@@ -42,7 +42,7 @@ export function CodeServerIDE({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const startRequestedRef = useRef(false);
-  const { accessToken, logout, updateTheme } = useAuthStore();
+  const { logout, updateTheme } = useAuthStore();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -95,6 +95,7 @@ export function CodeServerIDE({
   });
 
   // Start IDE
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startPolling is stable (same deps as startIDE), accessToken not needed (authFetch handles auth)
   const startIDE = useCallback(async () => {
     if (!projectId || startRequestedRef.current) return;
     startRequestedRef.current = true;
@@ -127,7 +128,7 @@ export function CodeServerIDE({
       onError?.(message);
       startRequestedRef.current = false;
     }
-  }, [projectId, onError, accessToken, resolvedTheme]);
+  }, [projectId, onError, resolvedTheme]);
 
   // Polling fallback (in case SSE doesn't work)
   const startPolling = useCallback(() => {
@@ -149,7 +150,7 @@ export function CodeServerIDE({
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setIdeUrl(status.ideUrl);
-          setState('loading');
+          setState((prev) => (prev === 'ready' ? 'ready' : 'loading'));
         } else if (attempts >= maxAttempts) {
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
@@ -191,6 +192,10 @@ export function CodeServerIDE({
     }
   }, [projectId, startPolling, onError, resolvedTheme]);
 
+  // Ref to break dependency chain — init should not re-run when startIDE changes
+  const startIDERef = useRef(startIDE);
+  startIDERef.current = startIDE;
+
   // Check status on mount and auto-start
   useEffect(() => {
     if (!projectId) return;
@@ -208,12 +213,12 @@ export function CodeServerIDE({
           setSseUrl(`/api/projects/${projectId}/ide/status/stream`);
 
           setIdeUrl(status.ideUrl);
-          setState('loading');
+          setState((prev) => (prev === 'ready' ? 'ready' : 'loading'));
         } else {
-          startIDE();
+          startIDERef.current();
         }
       } catch {
-        startIDE();
+        startIDERef.current();
       }
     };
 
@@ -224,7 +229,8 @@ export function CodeServerIDE({
         clearInterval(pollingRef.current);
       }
     };
-  }, [projectId, startIDE]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startIDE accessed via ref to prevent re-init on token refresh
+  }, [projectId]);
 
   // Listen for postMessage from code-server iframe (script is injected server-side in main.ts)
   useEffect(() => {
