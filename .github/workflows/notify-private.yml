@@ -1,0 +1,41 @@
+# This workflow goes into hyper-ext repo: .github/workflows/notify-private.yml
+# It sends a repository_dispatch to hyper-canvas-draft when a non-bot push hits main.
+#
+# Required secret in hyper-ext:
+#   PRIVATE_REPO_DISPATCH_TOKEN — fine-grained PAT with Contents:Read on hyper-canvas-draft
+
+name: Notify Private Repo
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Check if commit is from forward sync bot
+        id: check
+        run: |
+          AUTHOR="$(git log -1 --format='%an')"
+          MESSAGE="$(git log -1 --format='%s')"
+          if [[ "$AUTHOR" == "github-actions[bot]" && "$MESSAGE" == sync:* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping dispatch: commit is from forward sync ($MESSAGE)"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Will dispatch: commit by $AUTHOR — $MESSAGE"
+          fi
+
+      - name: Send repository_dispatch
+        if: steps.check.outputs.skip != 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PRIVATE_REPO_DISPATCH_TOKEN }}
+          repository: hyperide/hyper-canvas-draft
+          event-type: sync-from-public
+          client-payload: '{"sha": "${{ github.sha }}", "actor": "${{ github.actor }}"}'
