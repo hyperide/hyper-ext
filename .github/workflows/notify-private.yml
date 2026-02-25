@@ -36,6 +36,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.PRIVATE_REPO_DISPATCH_TOKEN }}
-          repository: hyperide/hyper-canvas-draft
+          repository: hyperide/hyper-saas
           event-type: sync-from-public
           client-payload: '{"sha": "${{ github.sha }}", "actor": "${{ github.actor }}"}'
