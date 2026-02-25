@@ -115,20 +115,20 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
     setIsReady(true);
 
     // Configure TypeScript/JavaScript compiler options for better IntelliSense
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    monaco.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.typescript.ScriptTarget.ESNext,
+      module: monaco.typescript.ModuleKind.ESNext,
+      moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true,
-      jsx: monaco.languages.typescript.JsxEmit.ReactJSX, // New JSX transform (React 17+)
+      jsx: monaco.typescript.JsxEmit.ReactJSX, // New JSX transform (React 17+)
       allowSyntheticDefaultImports: true,
       esModuleInterop: true,
     });
 
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    monaco.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.typescript.ScriptTarget.ESNext,
+      module: monaco.typescript.ModuleKind.ESNext,
+      moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true,
       allowJs: true,
       checkJs: false,
@@ -139,7 +139,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       .then(files => {
         Object.entries(files).forEach(([fileName, content]) => {
           const uri = `file:///node_modules/@types/react/${fileName}`;
-          monaco.languages.typescript.typescriptDefaults.addExtraLib(
+          monaco.typescript.typescriptDefaults.addExtraLib(
             content,
             uri
           );
@@ -180,14 +180,14 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       // For sampleRenderer files (with ':' in path), disable TypeScript diagnostics
       // to avoid false errors since Monaco doesn't have the component context
       if (filepath.includes(':')) {
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
           noSemanticValidation: true,  // Disable type checking
           noSyntaxValidation: true,    // Disable syntax checking (JSX causes false errors)
         });
         console.log('[MonacoEditor] Disabled TypeScript diagnostics for sampleRenderer');
       } else {
         // Re-enable for normal files
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
           noSemanticValidation: false,
           noSyntaxValidation: false,
         });

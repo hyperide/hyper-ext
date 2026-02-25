@@ -1534,15 +1534,15 @@ export default function AIAgentChat({
 								theme="vs-light"
 								beforeMount={(monaco) => {
 									// Disable all validation/diagnostics
-									monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+									monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
 										noSemanticValidation: true,
 										noSyntaxValidation: true,
 									});
-									monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+									monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
 										noSemanticValidation: true,
 										noSyntaxValidation: true,
 									});
-									monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+									monaco.json.jsonDefaults.setDiagnosticsOptions({
 										validate: false,
 									});
 								}}
