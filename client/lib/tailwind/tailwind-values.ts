@@ -365,9 +365,7 @@ export const TAILWIND_SHADOW_PRESETS = {
  * Get all color names (excluding special colors like white, black, etc.)
  */
 export function getColorNames(): string[] {
-  return Object.keys(TAILWIND_COLORS).filter(
-    (key) => !['white', 'black', 'transparent', 'current'].includes(key),
-  );
+  return Object.keys(TAILWIND_COLORS).filter((key) => !['white', 'black', 'transparent', 'current'].includes(key));
 }
 
 /**
@@ -406,9 +404,7 @@ export function getColorHex(colorClass: string): string | null {
 /**
  * Parse Tailwind color class to { color, shade, hex }
  */
-export function parseColorClass(
-  className: string,
-): { color: string; shade: string; hex: string } | null {
+export function parseColorClass(className: string): { color: string; shade: string; hex: string } | null {
   const hex = getColorHex(className);
   if (!hex) return null;
 

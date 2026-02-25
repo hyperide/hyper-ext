@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
 import cn from 'clsx';
-import { LazyEditor, type OnMount } from './LazyMonaco';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
-import type { TestGenerationEvent, InteractiveElementInfo } from '../../server/routes/generateTests';
 import { authFetch } from '@/utils/authFetch';
+import type { InteractiveElementInfo, TestGenerationEvent } from '../../server/routes/generateTests';
+import { LazyEditor, type OnMount } from './LazyMonaco';
 
 // Get language from file extension
 function getLanguageFromPath(filepath: string): string {
@@ -85,28 +85,31 @@ export function TestGenerationModal({
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
   }, []);
 
-  const loadFileContent = useCallback(async (file: GeneratedFile) => {
-    setSelectedFile(file);
-    setLoadingFile(true);
-    try {
-      // Use relativePath for the API (it joins with project path)
-      const params = new URLSearchParams({ path: file.relativePath });
-      if (projectId) {
-        params.set('projectId', projectId);
+  const loadFileContent = useCallback(
+    async (file: GeneratedFile) => {
+      setSelectedFile(file);
+      setLoadingFile(true);
+      try {
+        // Use relativePath for the API (it joins with project path)
+        const params = new URLSearchParams({ path: file.relativePath });
+        if (projectId) {
+          params.set('projectId', projectId);
+        }
+        const res = await authFetch(`/api/read-file?${params.toString()}`);
+        const data = await res.json();
+        if (data.success) {
+          setFileContent(data.content);
+        } else {
+          setFileContent(`// Error loading file: ${data.error}`);
+        }
+      } catch (err) {
+        setFileContent(`// Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      } finally {
+        setLoadingFile(false);
       }
-      const res = await authFetch(`/api/read-file?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        setFileContent(data.content);
-      } else {
-        setFileContent(`// Error loading file: ${data.error}`);
-      }
-    } catch (err) {
-      setFileContent(`// Error loading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setLoadingFile(false);
-    }
-  }, [projectId]);
+    },
+    [projectId],
+  );
 
   const startGeneration = useCallback(async () => {
     setStatus('running');
@@ -351,7 +354,7 @@ export function TestGenerationModal({
               onClick={() => setSelectedFile(null)}
               className="text-muted-foreground hover:text-foreground"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -359,7 +362,7 @@ export function TestGenerationModal({
           <div className="flex-1 overflow-auto p-4">
             {loadingFile ? (
               <div className="flex items-center justify-center h-32">
-                <svg className="w-6 h-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path
                     className="opacity-75"
@@ -408,7 +411,7 @@ export function TestGenerationModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground">Generate Tests</h2>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -420,7 +423,7 @@ export function TestGenerationModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {status === 'running' && (
-                <svg className="w-4 h-4 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path
                     className="opacity-75"
@@ -455,8 +458,11 @@ export function TestGenerationModal({
                 Interactive Elements ({interactiveElements.length}) - suggested data-test-id
               </h3>
               <div className="bg-muted rounded-lg p-3 space-y-1.5 max-h-40 overflow-y-auto">
-                {interactiveElements.map((el, index) => (
-                  <div key={index} className="text-xs font-mono flex items-center gap-2">
+                {interactiveElements.map((el) => (
+                  <div
+                    key={`${el.type}-${el.suggestedTestId}-${el.line}`}
+                    className="text-xs font-mono flex items-center gap-2"
+                  >
                     <span className="text-purple-500 w-24 flex-shrink-0">{el.type}</span>
                     <span className="text-green-600">data-test-id="{el.suggestedTestId}"</span>
                     <span className="text-muted-foreground">:L{el.line}</span>
@@ -481,15 +487,29 @@ export function TestGenerationModal({
                 Files ({createdCount} created, {skippedCount} skipped) - click to view
               </h3>
               <ul className="text-xs font-mono bg-muted rounded-lg p-3 space-y-1.5">
-                {generatedFiles.map((file, index) => (
+                {generatedFiles.map((file) => (
                   <li
-                    key={index}
+                    key={`${file.type}-${file.relativePath}`}
                     className={cn('flex items-start gap-2 rounded px-1 -mx-1', {
                       'text-green-600 cursor-pointer hover:bg-accent/50': file.status === 'created',
                       'text-muted-foreground': file.status === 'skipped' && file.reason !== 'File already exists',
-                      'text-amber-600 cursor-pointer hover:bg-accent/50': file.status === 'skipped' && file.reason === 'File already exists',
+                      'text-amber-600 cursor-pointer hover:bg-accent/50':
+                        file.status === 'skipped' && file.reason === 'File already exists',
                     })}
-                    onClick={() => (file.status === 'created' || file.reason === 'File already exists') && loadFileContent(file)}
+                    role={file.status === 'created' || file.reason === 'File already exists' ? 'button' : undefined}
+                    tabIndex={file.status === 'created' || file.reason === 'File already exists' ? 0 : undefined}
+                    onClick={() =>
+                      (file.status === 'created' || file.reason === 'File already exists') && loadFileContent(file)
+                    }
+                    onKeyDown={(e) => {
+                      if (
+                        (e.key === 'Enter' || e.key === ' ') &&
+                        (file.status === 'created' || file.reason === 'File already exists')
+                      ) {
+                        e.preventDefault();
+                        loadFileContent(file);
+                      }
+                    }}
                   >
                     <span className="flex-shrink-0">{file.status === 'created' ? '✓' : '⊘'}</span>
                     <span className="break-all">
@@ -511,6 +531,7 @@ export function TestGenerationModal({
               className="text-xs font-mono bg-slate-900 text-slate-300 rounded-lg p-3 h-36 overflow-y-auto whitespace-pre-wrap"
             >
               {logs.map((log, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only with no stable unique ID
                 <div key={index}>{log}</div>
               ))}
             </div>

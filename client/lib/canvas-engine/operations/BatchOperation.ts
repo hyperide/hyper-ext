@@ -2,12 +2,12 @@
  * Batch Operation - executes multiple operations as one
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation, Operation } from "./Operation";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
+import { BaseOperation, type Operation } from './Operation';
 
 export class BatchOperation extends BaseOperation {
-  name = "Batch";
+  name = 'Batch';
   private operations: Operation[];
 
   constructor(operations: Operation[]) {
@@ -47,9 +47,7 @@ export class BatchOperation extends BaseOperation {
       const result = operation.undo(tree);
 
       if (!result.success) {
-        return this.error(
-          `Batch undo failed at ${operation.name}: ${result.error}`
-        );
+        return this.error(`Batch undo failed at ${operation.name}: ${result.error}`);
       }
 
       if (result.changedIds) {

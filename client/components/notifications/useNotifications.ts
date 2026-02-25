@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
-import { useReconnectingEventSource, type SSEStatus } from '@/hooks/useReconnectingEventSource';
 import { authFetch } from '@/utils/authFetch';
 
 export interface NotificationActor {
@@ -144,9 +144,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         }
 
         setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n,
-          ),
+          prev.map((n) => (n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n)),
         );
         setUnreadCount((prev) => Math.max(0, prev - 1));
       } catch (err) {
@@ -169,9 +167,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         throw new Error('Failed to mark all notifications as read');
       }
 
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })),
-      );
+      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
       setUnreadCount(0);
     } catch (err) {
       console.error('[Notifications] Failed to mark all as read:', err);

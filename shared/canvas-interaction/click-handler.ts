@@ -15,20 +15,20 @@ import type { ClickHandlerCallbacks, ClickHandlerOptions } from './types';
  * Returns null when there's only one element with this ID.
  */
 export function getItemIndex(
-	element: Element,
-	uniqId: string,
-	doc: Document,
-	activeInstanceId?: string | null,
+  element: Element,
+  uniqId: string,
+  doc: Document,
+  activeInstanceId?: string | null,
 ): number | null {
-	let selector = `[data-uniq-id="${uniqId}"]`;
-	if (activeInstanceId) {
-		selector = `[data-canvas-instance-id="${activeInstanceId}"] ${selector}`;
-	}
-	const allWithSameId = doc.querySelectorAll(selector);
-	if (allWithSameId.length > 1) {
-		return Array.from(allWithSameId).indexOf(element);
-	}
-	return null;
+  let selector = `[data-uniq-id="${uniqId}"]`;
+  if (activeInstanceId) {
+    selector = `[data-canvas-instance-id="${activeInstanceId}"] ${selector}`;
+  }
+  const allWithSameId = doc.querySelectorAll(selector);
+  if (allWithSameId.length > 1) {
+    return Array.from(allWithSameId).indexOf(element);
+  }
+  return null;
 }
 
 /**
@@ -39,112 +39,96 @@ export function getItemIndex(
  * Interact mode: allow pass-through, only call onEmptyClick on empty space.
  */
 export function attachClickHandler(
-	iframeDoc: Document,
-	callbacks: ClickHandlerCallbacks,
-	options?: ClickHandlerOptions,
+  iframeDoc: Document,
+  callbacks: ClickHandlerCallbacks,
+  options?: ClickHandlerOptions,
 ): () => void {
-	const {
-		onElementClick,
-		onElementHover,
-		onEmptyClick,
-		getMode,
-		shouldIntercept,
-	} = callbacks;
-	const activeInstanceId = options?.activeInstanceId;
+  const { onElementClick, onElementHover, onEmptyClick, getMode, shouldIntercept } = callbacks;
+  const activeInstanceId = options?.activeInstanceId;
 
-	const handleClick = (e: MouseEvent) => {
-		const mode = getMode();
+  const handleClick = (e: MouseEvent) => {
+    const mode = getMode();
 
-		// External interceptor (e.g. comment mode, board mode)
-		if (shouldIntercept?.(e)) {
-			return;
-		}
+    // External interceptor (e.g. comment mode, board mode)
+    if (shouldIntercept?.(e)) {
+      return;
+    }
 
-		if (mode !== 'design' && mode !== 'interact') return;
+    if (mode !== 'design' && mode !== 'interact') return;
 
-		if (mode === 'design') {
-			e.preventDefault();
-			e.stopPropagation();
-		}
+    if (mode === 'design') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
-		const target = e.target as HTMLElement;
-		const element = target.closest('[data-uniq-id]') as HTMLElement | null;
+    const target = e.target as HTMLElement;
+    const element = target.closest('[data-uniq-id]') as HTMLElement | null;
 
-		if (!element) {
-			onEmptyClick?.(e);
-			return;
-		}
+    if (!element) {
+      onEmptyClick?.(e);
+      return;
+    }
 
-		// Only trigger element click callback in design mode
-		if (mode === 'design') {
-			const uniqId = element.dataset.uniqId;
-			if (uniqId) {
-				const itemIndex = getItemIndex(
-					element,
-					uniqId,
-					iframeDoc,
-					activeInstanceId,
-				);
-				onElementClick(uniqId, element, e, itemIndex);
-			}
-		}
-	};
+    // Only trigger element click callback in design mode
+    if (mode === 'design') {
+      const uniqId = element.dataset.uniqId;
+      if (uniqId) {
+        const itemIndex = getItemIndex(element, uniqId, iframeDoc, activeInstanceId);
+        onElementClick(uniqId, element, e, itemIndex);
+      }
+    }
+  };
 
-	const handleMouseDown = (e: MouseEvent) => {
-		if (getMode() !== 'design') return;
-		const target = e.target as HTMLElement;
-		if (
-			target.tagName === 'INPUT' ||
-			target.tagName === 'TEXTAREA' ||
-			target.tagName === 'SELECT' ||
-			target.isContentEditable
-		) {
-			e.preventDefault(); // Actually prevents focus on mousedown
-		}
-	};
+  const handleMouseDown = (e: MouseEvent) => {
+    if (getMode() !== 'design') return;
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    ) {
+      e.preventDefault(); // Actually prevents focus on mousedown
+    }
+  };
 
-	const handleMouseOver = (e: MouseEvent) => {
-		if (getMode() !== 'design') return;
-		const target = e.target as HTMLElement;
-		const element = target.closest('[data-uniq-id]') as HTMLElement | null;
-		if (element) {
-			const uniqId = element.dataset.uniqId;
-			if (uniqId) {
-				const itemIndex = getItemIndex(
-					element,
-					uniqId,
-					iframeDoc,
-					activeInstanceId,
-				);
-				onElementHover(uniqId, element, itemIndex);
-			}
-		}
-	};
+  const handleMouseOver = (e: MouseEvent) => {
+    if (getMode() !== 'design') return;
+    const target = e.target as HTMLElement;
+    const element = target.closest('[data-uniq-id]') as HTMLElement | null;
+    if (element) {
+      const uniqId = element.dataset.uniqId;
+      if (uniqId) {
+        const itemIndex = getItemIndex(element, uniqId, iframeDoc, activeInstanceId);
+        onElementHover(uniqId, element, itemIndex);
+      }
+    }
+  };
 
-	const handleMouseOut = (e: MouseEvent) => {
-		if (getMode() !== 'design') return;
-		const target = e.target as HTMLElement;
-		const element = target.closest('[data-uniq-id]') as HTMLElement | null;
-		if (element) {
-			onElementHover(null, null, null);
-		}
-	};
+  const handleMouseOut = (e: MouseEvent) => {
+    if (getMode() !== 'design') return;
+    const target = e.target as HTMLElement;
+    const element = target.closest('[data-uniq-id]') as HTMLElement | null;
+    if (element) {
+      onElementHover(null, null, null);
+    }
+  };
 
-	iframeDoc.addEventListener('click', handleClick, { capture: true });
-	iframeDoc.addEventListener('mousedown', handleMouseDown, { capture: true });
-	iframeDoc.addEventListener('mouseover', handleMouseOver, { capture: true });
-	iframeDoc.addEventListener('mouseout', handleMouseOut, { capture: true });
+  iframeDoc.addEventListener('click', handleClick, { capture: true });
+  iframeDoc.addEventListener('mousedown', handleMouseDown, { capture: true });
+  iframeDoc.addEventListener('mouseover', handleMouseOver, { capture: true });
+  iframeDoc.addEventListener('mouseout', handleMouseOut, { capture: true });
 
-	return () => {
-		iframeDoc.removeEventListener('click', handleClick, { capture: true });
-		iframeDoc.removeEventListener('mousedown', handleMouseDown, {
-			capture: true,
-		});
-		iframeDoc.removeEventListener('mouseover', handleMouseOver, {
-			capture: true,
-		});
-		iframeDoc.removeEventListener('mouseout', handleMouseOut, {
-			capture: true,
-		});
-	};
+  return () => {
+    iframeDoc.removeEventListener('click', handleClick, { capture: true });
+    iframeDoc.removeEventListener('mousedown', handleMouseDown, {
+      capture: true,
+    });
+    iframeDoc.removeEventListener('mouseover', handleMouseOver, {
+      capture: true,
+    });
+    iframeDoc.removeEventListener('mouseout', handleMouseOut, {
+      capture: true,
+    });
+  };
 }

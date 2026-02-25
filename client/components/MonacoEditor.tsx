@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import Editor, { OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
-import { useCanvasEngine } from '@/lib/canvas-engine';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTheme } from '@/components/ThemeProvider';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
 import { toast } from '@/hooks/use-toast';
+import { useCanvasEngine } from '@/lib/canvas-engine';
 import { authFetch } from '@/utils/authFetch';
-import { useTheme } from '@/components/ThemeProvider';
 
 interface MonacoEditorProps {
   filepath: string | null;
@@ -31,7 +31,7 @@ async function fetchTypeDefinitions(): Promise<Record<string, string>> {
   if (typeDefsCache) return typeDefsCache;
   if (!typeDefsPromise) {
     typeDefsPromise = authFetch('/api/type-definitions?package=react')
-      .then(res => res.json())
+      .then((res) => res.json())
       .then((data: { success?: boolean; files?: Record<string, string> }) => {
         if (data.success && data.files) {
           typeDefsCache = data.files;
@@ -56,19 +56,19 @@ function getLanguageFromPath(filepath: string): string {
   const ext = cleanPath.split('.').pop()?.toLowerCase();
 
   const languageMap: Record<string, string> = {
-    'ts': 'typescript',
-    'tsx': 'typescript',  // Use typescript with JSX enabled via compiler options
-    'js': 'javascript',
-    'jsx': 'javascript',  // Use javascript with JSX enabled via compiler options
-    'json': 'json',
-    'css': 'css',
-    'scss': 'scss',
-    'html': 'html',
-    'md': 'markdown',
-    'py': 'python',
-    'sh': 'shell',
-    'yml': 'yaml',
-    'yaml': 'yaml',
+    ts: 'typescript',
+    tsx: 'typescript', // Use typescript with JSX enabled via compiler options
+    js: 'javascript',
+    jsx: 'javascript', // Use javascript with JSX enabled via compiler options
+    json: 'json',
+    css: 'css',
+    scss: 'scss',
+    html: 'html',
+    md: 'markdown',
+    py: 'python',
+    sh: 'shell',
+    yml: 'yaml',
+    yaml: 'yaml',
   };
 
   return languageMap[ext || ''] || 'plaintext';
@@ -85,7 +85,13 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
   const { meta, loadComponent } = useComponentMeta();
   const { resolvedTheme } = useTheme();
   const gitDecorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
-  const pendingNavigationRef = useRef<{ line: number; column: number; filePath: string; endLine?: number; endColumn?: number } | null>(null);
+  const pendingNavigationRef = useRef<{
+    line: number;
+    column: number;
+    filePath: string;
+    endLine?: number;
+    endColumn?: number;
+  } | null>(null);
 
   // Keep refs up to date
   useEffect(() => {
@@ -136,16 +142,13 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
 
     // Load type definitions for React from server (cached at module level)
     fetchTypeDefinitions()
-      .then(files => {
+      .then((files) => {
         Object.entries(files).forEach(([fileName, content]) => {
           const uri = `file:///node_modules/@types/react/${fileName}`;
-          monaco.typescript.typescriptDefaults.addExtraLib(
-            content,
-            uri
-          );
+          monaco.typescript.typescriptDefaults.addExtraLib(content, uri);
         });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('[MonacoEditor] Failed to load type definitions:', error);
       });
 
@@ -181,8 +184,8 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       // to avoid false errors since Monaco doesn't have the component context
       if (filepath.includes(':')) {
         monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
-          noSemanticValidation: true,  // Disable type checking
-          noSyntaxValidation: true,    // Disable syntax checking (JSX causes false errors)
+          noSemanticValidation: true, // Disable type checking
+          noSyntaxValidation: true, // Disable syntax checking (JSX causes false errors)
         });
         console.log('[MonacoEditor] Disabled TypeScript diagnostics for sampleRenderer');
       } else {
@@ -196,9 +199,14 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       // Listen for model changes (only once per model!)
       model.onDidChangeContent(() => {
         if (isUserEditRef.current) {
-          const newValue = model!.getValue();
+          const newValue = model?.getValue() ?? '';
           if (newValue !== valueRef.current) {
-            console.log('[MonacoEditor] Content changed, calling onChange. Length:', newValue.length, 'Preview:', newValue.substring(0, 50));
+            console.log(
+              '[MonacoEditor] Content changed, calling onChange. Length:',
+              newValue.length,
+              'Preview:',
+              newValue.substring(0, 50),
+            );
             valueRef.current = newValue;
             onChangeRef.current(newValue);
           }
@@ -231,7 +239,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
             text: value,
           },
         ],
-        () => null
+        () => null,
       );
       setTimeout(() => {
         isUserEditRef.current = true;
@@ -254,7 +262,15 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
 
       // Store navigation request for later if editor is not ready or file doesn't match
       if (!editorRef.current || eventFilePath !== filepath || !isReady) {
-        console.log('[Monaco] Storing pending navigation:', { line, column, endLine, endColumn, eventFilePath, currentFilepath: filepath, isReady });
+        console.log('[Monaco] Storing pending navigation:', {
+          line,
+          column,
+          endLine,
+          endColumn,
+          eventFilePath,
+          currentFilepath: filepath,
+          isReady,
+        });
         pendingNavigationRef.current = { line, column, filePath: eventFilePath, endLine, endColumn };
         return;
       }
@@ -297,7 +313,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
               glyphMarginClassName: 'monaco-highlight-glyph',
             },
           },
-        ]
+        ],
       );
 
       // Remove decoration after 2 seconds
@@ -359,7 +375,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
             glyphMarginClassName: 'monaco-highlight-glyph',
           },
         },
-      ]
+      ],
     );
 
     setTimeout(() => {
@@ -542,8 +558,8 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
     const loadGitDecorations = () => {
       // Fetch git diff for current file
       authFetch(`/api/git/diff?filepath=${encodeURIComponent(filepath)}`)
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           if (!data.success || !data.diff) {
             // Clear decorations if no diff
             if (gitDecorationsRef.current) {
@@ -594,9 +610,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
               range: new monaco.Range(lineNumber, 1, lineNumber, 1),
               options: {
                 isWholeLine: true,
-                linesDecorationsClassName: change.type === 'added'
-                  ? 'git-line-added'
-                  : 'git-line-modified',
+                linesDecorationsClassName: change.type === 'added' ? 'git-line-added' : 'git-line-modified',
                 glyphMarginClassName: `git-gutter-${change.type}`,
               },
             };
@@ -608,7 +622,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
           }
           gitDecorationsRef.current = editor.createDecorationsCollection(newDecorations);
         })
-        .catch(error => {
+        .catch((error) => {
           console.log('[MonacoEditor] Git diff not available:', error.message);
         });
     };
@@ -649,41 +663,44 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
 
     const monaco = monacoRef.current;
 
-    const hoverProvider = monaco.languages.registerHoverProvider(['typescript', 'javascript', 'typescriptreact', 'javascriptreact'], {
-      provideHover: async (model, position) => {
-        // Only provide hover info for current file
-        if (!filepath || !model.uri.path.endsWith(filepath)) {
-          return null;
-        }
-
-        const lineNumber = position.lineNumber;
-
-        // Show blame info
-        try {
-          const response = await authFetch(`/api/git/blame?filepath=${encodeURIComponent(filepath)}`);
-          const data = await response.json();
-
-          if (!data.success || !data.blame || !data.blame.lines[lineNumber]) {
+    const hoverProvider = monaco.languages.registerHoverProvider(
+      ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'],
+      {
+        provideHover: async (model, position) => {
+          // Only provide hover info for current file
+          if (!filepath || !model.uri.path.endsWith(filepath)) {
             return null;
           }
 
-          const lineBlame = data.blame.lines[lineNumber];
-          const date = new Date(lineBlame.date).toLocaleDateString();
+          const lineNumber = position.lineNumber;
 
-          return {
-            range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
-            contents: [
-              { value: `**${lineBlame.author}** <${lineBlame.authorEmail}>` },
-              { value: `${date} • ${lineBlame.hash.substring(0, 7)}` },
-              { value: lineBlame.message },
-            ],
-          };
-        } catch {
-          // Silently fail if git blame is not available
-          return null;
-        }
+          // Show blame info
+          try {
+            const response = await authFetch(`/api/git/blame?filepath=${encodeURIComponent(filepath)}`);
+            const data = await response.json();
+
+            if (!data.success || !data.blame || !data.blame.lines[lineNumber]) {
+              return null;
+            }
+
+            const lineBlame = data.blame.lines[lineNumber];
+            const date = new Date(lineBlame.date).toLocaleDateString();
+
+            return {
+              range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
+              contents: [
+                { value: `**${lineBlame.author}** <${lineBlame.authorEmail}>` },
+                { value: `${date} • ${lineBlame.hash.substring(0, 7)}` },
+                { value: lineBlame.message },
+              ],
+            };
+          } catch {
+            // Silently fail if git blame is not available
+            return null;
+          }
+        },
       },
-    });
+    );
 
     return () => {
       try {

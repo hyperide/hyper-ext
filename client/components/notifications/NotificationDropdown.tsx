@@ -1,12 +1,8 @@
-import { memo, useState, useCallback } from 'react';
-import cn from 'clsx';
 import { IconBell, IconCheck, IconInbox } from '@tabler/icons-react';
+import cn from 'clsx';
+import { memo, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NotificationItem } from './NotificationItem';
 import type { Notification } from './useNotifications';
 
@@ -36,10 +32,7 @@ export const NotificationDropdown = memo(function NotificationDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  const filteredNotifications =
-    filter === 'unread'
-      ? notifications.filter((n) => !n.readAt)
-      : notifications;
+  const filteredNotifications = filter === 'unread' ? notifications.filter((n) => !n.readAt) : notifications;
 
   const handleNotificationClick = useCallback(
     (notification: Notification) => {
@@ -66,28 +59,17 @@ export const NotificationDropdown = memo(function NotificationDropdown({
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
-          {!isConnected && (
-            <span className="absolute bottom-1 right-1 w-2 h-2 bg-orange-400 rounded-full" />
-          )}
+          {!isConnected && <span className="absolute bottom-1 right-1 w-2 h-2 bg-orange-400 rounded-full" />}
         </button>
       </PopoverTrigger>
 
-      <PopoverContent
-        className="w-[380px] p-0"
-        align="end"
-        sideOffset={8}
-      >
+      <PopoverContent className="w-[380px] p-0" align="end" sideOffset={8}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="font-semibold text-sm">Notifications</h3>
           <div className="flex items-center gap-2">
             {unreadCount > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onMarkAllAsRead}
-                className="h-7 text-xs"
-              >
+              <Button size="sm" variant="ghost" onClick={onMarkAllAsRead} className="h-7 text-xs">
                 <IconCheck className="w-3 h-3 mr-1" stroke={2} />
                 Mark all read
               </Button>

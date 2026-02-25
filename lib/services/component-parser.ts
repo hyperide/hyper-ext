@@ -6,14 +6,14 @@
  * Used by both server routes and VSCode extension.
  */
 
+import { randomUUID } from 'node:crypto';
 import _generate from '@babel/generator';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
-import { randomUUID } from 'crypto';
 
-// @ts-ignore - babel/generator has ESM/CJS issues
+// @ts-expect-error - babel/generator has ESM/CJS issues
 const generate = _generate.default || _generate;
-// @ts-ignore - babel/traverse has ESM/CJS issues
+// @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
 
 // ============================================
@@ -114,15 +114,17 @@ export function findLocalFunctionDefinition(
   node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration;
   loc: t.SourceLocation;
 } | null {
-  let foundDef: { node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration; loc: t.SourceLocation } | null = null;
+  let foundDef: {
+    node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration;
+    loc: t.SourceLocation;
+  } | null = null;
 
   traverse(parseContext.fileAST, {
     VariableDeclarator(path: { node: t.VariableDeclarator; stop: () => void }) {
       if (
         t.isIdentifier(path.node.id) &&
         path.node.id.name === functionName &&
-        (t.isArrowFunctionExpression(path.node.init) ||
-          t.isFunctionExpression(path.node.init)) &&
+        (t.isArrowFunctionExpression(path.node.init) || t.isFunctionExpression(path.node.init)) &&
         path.node.loc
       ) {
         foundDef = {
@@ -158,15 +160,14 @@ export function findLocalComponentDefinition(
   node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration;
   loc: t.SourceLocation;
 } | null {
-  let foundDef: { node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration; loc: t.SourceLocation } | null = null;
+  let foundDef: {
+    node: t.ArrowFunctionExpression | t.FunctionExpression | t.FunctionDeclaration;
+    loc: t.SourceLocation;
+  } | null = null;
 
   traverse(parseContext.fileAST, {
     VariableDeclarator(path: { node: t.VariableDeclarator; stop: () => void }) {
-      if (
-        t.isIdentifier(path.node.id) &&
-        path.node.id.name === componentName &&
-        path.node.loc
-      ) {
+      if (t.isIdentifier(path.node.id) && path.node.id.name === componentName && path.node.loc) {
         const init = path.node.init;
 
         // Direct arrow/function expression
@@ -179,10 +180,7 @@ export function findLocalComponentDefinition(
         // HOC wrappers: forwardRef, memo, etc.
         if (t.isCallExpression(init)) {
           const firstArg = init.arguments[0];
-          if (
-            t.isArrowFunctionExpression(firstArg) ||
-            t.isFunctionExpression(firstArg)
-          ) {
+          if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
             foundDef = { node: firstArg, loc: path.node.loc };
             path.stop();
             return;
@@ -190,10 +188,7 @@ export function findLocalComponentDefinition(
           // Nested HOC: memo(forwardRef(...))
           if (t.isCallExpression(firstArg)) {
             const nestedArg = firstArg.arguments[0];
-            if (
-              t.isArrowFunctionExpression(nestedArg) ||
-              t.isFunctionExpression(nestedArg)
-            ) {
+            if (t.isArrowFunctionExpression(nestedArg) || t.isFunctionExpression(nestedArg)) {
               foundDef = { node: nestedArg, loc: path.node.loc };
               path.stop();
               return;
@@ -270,12 +265,26 @@ export function parseLocalComponentBody(
           if (nestedFunctionDepth > 0) return;
 
           if (path.node.argument && t.isJSXElement(path.node.argument)) {
-            const node = parseJSXElement(path.node.argument, mapContext, condContext, undefined, parseContext, expandedComponents);
+            const node = parseJSXElement(
+              path.node.argument,
+              mapContext,
+              condContext,
+              undefined,
+              parseContext,
+              expandedComponents,
+            );
             if (node) result.push(node);
           } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
             for (const child of path.node.argument.children) {
               if (t.isJSXElement(child)) {
-                const node = parseJSXElement(child, mapContext, condContext, undefined, parseContext, expandedComponents);
+                const node = parseJSXElement(
+                  child,
+                  mapContext,
+                  condContext,
+                  undefined,
+                  parseContext,
+                  expandedComponents,
+                );
                 if (node) result.push(node);
               }
             }
@@ -298,7 +307,6 @@ export function parseLocalFunctionBody(
   parseContext: ParseContext,
   mapContext?: MapContext,
   condContext?: CondContext,
-  functionContext?: FunctionContext,
   expandedComponents?: Set<string>,
 ): ComponentNode[] {
   const result: ComponentNode[] = [];
@@ -373,12 +381,26 @@ export function parseLocalFunctionBody(
           if (nestedFunctionDepth > 0) return;
 
           if (path.node.argument && t.isJSXElement(path.node.argument)) {
-            const node = parseJSXElement(path.node.argument, mapContext, condContext, undefined, parseContext, expandedComponents);
+            const node = parseJSXElement(
+              path.node.argument,
+              mapContext,
+              condContext,
+              undefined,
+              parseContext,
+              expandedComponents,
+            );
             if (node) result.push(node);
           } else if (path.node.argument && t.isJSXFragment(path.node.argument)) {
             for (const child of path.node.argument.children) {
               if (t.isJSXElement(child)) {
-                const node = parseJSXElement(child, mapContext, condContext, undefined, parseContext, expandedComponents);
+                const node = parseJSXElement(
+                  child,
+                  mapContext,
+                  condContext,
+                  undefined,
+                  parseContext,
+                  expandedComponents,
+                );
                 if (node) result.push(node);
               }
             }
@@ -427,17 +449,10 @@ export function parseJSXElement(
   // Read existing data-uniq-id or generate new one
   let elementId: string;
   const dataUniqIdAttr = opening.attributes.find(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === 'data-uniq-id',
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
   );
 
-  if (
-    dataUniqIdAttr &&
-    t.isJSXAttribute(dataUniqIdAttr) &&
-    t.isStringLiteral(dataUniqIdAttr.value)
-  ) {
+  if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr) && t.isStringLiteral(dataUniqIdAttr.value)) {
     elementId = dataUniqIdAttr.value.value;
   } else if (
     dataUniqIdAttr &&
@@ -482,9 +497,7 @@ export function parseJSXElement(
             propValue = expr.value;
             shouldAddProp = true;
           } else if (t.isArrayExpression(expr)) {
-            propValue = expr.elements
-              .map((el) => (t.isStringLiteral(el) ? el.value : null))
-              .filter(Boolean);
+            propValue = expr.elements.map((el) => (t.isStringLiteral(el) ? el.value : null)).filter(Boolean);
             shouldAddProp = true;
           }
         }
@@ -500,12 +513,10 @@ export function parseJSXElement(
       const attrName = attr.name;
       if (t.isJSXNamespacedName(attrName)) {
         const propName = `${attrName.namespace.name}:${attrName.name.name}`;
-        const propValue =
-          attr.value && t.isStringLiteral(attr.value) ? attr.value.value : true;
+        const propValue = attr.value && t.isStringLiteral(attr.value) ? attr.value.value : true;
         props[propName] = propValue;
       } else if (t.isJSXIdentifier(attrName) && attrName.name.includes('-')) {
-        const propValue =
-          attr.value && t.isStringLiteral(attr.value) ? attr.value.value : true;
+        const propValue = attr.value && t.isStringLiteral(attr.value) ? attr.value.value : true;
         props[attrName.name] = propValue;
       }
     }
@@ -545,7 +556,7 @@ export function parseJSXElement(
 
       if (isLocalFunctionCall && t.isIdentifier(node.callee)) {
         const functionName = node.callee.name;
-        const functionDef = findLocalFunctionDefinition(parseContext!, functionName);
+        const functionDef = findLocalFunctionDefinition(parseContext, functionName);
 
         if (functionDef && node.loc) {
           const newFunctionContext: FunctionContext = {
@@ -562,10 +573,9 @@ export function parseJSXElement(
 
           const functionChildren = parseLocalFunctionBody(
             functionDef.node,
-            parseContext!,
+            parseContext,
             currentMapContext,
             currentCondContext,
-            newFunctionContext,
             expandedComponents,
           );
 
@@ -581,9 +591,7 @@ export function parseJSXElement(
           }
         }
       } else if (isMapCall) {
-        const expression = t.isMemberExpression(node.callee)
-          ? generate(node.callee.object).code
-          : '';
+        const expression = t.isMemberExpression(node.callee) ? generate(node.callee.object).code : '';
 
         const newMapContext: MapContext = {
           parentMapId: generateId(),
@@ -684,7 +692,14 @@ export function parseJSXElement(
     childrenType = 'jsx';
     for (const child of element.children) {
       if (t.isJSXElement(child)) {
-        const childNode = parseJSXElement(child, mapContext, undefined, functionContext, parseContext, expandedComponents);
+        const childNode = parseJSXElement(
+          child,
+          mapContext,
+          undefined,
+          functionContext,
+          parseContext,
+          expandedComponents,
+        );
         if (childNode) children.push(childNode);
       } else if (t.isJSXExpressionContainer(child)) {
         const jsx = findJSXInNode(child.expression as t.Node, mapContext, undefined);
@@ -777,13 +792,7 @@ export function parseJSXElement(
   const isHtmlTag = name.toLowerCase() === name;
   const currentExpandedSet = expandedComponents ?? new Set<string>();
 
-  if (
-    parseContext &&
-    isReactComponent &&
-    !isHtmlTag &&
-    !currentExpandedSet.has(name) &&
-    children.length === 0
-  ) {
+  if (parseContext && isReactComponent && !isHtmlTag && !currentExpandedSet.has(name) && children.length === 0) {
     const componentDef = findLocalComponentDefinition(parseContext, name);
     if (componentDef) {
       const newExpandedSet = new Set(currentExpandedSet);

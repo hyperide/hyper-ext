@@ -16,18 +16,13 @@ const STYLE_ELEMENT_ID = 'hyper-canvas-dynamic-styles';
  * (e.g. VS Code injected script).
  */
 export function buildDesignStylesCSS(options: DesignStylesOptions): string {
-	const {
-		mode,
-		boardModeActive = false,
-		canvasMode = 'single',
-		transparentBackground = false,
-	} = options;
+  const { mode, boardModeActive = false, canvasMode = 'single', transparentBackground = false } = options;
 
-	const parts: string[] = [];
+  const parts: string[] = [];
 
-	// Transparent background (SaaS: always, VS Code: optional)
-	if (transparentBackground) {
-		parts.push(`
+  // Transparent background (SaaS: always, VS Code: optional)
+  if (transparentBackground) {
+    parts.push(`
 html, body {
   background: transparent !important;
   background-color: transparent !important;
@@ -39,25 +34,25 @@ html, body {
   ${boardModeActive ? 'pointer-events: none !important;' : ''}
   ${canvasMode === 'multi' ? 'overflow: hidden !important;' : ''}
 }`);
-	}
+  }
 
-	// Default cursor in design mode
-	parts.push(`
+  // Default cursor in design mode
+  parts.push(`
 body.design-mode, body.design-mode * {
   cursor: default !important;
 }`);
 
-	// Board mode: only instances are clickable
-	if (boardModeActive) {
-		parts.push(`
+  // Board mode: only instances are clickable
+  if (boardModeActive) {
+    parts.push(`
 [data-canvas-instance-id] {
   pointer-events: auto !important;
 }`);
-	}
+  }
 
-	// Empty container styling (design mode only)
-	if (mode !== 'interact') {
-		parts.push(`
+  // Empty container styling (design mode only)
+  if (mode !== 'interact') {
+    parts.push(`
 div[data-uniq-id]:empty {
   min-height: 120px;
   border: 2px dashed #cbd5e1;
@@ -83,28 +78,23 @@ div[data-uniq-id]:empty:hover {
   border-color: #94a3b8;
   background-color: #f1f5f9;
 }`);
-	}
+  }
 
-	return parts.join('\n');
+  return parts.join('\n');
 }
 
 /**
  * Inject or update design-mode styles in an iframe document.
  * Creates a <style> element in <head> if it doesn't exist.
  */
-export function injectDesignStyles(
-	iframeDoc: Document,
-	options: DesignStylesOptions,
-): void {
-	let styleElement = iframeDoc.getElementById(
-		STYLE_ELEMENT_ID,
-	) as HTMLStyleElement | null;
+export function injectDesignStyles(iframeDoc: Document, options: DesignStylesOptions): void {
+  let styleElement = iframeDoc.getElementById(STYLE_ELEMENT_ID) as HTMLStyleElement | null;
 
-	if (!styleElement) {
-		styleElement = iframeDoc.createElement('style');
-		styleElement.id = STYLE_ELEMENT_ID;
-		iframeDoc.head.appendChild(styleElement);
-	}
+  if (!styleElement) {
+    styleElement = iframeDoc.createElement('style');
+    styleElement.id = STYLE_ELEMENT_ID;
+    iframeDoc.head.appendChild(styleElement);
+  }
 
-	styleElement.textContent = buildDesignStylesCSS(options);
+  styleElement.textContent = buildDesignStylesCSS(options);
 }

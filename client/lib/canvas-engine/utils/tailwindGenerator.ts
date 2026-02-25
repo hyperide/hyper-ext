@@ -44,11 +44,7 @@ function toArbitraryValue(value: string): string {
 /**
  * Update className with new style value
  */
-export function updateTailwindClassName(
-  currentClassName: string,
-  styleKey: string,
-  styleValue: string
-): string {
+export function updateTailwindClassName(currentClassName: string, styleKey: string, styleValue: string): string {
   const classes = currentClassName.split(/\s+/).filter(Boolean);
   let updatedClasses = [...classes];
 
@@ -61,29 +57,29 @@ export function updateTailwindClassName(
     },
     top: {
       remove: ['top-', '-top-'],
-      add: (value) => value ? `top-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `top-${toArbitraryValue(value)}` : null),
     },
     right: {
       remove: ['right-', '-right-'],
-      add: (value) => value ? `right-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `right-${toArbitraryValue(value)}` : null),
     },
     bottom: {
       remove: ['bottom-', '-bottom-'],
-      add: (value) => value ? `bottom-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `bottom-${toArbitraryValue(value)}` : null),
     },
     left: {
       remove: ['left-', '-left-'],
-      add: (value) => value ? `left-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `left-${toArbitraryValue(value)}` : null),
     },
 
     // Sizing
     width: {
       remove: ['w-'],
-      add: (value) => value ? `w-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `w-${toArbitraryValue(value)}` : null),
     },
     height: {
       remove: ['h-'],
-      add: (value) => value ? `h-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `h-${toArbitraryValue(value)}` : null),
     },
 
     // Margin
@@ -131,11 +127,11 @@ export function updateTailwindClassName(
     // Colors
     backgroundColor: {
       remove: ['bg-'],
-      add: (value) => value ? `bg-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `bg-${toArbitraryValue(value)}` : null),
     },
     borderColor: {
       remove: ['border-gray-', 'border-red-', 'border-blue-', 'border-green-', 'border-yellow-', 'border-purple-'],
-      add: (value) => value ? `border-${toArbitraryValue(value)}` : null,
+      add: (value) => (value ? `border-${toArbitraryValue(value)}` : null),
     },
     borderWidth: {
       remove: ['border-0', 'border-2', 'border-4', 'border-8', 'border-[', 'border'],
@@ -280,7 +276,17 @@ export function updateTailwindClassName(
 
     // Shadow
     shadow: {
-      remove: ['shadow-sm', 'shadow-md', 'shadow-lg', 'shadow-xl', 'shadow-2xl', 'shadow-inner', 'shadow-none', 'shadow-[', 'shadow'],
+      remove: [
+        'shadow-sm',
+        'shadow-md',
+        'shadow-lg',
+        'shadow-xl',
+        'shadow-2xl',
+        'shadow-inner',
+        'shadow-none',
+        'shadow-[',
+        'shadow',
+      ],
       add: (value) => {
         if (!value || value === 'none') return null;
         if (value === 'default') return 'shadow';
@@ -290,7 +296,17 @@ export function updateTailwindClassName(
 
     // Box shadow (for arbitrary values with custom colors)
     boxShadow: {
-      remove: ['shadow-sm', 'shadow-md', 'shadow-lg', 'shadow-xl', 'shadow-2xl', 'shadow-inner', 'shadow-none', 'shadow-[', 'shadow'],
+      remove: [
+        'shadow-sm',
+        'shadow-md',
+        'shadow-lg',
+        'shadow-xl',
+        'shadow-2xl',
+        'shadow-inner',
+        'shadow-none',
+        'shadow-[',
+        'shadow',
+      ],
       add: (value) => {
         if (!value || value === 'none') return null;
         // Convert spaces to underscores for Tailwind arbitrary value syntax
@@ -320,7 +336,14 @@ export function updateTailwindClassName(
 
     // Transition property
     transitionProperty: {
-      remove: ['transition', 'transition-all', 'transition-colors', 'transition-opacity', 'transition-transform', 'transition-none'],
+      remove: [
+        'transition',
+        'transition-all',
+        'transition-colors',
+        'transition-opacity',
+        'transition-transform',
+        'transition-none',
+      ],
       add: (value) => {
         if (!value || value === 'none') return null;
         if (value === 'all') return 'transition';
@@ -373,11 +396,23 @@ export function updateTailwindClassName(
         return cls.startsWith(prefix);
       });
     });
-  } else if (styleKey === 'borderWidth' || styleKey === 'borderTopWidth' || styleKey === 'borderRightWidth' || styleKey === 'borderBottomWidth' || styleKey === 'borderLeftWidth') {
+  } else if (
+    styleKey === 'borderWidth' ||
+    styleKey === 'borderTopWidth' ||
+    styleKey === 'borderRightWidth' ||
+    styleKey === 'borderBottomWidth' ||
+    styleKey === 'borderLeftWidth'
+  ) {
     // Special handling for border width - don't remove border-dashed, border-dotted, etc.
     updatedClasses = updatedClasses.filter((cls) => {
       // Keep border-style classes
-      if (cls === 'border-solid' || cls === 'border-dashed' || cls === 'border-dotted' || cls === 'border-double' || cls === 'border-none') {
+      if (
+        cls === 'border-solid' ||
+        cls === 'border-dashed' ||
+        cls === 'border-dotted' ||
+        cls === 'border-double' ||
+        cls === 'border-none'
+      ) {
         return true;
       }
       // Keep border-color classes (border-[#...] or border-[rgba(...)])
@@ -408,10 +443,7 @@ export function updateTailwindClassName(
 /**
  * Batch update multiple styles at once
  */
-export function updateTailwindClassNames(
-  currentClassName: string,
-  updates: StyleUpdate[]
-): string {
+export function updateTailwindClassNames(currentClassName: string, updates: StyleUpdate[]): string {
   let result = currentClassName;
 
   for (const { styleKey, styleValue } of updates) {

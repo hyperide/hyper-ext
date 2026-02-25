@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 import type {
   GitHubAppInstallation,
   GitHubAppInstallationsResponse,
-  GitHubAppStatusResponse,
   GitHubAppInstallUrlResponse,
+  GitHubAppStatusResponse,
 } from '../types';
 
 interface UseGitHubAppInstallationsResult {
@@ -94,9 +94,7 @@ export function useGitHubAppInstallations(): UseGitHubAppInstallationsResult {
       });
 
       if (response.ok) {
-        setInstallations((prev) =>
-          prev.filter((inst) => inst.installationId !== installationId)
-        );
+        setInstallations((prev) => prev.filter((inst) => inst.installationId !== installationId));
         return true;
       }
       return false;

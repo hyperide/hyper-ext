@@ -124,7 +124,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           ) : (
             <>
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>Reconnecting... ({connectionRetryCount}/{MAX_RETRIES})</span>
+              <span>
+                Reconnecting... ({connectionRetryCount}/{MAX_RETRIES})
+              </span>
             </>
           )}
         </div>
@@ -140,9 +142,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
         <div className="text-center max-w-md px-4">
           <div className="text-4xl mb-4">⏰</div>
           <h2 className="text-xl font-semibold text-foreground mb-2">Session Expired</h2>
-          <p className="text-muted-foreground mb-4">
-            Your session has expired. Please login again to continue.
-          </p>
+          <p className="text-muted-foreground mb-4">Your session has expired. Please login again to continue.</p>
           <button
             type="button"
             onClick={() => {

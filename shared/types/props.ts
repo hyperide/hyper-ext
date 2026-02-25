@@ -3,17 +3,7 @@
  */
 
 export interface PropTypeInfo {
-  type:
-    | 'string'
-    | 'number'
-    | 'boolean'
-    | 'enum'
-    | 'union'
-    | 'object'
-    | 'array'
-    | 'function'
-    | 'reactNode'
-    | 'unknown';
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'union' | 'object' | 'array' | 'function' | 'reactNode' | 'unknown';
   required: boolean;
   description?: string;
   defaultValue?: unknown;

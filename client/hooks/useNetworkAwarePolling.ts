@@ -11,9 +11,9 @@
  * - Auto-resumes polling when back online
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { isNetworkError } from '../utils/networkError';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNetworkStore, useOnReconnect } from '../stores/networkStore';
+import { isNetworkError } from '../utils/networkError';
 
 export interface UseNetworkAwarePollingOptions<T> {
   /** Polling interval in milliseconds */

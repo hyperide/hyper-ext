@@ -2,7 +2,7 @@
  * Event types for Canvas Engine
  */
 
-import type { ComponentInstance, HistoryState, SelectionState } from "../models/types";
+import type { ComponentInstance, HistoryState } from '../models/types';
 
 /**
  * Instance events
@@ -13,8 +13,8 @@ export interface InstanceInsertEvent {
 
 export interface InstanceUpdateEvent {
   id: string;
-  props: Record<string, any>;
-  oldProps: Record<string, any>;
+  props: Record<string, unknown>;
+  oldProps: Record<string, unknown>;
 }
 
 export interface InstanceDeleteEvent {
@@ -84,26 +84,26 @@ export interface TreeChangeEvent {
  */
 export interface CanvasEngineEvents {
   // Instance events
-  "instance:insert": InstanceInsertEvent;
-  "instance:update": InstanceUpdateEvent;
-  "instance:delete": InstanceDeleteEvent;
-  "instance:move": InstanceMoveEvent;
-  "instance:duplicate": InstanceDuplicateEvent;
+  'instance:insert': InstanceInsertEvent;
+  'instance:update': InstanceUpdateEvent;
+  'instance:delete': InstanceDeleteEvent;
+  'instance:move': InstanceMoveEvent;
+  'instance:duplicate': InstanceDuplicateEvent;
 
   // Selection events
-  "selection:change": SelectionChangeEvent;
-  "hover:change": HoverChangeEvent;
+  'selection:change': SelectionChangeEvent;
+  'hover:change': HoverChangeEvent;
 
   // Mode events
-  "mode:change": ModeChangeEvent;
+  'mode:change': ModeChangeEvent;
 
   // History events
-  "history:change": HistoryChangeEvent;
-  "history:undo": UndoEvent;
-  "history:redo": RedoEvent;
+  'history:change': HistoryChangeEvent;
+  'history:undo': UndoEvent;
+  'history:redo': RedoEvent;
 
   // Tree events
-  "tree:change": TreeChangeEvent;
+  'tree:change': TreeChangeEvent;
 }
 
 /**

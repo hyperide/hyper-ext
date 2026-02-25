@@ -4,11 +4,11 @@
  * Similar to ASTUpdateOperation but handles multiple props in a single operation
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation } from "./Operation";
-import type { ASTApiService } from '../services/ASTApiService';
 import { getPreviewIframe } from '@/lib/dom-utils';
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
+import type { ASTApiService } from '../services/ASTApiService';
+import { BaseOperation } from './Operation';
 
 export interface ASTUpdatePropsOperationParams {
   elementId: string;
@@ -17,7 +17,7 @@ export interface ASTUpdatePropsOperationParams {
 }
 
 export class ASTUpdatePropsOperation extends BaseOperation {
-  name = "AST Update Props";
+  name = 'AST Update Props';
   private params: ASTUpdatePropsOperationParams;
   private oldValues: Record<string, unknown> = {};
 
@@ -36,7 +36,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
   /**
    * Execute operation - update props via API and apply to DOM
    */
-  execute(tree: DocumentTree): OperationResult {
+  execute(_tree: DocumentTree): OperationResult {
     try {
       // Store old values for undo (get from DOM)
       for (const propName of Object.keys(this.params.props)) {
@@ -68,9 +68,9 @@ export class ASTUpdatePropsOperation extends BaseOperation {
   /**
    * Undo operation - restore old values
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (Object.keys(this.oldValues).length === 0) {
-      return this.error("No old values to restore");
+      return this.error('No old values to restore');
     }
 
     try {
@@ -99,9 +99,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
       return undefined;
     }
 
-    const element = iframe.contentDocument.querySelector(
-      `[data-uniq-id="${elementId}"]`
-    ) as HTMLElement;
+    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
 
     if (!element) {
       return undefined;
@@ -114,7 +112,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
 
     // For style props, get from element.style
     if (element.style && propName in element.style) {
-      return (element.style as any)[propName];
+      return element.style.getPropertyValue(propName);
     }
 
     // Try to get attribute
@@ -130,9 +128,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
       throw new Error('Iframe not found');
     }
 
-    const element = iframe.contentDocument.querySelector(
-      `[data-uniq-id="${elementId}"]`
-    ) as HTMLElement;
+    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
 
     if (!element) {
       throw new Error(`Element with data-uniq-id="${elementId}" not found`);
@@ -146,7 +142,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
 
     // Apply style props
     if (element.style && propName in element.style) {
-      (element.style as any)[propName] = propValue;
+      element.style.setProperty(propName, String(propValue ?? ''));
       return;
     }
 

@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  parseSpacingValue,
   formatSpacingValue,
-  isPairedSpacing,
-  handleSpacingInput,
-  normalizeSpacingValue,
-  isZeroValue,
-  getSpacingDisplayValue,
-  updateSpacingFromInput,
   getCursorPart,
-  parseNumericValue,
-  incrementSpacingValue,
+  getSpacingDisplayValue,
   handleSpacingArrowKey,
+  handleSpacingInput,
+  incrementSpacingValue,
+  isPairedSpacing,
+  isZeroValue,
+  normalizeSpacingValue,
+  parseNumericValue,
+  parseSpacingValue,
+  updateSpacingFromInput,
 } from './spacingValue';
 
 describe('spacingValue', () => {

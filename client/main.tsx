@@ -17,9 +17,5 @@ const isPreviewPath = window.location.pathname.match(/^\/project-preview\/[^/]+\
 
 const element = document.getElementById('root');
 if (element) {
-  createRoot(element).render(
-    <StrictMode>
-      {isPreviewPath ? <PreviewGuard /> : <App />}
-    </StrictMode>
-  );
+  createRoot(element).render(<StrictMode>{isPreviewPath ? <PreviewGuard /> : <App />}</StrictMode>);
 }

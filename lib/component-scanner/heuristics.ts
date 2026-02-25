@@ -57,7 +57,7 @@ export async function analyzeWithHeuristics(projectPath: string, tree: string): 
     .filter((p) => {
       const lowerPath = p.toLowerCase();
       if (lowerPath.includes('project-preview')) return false;
-      if (atomPaths.some((atomPath) => p === atomPath || p.startsWith(atomPath + '/'))) return false;
+      if (atomPaths.some((atomPath) => p === atomPath || p.startsWith(`${atomPath}/`))) return false;
       return compositePatterns.some((pattern) => lowerPath.includes(pattern));
     })
     .sort((a, b) => b.split('/').length - a.split('/').length);
@@ -70,18 +70,23 @@ export async function analyzeWithHeuristics(projectPath: string, tree: string): 
       const lowerPath = p.toLowerCase();
       const dirName = p.split('/').pop()?.toLowerCase() || '';
       if (lowerPath.includes('project-preview')) return false;
-      if (atomPaths.some((atomPath) => p === atomPath || p.startsWith(atomPath + '/'))) return false;
-      if (compositePaths.some((compPath) => p === compPath || p.startsWith(compPath + '/'))) return false;
+      if (atomPaths.some((atomPath) => p === atomPath || p.startsWith(`${atomPath}/`))) return false;
+      if (compositePaths.some((compPath) => p === compPath || p.startsWith(`${compPath}/`))) return false;
       if (dirName === 'pages' || dirName === 'routes') return true;
-      if (lowerPath.includes('/pages') || lowerPath.includes('/routes') ||
-          lowerPath.includes('/screens') || lowerPath.includes('/views')) return true;
+      if (
+        lowerPath.includes('/pages') ||
+        lowerPath.includes('/routes') ||
+        lowerPath.includes('/screens') ||
+        lowerPath.includes('/views')
+      )
+        return true;
       return false;
     })
     .sort((a, b) => {
       const aName = a.split('/').pop()?.toLowerCase() || '';
       const bName = b.split('/').pop()?.toLowerCase() || '';
-      const aExact = (aName === 'pages' || aName === 'routes') ? 1 : 0;
-      const bExact = (bName === 'pages' || bName === 'routes') ? 1 : 0;
+      const aExact = aName === 'pages' || aName === 'routes' ? 1 : 0;
+      const bExact = bName === 'pages' || bName === 'routes' ? 1 : 0;
       if (aExact !== bExact) return bExact - aExact;
       return b.split('/').length - a.split('/').length;
     });
@@ -145,7 +150,7 @@ export async function findUIComponents(
 
         const fileName = entry.name.toLowerCase();
         const fullPath = entry.parentPath ? join(entry.parentPath, entry.name) : join(absolutePath, entry.name);
-        const relativePath = fullPath.replace(projectPath + '/', '');
+        const relativePath = fullPath.replace(`${projectPath}/`, '');
 
         if (!uiComponents.textComponentPath && patterns.text.includes(fileName)) {
           uiComponents.textComponentPath = relativePath;
@@ -165,9 +170,13 @@ export async function findUIComponents(
           }
         }
 
-        if (uiComponents.textComponentPath && uiComponents.linkComponentPath &&
-            uiComponents.buttonComponentPath && uiComponents.imageComponentPath &&
-            uiComponents.containerComponentPath) {
+        if (
+          uiComponents.textComponentPath &&
+          uiComponents.linkComponentPath &&
+          uiComponents.buttonComponentPath &&
+          uiComponents.imageComponentPath &&
+          uiComponents.containerComponentPath
+        ) {
           return uiComponents;
         }
       }

@@ -15,11 +15,7 @@ import { useAuthStore } from '../stores/authStore';
  * set sessionExpired/connectionError flags when refresh fails, allowing
  * ProtectedRoute to show appropriate UI ("Session Expired" instead of empty state)
  */
-export async function authFetch(
-  url: string,
-  options: RequestInit = {},
-  _isRetry = false
-): Promise<Response> {
+export async function authFetch(url: string, options: RequestInit = {}, _isRetry = false): Promise<Response> {
   const { accessToken } = useAuthStore.getState();
 
   const headers: HeadersInit = {
@@ -27,7 +23,7 @@ export async function authFetch(
   };
 
   if (accessToken) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+    (headers as Record<string, string>).Authorization = `Bearer ${accessToken}`;
   }
 
   const response = await fetch(url, {
@@ -60,10 +56,7 @@ export async function authFetch(
 /**
  * Make an authenticated JSON POST request
  */
-export async function authJsonPost<T>(
-  url: string,
-  data: unknown
-): Promise<T> {
+export async function authJsonPost<T>(url: string, data: unknown): Promise<T> {
   const response = await authFetch(url, {
     method: 'POST',
     headers: {

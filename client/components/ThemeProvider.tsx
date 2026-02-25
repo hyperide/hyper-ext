@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 
 type Theme = 'light' | 'dark' | 'system';
@@ -63,21 +63,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mediaQuery.removeEventListener('change', handler);
   }, [theme]);
 
-  const setTheme = useCallback((newTheme: Theme) => {
-    updateTheme(newTheme);
-  }, [updateTheme]);
-
-  const value = useMemo(() => ({
-    theme,
-    resolvedTheme,
-    setTheme,
-  }), [theme, resolvedTheme, setTheme]);
-
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+  const setTheme = useCallback(
+    (newTheme: Theme) => {
+      updateTheme(newTheme);
+    },
+    [updateTheme],
   );
+
+  const value = useMemo(
+    () => ({
+      theme,
+      resolvedTheme,
+      setTheme,
+    }),
+    [theme, resolvedTheme, setTheme],
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

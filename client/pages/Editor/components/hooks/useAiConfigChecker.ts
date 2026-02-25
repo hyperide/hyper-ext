@@ -1,10 +1,10 @@
-import { SetStateAction, useEffect } from 'react';
+import { type SetStateAction, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 
 export function useAiConfigChecker(
-  setAiConfig: { (value: any): void; (arg0: null): void },
+  setAiConfig: (value: unknown) => void,
   setAiConfigChecked: (value: SetStateAction<boolean>) => void,
 ) {
   const { currentWorkspace } = useAuthStore();

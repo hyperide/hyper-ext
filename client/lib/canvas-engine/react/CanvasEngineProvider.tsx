@@ -2,10 +2,10 @@
  * React Provider for Canvas Engine
  */
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { CanvasEngine } from "../core/CanvasEngine";
-import type { CanvasStoreApi } from "../store/createCanvasStore";
-import { createCanvasStore } from "../store/createCanvasStore";
+import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import type { CanvasEngine } from '../core/CanvasEngine';
+import type { CanvasStoreApi } from '../store/createCanvasStore';
+import { createCanvasStore } from '../store/createCanvasStore';
 
 /**
  * Canvas Engine Context
@@ -28,10 +28,7 @@ export interface CanvasEngineProviderProps {
 /**
  * Canvas Engine Provider
  */
-export function CanvasEngineProvider({
-  engine,
-  children,
-}: CanvasEngineProviderProps) {
+export function CanvasEngineProvider({ engine, children }: CanvasEngineProviderProps) {
   const store = useMemo(() => createCanvasStore(engine), [engine]);
 
   const value = useMemo(
@@ -39,14 +36,10 @@ export function CanvasEngineProvider({
       engine,
       store,
     }),
-    [engine, store]
+    [engine, store],
   );
 
-  return (
-    <CanvasEngineContext.Provider value={value}>
-      {children}
-    </CanvasEngineContext.Provider>
-  );
+  return <CanvasEngineContext.Provider value={value}>{children}</CanvasEngineContext.Provider>;
 }
 
 /**
@@ -56,9 +49,7 @@ export function useCanvasEngineContext(): CanvasEngineContext {
   const context = useContext(CanvasEngineContext);
 
   if (!context) {
-    throw new Error(
-      "useCanvasEngineContext must be used within CanvasEngineProvider"
-    );
+    throw new Error('useCanvasEngineContext must be used within CanvasEngineProvider');
   }
 
   return context;
@@ -71,4 +62,11 @@ export function useCanvasEngineContext(): CanvasEngineContext {
 export function useCanvasEngineOptional(): CanvasEngine | null {
   const context = useContext(CanvasEngineContext);
   return context?.engine ?? null;
+}
+
+/**
+ * Safe variant of useCanvasEngineContext — returns null outside CanvasEngineProvider.
+ */
+export function useCanvasEngineContextOptional(): CanvasEngineContext | null {
+  return useContext(CanvasEngineContext);
 }

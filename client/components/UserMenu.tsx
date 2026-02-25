@@ -1,31 +1,32 @@
 // ⚠️ Vanilla JS copy exists in server/main.ts (IDE injection) - sync on changes
-import { useNavigate } from 'react-router-dom';
+
 import {
   IconChevronDown,
-  IconLogout,
-  IconSettings,
-  IconUser,
-  IconSun,
-  IconMoon,
   IconDeviceDesktop,
+  IconLogout,
+  IconMoon,
+  IconSettings,
+  IconSun,
+  IconUser,
 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@/components/ThemeProvider';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/stores/authStore';
-import { useTheme } from '@/components/ThemeProvider';
 
 interface UserMenuProps {
   onOpenProjectSettings?: () => void;
@@ -62,10 +63,7 @@ export default function UserMenu({ onOpenProjectSettings }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <button type="button" className="flex items-center gap-1">
           <Avatar className="w-6 h-6">
-            <AvatarImage
-              src={user?.avatarUrl || undefined}
-              alt={user?.name || user?.email || 'User'}
-            />
+            <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || user?.email || 'User'} />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
           <IconChevronDown className="w-3 h-3" stroke={1.5} />
@@ -83,10 +81,7 @@ export default function UserMenu({ onOpenProjectSettings }: UserMenuProps) {
             <DropdownMenuSeparator />
           </>
         )}
-        <DropdownMenuItem
-          onClick={() => navigate('/settings')}
-          className="cursor-pointer"
-        >
+        <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer">
           <IconUser className="w-4 h-4 mr-2" />
           Account settings
         </DropdownMenuItem>

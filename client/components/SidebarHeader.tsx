@@ -1,11 +1,19 @@
-import { IconHome, IconGitBranch } from '@tabler/icons-react';
+import { IconGitBranch, IconHome } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useGitStore } from '@/stores/gitStore';
 
 export default function SidebarHeader() {
   const navigate = useNavigate();
 
-  const { isPushPopoverOpen, setIsPushPopoverOpen, hasUnpushedChanges, unpushedFileCount, flowState, pushChanges, commitMessage } = useGitStore();
+  const {
+    isPushPopoverOpen,
+    setIsPushPopoverOpen,
+    hasUnpushedChanges,
+    unpushedFileCount,
+    flowState,
+    pushChanges,
+    commitMessage,
+  } = useGitStore();
   const hasChanges = hasUnpushedChanges;
   const isPushing = flowState === 'pushing';
   const isGenerating = flowState === 'generating';
@@ -38,7 +46,11 @@ export default function SidebarHeader() {
     return 'Push';
   };
 
-  const isDisabled = (!isPushPopoverOpen && !hasChanges) || isPushing || (isPushPopoverOpen && hasChanges && isGenerating) || (isPushPopoverOpen && hasChanges && !commitMessage.trim());
+  const isDisabled =
+    (!isPushPopoverOpen && !hasChanges) ||
+    isPushing ||
+    (isPushPopoverOpen && hasChanges && isGenerating) ||
+    (isPushPopoverOpen && hasChanges && !commitMessage.trim());
 
   return (
     <div className="p-3 flex items-center justify-between border-b border-border">

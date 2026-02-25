@@ -2,7 +2,9 @@
  * Canvas Engine - main facade class
  */
 
-import { EventEmitter } from "../events/EventEmitter";
+import { loadPersistedState, savePersistedState } from '../../storage';
+import { EventEmitter } from '../events/EventEmitter';
+import type { CanvasEngineEvents, CanvasEventName } from '../events/events';
 import type {
   CanvasEngineConfig,
   ComponentDefinition,
@@ -11,32 +13,34 @@ import type {
   HistoryState,
   DocumentTree as IDocumentTree,
   SelectionState,
-} from "../models/types";
-import { BatchOperation } from "../operations/BatchOperation";
-import type { Operation } from "../operations/Operation";
-import { ASTUpdateOperation } from "../operations/ASTUpdateOperation";
-import { ASTUpdatePropsOperation } from "../operations/ASTUpdatePropsOperation";
-import { ASTInsertOperation } from "../operations/ASTInsertOperation";
-import { ASTDeleteOperation } from "../operations/ASTDeleteOperation";
-import { ASTBatchDeleteOperation } from "../operations/ASTBatchDeleteOperation";
-import { ASTDuplicateOperation } from "../operations/ASTDuplicateOperation";
-import { ASTPasteOperation } from "../operations/ASTPasteOperation";
-import { ASTStyleOperation } from "../operations/ASTStyleOperation";
-import { ASTEditConditionOperation } from "../operations/ASTEditConditionOperation";
-import {
-  FileSnapshotOperation,
-  type FileSnapshotOperationParams,
-} from "../operations/FileSnapshotOperation";
-import type { ASTApiService } from "../services/ASTApiService";
-import { ASTApiServiceImpl } from "../services/ASTApiServiceImpl";
-import type { Operation as BaseOperation } from "../operations/Operation";
-import { deserialize, serialize } from "../utils/serialization";
-import { loadPersistedState, savePersistedState } from "../../storage";
-import { ClipboardManager } from "./ClipboardManager";
-import { ComponentRegistry } from "./ComponentRegistry";
-import { DocumentTree } from "./DocumentTree";
-import { HistoryManager } from "./HistoryManager";
-import { ServerSyncManager } from "./ServerSyncManager";
+} from '../models/types';
+import { ASTBatchDeleteOperation } from '../operations/ASTBatchDeleteOperation';
+import { ASTDeleteOperation } from '../operations/ASTDeleteOperation';
+import { ASTDuplicateOperation } from '../operations/ASTDuplicateOperation';
+import { ASTEditConditionOperation } from '../operations/ASTEditConditionOperation';
+import { ASTInsertOperation } from '../operations/ASTInsertOperation';
+import { ASTPasteOperation } from '../operations/ASTPasteOperation';
+import { ASTStyleOperation } from '../operations/ASTStyleOperation';
+import { ASTUpdateOperation } from '../operations/ASTUpdateOperation';
+import { ASTUpdatePropsOperation } from '../operations/ASTUpdatePropsOperation';
+import { BatchOperation } from '../operations/BatchOperation';
+import { FileSnapshotOperation, type FileSnapshotOperationParams } from '../operations/FileSnapshotOperation';
+import type { Operation as BaseOperation, Operation } from '../operations/Operation';
+import type { ASTApiService } from '../services/ASTApiService';
+import { ASTApiServiceImpl } from '../services/ASTApiServiceImpl';
+import type { ASTNode } from '../types/ast';
+import { deserialize, serialize } from '../utils/serialization';
+import { ClipboardManager } from './ClipboardManager';
+import { ComponentRegistry } from './ComponentRegistry';
+import { DocumentTree } from './DocumentTree';
+import { HistoryManager } from './HistoryManager';
+import { ServerSyncManager } from './ServerSyncManager';
+
+interface LoadInstanceChild {
+  type: string;
+  props: Record<string, unknown>;
+  children?: LoadInstanceChild[];
+}
 
 /**
  * Main Canvas Engine class
@@ -57,10 +61,10 @@ export class CanvasEngine {
     hoveredItemIndex: null,
     selectedItemIndices: new Map(),
   };
-  private mode: "design" | "interact" | "code" = (() => {
+  private mode: 'design' | 'interact' | 'code' = (() => {
     const persistedMode = loadPersistedState().mode;
     // Filter out 'board' mode - it's handled at UI level
-    return (persistedMode === 'board' ? 'interact' : persistedMode) || "design";
+    return (persistedMode === 'board' ? 'interact' : persistedMode) || 'design';
   })();
 
   // Config
@@ -70,8 +74,8 @@ export class CanvasEngine {
   // Batch mode for bulk operations
   private _isBatchMode: boolean = false;
   private _batchedEvents: Array<{
-    eventName: keyof import("../events/events").CanvasEngineEvents;
-    payload: any;
+    eventName: CanvasEventName;
+    payload: CanvasEngineEvents[CanvasEventName];
   }> = [];
 
   // Undo/redo debounce to prevent concurrent operations
@@ -90,12 +94,10 @@ export class CanvasEngine {
     this.tree = new DocumentTree(config.initialTree);
     this.history = new HistoryManager(config.maxHistoryLength ?? 100);
     this.clipboard = new ClipboardManager();
-    this.serverSync = config.serverSync
-      ? new ServerSyncManager(config.serverSync)
-      : null;
+    this.serverSync = config.serverSync ? new ServerSyncManager(config.serverSync) : null;
     this.api = new ASTApiServiceImpl();
 
-    this.log("CanvasEngine initialized");
+    this.log('CanvasEngine initialized');
   }
 
   // ============================================
@@ -105,9 +107,7 @@ export class CanvasEngine {
   /**
    * Register component definition
    */
-  registerComponent<F extends FieldsMap>(
-    definition: ComponentDefinition<F>,
-  ): void {
+  registerComponent<F extends FieldsMap>(definition: ComponentDefinition<F>): void {
     this.registry.register(definition);
     this.log(`Component registered: ${definition.type}`);
   }
@@ -148,12 +148,13 @@ export class CanvasEngine {
     // If not found as instance, check if it's an AST node ID
     if (!instance) {
       const root = this.tree.getRoot();
-      if (root.metadata?.astStructure) {
-        const astNode = this.findASTNode(root.metadata.astStructure, id);
+      const astStructure = root.metadata?.astStructure;
+      if (Array.isArray(astStructure)) {
+        const astNode = this.findASTNode(astStructure as ASTNode[], id);
         if (astNode) {
           // Valid AST node - allow selection
           this.selection.selectedIds = [id];
-          this.emitEvent("selection:change", {
+          this.emitEvent('selection:change', {
             selectedIds: this.selection.selectedIds,
             previousIds,
           });
@@ -168,7 +169,7 @@ export class CanvasEngine {
     this.selection.selectedIds = [id];
     this.selection.selectedItemIndices.clear();
 
-    this.emitEvent("selection:change", {
+    this.emitEvent('selection:change', {
       selectedIds: this.selection.selectedIds,
       previousIds,
     });
@@ -188,7 +189,7 @@ export class CanvasEngine {
       this.selection.selectedItemIndices.set(id, itemIndex);
     }
 
-    this.emitEvent("selection:change", {
+    this.emitEvent('selection:change', {
       selectedIds: this.selection.selectedIds,
       previousIds,
     });
@@ -201,7 +202,7 @@ export class CanvasEngine {
     const previousIds = [...this.selection.selectedIds];
     this.selection.selectedIds = ids;
 
-    this.emitEvent("selection:change", {
+    this.emitEvent('selection:change', {
       selectedIds: this.selection.selectedIds,
       previousIds,
     });
@@ -215,7 +216,7 @@ export class CanvasEngine {
       const previousIds = [...this.selection.selectedIds];
       this.selection.selectedIds = [...this.selection.selectedIds, id];
 
-      this.emitEvent("selection:change", {
+      this.emitEvent('selection:change', {
         selectedIds: this.selection.selectedIds,
         previousIds,
       });
@@ -227,11 +228,9 @@ export class CanvasEngine {
    */
   removeFromSelection(id: string): void {
     const previousIds = [...this.selection.selectedIds];
-    this.selection.selectedIds = this.selection.selectedIds.filter(
-      (selectedId) => selectedId !== id,
-    );
+    this.selection.selectedIds = this.selection.selectedIds.filter((selectedId) => selectedId !== id);
 
-    this.emitEvent("selection:change", {
+    this.emitEvent('selection:change', {
       selectedIds: this.selection.selectedIds,
       previousIds,
     });
@@ -245,7 +244,7 @@ export class CanvasEngine {
     this.selection.selectedIds = [];
     this.selection.selectedItemIndices.clear();
 
-    this.emitEvent("selection:change", {
+    this.emitEvent('selection:change', {
       selectedIds: [],
       previousIds,
     });
@@ -259,7 +258,7 @@ export class CanvasEngine {
     this.selection.hoveredId = id;
     this.selection.hoveredItemIndex = null;
 
-    this.emitEvent("hover:change", {
+    this.emitEvent('hover:change', {
       hoveredId: id,
       previousId,
     });
@@ -273,7 +272,7 @@ export class CanvasEngine {
     this.selection.hoveredId = id;
     this.selection.hoveredItemIndex = itemIndex;
 
-    this.emitEvent("hover:change", {
+    this.emitEvent('hover:change', {
       hoveredId: id,
       previousId,
     });
@@ -295,9 +294,7 @@ export class CanvasEngine {
   getSelectedInstances(): ComponentInstance[] {
     return this.selection.selectedIds
       .map((id) => this.tree.getInstance(id))
-      .filter(
-        (instance): instance is ComponentInstance => instance !== undefined,
-      );
+      .filter((instance): instance is ComponentInstance => instance !== undefined);
   }
 
   // ============================================
@@ -307,7 +304,7 @@ export class CanvasEngine {
   /**
    * Set mode
    */
-  setMode(mode: "design" | "interact" | "code"): void {
+  setMode(mode: 'design' | 'interact' | 'code'): void {
     const previousMode = this.mode;
     if (previousMode === mode) {
       return;
@@ -318,7 +315,7 @@ export class CanvasEngine {
     // Persist mode to localStorage
     savePersistedState({ mode });
 
-    this.emitEvent("mode:change", {
+    this.emitEvent('mode:change', {
       mode,
       previousMode,
     });
@@ -329,7 +326,7 @@ export class CanvasEngine {
   /**
    * Get current mode
    */
-  getMode(): "design" | "interact" | "code" {
+  getMode(): 'design' | 'interact' | 'code' {
     return this.mode;
   }
 
@@ -355,9 +352,9 @@ export class CanvasEngine {
 
       if (success) {
         // Wait for any pending async work (API calls) in the operation
-        if (operation && '_pendingPromise' in operation) {
+        if (operation && '_pendingPromise' in operation && operation._pendingPromise instanceof Promise) {
           try {
-            await (operation as any)._pendingPromise;
+            await operation._pendingPromise;
           } catch {
             // Operation failure is already handled by HistoryManager
           }
@@ -367,12 +364,12 @@ export class CanvasEngine {
         this.emitHistoryChange();
 
         if (operation) {
-          this.emitEvent("history:undo", {
+          this.emitEvent('history:undo', {
             operationName: operation.name,
           });
         }
 
-        this.log("Undo successful");
+        this.log('Undo successful');
       }
 
       return success;
@@ -400,9 +397,9 @@ export class CanvasEngine {
         const operation = this.history.getCurrentOperation();
 
         // Wait for any pending async work (API calls) in the operation
-        if (operation && '_pendingPromise' in operation) {
+        if (operation && '_pendingPromise' in operation && operation._pendingPromise instanceof Promise) {
           try {
-            await (operation as any)._pendingPromise;
+            await operation._pendingPromise;
           } catch {
             // Operation failure is already handled by HistoryManager
           }
@@ -412,12 +409,12 @@ export class CanvasEngine {
         this.emitHistoryChange();
 
         if (operation) {
-          this.emitEvent("history:redo", {
+          this.emitEvent('history:redo', {
             operationName: operation.name,
           });
         }
 
-        this.log("Redo successful");
+        this.log('Redo successful');
       }
 
       return success;
@@ -481,12 +478,7 @@ export class CanvasEngine {
    * Update AST element prop (for iframe components)
    * This executes an ASTUpdateOperation and records it in history
    */
-  updateASTProp(
-    elementId: string,
-    filePath: string,
-    propName: string,
-    propValue: any
-  ): void {
+  updateASTProp(elementId: string, filePath: string, propName: string, propValue: unknown): void {
     const operation = new ASTUpdateOperation(this.api, {
       elementId,
       filePath,
@@ -517,7 +509,7 @@ export class CanvasEngine {
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
-    }
+    },
   ): void {
     const operation = new ASTStyleOperation(this.api, {
       elementId,
@@ -568,11 +560,7 @@ export class CanvasEngine {
    * Update multiple AST element props at once (for iframe components)
    * This executes an ASTUpdatePropsOperation and records it in history
    */
-  updateASTProps(
-    elementId: string,
-    filePath: string,
-    props: Record<string, unknown>
-  ): void {
+  updateASTProps(elementId: string, filePath: string, props: Record<string, unknown>): void {
     const operation = new ASTUpdatePropsOperation(this.api, {
       elementId,
       filePath,
@@ -598,8 +586,8 @@ export class CanvasEngine {
     parentId: string | null,
     filePath: string,
     componentType: string,
-    props: Record<string, any>,
-    componentFilePath?: string
+    props: Record<string, unknown>,
+    componentFilePath?: string,
   ): void {
     const operation = new ASTInsertOperation(this.api, {
       parentId,
@@ -650,7 +638,10 @@ export class CanvasEngine {
    * More efficient than multiple deleteASTElement calls
    */
   deleteASTElements(elementIds: string[], filePath: string): void {
-    console.log(`[CanvasEngine.deleteASTElements] Called with ${elementIds.length} elements:`, elementIds.map(id => id.substring(0, 8))); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    console.log(
+      `[CanvasEngine.deleteASTElements] Called with ${elementIds.length} elements:`,
+      elementIds.map((id) => id.substring(0, 8)),
+    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
     if (elementIds.length === 0) {
       console.warn('[CanvasEngine] No elements to delete');
@@ -716,11 +707,7 @@ export class CanvasEngine {
    * This executes an ASTPasteOperation and records it in history
    * Returns promise that resolves to new element ID
    */
-  async pasteASTElement(
-    parentId: string | null,
-    filePath: string,
-    tsxCode: string
-  ): Promise<string | null> {
+  async pasteASTElement(parentId: string | null, filePath: string, tsxCode: string): Promise<string | null> {
     const operation = new ASTPasteOperation(this.api, {
       parentId,
       filePath,
@@ -757,10 +744,7 @@ export class CanvasEngine {
    * Paste instance from clipboard
    */
   paste(parentId?: string | null): string | null {
-    const pastedId = this.clipboard.paste(
-      this.tree,
-      parentId ?? this.tree.getRootId(),
-    );
+    const pastedId = this.clipboard.paste(this.tree, parentId ?? this.tree.getRootId());
 
     if (pastedId) {
       this.notifyStateChange();
@@ -849,7 +833,7 @@ export class CanvasEngine {
     this.history.clear();
     this.clearSelection();
     this.notifyStateChange();
-    this.log("Tree deserialized");
+    this.log('Tree deserialized');
   }
 
   /**
@@ -870,7 +854,7 @@ export class CanvasEngine {
   startBatch(): void {
     this._isBatchMode = true;
     this._batchedEvents = [];
-    this.log("Batch mode started");
+    this.log('Batch mode started');
   }
 
   /**
@@ -878,7 +862,7 @@ export class CanvasEngine {
    */
   finalizeBatch(): void {
     if (!this._isBatchMode) {
-      this.log("Warning: finalizeBatch called without startBatch");
+      this.log('Warning: finalizeBatch called without startBatch');
       return;
     }
 
@@ -889,16 +873,14 @@ export class CanvasEngine {
     this._batchedEvents = [];
 
     // Emit unique events (deduplicate by event name)
-    const uniqueEvents = new Map<string, any>();
+    const uniqueEvents = new Map<string, CanvasEngineEvents[CanvasEventName]>();
     for (const { eventName, payload } of events) {
       // For tree:change events, merge changedIds
-      if (eventName === "tree:change") {
-        const existing = uniqueEvents.get(eventName);
+      if (eventName === 'tree:change') {
+        const existing = uniqueEvents.get(eventName) as import('../events/events').TreeChangeEvent | undefined;
+        const treePayload = payload as import('../events/events').TreeChangeEvent;
         if (existing) {
-          const mergedIds = new Set([
-            ...(existing.changedIds || []),
-            ...(payload.changedIds || []),
-          ]);
+          const mergedIds = new Set([...(existing.changedIds || []), ...(treePayload.changedIds || [])]);
           uniqueEvents.set(eventName, { changedIds: Array.from(mergedIds) });
         } else {
           uniqueEvents.set(eventName, payload);
@@ -911,18 +893,18 @@ export class CanvasEngine {
 
     // Always emit at least one tree:change event to trigger store update
     // This ensures UI updates even if metadata was changed directly without events
-    if (!uniqueEvents.has("tree:change")) {
+    if (!uniqueEvents.has('tree:change')) {
       const rootId = this.tree.getRootId();
       const rootChildren = this.tree.getChildren(rootId);
       const changedIds = rootChildren.map((child) => child.id);
-      uniqueEvents.set("tree:change", {
+      uniqueEvents.set('tree:change', {
         changedIds,
       });
     }
 
     // Emit deduplicated events directly (bypass emitEvent to avoid recursion)
     for (const [eventName, payload] of uniqueEvents.entries()) {
-      this.events.emit(eventName as any, payload);
+      this.events.emit(eventName as CanvasEventName, payload as CanvasEngineEvents[CanvasEventName]);
     }
   }
 
@@ -936,12 +918,12 @@ export class CanvasEngine {
    */
   loadInstances(
     type: string,
-    props: Record<string, any>,
+    props: Record<string, unknown>,
     parentId: string | null = null,
     children?: Array<{
       type: string;
-      props: Record<string, any>;
-      children?: any[];
+      props: Record<string, unknown>;
+      children?: LoadInstanceChild[];
     }>,
   ): string {
     const actualParentId = parentId ?? this.tree.getRootId();
@@ -974,7 +956,7 @@ export class CanvasEngine {
 
     // Emit tree change event so Zustand store updates
     // Note: notifyStateChange() removed - it bypasses batch mode
-    this.emitEvent("tree:change", {
+    this.emitEvent('tree:change', {
       changedIds: deletedIds,
     });
   }
@@ -1011,7 +993,7 @@ export class CanvasEngine {
     this.notifyStateChange();
 
     // Emit tree change event so Zustand store updates
-    this.emitEvent("tree:change", {
+    this.emitEvent('tree:change', {
       changedIds,
     });
   }
@@ -1023,11 +1005,9 @@ export class CanvasEngine {
   /**
    * Emit event or batch it if in batch mode
    */
-  private emitEvent<
-    K extends keyof import("../events/events").CanvasEngineEvents,
-  >(
+  private emitEvent<K extends keyof import('../events/events').CanvasEngineEvents>(
     eventName: K,
-    payload: import("../events/events").CanvasEngineEvents[K],
+    payload: import('../events/events').CanvasEngineEvents[K],
   ): void {
     if (this._isBatchMode) {
       this._batchedEvents.push({ eventName, payload });
@@ -1055,7 +1035,7 @@ export class CanvasEngine {
         await this.syncOperationToServer(operation);
       } catch (error) {
         // Rollback operation if server sync failed
-        this.log("Server sync failed, rolling back operation");
+        this.log('Server sync failed, rolling back operation');
 
         // Undo the operation
         operation.undo(this.tree);
@@ -1065,10 +1045,7 @@ export class CanvasEngine {
 
         // Notify error
         if (this.config.serverSync?.onSyncError) {
-          this.config.serverSync.onSyncError(
-            error instanceof Error ? error : new Error(String(error)),
-            operation
-          );
+          this.config.serverSync.onSyncError(error instanceof Error ? error : new Error(String(error)), operation);
         }
 
         throw error;
@@ -1083,7 +1060,7 @@ export class CanvasEngine {
 
     // Emit tree change
     if (result.changedIds) {
-      this.emitEvent("tree:change", {
+      this.emitEvent('tree:change', {
         changedIds: result.changedIds,
       });
     }
@@ -1113,7 +1090,7 @@ export class CanvasEngine {
    * Emit history change event
    */
   private emitHistoryChange(): void {
-    this.emitEvent("history:change", {
+    this.emitEvent('history:change', {
       state: this.history.getState(),
     });
   }
@@ -1121,7 +1098,7 @@ export class CanvasEngine {
   /**
    * Find AST node by ID in tree structure (recursive)
    */
-  private findASTNode(nodes: any[], id: string): any | null {
+  private findASTNode(nodes: ASTNode[], id: string): ASTNode | null {
     for (const node of nodes) {
       if (node.id === id) {
         return node;
@@ -1139,7 +1116,7 @@ export class CanvasEngine {
   /**
    * Debug logging
    */
-  private log(message: string, ...args: any[]): void {
+  private log(message: string, ...args: unknown[]): void {
     if (this.debug) {
       console.log(`[CanvasEngine] ${message}`, ...args); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }

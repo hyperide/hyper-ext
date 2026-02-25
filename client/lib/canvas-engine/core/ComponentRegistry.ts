@@ -2,12 +2,8 @@
  * Component Registry - manages component definitions
  */
 
-import type {
-  ComponentDefinition,
-  ComponentCategory,
-  FieldsMap,
-} from "../models/types";
-import { componentDefinitionSchema } from "../models/validation";
+import type { ComponentCategory, ComponentDefinition, FieldsMap } from '../models/types';
+import { componentDefinitionSchema } from '../models/validation';
 
 /**
  * Component registry for managing component definitions
@@ -24,16 +20,12 @@ export class ComponentRegistry {
     // Validate definition
     const result = componentDefinitionSchema.safeParse(definition);
     if (!result.success) {
-      throw new Error(
-        `Invalid component definition: ${result.error.message}`
-      );
+      throw new Error(`Invalid component definition: ${result.error.message}`);
     }
 
     // Check for duplicates
     if (this.components.has(definition.type)) {
-      throw new Error(
-        `Component type "${definition.type}" is already registered`
-      );
+      throw new Error(`Component type "${definition.type}" is already registered`);
     }
 
     // Store component (cast needed: generic F extends FieldsMap, safe at runtime)
@@ -44,7 +36,7 @@ export class ComponentRegistry {
       if (!this.categories.has(definition.category)) {
         this.categories.set(definition.category, new Set());
       }
-      this.categories.get(definition.category)!.add(definition.type);
+      this.categories.get(definition.category)?.add(definition.type);
     }
   }
 
@@ -152,18 +144,12 @@ export class ComponentRegistry {
     }
 
     // Check parent's allowed children
-    if (
-      parentDef.allowedChildren &&
-      !parentDef.allowedChildren.includes(childType)
-    ) {
+    if (parentDef.allowedChildren && !parentDef.allowedChildren.includes(childType)) {
       return false;
     }
 
     // Check child's allowed parents
-    if (
-      childDef.allowedParents &&
-      !childDef.allowedParents.includes(parentType)
-    ) {
+    if (childDef.allowedParents && !childDef.allowedParents.includes(parentType)) {
       return false;
     }
 

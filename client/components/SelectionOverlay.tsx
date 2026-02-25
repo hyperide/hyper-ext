@@ -49,14 +49,9 @@ function SelectionBorderOverlay({ selection }: { selection: SelectionRect }) {
  */
 export function SelectionOverlay({ selections, portalContainer }: SelectionOverlayProps) {
   return createPortal(
-    <>
-      {selections.map((selection) => (
-        <SelectionBorderOverlay
-          key={`${selection.elementId}-${selection.type}`}
-          selection={selection}
-        />
-      ))}
-    </>,
-    portalContainer
+    selections.map((selection) => (
+      <SelectionBorderOverlay key={`${selection.elementId}-${selection.type}`} selection={selection} />
+    )),
+    portalContainer,
   );
 }

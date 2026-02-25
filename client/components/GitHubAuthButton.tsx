@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
 import { IconBrandGithub } from '@tabler/icons-react';
+import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/utils/authFetch';
 
 interface GitHubUser {
@@ -80,11 +80,7 @@ export default function GitHubAuthButton({ onAuthChange }: GitHubAuthButtonProps
   if (user) {
     return (
       <div className="flex items-center gap-2">
-        <img
-          src={user.avatar_url}
-          alt={user.login}
-          className="w-6 h-6 rounded-full"
-        />
+        <img src={user.avatar_url} alt={user.login} className="w-6 h-6 rounded-full" />
         <span className="text-sm font-medium">{user.name || user.login}</span>
       </div>
     );

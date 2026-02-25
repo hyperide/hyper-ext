@@ -3,9 +3,9 @@
  * Shows arrows pointing to instances that are outside the visible viewport
  */
 
+import { type RefObject, useEffect } from 'react';
 import type { ViewportState } from '@/../../shared/types/canvas';
 import { getPreviewIframe } from '@/lib/dom-utils';
-import { useEffect, type RefObject } from 'react';
 
 interface UseOffscreenIndicatorsProps {
   enabled: boolean; // Only show in board mode

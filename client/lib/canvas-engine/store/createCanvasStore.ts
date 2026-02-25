@@ -2,15 +2,10 @@
  * Zustand store factory for Canvas Engine
  */
 
-import { create } from "zustand";
-import { subscribeWithSelector } from "zustand/middleware";
-import type { CanvasEngine } from "../core/CanvasEngine";
-import type {
-  ComponentInstance,
-  DocumentTree,
-  HistoryState,
-  SelectionState,
-} from "../models/types";
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import type { CanvasEngine } from '../core/CanvasEngine';
+import type { ComponentInstance, DocumentTree, HistoryState, SelectionState } from '../models/types';
 
 /**
  * Canvas store state
@@ -78,15 +73,15 @@ export function createCanvasStore(engine: CanvasEngine) {
       };
 
       // Subscribe to engine events
-      engine.events.on("tree:change", updateState);
-      engine.events.on("selection:change", updateState);
-      engine.events.on("hover:change", updateState);
-      engine.events.on("history:change", updateState);
-      engine.events.on("instance:insert", updateState);
-      engine.events.on("instance:update", updateState);
-      engine.events.on("instance:delete", updateState);
-      engine.events.on("instance:move", updateState);
-      engine.events.on("instance:duplicate", updateState);
+      engine.events.on('tree:change', updateState);
+      engine.events.on('selection:change', updateState);
+      engine.events.on('hover:change', updateState);
+      engine.events.on('history:change', updateState);
+      engine.events.on('instance:insert', updateState);
+      engine.events.on('instance:update', updateState);
+      engine.events.on('instance:delete', updateState);
+      engine.events.on('instance:move', updateState);
+      engine.events.on('instance:duplicate', updateState);
 
       return {
         engine,
@@ -99,7 +94,7 @@ export function createCanvasStore(engine: CanvasEngine) {
         _updateCounter: 0,
         forceUpdate: () => updateState(),
       };
-    })
+    }),
   );
 
   return store;

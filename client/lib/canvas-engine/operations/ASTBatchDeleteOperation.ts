@@ -5,10 +5,11 @@
  * Preserves original IDs and full structure for undo.
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation } from "./Operation";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
+import type { ASTNode } from '../types/ast';
+import { BaseOperation } from './Operation';
 
 export interface ASTBatchDeleteOperationParams {
   elementIds: string[];
@@ -16,13 +17,13 @@ export interface ASTBatchDeleteOperationParams {
 }
 
 interface DeletedElementInfo {
-  element: any;
+  element: ASTNode;
   parentId: string | null;
   index: number;
 }
 
 export class ASTBatchDeleteOperation extends BaseOperation {
-  name = "ASTBatchDelete";
+  name = 'ASTBatchDelete';
   private params: ASTBatchDeleteOperationParams;
   private deletedElements: Map<string, DeletedElementInfo> = new Map();
 
@@ -55,7 +56,7 @@ export class ASTBatchDeleteOperation extends BaseOperation {
   /**
    * Undo batch delete: restore all deleted elements with original IDs
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (this.deletedElements.size === 0) {
       console.warn('[ASTBatchDeleteOperation] No elements to restore');
       return this.error('No deleted elements to restore');
@@ -78,7 +79,7 @@ export class ASTBatchDeleteOperation extends BaseOperation {
   /**
    * Redo batch delete: delete all elements again
    */
-  redo(tree: DocumentTree): OperationResult {
+  redo(_tree: DocumentTree): OperationResult {
     if (this.deletedElements.size === 0) {
       console.warn('[ASTBatchDeleteOperation] No elements to delete');
       return this.error('No elements to delete');
@@ -106,11 +107,11 @@ export class ASTBatchDeleteOperation extends BaseOperation {
 
     // Helper to find element and its parent in AST
     const findElementWithParent = (
-      nodes: any[],
+      nodes: ASTNode[],
       targetId: string,
-      parent?: any,
-      index?: number
-    ): { element: any; parent: any; index: number } | null => {
+      parent?: ASTNode,
+      _index?: number,
+    ): { element: ASTNode; parent: ASTNode | undefined; index: number } | null => {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
         if (node.id === targetId) {
@@ -129,8 +130,9 @@ export class ASTBatchDeleteOperation extends BaseOperation {
       let found = false;
 
       // Search in root.metadata.astStructure
-      if (root.metadata?.astStructure) {
-        const result = findElementWithParent(root.metadata.astStructure, elementId);
+      const astStructure = root.metadata?.astStructure;
+      if (Array.isArray(astStructure)) {
+        const result = findElementWithParent(astStructure as ASTNode[], elementId);
         if (result) {
           // Deep copy to avoid mutation issues
           const info: DeletedElementInfo = {
@@ -148,9 +150,10 @@ export class ASTBatchDeleteOperation extends BaseOperation {
             childrenCount: result.element.children?.length || 0,
             hasPropsChildren: !!result.element.props?.children,
             propsChildrenType: typeof result.element.props?.children,
-            propsChildrenValue: typeof result.element.props?.children === 'string'
-              ? result.element.props.children.substring(0, 50)
-              : undefined,
+            propsChildrenValue:
+              typeof result.element.props?.children === 'string'
+                ? result.element.props.children.substring(0, 50)
+                : undefined,
           });
           found = true;
           continue;
@@ -161,8 +164,9 @@ export class ASTBatchDeleteOperation extends BaseOperation {
       const rootChildren = root.children || [];
       for (const childId of rootChildren) {
         const inst = tree.getInstance(childId);
-        if (inst?.metadata?.astStructure) {
-          const result = findElementWithParent(inst.metadata.astStructure, elementId);
+        const childAst = inst?.metadata?.astStructure;
+        if (Array.isArray(childAst)) {
+          const result = findElementWithParent(childAst as ASTNode[], elementId);
           if (result) {
             // Deep copy to avoid mutation issues
             const info: DeletedElementInfo = {
@@ -180,9 +184,10 @@ export class ASTBatchDeleteOperation extends BaseOperation {
               childrenCount: result.element.children?.length || 0,
               hasPropsChildren: !!result.element.props?.children,
               propsChildrenType: typeof result.element.props?.children,
-              propsChildrenValue: typeof result.element.props?.children === 'string'
-                ? result.element.props.children.substring(0, 50)
-                : undefined,
+              propsChildrenValue:
+                typeof result.element.props?.children === 'string'
+                  ? result.element.props.children.substring(0, 50)
+                  : undefined,
             });
             found = true;
             break;
@@ -195,7 +200,13 @@ export class ASTBatchDeleteOperation extends BaseOperation {
       }
     }
 
-    console.log('[ASTBatchDeleteOperation] Stored', this.deletedElements.size, 'of', this.params.elementIds.length, 'elements for undo');
+    console.log(
+      '[ASTBatchDeleteOperation] Stored',
+      this.deletedElements.size,
+      'of',
+      this.params.elementIds.length,
+      'elements for undo',
+    );
   }
 
   /**
@@ -233,18 +244,20 @@ export class ASTBatchDeleteOperation extends BaseOperation {
       if (!elementsByParent.has(key)) {
         elementsByParent.set(key, []);
       }
-      elementsByParent.get(key)!.push([elementId, info]);
+      elementsByParent.get(key)?.push([elementId, info]);
     }
 
     // Sort elements within each parent by original index
     for (const [parentKey, elements] of elementsByParent.entries()) {
       elements.sort((a, b) => a[1].index - b[1].index);
-      console.log(`[ASTBatchDeleteOperation] Parent ${parentKey}: restoring ${elements.length} elements at indices:`, // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        elements.map(e => `${e[0].substring(0, 8)}@${e[1].index}`));
+      console.log(
+        `[ASTBatchDeleteOperation] Parent ${parentKey}: restoring ${elements.length} elements at indices:`, // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+        elements.map((e) => `${e[0].substring(0, 8)}@${e[1].index}`),
+      );
     }
 
     // Restore elements group by group (parent by parent)
-    for (const [parentKey, elements] of elementsByParent.entries()) {
+    for (const [_parentKey, elements] of elementsByParent.entries()) {
       for (const [elementId, info] of elements) {
         // Use original index - elements are sorted, so each insert shifts the array correctly
         const adjustedIndex = info.index;
@@ -259,9 +272,8 @@ export class ASTBatchDeleteOperation extends BaseOperation {
           propsKeys: Object.keys(info.element.props || {}),
           hasPropsChildren: !!info.element.props?.children,
           propsChildrenType: typeof info.element.props?.children,
-          propsChildrenPreview: typeof info.element.props?.children === 'string'
-            ? info.element.props.children.substring(0, 50)
-            : undefined,
+          propsChildrenPreview:
+            typeof info.element.props?.children === 'string' ? info.element.props.children.substring(0, 50) : undefined,
           hasChildrenArray: !!info.element.children,
           childrenArrayLength: Array.isArray(info.element.children) ? info.element.children.length : 0,
         });
@@ -269,13 +281,14 @@ export class ASTBatchDeleteOperation extends BaseOperation {
         // Prepare request body
         // IMPORTANT: Only include 'children' parameter if the array is not empty
         // Otherwise it will overwrite props.children (text content)
-        const requestBody: any = {
-          parentId: info.parentId,
+        const requestBody = {
+          parentId: info.parentId ?? '',
           filePath: this.params.filePath,
           componentType: info.element.type,
-          props: info.element.props || {},
+          props: info.element.props ?? {},
           targetId: info.element.id, // Preserve original ID
           index: adjustedIndex, // Restore at adjusted position
+          children: undefined as ASTNode[] | undefined,
         };
 
         // Only add children parameter if array has elements

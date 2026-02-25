@@ -2,16 +2,11 @@
  * React hooks for Canvas Engine
  */
 
-import { useStore } from "zustand";
-import { useShallow } from "zustand/react/shallow";
-import { useCanvasEngineContext } from "./CanvasEngineProvider";
-import type {
-  CanvasEngine} from "../core/CanvasEngine";
-import type {
-  ComponentInstance,
-  HistoryState,
-  SelectionState,
-} from "../models/types";
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import type { CanvasEngine } from '../core/CanvasEngine';
+import type { ComponentInstance, HistoryState, SelectionState } from '../models/types';
+import { useCanvasEngineContext } from './CanvasEngineProvider';
 
 /**
  * Get Canvas Engine instance
@@ -52,7 +47,7 @@ export function useChildren(parentId: string): ComponentInstance[] {
       return parent.children
         .map((childId) => state.instances.get(childId))
         .filter((child): child is ComponentInstance => child !== undefined);
-    })
+    }),
   );
 }
 
@@ -83,7 +78,10 @@ export function useRoot(): ComponentInstance {
  */
 export function useAllInstances(): ComponentInstance[] {
   const { store } = useCanvasEngineContext();
-  return useStore(store, useShallow((state) => Array.from(state.instances.values())));
+  return useStore(
+    store,
+    useShallow((state) => Array.from(state.instances.values())),
+  );
 }
 
 /**
@@ -99,7 +97,10 @@ export function useSelection(): SelectionState {
  */
 export function useSelectedIds(): string[] {
   const { store } = useCanvasEngineContext();
-  return useStore(store, useShallow((state) => state.selection.selectedIds));
+  return useStore(
+    store,
+    useShallow((state) => state.selection.selectedIds),
+  );
 }
 
 /**
@@ -116,7 +117,10 @@ export function useSelectedItemIndices(): Map<string, number | null> {
  */
 export function useSelectedInstances(): ComponentInstance[] {
   const { store } = useCanvasEngineContext();
-  return useStore(store, useShallow((state) => state.selectedInstances));
+  return useStore(
+    store,
+    useShallow((state) => state.selectedInstances),
+  );
 }
 
 /**

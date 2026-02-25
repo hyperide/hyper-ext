@@ -4,7 +4,7 @@
  */
 
 export interface ParsedTailwindStyles {
-  position?: "static" | "relative" | "absolute" | "fixed" | "sticky";
+  position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
   top?: string;
   right?: string;
   bottom?: string;
@@ -19,7 +19,7 @@ export interface ParsedTailwindStyles {
   backgroundImage?: string;
   borderColor?: string;
   borderRadius?: string;
-  overflow?: "visible" | "hidden" | "scroll" | "auto";
+  overflow?: 'visible' | 'hidden' | 'scroll' | 'auto';
   display?: string;
   flexDirection?: string;
   gap?: string;
@@ -29,42 +29,42 @@ export interface ParsedTailwindStyles {
 
 // Tailwind spacing scale (0-96 + auto)
 const SPACING_SCALE: Record<string, string> = {
-  "0": "0px",
-  px: "1px",
-  "0.5": "0.125rem",
-  "1": "0.25rem",
-  "1.5": "0.375rem",
-  "2": "0.5rem",
-  "2.5": "0.625rem",
-  "3": "0.75rem",
-  "3.5": "0.875rem",
-  "4": "1rem",
-  "5": "1.25rem",
-  "6": "1.5rem",
-  "7": "1.75rem",
-  "8": "2rem",
-  "9": "2.25rem",
-  "10": "2.5rem",
-  "11": "2.75rem",
-  "12": "3rem",
-  "14": "3.5rem",
-  "16": "4rem",
-  "20": "5rem",
-  "24": "6rem",
-  "28": "7rem",
-  "32": "8rem",
-  "36": "9rem",
-  "40": "10rem",
-  "44": "11rem",
-  "48": "12rem",
-  "52": "13rem",
-  "56": "14rem",
-  "60": "15rem",
-  "64": "16rem",
-  "72": "18rem",
-  "80": "20rem",
-  "96": "24rem",
-  auto: "auto",
+  '0': '0px',
+  px: '1px',
+  '0.5': '0.125rem',
+  '1': '0.25rem',
+  '1.5': '0.375rem',
+  '2': '0.5rem',
+  '2.5': '0.625rem',
+  '3': '0.75rem',
+  '3.5': '0.875rem',
+  '4': '1rem',
+  '5': '1.25rem',
+  '6': '1.5rem',
+  '7': '1.75rem',
+  '8': '2rem',
+  '9': '2.25rem',
+  '10': '2.5rem',
+  '11': '2.75rem',
+  '12': '3rem',
+  '14': '3.5rem',
+  '16': '4rem',
+  '20': '5rem',
+  '24': '6rem',
+  '28': '7rem',
+  '32': '8rem',
+  '36': '9rem',
+  '40': '10rem',
+  '44': '11rem',
+  '48': '12rem',
+  '52': '13rem',
+  '56': '14rem',
+  '60': '15rem',
+  '64': '16rem',
+  '72': '18rem',
+  '80': '20rem',
+  '96': '24rem',
+  auto: 'auto',
 };
 
 /**
@@ -76,7 +76,7 @@ function extractArbitraryValue(className: string): string | null {
 }
 
 // Import and re-export getConflictingPrefixes from generator
-import { getConflictingPrefixes } from "./generator";
+import { getConflictingPrefixes } from './generator';
 export { getConflictingPrefixes };
 
 /**
@@ -117,7 +117,7 @@ export function removeConflictingClasses(
   styleKeys: string[],
   state?: string,
 ): { preserved: string; removed: string[] } {
-  if (!className) return { preserved: "", removed: [] };
+  if (!className) return { preserved: '', removed: [] };
 
   const classes = className.split(/\s+/).filter(Boolean);
   const prefixes = getConflictingPrefixes(styleKeys);
@@ -147,26 +147,20 @@ export function removeConflictingClasses(
     for (const prefix of prefixes) {
       if (baseClass === prefix || baseClass.startsWith(prefix)) {
         // Special case: don't remove 'border' (border-width) when removing borderColor
-        if (prefix === "border-" && baseClass === "border") {
+        if (prefix === 'border-' && baseClass === 'border') {
           continue;
         }
         // Special case: don't remove gap-x-* or gap-y-* when removing generic gap-*
-        if (
-          prefix === "gap-" &&
-          (baseClass.startsWith("gap-x-") || baseClass.startsWith("gap-y-"))
-        ) {
+        if (prefix === 'gap-' && (baseClass.startsWith('gap-x-') || baseClass.startsWith('gap-y-'))) {
           continue;
         }
         // Special case: don't remove justify-items-* when removing justify-* (justifyContent)
-        if (prefix === "justify-" && baseClass.startsWith("justify-items-")) {
+        if (prefix === 'justify-' && baseClass.startsWith('justify-items-')) {
           continue;
         }
         // Special case: don't remove flex-col/flex-row when removing display classes
         // 'flex-col'.startsWith('flex') is true, but flex-col is flexDirection, not display
-        if (
-          prefix === "flex" &&
-          (baseClass === "flex-col" || baseClass === "flex-row")
-        ) {
+        if (prefix === 'flex' && (baseClass === 'flex-col' || baseClass === 'flex-row')) {
           continue;
         }
         shouldRemove = true;
@@ -182,7 +176,7 @@ export function removeConflictingClasses(
   }
 
   return {
-    preserved: preserved.join(" "),
+    preserved: preserved.join(' '),
     removed,
   };
 }
@@ -191,10 +185,7 @@ export function removeConflictingClasses(
  * Remove conflicting classes from className (legacy, returns only string)
  * @deprecated Use removeConflictingClasses instead
  */
-export function removeConflictingClassesString(
-  className: string,
-  styleKeys: string[],
-): string {
+export function removeConflictingClassesString(className: string, styleKeys: string[]): string {
   return removeConflictingClasses(className, styleKeys).preserved;
 }
 
@@ -209,32 +200,32 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
 
   for (const cls of classes) {
     // Position type
-    if (cls === "static") result.position = "static";
-    else if (cls === "relative") result.position = "relative";
-    else if (cls === "absolute") result.position = "absolute";
-    else if (cls === "fixed") result.position = "fixed";
-    else if (cls === "sticky") result.position = "sticky";
+    if (cls === 'static') result.position = 'static';
+    else if (cls === 'relative') result.position = 'relative';
+    else if (cls === 'absolute') result.position = 'absolute';
+    else if (cls === 'fixed') result.position = 'fixed';
+    else if (cls === 'sticky') result.position = 'sticky';
 
     // Position values
-    const isNegative = cls.startsWith("-");
+    const isNegative = cls.startsWith('-');
     const cleanCls = isNegative ? cls.slice(1) : cls;
 
-    if (cleanCls.startsWith("top-")) {
+    if (cleanCls.startsWith('top-')) {
       const value = cleanCls.slice(4);
       const arbValue = extractArbitraryValue(cleanCls);
       result.top = arbValue || SPACING_SCALE[value] || value;
       if (isNegative && result.top) result.top = `-${result.top}`;
-    } else if (cleanCls.startsWith("right-")) {
+    } else if (cleanCls.startsWith('right-')) {
       const value = cleanCls.slice(6);
       const arbValue = extractArbitraryValue(cleanCls);
       result.right = arbValue || SPACING_SCALE[value] || value;
       if (isNegative && result.right) result.right = `-${result.right}`;
-    } else if (cleanCls.startsWith("bottom-")) {
+    } else if (cleanCls.startsWith('bottom-')) {
       const value = cleanCls.slice(7);
       const arbValue = extractArbitraryValue(cleanCls);
       result.bottom = arbValue || SPACING_SCALE[value] || value;
       if (isNegative && result.bottom) result.bottom = `-${result.bottom}`;
-    } else if (cleanCls.startsWith("left-")) {
+    } else if (cleanCls.startsWith('left-')) {
       const value = cleanCls.slice(5);
       const arbValue = extractArbitraryValue(cleanCls);
       result.left = arbValue || SPACING_SCALE[value] || value;
@@ -242,36 +233,36 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
     }
 
     // Width and height
-    if (cls.startsWith("w-")) {
+    if (cls.startsWith('w-')) {
       const value = cls.slice(2);
       const arbValue = extractArbitraryValue(cls);
       result.width = arbValue || SPACING_SCALE[value] || value;
-    } else if (cls.startsWith("h-")) {
+    } else if (cls.startsWith('h-')) {
       const value = cls.slice(2);
       const arbValue = extractArbitraryValue(cls);
       result.height = arbValue || SPACING_SCALE[value] || value;
     }
 
     // Margin
-    if (cleanCls.startsWith("mt-")) {
+    if (cleanCls.startsWith('mt-')) {
       const value = cleanCls.slice(3);
       const arbValue = extractArbitraryValue(cleanCls);
       let cssValue = arbValue || SPACING_SCALE[value] || value;
       if (isNegative) cssValue = `-${cssValue}`;
       result.marginTop = cssValue;
-    } else if (cleanCls.startsWith("mr-")) {
+    } else if (cleanCls.startsWith('mr-')) {
       const value = cleanCls.slice(3);
       const arbValue = extractArbitraryValue(cleanCls);
       let cssValue = arbValue || SPACING_SCALE[value] || value;
       if (isNegative) cssValue = `-${cssValue}`;
       result.marginRight = cssValue;
-    } else if (cleanCls.startsWith("mb-")) {
+    } else if (cleanCls.startsWith('mb-')) {
       const value = cleanCls.slice(3);
       const arbValue = extractArbitraryValue(cleanCls);
       let cssValue = arbValue || SPACING_SCALE[value] || value;
       if (isNegative) cssValue = `-${cssValue}`;
       result.marginBottom = cssValue;
-    } else if (cleanCls.startsWith("ml-")) {
+    } else if (cleanCls.startsWith('ml-')) {
       const value = cleanCls.slice(3);
       const arbValue = extractArbitraryValue(cleanCls);
       let cssValue = arbValue || SPACING_SCALE[value] || value;
@@ -280,7 +271,7 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
     }
 
     // Background image: bg-\[url('/path/to/image.png')\]
-    if (cls.startsWith("bg-[url(")) {
+    if (cls.startsWith('bg-[url(')) {
       // Extract URL from bg-\[url('...')\] or bg-\[url("...")\] or bg-\[url(...)\]
       const urlMatch = cls.match(/bg-\[url\(['"]?([^'")\]]+)['"]?\)\]/);
       if (urlMatch) {
@@ -288,76 +279,76 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
       }
     }
     // Background color (arbitrary values only for now)
-    else if (cls.startsWith("bg-[")) {
+    else if (cls.startsWith('bg-[')) {
       const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.backgroundColor = arbValue;
     }
 
     // Border color (arbitrary values only for now)
     if (
-      cls.startsWith("border-[") &&
-      !cls.startsWith("border-t") &&
-      !cls.startsWith("border-r") &&
-      !cls.startsWith("border-b") &&
-      !cls.startsWith("border-l")
+      cls.startsWith('border-[') &&
+      !cls.startsWith('border-t') &&
+      !cls.startsWith('border-r') &&
+      !cls.startsWith('border-b') &&
+      !cls.startsWith('border-l')
     ) {
       const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.borderColor = arbValue;
     }
 
     // Border radius
-    if (cls === "rounded") {
-      result.borderRadius = "0.25rem";
-    } else if (cls === "rounded-none") {
-      result.borderRadius = "0px";
-    } else if (cls === "rounded-sm") {
-      result.borderRadius = "0.125rem";
-    } else if (cls === "rounded-md") {
-      result.borderRadius = "0.375rem";
-    } else if (cls === "rounded-lg") {
-      result.borderRadius = "0.5rem";
-    } else if (cls === "rounded-xl") {
-      result.borderRadius = "0.75rem";
-    } else if (cls.startsWith("rounded-[")) {
+    if (cls === 'rounded') {
+      result.borderRadius = '0.25rem';
+    } else if (cls === 'rounded-none') {
+      result.borderRadius = '0px';
+    } else if (cls === 'rounded-sm') {
+      result.borderRadius = '0.125rem';
+    } else if (cls === 'rounded-md') {
+      result.borderRadius = '0.375rem';
+    } else if (cls === 'rounded-lg') {
+      result.borderRadius = '0.5rem';
+    } else if (cls === 'rounded-xl') {
+      result.borderRadius = '0.75rem';
+    } else if (cls.startsWith('rounded-[')) {
       const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.borderRadius = arbValue;
     }
 
     // Overflow
-    if (cls === "overflow-visible") {
-      result.overflow = "visible";
-    } else if (cls === "overflow-hidden") {
-      result.overflow = "hidden";
-    } else if (cls === "overflow-scroll") {
-      result.overflow = "scroll";
-    } else if (cls === "overflow-auto") {
-      result.overflow = "auto";
+    if (cls === 'overflow-visible') {
+      result.overflow = 'visible';
+    } else if (cls === 'overflow-hidden') {
+      result.overflow = 'hidden';
+    } else if (cls === 'overflow-scroll') {
+      result.overflow = 'scroll';
+    } else if (cls === 'overflow-auto') {
+      result.overflow = 'auto';
     }
 
     // Display & Flexbox
-    if (cls === "flex") {
-      result.display = "flex";
-    } else if (cls === "block") {
-      result.display = "block";
-    } else if (cls === "grid") {
-      result.display = "grid";
+    if (cls === 'flex') {
+      result.display = 'flex';
+    } else if (cls === 'block') {
+      result.display = 'block';
+    } else if (cls === 'grid') {
+      result.display = 'grid';
     }
 
-    if (cls === "flex-col") {
-      result.flexDirection = "column";
-    } else if (cls === "flex-row") {
-      result.flexDirection = "row";
-    } else if (cls.startsWith("space-y-")) {
+    if (cls === 'flex-col') {
+      result.flexDirection = 'column';
+    } else if (cls === 'flex-row') {
+      result.flexDirection = 'row';
+    } else if (cls.startsWith('space-y-')) {
       // space-y-* implies flex column direction with gap
-      result.display = "flex";
-      result.flexDirection = "column";
+      result.display = 'flex';
+      result.flexDirection = 'column';
       const value = cls.slice(8);
       const arbValue = extractArbitraryValue(cls);
       result.gap = arbValue || SPACING_SCALE[value] || value;
-    } else if (cls.startsWith("space-x-")) {
+    } else if (cls.startsWith('space-x-')) {
       // space-x-* implies flex row direction with gap
-      result.display = "flex";
-      result.flexDirection = "row";
+      result.display = 'flex';
+      result.flexDirection = 'row';
       const value = cls.slice(8);
       const arbValue = extractArbitraryValue(cls);
       result.gap = arbValue || SPACING_SCALE[value] || value;
@@ -383,9 +374,7 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
  * //   boxShadow: 'shadow-lg'
  * // }
  */
-export function mapPropertiesToTailwindClasses(
-  domClasses: string,
-): Record<string, string> {
+export function mapPropertiesToTailwindClasses(domClasses: string): Record<string, string> {
   if (!domClasses) return {};
 
   const classes = domClasses.split(/\s+/).filter(Boolean);
@@ -397,23 +386,20 @@ export function mapPropertiesToTailwindClasses(
   for (const cls of classes) {
     // Extract modifier if present (hover:, focus:, etc.)
     const { modifier, baseClass } = extractModifier(cls);
-    const prefix = modifier ? `${modifierToCamelCase(modifier)}.` : "";
+    const prefix = modifier ? `${modifierToCamelCase(modifier)}.` : '';
 
     // Background color
-    if (baseClass.startsWith("bg-") && !baseClass.startsWith("bg-gradient-")) {
+    if (baseClass.startsWith('bg-') && !baseClass.startsWith('bg-gradient-')) {
       result[`${prefix}backgroundColor`] = cls;
     }
 
     // Text color
-    else if (baseClass.startsWith("text-") && !baseClass.includes("/")) {
+    else if (baseClass.startsWith('text-') && !baseClass.includes('/')) {
       result[`${prefix}color`] = cls;
     }
 
     // Border color
-    else if (
-      baseClass.startsWith("border-") &&
-      !baseClass.match(/^border-[0-9]/)
-    ) {
+    else if (baseClass.startsWith('border-') && !baseClass.match(/^border-[0-9]/)) {
       result[`${prefix}borderColor`] = cls;
     }
 
@@ -423,49 +409,49 @@ export function mapPropertiesToTailwindClasses(
     }
 
     // Border radius
-    else if (baseClass.startsWith("rounded")) {
+    else if (baseClass.startsWith('rounded')) {
       result[`${prefix}borderRadius`] = cls;
     }
 
     // Width
-    else if (baseClass.startsWith("w-")) {
+    else if (baseClass.startsWith('w-')) {
       result[`${prefix}width`] = cls;
     }
 
     // Height
-    else if (baseClass.startsWith("h-")) {
+    else if (baseClass.startsWith('h-')) {
       result[`${prefix}height`] = cls;
     }
 
     // Min width
-    else if (baseClass.startsWith("min-w-")) {
+    else if (baseClass.startsWith('min-w-')) {
       result[`${prefix}minWidth`] = cls;
     }
 
     // Min height
-    else if (baseClass.startsWith("min-h-")) {
+    else if (baseClass.startsWith('min-h-')) {
       result[`${prefix}minHeight`] = cls;
     }
 
     // Max width
-    else if (baseClass.startsWith("max-w-")) {
+    else if (baseClass.startsWith('max-w-')) {
       result[`${prefix}maxWidth`] = cls;
     }
 
     // Max height
-    else if (baseClass.startsWith("max-h-")) {
+    else if (baseClass.startsWith('max-h-')) {
       result[`${prefix}maxHeight`] = cls;
     }
 
     // Padding
     else if (
-      baseClass.startsWith("p-") ||
-      baseClass.startsWith("px-") ||
-      baseClass.startsWith("py-") ||
-      baseClass.startsWith("pt-") ||
-      baseClass.startsWith("pr-") ||
-      baseClass.startsWith("pb-") ||
-      baseClass.startsWith("pl-")
+      baseClass.startsWith('p-') ||
+      baseClass.startsWith('px-') ||
+      baseClass.startsWith('py-') ||
+      baseClass.startsWith('pt-') ||
+      baseClass.startsWith('pr-') ||
+      baseClass.startsWith('pb-') ||
+      baseClass.startsWith('pl-')
     ) {
       const key = `${prefix}padding`;
       result[key] = result[key] ? `${result[key]} ${cls}` : cls;
@@ -473,21 +459,21 @@ export function mapPropertiesToTailwindClasses(
 
     // Margin
     else if (
-      baseClass.startsWith("m-") ||
-      baseClass.startsWith("mx-") ||
-      baseClass.startsWith("my-") ||
-      baseClass.startsWith("mt-") ||
-      baseClass.startsWith("mr-") ||
-      baseClass.startsWith("mb-") ||
-      baseClass.startsWith("ml-")
+      baseClass.startsWith('m-') ||
+      baseClass.startsWith('mx-') ||
+      baseClass.startsWith('my-') ||
+      baseClass.startsWith('mt-') ||
+      baseClass.startsWith('mr-') ||
+      baseClass.startsWith('mb-') ||
+      baseClass.startsWith('ml-')
     ) {
       const key = `${prefix}margin`;
       result[key] = result[key] ? `${result[key]} ${cls}` : cls;
     }
 
     // Shadow
-    else if (baseClass.startsWith("shadow")) {
-      const shadowKey = modifier || "base";
+    else if (baseClass.startsWith('shadow')) {
+      const shadowKey = modifier || 'base';
       if (!shadowClasses[shadowKey]) {
         shadowClasses[shadowKey] = [];
       }
@@ -495,81 +481,81 @@ export function mapPropertiesToTailwindClasses(
     }
 
     // Opacity
-    else if (baseClass.startsWith("opacity-")) {
+    else if (baseClass.startsWith('opacity-')) {
       result[`${prefix}opacity`] = cls;
     }
 
     // Blur
-    else if (baseClass.startsWith("blur")) {
+    else if (baseClass.startsWith('blur')) {
       result[`${prefix}blur`] = cls;
     }
 
     // Display
     else if (
-      baseClass === "flex" ||
-      baseClass === "inline-flex" ||
-      baseClass === "grid" ||
-      baseClass === "inline-grid" ||
-      baseClass === "block" ||
-      baseClass === "inline-block" ||
-      baseClass === "hidden"
+      baseClass === 'flex' ||
+      baseClass === 'inline-flex' ||
+      baseClass === 'grid' ||
+      baseClass === 'inline-grid' ||
+      baseClass === 'block' ||
+      baseClass === 'inline-block' ||
+      baseClass === 'hidden'
     ) {
       result[`${prefix}display`] = cls;
     }
 
     // Flex direction
     else if (
-      baseClass === "flex-row" ||
-      baseClass === "flex-col" ||
-      baseClass === "flex-row-reverse" ||
-      baseClass === "flex-col-reverse"
+      baseClass === 'flex-row' ||
+      baseClass === 'flex-col' ||
+      baseClass === 'flex-row-reverse' ||
+      baseClass === 'flex-col-reverse'
     ) {
       result[`${prefix}flexDirection`] = cls;
     }
 
     // Align items
-    else if (baseClass.startsWith("items-")) {
+    else if (baseClass.startsWith('items-')) {
       result[`${prefix}alignItems`] = cls;
     }
 
     // Justify content
-    else if (baseClass.startsWith("justify-")) {
+    else if (baseClass.startsWith('justify-')) {
       result[`${prefix}justifyContent`] = cls;
     }
 
     // Gap (must check gap-x/gap-y before generic gap-)
-    else if (baseClass.startsWith("gap-x-")) {
+    else if (baseClass.startsWith('gap-x-')) {
       result[`${prefix}columnGap`] = cls;
-    } else if (baseClass.startsWith("gap-y-")) {
+    } else if (baseClass.startsWith('gap-y-')) {
       result[`${prefix}rowGap`] = cls;
-    } else if (baseClass.startsWith("gap-")) {
+    } else if (baseClass.startsWith('gap-')) {
       result[`${prefix}gap`] = cls;
     }
 
     // Justify items (grid horizontal alignment)
-    else if (baseClass.startsWith("justify-items-")) {
+    else if (baseClass.startsWith('justify-items-')) {
       result[`${prefix}justifyItems`] = cls;
     }
 
     // Position
     else if (
-      baseClass === "static" ||
-      baseClass === "relative" ||
-      baseClass === "absolute" ||
-      baseClass === "fixed" ||
-      baseClass === "sticky"
+      baseClass === 'static' ||
+      baseClass === 'relative' ||
+      baseClass === 'absolute' ||
+      baseClass === 'fixed' ||
+      baseClass === 'sticky'
     ) {
       result[`${prefix}position`] = cls;
     }
 
     // Top, right, bottom, left
-    else if (baseClass.startsWith("top-")) {
+    else if (baseClass.startsWith('top-')) {
       result[`${prefix}top`] = cls;
-    } else if (baseClass.startsWith("right-")) {
+    } else if (baseClass.startsWith('right-')) {
       result[`${prefix}right`] = cls;
-    } else if (baseClass.startsWith("bottom-")) {
+    } else if (baseClass.startsWith('bottom-')) {
       result[`${prefix}bottom`] = cls;
-    } else if (baseClass.startsWith("left-")) {
+    } else if (baseClass.startsWith('left-')) {
       result[`${prefix}left`] = cls;
     }
   }
@@ -577,9 +563,8 @@ export function mapPropertiesToTailwindClasses(
   // Combine shadow classes by state
   for (const [shadowKey, classes] of Object.entries(shadowClasses)) {
     if (classes.length > 0) {
-      const prefix =
-        shadowKey === "base" ? "" : `${modifierToCamelCase(shadowKey)}.`;
-      result[`${prefix}boxShadow`] = classes.join(" ");
+      const prefix = shadowKey === 'base' ? '' : `${modifierToCamelCase(shadowKey)}.`;
+      result[`${prefix}boxShadow`] = classes.join(' ');
     }
   }
 

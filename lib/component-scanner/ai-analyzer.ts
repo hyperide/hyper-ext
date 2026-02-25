@@ -5,8 +5,8 @@
  * Uses LLM to analyze directory tree and identify component categories.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { join } from 'node:path';
+import Anthropic from '@anthropic-ai/sdk';
 import { filterChildPaths } from './directory-tree.js';
 import type { ProjectStructure } from './types.js';
 
@@ -137,13 +137,8 @@ Return ONLY a JSON object (no markdown, no backticks, no explanation):
  * Call an OpenAI Chat Completions-compatible API via fetch.
  * Works with OpenAI, Gemini, DeepSeek, Mistral, Groq, Qwen, etc.
  */
-async function callOpenAICompatible(
-  apiKey: string,
-  baseURL: string,
-  model: string,
-  prompt: string,
-): Promise<string> {
-  const url = baseURL.replace(/\/+$/, '') + '/chat/completions';
+async function callOpenAICompatible(apiKey: string, baseURL: string, model: string, prompt: string): Promise<string> {
+  const url = `${baseURL.replace(/\/+$/, '')}/chat/completions`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -219,9 +214,7 @@ export async function analyzeWithAI(
     compositeComponentsPaths: raw.compositeComponentsPaths
       ? filterChildPaths(raw.compositeComponentsPaths).map((p) => join(projectPath, p))
       : [],
-    pagesPaths: raw.pagesPaths
-      ? filterChildPaths(raw.pagesPaths).map((p) => join(projectPath, p))
-      : [],
+    pagesPaths: raw.pagesPaths ? filterChildPaths(raw.pagesPaths).map((p) => join(projectPath, p)) : [],
     textComponentPath: raw.textComponentPath ? join(projectPath, raw.textComponentPath) : null,
     linkComponentPath: raw.linkComponentPath ? join(projectPath, raw.linkComponentPath) : null,
     buttonComponentPath: raw.buttonComponentPath ? join(projectPath, raw.buttonComponentPath) : null,

@@ -3,15 +3,10 @@ export default function IconLayoutChart({
   ...props
 }: {
   className?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      fill="none"
-      {...props}
-    >
+    <svg aria-hidden="true" className={className} viewBox="0 0 16 16" fill="none" {...props}>
       <g clipPath="url(#clip0_layout_chart)">
         <path
           d="M8.5 2.66666V13.3333"
@@ -27,13 +22,7 @@ export default function IconLayoutChart({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path
-          d="M0.5 4V12"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <path d="M0.5 4V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </g>
       <defs>
         <clipPath id="clip0_layout_chart">

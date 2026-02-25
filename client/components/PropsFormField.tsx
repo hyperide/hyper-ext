@@ -2,28 +2,17 @@
  * Recursive form field component for rendering different prop types
  */
 
+import type { PropTypeInfo } from '@shared/types/props';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
-import { IconPlus, IconTrash } from '@tabler/icons-react';
-import type { PropTypeInfo } from '@shared/types/props';
 
 // Helper to detect if value is a token (format: $word or $number or $word.number)
-const isTokenValue = (val: any): boolean => {
+const isTokenValue = (val: unknown): val is string => {
   return typeof val === 'string' && /^\$[\w.]+$/.test(val);
 };
 
@@ -36,8 +25,8 @@ interface TamaguiTokens {
 interface PropsFormFieldProps {
   name: string;
   propInfo: PropTypeInfo;
-  value: any;
-  onChange: (value: any) => void;
+  value: unknown;
+  onChange: (value: unknown) => void;
   depth?: number;
   tamaguiTokens?: TamaguiTokens;
 }
@@ -45,21 +34,10 @@ interface PropsFormFieldProps {
 /**
  * Render form field based on prop type
  */
-export function PropsFormField({
-  name,
-  propInfo,
-  value,
-  onChange,
-  depth = 0,
-  tamaguiTokens,
-}: PropsFormFieldProps) {
+export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tamaguiTokens }: PropsFormFieldProps) {
   // Prevent infinite recursion
   if (depth > 5) {
-    return (
-      <div className="text-sm text-muted-foreground">
-        Max nesting depth reached
-      </div>
-    );
+    return <div className="text-sm text-muted-foreground">Max nesting depth reached</div>;
   }
 
   const fieldId = `prop-${name}-${depth}`;
@@ -95,7 +73,7 @@ export function PropsFormField({
           <Input
             id={fieldId}
             type="text"
-            value={value || ''}
+            value={String(value ?? '')}
             onChange={(e) => onChange(e.target.value)}
             placeholder={propInfo.description || 'Enter token or value'}
             list={`${fieldId}-tokens`}
@@ -123,7 +101,7 @@ export function PropsFormField({
           <Input
             id={fieldId}
             type="text"
-            value={value || ''}
+            value={String(value ?? '')}
             onChange={(e) => onChange(e.target.value)}
             placeholder={propInfo.description}
             className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
@@ -145,7 +123,7 @@ export function PropsFormField({
           <Input
             id={fieldId}
             type="number"
-            value={value ?? ''}
+            value={value != null ? String(value) : ''}
             onChange={(e) => {
               const num = Number.parseFloat(e.target.value);
               onChange(Number.isNaN(num) ? undefined : num);
@@ -166,11 +144,7 @@ export function PropsFormField({
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <Switch
-          id={fieldId}
-          checked={value ?? false}
-          onCheckedChange={onChange}
-        />
+        <Switch id={fieldId} checked={Boolean(value ?? false)} onCheckedChange={onChange} />
       </div>
     );
   }
@@ -183,7 +157,7 @@ export function PropsFormField({
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <Select value={value || ''} onValueChange={onChange}>
+        <Select value={String(value ?? '')} onValueChange={onChange}>
           <SelectTrigger id={fieldId} className="h-6 bg-gray-100 border-0 text-[11px] text-gray-800">
             <SelectValue placeholder="Select value" />
           </SelectTrigger>
@@ -201,7 +175,7 @@ export function PropsFormField({
 
   // Object type (nested form)
   if (propInfo.type === 'object' && propInfo.objectSchema) {
-    const objValue = value || {};
+    const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
 
     return (
       <Accordion type="single" collapsible>
@@ -249,6 +223,7 @@ export function PropsFormField({
         </Label>
         <div className="space-y-2 pl-3 border-l-2 border-gray-200">
           {arrValue.map((item, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: array items have no stable unique id
             <div key={index} className="flex items-start gap-2">
               <div className="flex-1">
                 {propInfo.arrayItemType ? (
@@ -318,9 +293,7 @@ export function PropsFormField({
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="text-[11px] text-gray-400 italic">
-          Not editable ({propInfo.type})
-        </div>
+        <div className="text-[11px] text-gray-400 italic">Not editable ({propInfo.type})</div>
       </div>
     );
   }
@@ -336,7 +309,7 @@ export function PropsFormField({
         <Input
           id={fieldId}
           type="text"
-          value={value || ''}
+          value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           placeholder={propInfo.description || 'Unknown type'}
           className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"

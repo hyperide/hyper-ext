@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
-import ProjectSettingsTab from './ProjectSettingsTab';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import ProjectSettingsTab from './ProjectSettingsTab';
 
 interface ProjectSettingsProps {
   onClose: () => void;

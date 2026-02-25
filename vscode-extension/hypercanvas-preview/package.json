@@ -207,6 +207,7 @@
     "package": "npm run build && npx @vscode/vsce package"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@babel/generator": "^7.26.5",
     "@babel/parser": "^7.26.3",
     "@babel/traverse": "^7.26.5",

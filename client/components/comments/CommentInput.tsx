@@ -1,20 +1,7 @@
-import { memo, useState, useRef, useCallback, useEffect } from 'react';
-import cn from 'clsx';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 
 export interface MentionUser {
   id: string;
@@ -86,7 +73,6 @@ export const CommentInput = memo(function CommentInput({
 
         // Calculate position for popover
         if (textareaRef.current) {
-          const textarea = textareaRef.current;
           const lineHeight = 20;
           const lines = textBeforeCursor.split('\n');
           const currentLine = lines.length - 1;
@@ -108,10 +94,7 @@ export const CommentInput = memo(function CommentInput({
 
       if (lastAtIndex !== -1) {
         const displayName = user.name || user.email.split('@')[0];
-        const newContent =
-          textBeforeCursor.slice(0, lastAtIndex) +
-          `@${displayName} ` +
-          textAfterCursor;
+        const newContent = `${textBeforeCursor.slice(0, lastAtIndex)}@${displayName} ${textAfterCursor}`;
 
         setContent(newContent);
         setMentionedUsers((prev) => new Set(prev).add(user.id));
@@ -204,20 +187,14 @@ export const CommentInput = memo(function CommentInput({
                         />
                       ) : (
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-medium">
-                          {(member.name || member.email)
-                            .charAt(0)
-                            .toUpperCase()}
+                          {(member.name || member.email).charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div className="flex flex-col min-w-0">
                         <span className="text-sm font-medium truncate">
                           {member.name || member.email.split('@')[0]}
                         </span>
-                        {member.name && (
-                          <span className="text-xs text-muted-foreground truncate">
-                            {member.email}
-                          </span>
-                        )}
+                        {member.name && <span className="text-xs text-muted-foreground truncate">{member.email}</span>}
                       </div>
                     </CommandItem>
                   ))}
@@ -229,25 +206,14 @@ export const CommentInput = memo(function CommentInput({
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          Type @ to mention • Cmd+Enter to send
-        </span>
+        <span className="text-xs text-muted-foreground">Type @ to mention • Cmd+Enter to send</span>
         <div className="flex gap-2">
           {onCancel && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onCancel}
-              disabled={isSubmitting}
-            >
+            <Button size="sm" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
               Cancel
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={!content.trim() || isSubmitting}
-          >
+          <Button size="sm" onClick={handleSubmit} disabled={!content.trim() || isSubmitting}>
             {submitLabel}
           </Button>
         </div>

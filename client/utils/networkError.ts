@@ -10,7 +10,10 @@
  * Use this when you want to explicitly mark an error as network-related.
  */
 export class NetworkError extends Error {
-  constructor(message = 'Network request failed', public originalError?: unknown) {
+  constructor(
+    message = 'Network request failed',
+    public originalError?: unknown,
+  ) {
     super(message);
     this.name = 'NetworkError';
   }

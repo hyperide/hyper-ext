@@ -20,7 +20,11 @@ export const isBun = typeof process !== 'undefined' && process.versions?.bun !==
  */
 function generateImports(analysis: ComponentAnalysis, testRunner: TestRunner): string[] {
   const { componentName, filePath } = analysis;
-  const componentFileName = filePath.split('/').pop()?.replace(/\.tsx?$/, '') || 'component';
+  const componentFileName =
+    filePath
+      .split('/')
+      .pop()
+      ?.replace(/\.tsx?$/, '') || 'component';
 
   const imports: string[] = [
     getTestImportForRunner(testRunner),
@@ -76,10 +80,7 @@ function generateTestIdTest(componentName: string): string[] {
 /**
  * Generate tests for boolean props (disabled, loading, etc.)
  */
-function generateBooleanPropTests(
-  componentName: string,
-  booleanProps: string[],
-): string[] {
+function generateBooleanPropTests(componentName: string, booleanProps: string[]): string[] {
   const tests: string[] = [];
 
   for (const prop of booleanProps) {
@@ -123,14 +124,8 @@ function generateBooleanPropTests(
 /**
  * Generate tests for CVA variants
  */
-function generateVariantTests(
-  componentName: string,
-  variantName: string,
-  values: string[],
-): string[] {
-  const tests: string[] = [
-    `  describe('${variantName} variants', () => {`,
-  ];
+function generateVariantTests(componentName: string, variantName: string, values: string[]): string[] {
+  const tests: string[] = [`  describe('${variantName} variants', () => {`];
 
   for (const value of values) {
     tests.push(`    it('should render with ${variantName}="${value}"', () => {`);
@@ -147,13 +142,8 @@ function generateVariantTests(
 /**
  * Generate tests for interactive elements
  */
-function generateInteractiveTests(
-  componentName: string,
-  elements: InteractiveElement[],
-): string[] {
-  const tests: string[] = [
-    `  describe('interactive elements', () => {`,
-  ];
+function generateInteractiveTests(componentName: string, elements: InteractiveElement[]): string[] {
+  const tests: string[] = [`  describe('interactive elements', () => {`];
 
   // Group by type
   const byType = new Map<string, InteractiveElement[]>();
@@ -226,15 +216,10 @@ function generateA11yTests(componentName: string): string[] {
 /**
  * Generate tests for canvas variants (from canvas.json)
  */
-function generateCanvasVariantTests(
-  componentName: string,
-  variants: TestVariant[],
-): string[] {
+function generateCanvasVariantTests(componentName: string, variants: TestVariant[]): string[] {
   if (variants.length === 0) return [];
 
-  const tests: string[] = [
-    `  describe('canvas variants', () => {`,
-  ];
+  const tests: string[] = [`  describe('canvas variants', () => {`];
 
   for (const variant of variants) {
     // Skip variants marked to skip unit tests
@@ -295,19 +280,14 @@ export function generateUnitTestContent(options: UnitTestGeneratorOptions): stri
 /**
  * @deprecated Use options object instead
  */
-export function generateUnitTestContent(
-  analysis: ComponentAnalysis,
-  testRunner?: TestRunner,
-): string;
+export function generateUnitTestContent(analysis: ComponentAnalysis, testRunner?: TestRunner): string;
 export function generateUnitTestContent(
   optionsOrAnalysis: UnitTestGeneratorOptions | ComponentAnalysis,
   testRunnerArg?: TestRunner,
 ): string {
   // Handle both signatures for backwards compatibility
   const options: UnitTestGeneratorOptions =
-    'analysis' in optionsOrAnalysis
-      ? optionsOrAnalysis
-      : { analysis: optionsOrAnalysis, testRunner: testRunnerArg };
+    'analysis' in optionsOrAnalysis ? optionsOrAnalysis : { analysis: optionsOrAnalysis, testRunner: testRunnerArg };
 
   const { analysis, testRunner = 'bun', variants } = options;
   const { componentName, propsInterface, cvaVariants, interactiveElements } = analysis;
@@ -340,9 +320,10 @@ export function generateUnitTestContent(
   lines.push('');
 
   // Boolean prop tests
-  const booleanProps = propsInterface?.props
-    .filter(p => p.isBoolean && ['disabled', 'loading', 'checked', 'selected', 'active'].includes(p.name))
-    .map(p => p.name) || [];
+  const booleanProps =
+    propsInterface?.props
+      .filter((p) => p.isBoolean && ['disabled', 'loading', 'checked', 'selected', 'active'].includes(p.name))
+      .map((p) => p.name) || [];
 
   if (booleanProps.length > 0) {
     lines.push(...generateBooleanPropTests(componentName, booleanProps));

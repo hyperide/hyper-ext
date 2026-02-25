@@ -4,17 +4,17 @@
  * Implements drag & drop with 16px grid snap
  */
 
-import { useCallback, useEffect, useRef, type RefObject } from "react";
-import { GRID_SIZE, type ViewportState } from "@/../../shared/types/canvas";
-import { IPHONE_SIZES } from "@/components/RightSidebar/constants";
-import { getPreviewIframe } from "@/lib/dom-utils";
-import { authFetch } from "@/utils/authFetch";
+import { type RefObject, useCallback, useEffect, useRef } from 'react';
+import { GRID_SIZE, type ViewportState } from '@/../../shared/types/canvas';
+import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
+import { getPreviewIframe } from '@/lib/dom-utils';
+import { authFetch } from '@/utils/authFetch';
 
 interface UseInstanceOverlaysProps {
   boardModeActive: boolean; // Show overlays only in board mode
   activeInstanceId: string | null; // Currently active instance in design mode
   selectedInstancesInBoard: string[]; // Selected instances in board mode (for visual highlighting)
-  mode: "design" | "interact" | "code"; // Engine mode to determine overlay behavior
+  mode: 'design' | 'interact' | 'code'; // Engine mode to determine overlay behavior
   overlayContainerRef: RefObject<HTMLDivElement>;
   iframeLoadedCounter: number;
   projectId: string | undefined;
@@ -91,7 +91,6 @@ export function useInstanceOverlays({
   const handleDragEndRef = useRef<(() => void) | null>(null);
   const listenersAttachedRef = useRef(false);
 
-
   // Persistent refs for data accessed by drag handlers
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const iframeDocRef = useRef<Document | null>(null);
@@ -107,14 +106,14 @@ export function useInstanceOverlays({
 
   // Attach window listeners ONCE on mount, cleanup only on unmount
   useEffect(() => {
-    window.addEventListener("mousemove", stableHandleDragMove);
-    window.addEventListener("mouseup", stableHandleDragEnd);
+    window.addEventListener('mousemove', stableHandleDragMove);
+    window.addEventListener('mouseup', stableHandleDragEnd);
     listenersAttachedRef.current = true;
 
     return () => {
       // Only cleanup on unmount
-      window.removeEventListener("mousemove", stableHandleDragMove);
-      window.removeEventListener("mouseup", stableHandleDragEnd);
+      window.removeEventListener('mousemove', stableHandleDragMove);
+      window.removeEventListener('mouseup', stableHandleDragEnd);
       listenersAttachedRef.current = false;
     };
   }, [stableHandleDragMove, stableHandleDragEnd]);
@@ -149,10 +148,7 @@ export function useInstanceOverlays({
     iframeDocRef.current = iframeDoc;
 
     let rafId: number;
-    const overlayElements = new Map<
-      string,
-      { frame: HTMLDivElement; badge: HTMLDivElement }
-    >();
+    const overlayElements = new Map<string, { frame: HTMLDivElement; badge: HTMLDivElement }>();
 
     /**
      * Save instance position via PUT. Fires immediately (no debounce — called once per drag end).
@@ -162,26 +158,25 @@ export function useInstanceOverlays({
       // Update React state immediately for responsive UI
       onInstanceMove?.(instanceId, x, y);
 
-      authFetch(
-        `/api/canvas-composition/${projectId}/instance/${encodeURIComponent(instanceId)}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ componentPath, updates: { x, y } }),
-        },
-      ).then(async (response) => {
-        if (!response.ok) {
-          console.error('[DragDrop] Save failed:', response.statusText);
-          return;
-        }
-        const data = await response.json();
-        console.log('[DragDrop] Position saved:', { instanceId, x, y });
-        if (data.commentsUpdated > 0) {
-          window.dispatchEvent(new CustomEvent('canvas:comments-updated'));
-        }
-      }).catch((error) => {
-        console.error('[DragDrop] Save error:', error);
-      });
+      authFetch(`/api/canvas-composition/${projectId}/instance/${encodeURIComponent(instanceId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ componentPath, updates: { x, y } }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            console.error('[DragDrop] Save failed:', response.statusText);
+            return;
+          }
+          const data = await response.json();
+          console.log('[DragDrop] Position saved:', { instanceId, x, y });
+          if (data.commentsUpdated > 0) {
+            window.dispatchEvent(new CustomEvent('canvas:comments-updated'));
+          }
+        })
+        .catch((error) => {
+          console.error('[DragDrop] Save error:', error);
+        });
     };
 
     /**
@@ -198,9 +193,7 @@ export function useInstanceOverlays({
       e.stopPropagation();
 
       // Get current position from iframe element
-      const instanceElement = iframeDoc.querySelector(
-        `[data-canvas-instance-id="${instanceId}"]`,
-      ) as HTMLElement;
+      const instanceElement = iframeDoc.querySelector(`[data-canvas-instance-id="${instanceId}"]`) as HTMLElement;
 
       if (!instanceElement) return;
 
@@ -249,19 +242,19 @@ export function useInstanceOverlays({
         // Disable pointer-events on iframe to prevent it from intercepting mouse events
         // This allows window mousemove listeners to work even when cursor is over iframe
         if (iframeRef.current) {
-          iframeRef.current.style.pointerEvents = "none";
+          iframeRef.current.style.pointerEvents = 'none';
         }
 
         // Disable text selection during drag
-        document.body.style.userSelect = "none";
+        document.body.style.userSelect = 'none';
 
         // Highlight frame during drag and set cursor to grabbing
         const overlay = overlayElements.get(dragState.instanceId);
         if (overlay) {
-          overlay.frame.style.borderColor = "#60a5fa";
-          overlay.badge.style.background = "#60a5fa";
-          overlay.frame.style.cursor = "grabbing";
-          overlay.badge.style.cursor = "grabbing";
+          overlay.frame.style.borderColor = '#60a5fa';
+          overlay.badge.style.background = '#60a5fa';
+          overlay.frame.style.cursor = 'grabbing';
+          overlay.badge.style.cursor = 'grabbing';
         }
       }
 
@@ -311,7 +304,7 @@ export function useInstanceOverlays({
       // Only save position if actual dragging happened
       if (dragState.isDragging) {
         // Re-enable text selection
-        document.body.style.userSelect = "";
+        document.body.style.userSelect = '';
 
         const instanceElement = iframeDoc.querySelector(
           `[data-canvas-instance-id="${dragState.instanceId}"]`,
@@ -319,8 +312,8 @@ export function useInstanceOverlays({
 
         if (instanceElement) {
           const style = instanceElement.style;
-          const finalX = Number.parseInt(style.left || "0", 10);
-          const finalY = Number.parseInt(style.top || "0", 10);
+          const finalX = Number.parseInt(style.left || '0', 10);
+          const finalY = Number.parseInt(style.top || '0', 10);
 
           // Save position to canvas.json
           savePosition(dragState.instanceId, finalX, finalY);
@@ -349,10 +342,10 @@ export function useInstanceOverlays({
         // Reset frame highlight and cursor
         const overlay = overlayElements.get(dragState.instanceId);
         if (overlay) {
-          overlay.frame.style.borderColor = "#3b82f6";
-          overlay.badge.style.background = "#3b82f6";
-          overlay.frame.style.cursor = "grab";
-          overlay.badge.style.cursor = "grab";
+          overlay.frame.style.borderColor = '#3b82f6';
+          overlay.badge.style.background = '#3b82f6';
+          overlay.frame.style.cursor = 'grab';
+          overlay.badge.style.cursor = 'grab';
         }
         // Don't restore pointer-events here - RAF loop will do it on next frame
         // when isDragging is false
@@ -375,9 +368,7 @@ export function useInstanceOverlays({
 
     const updateInstanceOverlays = () => {
       // Find all instance elements in iframe
-      const instanceElements = iframeDoc.querySelectorAll(
-        "[data-canvas-instance-id]",
-      );
+      const instanceElements = iframeDoc.querySelectorAll('[data-canvas-instance-id]');
       const activeInstances = new Set<string>();
 
       // Update or create overlays for each instance
@@ -389,8 +380,8 @@ export function useInstanceOverlays({
 
         // Get element's position within iframe (in iframe coordinates)
         const style = (element as HTMLElement).style;
-        const left = Number.parseInt(style.left || "0", 10);
-        const top = Number.parseInt(style.top || "0", 10);
+        const left = Number.parseInt(style.left || '0', 10);
+        const top = Number.parseInt(style.top || '0', 10);
 
         // Get element's dimensions
         const rect = element.getBoundingClientRect();
@@ -402,8 +393,8 @@ export function useInstanceOverlays({
         // Create overlay if doesn't exist
         if (!overlay) {
           // Create frame
-          const frame = document.createElement("div");
-          frame.setAttribute("data-instance-frame", instanceId);
+          const frame = document.createElement('div');
+          frame.setAttribute('data-instance-frame', instanceId);
           frame.style.cssText = `
             position: absolute;
             pointer-events: auto;
@@ -414,8 +405,8 @@ export function useInstanceOverlays({
           container.appendChild(frame);
 
           // Create badge
-          const badge = document.createElement("div");
-          badge.setAttribute("data-instance-badge", instanceId);
+          const badge = document.createElement('div');
+          badge.setAttribute('data-instance-badge', instanceId);
           badge.style.cssText = `
             position: absolute;
             pointer-events: auto;
@@ -449,18 +440,18 @@ export function useInstanceOverlays({
           if (chevronSvg) {
             badge.insertAdjacentHTML('beforeend', chevronSvg);
           }
-          badge.title = "Drag to move, click to edit";
+          badge.title = 'Drag to move, click to edit';
           container.appendChild(badge);
 
           // Add hover effect
-          badge.addEventListener("mouseenter", () => {
+          badge.addEventListener('mouseenter', () => {
             if (!dragStateRef.current.isDragging) {
-              badge.style.background = "#2563eb"; // darker blue on hover
+              badge.style.background = '#2563eb'; // darker blue on hover
             }
           });
-          badge.addEventListener("mouseleave", () => {
+          badge.addEventListener('mouseleave', () => {
             if (!dragStateRef.current.isDragging) {
-              badge.style.background = "#3b82f6";
+              badge.style.background = '#3b82f6';
             }
           });
 
@@ -511,8 +502,8 @@ export function useInstanceOverlays({
             }
           };
 
-          badge.addEventListener("mousedown", handleBadgeMouseDown);
-          badge.addEventListener("mouseup", handleBadgeMouseUp);
+          badge.addEventListener('mousedown', handleBadgeMouseDown);
+          badge.addEventListener('mouseup', handleBadgeMouseUp);
 
           // Handle frame interactions (single click to select, double click to enter design mode)
           let frameMouseDownTime = 0;
@@ -551,9 +542,7 @@ export function useInstanceOverlays({
               const dblClickState = doubleClickStateRef.current;
               // Only count as double click if it's on the same instance
               const isSameInstance = dblClickState.lastClickInstanceId === instanceId;
-              const timeSinceLastClick = isSameInstance
-                ? now - dblClickState.lastClickTime
-                : Number.POSITIVE_INFINITY;
+              const timeSinceLastClick = isSameInstance ? now - dblClickState.lastClickTime : Number.POSITIVE_INFINITY;
 
               if (timeSinceLastClick < 300) {
                 // Double click detected
@@ -582,8 +571,8 @@ export function useInstanceOverlays({
             }
           };
 
-          frame.addEventListener("mousedown", handleFrameMouseDown);
-          frame.addEventListener("mouseup", handleFrameMouseUp);
+          frame.addEventListener('mousedown', handleFrameMouseDown);
+          frame.addEventListener('mouseup', handleFrameMouseUp);
         }
 
         // Update positions (subtract scroll offset for safety)
@@ -617,8 +606,12 @@ export function useInstanceOverlays({
         const isActive = instanceId === activeInstanceId;
         const isSelectedInBoard = selectedInstancesInBoard.includes(instanceId);
         const opacity = boardModeActive
-          ? (isSelectedInBoard ? "1" : "0.5") // Board mode: highlight selected
-          : (isActive ? "1" : "0.5"); // Design/interact mode: highlight active
+          ? isSelectedInBoard
+            ? '1'
+            : '0.5' // Board mode: highlight selected
+          : isActive
+            ? '1'
+            : '0.5'; // Design/interact mode: highlight active
         overlay.frame.style.opacity = opacity;
         overlay.badge.style.opacity = opacity;
 
@@ -626,17 +619,15 @@ export function useInstanceOverlays({
         // IMPORTANT: Don't change pointer-events during drag - handleDragStart sets them to 'none'
         // Check both isDragging AND instanceId (pointer-events disabled on mousedown, before drag starts)
         if (!dragStateRef.current.instanceId) {
-          overlay.frame.style.pointerEvents = boardModeActive ? "auto" : "none";
-          overlay.badge.style.pointerEvents = "auto";
+          overlay.frame.style.pointerEvents = boardModeActive ? 'auto' : 'none';
+          overlay.badge.style.pointerEvents = 'auto';
         }
       }
 
       // Restore iframe pointer-events after drag ends
       // In board mode: iframe should have pointer-events: none for click passthrough to Excalidraw
       if (!dragStateRef.current.instanceId && iframeRef.current) {
-        iframeRef.current.style.pointerEvents = boardModeActive
-          ? "none"
-          : "auto";
+        iframeRef.current.style.pointerEvents = boardModeActive ? 'none' : 'auto';
       }
 
       // Remove unused overlays
@@ -660,8 +651,8 @@ export function useInstanceOverlays({
       // Note: window listeners are managed by separate useEffect with empty deps
 
       // Reset cursor and user-select
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
 
       // Clean up all overlays
       for (const overlay of overlayElements.values()) {

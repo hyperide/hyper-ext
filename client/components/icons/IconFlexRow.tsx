@@ -1,12 +1,12 @@
 export default function IconFlexRow({
-  className = "w-5 h-5",
+  className = 'w-5 h-5',
   ...props
 }: {
   className?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }) {
   return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" {...props}>
+    <svg aria-hidden="true" className={className} viewBox="0 0 20 20" fill="none" {...props}>
       <g clipPath="url(#clip0_18_314)">
         <path
           d="M4.58329 4.16669C4.47279 4.16669 4.36681 4.21059 4.28866 4.28873C4.21052 4.36687 4.16663 4.47285 4.16663 4.58335V7.91669C4.16663 8.02719 4.21052 8.13317 4.28866 8.21131C4.36681 8.28945 4.47279 8.33335 4.58329 8.33335H7.91663C8.02713 8.33335 8.13311 8.28945 8.21125 8.21131C8.28939 8.13317 8.33329 8.02719 8.33329 7.91669V4.58335C8.33329 4.47285 8.28939 4.36687 8.21125 4.28873C8.13311 4.21059 8.02713 4.16669 7.91663 4.16669H4.58329Z"
@@ -26,12 +26,7 @@ export default function IconFlexRow({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path
-          d="M15 14.1667H5"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <path d="M15 14.1667H5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
       </g>
       <defs>
         <clipPath id="clip0_18_314">

@@ -17,7 +17,7 @@ export interface DemoResponse {
  */
 export interface NestedComponent {
   type: string;
-  props: Record<string, any>;
+  props: Record<string, unknown>;
 }
 
 /**

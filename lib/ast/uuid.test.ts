@@ -2,10 +2,10 @@
  * Tests for UUID utilities
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { parseCode, printAST } from './parser';
-import { findElementByUuid, findAllJSXElements, getUuidFromElement } from './traverser';
-import { generateUuid, updateAllChildUuids, ensureUuid } from './uuid';
+import { findAllJSXElements, findElementByUuid, getUuidFromElement } from './traverser';
+import { ensureUuid, generateUuid, updateAllChildUuids } from './uuid';
 
 describe('generateUuid', () => {
   it('should generate valid UUID', () => {
@@ -40,10 +40,11 @@ describe('updateAllChildUuids', () => {
     const parent = findElementByUuid(ast, 'parent');
     expect(parent).not.toBeNull();
 
-    updateAllChildUuids(parent!.element);
+    if (!parent) throw new Error('Element not found');
+    updateAllChildUuids(parent.element);
 
     // Parent UUID should remain unchanged
-    const parentUuid = getUuidFromElement(parent!.element);
+    const parentUuid = getUuidFromElement(parent.element);
     expect(parentUuid).toBe('parent');
 
     // Children should have new UUIDs
@@ -66,9 +67,9 @@ describe('updateAllChildUuids', () => {
     const ast = parseCode(code);
 
     const root = findElementByUuid(ast, 'root');
-    expect(root).not.toBeNull();
+    if (!root) throw new Error('Element not found');
 
-    updateAllChildUuids(root!.element);
+    updateAllChildUuids(root.element);
 
     const output = printAST(ast);
     expect(output).not.toContain('level1');
@@ -89,7 +90,8 @@ describe('updateAllChildUuids', () => {
     expect(parent).not.toBeNull();
 
     expect(() => {
-      updateAllChildUuids(parent!.element);
+      if (!parent) throw new Error('Element not found');
+      updateAllChildUuids(parent.element);
     }).not.toThrow();
   });
 
@@ -105,7 +107,8 @@ describe('updateAllChildUuids', () => {
     const parent = findElementByUuid(ast, 'parent');
     expect(parent).not.toBeNull();
 
-    updateAllChildUuids(parent!.element);
+    if (!parent) throw new Error('Element not found');
+    updateAllChildUuids(parent.element);
 
     const output = printAST(ast);
     expect(output).not.toContain('data-uniq-id="item"');

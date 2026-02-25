@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { IconTrash, IconWand, IconChevronDown } from '@tabler/icons-react';
-import { useAuthStore } from '@/stores/authStore';
-import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
-import { authFetch } from '@/utils/authFetch';
-import { ERROR_PATTERNS } from '@shared/fix-session';
 import type { RuntimeError } from '@shared/runtime-error';
+import { IconChevronDown, IconTrash, IconWand } from '@tabler/icons-react';
 import cn from 'clsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
+import { useAuthStore } from '@/stores/authStore';
+import { authFetch } from '@/utils/authFetch';
 
 interface ProjectInfo {
   name: string;
@@ -25,7 +24,6 @@ interface DockerLogsViewerProps {
   projectInfo?: ProjectInfo;
   proxyError?: string | null;
   runtimeError?: RuntimeError | null;
-  onClose?: () => void;
 }
 
 interface ProxyLogEntry {
@@ -69,7 +67,6 @@ export function DockerLogsViewer({
   projectInfo,
   proxyError,
   runtimeError,
-  onClose,
 }: DockerLogsViewerProps) {
   const { accessToken } = useAuthStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -193,48 +190,51 @@ export function DockerLogsViewer({
   }, [projectId]);
 
   // Fetch logs via HTTP (for initial load and polling fallback)
-  const fetchLogs = useCallback(async (isInitial: boolean) => {
-    try {
-      const linesToFetch = isInitial ? initialLines : 500;
-      const res = await authFetch(`/api/docker/logs/${projectId}?lines=${linesToFetch}`);
+  const fetchLogs = useCallback(
+    async (isInitial: boolean) => {
+      try {
+        const linesToFetch = isInitial ? initialLines : 500;
+        const res = await authFetch(`/api/docker/logs/${projectId}?lines=${linesToFetch}`);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.logs) {
-          const logLines = data.logs.split('\n').filter((line: string) => line.trim());
-          const newEntries: LogEntry[] = logLines.map((line: string) => ({
-            line,
-            timestamp: new Date().toISOString(),
-            type: 'current' as const,
-          }));
+        if (res.ok) {
+          const data = await res.json();
+          if (data.logs) {
+            const logLines = data.logs.split('\n').filter((line: string) => line.trim());
+            const newEntries: LogEntry[] = logLines.map((line: string) => ({
+              line,
+              timestamp: new Date().toISOString(),
+              type: 'current' as const,
+            }));
 
-          if (isInitial) {
-            setLogs(newEntries);
-            lastLogCountRef.current = newEntries.length;
-          } else {
-            // Container restarted - log count decreased, replace all logs
-            if (newEntries.length < lastLogCountRef.current) {
+            if (isInitial) {
               setLogs(newEntries);
               lastLogCountRef.current = newEntries.length;
+            } else {
+              // Container restarted - log count decreased, replace all logs
+              if (newEntries.length < lastLogCountRef.current) {
+                setLogs(newEntries);
+                lastLogCountRef.current = newEntries.length;
+              }
+              // Only add new lines (compare by count - docker logs are append-only)
+              else if (newEntries.length > lastLogCountRef.current) {
+                const newLines = newEntries.slice(lastLogCountRef.current);
+                setLogs((prev) => [...prev, ...newLines]);
+                lastLogCountRef.current = newEntries.length;
+              }
+              // If equal - no changes
             }
-            // Only add new lines (compare by count - docker logs are append-only)
-            else if (newEntries.length > lastLogCountRef.current) {
-              const newLines = newEntries.slice(lastLogCountRef.current);
-              setLogs((prev) => [...prev, ...newLines]);
-              lastLogCountRef.current = newEntries.length;
-            }
-            // If equal - no changes
+            setError(null);
           }
-          setError(null);
+        }
+      } catch (err) {
+        console.error('[DockerLogsViewer] Failed to fetch logs:', err);
+        if (isInitial) {
+          setError('Failed to load logs');
         }
       }
-    } catch (err) {
-      console.error('[DockerLogsViewer] Failed to fetch logs:', err);
-      if (isInitial) {
-        setError('Failed to load logs');
-      }
-    }
-  }, [initialLines, projectId]);
+    },
+    [initialLines, projectId],
+  );
 
   // Initial fetch (only when container is running or building)
   useEffect(() => {
@@ -391,22 +391,26 @@ export function DockerLogsViewer({
   const handleAutoFix = () => {
     if (!projectInfo) return;
 
-    const recentLogs = logs.slice(-50).map((log) => log.line).join('\n');
-    const prevLogsText = previousLogs.length > 0
-      ? previousLogs.slice(-50).map((log) => log.line).join('\n')
-      : '';
+    const recentLogs = logs
+      .slice(-50)
+      .map((log) => log.line)
+      .join('\n');
+    const prevLogsText =
+      previousLogs.length > 0
+        ? previousLogs
+            .slice(-50)
+            .map((log) => log.line)
+            .join('\n')
+        : '';
 
-    const eventsText = events.length > 0
-      ? events.map(e => `- ${e.type}: ${e.reason} - ${e.message}`).join('\n')
-      : '';
+    const eventsText = events.length > 0 ? events.map((e) => `- ${e.type}: ${e.reason} - ${e.message}`).join('\n') : '';
 
-    const restartText = restartInfo && restartInfo.restartCount > 0
-      ? `Container has restarted ${restartInfo.restartCount} times. ${restartInfo.reason ? `Last reason: ${restartInfo.reason}` : ''}`
-      : '';
+    const restartText =
+      restartInfo && restartInfo.restartCount > 0
+        ? `Container has restarted ${restartInfo.restartCount} times. ${restartInfo.reason ? `Last reason: ${restartInfo.reason}` : ''}`
+        : '';
 
-    const proxyErrorText = proxyError
-      ? `**Proxy Error (request couldn't reach container):** ${proxyError}`
-      : '';
+    const proxyErrorText = proxyError ? `**Proxy Error (request couldn't reach container):** ${proxyError}` : '';
 
     const runtimeErrorText = runtimeError
       ? `**Runtime Error (${runtimeError.framework}):**
@@ -415,11 +419,7 @@ ${runtimeError.file ? `File: ${runtimeError.file}${runtimeError.line ? `:${runti
 ${runtimeError.codeframe ? `\`\`\`\n${runtimeError.codeframe}\n\`\`\`` : ''}`
       : '';
 
-    const issueType = runtimeError
-      ? 'build/runtime'
-      : proxyError?.includes('404')
-        ? 'routing/preview'
-        : 'container';
+    const issueType = runtimeError ? 'build/runtime' : proxyError?.includes('404') ? 'routing/preview' : 'container';
 
     const prompt = `Fix the ${issueType} issues in this project.
 
@@ -475,11 +475,11 @@ Analyze the errors and suggest a fix.`;
     if (log.type === 'proxy') {
       // Check if it's an error/timeout (red) or success (cyan)
       const proxyEntry = log.proxyEntry;
-      const isError = proxyEntry && (
-        proxyEntry.status === 'timeout' ||
-        proxyEntry.status === 'error' ||
-        (typeof proxyEntry.status === 'number' && proxyEntry.status >= 400)
-      );
+      const isError =
+        proxyEntry &&
+        (proxyEntry.status === 'timeout' ||
+          proxyEntry.status === 'error' ||
+          (typeof proxyEntry.status === 'number' && proxyEntry.status >= 400));
       return {
         color: isError ? '#ef4444' : '#22d3ee', // Red for errors, cyan for success
         fontStyle: 'italic',
@@ -505,9 +505,7 @@ Analyze the errors and suggest a fix.`;
             className={cn('w-2 h-2 rounded-full', connected ? 'bg-green-500' : 'bg-red-500')}
             title={connected ? (usePolling ? 'Polling' : 'SSE Connected') : 'Disconnected'}
           />
-          {usePolling && (
-            <span className="text-[10px] text-muted-foreground">(polling)</span>
-          )}
+          {usePolling && <span className="text-[10px] text-muted-foreground">(polling)</span>}
           {restartInfo && restartInfo.restartCount > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">
               {restartInfo.restartCount} restarts
@@ -515,16 +513,9 @@ Analyze the errors and suggest a fix.`;
           )}
         </div>
         <div className="flex items-center gap-1">
-          {userScrolled && (
-            <span className="text-[10px] text-muted-foreground mr-1">(scroll paused)</span>
-          )}
+          {userScrolled && <span className="text-[10px] text-muted-foreground mr-1">(scroll paused)</span>}
           {projectInfo && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAutoFix}
-              title="Open AI Chat to fix issues"
-            >
+            <Button variant="outline" size="sm" onClick={handleAutoFix} title="Open AI Chat to fix issues">
               <IconWand size={16} />
               <span className="ml-1">Auto Fix</span>
             </Button>
@@ -580,7 +571,10 @@ Analyze the errors and suggest a fix.`;
               {runtimeError.type} ({runtimeError.framework})
             </span>
             {runtimeError.file && (
-              <span style={{ color: '#888' }}>{runtimeError.file}{runtimeError.line ? `:${runtimeError.line}` : ''}</span>
+              <span style={{ color: '#888' }}>
+                {runtimeError.file}
+                {runtimeError.line ? `:${runtimeError.line}` : ''}
+              </span>
             )}
           </div>
           <div style={{ color: '#f87171' }}>{runtimeError.message}</div>
@@ -612,10 +606,7 @@ Analyze the errors and suggest a fix.`;
           minHeight: 0, // Critical for flex children to allow shrinking
         }}
       >
-        <ScrollArea
-          ref={scrollAreaRef}
-          style={{ height: '100%', flex: 1 }}
-        >
+        <ScrollArea ref={scrollAreaRef} style={{ height: '100%', flex: 1 }}>
           <div
             style={{
               fontFamily: 'monospace',
@@ -625,28 +616,21 @@ Analyze the errors and suggest a fix.`;
               wordBreak: 'break-all',
             }}
           >
-            {error && (
-              <div style={{ color: '#ef4444', marginBottom: '8px' }}>
-                Error: {error}
-              </div>
-            )}
-            {loadingInitial && (
-              <div style={{ color: '#888', fontStyle: 'italic' }}>
-                Loading logs...
-              </div>
-            )}
+            {error && <div style={{ color: '#ef4444', marginBottom: '8px' }}>Error: {error}</div>}
+            {loadingInitial && <div style={{ color: '#888', fontStyle: 'italic' }}>Loading logs...</div>}
             {!loadingInitial && allLogs.length === 0 && !error && (
-              <div style={{ color: '#888', fontStyle: 'italic' }}>
-                No logs available
-              </div>
+              <div style={{ color: '#888', fontStyle: 'italic' }}>No logs available</div>
             )}
             {allLogs.map((log, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: log entries have no stable id
               <div key={index} style={{ marginBottom: '2px', ...getLogStyle(log) }}>
                 {log.type !== 'restart' && (
                   <span style={{ color: '#666', marginRight: '8px', fontSize: '10px' }}>
-                    {log.type === 'previous' ? '[prev]' :
-                     log.type === 'proxy' ? '[proxy]' :
-                     new Date(log.timestamp).toLocaleTimeString()}
+                    {log.type === 'previous'
+                      ? '[prev]'
+                      : log.type === 'proxy'
+                        ? '[proxy]'
+                        : new Date(log.timestamp).toLocaleTimeString()}
                   </span>
                 )}
                 <span>{log.line}</span>

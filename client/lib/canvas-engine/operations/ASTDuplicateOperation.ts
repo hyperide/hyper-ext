@@ -4,10 +4,11 @@
  * This operation duplicates AST elements in the source file and records in history for undo/redo.
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation } from "./Operation";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
+import type { ASTNode } from '../types/ast';
+import { BaseOperation } from './Operation';
 
 export interface ASTDuplicateOperationParams {
   elementId: string;
@@ -15,12 +16,12 @@ export interface ASTDuplicateOperationParams {
 }
 
 export class ASTDuplicateOperation extends BaseOperation {
-  name = "ASTDuplicate";
+  name = 'ASTDuplicate';
   private params: ASTDuplicateOperationParams;
   private newElementId?: string; // Store new element ID for undo
   private newElementIndex?: number; // Store index where duplicate was inserted
   private parentId?: string | null; // Store parent ID for redo
-  private duplicatedElementStructure?: any; // Store full element structure for redo
+  private duplicatedElementStructure?: ASTNode; // Store full element structure for redo
 
   constructor(api: ASTApiService, params: ASTDuplicateOperationParams) {
     super(api);
@@ -62,7 +63,7 @@ export class ASTDuplicateOperation extends BaseOperation {
     const root = tree.getRoot();
 
     // Helper to find element in AST
-    const findElement = (nodes: any[], targetId: string): any | null => {
+    const findElement = (nodes: ASTNode[], targetId: string): ASTNode | null => {
       for (const node of nodes) {
         if (node.id === targetId) {
           return node;
@@ -76,8 +77,9 @@ export class ASTDuplicateOperation extends BaseOperation {
     };
 
     // Search in root.metadata.astStructure
-    if (root.metadata?.astStructure) {
-      const element = findElement(root.metadata.astStructure, this.params.elementId);
+    const astStructure = root.metadata?.astStructure;
+    if (Array.isArray(astStructure)) {
+      const element = findElement(astStructure as ASTNode[], this.params.elementId);
       if (element) {
         this.duplicatedElementStructure = element;
         return;
@@ -88,8 +90,9 @@ export class ASTDuplicateOperation extends BaseOperation {
     const rootChildren = root.children || [];
     for (const childId of rootChildren) {
       const inst = tree.getInstance(childId);
-      if (inst?.metadata?.astStructure) {
-        const element = findElement(inst.metadata.astStructure, this.params.elementId);
+      const childAst = inst?.metadata?.astStructure;
+      if (Array.isArray(childAst)) {
+        const element = findElement(childAst as ASTNode[], this.params.elementId);
         if (element) {
           this.duplicatedElementStructure = element;
           return;
@@ -101,7 +104,7 @@ export class ASTDuplicateOperation extends BaseOperation {
   /**
    * Undo duplicate: delete the duplicated element
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (!this.newElementId) {
       console.warn('[ASTDuplicateOperation] No new element ID to undo');
       return this.error('No duplicated element to remove');
@@ -124,7 +127,7 @@ export class ASTDuplicateOperation extends BaseOperation {
   /**
    * Redo duplicate: re-create the duplicate at the same position
    */
-  redo(tree: DocumentTree): OperationResult {
+  redo(_tree: DocumentTree): OperationResult {
     if (!this.duplicatedElementStructure || !this.newElementId) {
       console.warn('[ASTDuplicateOperation] No element structure to redo');
       return this.error('No duplicate to restore');
@@ -160,7 +163,7 @@ export class ASTDuplicateOperation extends BaseOperation {
     }
     try {
       return await this.duplicatePromise;
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }
@@ -237,17 +240,21 @@ export class ASTDuplicateOperation extends BaseOperation {
     // Prepare request body
     // IMPORTANT: Only include 'children' parameter if the array is not empty
     // Otherwise it will overwrite props.children (text content)
-    const requestBody: any = {
-      parentId: this.parentId,
+    const requestBody = {
+      parentId: this.parentId ?? '',
       filePath: this.params.filePath,
       componentType: this.duplicatedElementStructure.type,
-      props: this.duplicatedElementStructure.props || {},
+      props: this.duplicatedElementStructure.props ?? {},
       targetId: this.newElementId, // Use the same ID as before
       index: this.newElementIndex, // Insert at exact same position
+      children: undefined as ASTNode[] | undefined,
     };
 
     // Only add children parameter if array has elements
-    if (Array.isArray(this.duplicatedElementStructure.children) && this.duplicatedElementStructure.children.length > 0) {
+    if (
+      Array.isArray(this.duplicatedElementStructure.children) &&
+      this.duplicatedElementStructure.children.length > 0
+    ) {
       requestBody.children = this.duplicatedElementStructure.children;
     }
 
@@ -260,6 +267,9 @@ export class ASTDuplicateOperation extends BaseOperation {
     // Reparse component to update AST structure
     await this.api.reloadComponent(this.params.filePath);
 
-    return this.newElementId!;
+    if (!this.newElementId) {
+      throw new Error('No new element ID available');
+    }
+    return this.newElementId;
   }
 }

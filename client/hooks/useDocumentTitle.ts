@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
-const baseTitle = "HyperIDE";
+const baseTitle = 'HyperIDE';
 
 /**
  * Updates document title based on current context

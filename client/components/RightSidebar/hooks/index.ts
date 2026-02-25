@@ -1,2 +1,2 @@
-export { useStyleSync } from './useStyleSync';
 export { useProjectUIKit } from './useProjectUIKit';
+export { useStyleSync } from './useStyleSync';

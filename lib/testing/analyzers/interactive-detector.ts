@@ -11,31 +11,9 @@ import type { InteractiveElement, InteractiveElementType } from '../types';
 import { generateSemanticTestId } from '../utils/naming';
 
 /**
- * Native HTML interactive elements
- */
-const NATIVE_INTERACTIVE_TAGS = new Set([
-  'button',
-  'input',
-  'select',
-  'textarea',
-  'a',
-  'option',
-  'label',
-  'details',
-  'summary',
-]);
-
-/**
  * Radix/shadcn trigger patterns (components ending with these)
  */
-const TRIGGER_SUFFIXES = [
-  'Trigger',
-  'Close',
-  'Cancel',
-  'Confirm',
-  'Toggle',
-  'Dismiss',
-];
+const TRIGGER_SUFFIXES = ['Trigger', 'Close', 'Cancel', 'Confirm', 'Toggle', 'Dismiss'];
 
 /**
  * Interactive ARIA roles
@@ -106,7 +84,7 @@ function getAttributeStringValue(value: t.JSXAttribute['value']): string | null 
       return expr.value;
     }
     if (t.isTemplateLiteral(expr) && expr.expressions.length === 0) {
-      return expr.quasis.map(q => q.value.cooked ?? q.value.raw).join('');
+      return expr.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
     }
   }
 
@@ -144,37 +122,15 @@ function getTagName(element: t.JSXElement): string {
 }
 
 /**
- * Check if tag is a native HTML element
- */
-function isNativeElement(tagName: string): boolean {
-  // Native elements start with lowercase
-  return tagName.charAt(0) === tagName.charAt(0).toLowerCase();
-}
-
-/**
  * Get attribute by name from JSX element
  */
-function getAttribute(
-  element: t.JSXElement,
-  attributeName: string,
-): t.JSXAttribute | null {
+function getAttribute(element: t.JSXElement, attributeName: string): t.JSXAttribute | null {
   for (const attr of element.openingElement.attributes) {
-    if (
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === attributeName
-    ) {
+    if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === attributeName) {
       return attr;
     }
   }
   return null;
-}
-
-/**
- * Check if element has any of the given attributes
- */
-function hasAnyAttribute(element: t.JSXElement, names: string[]): boolean {
-  return names.some(name => getAttribute(element, name) !== null);
 }
 
 /**
@@ -183,7 +139,7 @@ function hasAnyAttribute(element: t.JSXElement, names: string[]): boolean {
 function getHandlerName(element: t.JSXElement, handlerNames: string[]): string | null {
   for (const name of handlerNames) {
     const attr = getAttribute(element, name);
-    if (attr && attr.value && t.isJSXExpressionContainer(attr.value)) {
+    if (attr?.value && t.isJSXExpressionContainer(attr.value)) {
       const expr = attr.value.expression;
       if (t.isIdentifier(expr)) {
         return expr.name;
@@ -221,10 +177,7 @@ function extractChildrenText(element: t.JSXElement): string {
 /**
  * Determine interactive element type based on tag and attributes
  */
-function determineInteractiveType(
-  tagName: string,
-  element: t.JSXElement,
-): InteractiveElementType | null {
+function determineInteractiveType(tagName: string, element: t.JSXElement): InteractiveElementType | null {
   const lowerTag = tagName.toLowerCase();
 
   // Native elements
@@ -293,7 +246,7 @@ function determineInteractiveType(
 
   // Check for event handlers
   const hasInteractiveHandler = Array.from(INTERACTIVE_HANDLERS).some(
-    handler => getAttribute(element, handler) !== null,
+    (handler) => getAttribute(element, handler) !== null,
   );
 
   if (hasInteractiveHandler) {
@@ -333,12 +286,8 @@ export function detectInteractiveElement(
   const handler = getHandlerName(element, ['onClick', 'onChange', 'onSubmit']);
 
   // Check for existing test IDs
-  const existingTestId = getAttributeStringValue(
-    getAttribute(element, 'data-test-id')?.value ?? null,
-  );
-  const existingUniqId = getAttributeStringValue(
-    getAttribute(element, 'data-uniq-id')?.value ?? null,
-  );
+  const existingTestId = getAttributeStringValue(getAttribute(element, 'data-test-id')?.value ?? null);
+  const existingUniqId = getAttributeStringValue(getAttribute(element, 'data-uniq-id')?.value ?? null);
 
   const context = {
     ariaLabel: ariaLabel ?? undefined,
@@ -352,12 +301,7 @@ export function detectInteractiveElement(
 
   // Always generate semantic test ID (AI will enhance it later)
   // Don't skip generation even if existingTestId exists - AI should always have a chance to improve
-  const suggestedTestId = generateSemanticTestId(
-    context,
-    interactiveType,
-    componentContext,
-    existingIds,
-  );
+  const suggestedTestId = generateSemanticTestId(context, interactiveType, componentContext, existingIds);
 
   // Get location info
   const loc = element.loc;

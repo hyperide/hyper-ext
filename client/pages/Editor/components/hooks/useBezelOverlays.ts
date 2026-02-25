@@ -3,8 +3,8 @@
  * Bezels are rendered outside iframe using RAF loop for performance
  */
 
-import { useEffect, type RefObject } from "react";
-import { getPreviewIframe } from "@/lib/dom-utils";
+import { type RefObject, useEffect } from 'react';
+import { getPreviewIframe } from '@/lib/dom-utils';
 
 const IPHONE17_WIDTH = 402;
 const IPHONE17_HEIGHT = 874;
@@ -19,11 +19,7 @@ interface UseBezelOverlaysProps {
 /**
  * Renders iPhone bezel images as overlays for instances with matching dimensions
  */
-export function useBezelOverlays({
-  overlayContainerRef,
-  iframeLoadedCounter,
-  instanceSizes,
-}: UseBezelOverlaysProps) {
+export function useBezelOverlays({ overlayContainerRef, iframeLoadedCounter, instanceSizes }: UseBezelOverlaysProps) {
   useEffect(() => {
     const container = overlayContainerRef.current;
     if (!container) return;
@@ -35,16 +31,13 @@ export function useBezelOverlays({
 
     let rafId: number;
     const bezelElements = new Map<string, HTMLImageElement>();
-    const statusbarElements = new Map<
-      string,
-      { container: HTMLDivElement; clock: HTMLDivElement }
-    >();
+    const statusbarElements = new Map<string, { container: HTMLDivElement; clock: HTMLDivElement }>();
 
     // Update clock every second
     const updateClocks = () => {
       const now = new Date();
       const hours = now.getHours();
-      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const minutes = now.getMinutes().toString().padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
 
       for (const { clock } of statusbarElements.values()) {
@@ -55,9 +48,7 @@ export function useBezelOverlays({
     const clockInterval = setInterval(updateClocks, 1000);
 
     const updateBezelOverlays = () => {
-      const instanceElements = iframeDoc.querySelectorAll(
-        "[data-canvas-instance-id]",
-      );
+      const instanceElements = iframeDoc.querySelectorAll('[data-canvas-instance-id]');
       const activeBezelInstances = new Set<string>();
       const activeStatusbarInstances = new Set<string>();
 
@@ -66,11 +57,8 @@ export function useBezelOverlays({
         if (!instanceId) continue;
 
         const size = instanceSizes[instanceId];
-        const isIPhone17 =
-          size?.width === IPHONE17_WIDTH && size?.height === IPHONE17_HEIGHT;
-        const isIPhone17Safe =
-          size?.width === IPHONE17_WIDTH &&
-          size?.height === IPHONE17_SAFE_HEIGHT;
+        const isIPhone17 = size?.width === IPHONE17_WIDTH && size?.height === IPHONE17_HEIGHT;
+        const isIPhone17Safe = size?.width === IPHONE17_WIDTH && size?.height === IPHONE17_SAFE_HEIGHT;
 
         // Handle full iPhone 17 bezel
         if (!isIPhone17) {
@@ -103,18 +91,18 @@ export function useBezelOverlays({
 
         // Get element's position within iframe
         const style = (element as HTMLElement).style;
-        const left = Number.parseInt(style.left || "0", 10);
-        const top = Number.parseInt(style.top || "0", 10);
+        const left = Number.parseInt(style.left || '0', 10);
+        const top = Number.parseInt(style.top || '0', 10);
 
         // Handle full iPhone 17 bezel
         if (isIPhone17) {
           let bezel = bezelElements.get(instanceId);
 
           if (!bezel) {
-            bezel = document.createElement("img");
-            bezel.src = "/iphone17.png";
-            bezel.alt = "iPhone 17 Bezel";
-            bezel.setAttribute("data-bezel-overlay", instanceId);
+            bezel = document.createElement('img');
+            bezel.src = '/iphone17.png';
+            bezel.alt = 'iPhone 17 Bezel';
+            bezel.setAttribute('data-bezel-overlay', instanceId);
             bezel.style.cssText = `
 							position: absolute;
 							pointer-events: none;
@@ -136,11 +124,8 @@ export function useBezelOverlays({
 
           if (!statusbar) {
             // Create container for image + clock overlay
-            const statusbarContainer = document.createElement("div");
-            statusbarContainer.setAttribute(
-              "data-statusbar-overlay",
-              instanceId,
-            );
+            const statusbarContainer = document.createElement('div');
+            statusbarContainer.setAttribute('data-statusbar-overlay', instanceId);
             statusbarContainer.style.cssText = `
 							position: absolute;
 							pointer-events: none;
@@ -150,9 +135,9 @@ export function useBezelOverlays({
 						`;
 
             // Add bezel image
-            const img = document.createElement("img");
-            img.src = "/iphone17-statusbar.png";
-            img.alt = "iPhone 17 Statusbar";
+            const img = document.createElement('img');
+            img.src = '/iphone17-statusbar.png';
+            img.alt = 'iPhone 17 Statusbar';
             img.style.cssText = `
 							width: 100%;
 							height: 100%;
@@ -160,10 +145,10 @@ export function useBezelOverlays({
             statusbarContainer.appendChild(img);
 
             // Add clock overlay
-            const clock = document.createElement("div");
+            const clock = document.createElement('div');
             const now = new Date();
             const hours = now.getHours();
-            const minutes = now.getMinutes().toString().padStart(2, "0");
+            const minutes = now.getMinutes().toString().padStart(2, '0');
             clock.textContent = `${hours}:${minutes}`;
             clock.style.cssText = `
 							position: absolute;

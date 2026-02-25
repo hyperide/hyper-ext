@@ -19,12 +19,12 @@ function getPreviewUrl(componentPath: string, variant?: string): string {
 
   // Try to extract relative path from common project structures
   const patterns = [
-    /^.*\/client\/components\//,  // client/components/Button.tsx → Button
-    /^.*\/client\//,               // client/pages/Home.tsx → pages/Home
-    /^.*\/src\/components\//,      // src/components/Button.tsx → Button
-    /^.*\/src\//,                  // src/pages/Home.tsx → pages/Home
-    /^.*\/components\//,           // components/Button.tsx → Button
-    /^.*\/app\//,                  // app/page.tsx → page
+    /^.*\/client\/components\//, // client/components/Button.tsx → Button
+    /^.*\/client\//, // client/pages/Home.tsx → pages/Home
+    /^.*\/src\/components\//, // src/components/Button.tsx → Button
+    /^.*\/src\//, // src/pages/Home.tsx → pages/Home
+    /^.*\/components\//, // components/Button.tsx → Button
+    /^.*\/app\//, // app/page.tsx → page
   ];
 
   for (const pattern of patterns) {
@@ -59,14 +59,8 @@ function generateHeader(componentName: string): string[] {
 /**
  * Generate visual snapshot tests for each variant
  */
-function generateVisualTests(
-  componentName: string,
-  componentPath: string,
-  variants: TestVariant[],
-): string[] {
-  const tests: string[] = [
-    `test.describe('${componentName} Visual Tests', () => {`,
-  ];
+function generateVisualTests(componentName: string, componentPath: string, variants: TestVariant[]): string[] {
+  const tests: string[] = [`test.describe('${componentName} Visual Tests', () => {`];
 
   for (const variant of variants) {
     const url = getPreviewUrl(componentPath, variant.id);
@@ -77,7 +71,9 @@ function generateVisualTests(
     tests.push(`    await page.waitForLoadState('networkidle');`);
     tests.push(``);
     tests.push(`    // Wait for component to render`);
-    tests.push(`    await page.waitForSelector('[data-test-id]', { state: 'visible', timeout: 5000 }).catch(() => {});`);
+    tests.push(
+      `    await page.waitForSelector('[data-test-id]', { state: 'visible', timeout: 5000 }).catch(() => {});`,
+    );
     tests.push(``);
     tests.push(`    await expect(page).toHaveScreenshot('${snapshotName}', {`);
     tests.push(`      animations: 'disabled',`);
@@ -109,9 +105,9 @@ function generateInteractionTests(
   ];
 
   // Group elements by type for organized tests
-  const buttons = elements.filter(e => e.type === 'button');
-  const inputs = elements.filter(e => e.type === 'input');
-  const links = elements.filter(e => e.type === 'a');
+  const buttons = elements.filter((e) => e.type === 'button');
+  const inputs = elements.filter((e) => e.type === 'input');
+  const links = elements.filter((e) => e.type === 'a');
 
   // Button interaction tests
   if (buttons.length > 0) {
@@ -205,10 +201,7 @@ function generateInteractionTests(
 /**
  * Generate accessibility tests
  */
-function generateA11yTests(
-  componentName: string,
-  componentPath: string,
-): string[] {
+function generateA11yTests(componentName: string, componentPath: string): string[] {
   return [
     `test.describe('${componentName} Accessibility Tests', () => {`,
     `  test('should be keyboard navigable', async ({ page }) => {`,
@@ -288,15 +281,11 @@ function generateVariantInteractionTests(
   componentPath: string,
   variants: TestVariant[],
 ): string[] {
-  const variantsWithInteractions = variants.filter(
-    (v) => v.interactions && v.interactions.length > 0 && !v.skip?.e2e,
-  );
+  const variantsWithInteractions = variants.filter((v) => v.interactions && v.interactions.length > 0 && !v.skip?.e2e);
 
   if (variantsWithInteractions.length === 0) return [];
 
-  const tests: string[] = [
-    `test.describe('${componentName} Variant Interactions', () => {`,
-  ];
+  const tests: string[] = [`test.describe('${componentName} Variant Interactions', () => {`];
 
   for (const variant of variantsWithInteractions) {
     const url = getPreviewUrl(componentPath, variant.id);
@@ -306,7 +295,7 @@ function generateVariantInteractionTests(
     tests.push(`    await page.waitForLoadState('networkidle');`);
     tests.push(``);
 
-    for (const interaction of variant.interactions!) {
+    for (const interaction of variant.interactions ?? []) {
       tests.push(...generateInteractionStep(interaction));
     }
 
@@ -323,9 +312,7 @@ function generateVariantInteractionTests(
  */
 function generateInteractionStep(interaction: TestInteraction): string[] {
   const lines: string[] = [];
-  const selector = interaction.target.startsWith('[')
-    ? interaction.target
-    : `[data-test-id="${interaction.target}"]`;
+  const selector = interaction.target.startsWith('[') ? interaction.target : `[data-test-id="${interaction.target}"]`;
 
   if (interaction.delay) {
     lines.push(`    await page.waitForTimeout(${interaction.delay});`);
@@ -402,9 +389,7 @@ export function generateE2ETestContent(options: E2ETestGeneratorOptions): string
  * @deprecated Use options object instead
  */
 export function generateE2ETestContent(analysis: ComponentAnalysis): string;
-export function generateE2ETestContent(
-  optionsOrAnalysis: E2ETestGeneratorOptions | ComponentAnalysis,
-): string {
+export function generateE2ETestContent(optionsOrAnalysis: E2ETestGeneratorOptions | ComponentAnalysis): string {
   // Handle both signatures for backwards compatibility
   // Check if it's ComponentAnalysis (has filePath) or E2ETestGeneratorOptions (has analysis)
   const isComponentAnalysis = 'filePath' in optionsOrAnalysis;

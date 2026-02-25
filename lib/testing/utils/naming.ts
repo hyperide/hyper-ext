@@ -11,21 +11,23 @@
  * @example toKebabCase('data_testId') => 'data-test-id'
  */
 export function toKebabCase(str: string): string {
-  return str
-    // Handle camelCase and PascalCase
-    .replace(/([a-z])([A-Z])/g, '$1-$2')
-    // Handle uppercase sequences (e.g., HTMLParser -> html-parser)
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
-    // Replace underscores and spaces with hyphens
-    .replace(/[_\s]+/g, '-')
-    // Remove non-alphanumeric characters except hyphens
-    .replace(/[^a-zA-Z0-9-]/g, '')
-    // Convert to lowercase
-    .toLowerCase()
-    // Remove consecutive hyphens
-    .replace(/-+/g, '-')
-    // Remove leading/trailing hyphens
-    .replace(/^-|-$/g, '');
+  return (
+    str
+      // Handle camelCase and PascalCase
+      .replace(/([a-z])([A-Z])/g, '$1-$2')
+      // Handle uppercase sequences (e.g., HTMLParser -> html-parser)
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+      // Replace underscores and spaces with hyphens
+      .replace(/[_\s]+/g, '-')
+      // Remove non-alphanumeric characters except hyphens
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      // Convert to lowercase
+      .toLowerCase()
+      // Remove consecutive hyphens
+      .replace(/-+/g, '-')
+      // Remove leading/trailing hyphens
+      .replace(/^-|-$/g, '')
+  );
 }
 
 /**
@@ -34,25 +36,63 @@ export function toKebabCase(str: string): string {
  */
 export function cleanTextForId(text: string): string {
   const fillerWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
-    'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-    'will', 'would', 'could', 'should', 'may', 'might', 'must',
-    'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
-    'this', 'that', 'these', 'those', 'it', 'its',
+    'the',
+    'a',
+    'an',
+    'and',
+    'or',
+    'but',
+    'is',
+    'are',
+    'was',
+    'were',
+    'be',
+    'been',
+    'being',
+    'have',
+    'has',
+    'had',
+    'do',
+    'does',
+    'did',
+    'will',
+    'would',
+    'could',
+    'should',
+    'may',
+    'might',
+    'must',
+    'to',
+    'of',
+    'in',
+    'for',
+    'on',
+    'with',
+    'at',
+    'by',
+    'from',
+    'this',
+    'that',
+    'these',
+    'those',
+    'it',
+    'its',
   ]);
 
-  return text
-    // Remove JSX expressions like {variable}
-    .replace(/\{[^}]+\}/g, '')
-    // Split into words
-    .split(/\s+/)
-    // Filter out filler words and empty strings
-    .filter(word => word.length > 0 && !fillerWords.has(word.toLowerCase()))
-    // Take first 4 meaningful words
-    .slice(0, 4)
-    // Join with spaces (will be converted to kebab later)
-    .join(' ')
-    .trim();
+  return (
+    text
+      // Remove JSX expressions like {variable}
+      .replace(/\{[^}]+\}/g, '')
+      // Split into words
+      .split(/\s+/)
+      // Filter out filler words and empty strings
+      .filter((word) => word.length > 0 && !fillerWords.has(word.toLowerCase()))
+      // Take first 4 meaningful words
+      .slice(0, 4)
+      // Join with spaces (will be converted to kebab later)
+      .join(' ')
+      .trim()
+  );
 }
 
 /**

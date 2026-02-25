@@ -7,9 +7,22 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const IGNORED_DIRS = [
-  'node_modules', '.git', 'dist', 'build', '.next', 'out',
-  '.cache', 'coverage', '.vscode', '.idea', 'tmp', 'temp',
-  'logs', '.turbo', '.vercel', '.parcel-cache',
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'out',
+  '.cache',
+  'coverage',
+  '.vscode',
+  '.idea',
+  'tmp',
+  'temp',
+  'logs',
+  '.turbo',
+  '.vercel',
+  '.parcel-cache',
 ];
 
 const CODE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js'];
@@ -48,7 +61,9 @@ export async function getDirectoryTree(
     }
 
     if (currentDepth === 0) {
-      console.log(`[ComponentScanner] Scanned ${dirPath}: found ${dirCount} directories and ${fileCount} files at root level`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      console.log(
+        `[ComponentScanner] Scanned ${dirPath}: found ${dirCount} directories and ${fileCount} files at root level`,
+      ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
 
     return tree;
@@ -63,6 +78,6 @@ export async function getDirectoryTree(
  */
 export function filterChildPaths(paths: string[]): string[] {
   return paths.filter((p) => {
-    return !paths.some((otherPath) => otherPath !== p && p.startsWith(otherPath + '/'));
+    return !paths.some((otherPath) => otherPath !== p && p.startsWith(`${otherPath}/`));
   });
 }

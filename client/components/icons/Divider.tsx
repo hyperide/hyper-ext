@@ -1,25 +1,23 @@
 export default function Divider({
-  className = "w-px h-6 text-border",
+  className = 'w-px h-6 text-border',
   ...props
 }: {
   className?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }) {
   return (
     <svg
+      aria-hidden="true"
       data-uniq-id="988c7153-9af0-4205-92a6-e2196bef5716"
       className={className}
       viewBox="0 0 1 24"
       fill="none"
-      {...props}>
-      <path
-        data-uniq-id="28d8984b-5549-43c4-8856-dbfd75a1f19a"
-        d="M1 0V24H0V0H1Z"
-        fill="currentColor" />
+      {...props}
+    >
+      <path data-uniq-id="28d8984b-5549-43c4-8856-dbfd75a1f19a" d="M1 0V24H0V0H1Z" fill="currentColor" />
     </svg>
   );
 }
-
 
 export const SampleDefault = () => {
   return (
@@ -57,5 +55,4 @@ export const SampleDefault = () => {
   );
 };
 
-
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';

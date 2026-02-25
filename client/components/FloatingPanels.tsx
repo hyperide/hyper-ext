@@ -1,24 +1,12 @@
-import { useRef, useEffect, useState } from "react";
-import {
-  IconX,
-  IconSearch,
-  IconChevronDown,
-  IconComponents,
-  IconPlus,
-  IconTrash,
-} from "@tabler/icons-react";
-import { useCanvasEngine } from "@/lib/canvas-engine";
-import { authFetch } from "@/utils/authFetch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { useComponentMeta } from "@/contexts/ComponentMetaContext";
-import { NestedComponent } from "../../shared/api";
+import { IconChevronDown, IconComponents, IconSearch, IconTrash, IconX } from '@tabler/icons-react';
+import { useEffect, useRef, useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useComponentMeta } from '@/contexts/ComponentMetaContext';
+import { useCanvasEngine } from '@/lib/canvas-engine';
+import type { ComponentDefinition, FieldsMap } from '@/lib/canvas-engine/models/types';
+import { authFetch } from '@/utils/authFetch';
+import type { NestedComponent } from '../../shared/api';
 
 interface ComponentNavigatorPanelProps {
   onClose?: () => void;
@@ -61,9 +49,6 @@ export function ComponentNavigatorPanel({
     }
   }, [elementY]);
 
-  // Получаем реальные компоненты из registry
-  const components = engine.registry.getVisible();
-
   // Группируем по категориям
   const categories = engine.registry.getCategories();
 
@@ -72,8 +57,8 @@ export function ComponentNavigatorPanel({
       ref={panelRef}
       className="absolute left-0 w-80 rounded-xl bg-background shadow-[0_4px_11px_rgba(0,0,0,0.25)] z-20"
       style={{
-        top: topPosition ? `${topPosition}px` : "auto",
-        bottom: topPosition ? "auto" : "128px",
+        top: topPosition ? `${topPosition}px` : 'auto',
+        bottom: topPosition ? 'auto' : '128px',
       }}
     >
       <div className="p-4 flex items-center justify-between border-b border-border">
@@ -81,16 +66,14 @@ export function ComponentNavigatorPanel({
           <IconComponents className="w-4 h-4" stroke={1.5} />
           <span className="text-sm font-semibold text-black">Components</span>
         </div>
-        <button onClick={onClose}>
+        <button type="button" onClick={onClose}>
           <IconX className="w-5 h-5" stroke={1.5} />
         </button>
       </div>
       <div className="p-4 border-b border-border">
         <div className="h-6 px-2 bg-gray-100 rounded flex items-center gap-1">
           <IconSearch className="w-4 h-4" stroke={1.5} />
-          <span className="text-xs font-medium text-gray-500">
-            Search component
-          </span>
+          <span className="text-xs font-medium text-gray-500">Search component</span>
         </div>
       </div>
 
@@ -103,34 +86,28 @@ export function ComponentNavigatorPanel({
           return (
             <div key={category}>
               <div className="flex items-center gap-1 mb-2">
-                <IconChevronDown
-                  className="w-2 h-2 text-gray-400 rotate-[-90deg]"
-                  stroke={1.5}
-                />
+                <IconChevronDown className="w-2 h-2 text-gray-400 rotate-[-90deg]" stroke={1.5} />
                 <span className="text-xs font-medium text-black">{category}</span>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {categoryComponents.map((comp) => (
-                  <div
+                  <button
+                    type="button"
                     key={comp.type}
-                    className="flex flex-col gap-2 cursor-pointer"
+                    className="flex flex-col gap-2 cursor-pointer text-left"
                     onClick={() => handleComponentClick(comp.type)}
                   >
                     <div
                       className={`h-24 rounded-md flex flex-col items-center justify-center ${
                         selectedComponentType === comp.type
-                          ? "border-2 border-button-primary"
-                          : "border border-gray-400"
+                          ? 'border-2 border-button-primary'
+                          : 'border border-gray-400'
                       } bg-gray-100`}
                     >
-                      <span className="text-xs font-medium text-gray-600">
-                        {comp.label}
-                      </span>
+                      <span className="text-xs font-medium text-gray-600">{comp.label}</span>
                     </div>
-                    <span className="text-xs font-medium text-black">
-                      {comp.label}
-                    </span>
-                  </div>
+                    <span className="text-xs font-medium text-black">{comp.label}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -144,14 +121,10 @@ export function ComponentNavigatorPanel({
 /**
  * Check if value is a nested component structure
  */
-function isNestedComponent(value: any): value is NestedComponent {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    typeof value.type === "string" &&
-    value.props !== undefined &&
-    typeof value.props === "object"
-  );
+function isNestedComponent(value: unknown): value is NestedComponent {
+  if (value === null || typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.type === 'string' && obj.props !== undefined && typeof obj.props === 'object';
 }
 
 /**
@@ -159,17 +132,12 @@ function isNestedComponent(value: any): value is NestedComponent {
  */
 interface NestedComponentFieldProps {
   label: string;
-  value: any;
-  onChange: (newValue: any) => void;
+  value: unknown;
+  onChange: (newValue: unknown) => void;
   depth?: number;
 }
 
-function NestedComponentField({
-  label,
-  value,
-  onChange,
-  depth = 0,
-}: NestedComponentFieldProps) {
+function NestedComponentField({ label, value, onChange, depth = 0 }: NestedComponentFieldProps) {
   const [isExpanded, setIsExpanded] = useState(depth === 0);
 
   // Handle array of nested components
@@ -177,13 +145,11 @@ function NestedComponentField({
     return (
       <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
         <button
+          type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
         >
-          <IconChevronDown
-            className={`w-3 h-3 transition-transform ${isExpanded ? "" : "-rotate-90"}`}
-            stroke={1.5}
-          />
+          <IconChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? '' : '-rotate-90'}`} stroke={1.5} />
           {label} ({value.length} items)
         </button>
 
@@ -192,12 +158,14 @@ function NestedComponentField({
             {value.map((item, index) => {
               if (isNestedComponent(item)) {
                 return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: nested components have no stable unique id
                   <div key={index} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-600">
                         {item.type} #{index + 1}
                       </span>
                       <button
+                        type="button"
                         onClick={() => {
                           const newArray = [...value];
                           newArray.splice(index, 1);
@@ -240,13 +208,11 @@ function NestedComponentField({
     return (
       <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
         <button
+          type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-1 text-xs font-medium text-gray-700 hover:text-gray-900"
         >
-          <IconChevronDown
-            className={`w-3 h-3 transition-transform ${isExpanded ? "" : "-rotate-90"}`}
-            stroke={1.5}
-          />
+          <IconChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? '' : '-rotate-90'}`} stroke={1.5} />
           {label}: {value.type}
         </button>
 
@@ -273,44 +239,29 @@ function NestedComponentField({
   }
 
   // Handle primitive values (string, number, boolean)
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return (
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-gray-600">{label}</span>
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-7 text-xs"
-        />
+        <Input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="h-7 text-xs" />
       </div>
     );
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return (
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-gray-600">{label}</span>
-        <Input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="h-7 text-xs"
-        />
+        <Input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-7 text-xs" />
       </div>
     );
   }
 
-  if (typeof value === "boolean") {
+  if (typeof value === 'boolean') {
     return (
       <div className="flex flex-col gap-1">
         <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={value}
-            onChange={(e) => onChange(e.target.checked)}
-            className="w-4 h-4"
-          />
+          <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4" />
           <span className="text-xs font-medium text-gray-600">{label}</span>
         </label>
       </div>
@@ -329,7 +280,7 @@ const NATIVE_ELEMENT_DEFINITIONS: Record<
   string,
   {
     label: string;
-    defaultProps: Record<string, any>;
+    defaultProps: Record<string, unknown>;
     fields?: Record<string, { label: string; type: string; options?: string[] }>;
   }
 > = {
@@ -385,7 +336,7 @@ export function InsertInstancePanel({
   const { meta } = useComponentMeta();
 
   // Helper to get componentDef with fallback to native elements
-  const getComponentDefWithFallback = (type: string) => {
+  const getComponentDefWithFallback = (type: string): ComponentDefinition | undefined => {
     const def = engine.registry.get(type);
     if (def) return def;
 
@@ -396,32 +347,35 @@ export function InsertInstancePanel({
         type,
         label: nativeDef.label,
         defaultProps: nativeDef.defaultProps,
-        fields: nativeDef.fields || {},
+        fields: (nativeDef.fields || {}) as FieldsMap,
         render: () => null,
-      };
+      } satisfies ComponentDefinition;
     }
     return undefined;
   };
 
   // Track componentDef in state so it updates when registry changes
-  const [componentDef, setComponentDef] = useState(() =>
-    getComponentDefWithFallback(selectedComponentType)
-  );
+  const [componentDef, setComponentDef] = useState(() => getComponentDefWithFallback(selectedComponentType));
 
   // Update componentDef when selectedComponentType changes
   useEffect(() => {
     const def = getComponentDefWithFallback(selectedComponentType);
-    console.log("[InsertInstancePanel] Component changed to:", selectedComponentType, "defaultProps:", def?.defaultProps);
+    console.log(
+      '[InsertInstancePanel] Component changed to:',
+      selectedComponentType,
+      'defaultProps:',
+      def?.defaultProps,
+    );
     setComponentDef(def);
   }, [engine, selectedComponentType]);
 
   // Initialize field values from defaultProps
-  const [fieldValues, setFieldValues] = useState<Record<string, any>>(() => {
+  const [fieldValues, setFieldValues] = useState<Record<string, unknown>>(() => {
     return componentDef?.defaultProps || {};
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationStatus, setGenerationStatus] = useState<string>("");
+  const [generationStatus, setGenerationStatus] = useState<string>('');
 
   useEffect(() => {
     if (panelRef.current && elementY) {
@@ -443,7 +397,7 @@ export function InsertInstancePanel({
   // Update field values when component changes
   useEffect(() => {
     if (componentDef?.defaultProps) {
-      console.log("[InsertInstancePanel] Updating fieldValues from defaultProps:", componentDef.defaultProps);
+      console.log('[InsertInstancePanel] Updating fieldValues from defaultProps:', componentDef.defaultProps);
       setFieldValues(componentDef.defaultProps);
     }
   }, [componentDef]);
@@ -451,127 +405,132 @@ export function InsertInstancePanel({
   // Listen for reload event to refresh componentDef and fieldValues
   useEffect(() => {
     const handleReload = () => {
-      console.log("[InsertInstancePanel] Reloading after component definitions update");
+      console.log('[InsertInstancePanel] Reloading after component definitions update');
       // Force re-fetch componentDef with fallback
       const updatedDef = getComponentDefWithFallback(selectedComponentType);
-      console.log("[InsertInstancePanel] Updated componentDef:", updatedDef?.type, "defaultProps:", updatedDef?.defaultProps);
+      console.log(
+        '[InsertInstancePanel] Updated componentDef:',
+        updatedDef?.type,
+        'defaultProps:',
+        updatedDef?.defaultProps,
+      );
 
       setComponentDef(updatedDef);
 
       if (updatedDef?.defaultProps) {
-        console.log("[InsertInstancePanel] Updating fieldValues:", updatedDef.defaultProps);
+        console.log('[InsertInstancePanel] Updating fieldValues:', updatedDef.defaultProps);
         setFieldValues(updatedDef.defaultProps);
       }
     };
 
-    window.addEventListener("reload-component-definitions", handleReload);
+    window.addEventListener('reload-component-definitions', handleReload);
     return () => {
-      window.removeEventListener("reload-component-definitions", handleReload);
+      window.removeEventListener('reload-component-definitions', handleReload);
     };
   }, [engine, selectedComponentType]);
 
   // Generate defaultProps with AI if empty
   useEffect(() => {
     if (!componentDef) {
-      console.log("[AI] No componentDef");
+      console.log('[AI] No componentDef');
       return;
     }
 
-    const hasDefaultProps =
-      componentDef.defaultProps &&
-      Object.keys(componentDef.defaultProps).length > 0;
+    const hasDefaultProps = componentDef.defaultProps && Object.keys(componentDef.defaultProps).length > 0;
 
-    console.log("[AI] Component:", selectedComponentType);
-    console.log("[AI] DefaultProps count:", Object.keys(componentDef.defaultProps || {}).length);
-    console.log("[AI] Has defaultProps:", hasDefaultProps);
+    console.log('[AI] Component:', selectedComponentType);
+    console.log('[AI] DefaultProps count:', Object.keys(componentDef.defaultProps || {}).length);
+    console.log('[AI] Has defaultProps:', hasDefaultProps);
 
     if (hasDefaultProps) {
-      console.log("[AI] ✗ Skipping - defaultProps already exist");
+      console.log('[AI] ✗ Skipping - defaultProps already exist');
       return;
     }
 
     // For Atom components: use filePath from componentDef
     // For canvas components: use filePath from meta
-    const filePath = (componentDef as any).filePath || meta?.filePath;
+    const filePath = componentDef?.filePath || meta?.filePath;
     if (!filePath) {
-      console.error("[AI] No filePath in componentDef or meta");
+      console.error('[AI] No filePath in componentDef or meta');
       return;
     }
 
     // Skip generation for canvas components (they are loaded, not from test-repo)
-    if (!( componentDef as any).filePath) {
-      console.log("[AI] ✗ Skipping - not an Atom component");
+    if (!componentDef?.filePath) {
+      console.log('[AI] ✗ Skipping - not an Atom component');
       return;
     }
 
-    console.log("[AI] ✓ Starting generation...");
+    console.log('[AI] ✓ Starting generation...');
     setIsGenerating(true);
-    setGenerationStatus("Generating...");
+    setGenerationStatus('Generating...');
 
-    console.log("[AI] Fetching:", {
+    console.log('[AI] Fetching:', {
       componentType: selectedComponentType,
       filePath,
     });
 
-    authFetch("/api/generate-default-props", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    authFetch('/api/generate-default-props', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         componentType: selectedComponentType,
         filePath,
       }),
     })
       .then(async (response) => {
-        console.log("[AI] Response received:", response.status);
+        console.log('[AI] Response received:', response.status);
 
         if (!response.ok) {
           throw new Error(`Failed to generate: ${response.status}`);
         }
 
         const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
+        if (!reader) throw new Error('No response body');
 
         const decoder = new TextDecoder();
-        let buffer = "";
+        let buffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            console.log("[AI] Stream ended");
+            console.log('[AI] Stream ended');
             break;
           }
 
           buffer += decoder.decode(value, { stream: true });
-          const messages = buffer.split("\n\n");
-          buffer = messages.pop() || "";
+          const messages = buffer.split('\n\n');
+          buffer = messages.pop() || '';
 
           for (const message of messages) {
-            if (!message.startsWith("data: ")) continue;
+            if (!message.startsWith('data: ')) continue;
             const data = JSON.parse(message.slice(6));
-            console.log("[AI] Message:", data);
+            console.log('[AI] Message:', data);
 
-            if (data.status === "complete") {
-              console.log("[AI] ✓ Generation complete:", data.defaultProps);
-              setGenerationStatus("✓ Generated");
+            if (data.status === 'complete') {
+              console.log('[AI] ✓ Generation complete:', data.defaultProps);
+              setGenerationStatus('✓ Generated');
               setIsGenerating(false);
 
               // Trigger registry reload - App.tsx will dispatch reload-component-definitions after updating
-              window.dispatchEvent(new CustomEvent("ai-generation-complete", {
-                detail: { componentType: selectedComponentType }
-              }));
-            } else if (data.status === "error") {
-              console.error("[AI] ✗ Error:", data.error);
-              setGenerationStatus("Error");
+              window.dispatchEvent(
+                new CustomEvent('ai-generation-complete', {
+                  detail: { componentType: selectedComponentType },
+                }),
+              );
+            } else if (data.status === 'error') {
+              console.error('[AI] ✗ Error:', data.error);
+              setGenerationStatus('Error');
               setIsGenerating(false);
-            } else if (data.status === "streaming") {
-              console.log("[AI] Streaming chunk:", data.chunk?.slice(0, 50));
+            } else if (data.status === 'streaming') {
+              console.log('[AI] Streaming chunk:', data.chunk?.slice(0, 50));
             }
           }
         }
       })
       .catch((error) => {
-        console.error("[AI] ✗ Fetch error:", error);
-        setGenerationStatus("Error");
+        console.error('[AI] ✗ Fetch error:', error);
+        setGenerationStatus('Error');
         setIsGenerating(false);
       });
   }, [componentDef, selectedComponentType, meta]);
@@ -589,23 +548,17 @@ export function InsertInstancePanel({
     const filePath = meta?.filePath;
 
     if (!filePath) {
-      console.error("[InsertInstance] No component loaded. Please load a component first.");
+      console.error('[InsertInstance] No component loaded. Please load a component first.');
       return;
     }
 
     // Use prop componentFilePath if provided, otherwise get from componentDef
-    const componentFilePath = propComponentFilePath || (componentDef as any)?.filePath;
+    const componentFilePath = propComponentFilePath || componentDef?.filePath;
 
-    console.log("[InsertInstance] Inserting element:", selectedComponentType);
+    console.log('[InsertInstance] Inserting element:', selectedComponentType);
 
     // Insert via engine (records in unified history for undo/redo)
-    engine.insertASTElement(
-      parentId,
-      filePath,
-      selectedComponentType,
-      { ...fieldValues },
-      componentFilePath
-    );
+    engine.insertASTElement(parentId, filePath, selectedComponentType, { ...fieldValues }, componentFilePath);
 
     if (onClose) {
       onClose();
@@ -617,15 +570,13 @@ export function InsertInstancePanel({
       ref={panelRef}
       className="absolute left-80 w-80 rounded-xl bg-background shadow-[0_4px_11px_rgba(0,0,0,0.25)] z-20"
       style={{
-        top: topPosition ? `${topPosition}px` : "auto",
-        bottom: topPosition ? "auto" : "128px",
+        top: topPosition ? `${topPosition}px` : 'auto',
+        bottom: topPosition ? 'auto' : '128px',
       }}
     >
       <div className="p-4 flex items-center justify-between border-b border-border">
-        <span className="text-sm font-semibold text-black">
-          {componentDef.label}
-        </span>
-        <button onClick={onClose}>
+        <span className="text-sm font-semibold text-black">{componentDef.label}</span>
+        <button type="button" onClick={onClose}>
           <IconX className="w-5 h-5" stroke={1.5} />
         </button>
       </div>
@@ -644,14 +595,14 @@ export function InsertInstancePanel({
         {/* Render all fields with recursive support for nested components */}
         <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
           {Object.entries(fieldValues)
-            .filter(([name]) => name !== "className") // Skip className
+            .filter(([name]) => name !== 'className') // Skip className
             .map(([fieldName, fieldValue]) => {
               // Get field definition from componentDef.fields if exists
               const fieldDef = componentDef.fields?.[fieldName];
 
               // Check if it's a nested component or array
-              const isNested = isNestedComponent(fieldValue) ||
-                (Array.isArray(fieldValue) && fieldValue.some(isNestedComponent));
+              const isNested =
+                isNestedComponent(fieldValue) || (Array.isArray(fieldValue) && fieldValue.some(isNestedComponent));
 
               // Use NestedComponentField for nested structures
               if (isNested) {
@@ -660,30 +611,24 @@ export function InsertInstancePanel({
                     key={fieldName}
                     label={fieldDef?.label || fieldName}
                     value={fieldValue}
-                    onChange={(newValue) =>
-                      setFieldValues((prev) => ({ ...prev, [fieldName]: newValue }))
-                    }
+                    onChange={(newValue) => setFieldValues((prev) => ({ ...prev, [fieldName]: newValue }))}
                   />
                 );
               }
 
               // Legacy rendering for simple fields
-              const isSelect = fieldDef?.type === "select";
-              const isBoolean = typeof fieldValue === "boolean" || fieldDef?.type === "boolean";
-              const isNumber = typeof fieldValue === "number" || fieldDef?.type === "number";
+              const isSelect = fieldDef?.type === 'select';
+              const isBoolean = typeof fieldValue === 'boolean' || fieldDef?.type === 'boolean';
+              const isNumber = typeof fieldValue === 'number' || fieldDef?.type === 'number';
 
               return (
                 <div key={fieldName} className="flex flex-col gap-1.5">
-                  <span className="text-xs font-medium text-gray-600">
-                    {fieldDef?.label || fieldName}
-                  </span>
+                  <span className="text-xs font-medium text-gray-600">{fieldDef?.label || fieldName}</span>
 
                   {isSelect && fieldDef?.options ? (
                     <Select
-                      value={String(fieldValues[fieldName] || "")}
-                      onValueChange={(value) =>
-                        setFieldValues((prev) => ({ ...prev, [fieldName]: value }))
-                      }
+                      value={String(fieldValues[fieldName] || '')}
+                      onValueChange={(value) => setFieldValues((prev) => ({ ...prev, [fieldName]: value }))}
                     >
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
@@ -701,31 +646,23 @@ export function InsertInstancePanel({
                       <input
                         type="checkbox"
                         checked={Boolean(fieldValues[fieldName])}
-                        onChange={(e) =>
-                          setFieldValues((prev) => ({ ...prev, [fieldName]: e.target.checked }))
-                        }
+                        onChange={(e) => setFieldValues((prev) => ({ ...prev, [fieldName]: e.target.checked }))}
                         className="w-4 h-4"
                       />
-                      <span className="text-xs text-gray-500">
-                        {fieldValues[fieldName] ? "Yes" : "No"}
-                      </span>
+                      <span className="text-xs text-gray-500">{fieldValues[fieldName] ? 'Yes' : 'No'}</span>
                     </label>
                   ) : isNumber ? (
                     <Input
                       type="number"
                       value={Number(fieldValues[fieldName] || 0)}
-                      onChange={(e) =>
-                        setFieldValues((prev) => ({ ...prev, [fieldName]: Number(e.target.value) }))
-                      }
+                      onChange={(e) => setFieldValues((prev) => ({ ...prev, [fieldName]: Number(e.target.value) }))}
                       className="h-8 text-xs"
                     />
                   ) : (
                     <Input
                       type="text"
-                      value={String(fieldValues[fieldName] || "")}
-                      onChange={(e) =>
-                        setFieldValues((prev) => ({ ...prev, [fieldName]: e.target.value }))
-                      }
+                      value={String(fieldValues[fieldName] || '')}
+                      onChange={(e) => setFieldValues((prev) => ({ ...prev, [fieldName]: e.target.value }))}
                       className="h-8 text-xs"
                     />
                   )}
@@ -735,6 +672,7 @@ export function InsertInstancePanel({
         </div>
 
         <button
+          type="button"
           onClick={handleInsert}
           className="w-full h-6 px-2 rounded-md bg-button-primary text-white text-xs font-medium"
         >

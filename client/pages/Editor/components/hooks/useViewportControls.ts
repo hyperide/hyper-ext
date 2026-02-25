@@ -3,10 +3,10 @@
  * Active in all modes
  */
 
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { type RefObject, useCallback, useEffect, useRef } from 'react';
 import type { ViewportState } from '@/../../shared/types/canvas';
-import { clampZoom } from '@/lib/viewport';
 import { getPreviewIframe } from '@/lib/dom-utils';
+import { clampZoom } from '@/lib/viewport';
 
 interface UseViewportControlsProps {
   viewport: ViewportState;
@@ -115,7 +115,7 @@ export function useViewportControls({
         });
       }
     },
-    [viewport, onViewportChange, containerRef, enabled]
+    [viewport, onViewportChange, containerRef, enabled],
   );
 
   /**
@@ -145,7 +145,7 @@ export function useViewportControls({
         }
       }
     },
-    [viewport, containerRef]
+    [viewport, containerRef],
   );
 
   /**
@@ -167,7 +167,7 @@ export function useViewportControls({
         panY: panState.initialPanY + deltaY,
       });
     },
-    [viewport.zoom, onViewportChange]
+    [viewport.zoom, onViewportChange],
   );
 
   /**
@@ -210,7 +210,7 @@ export function useViewportControls({
         }
       }
     },
-    [containerRef]
+    [containerRef],
   );
 
   const handleKeyUp = useCallback(
@@ -224,7 +224,7 @@ export function useViewportControls({
         }
       }
     },
-    [containerRef]
+    [containerRef],
   );
 
   /**
@@ -237,7 +237,7 @@ export function useViewportControls({
         zoom: clampZoom(zoom),
       });
     },
-    [viewport, onViewportChange]
+    [viewport, onViewportChange],
   );
 
   const resetZoom = useCallback(() => {
@@ -321,16 +321,7 @@ export function useViewportControls({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [
-    enabled,
-    handleWheel,
-    handlePanStart,
-    handlePanMove,
-    handlePanEnd,
-    handleKeyDown,
-    handleKeyUp,
-    containerRef,
-  ]);
+  }, [enabled, handleWheel, handlePanStart, handlePanMove, handlePanEnd, handleKeyDown, handleKeyUp, containerRef]);
 
   return {
     setZoom,

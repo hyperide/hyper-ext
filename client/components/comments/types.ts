@@ -47,6 +47,4 @@ export interface CreateReplyParams {
   mentionedUserIds?: string[];
 }
 
-export type CommentPosition =
-  | { type: 'element'; elementId: string }
-  | { type: 'free'; x: number; y: number };
+export type CommentPosition = { type: 'element'; elementId: string } | { type: 'free'; x: number; y: number };

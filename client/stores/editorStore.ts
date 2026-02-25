@@ -73,9 +73,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isAddingComment: false,
   selectedCommentId: null,
   splitViewEnabled: persistedState.splitViewEnabled ?? false,
-  splitOrientation: persistedState.splitOrientation === 'horizontal' || persistedState.splitOrientation === 'vertical'
-    ? persistedState.splitOrientation
-    : 'horizontal',
+  splitOrientation:
+    persistedState.splitOrientation === 'horizontal' || persistedState.splitOrientation === 'vertical'
+      ? persistedState.splitOrientation
+      : 'horizontal',
   projectRole: null,
   isReadonly: false,
   // AI Chat state
@@ -158,7 +159,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const file = newOpenFiles.get(path);
 
       if (file) {
-        console.log('[editorStore] Updating file in store. Old length:', file.content.length, 'New length:', content.length);
+        console.log(
+          '[editorStore] Updating file in store. Old length:',
+          file.content.length,
+          'New length:',
+          content.length,
+        );
         newOpenFiles.set(path, {
           ...file,
           content,

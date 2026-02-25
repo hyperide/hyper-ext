@@ -19,8 +19,14 @@ import type {
 
 /** Next.js App Router special files that cannot be rendered in canvas preview */
 const NEXTJS_APP_ROUTER_FILES = new Set([
-  'layout', 'loading', 'error', 'not-found',
-  'template', 'global-error', 'default', 'route',
+  'layout',
+  'loading',
+  'error',
+  'not-found',
+  'template',
+  'global-error',
+  'default',
+  'route',
 ]);
 
 export class ComponentScanner {
@@ -72,11 +78,7 @@ export class ComponentScanner {
    * @param categoryRoot - absolute path of the category root (for computing display name)
    * @param projectRoot - absolute path of the project root (for computing relative path)
    */
-  private scanComponentDirectory(
-    dirPath: string,
-    categoryRoot: string,
-    projectRoot: string,
-  ): ComponentListItem[] {
+  private scanComponentDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -106,11 +108,7 @@ export class ComponentScanner {
   /**
    * Scan a directory for page files with Next.js special file filtering.
    */
-  private scanPagesDirectory(
-    dirPath: string,
-    categoryRoot: string,
-    projectRoot: string,
-  ): ComponentListItem[] {
+  private scanPagesDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -165,9 +163,10 @@ export class ComponentScanner {
     for (const categoryPath of categoryPaths) {
       if (!fs.existsSync(categoryPath)) continue;
 
-      const components = kind === 'page'
-        ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
-        : this.scanComponentDirectory(categoryPath, categoryPath, projectRoot);
+      const components =
+        kind === 'page'
+          ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
+          : this.scanComponentDirectory(categoryPath, categoryPath, projectRoot);
 
       if (components.length > 0) {
         groups.push({

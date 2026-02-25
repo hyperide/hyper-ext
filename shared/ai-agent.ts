@@ -136,7 +136,7 @@ export interface UserMessage {
 
 export interface AssistantMessage {
   role: 'assistant';
-  content: string | Array<{ type: 'text' | 'tool_use'; [key: string]: any }>;
+  content: string | Array<{ type: 'text' | 'tool_use'; [key: string]: unknown }>;
 }
 
 export type ChatMessage = UserMessage | AssistantMessage;
@@ -163,7 +163,7 @@ export type AIAgentStreamEvent =
   | { type: 'content_block_start'; content: string }
   | { type: 'content_block_delta'; delta: string }
   | { type: 'content_block_stop' }
-  | { type: 'tool_use_start'; toolName: ToolName; toolUseId: string; input: any }
+  | { type: 'tool_use_start'; toolName: ToolName; toolUseId: string; input: unknown }
   | { type: 'tool_use_result'; toolUseId: string; result: ToolResult }
   | { type: 'ask_user'; toolUseId: string; question: string; options?: string[] }
   | { type: 'keepalive' }

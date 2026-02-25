@@ -2,9 +2,9 @@
  * History Manager - manages undo/redo operations
  */
 
-import type { DocumentTree } from "./DocumentTree";
-import type { Operation } from "../operations/Operation";
-import type { HistoryState } from "../models/types";
+import type { HistoryState } from '../models/types';
+import type { Operation } from '../operations/Operation';
+import type { DocumentTree } from './DocumentTree';
 
 /**
  * History manager for undo/redo functionality

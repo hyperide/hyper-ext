@@ -1,5 +1,5 @@
-import { memo } from 'react';
 import cn from 'clsx';
+import { memo } from 'react';
 import type { Comment } from './types';
 
 interface CommentStickerProps {
@@ -34,12 +34,8 @@ export const CommentSticker = memo(function CommentSticker({
         'group relative flex items-center justify-center rounded shadow-lg transition-all',
         'hover:scale-110 active:scale-95',
         'w-6 h-6',
-        isSelected
-          ? 'bg-yellow-400 ring-2 ring-yellow-600'
-          : isResolved
-            ? 'bg-green-400'
-            : 'bg-yellow-400',
-        comment.isOrphaned && 'opacity-70 border-2 border-dashed border-orange-600'
+        isSelected ? 'bg-yellow-400 ring-2 ring-yellow-600' : isResolved ? 'bg-green-400' : 'bg-yellow-400',
+        comment.isOrphaned && 'opacity-70 border-2 border-dashed border-orange-600',
       )}
       style={{
         // Yellow sticky note shape - slightly rotated pin
@@ -60,7 +56,13 @@ export const CommentSticker = memo(function CommentSticker({
 
       {/* Resolved checkmark */}
       {isResolved && (
-        <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <svg
+          className="h-3.5 w-3.5 text-white"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
         </svg>
       )}

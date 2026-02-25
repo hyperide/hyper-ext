@@ -66,11 +66,7 @@ function generateCvaVariantsSection(analysis: ComponentAnalysis): string[] {
 /**
  * Generate code example for a variant
  */
-function generateVariantExample(
-  componentName: string,
-  variant: TestVariant,
-  format: DocsFormat,
-): string[] {
+function generateVariantExample(componentName: string, variant: TestVariant, format: DocsFormat): string[] {
   const lines: string[] = [];
   const propsString = Object.entries(variant.props)
     .map(([key, value]) => {
@@ -109,11 +105,7 @@ function generateVariantExample(
 /**
  * Generate examples section from variants
  */
-function generateExamplesSection(
-  componentName: string,
-  variants: TestVariant[],
-  format: DocsFormat,
-): string[] {
+function generateExamplesSection(componentName: string, variants: TestVariant[], format: DocsFormat): string[] {
   if (variants.length === 0) return [];
 
   const lines: string[] = ['## Examples', ''];
@@ -140,14 +132,8 @@ function generateInteractiveElementsSection(analysis: ComponentAnalysis): string
   lines.push('|---------|------|---------|-------------|');
 
   for (const el of analysis.interactiveElements) {
-    const desc =
-      el.context.ariaLabel ||
-      el.context.placeholder ||
-      el.context.children ||
-      '-';
-    lines.push(
-      `| ${el.tagName} | ${el.type} | \`${el.suggestedTestId}\` | ${desc} |`,
-    );
+    const desc = el.context.ariaLabel || el.context.placeholder || el.context.children || '-';
+    lines.push(`| ${el.tagName} | ${el.type} | \`${el.suggestedTestId}\` | ${desc} |`);
   }
 
   lines.push('');
@@ -172,13 +158,7 @@ function generateA11ySection(): string[] {
  * Generate MDX-specific frontmatter
  */
 function generateMdxFrontmatter(componentName: string): string[] {
-  return [
-    '---',
-    `title: ${componentName}`,
-    `description: Documentation for ${componentName} component`,
-    '---',
-    '',
-  ];
+  return ['---', `title: ${componentName}`, `description: Documentation for ${componentName} component`, '---', ''];
 }
 
 /**

@@ -5,8 +5,8 @@
  * for reacting to network reconnection events.
  */
 
-import { create } from 'zustand';
 import { useEffect, useRef } from 'react';
+import { create } from 'zustand';
 
 interface NetworkState {
   /** Whether the browser reports being online */

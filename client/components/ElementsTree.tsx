@@ -1,13 +1,7 @@
-import { useState, useRef, useEffect } from "react";
-import {
-  IconChevronDown,
-  IconFrame,
-  IconBinaryTree,
-  IconSquareRotated,
-  IconBraces,
-} from "@tabler/icons-react";
-import IconSquareRotatedPlus from "./icons/IconSquareRotatedPlus";
+import { IconBinaryTree, IconBraces, IconChevronDown, IconFrame, IconSquareRotated } from '@tabler/icons-react';
+import { useEffect, useRef, useState } from 'react';
 import type { TreeNode } from '../../lib/types';
+import IconSquareRotatedPlus from './icons/IconSquareRotatedPlus';
 
 export type { TreeNode };
 
@@ -16,7 +10,7 @@ interface TreeNodeItemProps {
   depth: number;
   selectedElements: string[];
   hoveredElement: string | null;
-  onSelectElement: (id: string, event: React.MouseEvent) => void;
+  onSelectElement: (id: string, event: React.MouseEvent | React.KeyboardEvent) => void;
   onOpenPanel?: (id: string) => void;
   onHoverElement: (id: string | null) => void;
   onElementPosition?: (id: string, y: number) => void;
@@ -49,12 +43,12 @@ function TreeNodeItem({
 
   const getIcon = () => {
     switch (node.type) {
-      case "frame":
+      case 'frame':
         return <IconFrame className="w-3.5 h-3.5 flex-shrink-0" stroke={1.5} />;
-      case "tree":
-      case "map":
+      case 'tree':
+      case 'map':
         return <IconBinaryTree className="w-3.5 h-3.5 flex-shrink-0" stroke={1.5} />;
-      case "function":
+      case 'function':
         return <IconBraces className="w-3.5 h-3.5 flex-shrink-0 text-cyan-500" stroke={1.5} />;
       default:
         return <IconSquareRotated className="w-3.5 h-3.5 flex-shrink-0" stroke={1.5} />;
@@ -63,7 +57,7 @@ function TreeNodeItem({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     // Double-click on function node navigates to function definition
-    if (node.type === "function" && node.functionLoc && onFunctionNavigate) {
+    if (node.type === 'function' && node.functionLoc && onFunctionNavigate) {
       e.stopPropagation();
       onFunctionNavigate(node.functionLoc.start);
     }
@@ -75,20 +69,26 @@ function TreeNodeItem({
         ref={elementRef}
         className={`h-6 px-2 flex items-center justify-between gap-1.5 rounded hover:bg-muted cursor-pointer ${
           isSelected
-            ? "bg-primary/10 border border-primary/50"
+            ? 'bg-primary/10 border border-primary/50'
             : isHovered
-            ? "bg-primary/5 border border-primary/30"
-            : ""
+              ? 'bg-primary/5 border border-primary/30'
+              : ''
         }`}
+        role="treeitem"
+        tabIndex={0}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onMouseEnter={() => onHoverElement(node.id)}
         onMouseLeave={() => onHoverElement(null)}
         onClick={(e) => onSelectElement(node.id, e)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSelectElement(node.id, e);
+        }}
         onDoubleClick={handleDoubleClick}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {hasChildren ? (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsCollapsed(!isCollapsed);
@@ -97,7 +97,7 @@ function TreeNodeItem({
             >
               <IconChevronDown
                 className={`w-2 h-2 text-muted-foreground flex-shrink-0 transition-transform ${
-                  isCollapsed ? "rotate-[-90deg]" : ""
+                  isCollapsed ? 'rotate-[-90deg]' : ''
                 }`}
                 stroke={1.5}
               />
@@ -107,12 +107,11 @@ function TreeNodeItem({
           )}
           {getIcon()}
           <span className="text-xs text-foreground truncate">{node.label}</span>
-          {node.name && (
-            <span className="text-xs text-foreground truncate">"{node.name}"</span>
-          )}
+          {node.name && <span className="text-xs text-foreground truncate">"{node.name}"</span>}
         </div>
         {(isHovered || isSelected) && !node.label.startsWith('svg') && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpenPanel?.(node.id);
@@ -125,7 +124,7 @@ function TreeNodeItem({
       </div>
       {hasChildren && !isCollapsed && (
         <div>
-          {node.children!.map((child) => (
+          {node.children?.map((child) => (
             <TreeNodeItem
               key={child.id}
               node={child}
@@ -148,7 +147,7 @@ function TreeNodeItem({
 interface ElementsTreeProps {
   tree: TreeNode[];
   selectedElements: string[];
-  onSelectElement: (id: string, event: React.MouseEvent) => void;
+  onSelectElement: (id: string, event: React.MouseEvent | React.KeyboardEvent) => void;
   onOpenPanel?: (id: string) => void;
   onHoverElement?: (id: string | null) => void;
   hoveredElement?: string | null;

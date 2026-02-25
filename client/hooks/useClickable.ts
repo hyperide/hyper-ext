@@ -5,7 +5,7 @@
  * - Click duration exceeded maxDuration
  */
 
-import { useRef, useCallback, type MouseEvent } from 'react';
+import { type MouseEvent, useCallback, useRef } from 'react';
 
 interface UseClickableOptions {
   /**
@@ -87,7 +87,7 @@ export function useClickable({
 
       onMouseDown?.(e);
     },
-    [onMouseDown]
+    [onMouseDown],
   );
 
   const handleMouseUp = useCallback(
@@ -115,7 +115,7 @@ export function useClickable({
       onClick?.(e);
       onMouseUp?.(e);
     },
-    [maxDuration, maxDistance, onClick, onMouseUp]
+    [maxDuration, maxDistance, onClick, onMouseUp],
   );
 
   return {

@@ -2,8 +2,8 @@
  * Serialization utilities for Canvas Engine
  */
 
-import type { DocumentTree } from "../models/types";
-import { documentTreeSchema } from "../models/validation";
+import type { DocumentTree } from '../models/types';
+import { documentTreeSchema } from '../models/validation';
 
 const CURRENT_VERSION = 1;
 
@@ -35,9 +35,7 @@ export function deserialize(json: string): DocumentTree {
 
     // Validate version
     if (!data.version || data.version > CURRENT_VERSION) {
-      throw new Error(
-        `Unsupported version: ${data.version}. Current version: ${CURRENT_VERSION}`
-      );
+      throw new Error(`Unsupported version: ${data.version}. Current version: ${CURRENT_VERSION}`);
     }
 
     // Migrate if needed
@@ -58,12 +56,8 @@ export function deserialize(json: string): DocumentTree {
 /**
  * Migrate tree between versions
  */
-function migrate(
-  tree: DocumentTree,
-  fromVersion: number,
-  toVersion: number
-): DocumentTree {
-  let migratedTree = tree;
+function migrate(tree: DocumentTree, _fromVersion: number, _toVersion: number): DocumentTree {
+  const migratedTree = tree;
 
   // Add migration logic here as versions evolve
   // Example:
@@ -77,12 +71,12 @@ function migrate(
 /**
  * Export tree to downloadable file
  */
-export function exportToFile(tree: DocumentTree, filename = "canvas-tree.json"): void {
+export function exportToFile(tree: DocumentTree, filename = 'canvas-tree.json'): void {
   const json = serialize(tree);
-  const blob = new Blob([json], { type: "application/json" });
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.click();
@@ -108,7 +102,7 @@ export function importFromFile(file: File): Promise<DocumentTree> {
     };
 
     reader.onerror = () => {
-      reject(new Error("Failed to read file"));
+      reject(new Error('Failed to read file'));
     };
 
     reader.readAsText(file);

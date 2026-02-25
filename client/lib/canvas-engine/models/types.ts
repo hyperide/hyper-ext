@@ -2,28 +2,19 @@
  * Core types for Canvas Engine
  */
 
-import type React from "react";
-import { ReactNode } from "react";
-import type { ServerSyncConfig } from "../core/ServerSyncManager";
+import type React from 'react';
+import type { ReactNode } from 'react';
+import type { ServerSyncConfig } from '../core/ServerSyncManager';
 
 /**
  * Supported field types for component properties
  */
-export type FieldType =
-  | "text"
-  | "textarea"
-  | "number"
-  | "boolean"
-  | "select"
-  | "radio"
-  | "color"
-  | "date"
-  | "custom";
+export type FieldType = 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'radio' | 'color' | 'date' | 'custom';
 
 /**
  * Base field definition
  */
-export interface BaseFieldDefinition<T = any> {
+export interface BaseFieldDefinition<T = unknown> {
   type: FieldType;
   label?: string;
   defaultValue?: T;
@@ -36,7 +27,7 @@ export interface BaseFieldDefinition<T = any> {
  * Text field definition
  */
 export interface TextFieldDefinition extends BaseFieldDefinition<string> {
-  type: "text" | "textarea";
+  type: 'text' | 'textarea';
   placeholder?: string;
   maxLength?: number;
   minLength?: number;
@@ -47,7 +38,7 @@ export interface TextFieldDefinition extends BaseFieldDefinition<string> {
  * Number field definition
  */
 export interface NumberFieldDefinition extends BaseFieldDefinition<number> {
-  type: "number";
+  type: 'number';
   min?: number;
   max?: number;
   step?: number;
@@ -57,15 +48,14 @@ export interface NumberFieldDefinition extends BaseFieldDefinition<number> {
  * Boolean field definition
  */
 export interface BooleanFieldDefinition extends BaseFieldDefinition<boolean> {
-  type: "boolean";
+  type: 'boolean';
 }
 
 /**
  * Select/Radio field definition
  */
-export interface SelectFieldDefinition<T = string>
-  extends BaseFieldDefinition<T> {
-  type: "select" | "radio";
+export interface SelectFieldDefinition<T = string> extends BaseFieldDefinition<T> {
+  type: 'select' | 'radio';
   options: { label: string; value: T }[] | T[];
 }
 
@@ -73,14 +63,14 @@ export interface SelectFieldDefinition<T = string>
  * Color field definition
  */
 export interface ColorFieldDefinition extends BaseFieldDefinition<string> {
-  type: "color";
+  type: 'color';
 }
 
 /**
  * Date field definition
  */
 export interface DateFieldDefinition extends BaseFieldDefinition<string> {
-  type: "date";
+  type: 'date';
   min?: string;
   max?: string;
 }
@@ -88,8 +78,8 @@ export interface DateFieldDefinition extends BaseFieldDefinition<string> {
 /**
  * Custom field definition with render function
  */
-export interface CustomFieldDefinition<T = any> extends BaseFieldDefinition<T> {
-  type: "custom";
+export interface CustomFieldDefinition<T = unknown> extends BaseFieldDefinition<T> {
+  type: 'custom';
   render: (props: {
     value: T;
     onChange: (value: T) => void;
@@ -119,13 +109,13 @@ export type FieldsMap = Record<string, FieldDefinition>;
  * Component props based on fields
  */
 export type ComponentProps<F extends FieldsMap = FieldsMap> = {
-  [K in keyof F]: F[K] extends BaseFieldDefinition<infer T> ? T : any;
+  [K in keyof F]: F[K] extends BaseFieldDefinition<infer T> ? T : unknown;
 };
 
 /**
  * Component render function
  */
-export type ComponentRenderFn<Props = any> = (props: {
+export type ComponentRenderFn<Props = Record<string, unknown>> = (props: {
   id: string;
   props: Props;
   children?: ReactNode;
@@ -178,12 +168,15 @@ export interface ComponentDefinition<F extends FieldsMap = FieldsMap> {
 
   /** Is this component hidden from component picker? */
   hidden?: boolean;
+
+  /** File path of the component source (set by server for Atom components) */
+  filePath?: string;
 }
 
 /**
  * Component instance - actual component on canvas
  */
-export interface ComponentInstance<Props = any> {
+export interface ComponentInstance<Props = Record<string, unknown>> {
   /** Unique instance ID */
   id: string;
 
@@ -203,7 +196,7 @@ export interface ComponentInstance<Props = any> {
   metadata?: {
     createdAt?: number;
     updatedAt?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

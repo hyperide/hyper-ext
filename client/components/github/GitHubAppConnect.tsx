@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { IconBrandGithub, IconLock, IconCheck, IconExternalLink } from '@tabler/icons-react';
-import { Button } from '@/components/ui/button';
+import { IconBrandGithub, IconCheck, IconExternalLink, IconLock } from '@tabler/icons-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useGitHubAppInstallations } from './hooks/useGitHubAppInstallations';
 
 interface GitHubAppConnectProps {
@@ -61,8 +61,8 @@ export function GitHubAppConnect({ className, variant = 'banner' }: GitHubAppCon
         <IconCheck className="h-4 w-4 text-green-500" />
         <AlertDescription className="flex items-center justify-between">
           <span>
-            GitHub App connected to {installations.length} account{installations.length > 1 ? 's' : ''}.
-            You can clone private repositories.
+            GitHub App connected to {installations.length} account{installations.length > 1 ? 's' : ''}. You can clone
+            private repositories.
           </span>
           <Button variant="outline" size="sm" onClick={handleConnect}>
             <IconExternalLink className="mr-1 h-3 w-3" />
@@ -76,13 +76,7 @@ export function GitHubAppConnect({ className, variant = 'banner' }: GitHubAppCon
   // Prompt to connect
   if (variant === 'compact') {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleConnect}
-        disabled={connecting}
-        className={className}
-      >
+      <Button variant="outline" size="sm" onClick={handleConnect} disabled={connecting} className={className}>
         <IconLock className="mr-1 h-3 w-3" />
         Connect for private repos
       </Button>
@@ -93,9 +87,7 @@ export function GitHubAppConnect({ className, variant = 'banner' }: GitHubAppCon
     <Alert className={className}>
       <IconBrandGithub className="h-4 w-4" />
       <AlertDescription className="flex items-center justify-between">
-        <span>
-          Connect the HyperIDE GitHub App to clone private repositories
-        </span>
+        <span>Connect the HyperIDE GitHub App to clone private repositories</span>
         <Button onClick={handleConnect} disabled={connecting} size="sm">
           <IconLock className="mr-1 h-3 w-3" />
           {connecting ? 'Connecting...' : 'Connect GitHub App'}

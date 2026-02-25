@@ -1,11 +1,5 @@
+import { IconBolt, IconBox, IconBrush, IconCode, IconMessageChatbot } from '@tabler/icons-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  IconBrush,
-  IconMessageChatbot,
-  IconBolt,
-  IconCode,
-  IconBox,
-} from '@tabler/icons-react';
 
 const features = [
   {
@@ -23,8 +17,7 @@ const features = [
   {
     icon: IconBolt,
     title: 'Live Preview',
-    description:
-      'See changes instantly with Hot Module Replacement. Your components update in real-time as you edit.',
+    description: 'See changes instantly with Hot Module Replacement. Your components update in real-time as you edit.',
   },
   {
     icon: IconCode,
@@ -35,8 +28,7 @@ const features = [
   {
     icon: IconBox,
     title: 'Docker Isolation',
-    description:
-      'Each project runs in a secure, sandboxed Docker container. Safe execution with easy cleanup.',
+    description: 'Each project runs in a secure, sandboxed Docker container. Safe execution with easy cleanup.',
   },
 ];
 
@@ -46,12 +38,9 @@ export default function Features() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Everything you need to build faster
-          </h2>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything you need to build faster</h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            HyperIDE combines visual editing, AI assistance, and developer tools
-            in one seamless experience.
+            HyperIDE combines visual editing, AI assistance, and developer tools in one seamless experience.
           </p>
         </div>
 
@@ -67,9 +56,7 @@ export default function Features() {
                 <CardTitle className="text-xl">{feature.title}</CardTitle>
               </CardHeader>
               <CardContent>
-                <CardDescription className="text-base">
-                  {feature.description}
-                </CardDescription>
+                <CardDescription className="text-base">{feature.description}</CardDescription>
               </CardContent>
             </Card>
           ))}

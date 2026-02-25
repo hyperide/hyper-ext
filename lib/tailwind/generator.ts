@@ -3,42 +3,42 @@
  * Converts style values to Tailwind CSS classes
  */
 
-import colors from "tailwindcss/colors";
+import colors from 'tailwindcss/colors';
 
 // Build reverse lookup map: hex -> tailwind class (e.g., '#3b82f6' -> 'blue-500')
 const HEX_TO_TW_CLASS: Record<string, string> = {};
 
 // Populate the map from tailwindcss/colors
 const colorNames = [
-  "slate",
-  "gray",
-  "zinc",
-  "neutral",
-  "stone",
-  "red",
-  "orange",
-  "amber",
-  "yellow",
-  "lime",
-  "green",
-  "emerald",
-  "teal",
-  "cyan",
-  "sky",
-  "blue",
-  "indigo",
-  "violet",
-  "purple",
-  "fuchsia",
-  "pink",
-  "rose",
+  'slate',
+  'gray',
+  'zinc',
+  'neutral',
+  'stone',
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'emerald',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'purple',
+  'fuchsia',
+  'pink',
+  'rose',
 ];
 
 for (const colorName of colorNames) {
   const palette = colors[colorName as keyof typeof colors];
-  if (palette && typeof palette === "object") {
+  if (palette && typeof palette === 'object') {
     for (const [shade, hex] of Object.entries(palette)) {
-      if (typeof hex === "string") {
+      if (typeof hex === 'string') {
         HEX_TO_TW_CLASS[hex.toLowerCase()] = `${colorName}-${shade}`;
       }
     }
@@ -46,11 +46,11 @@ for (const colorName of colorNames) {
 }
 
 // Add special colors
-HEX_TO_TW_CLASS["#ffffff"] = "white";
-HEX_TO_TW_CLASS["#fff"] = "white";
-HEX_TO_TW_CLASS["#000000"] = "black";
-HEX_TO_TW_CLASS["#000"] = "black";
-HEX_TO_TW_CLASS["transparent"] = "transparent";
+HEX_TO_TW_CLASS['#ffffff'] = 'white';
+HEX_TO_TW_CLASS['#fff'] = 'white';
+HEX_TO_TW_CLASS['#000000'] = 'black';
+HEX_TO_TW_CLASS['#000'] = 'black';
+HEX_TO_TW_CLASS.transparent = 'transparent';
 
 interface StyleUpdate {
   position?: string;
@@ -97,48 +97,48 @@ interface StyleUpdate {
 
 // Tailwind spacing scale mapping
 const SPACING_MAP: Record<string, string> = {
-  "0px": "0",
-  "1px": "px",
-  "0.125rem": "0.5",
-  "0.25rem": "1",
-  "0.5rem": "2",
-  "0.75rem": "3",
-  "1rem": "4",
-  "1.25rem": "5",
-  "1.5rem": "6",
-  "1.75rem": "7",
-  "2rem": "8",
-  "2.25rem": "9",
-  "2.5rem": "10",
-  "2.75rem": "11",
-  "3rem": "12",
-  "3.5rem": "14",
-  "4rem": "16",
-  "5rem": "20",
-  "6rem": "24",
-  "7rem": "28",
-  "8rem": "32",
-  "9rem": "36",
-  "10rem": "40",
-  "11rem": "44",
-  "12rem": "48",
-  "13rem": "52",
-  "14rem": "56",
-  "15rem": "60",
-  "16rem": "64",
+  '0px': '0',
+  '1px': 'px',
+  '0.125rem': '0.5',
+  '0.25rem': '1',
+  '0.5rem': '2',
+  '0.75rem': '3',
+  '1rem': '4',
+  '1.25rem': '5',
+  '1.5rem': '6',
+  '1.75rem': '7',
+  '2rem': '8',
+  '2.25rem': '9',
+  '2.5rem': '10',
+  '2.75rem': '11',
+  '3rem': '12',
+  '3.5rem': '14',
+  '4rem': '16',
+  '5rem': '20',
+  '6rem': '24',
+  '7rem': '28',
+  '8rem': '32',
+  '9rem': '36',
+  '10rem': '40',
+  '11rem': '44',
+  '12rem': '48',
+  '13rem': '52',
+  '14rem': '56',
+  '15rem': '60',
+  '16rem': '64',
 };
 
 // Border radius mapping
 const RADIUS_MAP: Record<string, string> = {
-  "0px": "0",
-  "2px": "sm",
-  "4px": "",
-  "6px": "md",
-  "8px": "lg",
-  "12px": "xl",
-  "16px": "2xl",
-  "24px": "3xl",
-  "9999px": "full",
+  '0px': '0',
+  '2px': 'sm',
+  '4px': '',
+  '6px': 'md',
+  '8px': 'lg',
+  '12px': 'xl',
+  '16px': '2xl',
+  '24px': '3xl',
+  '9999px': 'full',
 };
 
 /**
@@ -148,7 +148,7 @@ function toSpacingToken(value: string | undefined): string | null {
   if (!value) return null;
 
   const trimmed = value.trim();
-  if (!trimmed || trimmed === "0") return "0";
+  if (!trimmed || trimmed === '0') return '0';
 
   // Check if it's in the spacing map
   if (SPACING_MAP[trimmed]) {
@@ -162,19 +162,16 @@ function toSpacingToken(value: string | undefined): string | null {
 /**
  * Convert position value to Tailwind class
  */
-function toPositionClass(
-  direction: "top" | "right" | "bottom" | "left",
-  value: string | undefined,
-): string | null {
+function toPositionClass(direction: 'top' | 'right' | 'bottom' | 'left', value: string | undefined): string | null {
   if (!value) return null;
 
   const token = toSpacingToken(value);
   if (!token) return null;
 
   // Handle negative values
-  const isNegative = value.startsWith("-");
-  const prefix = isNegative ? "-" : "";
-  const cleanToken = isNegative ? token.replace("-", "") : token;
+  const isNegative = value.startsWith('-');
+  const prefix = isNegative ? '-' : '';
+  const cleanToken = isNegative ? token.replace('-', '') : token;
 
   return `${prefix}${direction}-${cleanToken}`;
 }
@@ -182,26 +179,23 @@ function toPositionClass(
 /**
  * Convert width/height to Tailwind class
  */
-function toSizingClass(
-  dimension: "w" | "h",
-  value: string | undefined,
-): string | null {
+function toSizingClass(dimension: 'w' | 'h', value: string | undefined): string | null {
   if (!value) return null;
 
   const trimmed = value.trim();
 
   // Common width/height values
   const commonSizes: Record<string, string> = {
-    auto: "auto",
-    "100%": "full",
-    "100vw": "screen",
-    "100vh": "screen",
-    "50%": "1/2",
-    "33.333333%": "1/3",
-    "66.666667%": "2/3",
-    "25%": "1/4",
-    "75%": "3/4",
-    "20%": "1/5",
+    auto: 'auto',
+    '100%': 'full',
+    '100vw': 'screen',
+    '100vh': 'screen',
+    '50%': '1/2',
+    '33.333333%': '1/3',
+    '66.666667%': '2/3',
+    '25%': '1/4',
+    '75%': '3/4',
+    '20%': '1/5',
   };
 
   if (commonSizes[trimmed]) {
@@ -217,27 +211,24 @@ function toSizingClass(
 /**
  * Convert margin to Tailwind class
  */
-function toMarginClass(
-  direction: "t" | "r" | "b" | "l",
-  value: string | undefined,
-): string | null {
+function toMarginClass(direction: 't' | 'r' | 'b' | 'l', value: string | undefined): string | null {
   if (!value) return null;
 
   const trimmed = value.trim();
 
   // Handle 'auto' specially
-  if (trimmed === "auto") {
+  if (trimmed === 'auto') {
     return `m${direction}-auto`;
   }
 
   // Handle negative values
-  const isNegative = trimmed.startsWith("-");
+  const isNegative = trimmed.startsWith('-');
   const absoluteValue = isNegative ? trimmed.slice(1) : trimmed;
 
   const token = toSpacingToken(absoluteValue);
   if (!token) return null;
 
-  const prefix = isNegative ? "-" : "";
+  const prefix = isNegative ? '-' : '';
   return `${prefix}m${direction}-${token}`;
 }
 
@@ -245,10 +236,7 @@ function toMarginClass(
  * Convert color to Tailwind class
  * Uses full Tailwind color palette for exact matches
  */
-function toColorClass(
-  type: "bg" | "text" | "border" | "shadow",
-  value: string | undefined,
-): string | null {
+function toColorClass(type: 'bg' | 'text' | 'border' | 'shadow', value: string | undefined): string | null {
   if (!value) return null;
 
   const trimmed = value.trim().toLowerCase();
@@ -260,7 +248,7 @@ function toColorClass(
   }
 
   // Handle hex with alpha channel (#rrggbbaa) - extract base color
-  if (trimmed.length === 9 && trimmed.startsWith("#")) {
+  if (trimmed.length === 9 && trimmed.startsWith('#')) {
     const baseHex = trimmed.slice(0, 7);
     const twClassFromBase = HEX_TO_TW_CLASS[baseHex];
     if (twClassFromBase) {
@@ -268,9 +256,7 @@ function toColorClass(
       const alpha = Number.parseInt(trimmed.slice(7, 9), 16);
       const opacityPercent = Math.round((alpha / 255) * 100);
       // Use Tailwind opacity modifier if it's a standard value
-      const standardOpacities = [
-        0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100,
-      ];
+      const standardOpacities = [0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100];
       if (standardOpacities.includes(opacityPercent)) {
         return `${type}-${twClassFromBase}/${opacityPercent}`;
       }
@@ -293,7 +279,7 @@ function toBorderRadiusClass(value: string | undefined): string | null {
 
   if (RADIUS_MAP[trimmed]) {
     const token = RADIUS_MAP[trimmed];
-    return token ? `rounded-${token}` : "rounded";
+    return token ? `rounded-${token}` : 'rounded';
   }
 
   // Use arbitrary value
@@ -303,10 +289,7 @@ function toBorderRadiusClass(value: string | undefined): string | null {
 /**
  * Convert individual corner border radius to Tailwind class
  */
-function toBorderRadiusCornerClass(
-  corner: "tl" | "tr" | "bl" | "br",
-  value: string | undefined,
-): string | null {
+function toBorderRadiusCornerClass(corner: 'tl' | 'tr' | 'bl' | 'br', value: string | undefined): string | null {
   if (!value) return null;
 
   const trimmed = value.trim();
@@ -325,20 +308,17 @@ function toBorderRadiusCornerClass(
  * @param styles - Style properties to convert to Tailwind classes
  * @param state - Optional state modifier (hover, focus, etc.) to prefix all classes
  */
-export function generateTailwindClasses(
-  styles: StyleUpdate,
-  state?: string,
-): string {
+export function generateTailwindClasses(styles: StyleUpdate, state?: string): string {
   const classes: string[] = [];
 
   // Position
   if (styles.position) {
     const posMap: Record<string, string> = {
-      static: "static",
-      relative: "relative",
-      absolute: "absolute",
-      fixed: "fixed",
-      sticky: "sticky",
+      static: 'static',
+      relative: 'relative',
+      absolute: 'absolute',
+      fixed: 'fixed',
+      sticky: 'sticky',
     };
     if (posMap[styles.position]) {
       classes.push(posMap[styles.position]);
@@ -346,11 +326,11 @@ export function generateTailwindClasses(
   }
 
   // Position values (only for non-static)
-  if (styles.position && styles.position !== "static") {
-    const top = toPositionClass("top", styles.top);
-    const right = toPositionClass("right", styles.right);
-    const bottom = toPositionClass("bottom", styles.bottom);
-    const left = toPositionClass("left", styles.left);
+  if (styles.position && styles.position !== 'static') {
+    const top = toPositionClass('top', styles.top);
+    const right = toPositionClass('right', styles.right);
+    const bottom = toPositionClass('bottom', styles.bottom);
+    const left = toPositionClass('left', styles.left);
 
     if (top) classes.push(top);
     if (right) classes.push(right);
@@ -360,20 +340,20 @@ export function generateTailwindClasses(
 
   // Display & Layout
   if (styles.display) {
-    if (styles.display === "flex" || styles.display === "inline-flex") {
-      classes.push("flex");
-      if (styles.flexDirection === "column") {
-        classes.push("flex-col");
+    if (styles.display === 'flex' || styles.display === 'inline-flex') {
+      classes.push('flex');
+      if (styles.flexDirection === 'column') {
+        classes.push('flex-col');
       }
-    } else if (styles.display === "grid" || styles.display === "inline-grid") {
-      classes.push("grid");
+    } else if (styles.display === 'grid' || styles.display === 'inline-grid') {
+      classes.push('grid');
     }
   }
 
   // Handle flexDirection separately (when sent without display, e.g., changing direction)
   if (!styles.display && styles.flexDirection !== undefined) {
-    if (styles.flexDirection === "column") {
-      classes.push("flex-col");
+    if (styles.flexDirection === 'column') {
+      classes.push('flex-col');
     }
     // Note: flex-row is default, so empty string removes flex-col
     // The removeConflictingClasses will handle removing flex-col when switching to row
@@ -382,15 +362,15 @@ export function generateTailwindClasses(
   // Justify Content
   if (styles.justifyContent) {
     const justifyMap: Record<string, string> = {
-      "flex-start": "justify-start",
-      start: "justify-start",
-      center: "justify-center",
-      "flex-end": "justify-end",
-      end: "justify-end",
-      "space-between": "justify-between",
-      "space-around": "justify-around",
-      "space-evenly": "justify-evenly",
-      stretch: "justify-stretch",
+      'flex-start': 'justify-start',
+      start: 'justify-start',
+      center: 'justify-center',
+      'flex-end': 'justify-end',
+      end: 'justify-end',
+      'space-between': 'justify-between',
+      'space-around': 'justify-around',
+      'space-evenly': 'justify-evenly',
+      stretch: 'justify-stretch',
     };
     if (justifyMap[styles.justifyContent]) {
       classes.push(justifyMap[styles.justifyContent]);
@@ -400,13 +380,13 @@ export function generateTailwindClasses(
   // Align Items
   if (styles.alignItems) {
     const alignMap: Record<string, string> = {
-      "flex-start": "items-start",
-      start: "items-start",
-      center: "items-center",
-      "flex-end": "items-end",
-      end: "items-end",
-      stretch: "items-stretch",
-      baseline: "items-baseline",
+      'flex-start': 'items-start',
+      start: 'items-start',
+      center: 'items-center',
+      'flex-end': 'items-end',
+      end: 'items-end',
+      stretch: 'items-stretch',
+      baseline: 'items-baseline',
     };
     if (alignMap[styles.alignItems]) {
       classes.push(alignMap[styles.alignItems]);
@@ -470,10 +450,10 @@ export function generateTailwindClasses(
   // Justify Items (grid horizontal alignment)
   if (styles.justifyItems) {
     const justifyItemsMap: Record<string, string> = {
-      start: "justify-items-start",
-      center: "justify-items-center",
-      end: "justify-items-end",
-      stretch: "justify-items-stretch",
+      start: 'justify-items-start',
+      center: 'justify-items-center',
+      end: 'justify-items-end',
+      stretch: 'justify-items-stretch',
     };
     if (justifyItemsMap[styles.justifyItems]) {
       classes.push(justifyItemsMap[styles.justifyItems]);
@@ -483,10 +463,10 @@ export function generateTailwindClasses(
   // Overflow
   if (styles.overflow) {
     const overflowMap: Record<string, string> = {
-      visible: "overflow-visible",
-      hidden: "overflow-hidden",
-      scroll: "overflow-scroll",
-      auto: "overflow-auto",
+      visible: 'overflow-visible',
+      hidden: 'overflow-hidden',
+      scroll: 'overflow-scroll',
+      auto: 'overflow-auto',
     };
     if (overflowMap[styles.overflow]) {
       classes.push(overflowMap[styles.overflow]);
@@ -494,30 +474,24 @@ export function generateTailwindClasses(
   }
 
   // Width & Height
-  const width = toSizingClass("w", styles.width);
-  const height = toSizingClass("h", styles.height);
+  const width = toSizingClass('w', styles.width);
+  const height = toSizingClass('h', styles.height);
   if (width) classes.push(width);
   if (height) classes.push(height);
 
   // Margins
-  const mt = toMarginClass("t", styles.marginTop);
-  const mr = toMarginClass("r", styles.marginRight);
-  const mb = toMarginClass("b", styles.marginBottom);
-  const ml = toMarginClass("l", styles.marginLeft);
+  const mt = toMarginClass('t', styles.marginTop);
+  const mr = toMarginClass('r', styles.marginRight);
+  const mb = toMarginClass('b', styles.marginBottom);
+  const ml = toMarginClass('l', styles.marginLeft);
   if (mt) classes.push(mt);
   if (mr) classes.push(mr);
   if (mb) classes.push(mb);
   if (ml) classes.push(ml);
 
   // Paddings - use px/py when left===right or top===bottom
-  const useHorizontalPadding =
-    styles.paddingLeft &&
-    styles.paddingRight &&
-    styles.paddingLeft === styles.paddingRight;
-  const useVerticalPadding =
-    styles.paddingTop &&
-    styles.paddingBottom &&
-    styles.paddingTop === styles.paddingBottom;
+  const useHorizontalPadding = styles.paddingLeft && styles.paddingRight && styles.paddingLeft === styles.paddingRight;
+  const useVerticalPadding = styles.paddingTop && styles.paddingBottom && styles.paddingTop === styles.paddingBottom;
 
   if (useHorizontalPadding) {
     const token = toSpacingToken(styles.paddingLeft);
@@ -548,9 +522,9 @@ export function generateTailwindClasses(
   }
 
   // Colors
-  const bg = toColorClass("bg", styles.backgroundColor);
-  const textColor = toColorClass("text", styles.color);
-  const border = toColorClass("border", styles.borderColor);
+  const bg = toColorClass('bg', styles.backgroundColor);
+  const textColor = toColorClass('text', styles.color);
+  const border = toColorClass('border', styles.borderColor);
   if (bg) classes.push(bg);
   if (textColor) classes.push(textColor);
   if (border) classes.push(border);
@@ -560,9 +534,9 @@ export function generateTailwindClasses(
     // Generate Tailwind arbitrary value class: bg-\[url('/path/to/image.png')\]
     const imagePath = styles.backgroundImage;
     classes.push(`bg-[url('${imagePath}')]`);
-    classes.push("bg-cover");
-    classes.push("bg-center");
-    classes.push("bg-no-repeat");
+    classes.push('bg-cover');
+    classes.push('bg-center');
+    classes.push('bg-no-repeat');
   }
 
   // Border Radius
@@ -573,10 +547,10 @@ export function generateTailwindClasses(
     styles.borderRadiusBottomLeft ||
     styles.borderRadiusBottomRight
   ) {
-    const tl = toBorderRadiusCornerClass("tl", styles.borderRadiusTopLeft);
-    const tr = toBorderRadiusCornerClass("tr", styles.borderRadiusTopRight);
-    const bl = toBorderRadiusCornerClass("bl", styles.borderRadiusBottomLeft);
-    const br = toBorderRadiusCornerClass("br", styles.borderRadiusBottomRight);
+    const tl = toBorderRadiusCornerClass('tl', styles.borderRadiusTopLeft);
+    const tr = toBorderRadiusCornerClass('tr', styles.borderRadiusTopRight);
+    const bl = toBorderRadiusCornerClass('bl', styles.borderRadiusBottomLeft);
+    const br = toBorderRadiusCornerClass('br', styles.borderRadiusBottomRight);
     if (tl) classes.push(tl);
     if (tr) classes.push(tr);
     if (bl) classes.push(bl);
@@ -590,23 +564,7 @@ export function generateTailwindClasses(
   if (styles.opacity !== undefined) {
     const opacityValue = styles.opacity;
     // Tailwind supports: 0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100
-    const validOpacities = [
-      "0",
-      "5",
-      "10",
-      "20",
-      "25",
-      "30",
-      "40",
-      "50",
-      "60",
-      "70",
-      "75",
-      "80",
-      "90",
-      "95",
-      "100",
-    ];
+    const validOpacities = ['0', '5', '10', '20', '25', '30', '40', '50', '60', '70', '75', '80', '90', '95', '100'];
     if (validOpacities.includes(opacityValue)) {
       classes.push(`opacity-${opacityValue}`);
     } else {
@@ -620,11 +578,11 @@ export function generateTailwindClasses(
   if (styles.shadow !== undefined) {
     const shadowValue = styles.shadow;
     // Valid Tailwind shadow sizes
-    const validShadows = ["sm", "default", "md", "lg", "xl", "2xl", "inner", "none"];
-    if (shadowValue === "none") {
-      classes.push("shadow-none");
-    } else if (shadowValue === "default" || shadowValue === "") {
-      classes.push("shadow");
+    const validShadows = ['sm', 'default', 'md', 'lg', 'xl', '2xl', 'inner', 'none'];
+    if (shadowValue === 'none') {
+      classes.push('shadow-none');
+    } else if (shadowValue === 'default' || shadowValue === '') {
+      classes.push('shadow');
     } else if (validShadows.includes(shadowValue)) {
       classes.push(`shadow-${shadowValue}`);
     } else {
@@ -635,7 +593,7 @@ export function generateTailwindClasses(
 
   // Shadow Color
   if (styles.shadowColor) {
-    const shadowColorClass = toColorClass("shadow", styles.shadowColor);
+    const shadowColorClass = toColorClass('shadow', styles.shadowColor);
     if (shadowColorClass) {
       classes.push(shadowColorClass);
     }
@@ -644,12 +602,12 @@ export function generateTailwindClasses(
   // Box Shadow (raw CSS value - use arbitrary syntax)
   if (styles.boxShadow !== undefined) {
     const boxShadowValue = styles.boxShadow;
-    if (boxShadowValue === "none" || boxShadowValue === "") {
-      classes.push("shadow-none");
+    if (boxShadowValue === 'none' || boxShadowValue === '') {
+      classes.push('shadow-none');
     } else {
       // Encode the CSS value for Tailwind arbitrary syntax
       // Replace spaces with underscores for Tailwind arbitrary value syntax
-      const encoded = boxShadowValue.replace(/\s+/g, "_");
+      const encoded = boxShadowValue.replace(/\s+/g, '_');
       classes.push(`shadow-[${encoded}]`);
     }
   }
@@ -659,10 +617,10 @@ export function generateTailwindClasses(
 
   // Apply state modifier prefix if specified (e.g., hover:, focus:)
   if (state) {
-    return uniqueClasses.map((cls) => `${state}:${cls}`).join(" ");
+    return uniqueClasses.map((cls) => `${state}:${cls}`).join(' ');
   }
 
-  return uniqueClasses.join(" ");
+  return uniqueClasses.join(' ');
 }
 
 /**

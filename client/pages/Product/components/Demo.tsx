@@ -32,13 +32,10 @@ export default function Demo() {
 
           {/* Content */}
           <div>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Built for developers who value their time
-            </h2>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Built for developers who value their time</h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Stop switching between code and browser. HyperIDE brings the design
-              experience to your development workflow, without sacrificing code
-              quality or control.
+              Stop switching between code and browser. HyperIDE brings the design experience to your development
+              workflow, without sacrificing code quality or control.
             </p>
 
             {/* Capabilities */}
@@ -54,21 +51,15 @@ export default function Demo() {
             <div className="mt-10 grid grid-cols-3 gap-4 border-t pt-10">
               <div>
                 <div className="text-3xl font-bold">5+</div>
-                <div className="text-sm text-muted-foreground">
-                  Supported frameworks
-                </div>
+                <div className="text-sm text-muted-foreground">Supported frameworks</div>
               </div>
               <div>
                 <div className="text-3xl font-bold">50+</div>
-                <div className="text-sm text-muted-foreground">
-                  Keyboard shortcuts
-                </div>
+                <div className="text-sm text-muted-foreground">Keyboard shortcuts</div>
               </div>
               <div>
                 <div className="text-3xl font-bold">∞</div>
-                <div className="text-sm text-muted-foreground">
-                  Time saved
-                </div>
+                <div className="text-sm text-muted-foreground">Time saved</div>
               </div>
             </div>
           </div>

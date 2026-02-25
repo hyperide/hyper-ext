@@ -2,8 +2,8 @@
  * Clipboard Manager - manages copy/paste operations
  */
 
-import type { DocumentTree } from "./DocumentTree";
-import type { ComponentInstance } from "../models/types";
+import type { ComponentInstance } from '../models/types';
+import type { DocumentTree } from './DocumentTree';
 
 /**
  * Clipboard manager for copy/paste functionality
@@ -35,11 +35,7 @@ export class ClipboardManager {
 
     try {
       // Clone the clipboard instance
-      const clone = tree.insert(
-        this.clipboard.type,
-        { ...this.clipboard.props },
-        parentId
-      );
+      const clone = tree.insert(this.clipboard.type, { ...this.clipboard.props }, parentId);
 
       // Clone children recursively if they exist
       if (this.clipboard.children && this.clipboard.children.length > 0) {
@@ -50,7 +46,7 @@ export class ClipboardManager {
 
       return clone.id;
     } catch (error) {
-      console.error("Paste failed:", error);
+      console.error('Paste failed:', error);
       return null;
     }
   }

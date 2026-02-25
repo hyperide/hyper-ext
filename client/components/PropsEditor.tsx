@@ -2,14 +2,15 @@
  * Props editor component that generates form based on TypeScript types
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useCanvasEngine, useSelectedInstance, useSelectedIds } from '@/lib/canvas-engine';
-import { PropsFormField } from './PropsFormField';
+import type { ComponentPropsSchema } from '@shared/types/props';
 import { IconChevronDown, IconSearch } from '@tabler/icons-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useTamaguiTokens } from '@/hooks/useTamaguiTokens';
+import { useCanvasEngine, useSelectedIds } from '@/lib/canvas-engine';
+import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import { authFetch } from '@/utils/authFetch';
-import type { PropTypeInfo, ComponentPropsSchema } from '@shared/types/props';
+import { PropsFormField } from './PropsFormField';
 
 export function PropsEditor() {
   const engine = useCanvasEngine();
@@ -19,7 +20,7 @@ export function PropsEditor() {
   const [schema, setSchema] = useState<ComponentPropsSchema | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [propsValues, setPropsValues] = useState<Record<string, any>>({});
+  const [propsValues, setPropsValues] = useState<Record<string, unknown>>({});
   const [isExpanded, setIsExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllProps, setShowAllProps] = useState(false);
@@ -52,14 +53,14 @@ export function PropsEditor() {
   }, [selectedIds, engine]);
 
   // Get selected element from AST
-  const getSelectedElementFromAST = useCallback((): any | null => {
+  const getSelectedElementFromAST = useCallback((): ASTNode | null => {
     if (selectedIds.length === 0) return null;
 
     const selectedId = selectedIds[0];
     const root = engine.getRoot();
 
     // Helper to find node by id
-    const findNodeById = (nodes: any[], id: string): any => {
+    const findNodeById = (nodes: ASTNode[], id: string): ASTNode | null => {
       for (const node of nodes) {
         if (node.id === id) return node;
         if (node.children) {
@@ -71,8 +72,9 @@ export function PropsEditor() {
     };
 
     // Check root AST
-    if (root.metadata?.astStructure) {
-      const node = findNodeById(root.metadata.astStructure, selectedId);
+    const rootAst = root.metadata?.astStructure;
+    if (Array.isArray(rootAst)) {
+      const node = findNodeById(rootAst, selectedId);
       if (node) return node;
     }
 
@@ -80,8 +82,9 @@ export function PropsEditor() {
     const rootChildren = root.children || [];
     for (const childId of rootChildren) {
       const inst = engine.getInstance(childId);
-      if (inst?.metadata?.astStructure) {
-        const node = findNodeById(inst.metadata.astStructure, selectedId);
+      const childAst = inst?.metadata?.astStructure;
+      if (Array.isArray(childAst)) {
+        const node = findNodeById(childAst, selectedId);
         if (node) return node;
       }
     }
@@ -167,29 +170,35 @@ export function PropsEditor() {
   }, [selectedIds, engine]);
 
   // Sync prop change to file
-  const syncPropToFile = useCallback((propName: string, value: any) => {
-    const filePath = getFilePath();
-    if (!filePath || selectedIds.length === 0) {
-      return;
-    }
+  const syncPropToFile = useCallback(
+    (propName: string, value: unknown) => {
+      const filePath = getFilePath();
+      if (!filePath || selectedIds.length === 0) {
+        return;
+      }
 
-    // Route through engine for undo/redo support
-    engine.updateASTProp(selectedIds[0], filePath, propName, value);
-  }, [getFilePath, selectedIds, engine]);
+      // Route through engine for undo/redo support
+      engine.updateASTProp(selectedIds[0], filePath, propName, value);
+    },
+    [getFilePath, selectedIds, engine],
+  );
 
   // Update prop value
-  const handlePropChange = useCallback((propName: string, value: any) => {
-    if (selectedIds.length === 0) return;
+  const handlePropChange = useCallback(
+    (propName: string, value: unknown) => {
+      if (selectedIds.length === 0) return;
 
-    // Update local state for immediate UI feedback
-    setPropsValues((prev) => ({
-      ...prev,
-      [propName]: value,
-    }));
+      // Update local state for immediate UI feedback
+      setPropsValues((prev) => ({
+        ...prev,
+        [propName]: value,
+      }));
 
-    // Sync to file - the file change will trigger re-parse and update the canvas
-    syncPropToFile(propName, value);
-  }, [selectedIds, syncPropToFile]);
+      // Sync to file - the file change will trigger re-parse and update the canvas
+      syncPropToFile(propName, value);
+    },
+    [selectedIds, syncPropToFile],
+  );
 
   // Don't show if no file path
   if (!getFilePath()) {
@@ -212,9 +221,7 @@ export function PropsEditor() {
   if (error) {
     return (
       <div className="px-4 py-3 border-b border-gray-200">
-        <div className="text-[11px] text-red-500">
-          {error}
-        </div>
+        <div className="text-[11px] text-red-500">{error}</div>
       </div>
     );
   }
@@ -230,9 +237,7 @@ export function PropsEditor() {
   if (propsCount === 0) {
     return (
       <div className="px-4 py-3 border-b border-gray-200">
-        <div className="text-[11px] text-gray-400 italic">
-          No editable props
-        </div>
+        <div className="text-[11px] text-gray-400 italic">No editable props</div>
       </div>
     );
   }
@@ -240,15 +245,14 @@ export function PropsEditor() {
   return (
     <div className="px-4 py-3 border-b border-gray-200">
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between w-full mb-3"
       >
         <span className="text-xs font-semibold text-black">Component Props</span>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-gray-400">{propsCount}</span>
-          <IconChevronDown
-            className={`h-3 w-3 transition-transform text-gray-400 ${isExpanded ? '' : '-rotate-90'}`}
-          />
+          <IconChevronDown className={`h-3 w-3 transition-transform text-gray-400 ${isExpanded ? '' : '-rotate-90'}`} />
         </div>
       </button>
 
@@ -270,15 +274,14 @@ export function PropsEditor() {
 
           {/* Filtered props */}
           {(() => {
-            const filteredProps = Object.entries(schema.props)
-              .filter(([propName]) =>
-                propName.toLowerCase().includes(searchQuery.toLowerCase())
-              );
+            const filteredProps = Object.entries(schema.props).filter(([propName]) =>
+              propName.toLowerCase().includes(searchQuery.toLowerCase()),
+            );
 
             const N = 8;
             const threshold = N + 2; // 10
             const shouldLimit = filteredProps.length > threshold;
-            const displayedProps = (shouldLimit && !showAllProps) ? filteredProps.slice(0, N) : filteredProps;
+            const displayedProps = shouldLimit && !showAllProps ? filteredProps.slice(0, N) : filteredProps;
 
             return (
               <>
@@ -296,6 +299,7 @@ export function PropsEditor() {
                 {/* Show all button */}
                 {shouldLimit && !showAllProps && (
                   <button
+                    type="button"
                     onClick={() => setShowAllProps(true)}
                     className="w-full h-6 px-2 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center text-[11px] text-gray-600 font-medium transition-colors"
                   >

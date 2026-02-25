@@ -1,6 +1,6 @@
+export { type AIAnalyzerOptions, analyzeWithAI, type ResolvedAIConfig, resolveAnalyzerConfig } from './ai-analyzer.js';
+export { filterChildPaths, getDirectoryTree } from './directory-tree.js';
 export { ComponentScanner } from './scanner.js';
-export { getDirectoryTree, filterChildPaths } from './directory-tree.js';
-export { analyzeWithAI, resolveAnalyzerConfig, type AIAnalyzerOptions, type ResolvedAIConfig } from './ai-analyzer.js';
 export type {
   ComponentGroup,
   ComponentListItem,

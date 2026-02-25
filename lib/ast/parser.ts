@@ -4,10 +4,10 @@
  */
 
 import * as path from 'node:path';
-import { parse as recastParse, print as recastPrint } from 'recast';
 import { parse as babelParse } from '@babel/parser';
 import type * as t from '@babel/types';
-import type { ParsedFile, ParseOptions } from '../types';
+import { parse as recastParse, print as recastPrint } from 'recast';
+import type { ParsedFile } from '../types';
 import type { FileIO } from './file-io';
 import { NodeFileIO } from './node-file-io';
 
@@ -31,7 +31,7 @@ export const babelParserWrapper = {
  * @param options - Parse options
  * @returns Parsed AST
  */
-export function parseCode(sourceCode: string, options?: ParseOptions): t.File {
+export function parseCode(sourceCode: string): t.File {
   return recastParse(sourceCode, {
     parser: babelParserWrapper,
   });
@@ -57,9 +57,7 @@ export function createFileParser(io: FileIO) {
 
   return {
     async readAndParseFile(filePath: string): Promise<ParsedFile> {
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(process.cwd(), filePath);
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
       await io.access(absolutePath);
       const sourceCode = await io.readFile(absolutePath);
@@ -76,9 +74,7 @@ export function createFileParser(io: FileIO) {
     },
 
     async writeAST(ast: t.File, filePath: string): Promise<void> {
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(process.cwd(), filePath);
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
       const output = printAST(ast);
       await io.writeFile(absolutePath, output);
@@ -88,9 +84,7 @@ export function createFileParser(io: FileIO) {
     },
 
     async readFileContent(filePath: string): Promise<string> {
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(process.cwd(), filePath);
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
       return io.readFile(absolutePath);
     },

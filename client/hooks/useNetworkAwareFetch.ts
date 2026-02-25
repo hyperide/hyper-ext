@@ -7,9 +7,9 @@
  * - Optionally preserves data on network errors (shows stale data + error indicator)
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { isNetworkError } from '../utils/networkError';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNetworkStore, useOnReconnect } from '../stores/networkStore';
+import { isNetworkError } from '../utils/networkError';
 
 export interface UseNetworkAwareFetchOptions<T> {
   /** Dependencies array - refetch when these change (like useEffect deps) */

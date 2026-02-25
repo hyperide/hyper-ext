@@ -19,27 +19,27 @@ import type { CanvasAdapter } from './types';
 // ============================================================================
 
 interface SharedEditorActions {
-	/** Apply a partial update locally (does NOT send to other panels) */
-	applyPatch: (patch: Partial<SharedEditorState>) => void;
+  /** Apply a partial update locally (does NOT send to other panels) */
+  applyPatch: (patch: Partial<SharedEditorState>) => void;
 
-	/** Reset to full state (used on state:init from extension host) */
-	init: (state: SharedEditorState) => void;
+  /** Reset to full state (used on state:init from extension host) */
+  init: (state: SharedEditorState) => void;
 }
 
 type SharedEditorStore = SharedEditorState & SharedEditorActions;
 
 export const useSharedEditorState = create<SharedEditorStore>((set) => ({
-	// Initial state
-	selectedIds: [],
-	hoveredId: null,
-	currentComponent: null,
-	astStructure: null,
-	canvasMode: 'single',
-	engineMode: 'design',
+  // Initial state
+  selectedIds: [],
+  hoveredId: null,
+  currentComponent: null,
+  astStructure: null,
+  canvasMode: 'single',
+  engineMode: 'design',
 
-	// Actions
-	applyPatch: (patch) => set((state) => ({ ...state, ...patch })),
-	init: (newState) => set(newState),
+  // Actions
+  applyPatch: (patch) => set((state) => ({ ...state, ...patch })),
+  init: (newState) => set(newState),
 }));
 
 // ============================================================================
@@ -51,27 +51,27 @@ export const useSharedEditorState = create<SharedEditorStore>((set) => ({
  * Call once in a top-level provider component.
  */
 export function useSharedEditorStateSync(canvas: CanvasAdapter): void {
-	useEffect(() => {
-		const { applyPatch, init } = useSharedEditorState.getState();
+  useEffect(() => {
+    const { applyPatch, init } = useSharedEditorState.getState();
 
-		const unsubUpdate = canvas.onEvent('state:update', (msg) => {
-			const { patch } = msg as { patch: Partial<SharedEditorState> };
-			applyPatch(patch);
-		});
+    const unsubUpdate = canvas.onEvent('state:update', (msg) => {
+      const { patch } = msg as { patch: Partial<SharedEditorState> };
+      applyPatch(patch);
+    });
 
-		const unsubInit = canvas.onEvent('state:init', (msg) => {
-			const { state } = msg as { state: SharedEditorState };
-			init(state);
-		});
+    const unsubInit = canvas.onEvent('state:init', (msg) => {
+      const { state } = msg as { state: SharedEditorState };
+      init(state);
+    });
 
-		// Signal that subscriptions are active and we're ready for state:init
-		canvas.sendEvent({ type: 'webview:ready' });
+    // Signal that subscriptions are active and we're ready for state:init
+    canvas.sendEvent({ type: 'webview:ready' });
 
-		return () => {
-			unsubUpdate();
-			unsubInit();
-		};
-	}, [canvas]);
+    return () => {
+      unsubUpdate();
+      unsubInit();
+    };
+  }, [canvas]);
 }
 
 // ============================================================================
@@ -79,23 +79,23 @@ export function useSharedEditorStateSync(canvas: CanvasAdapter): void {
 // ============================================================================
 
 export function useSelectedIds(): string[] {
-	return useSharedEditorState((s) => s.selectedIds);
+  return useSharedEditorState((s) => s.selectedIds);
 }
 
 export function useHoveredId(): string | null {
-	return useSharedEditorState((s) => s.hoveredId);
+  return useSharedEditorState((s) => s.hoveredId);
 }
 
 export function useCurrentComponent(): SharedEditorState['currentComponent'] {
-	return useSharedEditorState((s) => s.currentComponent);
+  return useSharedEditorState((s) => s.currentComponent);
 }
 
 export function useCanvasMode(): SharedEditorState['canvasMode'] {
-	return useSharedEditorState((s) => s.canvasMode);
+  return useSharedEditorState((s) => s.canvasMode);
 }
 
 export function useEngineMode(): SharedEditorState['engineMode'] {
-	return useSharedEditorState((s) => s.engineMode);
+  return useSharedEditorState((s) => s.engineMode);
 }
 
 // ============================================================================
@@ -107,11 +107,11 @@ export function useEngineMode(): SharedEditorState['engineMode'] {
  * Use this for user-initiated state changes (click to select, etc.)
  */
 export function createSharedDispatch(canvas: CanvasAdapter) {
-	return (patch: Partial<SharedEditorState>) => {
-		// Update local store immediately
-		useSharedEditorState.getState().applyPatch(patch);
+  return (patch: Partial<SharedEditorState>) => {
+    // Update local store immediately
+    useSharedEditorState.getState().applyPatch(patch);
 
-		// Broadcast to other panels via extension host
-		canvas.sendEvent({ type: 'state:update', patch });
-	};
+    // Broadcast to other panels via extension host
+    canvas.sendEvent({ type: 'state:update', patch });
+  };
 }

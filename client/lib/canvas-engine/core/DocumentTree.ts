@@ -2,9 +2,9 @@
  * Document Tree - manages tree structure of component instances
  */
 
-import type { ComponentInstance, DocumentTree as IDocumentTree } from "../models/types";
-import { componentInstanceSchema } from "../models/validation";
-import { generateId } from "../utils/id";
+import type { ComponentInstance, DocumentTree as IDocumentTree } from '../models/types';
+import { componentInstanceSchema } from '../models/validation';
+import { generateId } from '../utils/id';
 
 /**
  * Document tree manager
@@ -25,10 +25,10 @@ export class DocumentTree {
       });
     } else {
       // Create root instance
-      this.rootId = generateId("root");
+      this.rootId = generateId('root');
       this.instances.set(this.rootId, {
         id: this.rootId,
-        type: "root",
+        type: 'root',
         props: {},
         parentId: null,
         children: [],
@@ -52,7 +52,7 @@ export class DocumentTree {
   getRoot(): ComponentInstance {
     const root = this.instances.get(this.rootId);
     if (!root) {
-      throw new Error("Root instance not found");
+      throw new Error('Root instance not found');
     }
     return root;
   }
@@ -111,7 +111,7 @@ export class DocumentTree {
     const ancestors: ComponentInstance[] = [];
     let current = this.getInstance(id);
 
-    while (current && current.parentId) {
+    while (current?.parentId) {
       const parent = this.instances.get(current.parentId);
       if (!parent) break;
       ancestors.push(parent);
@@ -129,7 +129,8 @@ export class DocumentTree {
     const queue: string[] = [id];
 
     while (queue.length > 0) {
-      const currentId = queue.shift()!;
+      const currentId = queue.shift();
+      if (!currentId) continue;
       const children = this.getChildren(currentId);
 
       for (const child of children) {
@@ -146,10 +147,10 @@ export class DocumentTree {
    */
   insert(
     type: string,
-    props: Record<string, any>,
+    props: Record<string, unknown>,
     parentId: string | null = this.rootId,
     index?: number,
-    id?: string
+    id?: string,
   ): ComponentInstance {
     // Resolve parent ID (null means root)
     const resolvedParentId = parentId ?? this.rootId;
@@ -160,7 +161,7 @@ export class DocumentTree {
     }
 
     // Generate or use provided ID
-    const instanceId = id || generateId("instance");
+    const instanceId = id || generateId('instance');
 
     // Create instance
     const instance: ComponentInstance = {
@@ -186,7 +187,10 @@ export class DocumentTree {
 
     // Add to parent's children
     if (resolvedParentId) {
-      const parent = this.instances.get(resolvedParentId)!;
+      const parent = this.instances.get(resolvedParentId);
+      if (!parent) {
+        throw new Error(`Parent instance "${resolvedParentId}" not found`);
+      }
       if (index !== undefined && index >= 0 && index <= parent.children.length) {
         parent.children.splice(index, 0, instanceId);
       } else {
@@ -201,7 +205,7 @@ export class DocumentTree {
   /**
    * Update instance props
    */
-  update(id: string, props: Partial<Record<string, any>>): ComponentInstance {
+  update(id: string, props: Partial<Record<string, unknown>>): ComponentInstance {
     const instance = this.instances.get(id);
     if (!instance) {
       throw new Error(`Instance "${id}" not found`);
@@ -231,7 +235,7 @@ export class DocumentTree {
 
     // Cannot delete root
     if (id === this.rootId) {
-      throw new Error("Cannot delete root instance");
+      throw new Error('Cannot delete root instance');
     }
 
     // Remove from parent's children
@@ -258,11 +262,7 @@ export class DocumentTree {
   /**
    * Move instance to new parent/position
    */
-  move(
-    id: string,
-    newParentId: string | null,
-    newIndex?: number
-  ): ComponentInstance {
+  move(id: string, newParentId: string | null, newIndex?: number): ComponentInstance {
     const instance = this.instances.get(id);
     if (!instance) {
       throw new Error(`Instance "${id}" not found`);
@@ -270,7 +270,7 @@ export class DocumentTree {
 
     // Cannot move root
     if (id === this.rootId) {
-      throw new Error("Cannot move root instance");
+      throw new Error('Cannot move root instance');
     }
 
     // Validate new parent exists
@@ -282,7 +282,7 @@ export class DocumentTree {
     if (newParentId) {
       const descendants = this.getDescendants(id);
       if (descendants.some((d) => d.id === newParentId)) {
-        throw new Error("Cannot move instance to its own descendant");
+        throw new Error('Cannot move instance to its own descendant');
       }
     }
 
@@ -290,16 +290,17 @@ export class DocumentTree {
     if (instance.parentId) {
       const oldParent = this.instances.get(instance.parentId);
       if (oldParent) {
-        oldParent.children = oldParent.children.filter(
-          (childId) => childId !== id
-        );
+        oldParent.children = oldParent.children.filter((childId) => childId !== id);
       }
     }
 
     // Add to new parent
     instance.parentId = newParentId;
     if (newParentId) {
-      const newParent = this.instances.get(newParentId)!;
+      const newParent = this.instances.get(newParentId);
+      if (!newParent) {
+        throw new Error(`New parent instance "${newParentId}" not found`);
+      }
       if (newIndex !== undefined && newIndex >= 0 && newIndex <= newParent.children.length) {
         newParent.children.splice(newIndex, 0, id);
       } else {
@@ -329,11 +330,7 @@ export class DocumentTree {
     const parentId = newParentId !== undefined ? newParentId : original.parentId;
 
     // Clone instance
-    const clone = this.insert(
-      original.type,
-      { ...original.props },
-      parentId
-    );
+    const clone = this.insert(original.type, { ...original.props }, parentId);
 
     // Clone children recursively
     for (const childId of original.children) {

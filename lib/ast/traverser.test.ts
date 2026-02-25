@@ -2,16 +2,16 @@
  * Tests for AST traverser utilities
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { parseCode } from './parser';
 import {
-  findElementByUuid,
-  getUuidFromElement,
-  findAllJSXElements,
-  traverseJSXElements,
   analyzeJSXChildren,
+  findAllJSXElements,
+  findElementByUuid,
   getChildrenLocation,
   getJSXTagName,
+  getUuidFromElement,
+  traverseJSXElements,
 } from './traverser';
 
 describe('findElementByUuid', () => {
@@ -108,7 +108,8 @@ describe('getUuidFromElement', () => {
     const result = findElementByUuid(ast, 'test-123');
     expect(result).not.toBeNull();
 
-    const uuid = getUuidFromElement(result!.element);
+    if (!result) throw new Error('Element not found');
+    const uuid = getUuidFromElement(result.element);
     expect(uuid).toBe('test-123');
   });
 
@@ -358,21 +359,24 @@ describe('getChildrenLocation', () => {
     const el = getFirstElement('<div>Hello</div>');
     const loc = getChildrenLocation(el);
     expect(loc).not.toBeNull();
-    expect(loc!.line).toBeGreaterThan(0);
+    if (!loc) throw new Error('Location not found');
+    expect(loc.line).toBeGreaterThan(0);
   });
 
   it('should return location of expression child', () => {
     const el = getFirstElement('<div>{name}</div>');
     const loc = getChildrenLocation(el);
     expect(loc).not.toBeNull();
-    expect(loc!.line).toBeGreaterThan(0);
+    if (!loc) throw new Error('Location not found');
+    expect(loc.line).toBeGreaterThan(0);
   });
 
   it('should return location of member expression child', () => {
     const el = getFirstElement('<div>{item.name}</div>');
     const loc = getChildrenLocation(el);
     expect(loc).not.toBeNull();
-    expect(loc!.line).toBeGreaterThan(0);
+    if (!loc) throw new Error('Location not found');
+    expect(loc.line).toBeGreaterThan(0);
   });
 
   it('should return null for empty element', () => {
@@ -403,7 +407,8 @@ describe('getChildrenLocation', () => {
     const el = getFirstElement('<div>Hello {name}</div>');
     const loc = getChildrenLocation(el);
     expect(loc).not.toBeNull();
-    expect(loc!.line).toBeGreaterThan(0);
+    if (!loc) throw new Error('Location not found');
+    expect(loc.line).toBeGreaterThan(0);
   });
 });
 

@@ -300,11 +300,7 @@ export function findClosestTamaguiColor(hex: string): { token: string; hex: stri
     const rgb1 = hexToRgb(hex1);
     const rgb2 = hexToRgb(hex2);
     if (!rgb1 || !rgb2) return Infinity;
-    return Math.sqrt(
-      (rgb1.r - rgb2.r) ** 2 +
-      (rgb1.g - rgb2.g) ** 2 +
-      (rgb1.b - rgb2.b) ** 2
-    );
+    return Math.sqrt((rgb1.r - rgb2.r) ** 2 + (rgb1.g - rgb2.g) ** 2 + (rgb1.b - rgb2.b) ** 2);
   }
 
   let closestToken = '';

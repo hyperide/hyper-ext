@@ -3,10 +3,7 @@ import { authFetch } from '@/utils/authFetch';
 /**
  * Duplicate AST element in the component file
  */
-export async function duplicateASTElement(
-  elementId: string,
-  filePath: string,
-): Promise<string | null> {
+export async function duplicateASTElement(elementId: string, filePath: string): Promise<string | null> {
   try {
     const response = await authFetch('/api/duplicate-element', {
       method: 'POST',

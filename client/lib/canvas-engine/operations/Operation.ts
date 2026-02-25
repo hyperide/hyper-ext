@@ -2,19 +2,14 @@
  * Base Operation interface (Command pattern)
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import type { ASTApiService } from "../services/ASTApiService";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
+import type { ASTApiService } from '../services/ASTApiService';
 
 /**
  * Base operation interface
  */
-export type OperationSource =
-  | 'ui-editor'
-  | 'ai-agent'
-  | 'code-server'
-  | 'code-editor'
-  | 'external';
+export type OperationSource = 'ui-editor' | 'ai-agent' | 'code-server' | 'code-editor' | 'external';
 
 export interface Operation {
   /** Operation name for debugging */

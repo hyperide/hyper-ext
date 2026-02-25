@@ -2,12 +2,8 @@
  * Tests for Tailwind parser utilities
  */
 
-import { describe, it, expect } from 'bun:test';
-import {
-  parseTailwindClasses,
-  removeConflictingClasses,
-  getConflictingPrefixes,
-} from './parser';
+import { describe, expect, it } from 'bun:test';
+import { getConflictingPrefixes, parseTailwindClasses, removeConflictingClasses } from './parser';
 
 describe('parseTailwindClasses', () => {
   it('should parse position classes', () => {

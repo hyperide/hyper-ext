@@ -1,18 +1,14 @@
-import { useState, useCallback } from 'react';
 import {
-  IconBrandGithub,
-  IconTrash,
-  IconExternalLink,
-  IconBuilding,
-  IconUser,
   IconAlertCircle,
-  IconRefresh,
+  IconBrandGithub,
+  IconBuilding,
+  IconExternalLink,
   IconLock,
+  IconRefresh,
+  IconTrash,
+  IconUser,
 } from '@tabler/icons-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useCallback, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +20,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useGitHubAppInstallations } from './hooks/useGitHubAppInstallations';
 import type { GitHubAppInstallation } from './types';
 
@@ -74,20 +74,14 @@ function InstallationCard({
               {installation.repositorySelection === 'all' ? (
                 <span>All repositories</span>
               ) : (
-                <span>
-                  {installation.repositoryCount ?? 0} selected repositories
-                </span>
+                <span>{installation.repositoryCount ?? 0} selected repositories</span>
               )}
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-          >
+          <Button variant="outline" size="sm" asChild>
             <a
               href={`https://github.com/settings/installations/${installation.installationId}`}
               target="_blank"
@@ -108,9 +102,8 @@ function InstallationCard({
               <AlertDialogHeader>
                 <AlertDialogTitle>Remove installation?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will remove the connection to {installation.accountLogin} from HyperIDE.
-                  You can always reconnect later by installing the GitHub App again.
-                  To completely uninstall the app, use GitHub's settings.
+                  This will remove the connection to {installation.accountLogin} from HyperIDE. You can always reconnect
+                  later by installing the GitHub App again. To completely uninstall the app, use GitHub's settings.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -128,15 +121,8 @@ function InstallationCard({
 }
 
 export function GitHubAppInstallations({ className }: GitHubAppInstallationsProps) {
-  const {
-    installations,
-    loading,
-    error,
-    configured,
-    refetch,
-    removeInstallation,
-    getInstallUrl,
-  } = useGitHubAppInstallations();
+  const { installations, loading, error, configured, refetch, removeInstallation, getInstallUrl } =
+    useGitHubAppInstallations();
   const [connecting, setConnecting] = useState(false);
 
   const handleConnect = useCallback(async () => {
@@ -155,7 +141,7 @@ export function GitHubAppInstallations({ className }: GitHubAppInstallationsProp
     async (installationId: number) => {
       await removeInstallation(installationId);
     },
-    [removeInstallation]
+    [removeInstallation],
   );
 
   if (!configured) {
@@ -166,9 +152,7 @@ export function GitHubAppInstallations({ className }: GitHubAppInstallationsProp
             <IconBrandGithub className="h-5 w-5" />
             GitHub App
           </CardTitle>
-          <CardDescription>
-            GitHub App integration is not configured on this server.
-          </CardDescription>
+          <CardDescription>GitHub App integration is not configured on this server.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -183,9 +167,7 @@ export function GitHubAppInstallations({ className }: GitHubAppInstallationsProp
               <IconBrandGithub className="h-5 w-5" />
               GitHub App Connections
             </CardTitle>
-            <CardDescription>
-              Connect the HyperIDE GitHub App to access private repositories
-            </CardDescription>
+            <CardDescription>Connect the HyperIDE GitHub App to access private repositories</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={loading}>
@@ -220,11 +202,7 @@ export function GitHubAppInstallations({ className }: GitHubAppInstallationsProp
           </div>
         ) : (
           installations.map((installation) => (
-            <InstallationCard
-              key={installation.id}
-              installation={installation}
-              onRemove={handleRemove}
-            />
+            <InstallationCard key={installation.id} installation={installation} onRemove={handleRemove} />
           ))
         )}
       </CardContent>

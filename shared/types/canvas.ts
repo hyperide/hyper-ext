@@ -28,7 +28,7 @@ export type SerializableValue =
 export interface InstancePosition {
   x: number;
   y: number;
-  width?: number;  // Container width constraint
+  width?: number; // Container width constraint
   height?: number; // Container height constraint
 }
 
@@ -106,18 +106,14 @@ export interface CanvasComposition {
 /**
  * Type guard to check if instance has props (new format)
  */
-export function isInstanceConfig(
-  instance: InstancePosition | InstanceConfig
-): instance is InstanceConfig {
+export function isInstanceConfig(instance: InstancePosition | InstanceConfig): instance is InstanceConfig {
   return 'props' in instance;
 }
 
 /**
  * Convert legacy InstancePosition to InstanceConfig
  */
-export function toInstanceConfig(
-  instance: InstancePosition | InstanceConfig
-): InstanceConfig {
+export function toInstanceConfig(instance: InstancePosition | InstanceConfig): InstanceConfig {
   if (isInstanceConfig(instance)) {
     return instance;
   }

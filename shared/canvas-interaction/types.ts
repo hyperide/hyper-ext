@@ -8,25 +8,25 @@
 // ============================================================================
 
 export interface OverlayState {
-	selectedIds: string[];
-	hoveredId: string | null;
-	hoveredItemIndex?: number | null;
-	selectedItemIndices?: Map<string, number | null>;
-	activeInstanceId?: string | null;
-	viewportZoom?: number;
+  selectedIds: string[];
+  hoveredId: string | null;
+  hoveredItemIndex?: number | null;
+  selectedItemIndices?: Map<string, number | null>;
+  activeInstanceId?: string | null;
+  viewportZoom?: number;
 }
 
 export interface OverlayRendererOptions {
-	viewportZoom?: number;
+  viewportZoom?: number;
 }
 
 export interface OverlayRect {
-	key: string;
-	left: number;
-	top: number;
-	width: number;
-	height: number;
-	type: 'selection' | 'hover';
+  key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  type: 'selection' | 'hover';
 }
 
 // ============================================================================
@@ -34,32 +34,23 @@ export interface OverlayRect {
 // ============================================================================
 
 export interface ClickHandlerCallbacks {
-	/** Called when an element with data-uniq-id is clicked in design mode */
-	onElementClick: (
-		elementId: string,
-		element: HTMLElement,
-		event: MouseEvent,
-		itemIndex: number | null,
-	) => void;
-	/** Called on mouseover/mouseout (null = mouse left all elements) */
-	onElementHover: (
-		elementId: string | null,
-		element: HTMLElement | null,
-		itemIndex: number | null,
-	) => void;
-	/** Called when clicking empty space (no data-uniq-id ancestor) */
-	onEmptyClick?: (event: MouseEvent) => void;
-	/** Returns current editor mode */
-	getMode: () => 'design' | 'interact';
-	/**
-	 * Optional pre-intercept before default click handling.
-	 * Return true to skip default handling entirely.
-	 */
-	shouldIntercept?: (event: MouseEvent) => boolean;
+  /** Called when an element with data-uniq-id is clicked in design mode */
+  onElementClick: (elementId: string, element: HTMLElement, event: MouseEvent, itemIndex: number | null) => void;
+  /** Called on mouseover/mouseout (null = mouse left all elements) */
+  onElementHover: (elementId: string | null, element: HTMLElement | null, itemIndex: number | null) => void;
+  /** Called when clicking empty space (no data-uniq-id ancestor) */
+  onEmptyClick?: (event: MouseEvent) => void;
+  /** Returns current editor mode */
+  getMode: () => 'design' | 'interact';
+  /**
+   * Optional pre-intercept before default click handling.
+   * Return true to skip default handling entirely.
+   */
+  shouldIntercept?: (event: MouseEvent) => boolean;
 }
 
 export interface ClickHandlerOptions {
-	activeInstanceId?: string | null;
+  activeInstanceId?: string | null;
 }
 
 // ============================================================================
@@ -67,8 +58,8 @@ export interface ClickHandlerOptions {
 // ============================================================================
 
 export interface DesignStylesOptions {
-	mode: 'design' | 'interact';
-	boardModeActive?: boolean;
-	canvasMode?: 'single' | 'multi';
-	transparentBackground?: boolean;
+  mode: 'design' | 'interact';
+  boardModeActive?: boolean;
+  canvasMode?: 'single' | 'multi';
+  transparentBackground?: boolean;
 }

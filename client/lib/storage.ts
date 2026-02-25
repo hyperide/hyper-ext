@@ -2,11 +2,8 @@
  * LocalStorage persistence utilities
  */
 
-import type {
-  CanvasComposition,
-  CanvasMode,
-} from '../../shared/types/canvas';
 import type { LayoutStorage } from 'react-resizable-panels';
+import type { CanvasComposition, CanvasMode } from '../../shared/types/canvas';
 
 /**
  * LayoutStorage adapter for react-resizable-panels persistence.
@@ -123,20 +120,14 @@ export function clearPersistedState(): void {
 /**
  * Build cache key for canvas composition
  */
-function getCanvasCompositionCacheKey(
-  projectId: string,
-  componentPath: string
-): string {
+function getCanvasCompositionCacheKey(projectId: string, componentPath: string): string {
   return `${CANVAS_COMPOSITION_KEY}:${projectId}:${componentPath}`;
 }
 
 /**
  * Get cached canvas composition from localStorage
  */
-export function getCanvasComposition(
-  projectId: string,
-  componentPath: string
-): CanvasComposition | null {
+export function getCanvasComposition(projectId: string, componentPath: string): CanvasComposition | null {
   try {
     const key = getCanvasCompositionCacheKey(projectId, componentPath);
     const cached = localStorage.getItem(key);
@@ -152,11 +143,7 @@ export function getCanvasComposition(
 /**
  * Save canvas composition to localStorage cache
  */
-export function saveCanvasComposition(
-  projectId: string,
-  componentPath: string,
-  composition: CanvasComposition
-): void {
+export function saveCanvasComposition(projectId: string, componentPath: string, composition: CanvasComposition): void {
   try {
     const key = getCanvasCompositionCacheKey(projectId, componentPath);
     localStorage.setItem(key, JSON.stringify(composition));
@@ -169,10 +156,7 @@ export function saveCanvasComposition(
  * Get canvas mode based on composition state
  * If composition exists and has instances, mode is 'multi', otherwise 'single'
  */
-export function getCanvasMode(
-  projectId: string,
-  componentPath: string
-): CanvasMode {
+export function getCanvasMode(projectId: string, componentPath: string): CanvasMode {
   const composition = getCanvasComposition(projectId, componentPath);
   if (!composition) return 'single';
 
@@ -183,10 +167,7 @@ export function getCanvasMode(
 /**
  * Clear canvas composition cache for a component
  */
-export function clearCanvasComposition(
-  projectId: string,
-  componentPath: string
-): void {
+export function clearCanvasComposition(projectId: string, componentPath: string): void {
   try {
     const key = getCanvasCompositionCacheKey(projectId, componentPath);
     localStorage.removeItem(key);

@@ -1,9 +1,8 @@
+import { IconCheck, IconEdit, IconRefresh, IconTrash } from '@tabler/icons-react';
+import { formatDistanceToNow } from 'date-fns';
 import { memo, useState } from 'react';
-import cn from 'clsx';
-import { IconCheck, IconTrash, IconRefresh, IconEdit } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { formatDistanceToNow } from 'date-fns';
 import type { Comment } from './types';
 
 interface CommentThreadProps {
@@ -69,15 +68,11 @@ export const CommentThread = memo(function CommentThread({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-sm truncate">
-                {comment.author.name || comment.author.email}
-              </span>
+              <span className="font-medium text-sm truncate">{comment.author.name || comment.author.email}</span>
               <span className="text-xs text-muted-foreground">
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
               </span>
-              {comment.editedAt && (
-                <span className="text-xs text-muted-foreground">(edited)</span>
-              )}
+              {comment.editedAt && <span className="text-xs text-muted-foreground">(edited)</span>}
             </div>
 
             {isEditing ? (
@@ -120,12 +115,7 @@ export const CommentThread = memo(function CommentThread({
             )}
 
             {canEdit && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsEditing(true)}
-                disabled={isSubmitting}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} disabled={isSubmitting}>
                 <IconEdit className="h-4 w-4 mr-1" />
                 Edit
               </Button>
@@ -163,15 +153,11 @@ export const CommentThread = memo(function CommentThread({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-xs truncate">
-                    {reply.author.name || reply.author.email}
-                  </span>
+                  <span className="font-medium text-xs truncate">{reply.author.name || reply.author.email}</span>
                   <span className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
                   </span>
-                  {reply.editedAt && (
-                    <span className="text-xs text-muted-foreground">(edited)</span>
-                  )}
+                  {reply.editedAt && <span className="text-xs text-muted-foreground">(edited)</span>}
                 </div>
                 <p className="mt-0.5 text-sm whitespace-pre-wrap break-words">{reply.content}</p>
               </div>
@@ -189,11 +175,7 @@ export const CommentThread = memo(function CommentThread({
           placeholder="Write a reply... (Cmd+Enter to send)"
           className="min-h-[60px] text-sm"
         />
-        <Button
-          size="sm"
-          onClick={handleSubmitReply}
-          disabled={!replyContent.trim() || isSubmitting}
-        >
+        <Button size="sm" onClick={handleSubmitReply} disabled={!replyContent.trim() || isSubmitting}>
           Reply
         </Button>
       </div>

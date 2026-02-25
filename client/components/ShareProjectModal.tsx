@@ -1,53 +1,13 @@
-import { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { IconCheck, IconCopy, IconLink, IconMail, IconTrash, IconUserPlus, IconX } from '@tabler/icons-react';
+import { useState } from 'react';
+import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  IconUserPlus,
-  IconMail,
-  IconX,
-  IconCopy,
-  IconCheck,
-  IconTrash,
-  IconLink,
-} from '@tabler/icons-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
-import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
-import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
-
-interface Member {
-  userId: string;
-  role: 'editor' | 'viewer';
-  joinedAt: string;
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-  };
-}
-
-interface Invite {
-  id: string;
-  email: string | null;
-  role: 'editor' | 'viewer';
-  token: string;
-  expiresAt: string;
-  createdAt: string;
-}
 
 interface ShareProjectModalProps {
   isOpen: boolean;
@@ -56,12 +16,7 @@ interface ShareProjectModalProps {
   projectName: string;
 }
 
-export function ShareProjectModal({
-  isOpen,
-  onClose,
-  projectId,
-  projectName,
-}: ShareProjectModalProps) {
+export function ShareProjectModal({ isOpen, onClose, projectId, projectName }: ShareProjectModalProps) {
   const { user } = useAuthStore();
 
   // State
@@ -90,7 +45,7 @@ export function ShareProjectModal({
       deps: [projectId],
       skip: !isOpen || !projectId,
       autoRetryOnReconnect: true,
-    }
+    },
   );
 
   // Network-aware invites loading
@@ -110,13 +65,12 @@ export function ShareProjectModal({
       deps: [projectId],
       skip: !isOpen || !projectId,
       autoRetryOnReconnect: true,
-    }
+    },
   );
 
   const members: { userId: string; role: string; user: { name: string | null; email: string } }[] =
     membersData?.members || [];
-  const invites: { id: string; email: string | null; role: string; expiresAt: string }[] =
-    invitesData?.invites || [];
+  const invites: { id: string; email: string | null; role: string; expiresAt: string }[] = invitesData?.invites || [];
   const loading = membersLoading || invitesLoading;
   const hasNetworkError = membersNetworkError || invitesNetworkError;
 
@@ -147,9 +101,7 @@ export function ShareProjectModal({
       setInviteLink(data.inviteLink);
       refetchInvites();
     } catch (err) {
-      setInviteError(
-        err instanceof Error ? err.message : 'Failed to create invite'
-      );
+      setInviteError(err instanceof Error ? err.message : 'Failed to create invite');
     } finally {
       setInviting(false);
     }
@@ -160,10 +112,7 @@ export function ShareProjectModal({
     if (!projectId) return;
 
     try {
-      const response = await authFetch(
-        `/api/projects/${projectId}/invites/${inviteId}`,
-        { method: 'DELETE' }
-      );
+      const response = await authFetch(`/api/projects/${projectId}/invites/${inviteId}`, { method: 'DELETE' });
 
       if (!response.ok) throw new Error('Failed to cancel invite');
 
@@ -179,10 +128,7 @@ export function ShareProjectModal({
     if (!confirm('Are you sure you want to remove this member?')) return;
 
     try {
-      const response = await authFetch(
-        `/api/projects/${projectId}/members/${userId}`,
-        { method: 'DELETE' }
-      );
+      const response = await authFetch(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
 
       if (!response.ok) throw new Error('Failed to remove member');
 
@@ -197,14 +143,11 @@ export function ShareProjectModal({
     if (!projectId) return;
 
     try {
-      const response = await authFetch(
-        `/api/projects/${projectId}/members/${userId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: newRole }),
-        }
-      );
+      const response = await authFetch(`/api/projects/${projectId}/members/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
 
       if (!response.ok) throw new Error('Failed to update role');
 
@@ -244,9 +187,7 @@ export function ShareProjectModal({
       setInviteLink(data.inviteLink);
       refetchInvites();
     } catch (err) {
-      setInviteError(
-        err instanceof Error ? err.message : 'Failed to create invite link'
-      );
+      setInviteError(err instanceof Error ? err.message : 'Failed to create invite link');
     } finally {
       setInviting(false);
     }
@@ -257,9 +198,7 @@ export function ShareProjectModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Share Project</DialogTitle>
-          <DialogDescription>
-            Invite people to collaborate on &quot;{projectName}&quot;
-          </DialogDescription>
+          <DialogDescription>Invite people to collaborate on &quot;{projectName}&quot;</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 w-full">
@@ -273,10 +212,7 @@ export function ShareProjectModal({
                 placeholder="Email address (optional)"
                 className="flex-1"
               />
-              <Select
-                value={inviteRole}
-                onValueChange={(v) => setInviteRole(v as 'editor' | 'viewer')}
-              >
+              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'editor' | 'viewer')}>
                 <SelectTrigger className="w-28">
                   <SelectValue />
                 </SelectTrigger>
@@ -288,20 +224,11 @@ export function ShareProjectModal({
             </div>
 
             <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={inviting || !inviteEmail.trim()}
-                className="flex-1"
-              >
+              <Button type="submit" disabled={inviting || !inviteEmail.trim()} className="flex-1">
                 <IconMail className="w-4 h-4 mr-2" />
                 {inviting ? 'Sending...' : 'Send invite'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCreateLink}
-                disabled={inviting}
-              >
+              <Button type="button" variant="outline" onClick={handleCreateLink} disabled={inviting}>
                 <IconLink className="w-4 h-4 mr-2" />
                 Create link
               </Button>
@@ -312,28 +239,15 @@ export function ShareProjectModal({
           {inviteLink && (
             <div className="flex items-center gap-2 p-3 rounded-lg border bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 overflow-hidden">
               <IconCheck className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-              <code className="text-sm w-0 flex-1 truncate block">
-                {inviteLink}
-              </code>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={copyInviteLink}
-                className="shrink-0"
-              >
-                {copiedLink ? (
-                  <IconCheck className="w-4 h-4" />
-                ) : (
-                  <IconCopy className="w-4 h-4" />
-                )}
+              <code className="text-sm w-0 flex-1 truncate block">{inviteLink}</code>
+              <Button variant="ghost" size="sm" onClick={copyInviteLink} className="shrink-0">
+                {copiedLink ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
               </Button>
             </div>
           )}
 
           {/* Error */}
-          {inviteError && (
-            <p className="text-sm text-destructive">{inviteError}</p>
-          )}
+          {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
 
           {/* Network error banner */}
           {hasNetworkError && (
@@ -349,9 +263,7 @@ export function ShareProjectModal({
 
           {/* Members list */}
           {loading ? (
-            <div className="text-center py-4 text-muted-foreground">
-              Loading...
-            </div>
+            <div className="text-center py-4 text-muted-foreground">Loading...</div>
           ) : members.length > 0 ? (
             <div className="space-y-2">
               <h3 className="text-sm font-medium flex items-center gap-2">
@@ -360,10 +272,7 @@ export function ShareProjectModal({
               </h3>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {members.map((member) => (
-                  <div
-                    key={member.userId}
-                    className="flex items-center justify-between p-2 rounded-lg border bg-card"
-                  >
+                  <div key={member.userId} className="flex items-center justify-between p-2 rounded-lg border bg-card">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         {(member.user.name || member.user.email)[0].toUpperCase()}
@@ -371,15 +280,9 @@ export function ShareProjectModal({
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">
                           {member.user.name || member.user.email}
-                          {member.userId === user?.id && (
-                            <span className="text-muted-foreground ml-1">
-                              (you)
-                            </span>
-                          )}
+                          {member.userId === user?.id && <span className="text-muted-foreground ml-1">(you)</span>}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {member.user.email}
-                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{member.user.email}</p>
                       </div>
                     </div>
 
@@ -388,12 +291,7 @@ export function ShareProjectModal({
                         <>
                           <Select
                             value={member.role}
-                            onValueChange={(v) =>
-                              handleRoleUpdate(
-                                member.userId,
-                                v as 'editor' | 'viewer'
-                              )
-                            }
+                            onValueChange={(v) => handleRoleUpdate(member.userId, v as 'editor' | 'viewer')}
                           >
                             <SelectTrigger className="w-24 h-8 text-xs">
                               <SelectValue />
@@ -413,9 +311,7 @@ export function ShareProjectModal({
                           </Button>
                         </>
                       ) : (
-                        <span className="text-xs text-muted-foreground capitalize">
-                          {member.role}
-                        </span>
+                        <span className="text-xs text-muted-foreground capitalize">{member.role}</span>
                       )}
                     </div>
                   </div>
@@ -433,17 +329,11 @@ export function ShareProjectModal({
               </h3>
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {invites.map((invite) => (
-                  <div
-                    key={invite.id}
-                    className="flex items-center justify-between p-2 rounded-lg border bg-muted/50"
-                  >
+                  <div key={invite.id} className="flex items-center justify-between p-2 rounded-lg border bg-muted/50">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {invite.email || 'Link invite'}
-                      </p>
+                      <p className="text-sm font-medium truncate">{invite.email || 'Link invite'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {invite.role} · expires{' '}
-                        {new Date(invite.expiresAt).toLocaleDateString()}
+                        {invite.role} · expires {new Date(invite.expiresAt).toLocaleDateString()}
                       </p>
                     </div>
                     <Button

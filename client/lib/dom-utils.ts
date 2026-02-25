@@ -13,7 +13,7 @@ export const PREVIEW_IFRAME_ID = 'preview-iframe';
  * @returns HTMLIFrameElement or null
  */
 export function getPreviewIframe(): HTMLIFrameElement | null {
-	return document.getElementById(PREVIEW_IFRAME_ID) as HTMLIFrameElement | null;
+  return document.getElementById(PREVIEW_IFRAME_ID) as HTMLIFrameElement | null;
 }
 
 /**
@@ -22,14 +22,11 @@ export function getPreviewIframe(): HTMLIFrameElement | null {
  * @param instanceId - optional data-canvas-instance-id to scope the search
  * @returns CSS selector string
  */
-export function buildElementSelector(
-	elementId: string,
-	instanceId?: string | null,
-): string {
-	if (instanceId) {
-		return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`;
-	}
-	return `[data-uniq-id="${elementId}"]`;
+export function buildElementSelector(elementId: string, instanceId?: string | null): string {
+  if (instanceId) {
+    return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`;
+  }
+  return `[data-uniq-id="${elementId}"]`;
 }
 
 /**
@@ -38,20 +35,17 @@ export function buildElementSelector(
  * @param instanceId - optional data-canvas-instance-id to scope the search
  * @returns Space-separated className string
  */
-export function getDOMClassesFromIframe(
-	elementId: string,
-	instanceId?: string | null,
-): string {
-	const iframe = getPreviewIframe();
-	const doc = iframe?.contentDocument;
-	if (!doc) return '';
+export function getDOMClassesFromIframe(elementId: string, instanceId?: string | null): string {
+  const iframe = getPreviewIframe();
+  const doc = iframe?.contentDocument;
+  if (!doc) return '';
 
-	const selector = buildElementSelector(elementId, instanceId);
-	const element = doc.querySelector(selector) as HTMLElement;
-	if (!element) return '';
+  const selector = buildElementSelector(elementId, instanceId);
+  const element = doc.querySelector(selector) as HTMLElement;
+  if (!element) return '';
 
-	// Get computed className (includes all applied classes)
-	return element.className;
+  // Get computed className (includes all applied classes)
+  return element.className;
 }
 
 /**
@@ -60,22 +54,19 @@ export function getDOMClassesFromIframe(
  * @param instanceId - optional data-canvas-instance-id to scope the search
  * @returns CSSStyleDeclaration or null
  */
-export function getComputedStylesFromIframe(
-	elementId: string,
-	instanceId?: string | null,
-): CSSStyleDeclaration | null {
-	const iframe = getPreviewIframe();
-	const doc = iframe?.contentDocument;
-	if (!doc) return null;
+export function getComputedStylesFromIframe(elementId: string, instanceId?: string | null): CSSStyleDeclaration | null {
+  const iframe = getPreviewIframe();
+  const doc = iframe?.contentDocument;
+  if (!doc) return null;
 
-	const selector = buildElementSelector(elementId, instanceId);
-	const element = doc.querySelector(selector) as HTMLElement;
-	if (!element) return null;
+  const selector = buildElementSelector(elementId, instanceId);
+  const element = doc.querySelector(selector) as HTMLElement;
+  if (!element) return null;
 
-	const iframeWindow = iframe.contentWindow;
-	if (!iframeWindow) return null;
+  const iframeWindow = iframe.contentWindow;
+  if (!iframeWindow) return null;
 
-	return iframeWindow.getComputedStyle(element);
+  return iframeWindow.getComputedStyle(element);
 }
 
 /**
@@ -84,16 +75,13 @@ export function getComputedStylesFromIframe(
  * @param instanceId - optional data-canvas-instance-id to scope the search
  * @returns HTMLElement or null
  */
-export function getElementFromIframe(
-	elementId: string,
-	instanceId?: string | null,
-): HTMLElement | null {
-	const iframe = getPreviewIframe();
-	const doc = iframe?.contentDocument;
-	if (!doc) return null;
+export function getElementFromIframe(elementId: string, instanceId?: string | null): HTMLElement | null {
+  const iframe = getPreviewIframe();
+  const doc = iframe?.contentDocument;
+  if (!doc) return null;
 
-	const selector = buildElementSelector(elementId, instanceId);
-	return doc.querySelector(selector) as HTMLElement;
+  const selector = buildElementSelector(elementId, instanceId);
+  return doc.querySelector(selector) as HTMLElement;
 }
 
 /**
@@ -101,12 +89,12 @@ export function getElementFromIframe(
  * @returns true if iframe is accessible
  */
 export function isIframeAccessible(): boolean {
-	const iframe = getPreviewIframe();
-	if (!iframe) return false;
+  const iframe = getPreviewIframe();
+  if (!iframe) return false;
 
-	try {
-		return !!iframe.contentDocument;
-	} catch {
-		return false;
-	}
+  try {
+    return !!iframe.contentDocument;
+  } catch {
+    return false;
+  }
 }

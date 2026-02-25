@@ -1,10 +1,8 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useComments } from '@/components/comments';
-import { CommentsSection } from './CommentsSection';
-import type { MentionUser } from '@/components/comments/CommentInput';
 import { useAuthStore } from '@/stores/authStore';
 import { useEditorStore } from '@/stores/editorStore';
-import { authFetch } from '@/utils/authFetch';
+import { CommentsSection } from './CommentsSection';
 
 interface CommentsSectionContainerProps {
   projectId: string | undefined;
@@ -17,67 +15,12 @@ export const CommentsSectionContainer = memo(function CommentsSectionContainer({
   componentPath,
   onClose,
 }: CommentsSectionContainerProps) {
-  const { user, currentWorkspace, accessToken } = useAuthStore();
+  const { user } = useAuthStore();
   const { selectedCommentId, setSelectedCommentId } = useEditorStore();
-  const [workspaceMembers, setWorkspaceMembers] = useState<MentionUser[]>([]);
   const [showResolved, setShowResolved] = useState(false);
 
-  const {
-    comments,
-    isLoading,
-    createComment,
-    createReply,
-    updateComment,
-    resolveComment,
-    reopenComment,
-    deleteComment,
-  } = useComments({ projectId, componentPath });
-
-  // Fetch workspace members for @mentions
-  useEffect(() => {
-    if (!currentWorkspace || !accessToken) return;
-
-    const fetchMembers = async () => {
-      try {
-        const response = await authFetch(
-          `/api/workspaces/${currentWorkspace.id}/members`,
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const members: MentionUser[] = (data.members || []).map((m: any) => ({
-            id: m.user.id,
-            name: m.user.name,
-            email: m.user.email,
-            avatarUrl: m.user.avatarUrl,
-          }));
-          setWorkspaceMembers(members);
-        }
-      } catch (err) {
-        console.error('Failed to fetch workspace members:', err);
-      }
-    };
-
-    fetchMembers();
-  }, [currentWorkspace, accessToken]);
-
-  // Handler wrappers
-  const handleCreateComment = useCallback(
-    async (
-      content: string,
-      mentionedUserIds: string[],
-      position?: { elementId?: string; x?: number; y?: number },
-    ) => {
-      if (!componentPath) return;
-      await createComment({
-        content,
-        componentPath,
-        mentionedUserIds,
-        elementId: position?.elementId,
-        positionX: position?.x,
-        positionY: position?.y,
-      });
-    },
-    [componentPath, createComment],
+  const { comments, isLoading, createReply, updateComment, resolveComment, reopenComment, deleteComment } = useComments(
+    { projectId, componentPath },
   );
 
   const handleReply = useCallback(
@@ -124,14 +67,12 @@ export const CommentsSectionContainer = memo(function CommentsSectionContainer({
     <CommentsSection
       comments={comments}
       isLoading={isLoading}
-      onCreateComment={handleCreateComment}
       onReply={handleReply}
       onResolve={handleResolve}
       onReopen={handleReopen}
       onDelete={handleDelete}
       onEdit={handleEdit}
       currentUserId={user?.id}
-      workspaceMembers={workspaceMembers}
       showResolved={showResolved}
       onToggleShowResolved={() => setShowResolved(!showResolved)}
       onClose={onClose}

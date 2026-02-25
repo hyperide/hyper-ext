@@ -70,14 +70,14 @@ export const CommentStickerOverlay = memo(function CommentStickerOverlay({
       console.log('[CommentStickerOverlay] No position found, returning null');
       return null;
     },
-    [getElementRect, canvasOffset, zoom]
+    [getElementRect, canvasOffset, zoom],
   );
 
   const handleClick = useCallback(
     (commentId: string) => {
       onCommentSelect(selectedCommentId === commentId ? null : commentId);
     },
-    [onCommentSelect, selectedCommentId]
+    [onCommentSelect, selectedCommentId],
   );
 
   if (!portalContainer) {
@@ -116,6 +116,6 @@ export const CommentStickerOverlay = memo(function CommentStickerOverlay({
         );
       })}
     </div>,
-    portalContainer
+    portalContainer,
   );
 });

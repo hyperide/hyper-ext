@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/utils/authFetch';
 import type { Comment, CreateCommentParams, CreateReplyParams } from './types';
 
@@ -105,7 +105,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return null;
       }
     },
-    [projectId]
+    [projectId],
   );
 
   const createReply = useCallback(
@@ -128,9 +128,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
 
         // Add reply to parent comment
         setComments((prev) =>
-          prev.map((c) =>
-            c.id === parentId ? { ...c, replies: [...(c.replies || []), data.comment] } : c
-          )
+          prev.map((c) => (c.id === parentId ? { ...c, replies: [...(c.replies || []), data.comment] } : c)),
         );
 
         return data.comment;
@@ -139,7 +137,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return null;
       }
     },
-    [projectId]
+    [projectId],
   );
 
   const updateComment = useCallback(
@@ -160,9 +158,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
 
         const data = await response.json();
 
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c))
-        );
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c)));
 
         return true;
       } catch (err) {
@@ -170,7 +166,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return false;
       }
     },
-    [projectId]
+    [projectId],
   );
 
   const resolveComment = useCallback(
@@ -189,14 +185,14 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
 
         const data = await response.json();
 
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c))
-        );
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c)));
 
         // Notify other instances to refetch
-        window.dispatchEvent(new CustomEvent('comments-updated', {
-          detail: { projectId, componentPath }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('comments-updated', {
+            detail: { projectId, componentPath },
+          }),
+        );
 
         return true;
       } catch (err) {
@@ -204,7 +200,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return false;
       }
     },
-    [projectId, componentPath]
+    [projectId, componentPath],
   );
 
   const reopenComment = useCallback(
@@ -223,14 +219,14 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
 
         const data = await response.json();
 
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c))
-        );
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c)));
 
         // Notify other instances to refetch
-        window.dispatchEvent(new CustomEvent('comments-updated', {
-          detail: { projectId, componentPath }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('comments-updated', {
+            detail: { projectId, componentPath },
+          }),
+        );
 
         return true;
       } catch (err) {
@@ -238,7 +234,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return false;
       }
     },
-    [projectId, componentPath]
+    [projectId, componentPath],
   );
 
   const deleteComment = useCallback(
@@ -262,9 +258,11 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         }
 
         // Notify other instances to refetch
-        window.dispatchEvent(new CustomEvent('comments-updated', {
-          detail: { projectId, componentPath }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('comments-updated', {
+            detail: { projectId, componentPath },
+          }),
+        );
 
         return true;
       } catch (err) {
@@ -272,7 +270,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return false;
       }
     },
-    [projectId, componentPath, selectedCommentId]
+    [projectId, componentPath, selectedCommentId],
   );
 
   const markOrphaned = useCallback(
@@ -293,9 +291,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
 
         const data = await response.json();
 
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c))
-        );
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, ...data.comment } : c)));
 
         return true;
       } catch (err) {
@@ -303,7 +299,7 @@ export function useComments({ projectId, componentPath }: UseCommentsOptions): U
         return false;
       }
     },
-    [projectId]
+    [projectId],
   );
 
   return {

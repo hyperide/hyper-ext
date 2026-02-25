@@ -30,20 +30,16 @@ export class ASTEditConditionOperation extends BaseOperation {
   }
 
   execute(_tree: DocumentTree): OperationResult {
-    this._pendingPromise = this.applyExpression(this.params.newExpression, this.params.oldExpression).catch(
-      (error) => {
-        console.error('[ASTEditConditionOperation] Execute failed:', error);
-      }
-    );
+    this._pendingPromise = this.applyExpression(this.params.newExpression, this.params.oldExpression).catch((error) => {
+      console.error('[ASTEditConditionOperation] Execute failed:', error);
+    });
     return this.success([this.params.elementId]);
   }
 
   undo(_tree: DocumentTree): OperationResult {
-    this._pendingPromise = this.applyExpression(this.params.oldExpression, this.params.newExpression).catch(
-      (error) => {
-        console.error('[ASTEditConditionOperation] Undo failed:', error);
-      }
-    );
+    this._pendingPromise = this.applyExpression(this.params.oldExpression, this.params.newExpression).catch((error) => {
+      console.error('[ASTEditConditionOperation] Undo failed:', error);
+    });
     return this.success([this.params.elementId]);
   }
 

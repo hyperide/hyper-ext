@@ -8,17 +8,12 @@ export default function Footer() {
           {/* Logo & Copyright */}
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold">HyperIDE</span>
-            <span className="text-muted-foreground">
-              © {new Date().getFullYear()}
-            </span>
+            <span className="text-muted-foreground">© {new Date().getFullYear()}</span>
           </div>
 
           {/* Links */}
           <nav className="flex items-center gap-6">
-            <a
-              href="/docs"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
+            <a href="/docs" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
               Documentation
             </a>
             <a

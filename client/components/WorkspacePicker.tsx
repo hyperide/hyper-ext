@@ -1,3 +1,4 @@
+import { IconCheck, IconChevronDown, IconPlus } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { IconChevronDown, IconPlus, IconCheck } from '@tabler/icons-react';
 import { useAuthStore, type Workspace } from '@/stores/authStore';
 
 interface WorkspacePickerProps {
@@ -53,9 +53,7 @@ export default function WorkspacePicker({ className }: WorkspacePickerProps) {
             className="cursor-pointer"
           >
             <span className="flex-1 truncate">{workspace.name}</span>
-            {workspace.id === currentWorkspace.id && (
-              <IconCheck className="w-4 h-4 ml-2 text-primary" />
-            )}
+            {workspace.id === currentWorkspace.id && <IconCheck className="w-4 h-4 ml-2 text-primary" />}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />

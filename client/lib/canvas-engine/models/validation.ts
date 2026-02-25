@@ -2,21 +2,21 @@
  * Zod validation schemas for Canvas Engine types
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Field type schema
  */
 export const fieldTypeSchema = z.enum([
-  "text",
-  "textarea",
-  "number",
-  "boolean",
-  "select",
-  "radio",
-  "color",
-  "date",
-  "custom",
+  'text',
+  'textarea',
+  'number',
+  'boolean',
+  'select',
+  'radio',
+  'color',
+  'date',
+  'custom',
 ]);
 
 /**
@@ -35,7 +35,7 @@ const baseFieldSchema = z.object({
  * Text field schema
  */
 export const textFieldSchema = baseFieldSchema.extend({
-  type: z.enum(["text", "textarea"]),
+  type: z.enum(['text', 'textarea']),
   placeholder: z.string().optional(),
   maxLength: z.number().positive().optional(),
   minLength: z.number().nonnegative().optional(),
@@ -46,7 +46,7 @@ export const textFieldSchema = baseFieldSchema.extend({
  * Number field schema
  */
 export const numberFieldSchema = baseFieldSchema.extend({
-  type: z.literal("number"),
+  type: z.literal('number'),
   min: z.number().optional(),
   max: z.number().optional(),
   step: z.number().positive().optional(),
@@ -56,32 +56,29 @@ export const numberFieldSchema = baseFieldSchema.extend({
  * Boolean field schema
  */
 export const booleanFieldSchema = baseFieldSchema.extend({
-  type: z.literal("boolean"),
+  type: z.literal('boolean'),
 });
 
 /**
  * Select field schema
  */
 export const selectFieldSchema = baseFieldSchema.extend({
-  type: z.enum(["select", "radio"]),
-  options: z.union([
-    z.array(z.object({ label: z.string(), value: z.any() })),
-    z.array(z.any()),
-  ]),
+  type: z.enum(['select', 'radio']),
+  options: z.union([z.array(z.object({ label: z.string(), value: z.any() })), z.array(z.any())]),
 });
 
 /**
  * Color field schema
  */
 export const colorFieldSchema = baseFieldSchema.extend({
-  type: z.literal("color"),
+  type: z.literal('color'),
 });
 
 /**
  * Date field schema
  */
 export const dateFieldSchema = baseFieldSchema.extend({
-  type: z.literal("date"),
+  type: z.literal('date'),
   min: z.string().optional(),
   max: z.string().optional(),
 });
@@ -90,14 +87,14 @@ export const dateFieldSchema = baseFieldSchema.extend({
  * Custom field schema
  */
 export const customFieldSchema = baseFieldSchema.extend({
-  type: z.literal("custom"),
+  type: z.literal('custom'),
   render: z.function(),
 });
 
 /**
  * Field definition schema (discriminated union)
  */
-export const fieldDefinitionSchema = z.discriminatedUnion("type", [
+export const fieldDefinitionSchema = z.discriminatedUnion('type', [
   textFieldSchema,
   numberFieldSchema,
   booleanFieldSchema,
@@ -119,7 +116,7 @@ export const componentDefinitionSchema = z.object({
   type: z
     .string()
     .min(1)
-    .regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, "Type must be valid identifier"),
+    .regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, 'Type must be valid identifier'),
   label: z.string().min(1),
   category: z.string().optional(),
   fields: fieldsMapSchema,

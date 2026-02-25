@@ -7,7 +7,7 @@
  * - inline: Small inline text (for inline error messages)
  */
 
-import { IconWifiOff, IconRefresh } from '@tabler/icons-react';
+import { IconRefresh, IconWifiOff } from '@tabler/icons-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 

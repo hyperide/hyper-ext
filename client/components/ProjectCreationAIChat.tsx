@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
-import GitHubAuthButton from './GitHubAuthButton';
-import AIAgentChat from './AIAgentChat';
-import { IconX, IconLoader2, IconCheck, IconAlertCircle, IconExternalLink, IconRefresh } from '@tabler/icons-react';
-import { useGitHubOrganizations } from './github/hooks/useGitHubOrganizations';
-import { useGitHubAppInstallations } from './github/hooks/useGitHubAppInstallations';
-import { useGitHubRepositories } from './github/hooks/useGitHubRepositories';
+import { IconAlertCircle, IconCheck, IconExternalLink, IconLoader2, IconRefresh, IconX } from '@tabler/icons-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
+import AIAgentChat from './AIAgentChat';
+import GitHubAuthButton from './GitHubAuthButton';
+import { useGitHubAppInstallations } from './github/hooks/useGitHubAppInstallations';
+import { useGitHubOrganizations } from './github/hooks/useGitHubOrganizations';
+import { useGitHubRepositories } from './github/hooks/useGitHubRepositories';
 import type { GitHubRepository } from './github/types';
 
 interface ExistingProject {
@@ -41,7 +41,11 @@ interface SavedFormData {
   description: string;
 }
 
-export default function ProjectCreationAIChat({ onClose, onProjectCreated, existingProject }: ProjectCreationAIChatProps) {
+export default function ProjectCreationAIChat({
+  onClose,
+  onProjectCreated,
+  existingProject,
+}: ProjectCreationAIChatProps) {
   const { currentWorkspace } = useAuthStore();
   const [isGitHubAuthenticated, setIsGitHubAuthenticated] = useState(false);
   const [currentStep, setCurrentStep] = useState<CreationStep>(existingProject ? 'chatting' : 'setup');
@@ -76,11 +80,9 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
     enabled: isGitHubAuthenticated && isPersonalAccount,
     perPage: 50,
   });
-  const [framework, setFramework] = useState<Framework>(
-    (existingProject?.framework as Framework) || 'vite'
-  );
+  const [framework, setFramework] = useState<Framework>((existingProject?.framework as Framework) || 'vite');
   const [packageManager, setPackageManager] = useState<PackageManager>(
-    (existingProject?.packageManager as PackageManager) || 'npm'
+    (existingProject?.packageManager as PackageManager) || 'npm',
   );
   const [uiKit, setUIKit] = useState<UIKit>('shadcn');
   const [isPrivate, setIsPrivate] = useState(true);
@@ -126,9 +128,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
     if (!configured) return true; // If GitHub App not configured on server, skip check
     const ownerLogin = selectedOrg === 'personal' ? user?.login : selectedOrg;
     if (!ownerLogin) return false;
-    return installations.some(
-      (inst) => inst.accountLogin.toLowerCase() === ownerLogin.toLowerCase(),
-    );
+    return installations.some((inst) => inst.accountLogin.toLowerCase() === ownerLogin.toLowerCase());
   }, [configured, selectedOrg, user, installations]);
 
   // Fetch install URL when GitHub App not installed for owner
@@ -166,7 +166,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
     } catch {
       // Ignore parse errors
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount
 
   // Restore selectedRepo after repositories load
@@ -179,7 +179,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
       const data: SavedFormData = JSON.parse(saved);
       if (data.selectedRepoId) {
-        const repo = personalRepos.find(r => r.id === data.selectedRepoId);
+        const repo = personalRepos.find((r) => r.id === data.selectedRepoId);
         if (repo) setSelectedRepo(repo);
       }
     } catch {
@@ -216,11 +216,13 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
   ]);
 
   // For personal accounts: need selected repo; for orgs: need repo name and app installed
-  const canStart = isGitHubAuthenticated && currentStep === 'setup' && !!currentWorkspace && (
-    isPersonalAccount
+  const canStart =
+    isGitHubAuthenticated &&
+    currentStep === 'setup' &&
+    !!currentWorkspace &&
+    (isPersonalAccount
       ? selectedRepo !== null && isAppInstalledForOwner
-      : repoName.trim() !== '' && isAppInstalledForOwner
-  );
+      : repoName.trim() !== '' && isAppInstalledForOwner);
 
   const handleStartProject = async () => {
     if (!canStart || !currentWorkspace) return;
@@ -231,34 +233,35 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
     try {
       // Step 1: Initialize project
       // For personal accounts, use existing repo; for orgs, create new repo
-      const requestBody = isPersonalAccount && selectedRepo
-        ? {
-            // Use existing repository
-            existingRepo: {
-              name: selectedRepo.name,
-              full_name: selectedRepo.full_name,
-              clone_url: selectedRepo.clone_url,
-              html_url: selectedRepo.html_url,
-              default_branch: selectedRepo.default_branch,
-              private: selectedRepo.private,
-            },
-            framework,
-            packageManager,
-            uiKit,
-            description,
-            workspaceId: currentWorkspace.id,
-          }
-        : {
-            // Create new repository (for organizations)
-            repoName,
-            org: selectedOrg,
-            framework,
-            packageManager,
-            uiKit,
-            isPrivate,
-            description,
-            workspaceId: currentWorkspace.id,
-          };
+      const requestBody =
+        isPersonalAccount && selectedRepo
+          ? {
+              // Use existing repository
+              existingRepo: {
+                name: selectedRepo.name,
+                full_name: selectedRepo.full_name,
+                clone_url: selectedRepo.clone_url,
+                html_url: selectedRepo.html_url,
+                default_branch: selectedRepo.default_branch,
+                private: selectedRepo.private,
+              },
+              framework,
+              packageManager,
+              uiKit,
+              description,
+              workspaceId: currentWorkspace.id,
+            }
+          : {
+              // Create new repository (for organizations)
+              repoName,
+              org: selectedOrg,
+              framework,
+              packageManager,
+              uiKit,
+              isPrivate,
+              description,
+              workspaceId: currentWorkspace.id,
+            };
 
       const response = await authFetch('/api/project-creation/initialize', {
         method: 'POST',
@@ -295,8 +298,8 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
       // AIAgentChat will handle initial prompt via initialPrompt prop
       localStorage.removeItem(STORAGE_KEY);
       setCurrentStep('chatting');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
       setCurrentStep('error');
     }
   };
@@ -315,8 +318,8 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
       setCurrentStep('completed');
       onProjectCreated?.(projectId);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -325,11 +328,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
       {/* Header */}
       <div className="h-12 px-4 flex items-center justify-between border-b border-border flex-shrink-0">
         <h2 className="text-sm font-semibold">Create New Project with AI</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 hover:bg-muted rounded"
-        >
+        <button type="button" onClick={onClose} className="p-1 hover:bg-muted rounded">
           <IconX className="w-4 h-4" />
         </button>
       </div>
@@ -341,9 +340,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
           <div className="space-y-4">
             {/* GitHub Auth */}
             <div>
-              <label className="block text-xs font-medium text-foreground mb-2">
-                GitHub Connection
-              </label>
+              <span className="block text-xs font-medium text-foreground mb-2">GitHub Connection</span>
               <GitHubAuthButton onAuthChange={setIsGitHubAuthenticated} />
             </div>
 
@@ -351,17 +348,16 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
               <>
                 {/* Owner */}
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-2">
+                  <label htmlFor="owner-select" className="block text-xs font-medium text-foreground mb-2">
                     Owner *
                   </label>
                   <select
+                    id="owner-select"
                     value={selectedOrg}
                     onChange={(e) => setSelectedOrg(e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background"
                   >
-                    {user && (
-                      <option value="personal">{user.login} (personal)</option>
-                    )}
+                    {user && <option value="personal">{user.login} (personal)</option>}
                     {organizations.map((org) => (
                       <option key={org.id} value={org.login}>
                         {org.login}
@@ -374,9 +370,8 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                 {configured && !installationsLoading && !isAppInstalledForOwner && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
                     <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
-                      GitHub App not installed for{' '}
-                      {selectedOrg === 'personal' ? 'your account' : selectedOrg}.
-                      Install it to {isPersonalAccount ? 'access your repositories' : 'create repositories'}.
+                      GitHub App not installed for {selectedOrg === 'personal' ? 'your account' : selectedOrg}. Install
+                      it to {isPersonalAccount ? 'access your repositories' : 'create repositories'}.
                     </p>
                     {installUrl && (
                       <button
@@ -397,8 +392,8 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                     {/* API limitation notice */}
                     <div className="p-3 mb-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
                       <p className="text-xs text-blue-600 dark:text-blue-400">
-                        Due to GitHub API limitations, repositories in personal accounts cannot be created automatically.
-                        Please create a repository on GitHub first, then select it below.
+                        Due to GitHub API limitations, repositories in personal accounts cannot be created
+                        automatically. Please create a repository on GitHub first, then select it below.
                       </p>
                       <a
                         href="https://github.com/new"
@@ -412,9 +407,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                     </div>
 
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-medium text-foreground">
-                        Select Repository *
-                      </label>
+                      <span className="block text-xs font-medium text-foreground">Select Repository *</span>
                       <button
                         type="button"
                         onClick={() => refetchRepos()}
@@ -429,16 +422,14 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                     <select
                       value={selectedRepo?.id.toString() || ''}
                       onChange={(e) => {
-                        const repo = personalRepos.find(r => r.id.toString() === e.target.value);
+                        const repo = personalRepos.find((r) => r.id.toString() === e.target.value);
                         setSelectedRepo(repo || null);
                       }}
                       onFocus={() => refetchRepos()}
                       className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background"
                       disabled={!isAppInstalledForOwner}
                     >
-                      <option value="">
-                        {reposLoading ? 'Loading repositories...' : 'Select a repository'}
-                      </option>
+                      <option value="">{reposLoading ? 'Loading repositories...' : 'Select a repository'}</option>
                       {personalRepos.map((repo) => (
                         <option key={repo.id} value={repo.id.toString()}>
                           {repo.name} {repo.private ? '🔒' : '🌐'}
@@ -453,10 +444,11 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-medium text-foreground mb-2">
+                    <label htmlFor="repo-name-input" className="block text-xs font-medium text-foreground mb-2">
                       Repository Name *
                     </label>
                     <input
+                      id="repo-name-input"
                       type="text"
                       value={repoName}
                       onChange={(e) => setRepoName(e.target.value)}
@@ -468,9 +460,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
                 {/* Framework */}
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-2">
-                    Framework *
-                  </label>
+                  <span className="block text-xs font-medium text-foreground mb-2">Framework *</span>
                   <div className="grid grid-cols-4 gap-2">
                     {(['nextjs', 'vite', 'remix', 'bun'] as Framework[]).map((fw) => (
                       <button
@@ -497,12 +487,12 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
                 {/* Package Manager */}
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-2">
+                  <span className="block text-xs font-medium text-foreground mb-2">
                     Package Manager *
                     {uiKit === 'tamagui' && (
                       <span className="ml-1 text-muted-foreground font-normal">(Tamagui requires Yarn)</span>
                     )}
-                  </label>
+                  </span>
                   <div className="grid grid-cols-4 gap-2">
                     {(['npm', 'yarn', 'pnpm', 'bun'] as PackageManager[]).map((pm) => {
                       const isDisabledByTamagui = uiKit === 'tamagui' && pm !== 'yarn';
@@ -527,9 +517,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
                 {/* UI Kit */}
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-2">
-                    UI Kit *
-                  </label>
+                  <span className="block text-xs font-medium text-foreground mb-2">UI Kit *</span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -577,10 +565,11 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
 
                 {/* Description */}
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-2">
+                  <label htmlFor="project-description" className="block text-xs font-medium text-foreground mb-2">
                     Description (optional)
                   </label>
                   <textarea
+                    id="project-description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="A brief description of your project..."
@@ -623,8 +612,7 @@ export default function ProjectCreationAIChat({ onClose, onProjectCreated, exist
                   <span className="font-medium">{framework}</span>
                 </span>
                 <span className="px-2 py-1 bg-background rounded border border-border">
-                  <span className="text-muted-foreground">UI:</span>{' '}
-                  <span className="font-medium">{uiKit}</span>
+                  <span className="text-muted-foreground">UI:</span> <span className="font-medium">{uiKit}</span>
                 </span>
                 <span className="px-2 py-1 bg-background rounded border border-border">
                   <span className="text-muted-foreground">Package Manager:</span>{' '}

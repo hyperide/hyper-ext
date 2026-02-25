@@ -24,7 +24,7 @@ interface MapOverlayProps {
  */
 function MapBoundaryOverlay({
   boundary,
-  onMapClick
+  onMapClick,
 }: {
   boundary: MapBoundary;
   onMapClick?: (boundary: MapBoundary) => void;
@@ -49,13 +49,17 @@ function MapBoundaryOverlay({
       />
 
       {/* Label - clickable */}
+      {/* biome-ignore lint/a11y/useSemanticElements: inline overlay label with absolute positioning */}
       <div
         className="absolute px-1 h-2.5 bg-purple-100 rounded-br shadow-[inset_-1px_-1px_4px_rgba(0,0,0,0.1),inset_1px_1px_4px_#fff] text-gray-900 text-[8px] leading-none flex items-center cursor-pointer hover:bg-purple-200 transition-colors pointer-events-auto"
+        role="button"
+        tabIndex={0}
         style={{
           left: `${rect.left}px`,
           top: `${rect.top}px`,
         }}
         onClick={() => onMapClick?.(boundary)}
+        onKeyDown={(e) => e.key === 'Enter' && onMapClick?.(boundary)}
       >
         map
       </div>
@@ -70,13 +74,9 @@ export function MapOverlay({ boundaries, portalContainer, onMapClick }: MapOverl
   return createPortal(
     <div className="fixed inset-0 pointer-events-none z-10">
       {boundaries.map((boundary, index) => (
-        <MapBoundaryOverlay
-          key={`${boundary.parentMapId}-${index}`}
-          boundary={boundary}
-          onMapClick={onMapClick}
-        />
+        <MapBoundaryOverlay key={`${boundary.parentMapId}-${index}`} boundary={boundary} onMapClick={onMapClick} />
       ))}
     </div>,
-    portalContainer
+    portalContainer,
   );
 }

@@ -2,29 +2,26 @@
  * Type-safe EventEmitter for Canvas Engine
  */
 
-import type { CanvasEngineEvents, CanvasEventName, EventListener } from "./events";
+import type { CanvasEngineEvents, CanvasEventName, EventListener } from './events';
 
 /**
  * Type-safe event emitter
  */
 export class EventEmitter {
-  private listeners: Map<
-    CanvasEventName,
-    Set<EventListener<any>>
-  > = new Map();
+  private listeners: Map<CanvasEventName, Set<EventListener<CanvasEngineEvents[CanvasEventName]>>> = new Map();
 
   /**
    * Register event listener
    */
-  on<K extends CanvasEventName>(
-    event: K,
-    listener: EventListener<CanvasEngineEvents[K]>
-  ): () => void {
+  on<K extends CanvasEventName>(event: K, listener: EventListener<CanvasEngineEvents[K]>): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
 
-    this.listeners.get(event)!.add(listener);
+    const listeners = this.listeners.get(event);
+    if (listeners) {
+      listeners.add(listener as EventListener<CanvasEngineEvents[CanvasEventName]>);
+    }
 
     // Return unsubscribe function
     return () => this.off(event, listener);
@@ -33,10 +30,7 @@ export class EventEmitter {
   /**
    * Register one-time event listener
    */
-  once<K extends CanvasEventName>(
-    event: K,
-    listener: EventListener<CanvasEngineEvents[K]>
-  ): () => void {
+  once<K extends CanvasEventName>(event: K, listener: EventListener<CanvasEngineEvents[K]>): () => void {
     const wrapper: EventListener<CanvasEngineEvents[K]> = (data) => {
       listener(data);
       this.off(event, wrapper);
@@ -48,10 +42,7 @@ export class EventEmitter {
   /**
    * Unregister event listener
    */
-  off<K extends CanvasEventName>(
-    event: K,
-    listener: EventListener<CanvasEngineEvents[K]>
-  ): void {
+  off<K extends CanvasEventName>(event: K, listener: EventListener<CanvasEngineEvents[K]>): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
       eventListeners.delete(listener);
@@ -64,10 +55,7 @@ export class EventEmitter {
   /**
    * Emit event
    */
-  emit<K extends CanvasEventName>(
-    event: K,
-    data: CanvasEngineEvents[K]
-  ): void {
+  emit<K extends CanvasEventName>(event: K, data: CanvasEngineEvents[K]): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
       eventListeners.forEach((listener) => {

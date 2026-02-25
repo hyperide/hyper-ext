@@ -12,17 +12,11 @@ import * as t from '@babel/types';
  * @param attributeName - Name of attribute to get
  * @returns Attribute value or null if not found
  */
-export function getAttribute(
-  element: t.JSXElement,
-  attributeName: string
-): t.JSXAttribute['value'] | null {
+export function getAttribute(element: t.JSXElement, attributeName: string): t.JSXAttribute['value'] | null {
   const openingElement = element.openingElement;
 
   const attr = openingElement.attributes.find(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === attributeName
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === attributeName,
   );
 
   if (attr && t.isJSXAttribute(attr)) {
@@ -38,10 +32,7 @@ export function getAttribute(
  * @param attributeName - Name of attribute
  * @returns String value or null
  */
-export function getAttributeString(
-  element: t.JSXElement,
-  attributeName: string
-): string | null {
+export function getAttributeString(element: t.JSXElement, attributeName: string): string | null {
   const value = getAttribute(element, attributeName);
 
   if (t.isStringLiteral(value)) {
@@ -58,19 +49,12 @@ export function getAttributeString(
  * @param attributeName - Name of attribute to set
  * @param value - Value to set (or null to remove attribute)
  */
-export function setAttribute(
-  element: t.JSXElement,
-  attributeName: string,
-  value: t.JSXAttribute['value']
-): void {
+export function setAttribute(element: t.JSXElement, attributeName: string, value: t.JSXAttribute['value']): void {
   const openingElement = element.openingElement;
 
   // Find existing attribute
   const existingIndex = openingElement.attributes.findIndex(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === attributeName
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === attributeName,
   );
 
   if (value === null) {
@@ -106,7 +90,7 @@ export function removeAttribute(element: t.JSXElement, attributeName: string): v
  * @param value - JavaScript value to convert
  * @returns JSX attribute value
  */
-export function valueToJSXAttribute(value: any): t.JSXAttribute['value'] {
+export function valueToJSXAttribute(value: unknown): t.JSXAttribute['value'] {
   if (value === null || value === undefined) {
     return null;
   }
@@ -223,9 +207,7 @@ export function makeNotSelfClosing(element: t.JSXElement): void {
   if (tagName.includes('.')) {
     // Handle member expression like Card.Header
     const parts = tagName.split('.');
-    let memberExpr: t.JSXMemberExpression | t.JSXIdentifier = t.jsxIdentifier(
-      parts[0],
-    );
+    let memberExpr: t.JSXMemberExpression | t.JSXIdentifier = t.jsxIdentifier(parts[0]);
     for (let i = 1; i < parts.length; i++) {
       memberExpr = t.jsxMemberExpression(
         memberExpr as t.JSXMemberExpression | t.JSXIdentifier,
@@ -255,7 +237,6 @@ export function addChild(
   }
 }
 
-
 /**
  * Parse mixed content like "{hour.toString()}:00" into JSX children nodes.
  * Returns an array of t.JSXText and t.JSXExpressionContainer nodes.
@@ -265,9 +246,9 @@ export function parseMixedContent(text: string): (t.JSXText | t.JSXExpressionCon
 
   const expressionRegex = /\{([^}]+)\}/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let match: RegExpExecArray | null = expressionRegex.exec(text);
 
-  while ((match = expressionRegex.exec(text)) !== null) {
+  while (match !== null) {
     const beforeText = text.slice(lastIndex, match.index);
 
     if (beforeText) {
@@ -294,6 +275,7 @@ export function parseMixedContent(text: string): (t.JSXText | t.JSXExpressionCon
     }
 
     lastIndex = match.index + match[0].length;
+    match = expressionRegex.exec(text);
   }
 
   const remainingText = text.slice(lastIndex);

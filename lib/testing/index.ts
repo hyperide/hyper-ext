@@ -4,6 +4,57 @@
  * Public API for automatic test generation with data-test-id
  */
 
+// Analyzers
+export { analyzeComponent, analyzeComponents } from './analyzers/component-analyzer';
+export {
+  detectInteractiveElement,
+  findInteractiveElements,
+  isInteractiveElement,
+} from './analyzers/interactive-detector';
+export type {
+  GeneratedVariant,
+  GenerateVariantsOptions,
+  VariantGenerationStrategy,
+  VariantLayout,
+} from './generators/canvas-variant-generator';
+
+// Generators
+export {
+  addVariantsToCanvas,
+  generateVariantsForCanvas,
+  getVariantsFromCanvas,
+  hasCanvasVariants,
+  loadCanvasState,
+  saveCanvasState,
+} from './generators/canvas-variant-generator';
+export {
+  generateDemoConfig,
+  generateDemoE2ETest,
+  generateDemoScriptContent,
+  generateDemoStyles,
+  getDemoE2ETestPath,
+  getDemoPath,
+} from './generators/demo-generator';
+export type {
+  DocsFormat,
+  DocsGeneratorOptions,
+} from './generators/docs-generator';
+export {
+  generateComponentDocs,
+  getDocsPath,
+} from './generators/docs-generator';
+export type { E2ETestGeneratorOptions } from './generators/e2e-test-generator';
+export {
+  generateE2ETestContent,
+  generatePlaywrightConfigSnippet,
+  getE2ETestPath,
+} from './generators/e2e-test-generator';
+export type { UnitTestGeneratorOptions } from './generators/unit-test-generator';
+export {
+  generateUnitTestContent,
+  getUnitTestPath,
+  isBun,
+} from './generators/unit-test-generator';
 // Types
 export type {
   ComponentAnalysis,
@@ -21,84 +72,18 @@ export type {
   TestRunner,
   TestVariant,
 } from './types';
-
-// Analyzers
-export { analyzeComponent, analyzeComponents } from './analyzers/component-analyzer';
-export {
-  detectInteractiveElement,
-  findInteractiveElements,
-  isInteractiveElement,
-} from './analyzers/interactive-detector';
-
-// Generators
-export {
-  getVariantsFromCanvas,
-  hasCanvasVariants,
-  loadCanvasState,
-  saveCanvasState,
-  generateVariantsForCanvas,
-  addVariantsToCanvas,
-} from './generators/canvas-variant-generator';
-
-export type {
-  VariantGenerationStrategy,
-  VariantLayout,
-  GenerateVariantsOptions,
-  GeneratedVariant,
-} from './generators/canvas-variant-generator';
-
-export {
-  generateUnitTestContent,
-  getUnitTestPath,
-  isBun,
-} from './generators/unit-test-generator';
-
-export type {
-  UnitTestGeneratorOptions,
-} from './generators/unit-test-generator';
-
-export {
-  generateE2ETestContent,
-  getE2ETestPath,
-  generatePlaywrightConfigSnippet,
-} from './generators/e2e-test-generator';
-
-export type {
-  E2ETestGeneratorOptions,
-} from './generators/e2e-test-generator';
-
-export {
-  generateComponentDocs,
-  getDocsPath,
-} from './generators/docs-generator';
-
-export type {
-  DocsGeneratorOptions,
-  DocsFormat,
-} from './generators/docs-generator';
-
-export {
-  generateDemoConfig,
-  generateDemoScriptContent,
-  generateDemoStyles,
-  generateDemoE2ETest,
-  getDemoPath,
-  getDemoE2ETestPath,
-} from './generators/demo-generator';
-
-// Utils
-export {
-  toKebabCase,
-  cleanTextForId,
-  resolveCollision,
-  generateSemanticTestId,
-  isValidTestId,
-  suggestTestIdFix,
-  elementTypeToRole,
-  getInputRole,
-} from './utils/naming';
-
 export {
   detectTestRunner,
   getTestImportForRunner,
 } from './utils/detect-test-runner';
+// Utils
+export {
+  cleanTextForId,
+  elementTypeToRole,
+  generateSemanticTestId,
+  getInputRole,
+  isValidTestId,
+  resolveCollision,
+  suggestTestIdFix,
+  toKebabCase,
+} from './utils/naming';

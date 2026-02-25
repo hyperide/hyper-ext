@@ -2,7 +2,7 @@
  * Tests for Tailwind generator utilities
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { generateTailwindClasses } from './generator';
 
 describe('generateTailwindClasses', () => {

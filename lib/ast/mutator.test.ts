@@ -2,18 +2,18 @@
  * Tests for AST mutator utilities
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import * as t from '@babel/types';
-import { parseCode, printAST } from './parser';
-import { findElementByUuid, findAllJSXElements } from './traverser';
 import {
+  cloneElement,
   getAttribute,
   getAttributeString,
-  setAttribute,
   removeAttribute,
+  setAttribute,
   valueToJSXAttribute,
-  cloneElement,
 } from './mutator';
+import { parseCode, printAST } from './parser';
+import { findAllJSXElements, findElementByUuid } from './traverser';
 
 describe('getAttribute', () => {
   it('should get string attribute', () => {
@@ -183,14 +183,14 @@ describe('cloneElement', () => {
     const ast = parseCode(code);
 
     const original = findElementByUuid(ast, 'original');
-    expect(original).not.toBeNull();
+    if (!original) throw new Error('Element not found');
 
-    const cloned = cloneElement(original!.element);
+    const cloned = cloneElement(original.element);
 
-    expect(cloned).not.toBe(original!.element);
+    expect(cloned).not.toBe(original.element);
     expect(cloned.type).toBe('JSXElement');
     expect(cloned.openingElement.type).toBe('JSXOpeningElement');
-    expect(cloned.children.length).toBe(original!.element.children.length);
+    expect(cloned.children.length).toBe(original.element.children.length);
   });
 
   it('should preserve attributes in clone', () => {

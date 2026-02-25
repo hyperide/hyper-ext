@@ -30,9 +30,7 @@ export default function HowItWorks() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            How it works
-          </h2>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">How it works</h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
             From project setup to production code in three simple steps.
           </p>
@@ -64,9 +62,7 @@ export default function HowItWorks() {
                   {/* Content */}
                   <div className="lg:text-center">
                     <h3 className="text-xl font-semibold">{step.title}</h3>
-                    <p className="mt-3 text-muted-foreground">
-                      {step.description}
-                    </p>
+                    <p className="mt-3 text-muted-foreground">{step.description}</p>
                   </div>
                 </div>
               ))}

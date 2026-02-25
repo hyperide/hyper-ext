@@ -1,11 +1,11 @@
-export { AnnotationsLayer } from './AnnotationsLayer';
 export type {
-	AnnotationsLayerProps,
-	AnnotationOperationCallbacks,
-	DrawingTool,
-	DrawingStyle,
+  AnnotationOperationCallbacks,
+  AnnotationsLayerProps,
+  DrawingStyle,
+  DrawingTool,
 } from './AnnotationsLayer';
-export { ArrowElement } from './ArrowElement';
+export { AnnotationsLayer } from './AnnotationsLayer';
 export type { ArrowElementProps } from './ArrowElement';
-export { TextElement } from './TextElement';
+export { ArrowElement } from './ArrowElement';
 export type { TextElementProps } from './TextElement';
+export { TextElement } from './TextElement';

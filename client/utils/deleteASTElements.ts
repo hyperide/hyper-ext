@@ -4,10 +4,7 @@ import { authFetch } from '@/utils/authFetch';
  * Delete multiple AST elements in the component file in a single operation
  * More efficient than multiple individual deleteASTElement calls
  */
-export async function deleteASTElements(
-  elementIds: string[],
-  filePath: string,
-): Promise<boolean> {
+export async function deleteASTElements(elementIds: string[], filePath: string): Promise<boolean> {
   try {
     const response = await authFetch('/api/delete-elements', {
       method: 'POST',

@@ -1,8 +1,11 @@
 /** @import must precede all other statements */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind base;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind components;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind utilities;
 
 @layer base {
@@ -10,7 +13,7 @@
    * Tailwind CSS theme
    * tailwind.config.ts expects the following color variables to be expressed as HSL values.
    * A different format will require also updating the theme in tailwind.config.ts.
-  */
+   */
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -180,28 +183,33 @@
 
   /* Monaco Editor line highlighting (for navigation from visual to code) */
   .monaco-highlight-line {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Monaco's inline styles */
     background-color: rgba(59, 130, 246, 0.15) !important;
   }
 
   .monaco-highlight-glyph {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Monaco's inline styles */
     background-color: rgba(59, 130, 246, 0.4) !important;
   }
 
   /* Monaco Editor Git decorations */
   .git-line-added {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Monaco's inline styles */
     background-color: rgba(34, 197, 94, 0.1) !important;
   }
 
   .git-line-modified {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Monaco's inline styles */
     background-color: rgba(59, 130, 246, 0.1) !important;
   }
 
   .git-line-deleted {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Monaco's inline styles */
     background-color: rgba(239, 68, 68, 0.1) !important;
   }
 
   .git-gutter-added::before {
-    content: '';
+    content: "";
     position: absolute;
     left: 0;
     width: 3px;
@@ -210,7 +218,7 @@
   }
 
   .git-gutter-modified::before {
-    content: '';
+    content: "";
     position: absolute;
     left: 0;
     width: 3px;
@@ -219,7 +227,7 @@
   }
 
   .git-gutter-deleted::before {
-    content: '';
+    content: "";
     position: absolute;
     left: 2px;
     width: 0;

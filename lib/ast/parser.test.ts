@@ -2,10 +2,10 @@
  * Tests for AST parser utilities
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import { parseCode, printAST, readAndParseFile, writeAST } from './parser';
 
 describe('parseCode', () => {

@@ -2,71 +2,15 @@
  * Canvas Renderer - renders instances from Canvas Engine
  */
 
-import { createElement, useEffect, useRef, useState } from "react";
-import { useCanvasEngine, useChildren } from "./hooks";
-import type { ComponentInstance } from "../models/types";
-import type { MapBoundary } from "../../../components/MapOverlay";
-import type { ASTNode } from "../types/ast";
+import { useEffect, useRef } from 'react';
+import type { MapBoundary } from '../../../components/MapOverlay';
+import type { ASTNode } from '../types/ast';
+import { useCanvasEngine, useChildren } from './hooks';
 
 interface InstanceRendererProps {
   instanceId: string;
   hoveredId?: string | null;
   selectedId?: string | null;
-}
-
-/**
- * Renders AST node as HTML element with data-uniq-id
- */
-function ASTNodeRenderer({
-  node,
-  hoveredId,
-  selectedId
-}: {
-  node: ASTNode;
-  hoveredId?: string | null;
-  selectedId?: string | null;
-}) {
-  // Extract text content from props.children if it's a string
-  const textContent = typeof node.props?.children === "string" ? node.props.children : null;
-
-  // Render child nodes
-  const childElements = node.children?.map((child) => (
-    <ASTNodeRenderer
-      key={child.id}
-      node={child}
-      hoveredId={hoveredId}
-      selectedId={selectedId}
-    />
-  ));
-
-  // Prepare props with data-uniq-id and highlighting classes
-  const elementProps: Record<string, any> = {
-    ...node.props,
-    "data-uniq-id": node.id,
-  };
-
-  // Add highlight classes
-  let className = elementProps.className || "";
-  if (node.id === hoveredId) {
-    className += " canvas-hover-highlight";
-  }
-  if (node.id === selectedId) {
-    className += " canvas-select-highlight";
-  }
-  if (className) {
-    elementProps.className = className.trim();
-  }
-
-  // Remove children from props if it was text (we'll pass it separately)
-  if (textContent) {
-    delete elementProps.children;
-  }
-
-  return createElement(
-    node.type,
-    elementProps,
-    textContent || childElements || null
-  );
 }
 
 interface MapGroup {
@@ -95,7 +39,7 @@ function extractMapGroups(astNodes: ASTNode[]): MapGroup[] {
           elementId: node.id, // Use first encountered node as elementId
         });
       }
-      groups.get(parentMapId)!.nodeIds.push(node.id);
+      groups.get(parentMapId)?.nodeIds.push(node.id);
     }
 
     if (node.children) {
@@ -111,10 +55,7 @@ function extractMapGroups(astNodes: ASTNode[]): MapGroup[] {
  * Calculate bounding box for a group of elements
  * For map() items, finds ALL elements with the same data-uniq-id
  */
-function calculateGroupBoundingBox(
-  containerEl: HTMLElement,
-  nodeIds: string[]
-): DOMRect | null {
+function calculateGroupBoundingBox(containerEl: HTMLElement, nodeIds: string[]): DOMRect | null {
   const allElements: Element[] = [];
 
   // For each node ID, find ALL elements with that ID (map items have same ID)
@@ -142,7 +83,7 @@ function calculateGroupBoundingBox(
  */
 function addDataUniqIds(containerEl: HTMLElement, astNodes: ASTNode[]) {
   // For each AST node, try to find corresponding DOM element and add data-uniq-id
-  const allElements = Array.from(containerEl.querySelectorAll("*"));
+  const allElements = Array.from(containerEl.querySelectorAll('*'));
 
   function processNode(node: ASTNode, domElements: Element[]) {
     // Try to find matching DOM element by tag name and attributes
@@ -152,8 +93,8 @@ function addDataUniqIds(containerEl: HTMLElement, astNodes: ASTNode[]) {
         let matches = true;
         if (node.props) {
           for (const [key, value] of Object.entries(node.props)) {
-            if (key === "children" || key === "className") continue;
-            const attrName = key === "className" ? "class" : key;
+            if (key === 'children' || key === 'className') continue;
+            const attrName = key === 'className' ? 'class' : key;
             if (el.getAttribute(attrName) !== value) {
               matches = false;
               break;
@@ -178,7 +119,9 @@ function addDataUniqIds(containerEl: HTMLElement, astNodes: ASTNode[]) {
     }
   }
 
-  astNodes.forEach((node) => processNode(node, allElements));
+  for (const node of astNodes) {
+    processNode(node, allElements);
+  }
 }
 
 /**
@@ -188,39 +131,32 @@ function InstanceRenderer({ instanceId, hoveredId, selectedId }: InstanceRendere
   const engine = useCanvasEngine();
   const instance = engine.getInstance(instanceId);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  if (!instance) {
-    return null;
-  }
-
-  const componentDef = engine.registry.get(instance.type);
-  if (!componentDef) {
-    console.warn(`[CanvasRenderer] Component definition not found: ${instance.type}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-    return null;
-  }
+  const componentDef = instance ? engine.registry.get(instance.type) : undefined;
 
   // Add data-uniq-id attributes after render
   useEffect(() => {
-    if (containerRef.current && instance.metadata?.astStructure) {
-      addDataUniqIds(containerRef.current, instance.metadata.astStructure);
+    if (!instance || !componentDef) return;
+    const astStructure = instance.metadata?.astStructure;
+    if (containerRef.current && Array.isArray(astStructure)) {
+      addDataUniqIds(containerRef.current, astStructure as ASTNode[]);
     }
-  }, [instance.metadata?.astStructure]);
+  }, [instance, instance?.metadata?.astStructure, componentDef]);
 
   // Update highlight classes when hover/select changes
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!instance || !componentDef || !containerRef.current) return;
 
     // Remove all highlight classes first
-    const allElements = containerRef.current.querySelectorAll("[data-uniq-id]");
+    const allElements = containerRef.current.querySelectorAll('[data-uniq-id]');
     allElements.forEach((el) => {
-      el.classList.remove("canvas-hover-highlight", "canvas-select-highlight");
+      el.classList.remove('canvas-hover-highlight', 'canvas-select-highlight');
     });
 
     // Add highlight class to hovered element
     if (hoveredId) {
       const hoveredEl = containerRef.current.querySelector(`[data-uniq-id="${hoveredId}"]`);
       if (hoveredEl) {
-        hoveredEl.classList.add("canvas-hover-highlight");
+        hoveredEl.classList.add('canvas-hover-highlight');
       }
     }
 
@@ -228,10 +164,19 @@ function InstanceRenderer({ instanceId, hoveredId, selectedId }: InstanceRendere
     if (selectedId) {
       const selectedEl = containerRef.current.querySelector(`[data-uniq-id="${selectedId}"]`);
       if (selectedEl) {
-        selectedEl.classList.add("canvas-select-highlight");
+        selectedEl.classList.add('canvas-select-highlight');
       }
     }
-  }, [hoveredId, selectedId]);
+  }, [instance, hoveredId, selectedId, componentDef]);
+
+  if (!instance) {
+    return null;
+  }
+
+  if (!componentDef) {
+    console.warn(`[CanvasRenderer] Component definition not found: ${instance.type}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    return null;
+  }
 
   // Render component with SampleDefault or defaultProps
   if (componentDef.SampleDefault) {
@@ -297,10 +242,11 @@ export function CanvasRenderer({
         if (!instanceId) return;
 
         const instance = engine.getInstance(instanceId);
-        if (!instance?.metadata?.astStructure) return;
+        const astData = instance?.metadata?.astStructure;
+        if (!Array.isArray(astData)) return;
 
         // Extract map groups from AST
-        const mapGroups = extractMapGroups(instance.metadata.astStructure);
+        const mapGroups = extractMapGroups(astData as ASTNode[]);
 
         // Calculate boundaries for each group
         mapGroups.forEach((group) => {
@@ -331,12 +277,7 @@ export function CanvasRenderer({
   return (
     <div ref={canvasRef}>
       {rootChildren.map((child) => (
-        <InstanceRenderer
-          key={child.id}
-          instanceId={child.id}
-          hoveredId={hoveredId}
-          selectedId={selectedId}
-        />
+        <InstanceRenderer key={child.id} instanceId={child.id} hoveredId={hoveredId} selectedId={selectedId} />
       ))}
     </div>
   );

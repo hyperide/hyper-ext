@@ -1,4 +1,4 @@
-import { IconX, IconSparkles } from '@tabler/icons-react';
+import { IconSparkles, IconX } from '@tabler/icons-react';
 import cn from 'clsx';
 import { Input } from '@/components/ui/input';
 
@@ -21,10 +21,13 @@ export function PathInput({
   isAIDetected = false,
   className,
 }: PathInputProps) {
+  const inputId = `path-input-${label.toLowerCase().replace(/\s+/g, '-')}`;
   return (
     <div className={cn('space-y-1.5', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+          {label}
+        </label>
         {isAIDetected && (
           <span className="flex items-center gap-1 text-xs text-blue-600">
             <IconSparkles className="w-3 h-3" />
@@ -32,11 +35,10 @@ export function PathInput({
           </span>
         )}
       </div>
-      {description && (
-        <p className="text-xs text-gray-500">{description}</p>
-      )}
+      {description && <p className="text-xs text-gray-500">{description}</p>}
       <div className="flex items-center gap-2">
         <Input
+          id={inputId}
           type="text"
           value={value || ''}
           onChange={(e) => onChange(e.target.value || null)}

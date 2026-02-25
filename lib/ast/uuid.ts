@@ -105,10 +105,7 @@ export function ensureUuid(element: t.JSXElement, uuid?: string): string {
  */
 export function hasUuid(element: t.JSXElement): boolean {
   return element.openingElement.attributes.some(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === 'data-uniq-id',
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
   );
 }
 
@@ -117,10 +114,7 @@ export function hasUuid(element: t.JSXElement): boolean {
  */
 export function removeUuid(element: t.JSXElement): void {
   const index = element.openingElement.attributes.findIndex(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === 'data-uniq-id',
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
   );
 
   if (index !== -1) {

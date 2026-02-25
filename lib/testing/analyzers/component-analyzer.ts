@@ -16,16 +16,11 @@ import * as t from '@babel/types';
 
 import { readAndParseFile } from '../../ast/parser';
 import { findAllJSXElements } from '../../ast/traverser';
-import type {
-  ComponentAnalysis,
-  CvaVariantInfo,
-  PropDefinition,
-  PropsInterfaceInfo,
-} from '../types';
+import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, PropsInterfaceInfo } from '../types';
 import { toKebabCase } from '../utils/naming';
 import { findInteractiveElements } from './interactive-detector';
 
-// @ts-ignore - babel/traverse has ESM/CJS issues
+// @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
 
 /**
@@ -36,26 +31,18 @@ function extractComponentName(filePath: string): string {
   // Convert kebab-case to PascalCase
   return baseName
     .split('-')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
 }
 
 /**
  * Extract props interface from AST
  */
-function extractPropsInterface(
-  ast: t.File,
-  componentName: string,
-): PropsInterfaceInfo | null {
+function extractPropsInterface(ast: t.File, componentName: string): PropsInterfaceInfo | null {
   let result: PropsInterfaceInfo | null = null;
 
   // Common props interface naming patterns
-  const possibleNames = [
-    `${componentName}Props`,
-    `I${componentName}Props`,
-    `${componentName}PropsType`,
-    'Props',
-  ];
+  const possibleNames = [`${componentName}Props`, `I${componentName}Props`, `${componentName}PropsType`, 'Props'];
 
   traverse(ast, {
     // Handle interface declarations
@@ -150,7 +137,7 @@ function extractPropDefinition(prop: t.TSPropertySignature): PropDefinition | nu
     if (t.isTSUnionType(typeNode)) {
       unionValues = typeNode.types
         .filter((t): t is t.TSLiteralType => t.type === 'TSLiteralType')
-        .map(literal => {
+        .map((literal) => {
           if (t.isStringLiteral(literal.literal)) {
             return literal.literal.value;
           }
@@ -254,10 +241,7 @@ function extractCvaVariants(ast: t.File): CvaVariantInfo[] {
 
       // Find variants property
       const variantsProp = configArg.properties.find(
-        (p): p is t.ObjectProperty =>
-          t.isObjectProperty(p) &&
-          t.isIdentifier(p.key) &&
-          p.key.name === 'variants',
+        (p): p is t.ObjectProperty => t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'variants',
       );
 
       if (!variantsProp || !t.isObjectExpression(variantsProp.value)) return;
@@ -265,19 +249,13 @@ function extractCvaVariants(ast: t.File): CvaVariantInfo[] {
       // Find defaultVariants property
       const defaultVariantsProp = configArg.properties.find(
         (p): p is t.ObjectProperty =>
-          t.isObjectProperty(p) &&
-          t.isIdentifier(p.key) &&
-          p.key.name === 'defaultVariants',
+          t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'defaultVariants',
       );
 
       const defaultVariants: Record<string, string> = {};
       if (defaultVariantsProp && t.isObjectExpression(defaultVariantsProp.value)) {
         for (const prop of defaultVariantsProp.value.properties) {
-          if (
-            t.isObjectProperty(prop) &&
-            t.isIdentifier(prop.key) &&
-            t.isStringLiteral(prop.value)
-          ) {
+          if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && t.isStringLiteral(prop.value)) {
             defaultVariants[prop.key.name] = prop.value.value;
           }
         }
@@ -320,10 +298,10 @@ function hasSampleRenderExport(ast: t.File): boolean {
       if (path.node.declaration) {
         if (t.isVariableDeclaration(path.node.declaration)) {
           const hasNewFormat = path.node.declaration.declarations.some(
-            d => t.isIdentifier(d.id) && d.id.name === 'SampleDefault',
+            (d) => t.isIdentifier(d.id) && d.id.name === 'SampleDefault',
           );
           const hasLegacyFormat = path.node.declaration.declarations.some(
-            d => t.isIdentifier(d.id) && d.id.name === 'sampleRender',
+            (d) => t.isIdentifier(d.id) && d.id.name === 'sampleRender',
           );
           if (hasNewFormat || hasLegacyFormat) {
             found = true;
@@ -333,8 +311,7 @@ function hasSampleRenderExport(ast: t.File): boolean {
 
         if (
           t.isFunctionDeclaration(path.node.declaration) &&
-          (path.node.declaration.id?.name === 'SampleDefault' ||
-           path.node.declaration.id?.name === 'sampleRender')
+          (path.node.declaration.id?.name === 'SampleDefault' || path.node.declaration.id?.name === 'sampleRender')
         ) {
           found = true;
           path.stop();
@@ -344,8 +321,10 @@ function hasSampleRenderExport(ast: t.File): boolean {
       // Check specifiers for both new and legacy formats
       if (
         path.node.specifiers.some(
-          s => t.isExportSpecifier(s) && t.isIdentifier(s.exported) &&
-               (s.exported.name === 'SampleDefault' || s.exported.name === 'sampleRender'),
+          (s) =>
+            t.isExportSpecifier(s) &&
+            t.isIdentifier(s.exported) &&
+            (s.exported.name === 'SampleDefault' || s.exported.name === 'sampleRender'),
         )
       ) {
         found = true;
@@ -370,13 +349,11 @@ function hasSampleRenderersExport(ast: t.File): boolean {
         if (t.isVariableDeclaration(path.node.declaration)) {
           // Check for new Sample* format (any Sample* except SampleDefault)
           const hasNewFormat = path.node.declaration.declarations.some(
-            d => t.isIdentifier(d.id) &&
-                 d.id.name.startsWith('Sample') &&
-                 d.id.name !== 'SampleDefault',
+            (d) => t.isIdentifier(d.id) && d.id.name.startsWith('Sample') && d.id.name !== 'SampleDefault',
           );
           // Check for legacy sampleRenderers format
           const hasLegacyFormat = path.node.declaration.declarations.some(
-            d => t.isIdentifier(d.id) && d.id.name === 'sampleRenderers',
+            (d) => t.isIdentifier(d.id) && d.id.name === 'sampleRenderers',
           );
           if (hasNewFormat || hasLegacyFormat) {
             found = true;
@@ -388,9 +365,11 @@ function hasSampleRenderersExport(ast: t.File): boolean {
       // Check specifiers for both formats
       if (
         path.node.specifiers.some(
-          s => t.isExportSpecifier(s) && t.isIdentifier(s.exported) &&
-               ((s.exported.name.startsWith('Sample') && s.exported.name !== 'SampleDefault') ||
-                s.exported.name === 'sampleRenderers'),
+          (s) =>
+            t.isExportSpecifier(s) &&
+            t.isIdentifier(s.exported) &&
+            ((s.exported.name.startsWith('Sample') && s.exported.name !== 'SampleDefault') ||
+              s.exported.name === 'sampleRenderers'),
         )
       ) {
         found = true;
@@ -427,10 +406,7 @@ function extractExports(ast: t.File): string[] {
           exports.push(path.node.declaration.id.name);
         }
 
-        if (
-          t.isTSInterfaceDeclaration(path.node.declaration) ||
-          t.isTSTypeAliasDeclaration(path.node.declaration)
-        ) {
+        if (t.isTSInterfaceDeclaration(path.node.declaration) || t.isTSTypeAliasDeclaration(path.node.declaration)) {
           exports.push(path.node.declaration.id.name);
         }
       }
@@ -515,11 +491,9 @@ export async function analyzeComponent(filePath: string): Promise<ComponentAnaly
 /**
  * Analyze multiple component files
  */
-export async function analyzeComponents(
-  filePaths: string[],
-): Promise<ComponentAnalysis[]> {
+export async function analyzeComponents(filePaths: string[]): Promise<ComponentAnalysis[]> {
   const results = await Promise.all(
-    filePaths.map(async filePath => {
+    filePaths.map(async (filePath) => {
       try {
         return await analyzeComponent(filePath);
       } catch (error) {

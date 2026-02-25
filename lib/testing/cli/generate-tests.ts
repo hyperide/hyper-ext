@@ -23,12 +23,13 @@ import * as path from 'node:path';
 import { glob } from 'glob';
 
 import { analyzeComponent } from '../analyzers/component-analyzer';
+import { getVariantsFromCanvas, hasCanvasVariants, loadCanvasState } from '../generators/canvas-variant-generator';
 import {
-  getVariantsFromCanvas,
-  hasCanvasVariants,
-  loadCanvasState,
-} from '../generators/canvas-variant-generator';
-import { generateDemoE2ETest, generateDemoScriptContent, getDemoE2ETestPath, getDemoPath } from '../generators/demo-generator';
+  generateDemoE2ETest,
+  generateDemoScriptContent,
+  getDemoE2ETestPath,
+  getDemoPath,
+} from '../generators/demo-generator';
 import { generateE2ETestContent, getE2ETestPath } from '../generators/e2e-test-generator';
 import { generateUnitTestContent, getUnitTestPath } from '../generators/unit-test-generator';
 import type { TestGenerationResult, TestVariant } from '../types';
@@ -166,10 +167,7 @@ async function writeFile(filePath: string, content: string, options: CliOptions)
   console.log(`  ✓ Written: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 }
 
-async function generateForComponent(
-  componentPath: string,
-  options: CliOptions,
-): Promise<TestGenerationResult> {
+async function generateForComponent(componentPath: string, options: CliOptions): Promise<TestGenerationResult> {
   const result: TestGenerationResult = {
     componentPath,
     generatedFiles: [],
@@ -188,7 +186,7 @@ async function generateForComponent(
 
     console.log(`  Found ${analysis.interactiveElements.length} interactive elements`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     if (analysis.cvaVariants?.length) {
-      console.log(`  Found CVA variants: ${analysis.cvaVariants.map(v => v.name).join(', ')}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      console.log(`  Found CVA variants: ${analysis.cvaVariants.map((v) => v.name).join(', ')}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
 
     // Determine project root for canvas.json
@@ -281,7 +279,6 @@ async function generateForComponent(
         result.generatedFiles.push({ path: demoE2EPath, type: 'e2e' });
       }
     }
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     result.errors.push(errorMessage);
@@ -332,7 +329,7 @@ async function main(): Promise<void> {
   const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
   const totalInteractive = results.reduce((sum, r) => sum + r.interactiveElementsCount, 0);
   const totalCanvasVariants = results.reduce((sum, r) => sum + (r.canvasVariantsCount || 0), 0);
-  const componentsWithCanvas = results.filter(r => (r.canvasVariantsCount || 0) > 0).length;
+  const componentsWithCanvas = results.filter((r) => (r.canvasVariantsCount || 0) > 0).length;
 
   console.log(`Components processed: ${results.length}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   console.log(`Files generated: ${totalGenerated}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string

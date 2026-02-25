@@ -5,21 +5,21 @@
  * this operation inserts AST elements into the source file.
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
-import { BaseOperation } from "./Operation";
+import { BaseOperation } from './Operation';
 
 export interface ASTInsertOperationParams {
   parentId: string | null;
   filePath: string;
   componentType: string;
-  props: Record<string, any>;
+  props: Record<string, unknown>;
   componentFilePath?: string; // Source file path for import resolution
 }
 
 export class ASTInsertOperation extends BaseOperation {
-  name = "ASTInsert";
+  name = 'ASTInsert';
   private params: ASTInsertOperationParams;
   private insertedId?: string; // Store ID of inserted element for undo
 
@@ -31,7 +31,7 @@ export class ASTInsertOperation extends BaseOperation {
   /**
    * Execute insert: add element to file, return new ID
    */
-  execute(tree: DocumentTree): OperationResult {
+  execute(_tree: DocumentTree): OperationResult {
     console.log('[ASTInsertOperation] Executing insert:', this.params.componentType);
 
     // Sync to file immediately
@@ -50,7 +50,7 @@ export class ASTInsertOperation extends BaseOperation {
   /**
    * Undo insert: delete the inserted element
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (!this.insertedId) {
       console.warn('[ASTInsertOperation] No insertedId to undo');
       return this.error('No inserted element to undo');
@@ -59,10 +59,9 @@ export class ASTInsertOperation extends BaseOperation {
     console.log('[ASTInsertOperation] Undoing insert:', this.insertedId);
 
     // Delete element from file
-    this.syncDelete()
-      .catch((error) => {
-        console.error('[ASTInsertOperation] Undo failed:', error);
-      });
+    this.syncDelete().catch((error) => {
+      console.error('[ASTInsertOperation] Undo failed:', error);
+    });
 
     return this.success([this.insertedId]);
   }
@@ -86,7 +85,10 @@ export class ASTInsertOperation extends BaseOperation {
     // Reparse component to update AST structure
     await this.api.reloadComponent(this.params.filePath);
 
-    return result.newId!;
+    if (!result.newId) {
+      throw new Error('Insert succeeded but no newId returned');
+    }
+    return result.newId;
   }
 
   /**

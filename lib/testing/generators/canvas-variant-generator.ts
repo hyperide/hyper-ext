@@ -13,14 +13,8 @@ import type {
   InstanceConfig,
   InstanceTestConfig,
 } from '../../../shared/types/canvas';
-import { isInstanceConfig, toInstanceConfig } from '../../../shared/types/canvas';
-import type {
-  ComponentAnalysis,
-  CvaVariantInfo,
-  PropDefinition,
-  TestInteraction,
-  TestVariant,
-} from '../types';
+import { toInstanceConfig } from '../../../shared/types/canvas';
+import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, TestInteraction, TestVariant } from '../types';
 
 /**
  * Common boolean props that should generate variants
@@ -54,10 +48,7 @@ function toTestInteraction(interaction: CanvasTestInteraction): TestInteraction 
 /**
  * Convert canvas instance to TestVariant
  */
-function instanceToVariant(
-  instanceId: string,
-  instance: InstanceConfig,
-): TestVariant {
+function instanceToVariant(instanceId: string, instance: InstanceConfig): TestVariant {
   return {
     id: instanceId,
     name: instance.label || instanceId,
@@ -74,10 +65,7 @@ function instanceToVariant(
 /**
  * Get TestVariant array from canvas.json for a component
  */
-export function getVariantsFromCanvas(
-  canvasState: CanvasState,
-  componentPath: string,
-): TestVariant[] {
+export function getVariantsFromCanvas(canvasState: CanvasState, componentPath: string): TestVariant[] {
   const composition = canvasState[componentPath];
   if (!composition) return [];
 
@@ -97,10 +85,7 @@ export function getVariantsFromCanvas(
 /**
  * Check if canvas.json has variants for a component
  */
-export function hasCanvasVariants(
-  canvasState: CanvasState,
-  componentPath: string,
-): boolean {
+export function hasCanvasVariants(canvasState: CanvasState, componentPath: string): boolean {
   const composition = canvasState[componentPath];
   return !!composition && Object.keys(composition.instances).length > 0;
 }
@@ -108,9 +93,7 @@ export function hasCanvasVariants(
 /**
  * Load canvas.json from project directory
  */
-export async function loadCanvasState(
-  projectPath: string,
-): Promise<CanvasState | null> {
+export async function loadCanvasState(projectPath: string): Promise<CanvasState | null> {
   const canvasJsonPath = path.join(projectPath, '.hyperide', 'canvas.json');
 
   try {
@@ -124,10 +107,7 @@ export async function loadCanvasState(
 /**
  * Save canvas.json to project directory
  */
-export async function saveCanvasState(
-  projectPath: string,
-  state: CanvasState,
-): Promise<void> {
+export async function saveCanvasState(projectPath: string, state: CanvasState): Promise<void> {
   const canvasJsonPath = path.join(projectPath, '.hyperide', 'canvas.json');
   const dir = path.dirname(canvasJsonPath);
 
@@ -178,10 +158,7 @@ function generateVariantName(props: Record<string, unknown>): string {
 /**
  * Generate variant description
  */
-function generateVariantDescription(
-  componentName: string,
-  props: Record<string, unknown>,
-): string {
+function generateVariantDescription(componentName: string, props: Record<string, unknown>): string {
   const conditions: string[] = [];
 
   for (const [key, value] of Object.entries(props)) {
@@ -202,9 +179,7 @@ function generateVariantDescription(
 /**
  * Generate all combinations of CVA variants
  */
-function generateCvaCombinations(
-  cvaVariants: CvaVariantInfo[],
-): Array<Record<string, string>> {
+function generateCvaCombinations(cvaVariants: CvaVariantInfo[]): Array<Record<string, string>> {
   if (cvaVariants.length === 0) return [{}];
 
   const combinations: Array<Record<string, string>> = [];
@@ -242,9 +217,7 @@ function generateCvaCombinations(
 /**
  * Generate boolean prop combinations
  */
-function generateBooleanCombinations(
-  booleanProps: PropDefinition[],
-): Array<Record<string, boolean>> {
+function generateBooleanCombinations(booleanProps: PropDefinition[]): Array<Record<string, boolean>> {
   if (booleanProps.length === 0) return [{}];
 
   const combinations: Array<Record<string, boolean>> = [];
@@ -293,9 +266,7 @@ export interface GeneratedVariant {
 /**
  * Generate variant instances for canvas.json
  */
-export function generateVariantsForCanvas(
-  options: GenerateVariantsOptions,
-): GeneratedVariant[] {
+export function generateVariantsForCanvas(options: GenerateVariantsOptions): GeneratedVariant[] {
   const {
     analysis,
     strategy = 'minimal',
@@ -309,10 +280,7 @@ export function generateVariantsForCanvas(
   const { componentName, cvaVariants, propsInterface } = analysis;
 
   // Extract boolean props
-  const booleanProps =
-    propsInterface?.props.filter(
-      (p) => p.isBoolean && VARIANT_BOOLEAN_PROPS.has(p.name),
-    ) || [];
+  const booleanProps = propsInterface?.props.filter((p) => p.isBoolean && VARIANT_BOOLEAN_PROPS.has(p.name)) || [];
 
   // Generate combinations based on strategy
   let cvaCombinations: Array<Record<string, string>>;
@@ -323,11 +291,7 @@ export function generateVariantsForCanvas(
     cvaCombinations = cvaVariants?.length
       ? [
           // Default
-          Object.fromEntries(
-            cvaVariants
-              .filter((v) => v.defaultValue)
-              .map((v) => [v.name, v.defaultValue as string]),
-          ),
+          Object.fromEntries(cvaVariants.filter((v) => v.defaultValue).map((v) => [v.name, v.defaultValue as string])),
           // One non-default per variant type
           ...cvaVariants.flatMap((v) =>
             v.values
@@ -338,10 +302,7 @@ export function generateVariantsForCanvas(
         ]
       : [{}];
 
-    booleanCombinations = [
-      {},
-      ...booleanProps.slice(0, 3).map((p) => ({ [p.name]: true })),
-    ];
+    booleanCombinations = [{}, ...booleanProps.slice(0, 3).map((p) => ({ [p.name]: true }))];
   } else {
     // Comprehensive: all combinations
     cvaCombinations = generateCvaCombinations(cvaVariants || []);
@@ -377,10 +338,13 @@ export function generateVariantsForCanvas(
           y = startY + index * spacing;
           break;
         case 'grid':
-        default:
           x = startX + (index % gridColumns) * spacing;
           y = startY + Math.floor(index / gridColumns) * spacing;
           break;
+        default: {
+          const _exhaustive: never = layout;
+          throw new Error(`Unknown layout: ${_exhaustive}`);
+        }
       }
 
       variants.push({

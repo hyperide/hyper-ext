@@ -1,25 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { IconAlertCircle, IconArrowLeft, IconCheck, IconLoader2, IconMail } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { authFetch } from '@/utils/authFetch';
-import {
-  IconArrowLeft,
-  IconMail,
-  IconCheck,
-  IconAlertCircle,
-  IconLoader2,
-} from '@tabler/icons-react';
 import { useAuthStore } from '@/stores/authStore';
-import { toast } from 'sonner';
+import { authFetch } from '@/utils/authFetch';
 
 interface PendingEmailChange {
   newEmail: string;
@@ -43,7 +31,6 @@ export default function UserSettings() {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-
 
   // Handle URL params for magic link results
   useEffect(() => {
@@ -149,7 +136,7 @@ export default function UserSettings() {
 
       setPendingChange({ newEmail: newEmail.trim(), expiresAt: data.expiresAt });
       setEmailStep('pending');
-      toast.success('Verification code sent to ' + newEmail.trim());
+      toast.success(`Verification code sent to ${newEmail.trim()}`);
     } catch (err) {
       setEmailError(err instanceof Error ? err.message : 'Failed to send verification code');
     } finally {
@@ -214,9 +201,7 @@ export default function UserSettings() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">Account Settings</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage your account preferences
-            </p>
+            <p className="text-sm text-muted-foreground">Manage your account preferences</p>
           </div>
         </div>
 
@@ -230,12 +215,7 @@ export default function UserSettings() {
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Display Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                />
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               </div>
               <Button type="submit" disabled={savingProfile}>
                 {savingProfile && <IconLoader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -252,9 +232,7 @@ export default function UserSettings() {
               <IconMail className="w-5 h-5" />
               Email Address
             </CardTitle>
-            <CardDescription>
-              Change your email address with verification
-            </CardDescription>
+            <CardDescription>Change your email address with verification</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Current email */}
@@ -300,8 +278,7 @@ export default function UserSettings() {
                 {/* Pending change info */}
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                   <p className="text-sm text-blue-800 dark:text-blue-300">
-                    We sent a verification code to{' '}
-                    <strong>{pendingChange?.newEmail}</strong>
+                    We sent a verification code to <strong>{pendingChange?.newEmail}</strong>
                   </p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                     Enter the 6-digit code below, or click the magic link in the email.
@@ -332,20 +309,11 @@ export default function UserSettings() {
                   )}
 
                   <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      disabled={verifyingCode || verificationCode.length !== 6}
-                    >
-                      {verifyingCode && (
-                        <IconLoader2 className="w-4 h-4 mr-2 animate-spin" />
-                      )}
+                    <Button type="submit" disabled={verifyingCode || verificationCode.length !== 6}>
+                      {verifyingCode && <IconLoader2 className="w-4 h-4 mr-2 animate-spin" />}
                       Verify Code
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCancelEmailChange}
-                    >
+                    <Button type="button" variant="outline" onClick={handleCancelEmailChange}>
                       Cancel
                     </Button>
                   </div>

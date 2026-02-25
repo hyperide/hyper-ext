@@ -30,13 +30,8 @@ export function ComponentGroupList({
       {groups.map((group) => (
         <div key={group.dirPath} className="flex flex-col">
           <div className="flex items-center gap-1 pl-3">
-            <IconTilde
-              className="w-3.5 h-3.5 text-muted-foreground"
-              stroke={1.5}
-            />
-            <span className="text-xs font-normal text-[#7A7A7A]">
-              {group.dirPath}
-            </span>
+            <IconTilde className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
+            <span className="text-xs font-normal text-[#7A7A7A]">{group.dirPath}</span>
           </div>
           <div className="pl-6 flex flex-col">
             {group.components.map((component) => {
@@ -60,9 +55,7 @@ export function ComponentGroupList({
                   onClick={() => onComponentClick(component)}
                   disabled={isLoading}
                 >
-                  {isLoading && (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b border-muted-foreground" />
-                  )}
+                  {isLoading && <div className="animate-spin rounded-full h-3 w-3 border-b border-muted-foreground" />}
                   <span
                     className={cn('text-xs', {
                       'font-semibold text-foreground': isActive,

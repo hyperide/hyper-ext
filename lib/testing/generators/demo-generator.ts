@@ -7,7 +7,7 @@
 
 import * as path from 'node:path';
 
-import type { ComponentAnalysis, DemoConfig, InteractiveElement, TestVariant } from '../types';
+import type { ComponentAnalysis, DemoConfig, TestVariant } from '../types';
 
 export interface DemoGeneratorOptions {
   analysis: ComponentAnalysis;
@@ -22,9 +22,7 @@ export interface DemoGeneratorOptions {
 export function generateDemoConfig(options: DemoGeneratorOptions): DemoConfig;
 /** @deprecated Use options object instead */
 export function generateDemoConfig(analysis: ComponentAnalysis): DemoConfig;
-export function generateDemoConfig(
-  optionsOrAnalysis: DemoGeneratorOptions | ComponentAnalysis,
-): DemoConfig {
+export function generateDemoConfig(optionsOrAnalysis: DemoGeneratorOptions | ComponentAnalysis): DemoConfig {
   // Check if it's ComponentAnalysis (has filePath) or DemoGeneratorOptions (has analysis)
   const isComponentAnalysis = 'filePath' in optionsOrAnalysis;
   const options: DemoGeneratorOptions = isComponentAnalysis
@@ -51,9 +49,9 @@ export function generateDemoConfig(
   // For default variant, add hover and click interactions
   if (interactiveElements.length > 0) {
     const defaultInteractions = interactiveElements
-      .filter(el => el.type === 'button')
+      .filter((el) => el.type === 'button')
       .slice(0, 3) // Limit to first 3 buttons
-      .flatMap(el => [
+      .flatMap((el) => [
         {
           type: 'hover' as const,
           target: el.suggestedTestId,
@@ -76,7 +74,7 @@ export function generateDemoConfig(
 
   return {
     componentName,
-    variants: variants.map(v => v.id),
+    variants: variants.map((v) => v.id),
     interval: 2000,
     interactions,
     autoStart: true,
@@ -94,31 +92,22 @@ export function generateDemoConfig(
 export function generateDemoScriptContent(options: DemoGeneratorOptions): string;
 /** @deprecated Use options object instead */
 export function generateDemoScriptContent(analysis: ComponentAnalysis): string;
-export function generateDemoScriptContent(
-  optionsOrAnalysis: DemoGeneratorOptions | ComponentAnalysis,
-): string {
+export function generateDemoScriptContent(optionsOrAnalysis: DemoGeneratorOptions | ComponentAnalysis): string {
   // Check if it's ComponentAnalysis (has filePath) or DemoGeneratorOptions (has analysis)
   const isComponentAnalysis = 'filePath' in optionsOrAnalysis;
   const options: DemoGeneratorOptions = isComponentAnalysis
     ? { analysis: optionsOrAnalysis as ComponentAnalysis }
     : (optionsOrAnalysis as DemoGeneratorOptions);
 
-  const { analysis, variants: providedVariants } = options;
+  const { analysis } = options;
   const { componentName, filePath } = analysis;
   const config = generateDemoConfig(options);
 
-  // Use provided variants or create minimal default
-  const variants: TestVariant[] = providedVariants || [
-    {
-      id: 'default',
-      name: 'Default',
-      description: `${componentName} default state`,
-      props: {},
-      render: () => null as unknown as JSX.Element,
-    },
-  ];
-
-  const componentFileName = filePath.split('/').pop()?.replace(/\.tsx?$/, '') || 'component';
+  const componentFileName =
+    filePath
+      .split('/')
+      .pop()
+      ?.replace(/\.tsx?$/, '') || 'component';
 
   const lines: string[] = [
     '/**',
@@ -394,15 +383,17 @@ export function generateDemoE2ETest(analysis: ComponentAnalysis): string {
     `    await page.goto('/test-preview?component=${componentFileName}&demo=true');`,
     `    await page.waitForLoadState('networkidle');`,
     ``,
-    config.variants.length > 1 ? [
-      `    // Click on second variant`,
-      `    const variantBtn = page.locator('[data-test-id="demo-variant-${config.variants[1]}"]');`,
-      `    await variantBtn.click();`,
-      ``,
-      `    // Check indicator updated`,
-      `    const indicator = page.locator('.demo-indicator');`,
-      `    await expect(indicator).toContainText('2 / ${config.variants.length}');`,
-    ].join('\n') : '    // Only one variant, skip navigation test',
+    config.variants.length > 1
+      ? [
+          `    // Click on second variant`,
+          `    const variantBtn = page.locator('[data-test-id="demo-variant-${config.variants[1]}"]');`,
+          `    await variantBtn.click();`,
+          ``,
+          `    // Check indicator updated`,
+          `    const indicator = page.locator('.demo-indicator');`,
+          `    await expect(indicator).toContainText('2 / ${config.variants.length}');`,
+        ].join('\n')
+      : '    // Only one variant, skip navigation test',
     `  });`,
     ``,
     `  test('should capture screenshots for all variants', async ({ page }) => {`,
@@ -412,13 +403,15 @@ export function generateDemoE2ETest(analysis: ComponentAnalysis): string {
     `    // Pause auto-play`,
     `    await page.locator('[data-test-id="demo-play-pause"]').click();`,
     ``,
-    ...config.variants.map((variantId, index) => [
-      `    // Variant: ${variantId}`,
-      `    await page.locator('[data-test-id="demo-variant-${variantId}"]').click();`,
-      `    await page.waitForTimeout(300);`,
-      `    await expect(page).toHaveScreenshot('demo-${componentName.toLowerCase()}-${variantId}.png');`,
-      ``,
-    ].join('\n')),
+    ...config.variants.map((variantId) =>
+      [
+        `    // Variant: ${variantId}`,
+        `    await page.locator('[data-test-id="demo-variant-${variantId}"]').click();`,
+        `    await page.waitForTimeout(300);`,
+        `    await expect(page).toHaveScreenshot('demo-${componentName.toLowerCase()}-${variantId}.png');`,
+        ``,
+      ].join('\n'),
+    ),
     `  });`,
     `});`,
     '',

@@ -1,40 +1,38 @@
-import { type MutableRefObject, useEffect } from "react";
-import type { CondBoundary } from "@/components/CondOverlay";
-import type { MapBoundary } from "@/components/MapOverlay";
-import type { useComponentMeta } from "@/contexts/ComponentMetaContext";
-import type { CanvasEngine } from "@/lib/canvas-engine";
-import type { ViewportState } from "@/../../shared/types/canvas";
-import { getPreviewIframe } from "@/lib/dom-utils";
+import { type MutableRefObject, useEffect } from 'react';
+import type { ViewportState } from '@/../../shared/types/canvas';
+import type { CondBoundary } from '@/components/CondOverlay';
+import type { MapBoundary } from '@/components/MapOverlay';
+import type { useComponentMeta } from '@/contexts/ComponentMetaContext';
+import type { CanvasEngine } from '@/lib/canvas-engine';
+import type { ASTNode } from '@/lib/canvas-engine/types/ast';
+import { getPreviewIframe } from '@/lib/dom-utils';
+import type { ProjectData } from './useProjectControl';
 
 /** Direct DOM rendering of overlays with requestAnimationFrame */
 export function useOverlayMapCondHighlightComponents(
-  activeProject: any,
+  activeProject: ProjectData | null,
   mode: string,
   overlayContainerRef: MutableRefObject<HTMLDivElement>,
   engine: CanvasEngine,
   setEditingMapBoundary: React.Dispatch<React.SetStateAction<MapBoundary>>,
   setEditingCondBoundary: React.Dispatch<React.SetStateAction<CondBoundary>>,
-  meta: ReturnType<typeof useComponentMeta>["meta"],
+  meta: ReturnType<typeof useComponentMeta>['meta'],
   iframeLoadedCounter: number,
   storeUpdateCounter: number,
   viewport: ViewportState,
 ) {
   useEffect(() => {
-    if (
-      !activeProject ||
-      activeProject.status !== "running" ||
-      mode !== "design"
-    ) {
+    if (!activeProject || activeProject.status !== 'running' || mode !== 'design') {
       // Clear overlays when not in design mode
       if (overlayContainerRef.current) {
-        overlayContainerRef.current.innerHTML = ""; // nosemgrep: insecure-document-method -- clearing container, no user data
+        overlayContainerRef.current.innerHTML = ''; // nosemgrep: insecure-document-method -- clearing container, no user data
       }
       return;
     }
 
     const iframe = getPreviewIframe();
     if (!iframe || !iframe.contentDocument || !iframe.contentWindow) {
-      console.log("[CondMapOverlay] iframe not ready:", {
+      console.log('[CondMapOverlay] iframe not ready:', {
         iframe: !!iframe,
         contentDocument: !!iframe?.contentDocument,
         contentWindow: !!iframe?.contentWindow,
@@ -43,14 +41,15 @@ export function useOverlayMapCondHighlightComponents(
     }
 
     const root = engine.getRoot();
-    if (!root.metadata?.astStructure) {
-      console.log("[CondMapOverlay] astStructure not ready");
+    if (!Array.isArray(root.metadata?.astStructure)) {
+      console.log('[CondMapOverlay] astStructure not ready');
       return;
     }
+    const astStructure = root.metadata.astStructure as ASTNode[];
 
     const container = overlayContainerRef.current;
     if (!container) {
-      console.log("[CondMapOverlay] container not ready");
+      console.log('[CondMapOverlay] container not ready');
       return;
     }
 
@@ -58,10 +57,7 @@ export function useOverlayMapCondHighlightComponents(
 
     let rafId: number | null = null;
     let isRunning = true;
-    const overlayElements = new Map<
-      string,
-      { border: HTMLDivElement; label: HTMLDivElement }
-    >();
+    const overlayElements = new Map<string, { border: HTMLDivElement; label: HTMLDivElement }>();
 
     const updateOverlays = () => {
       if (!isRunning) return;
@@ -78,17 +74,17 @@ export function useOverlayMapCondHighlightComponents(
       const getCanvasInstanceId = (el: Element): string => {
         let current: Element | null = el;
         while (current) {
-          const instanceId = current.getAttribute("data-canvas-instance-id");
+          const instanceId = current.getAttribute('data-canvas-instance-id');
           if (instanceId) {
             return instanceId;
           }
           current = current.parentElement;
         }
-        return "root"; // No canvas instance found
+        return 'root'; // No canvas instance found
       };
 
       // Find and render map boundaries (grouped by instance container)
-      const findMapItems = (nodes: any[], depth: number = 0) => {
+      const findMapItems = (nodes: ASTNode[], depth: number = 0) => {
         for (const node of nodes) {
           if (node.mapItem && node.id) {
             const mapId = node.id;
@@ -96,9 +92,7 @@ export function useOverlayMapCondHighlightComponents(
               continue;
             }
 
-            const mapElements = doc.querySelectorAll(
-              `[data-uniq-id="${mapId}"]`,
-            );
+            const mapElements = doc.querySelectorAll(`[data-uniq-id="${mapId}"]`);
             if (mapElements.length > 0) {
               // Group elements by their instance container
               const instanceGroups = new Map<string, HTMLElement[]>();
@@ -133,29 +127,28 @@ export function useOverlayMapCondHighlightComponents(
                 let elements = overlayElements.get(key);
                 if (!elements) {
                   // Create new elements
-                  const border = document.createElement("div");
-                  border.style.position = "absolute";
-                  border.style.border = "1px dashed rgb(168, 85, 247)";
-                  border.style.pointerEvents = "none";
+                  const border = document.createElement('div');
+                  border.style.position = 'absolute';
+                  border.style.border = '1px dashed rgb(168, 85, 247)';
+                  border.style.pointerEvents = 'none';
                   container.appendChild(border);
 
-                  const label = document.createElement("div");
-                  label.style.position = "absolute";
-                  label.style.padding = "0 4px";
-                  label.style.height = "10px";
-                  label.style.background = "rgb(243, 232, 255)";
-                  label.style.borderRadius = "0 0 4px 0";
-                  label.style.boxShadow =
-                    "inset -1px -1px 4px rgba(0,0,0,0.1), inset 1px 1px 4px #fff";
-                  label.style.color = "rgb(17, 24, 39)";
-                  label.style.fontSize = "8px";
-                  label.style.lineHeight = "10px";
-                  label.style.display = "flex";
-                  label.style.alignItems = "center";
-                  label.style.cursor = "pointer";
-                  label.style.pointerEvents = "auto";
-                  label.textContent = "map";
-                  label.addEventListener("click", () => {
+                  const label = document.createElement('div');
+                  label.style.position = 'absolute';
+                  label.style.padding = '0 4px';
+                  label.style.height = '10px';
+                  label.style.background = 'rgb(243, 232, 255)';
+                  label.style.borderRadius = '0 0 4px 0';
+                  label.style.boxShadow = 'inset -1px -1px 4px rgba(0,0,0,0.1), inset 1px 1px 4px #fff';
+                  label.style.color = 'rgb(17, 24, 39)';
+                  label.style.fontSize = '8px';
+                  label.style.lineHeight = '10px';
+                  label.style.display = 'flex';
+                  label.style.alignItems = 'center';
+                  label.style.cursor = 'pointer';
+                  label.style.pointerEvents = 'auto';
+                  label.textContent = 'map';
+                  label.addEventListener('click', () => {
                     setEditingMapBoundary({
                       parentMapId: node.mapItem.parentMapId,
                       depth,
@@ -165,7 +158,7 @@ export function useOverlayMapCondHighlightComponents(
                         maxRight - minLeft,
                         maxBottom - minTop,
                       ),
-                      expression: node.mapItem.expression || "",
+                      expression: node.mapItem.expression || '',
                       elementId: node.id,
                     });
                   });
@@ -200,18 +193,15 @@ export function useOverlayMapCondHighlightComponents(
       };
 
       // Find and render cond boundaries (each element separately)
-      const findCondItems = (nodes: any[]) => {
+      const findCondItems = (nodes: ASTNode[]) => {
         for (const node of nodes) {
           if (node.condItem && node.id) {
-            const condElements = doc.querySelectorAll(
-              `[data-uniq-id="${node.id}"]`,
-            );
+            const condElements = doc.querySelectorAll(`[data-uniq-id="${node.id}"]`);
 
             condElements.forEach((el, index) => {
               const rect = (el as HTMLElement).getBoundingClientRect();
               const labelText =
-                node.condItem.branch === "case" &&
-                node.condItem.index !== undefined
+                node.condItem.branch === 'case' && node.condItem.index !== undefined
                   ? `case ${node.condItem.index}`
                   : node.condItem.branch;
 
@@ -221,30 +211,29 @@ export function useOverlayMapCondHighlightComponents(
               let elements = overlayElements.get(key);
               if (!elements) {
                 // Create new elements
-                const border = document.createElement("div");
-                border.style.position = "absolute";
-                border.style.border = "1px dashed rgb(249, 115, 22)";
-                border.style.opacity = "0.6";
-                border.style.pointerEvents = "none";
+                const border = document.createElement('div');
+                border.style.position = 'absolute';
+                border.style.border = '1px dashed rgb(249, 115, 22)';
+                border.style.opacity = '0.6';
+                border.style.pointerEvents = 'none';
                 container.appendChild(border);
 
-                const label = document.createElement("div");
-                label.style.position = "absolute";
-                label.style.padding = "0 4px";
-                label.style.height = "10px";
-                label.style.background = "rgb(254, 243, 199)";
-                label.style.borderRadius = "0 0 4px 0";
-                label.style.boxShadow =
-                  "inset -1px -1px 4px rgba(0,0,0,0.1), inset 1px 1px 4px #fff";
-                label.style.color = "rgb(17, 24, 39)";
-                label.style.fontSize = "8px";
-                label.style.lineHeight = "10px";
-                label.style.display = "flex";
-                label.style.alignItems = "center";
-                label.style.cursor = "pointer";
-                label.style.pointerEvents = "auto";
+                const label = document.createElement('div');
+                label.style.position = 'absolute';
+                label.style.padding = '0 4px';
+                label.style.height = '10px';
+                label.style.background = 'rgb(254, 243, 199)';
+                label.style.borderRadius = '0 0 4px 0';
+                label.style.boxShadow = 'inset -1px -1px 4px rgba(0,0,0,0.1), inset 1px 1px 4px #fff';
+                label.style.color = 'rgb(17, 24, 39)';
+                label.style.fontSize = '8px';
+                label.style.lineHeight = '10px';
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.cursor = 'pointer';
+                label.style.pointerEvents = 'auto';
                 label.textContent = labelText;
-                label.addEventListener("click", () => {
+                label.addEventListener('click', () => {
                   setEditingCondBoundary({
                     condId: node.condItem.condId,
                     type: node.condItem.type,
@@ -252,12 +241,7 @@ export function useOverlayMapCondHighlightComponents(
                     index: node.condItem.index,
                     expression: node.condItem.expression,
                     elementId: node.id,
-                    rect: new DOMRect(
-                      iframeRect.left + rect.left,
-                      iframeRect.top + rect.top,
-                      rect.width,
-                      rect.height,
-                    ),
+                    rect: new DOMRect(iframeRect.left + rect.left, iframeRect.top + rect.top, rect.width, rect.height),
                   });
                 });
                 container.appendChild(label);
@@ -288,8 +272,8 @@ export function useOverlayMapCondHighlightComponents(
         }
       };
 
-      findMapItems(root.metadata.astStructure);
-      findCondItems(root.metadata.astStructure);
+      findMapItems(astStructure);
+      findCondItems(astStructure);
 
       // Remove elements that are no longer needed
       for (const [key, elements] of overlayElements.entries()) {
@@ -312,7 +296,7 @@ export function useOverlayMapCondHighlightComponents(
         cancelAnimationFrame(rafId);
       }
       if (container) {
-        container.innerHTML = ""; // nosemgrep: insecure-document-method -- clearing container, no user data
+        container.innerHTML = ''; // nosemgrep: insecure-document-method -- clearing container, no user data
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- meta?.componentName, iframeLoadedCounter, storeUpdateCounter are triggers to re-run effect when AST structure updates

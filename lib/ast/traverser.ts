@@ -3,15 +3,14 @@
  * Provides helpers for finding and navigating JSX elements
  */
 
+import _generate from '@babel/generator';
 import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import _generate from '@babel/generator';
 import type { FindElementResult } from '../types';
 
-// @ts-ignore - babel/generator has ESM/CJS issues
 const generate = _generate.default || _generate;
 
-// @ts-ignore - babel/traverse has ESM/CJS issues
+// @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
 
 /**
@@ -21,9 +20,7 @@ const traverse = _traverse.default || _traverse;
  * @param value - JSX attribute value node
  * @returns String value or null if not a static string
  */
-function getStaticStringFromAttrValue(
-  value: t.JSXAttribute['value']
-): string | null {
+function getStaticStringFromAttrValue(value: t.JSXAttribute['value']): string | null {
   if (!value) return null;
 
   // Case 1: data-uniq-id="value"
@@ -56,10 +53,7 @@ function getStaticStringFromAttrValue(
  * @param uuid - UUID to find
  * @returns Element and its path, or null if not found
  */
-export function findElementByUuid(
-  ast: t.File,
-  uuid: string
-): FindElementResult | null {
+export function findElementByUuid(ast: t.File, uuid: string): FindElementResult | null {
   let result: FindElementResult | null = null;
 
   traverse(ast, {
@@ -71,9 +65,7 @@ export function findElementByUuid(
       // Find data-uniq-id attribute
       const dataUniqIdAttr = openingElement.attributes.find(
         (attr: t.JSXAttribute | t.JSXSpreadAttribute) =>
-          t.isJSXAttribute(attr) &&
-          t.isJSXIdentifier(attr.name) &&
-          attr.name.name === 'data-uniq-id'
+          t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
       );
 
       if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr)) {
@@ -102,10 +94,7 @@ export function getUuidFromElement(element: t.JSXElement): string | null {
   const openingElement = element.openingElement;
 
   const dataUniqIdAttr = openingElement.attributes.find(
-    (attr) =>
-      t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name) &&
-      attr.name.name === 'data-uniq-id'
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
   );
 
   if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr)) {
@@ -120,9 +109,7 @@ export function getUuidFromElement(element: t.JSXElement): string | null {
  * @param ast - AST to search in
  * @returns Array of all JSX elements with their paths
  */
-export function findAllJSXElements(
-  ast: t.File
-): Array<{ element: t.JSXElement; path: NodePath<t.JSXElement> }> {
+export function findAllJSXElements(ast: t.File): Array<{ element: t.JSXElement; path: NodePath<t.JSXElement> }> {
   const elements: Array<{ element: t.JSXElement; path: NodePath<t.JSXElement> }> = [];
 
   traverse(ast, {
@@ -144,7 +131,7 @@ export function findAllJSXElements(
  */
 export function traverseJSXElements(
   ast: t.File,
-  visitor: (element: t.JSXElement, path: NodePath<t.JSXElement>) => void | boolean
+  visitor: (element: t.JSXElement, path: NodePath<t.JSXElement>) => undefined | boolean,
 ): void {
   traverse(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
@@ -160,11 +147,7 @@ export function traverseJSXElements(
  * Find element by source location (line, column)
  * Used for "Go to Visual" feature
  */
-export function findElementAtPosition(
-  ast: t.File,
-  line: number,
-  column: number,
-): FindElementResult | null {
+export function findElementAtPosition(ast: t.File, line: number, column: number): FindElementResult | null {
   let bestMatch: {
     element: t.JSXElement;
     path: NodePath<t.JSXElement>;
@@ -204,9 +187,7 @@ export function findElementAtPosition(
 /**
  * Get element location for "Go to Code" feature
  */
-export function getElementLocation(
-  element: t.JSXElement,
-): { line: number; column: number } | null {
+export function getElementLocation(element: t.JSXElement): { line: number; column: number } | null {
   const loc = element.loc;
   if (!loc) return null;
 
@@ -220,9 +201,7 @@ export function getElementLocation(
  * Get location of the first meaningful child (text or expression).
  * Used for "Go to code" navigation to text/expression content.
  */
-export function getChildrenLocation(
-  element: t.JSXElement,
-): { line: number; column: number } | null {
+export function getChildrenLocation(element: t.JSXElement): { line: number; column: number } | null {
   for (const child of element.children) {
     if (t.isJSXText(child) && child.value.trim()) {
       if (child.loc) {
@@ -256,9 +235,7 @@ export function analyzeJSXChildren(element: t.JSXElement): ChildrenAnalysis {
   }
 
   // Check for JSX element children
-  const hasJSXChildren = children.some(
-    (child) => t.isJSXElement(child) || t.isJSXFragment(child),
-  );
+  const hasJSXChildren = children.some((child) => t.isJSXElement(child) || t.isJSXFragment(child));
   if (hasJSXChildren) {
     return { childrenType: 'jsx', textContent: '' };
   }

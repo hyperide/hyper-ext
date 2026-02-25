@@ -2,9 +2,9 @@
  * Server Sync Manager - synchronizes engine operations with server file system
  */
 
-import type { ComponentInstance } from "../models/types";
-import type { Operation } from "../operations/Operation";
-import { authFetch } from "@/utils/authFetch";
+import { authFetch } from '@/utils/authFetch';
+import type { ComponentInstance } from '../models/types';
+import type { Operation } from '../operations/Operation';
 
 export interface ServerSyncConfig {
   /**
@@ -32,24 +32,21 @@ export class ServerSyncManager {
 
   constructor(config: ServerSyncConfig) {
     this.config = config;
-    this.baseUrl = config.baseUrl || "";
+    this.baseUrl = config.baseUrl || '';
   }
 
   /**
    * Sync insert operation to server
    */
-  async syncInsert(
-    instance: ComponentInstance,
-    parentId: string
-  ): Promise<void> {
+  async syncInsert(instance: ComponentInstance, parentId: string): Promise<void> {
     const filePath = this.config.getFilePath();
     if (!filePath) {
-      throw new Error("No file path available for sync");
+      throw new Error('No file path available for sync');
     }
 
     const response = await authFetch(`${this.baseUrl}/api/insert-element`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         parentId,
         filePath,
@@ -61,7 +58,7 @@ export class ServerSyncManager {
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.error || "Failed to insert element on server");
+      throw new Error(result.error || 'Failed to insert element on server');
     }
   }
 
@@ -71,12 +68,12 @@ export class ServerSyncManager {
   async syncDelete(elementId: string): Promise<void> {
     const filePath = this.config.getFilePath();
     if (!filePath) {
-      throw new Error("No file path available for sync");
+      throw new Error('No file path available for sync');
     }
 
     const response = await authFetch(`${this.baseUrl}/api/delete-element`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         elementId,
         filePath,
@@ -86,27 +83,24 @@ export class ServerSyncManager {
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.error || "Failed to delete element on server");
+      throw new Error(result.error || 'Failed to delete element on server');
     }
   }
 
   /**
    * Sync update operation to server
    */
-  async syncUpdate(
-    elementId: string,
-    props: Record<string, any>
-  ): Promise<void> {
+  async syncUpdate(elementId: string, props: Record<string, unknown>): Promise<void> {
     const filePath = this.config.getFilePath();
     if (!filePath) {
-      throw new Error("No file path available for sync");
+      throw new Error('No file path available for sync');
     }
 
     // Update each prop individually (current API design)
     for (const [propName, propValue] of Object.entries(props)) {
       const response = await authFetch(`${this.baseUrl}/api/update-component-props`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           selectedId: elementId,
           filePath,
@@ -118,9 +112,7 @@ export class ServerSyncManager {
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(
-          result.error || `Failed to update prop ${propName} on server`
-        );
+        throw new Error(result.error || `Failed to update prop ${propName} on server`);
       }
     }
   }
@@ -129,17 +121,17 @@ export class ServerSyncManager {
    * Sync undo/redo operation to server
    * This requires replaying operations or restoring snapshots
    */
-  async syncUndoRedo(operations: Operation[]): Promise<void> {
+  async syncUndoRedo(_operations: Operation[]): Promise<void> {
     const filePath = this.config.getFilePath();
     if (!filePath) {
-      throw new Error("No file path available for sync");
+      throw new Error('No file path available for sync');
     }
 
     // TODO: Implement batch operation endpoint on server
     // For now, we'll need to reparse the file after each undo/redo
     // This is a temporary solution until we implement proper batch operations
     console.warn(
-      "[ServerSyncManager] Undo/redo requires file reparse - implement batch endpoint for better performance"
+      '[ServerSyncManager] Undo/redo requires file reparse - implement batch endpoint for better performance',
     );
   }
 
@@ -147,13 +139,13 @@ export class ServerSyncManager {
    * Reparse file to sync engine state with server
    * Called after undo/redo to ensure consistency
    */
-  async reparseFile(filePath: string): Promise<any> {
+  async reparseFile(filePath: string): Promise<Record<string, unknown>> {
     const response = await authFetch(
-      `${this.baseUrl}/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`
+      `${this.baseUrl}/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`,
     );
 
     if (!response.ok) {
-      throw new Error("Failed to reparse component file");
+      throw new Error('Failed to reparse component file');
     }
 
     return response.json();

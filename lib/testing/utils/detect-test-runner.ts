@@ -47,10 +47,7 @@ async function findPackageJson(startPath: string): Promise<string | null> {
  * @param componentPath - Path to the component file
  * @param packageManager - Package manager from project settings (npm, yarn, pnpm, bun)
  */
-export async function detectTestRunner(
-  componentPath: string,
-  packageManager?: string,
-): Promise<TestRunner> {
+export async function detectTestRunner(componentPath: string, packageManager?: string): Promise<TestRunner> {
   const packageJsonPath = await findPackageJson(componentPath);
 
   // Fallback based on package manager: bun if packageManager is bun, otherwise vitest

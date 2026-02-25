@@ -5,23 +5,23 @@
  * this operation works with AST elements in iframe components
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import type { ASTApiService } from '../services/ASTApiService';
-import { BaseOperation } from "./Operation";
 import { getPreviewIframe } from '@/lib/dom-utils';
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
+import type { ASTApiService } from '../services/ASTApiService';
+import { BaseOperation } from './Operation';
 
 export interface ASTUpdateOperationParams {
   elementId: string;
   filePath: string;
   propName: string;
-  propValue: any;
+  propValue: unknown;
 }
 
 export class ASTUpdateOperation extends BaseOperation {
-  name = "AST Update";
+  name = 'AST Update';
   private params: ASTUpdateOperationParams;
-  private oldValue?: any;
+  private oldValue?: unknown;
 
   constructor(api: ASTApiService, params: ASTUpdateOperationParams) {
     super(api);
@@ -45,7 +45,7 @@ export class ASTUpdateOperation extends BaseOperation {
   /**
    * Execute operation - update prop via API and apply to DOM
    */
-  execute(tree: DocumentTree): OperationResult {
+  execute(_tree: DocumentTree): OperationResult {
     try {
       // Store old value for undo (get from DOM)
       this.oldValue = this.getPropFromDOM(this.params.elementId, this.params.propName);
@@ -71,9 +71,9 @@ export class ASTUpdateOperation extends BaseOperation {
   /**
    * Undo operation - restore old value
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (this.oldValue === undefined) {
-      return this.error("No old value to restore");
+      return this.error('No old value to restore');
     }
 
     try {
@@ -94,15 +94,13 @@ export class ASTUpdateOperation extends BaseOperation {
   /**
    * Get prop value from DOM
    */
-  private getPropFromDOM(elementId: string, propName: string): any {
+  private getPropFromDOM(elementId: string, propName: string): string | null | undefined {
     const iframe = getPreviewIframe();
     if (!iframe?.contentDocument) {
       return undefined;
     }
 
-    const element = iframe.contentDocument.querySelector(
-      `[data-uniq-id="${elementId}"]`
-    ) as HTMLElement;
+    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
 
     if (!element) {
       return undefined;
@@ -123,16 +121,14 @@ export class ASTUpdateOperation extends BaseOperation {
   /**
    * Apply prop change to DOM in iframe (instant feedback)
    */
-  private applyPropToDOM(elementId: string, propName: string, propValue: any): void {
+  private applyPropToDOM(elementId: string, propName: string, propValue: unknown): void {
     const iframe = getPreviewIframe();
     if (!iframe?.contentDocument) {
       console.warn('[ASTUpdateOperation] Iframe not found');
       return;
     }
 
-    const element = iframe.contentDocument.querySelector(
-      `[data-uniq-id="${elementId}"]`
-    ) as HTMLElement;
+    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
 
     if (!element) {
       console.warn('[ASTUpdateOperation] Element not found in iframe:', elementId);
@@ -141,11 +137,11 @@ export class ASTUpdateOperation extends BaseOperation {
 
     // Apply prop to DOM
     if (propName === 'className') {
-      element.className = propValue || '';
+      element.className = String(propValue ?? '');
     } else if (propName === 'text') {
-      element.textContent = propValue || '';
+      element.textContent = String(propValue ?? '');
     } else if (propName === 'style') {
-      element.setAttribute('style', propValue || '');
+      element.setAttribute('style', String(propValue ?? ''));
     } else {
       // For other props, set as attribute
       if (propValue === null || propValue === undefined) {
@@ -161,7 +157,7 @@ export class ASTUpdateOperation extends BaseOperation {
   /**
    * Sync prop change to file via API
    */
-  private async syncToFile(valueOverride?: any): Promise<void> {
+  private async syncToFile(valueOverride?: unknown): Promise<void> {
     const propValue = valueOverride !== undefined ? valueOverride : this.params.propValue;
 
     // Use different API method for text updates
@@ -169,7 +165,7 @@ export class ASTUpdateOperation extends BaseOperation {
       const result = await this.api.updateText({
         selectedId: this.params.elementId,
         filePath: this.params.filePath,
-        text: propValue,
+        text: String(propValue ?? ''),
       });
       if (!result.success) {
         throw new Error(result.error || 'Failed to update text on server');

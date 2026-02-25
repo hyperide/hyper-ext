@@ -9,11 +9,7 @@ import type { ViewportState } from '@/../../shared/types/canvas';
  * Transform viewport coordinates to iframe coordinates
  * Used when reading mouse position to update iframe element positions
  */
-export function viewportToIframe(
-  x: number,
-  y: number,
-  viewport: ViewportState
-): { x: number; y: number } {
+export function viewportToIframe(x: number, y: number, viewport: ViewportState): { x: number; y: number } {
   return {
     x: (x - viewport.panX) / viewport.zoom,
     y: (y - viewport.panY) / viewport.zoom,
@@ -24,11 +20,7 @@ export function viewportToIframe(
  * Transform iframe coordinates to viewport coordinates
  * Used when rendering overlays on top of iframe elements
  */
-export function iframeToViewport(
-  x: number,
-  y: number,
-  viewport: ViewportState
-): { x: number; y: number } {
+export function iframeToViewport(x: number, y: number, viewport: ViewportState): { x: number; y: number } {
   return {
     x: x * viewport.zoom + viewport.panX,
     y: y * viewport.zoom + viewport.panY,
@@ -53,7 +45,7 @@ export function calculateFitToContentZoom(
   contentHeight: number,
   viewportWidth: number,
   viewportHeight: number,
-  padding = 40
+  padding = 40,
 ): number {
   const scaleX = (viewportWidth - padding * 2) / contentWidth;
   const scaleY = (viewportHeight - padding * 2) / contentHeight;

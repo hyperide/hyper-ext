@@ -1,7 +1,7 @@
-import { IconPlus, IconX, IconSparkles } from '@tabler/icons-react';
+import { IconPlus, IconSparkles, IconX } from '@tabler/icons-react';
 import cn from 'clsx';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface PathArrayInputProps {
   label: string;
@@ -40,7 +40,7 @@ export function PathArrayInput({
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <span className="text-sm font-medium text-gray-700">{label}</span>
         {isAIDetected && (
           <span className="flex items-center gap-1 text-xs text-blue-600">
             <IconSparkles className="w-3 h-3" />
@@ -48,15 +48,14 @@ export function PathArrayInput({
           </span>
         )}
       </div>
-      {description && (
-        <p className="text-xs text-gray-500">{description}</p>
-      )}
+      {description && <p className="text-xs text-gray-500">{description}</p>}
 
       <div className="space-y-2">
         {value.length === 0 ? (
           <p className="text-xs text-gray-400 italic">No paths configured</p>
         ) : (
           value.map((path, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: array items have no stable unique identifier
             <div key={index} className="flex items-center gap-2">
               <Input
                 type="text"
@@ -78,13 +77,7 @@ export function PathArrayInput({
         )}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleAdd}
-        className="w-full h-8"
-      >
+      <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="w-full h-8">
         <IconPlus className="w-4 h-4 mr-1" />
         Add path
       </Button>

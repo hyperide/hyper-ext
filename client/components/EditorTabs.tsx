@@ -1,4 +1,4 @@
-import { IconX, IconCircleFilled } from '@tabler/icons-react';
+import { IconCircleFilled, IconX } from '@tabler/icons-react';
 
 interface EditorTab {
   path: string;
@@ -28,19 +28,17 @@ export default function EditorTabs({ tabs, activeTab, onTabClick, onTabClose, di
           type="button"
           onClick={() => onTabClick(tab.path)}
           className={`group h-full px-3 flex items-center gap-2 border-r border-border min-w-0 max-w-[200px] ${
-            activeTab === tab.path
-              ? 'bg-background'
-              : 'bg-muted hover:bg-accent'
+            activeTab === tab.path ? 'bg-background' : 'bg-muted hover:bg-accent'
           }`}
         >
-          <span className={`text-xs truncate ${
-            activeTab === tab.path ? 'font-medium text-foreground' : 'text-muted-foreground'
-          }`}>
+          <span
+            className={`text-xs truncate ${
+              activeTab === tab.path ? 'font-medium text-foreground' : 'text-muted-foreground'
+            }`}
+          >
             {tab.filename}
           </span>
-          {tab.isDirty && (
-            <IconCircleFilled className="w-2 h-2 text-blue-500 flex-shrink-0" />
-          )}
+          {tab.isDirty && <IconCircleFilled className="w-2 h-2 text-blue-500 flex-shrink-0" />}
           <button
             type="button"
             onClick={(e) => {

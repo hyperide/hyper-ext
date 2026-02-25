@@ -3,16 +3,13 @@
  */
 
 import { toast } from '@/hooks/use-toast';
-import { authFetch } from '@/utils/authFetch';
 import { getPreviewIframe } from '@/lib/dom-utils';
+import { authFetch } from '@/utils/authFetch';
 
 /**
  * Copy element as TSX code to system clipboard
  */
-export async function copyElementAsTSX(
-  elementId: string,
-  filePath: string,
-): Promise<boolean> {
+export async function copyElementAsTSX(elementId: string, filePath: string): Promise<boolean> {
   try {
     const response = await authFetch('/api/copy-element-tsx', {
       method: 'POST',
@@ -54,10 +51,7 @@ export async function copyElementAsTSX(
 /**
  * Build CSS selector for element with optional instance scope
  */
-function buildElementSelector(
-  elementId: string,
-  instanceId?: string | null,
-): string {
+function buildElementSelector(elementId: string, instanceId?: string | null): string {
   if (instanceId) {
     return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`;
   }
@@ -106,7 +100,10 @@ export async function copyMultipleElementsAsTSX(
         }
         return 0;
       });
-      console.log('[TSX Clipboard] Sorted elements by DOM order:', sortedIds.map(id => id.substring(0, 8)));
+      console.log(
+        '[TSX Clipboard] Sorted elements by DOM order:',
+        sortedIds.map((id) => id.substring(0, 8)),
+      );
     }
 
     // Fetch TSX for each element
@@ -138,7 +135,9 @@ export async function copyMultipleElementsAsTSX(
 
     // Copy to system clipboard
     await navigator.clipboard.writeText(combinedTsx);
-    console.log(`[TSX Clipboard] Copied ${elementIds.length} elements to clipboard: ${combinedTsx.substring(0, 100)}...`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    console.log(
+      `[TSX Clipboard] Copied ${elementIds.length} elements to clipboard: ${combinedTsx.substring(0, 100)}...`,
+    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     toast({
       title: 'Copied',
       description: `${elementIds.length} elements copied to clipboard`,
@@ -158,10 +157,7 @@ export async function copyMultipleElementsAsTSX(
 /**
  * Paste TSX code from system clipboard and insert into parent
  */
-export async function pasteElementFromTSX(
-  parentId: string | null,
-  filePath: string,
-): Promise<string | null> {
+export async function pasteElementFromTSX(parentId: string | null, filePath: string): Promise<string | null> {
   try {
     // Read TSX code from clipboard
     const tsxCode = await navigator.clipboard.readText();
@@ -177,7 +173,7 @@ export async function pasteElementFromTSX(
       return null;
     }
 
-    console.log('[TSX Clipboard] Pasting TSX from clipboard:', tsxCode.substring(0, 100) + '...');
+    console.log('[TSX Clipboard] Pasting TSX from clipboard:', `${tsxCode.substring(0, 100)}...`);
 
     // Call API to paste element
     const response = await authFetch('/api/paste-element', {

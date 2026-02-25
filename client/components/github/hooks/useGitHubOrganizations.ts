@@ -1,11 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { useAuthStore } from "@/stores/authStore";
-import { authFetch } from "@/utils/authFetch";
-import type {
-  GitHubOrganization,
-  GitHubUser,
-  OrganizationsResponse,
-} from "../types";
+import { useCallback, useEffect, useState } from 'react';
+import { useAuthStore } from '@/stores/authStore';
+import { authFetch } from '@/utils/authFetch';
+import type { GitHubOrganization, GitHubUser, OrganizationsResponse } from '../types';
 
 interface UseGitHubOrganizationsResult {
   organizations: GitHubOrganization[];
@@ -24,7 +20,7 @@ export function useGitHubOrganizations(): UseGitHubOrganizationsResult {
 
   const fetchOrganizations = useCallback(async () => {
     if (!accessToken) {
-      setError("Not authenticated");
+      setError('Not authenticated');
       setLoading(false);
       return;
     }
@@ -33,21 +29,21 @@ export function useGitHubOrganizations(): UseGitHubOrganizationsResult {
     setError(null);
 
     try {
-      const response = await authFetch("/api/github/organizations");
+      const response = await authFetch('/api/github/organizations');
 
       if (!response.ok) {
         if (response.status === 401) {
-          setError("Not authenticated with GitHub");
+          setError('Not authenticated with GitHub');
           return;
         }
-        throw new Error("Failed to fetch organizations");
+        throw new Error('Failed to fetch organizations');
       }
 
       const data: OrganizationsResponse = await response.json();
       setOrganizations(data.organizations);
       setUser(data.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }

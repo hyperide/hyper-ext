@@ -1,16 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { IconAlertCircle, IconLoader2, IconRefresh } from '@tabler/icons-react';
+import cn from 'clsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authFetch } from '@/utils/authFetch';
+import { useTheme } from '@/components/ThemeProvider';
+import { Button } from '@/components/ui/button';
 import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
-import { useTheme } from '@/components/ThemeProvider';
-import {
-  IconLoader2,
-  IconAlertCircle,
-  IconRefresh,
-} from '@tabler/icons-react';
-import { Button } from '@/components/ui/button';
-import cn from 'clsx';
+import { authFetch } from '@/utils/authFetch';
 
 interface CodeServerIDEProps {
   projectId: string;
@@ -82,7 +78,7 @@ export function CodeServerIDE({
         setState((prev) => (prev === 'ready' ? 'ready' : 'loading'));
       }
     },
-    [onError, onGoToVisual]
+    [onError, onGoToVisual],
   );
 
   // SSE connection for real-time status updates
@@ -150,12 +146,12 @@ export function CodeServerIDE({
         const status: IDEStatus = await response.json();
 
         if (status.running && status.ideUrl) {
-          clearInterval(pollingRef.current!);
+          if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setIdeUrl(status.ideUrl);
           setState('loading');
         } else if (attempts >= maxAttempts) {
-          clearInterval(pollingRef.current!);
+          if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setError('IDE startup timeout');
           setState('error');
@@ -268,10 +264,7 @@ export function CodeServerIDE({
       // IDE asks for current theme
       if (event.data?.type === 'hypercanvas:getTheme') {
         // nosemgrep: wildcard-postmessage-configuration -- iframe communication, origin varies between SaaS and VS Code webview
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: 'hypercanvas:currentTheme', theme },
-          '*'
-        );
+        iframeRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:currentTheme', theme }, '*');
       }
     };
 
@@ -296,12 +289,7 @@ export function CodeServerIDE({
   // Render loading state
   if (state === 'starting') {
     return (
-      <div
-        className={cn(
-          'flex flex-col items-center justify-center h-full bg-background',
-          className
-        )}
-      >
+      <div className={cn('flex flex-col items-center justify-center h-full bg-background', className)}>
         <IconLoader2 className="w-8 h-8 animate-spin text-muted-foreground mb-4" />
         <p className="text-muted-foreground">Starting code-server IDE...</p>
         <p className="text-xs text-muted-foreground mt-2">This may take a few minutes</p>
@@ -312,12 +300,7 @@ export function CodeServerIDE({
   // Render error state
   if (state === 'error') {
     return (
-      <div
-        className={cn(
-          'flex flex-col items-center justify-center h-full bg-background',
-          className
-        )}
-      >
+      <div className={cn('flex flex-col items-center justify-center h-full bg-background', className)}>
         <IconAlertCircle className="w-8 h-8 text-destructive mb-4" />
         <p className="text-destructive mb-4">{error || 'Failed to start IDE'}</p>
         <Button onClick={restartIDE} variant="outline">
@@ -331,12 +314,7 @@ export function CodeServerIDE({
   // Render stopped state
   if (state === 'stopped') {
     return (
-      <div
-        className={cn(
-          'flex flex-col items-center justify-center h-full bg-background',
-          className
-        )}
-      >
+      <div className={cn('flex flex-col items-center justify-center h-full bg-background', className)}>
         <p className="text-muted-foreground mb-4">IDE is not running</p>
         <Button onClick={startIDE}>Start IDE</Button>
       </div>

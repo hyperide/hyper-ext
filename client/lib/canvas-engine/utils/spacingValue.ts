@@ -75,11 +75,7 @@ export function isPairedSpacing(first: string, second: string): boolean {
  * - If input is single value: update first value, keep second unchanged
  *   (or sync second if they were equal before)
  */
-export function handleSpacingInput(
-  inputValue: string,
-  currentFirst: string,
-  currentSecond: string,
-): SpacingPair {
+export function handleSpacingInput(inputValue: string, currentFirst: string, currentSecond: string): SpacingPair {
   const trimmed = inputValue.trim();
 
   // If input contains comma, parse as pair
@@ -134,11 +130,7 @@ export function isZeroValue(value: string): boolean {
  * @param second - Second value (bottom or right)
  * @param isLinked - Whether showing 4 separate fields (true) or 2 combined fields (false)
  */
-export function getSpacingDisplayValue(
-  first: string,
-  second: string,
-  isLinked: boolean,
-): string {
+export function getSpacingDisplayValue(first: string, second: string, isLinked: boolean): string {
   if (isLinked) {
     // 4 fields mode: show individual value
     return first;
@@ -195,10 +187,7 @@ export function updateSpacingFromInput(
  * @param cursorPosition - The cursor position in the input
  * @returns 'first' if cursor is before comma, 'second' if after
  */
-export function getCursorPart(
-  displayValue: string,
-  cursorPosition: number,
-): 'first' | 'second' {
+export function getCursorPart(displayValue: string, cursorPosition: number): 'first' | 'second' {
   const commaIndex = displayValue.indexOf(',');
 
   // No comma - single value, always 'first'
@@ -218,9 +207,7 @@ export function getCursorPart(
  * @example "auto" => null
  * @example "0" => { value: 0, unit: "" }
  */
-export function parseNumericValue(
-  str: string,
-): { value: number; unit: string } | null {
+export function parseNumericValue(str: string): { value: number; unit: string } | null {
   const trimmed = str.trim();
 
   if (!trimmed || trimmed === 'auto') {
@@ -250,11 +237,7 @@ export function parseNumericValue(
  * @param step - Step size (default 1 for integers, 0.25 for rem)
  * @returns New value string
  */
-export function incrementSpacingValue(
-  currentValue: string,
-  delta: number,
-  step?: number,
-): string {
+export function incrementSpacingValue(currentValue: string, delta: number, step?: number): string {
   const parsed = parseNumericValue(currentValue);
 
   if (!parsed) {
@@ -267,8 +250,7 @@ export function incrementSpacingValue(
   }
 
   // Determine step based on unit
-  const actualStep =
-    step ?? (parsed.unit === 'rem' || parsed.unit === 'em' ? 0.25 : 1);
+  const actualStep = step ?? (parsed.unit === 'rem' || parsed.unit === 'em' ? 0.25 : 1);
 
   const newValue = parsed.value + delta * actualStep;
 

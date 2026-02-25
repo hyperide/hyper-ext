@@ -67,30 +67,30 @@ export function createDebouncedSync(delay = 300) {
     isProcessing = true;
 
     try {
-      const response = await authFetch("/api/update-component-styles", {
-        method: "POST",
+      const response = await authFetch('/api/update-component-styles', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(updateToProcess),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        console.error("Failed to sync styles:", error);
+        console.error('Failed to sync styles:', error);
         return {
           success: false,
-          error: error.error || "Unknown error",
+          error: error.error || 'Unknown error',
         };
       }
 
       const result = await response.json();
       return result as SyncResult;
     } catch (error) {
-      console.error("Error syncing styles:", error);
+      console.error('Error syncing styles:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     } finally {
       isProcessing = false;
@@ -102,10 +102,12 @@ export function createDebouncedSync(delay = 300) {
    */
   const sync = (update: StyleUpdate) => {
     // Merge styles if updating the same element
-    if (lastUpdate &&
-        lastUpdate.selectedId === update.selectedId &&
-        lastUpdate.instanceId === update.instanceId &&
-        lastUpdate.filePath === update.filePath) {
+    if (
+      lastUpdate &&
+      lastUpdate.selectedId === update.selectedId &&
+      lastUpdate.instanceId === update.instanceId &&
+      lastUpdate.filePath === update.filePath
+    ) {
       // Merge styles
       lastUpdate = {
         ...lastUpdate,

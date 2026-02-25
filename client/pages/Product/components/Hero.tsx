@@ -1,7 +1,7 @@
-import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/stores/authStore';
 import { IconBrandGithub, IconPlayerPlay } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function Hero() {
   // Use actual auth state instead of just localStorage flag
@@ -35,8 +35,8 @@ export default function Hero() {
 
           {/* Subheadline */}
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl">
-            Edit React components like Figma. Generate production-ready code with AI.
-            Works with Next.js, Vite, and Remix.
+            Edit React components like Figma. Generate production-ready code with AI. Works with Next.js, Vite, and
+            Remix.
           </p>
 
           {/* CTA Buttons */}
@@ -48,11 +48,7 @@ export default function Hero() {
               </Link>
             </Button>
             <Button size="lg" variant="outline" className="gap-2" asChild>
-              <a
-                href="https://github.com/hyperide/hypercanvas"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href="https://github.com/hyperide/hypercanvas" target="_blank" rel="noopener noreferrer">
                 <IconBrandGithub className="h-5 w-5" />
                 View on GitHub
               </a>

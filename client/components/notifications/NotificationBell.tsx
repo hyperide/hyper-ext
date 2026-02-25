@@ -1,28 +1,19 @@
 import { memo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationDropdown } from './NotificationDropdown';
-import { useNotifications, type Notification } from './useNotifications';
+import { type Notification, useNotifications } from './useNotifications';
 
 interface NotificationBellProps {
   onNavigateToComment?: (projectId: string, commentId: string) => void;
 }
 
-export const NotificationBell = memo(function NotificationBell({
-  onNavigateToComment,
-}: NotificationBellProps) {
+export const NotificationBell = memo(function NotificationBell({ onNavigateToComment }: NotificationBellProps) {
   const navigate = useNavigate();
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  const {
-    notifications,
-    unreadCount,
-    isLoading,
-    isConnected,
-    markAsRead,
-    markAllAsRead,
-    fetchNotifications,
-  } = useNotifications({ enabled: true });
+  const { notifications, unreadCount, isLoading, isConnected, markAsRead, markAllAsRead, fetchNotifications } =
+    useNotifications({ enabled: true });
 
   const handleNotificationClick = useCallback(
     (notification: Notification) => {

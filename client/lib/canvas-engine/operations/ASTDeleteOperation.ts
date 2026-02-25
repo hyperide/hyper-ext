@@ -5,10 +5,11 @@
  * this operation deletes AST elements from the source file.
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation } from "./Operation";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
+import type { ASTNode } from '../types/ast';
+import { BaseOperation } from './Operation';
 
 export interface ASTDeleteOperationParams {
   elementId: string;
@@ -16,9 +17,9 @@ export interface ASTDeleteOperationParams {
 }
 
 export class ASTDeleteOperation extends BaseOperation {
-  name = "ASTDelete";
+  name = 'ASTDelete';
   private params: ASTDeleteOperationParams;
-  private deletedElement?: any; // Store deleted element structure for undo
+  private deletedElement?: ASTNode; // Store deleted element structure for undo
   private parentId?: string; // Store parent ID for undo
   private elementIndex?: number; // Store position in parent for undo
 
@@ -53,7 +54,7 @@ export class ASTDeleteOperation extends BaseOperation {
   /**
    * Undo delete: restore the deleted element with original ID
    */
-  undo(tree: DocumentTree): OperationResult {
+  undo(_tree: DocumentTree): OperationResult {
     if (!this.deletedElement || this.parentId === undefined) {
       console.warn('[ASTDeleteOperation] No element data to restore');
       return this.error('No deleted element to restore');
@@ -83,7 +84,7 @@ export class ASTDeleteOperation extends BaseOperation {
   /**
    * Redo delete: delete the element again
    */
-  redo(tree: DocumentTree): OperationResult {
+  redo(_tree: DocumentTree): OperationResult {
     console.log('[ASTDeleteOperation] Redoing delete');
 
     // Delete element again
@@ -106,11 +107,11 @@ export class ASTDeleteOperation extends BaseOperation {
 
     // Helper to find element and its parent in AST
     const findElementWithParent = (
-      nodes: any[],
+      nodes: ASTNode[],
       targetId: string,
-      parent?: any,
-      index?: number
-    ): { element: any; parent: any; index: number } | null => {
+      parent?: ASTNode,
+      _index?: number,
+    ): { element: ASTNode; parent: ASTNode | undefined; index: number } | null => {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
         if (node.id === targetId) {
@@ -125,14 +126,20 @@ export class ASTDeleteOperation extends BaseOperation {
     };
 
     // Search in root.metadata.astStructure
-    if (root.metadata?.astStructure) {
-      const result = findElementWithParent(root.metadata.astStructure, this.params.elementId);
+    const astStructure = root.metadata?.astStructure;
+    if (Array.isArray(astStructure)) {
+      const result = findElementWithParent(astStructure as ASTNode[], this.params.elementId);
       if (result) {
         // Deep copy to avoid mutation issues
         this.deletedElement = JSON.parse(JSON.stringify(result.element));
         this.parentId = result.parent?.id || null;
         this.elementIndex = result.index;
-        console.log('[ASTDeleteOperation] Stored element:', this.params.elementId.substring(0, 8), 'at index', this.elementIndex);
+        console.log(
+          '[ASTDeleteOperation] Stored element:',
+          this.params.elementId.substring(0, 8),
+          'at index',
+          this.elementIndex,
+        );
         return;
       }
     }
@@ -141,14 +148,20 @@ export class ASTDeleteOperation extends BaseOperation {
     const rootChildren = root.children || [];
     for (const childId of rootChildren) {
       const inst = tree.getInstance(childId);
-      if (inst?.metadata?.astStructure) {
-        const result = findElementWithParent(inst.metadata.astStructure, this.params.elementId);
+      const childAst = inst?.metadata?.astStructure;
+      if (Array.isArray(childAst)) {
+        const result = findElementWithParent(childAst as ASTNode[], this.params.elementId);
         if (result) {
           // Deep copy to avoid mutation issues
           this.deletedElement = JSON.parse(JSON.stringify(result.element));
           this.parentId = result.parent?.id || null;
           this.elementIndex = result.index;
-          console.log('[ASTDeleteOperation] Stored element:', this.params.elementId.substring(0, 8), 'at index', this.elementIndex);
+          console.log(
+            '[ASTDeleteOperation] Stored element:',
+            this.params.elementId.substring(0, 8),
+            'at index',
+            this.elementIndex,
+          );
           return;
         }
       }
@@ -191,18 +204,24 @@ export class ASTDeleteOperation extends BaseOperation {
       throw new Error('No deleted element to restore');
     }
 
-    console.log('[ASTDeleteOperation] Restoring element:', this.deletedElement.id.substring(0, 8), 'at index', this.elementIndex);
+    console.log(
+      '[ASTDeleteOperation] Restoring element:',
+      this.deletedElement.id.substring(0, 8),
+      'at index',
+      this.elementIndex,
+    );
 
     // Use insert API to restore element with original ID and full structure
     // IMPORTANT: Only include 'children' parameter if the array is not empty
     // Otherwise it will overwrite props.children (text content)
-    const requestBody: any = {
-      parentId: this.parentId,
+    const requestBody = {
+      parentId: this.parentId ?? '',
       filePath: this.params.filePath,
       componentType: this.deletedElement.type,
-      props: this.deletedElement.props || {},
+      props: this.deletedElement.props ?? {},
       targetId: this.deletedElement.id, // Preserve original ID
       index: this.elementIndex, // Restore at exact position
+      children: undefined as ASTNode[] | undefined,
     };
 
     // Only add children parameter if array has elements

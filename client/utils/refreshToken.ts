@@ -11,9 +11,7 @@
 
 import { useAuthStore } from '../stores/authStore';
 
-export type RefreshResult =
-  | { ok: true; accessToken: string }
-  | { ok: false; code: string; status: number };
+export type RefreshResult = { ok: true; accessToken: string } | { ok: false; code: string; status: number };
 
 // Singleton promise to deduplicate concurrent refresh calls
 let refreshPromise: Promise<RefreshResult> | null = null;

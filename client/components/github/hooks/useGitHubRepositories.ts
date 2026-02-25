@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuthStore } from "@/stores/authStore";
-import { authFetch } from "@/utils/authFetch";
-import type { GitHubRepository, RepositoriesResponse } from "../types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuthStore } from '@/stores/authStore';
+import { authFetch } from '@/utils/authFetch';
+import type { GitHubRepository, RepositoriesResponse } from '../types';
 
 interface UseGitHubRepositoriesOptions {
   org?: string | null;
@@ -23,15 +23,11 @@ interface UseGitHubRepositoriesResult {
   refetch: () => Promise<void>;
 }
 
-export function useGitHubRepositories(
-  options: UseGitHubRepositoriesOptions = {},
-): UseGitHubRepositoriesResult {
+export function useGitHubRepositories(options: UseGitHubRepositoriesOptions = {}): UseGitHubRepositoriesResult {
   const { org, search, perPage = 20, enabled = true, sort = 'name' } = options;
 
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
-  const [existingProjectIds, setExistingProjectIds] = useState<
-    Record<string, string>
-  >({});
+  const [existingProjectIds, setExistingProjectIds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -52,20 +48,20 @@ export function useGitHubRepositories(
 
       try {
         const params = new URLSearchParams();
-        if (org) params.set("org", org);
-        if (search) params.set("search", search);
-        params.set("page", pageNum.toString());
-        params.set("perPage", perPage.toString());
-        if (sort) params.set("sort", sort);
+        if (org) params.set('org', org);
+        if (search) params.set('search', search);
+        params.set('page', pageNum.toString());
+        params.set('perPage', perPage.toString());
+        if (sort) params.set('sort', sort);
 
         const response = await authFetch(`/api/github/repositories?${params}`);
 
         if (!response.ok) {
           if (response.status === 401) {
-            setError("Not authenticated with GitHub");
+            setError('Not authenticated with GitHub');
             return;
           }
-          throw new Error("Failed to fetch repositories");
+          throw new Error('Failed to fetch repositories');
         }
 
         const data: RepositoriesResponse = await response.json();
@@ -81,7 +77,7 @@ export function useGitHubRepositories(
         setTotalCount(data.totalCount);
         setPage(pageNum);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
+        setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -102,23 +98,10 @@ export function useGitHubRepositories(
 
   // Initial fetch
   useEffect(() => {
-    if (
-      enabled &&
-      accessToken &&
-      repositories.length === 0 &&
-      !loading &&
-      !error
-    ) {
+    if (enabled && accessToken && repositories.length === 0 && !loading && !error) {
       fetchRepositories(1, false);
     }
-  }, [
-    enabled,
-    accessToken,
-    repositories.length,
-    loading,
-    error,
-    fetchRepositories,
-  ]);
+  }, [enabled, accessToken, repositories.length, loading, error, fetchRepositories]);
 
   const loadMore = useCallback(() => {
     if (!loading && hasMore) {

@@ -9,68 +9,59 @@ import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
 import { BaseOperation } from './Operation';
 
-export type FileChangeSource =
-	| 'ui-editor'
-	| 'ai-agent'
-	| 'code-server'
-	| 'code-editor'
-	| 'external';
+export type FileChangeSource = 'ui-editor' | 'ai-agent' | 'code-server' | 'code-editor' | 'external';
 
 export interface FileSnapshotOperationParams {
-	filePath: string;
-	undoSnapshotId?: number;
-	redoSnapshotId?: number;
-	source: FileChangeSource;
-	description: string;
+  filePath: string;
+  undoSnapshotId?: number;
+  redoSnapshotId?: number;
+  source: FileChangeSource;
+  description: string;
 }
 
 export class FileSnapshotOperation extends BaseOperation {
-	name: string;
-	_pendingPromise?: Promise<void>;
+  name: string;
+  _pendingPromise?: Promise<void>;
 
-	private filePath: string;
-	private undoSnapshotId?: number;
-	private redoSnapshotId?: number;
+  private filePath: string;
+  private undoSnapshotId?: number;
+  private redoSnapshotId?: number;
 
-	constructor(api: ASTApiService, params: FileSnapshotOperationParams) {
-		super(api);
-		this.filePath = params.filePath;
-		this.undoSnapshotId = params.undoSnapshotId;
-		this.redoSnapshotId = params.redoSnapshotId;
-		this.source = params.source;
-		this.name = `File Change (${params.source}): ${params.description}`;
-	}
+  constructor(api: ASTApiService, params: FileSnapshotOperationParams) {
+    super(api);
+    this.filePath = params.filePath;
+    this.undoSnapshotId = params.undoSnapshotId;
+    this.redoSnapshotId = params.redoSnapshotId;
+    this.source = params.source;
+    this.name = `File Change (${params.source}): ${params.description}`;
+  }
 
-	execute(_tree: DocumentTree): OperationResult {
-		// No-op — the change already happened externally
-		return this.success();
-	}
+  execute(_tree: DocumentTree): OperationResult {
+    // No-op — the change already happened externally
+    return this.success();
+  }
 
-	undo(_tree: DocumentTree): OperationResult {
-		if (this.undoSnapshotId === undefined) {
-			return this.success(); // No undo snapshot = new file, nothing to restore
-		}
+  undo(_tree: DocumentTree): OperationResult {
+    if (this.undoSnapshotId === undefined) {
+      return this.success(); // No undo snapshot = new file, nothing to restore
+    }
 
-		this._pendingPromise = this.api
-			.restoreFileSnapshot(this.undoSnapshotId, this.filePath)
-			.catch((error) => {
-				console.error('[FileSnapshotOperation] Undo failed:', error);
-			});
+    this._pendingPromise = this.api.restoreFileSnapshot(this.undoSnapshotId, this.filePath).catch((error) => {
+      console.error('[FileSnapshotOperation] Undo failed:', error);
+    });
 
-		return this.success();
-	}
+    return this.success();
+  }
 
-	redo(_tree: DocumentTree): OperationResult {
-		if (this.redoSnapshotId === undefined) {
-			return this.success(); // No redo snapshot = deleted file, nothing to restore
-		}
+  redo(_tree: DocumentTree): OperationResult {
+    if (this.redoSnapshotId === undefined) {
+      return this.success(); // No redo snapshot = deleted file, nothing to restore
+    }
 
-		this._pendingPromise = this.api
-			.restoreFileSnapshot(this.redoSnapshotId, this.filePath)
-			.catch((error) => {
-				console.error('[FileSnapshotOperation] Redo failed:', error);
-			});
+    this._pendingPromise = this.api.restoreFileSnapshot(this.redoSnapshotId, this.filePath).catch((error) => {
+      console.error('[FileSnapshotOperation] Redo failed:', error);
+    });
 
-		return this.success();
-	}
+    return this.success();
+  }
 }

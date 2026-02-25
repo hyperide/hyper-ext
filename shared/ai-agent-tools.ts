@@ -285,7 +285,8 @@ export const SHELL_TOOLS: ToolDefinition[] = [BASH_EXEC, GIT_COMMAND];
 
 export const ASK_USER: ToolDefinition = {
   name: 'ask_user',
-  description: 'Ask the user a clarifying question and wait for their response. Use when you need more information to proceed.',
+  description:
+    'Ask the user a clarifying question and wait for their response. Use when you need more information to proceed.',
   input_schema: {
     type: 'object',
     properties: {
@@ -394,7 +395,8 @@ export const BROWSER_TYPE: ToolDefinition = {
 
 export const BROWSER_SNAPSHOT: ToolDefinition = {
   name: 'browser_snapshot',
-  description: 'Get accessibility tree of the page (DOM structure for interaction). Call this before browser_click or browser_type.',
+  description:
+    'Get accessibility tree of the page (DOM structure for interaction). Call this before browser_click or browser_type.',
   input_schema: {
     type: 'object',
     properties: {},
@@ -435,7 +437,8 @@ export const BROWSER_TOOLS: ToolDefinition[] = [
 
 export const CANVAS_CREATE_INSTANCE: ToolDefinition = {
   name: 'canvas_create_instance',
-  description: 'Create a new component instance on the canvas with specific props for UX flow. Use this to show a component in different states.',
+  description:
+    'Create a new component instance on the canvas with specific props for UX flow. Use this to show a component in different states.',
   input_schema: {
     type: 'object',
     properties: {
@@ -582,7 +585,8 @@ export const CANVAS_ADD_ANNOTATION: ToolDefinition = {
 
 export const CANVAS_MODIFY_MAP_ITEMS: ToolDefinition = {
   name: 'canvas_modify_map_items',
-  description: 'Add or remove items in an array prop that is used in .map() iteration. Use to change how many items appear in a list/grid.',
+  description:
+    'Add or remove items in an array prop that is used in .map() iteration. Use to change how many items appear in a list/grid.',
   input_schema: {
     type: 'object',
     properties: {
@@ -609,7 +613,8 @@ export const CANVAS_MODIFY_MAP_ITEMS: ToolDefinition = {
 
 export const CANVAS_MODIFY_COND_ITEM: ToolDefinition = {
   name: 'canvas_modify_cond_item',
-  description: 'Toggle a boolean prop that controls conditional rendering (e.g., isLoading, isError, isOpen). Use to show/hide conditional elements.',
+  description:
+    'Toggle a boolean prop that controls conditional rendering (e.g., isLoading, isError, isOpen). Use to show/hide conditional elements.',
   input_schema: {
     type: 'object',
     properties: {
@@ -636,7 +641,8 @@ export const CANVAS_MODIFY_COND_ITEM: ToolDefinition = {
 
 export const CANVAS_AUTO_GENERATE_VARIANTS: ToolDefinition = {
   name: 'canvas_auto_generate_variants',
-  description: 'Auto-generate test variants for a component in canvas.json. Analyzes component props and CVA variants to create instances for different states (default, disabled, loading, error, etc.).',
+  description:
+    'Auto-generate test variants for a component in canvas.json. Analyzes component props and CVA variants to create instances for different states (default, disabled, loading, error, etc.).',
   input_schema: {
     type: 'object',
     properties: {
@@ -647,7 +653,8 @@ export const CANVAS_AUTO_GENERATE_VARIANTS: ToolDefinition = {
       strategy: {
         type: 'string',
         enum: ['minimal', 'comprehensive'],
-        description: 'Generation strategy: minimal (default + key states) or comprehensive (all combinations). Default: minimal',
+        description:
+          'Generation strategy: minimal (default + key states) or comprehensive (all combinations). Default: minimal',
       },
       layout: {
         type: 'string',
@@ -717,7 +724,8 @@ export const CANVAS_TOOLS: ToolDefinition[] = [
 
 export const GENERATE_TESTS: ToolDefinition = {
   name: 'generate_tests',
-  description: 'Generate tests for a React component. Creates unit tests (bun:test), E2E tests (Playwright), visual snapshots, and component variants with different props.',
+  description:
+    'Generate tests for a React component. Creates unit tests (bun:test), E2E tests (Playwright), visual snapshots, and component variants with different props.',
   input_schema: {
     type: 'object',
     properties: {
@@ -744,7 +752,8 @@ export const GENERATE_TESTS: ToolDefinition = {
 
 export const ANALYZE_COMPONENT_TESTS: ToolDefinition = {
   name: 'analyze_component_tests',
-  description: 'Analyze a component to find interactive elements and suggest test coverage. Returns information about buttons, inputs, variants, and other testable elements.',
+  description:
+    'Analyze a component to find interactive elements and suggest test coverage. Returns information about buttons, inputs, variants, and other testable elements.',
   input_schema: {
     type: 'object',
     properties: {
@@ -759,7 +768,8 @@ export const ANALYZE_COMPONENT_TESTS: ToolDefinition = {
 
 export const RUN_TESTS: ToolDefinition = {
   name: 'run_tests',
-  description: 'Run tests for specified test files in the project Docker container. Returns test results including passed/failed counts, output logs, and any configuration errors.',
+  description:
+    'Run tests for specified test files in the project Docker container. Returns test results including passed/failed counts, output logs, and any configuration errors.',
   input_schema: {
     type: 'object',
     properties: {
@@ -785,7 +795,8 @@ export const TEST_TOOLS: ToolDefinition[] = [GENERATE_TESTS, ANALYZE_COMPONENT_T
 
 export const RESTART_DEV_SERVER: ToolDefinition = {
   name: 'restart_dev_server',
-  description: 'Restart the development server for the current project. Use this tool after modifying database models, configuration files, environment variables, or when the server crashes or becomes unresponsive. Returns server logs after restart.',
+  description:
+    'Restart the development server for the current project. Use this tool after modifying database models, configuration files, environment variables, or when the server crashes or becomes unresponsive. Returns server logs after restart.',
   input_schema: {
     type: 'object',
     properties: {
@@ -799,7 +810,8 @@ export const RESTART_DEV_SERVER: ToolDefinition = {
 
 export const GET_CONTAINER_LOGS: ToolDefinition = {
   name: 'get_container_logs',
-  description: 'Get recent container logs from the project dev server. Use this to debug startup issues, runtime errors, build failures, or investigate why the application is not working.',
+  description:
+    'Get recent container logs from the project dev server. Use this to debug startup issues, runtime errors, build failures, or investigate why the application is not working.',
   input_schema: {
     type: 'object',
     properties: {
@@ -809,7 +821,8 @@ export const GET_CONTAINER_LOGS: ToolDefinition = {
       },
       includePrevious: {
         type: 'boolean',
-        description: 'Include logs from before the last container restart (useful for crash debugging). Only works in Kubernetes mode.',
+        description:
+          'Include logs from before the last container restart (useful for crash debugging). Only works in Kubernetes mode.',
       },
       includeEvents: {
         type: 'boolean',
@@ -827,7 +840,8 @@ export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_CONTAINER
 
 export const BRAVE_WEB_SEARCH: ToolDefinition = {
   name: 'brave_web_search',
-  description: 'Search the web using Brave Search API. Returns titles, URLs, and descriptions of search results. Use this to find information, documentation, examples, or solutions online.',
+  description:
+    'Search the web using Brave Search API. Returns titles, URLs, and descriptions of search results. Use this to find information, documentation, examples, or solutions online.',
   input_schema: {
     type: 'object',
     properties: {
@@ -846,7 +860,8 @@ export const BRAVE_WEB_SEARCH: ToolDefinition = {
 
 export const URL_FETCH: ToolDefinition = {
   name: 'url_fetch',
-  description: 'Fetch content from a URL and convert HTML to readable Markdown. Use this to read documentation pages, articles, or any web content. Returns cleaned text without HTML tags.',
+  description:
+    'Fetch content from a URL and convert HTML to readable Markdown. Use this to read documentation pages, articles, or any web content. Returns cleaned text without HTML tags.',
   input_schema: {
     type: 'object',
     properties: {
@@ -871,7 +886,8 @@ export const WEB_TOOLS: ToolDefinition[] = [BRAVE_WEB_SEARCH, URL_FETCH];
 
 export const CHECK_BUILD_STATUS: ToolDefinition = {
   name: 'check_build_status',
-  description: 'Wait for build to settle and check if the dev server has build errors or runtime errors. Use after editing files to verify the fix worked.',
+  description:
+    'Wait for build to settle and check if the dev server has build errors or runtime errors. Use after editing files to verify the fix worked.',
   input_schema: {
     type: 'object',
     properties: {

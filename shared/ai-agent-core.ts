@@ -46,7 +46,11 @@ export type ContentBlock =
 /** Raw SSE event from Anthropic API */
 export type RawStreamEvent =
   | { type: 'message_start'; message: { id: string; model: string; stop_reason: string | null } }
-  | { type: 'content_block_start'; index: number; content_block: { type: string; id?: string; name?: string; text?: string } }
+  | {
+      type: 'content_block_start';
+      index: number;
+      content_block: { type: string; id?: string; name?: string; text?: string };
+    }
   | { type: 'content_block_delta'; index: number; delta: { type: string; text?: string; partial_json?: string } }
   | { type: 'content_block_stop'; index: number }
   | { type: 'message_delta'; delta: { stop_reason: string | null; usage?: { output_tokens: number } } }
@@ -104,16 +108,7 @@ export interface RunChatOptions {
  * Stops when the model finishes without tool calls, or maxTurns is reached.
  */
 export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEvent> {
-  const {
-    provider,
-    executor,
-    model,
-    system,
-    tools,
-    maxTokens = 8192,
-    maxTurns = 20,
-    signal,
-  } = options;
+  const { provider, executor, model, system, tools, maxTokens = 8192, maxTurns = 20, signal } = options;
 
   let messages = [...options.messages];
   let turns = 0;
@@ -225,10 +220,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
     // Execute tool calls
     if (toolCalls.length > 0) {
       // Add assistant message with tool calls
-      messages = [
-        ...messages,
-        { role: 'assistant', content: assistantBlocks },
-      ];
+      messages = [...messages, { role: 'assistant', content: assistantBlocks }];
 
       // Execute each tool and collect results
       const toolResultBlocks: ContentBlock[] = [];
@@ -241,17 +233,12 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: tool.id,
-          content: result.success
-            ? result.output || 'Done'
-            : `Error: ${result.error}`,
+          content: result.success ? result.output || 'Done' : `Error: ${result.error}`,
         });
       }
 
       // Add tool results as user message
-      messages = [
-        ...messages,
-        { role: 'user', content: toolResultBlocks },
-      ];
+      messages = [...messages, { role: 'user', content: toolResultBlocks }];
 
       // Continue the loop to let the model respond to tool results
       continue;
@@ -260,9 +247,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
     // No tool calls — conversation turn is complete
     if (stopReason === 'max_tokens') {
       // Model ran out of tokens mid-response, continue with accumulated text
-      const blocks = assistantBlocks.length > 0
-        ? assistantBlocks
-        : [{ type: 'text' as const, text: '...' }];
+      const blocks = assistantBlocks.length > 0 ? assistantBlocks : [{ type: 'text' as const, text: '...' }];
       messages = [
         ...messages,
         { role: 'assistant', content: blocks },

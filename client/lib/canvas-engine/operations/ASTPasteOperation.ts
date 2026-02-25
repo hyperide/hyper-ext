@@ -4,10 +4,11 @@
  * This operation reads TSX from clipboard, inserts it into file, and records in history for undo/redo.
  */
 
-import type { DocumentTree } from "../core/DocumentTree";
-import type { OperationResult } from "../models/types";
-import { BaseOperation } from "./Operation";
+import type { DocumentTree } from '../core/DocumentTree';
+import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
+import type { ASTNode } from '../types/ast';
+import { BaseOperation } from './Operation';
 
 export interface ASTPasteOperationParams {
   parentId: string | null;
@@ -16,12 +17,11 @@ export interface ASTPasteOperationParams {
 }
 
 export class ASTPasteOperation extends BaseOperation {
-  name = "ASTPaste";
+  name = 'ASTPaste';
   private params: ASTPasteOperationParams;
   private newElementId?: string; // Store first new element ID for backward compatibility
   private newElementIds: string[] = []; // Store all new element IDs for undo
-  private newElementIndex?: number; // Store index where element was inserted
-  private pastedElementStructure?: any; // Store full element structure for redo
+  private pastedElementStructure?: ASTNode; // Store full element structure for redo
 
   constructor(api: ASTApiService, params: ASTPasteOperationParams) {
     super(api);
@@ -32,7 +32,7 @@ export class ASTPasteOperation extends BaseOperation {
    * Execute paste: insert TSX code into file
    * Note: This triggers async file operation, actual paste happens in background
    */
-  execute(tree: DocumentTree): OperationResult {
+  execute(_tree: DocumentTree): OperationResult {
     console.log('[ASTPasteOperation] Executing paste');
 
     // Insert in file in background
@@ -83,7 +83,7 @@ export class ASTPasteOperation extends BaseOperation {
   /**
    * Redo paste: re-insert all pasted elements
    */
-  redo(tree: DocumentTree): OperationResult {
+  redo(_tree: DocumentTree): OperationResult {
     if (this.newElementIds.length === 0) {
       console.warn('[ASTPasteOperation] No elements to redo');
       return this.error('No paste to restore');
@@ -116,7 +116,7 @@ export class ASTPasteOperation extends BaseOperation {
     const root = tree.getRoot();
 
     // Helper to find element in AST
-    const findElement = (nodes: any[], targetId: string): any | null => {
+    const findElement = (nodes: ASTNode[], targetId: string): ASTNode | null => {
       for (const node of nodes) {
         if (node.id === targetId) {
           return node;
@@ -130,8 +130,9 @@ export class ASTPasteOperation extends BaseOperation {
     };
 
     // Search in root.metadata.astStructure
-    if (root.metadata?.astStructure) {
-      const element = findElement(root.metadata.astStructure, this.newElementId!);
+    const astStructure = root.metadata?.astStructure;
+    if (Array.isArray(astStructure) && this.newElementId) {
+      const element = findElement(astStructure as ASTNode[], this.newElementId);
       if (element) {
         this.pastedElementStructure = element;
         return;
@@ -142,8 +143,9 @@ export class ASTPasteOperation extends BaseOperation {
     const rootChildren = root.children || [];
     for (const childId of rootChildren) {
       const inst = tree.getInstance(childId);
-      if (inst?.metadata?.astStructure) {
-        const element = findElement(inst.metadata.astStructure, this.newElementId!);
+      const childAst = inst?.metadata?.astStructure;
+      if (Array.isArray(childAst) && this.newElementId) {
+        const element = findElement(childAst as ASTNode[], this.newElementId);
         if (element) {
           this.pastedElementStructure = element;
           return;
@@ -168,7 +170,7 @@ export class ASTPasteOperation extends BaseOperation {
     }
     try {
       return await this.pastePromise;
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }
@@ -191,11 +193,6 @@ export class ASTPasteOperation extends BaseOperation {
       throw new Error(result.error || 'Failed to paste element');
     }
 
-    // Store position info for redo
-    if (result.index !== undefined) {
-      this.newElementIndex = result.index;
-    }
-
     // Reparse component to update AST structure
     await this.api.reloadComponent(this.params.filePath);
 
@@ -203,13 +200,6 @@ export class ASTPasteOperation extends BaseOperation {
       newId: result.newId,
       newIds: result.newIds || [result.newId],
     };
-  }
-
-  /**
-   * Sync delete to file (for undo) - single element version (kept for compatibility)
-   */
-  private async syncDelete(elementId: string): Promise<void> {
-    return this.syncBatchDelete([elementId]);
   }
 
   /**
@@ -227,44 +217,6 @@ export class ASTPasteOperation extends BaseOperation {
 
     if (!result.success) {
       throw new Error(result.error || 'Failed to delete elements');
-    }
-
-    // Reparse component to update AST structure
-    await this.api.reloadComponent(this.params.filePath);
-  }
-
-  /**
-   * Sync re-paste to file (for redo)
-   * Re-inserts the pasted element at the exact same position
-   */
-  private async syncRepaste(): Promise<void> {
-    if (!this.pastedElementStructure) {
-      throw new Error('No element structure to restore');
-    }
-
-    console.log('[ASTPasteOperation] Re-inserting pasted element at index:', this.newElementIndex);
-
-    // Prepare request body
-    // IMPORTANT: Only include 'children' parameter if the array is not empty
-    // Otherwise it will overwrite props.children (text content)
-    const requestBody: any = {
-      parentId: this.params.parentId || '',
-      filePath: this.params.filePath,
-      componentType: this.pastedElementStructure.type,
-      props: this.pastedElementStructure.props || {},
-      targetId: this.newElementId, // Use the same ID as before
-      index: this.newElementIndex, // Insert at exact same position
-    };
-
-    // Only add children parameter if array has elements
-    if (Array.isArray(this.pastedElementStructure.children) && this.pastedElementStructure.children.length > 0) {
-      requestBody.children = this.pastedElementStructure.children;
-    }
-
-    const result = await this.api.insertElement(requestBody);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to re-insert pasted element');
     }
 
     // Reparse component to update AST structure
