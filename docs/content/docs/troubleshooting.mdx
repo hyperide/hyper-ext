@@ -1,0 +1,211 @@
+# Troubleshooting
+
+Solutions for common issues in HyperIDE.
+
+## Docker Issues
+
+### Docker is not running
+
+**Symptom**: "Docker is not running" error on startup.
+
+**Solution**:
+1. Open Docker Desktop
+2. Wait for it to fully start (whale icon in menu bar should be stable)
+3. Restart HyperIDE
+
+### Container won't start
+
+**Symptom**: Project stays in "Building" status indefinitely.
+
+**Solutions**:
+
+1. Check Docker logs:
+```bash
+docker logs canvas-project-{projectId}
+```
+
+2. Verify port availability:
+```bash
+lsof -i :5173  # or whatever port your project uses
+```
+
+3. Restart the container:
+   - Stop the project in HyperIDE
+   - Wait 5 seconds
+   - Start again
+
+### Out of disk space
+
+**Symptom**: Docker build fails with disk space error.
+
+**Solution**:
+```bash
+# Clean up Docker resources
+docker system prune -a
+```
+
+## Preview Issues
+
+### Preview not loading
+
+**Symptom**: Blank iframe or loading spinner that never completes.
+
+**Solutions**:
+
+1. Check if the dev server is running in the container
+2. Look for errors in browser console (F12)
+3. Try stopping and starting the project
+4. Check Docker logs for build errors
+
+### HMR not working
+
+**Symptom**: Changes don't appear until manual refresh.
+
+**Solutions**:
+
+1. Check WebSocket connection in browser console
+2. Verify Vite config wasn't corrupted:
+```bash
+# Check if backup exists
+ls cloned-projects/{project}/*.original
+```
+
+3. Re-clone the project if config is broken
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  HyperIDE modifies vite.config.ts to add base path support. If your original config is important, it's saved as `.original`.
+</Callout>
+
+### Component doesn't render
+
+**Symptom**: Error message in preview area.
+
+**Solutions**:
+
+1. Try Auto-Fix (bug icon in toolbar)
+2. Check for TypeScript errors in Code mode
+3. Verify all imports are correct
+4. Check browser console for runtime errors
+
+## Clone Issues
+
+### Permission denied when cloning
+
+**Symptom**: Git clone fails with authentication error.
+
+**Solutions**:
+
+1. Use SSH URL and verify SSH key:
+```bash
+ssh -T git@github.com
+```
+
+2. For HTTPS, configure credentials:
+```bash
+git config --global credential.helper store
+```
+
+### Framework not detected
+
+**Symptom**: Wrong framework selected or "unknown framework".
+
+**Solutions**:
+
+1. Check that `package.json` exists and has correct dependencies
+2. Manually select the framework in clone dialog
+3. Re-index with AI after cloning
+
+## Editor Issues
+
+### Styles not applying
+
+**Symptom**: Changes in right sidebar don't affect the component.
+
+**Solutions**:
+
+1. Check if element is selected (blue outline visible)
+2. Verify you're in Design mode
+3. Check if the style is being overridden by other CSS
+4. Try switching states (hover, focus, etc.)
+
+### Element tree empty
+
+**Symptom**: Left sidebar shows no elements.
+
+**Solutions**:
+
+1. Verify a component is loaded
+2. Check for parse errors in the component
+3. Try reloading the component
+4. Check browser console for errors
+
+### Keyboard shortcuts not working
+
+**Symptom**: Pressing shortcuts does nothing.
+
+**Solutions**:
+
+1. Click on the canvas to ensure it has focus
+2. Check you're in the correct mode
+3. Verify no modal or input field has focus
+
+## AI Issues
+
+### AI chat not responding
+
+**Symptom**: Messages sent but no response.
+
+**Solutions**:
+
+1. Check your internet connection
+2. Wait and try again (API rate limits)
+3. Start a new chat
+4. Check browser console for errors
+
+### AI generates incorrect code
+
+**Symptom**: Generated code has errors or doesn't match request.
+
+**Solutions**:
+
+1. Be more specific in your request
+2. Provide context about what you're trying to achieve
+3. Break complex requests into smaller steps
+4. Use Code mode to manually fix issues
+
+## Performance Issues
+
+### Slow preview loading
+
+**Symptom**: Preview takes a long time to appear.
+
+**Solutions**:
+
+1. Check if dependencies are still installing (first load)
+2. Large projects take longer — be patient
+3. Check Docker resource allocation
+4. Consider reducing project complexity
+
+### Editor feels sluggish
+
+**Symptom**: Lag when interacting with canvas.
+
+**Solutions**:
+
+1. Close other browser tabs
+2. Reduce element count in component
+3. Check for infinite loops in component code
+4. Try a different browser
+
+## Getting Help
+
+If these solutions don't work:
+
+1. Check the [FAQ](/docs/faq)
+2. Search [GitHub Issues](https://github.com/hyperide/hypercanvas/issues)
+3. Open a new issue with:
+   - Steps to reproduce
+   - Error messages (browser console, Docker logs)
+   - Your environment (OS, Docker version)

@@ -1,0 +1,86 @@
+# Position
+
+Control how elements are positioned in the document flow.
+
+## Position Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Static** | Normal document flow | Default for most elements |
+| **Relative** | Offset from normal position | Nudging elements, anchor for absolutes |
+| **Absolute** | Removed from flow, relative to positioned ancestor | Overlays, badges, tooltips |
+| **Fixed** | Relative to viewport | Sticky headers, floating buttons |
+| **Sticky** | Hybrid relative/fixed | Section headers |
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Sticky positioning is only available with Tailwind CSS.
+</Callout>
+
+## Position Offsets
+
+When not static, you can set offset values:
+
+| Property | Description |
+|----------|-------------|
+| **Top** | Distance from top edge |
+| **Right** | Distance from right edge |
+| **Bottom** | Distance from bottom edge |
+| **Left** | Distance from left edge |
+
+Values in pixels. Leave empty to ignore that edge.
+
+## Common Patterns
+
+### Centered Absolute
+
+Position an element in the center of its parent:
+
+```css
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+```
+
+In HyperIDE: Set position to Absolute, then set top: 50% and left: 50% in code mode.
+
+### Full-Width Sticky Header
+
+Keep a header visible while scrolling:
+
+```css
+position: sticky;
+top: 0;
+```
+
+In HyperIDE: Set position to Sticky, set Top to 0.
+
+### Corner Badge
+
+Position a badge in the corner of a card:
+
+```css
+position: absolute;
+top: -8px;
+right: -8px;
+```
+
+Parent must be `position: relative`.
+
+## Z-Index
+
+Control stacking order for positioned elements. Higher values appear on top.
+
+<Callout type="warning">
+  Z-index only works on positioned elements (not static).
+</Callout>
+
+## Tips
+
+1. **Avoid absolute positioning** when flexbox can solve the layout
+2. **Set parent to relative** when using absolute children
+3. **Use fixed sparingly** — it can cause layout issues on mobile
+4. **Sticky elements** need a scrollable container to work
+5. **Test on different screen sizes** — positioning can break responsively

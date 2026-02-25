@@ -1,0 +1,87 @@
+# Auto-Fix Feature
+
+Automatically fix component preview issues with AI assistance.
+
+## What is Auto-Fix?
+
+When a component fails to render in the preview, Auto-Fix analyzes the error and attempts to fix the code automatically.
+
+![Auto-fix feature](/screenshots/auto-fix.png)
+
+## When to Use Auto-Fix
+
+Auto-Fix is helpful for:
+
+- Import errors (missing dependencies)
+- Type mismatches
+- Syntax errors in TSX
+- Missing component props
+- Runtime errors during render
+
+## How It Works
+
+1. Component fails to render in preview
+2. Error message is captured
+3. Click the **bug icon** in the toolbar
+4. AI analyzes the error
+5. Fix is proposed and applied
+6. Preview reloads
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Auto-Fix makes changes to your component file. Use Undo (`Cmd+Z`) to revert if needed.
+</Callout>
+
+## Auto-Fix Process
+
+### Step 1: Error Detection
+
+When a component throws an error, HyperIDE captures:
+- Error message
+- Stack trace
+- Component source code
+
+### Step 2: AI Analysis
+
+The AI examines:
+- What went wrong
+- Why it happened
+- How to fix it
+
+### Step 3: Code Generation
+
+AI generates a fixed version of the code.
+
+### Step 4: Application
+
+The fix is written to your component file and the preview reloads.
+
+## Limitations
+
+Auto-Fix cannot solve:
+
+- Complex business logic errors
+- External API issues
+- Database connection problems
+- Build configuration issues
+
+<Callout type="warning">
+  Always review auto-fixed code. AI fixes may not be optimal or may introduce new issues.
+</Callout>
+
+## Manual Override
+
+If Auto-Fix doesn't work:
+
+1. Read the error message carefully
+2. Switch to Code mode (`4`)
+3. Fix the issue manually
+4. Return to Design mode
+
+## Tips
+
+1. **Run Auto-Fix early** — Fixes are easier when errors are small
+2. **Check the console** — More details may be in browser console
+3. **Multiple attempts** — Sometimes running Auto-Fix twice helps
+4. **Report persistent issues** — Open a GitHub issue for repeated failures

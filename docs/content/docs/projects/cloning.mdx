@@ -1,0 +1,105 @@
+# Clone from Git
+
+Connect an existing React project to HyperIDE by cloning from a Git repository.
+
+## Supported Git URLs
+
+HyperIDE supports both SSH and HTTPS Git URLs:
+
+```bash
+# SSH (recommended for full read/write access)
+git@github.com:username/repo.git
+
+# HTTPS
+https://github.com/username/repo.git
+```
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  **SSH is recommended** for full Git functionality including push/pull operations.
+</Callout>
+
+## Clone Process
+
+### Step 1: Open Clone Dialog
+
+Click **"Clone from Git"** on the Projects page.
+
+### Step 2: Enter Repository URL
+
+Paste your Git repository URL in the input field.
+
+![Clone form](/screenshots/clone-repo.png)
+
+### Step 3: Configure Settings (Optional)
+
+HyperIDE auto-detects most settings, but you can override:
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| **Project Name** | Display name | `my-app` |
+| **Framework** | React framework | Vite, Next.js, Remix |
+| **Package Manager** | Dependency manager | npm, yarn, pnpm, bun |
+| **Install Command** | Install deps | `npm install` |
+| **Dev Command** | Start dev server | `npm run dev` |
+| **Internal Port** | Container port | 3000, 5173 |
+
+### Step 4: Clone
+
+Click **"Clone Project"**. HyperIDE will:
+
+1. Clone the repository to `cloned-projects/` directory
+2. Analyze the project structure with AI
+3. Configure framework-specific settings
+4. Add the project to your list
+
+## Framework Detection
+
+HyperIDE automatically detects your framework by checking `package.json`:
+
+- **Next.js**: `next` dependency
+- **Vite**: `vite` dependency
+- **Remix**: `@remix-run/react` dependency
+- **Create React App**: `react-scripts` dependency
+- **Bun**: Bun-specific build scripts
+
+## Port Configuration
+
+Each framework has default internal ports:
+
+| Framework | Default Port |
+|-----------|--------------|
+| Vite | 5173 |
+| Next.js | 3000 |
+| Remix | 5173 |
+| CRA | 3000 |
+| Bun | 8080 |
+
+HyperIDE assigns a random external port (5000-6000 range) for each project.
+
+## GitHub Integration
+
+For easier cloning:
+
+1. Click the **GitHub icon** in the header
+2. Authenticate with your GitHub account
+3. Browse your repositories
+4. Select a repo to auto-fill the clone form
+
+## Troubleshooting
+
+### Clone fails with permission denied
+
+Make sure your SSH key is configured:
+```bash
+ssh -T git@github.com
+```
+
+### Framework not detected
+
+Check that `package.json` exists and contains framework dependencies.
+
+### Custom vite.config.ts not working
+
+HyperIDE modifies `vite.config.ts` to add base path support. Your custom config is preserved but wrapped.

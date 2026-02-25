@@ -1,0 +1,67 @@
+# Your First Project
+
+Learn how to connect your first React project to HyperIDE.
+
+## Creating a Project
+
+HyperIDE offers two ways to create a project:
+
+### Option 1: Clone from Git
+
+If you have an existing React project:
+
+1. Click **"Clone from Git"** on the Projects page
+2. Enter your Git repository URL (SSH or HTTPS)
+3. Configure optional settings:
+   - **Framework**: Auto-detected (Vite, Next.js, Remix, CRA, Bun)
+   - **Package Manager**: npm, yarn, pnpm, or bun
+   - **Dev Command**: Usually auto-detected
+4. Click **"Clone Project"**
+
+![Clone from Git](/screenshots/clone-repo.png)
+
+### Option 2: Create with AI
+
+Let AI generate a new project from scratch:
+
+1. Click **"Create New Project with AI"**
+2. Describe your project in the chat
+3. AI will generate the project structure and initial components
+4. The project is automatically created and ready to use
+
+![AI creation](/screenshots/ai-creation.png)
+
+## Supported Frameworks
+
+HyperIDE supports these React frameworks:
+
+| Framework | Dev Server | Default Port | Notes |
+|-----------|------------|--------------|-------|
+| **Vite** | `npm run dev` | 5173 | Recommended |
+| **Next.js** | `npm run dev` | 3000 | App Router & Pages Router |
+| **Remix** | `npm run dev` | 5173 | Uses Vite under the hood |
+| **Create React App** | `npm start` | 3000 | Legacy support |
+| **Bun** | `bun run dev` | 8080 | Native Bun runtime |
+
+## Starting Your Project
+
+After creating a project:
+
+1. Find your project in the Projects list
+2. Click **"Start"** to launch the Docker container
+3. Wait for the status to change from "Building" to "Running"
+4. Click **"Open"** to enter the editor
+
+## Project Structure Requirements
+
+For HyperIDE to work with your project:
+
+- Must have a valid `package.json`
+- Must be a React project (Next.js, Vite, etc.)
+- Component files should be `.tsx` or `.jsx`
+
+## Next Steps
+
+- [Learn about the Visual Editor](/docs/editor/modes)
+- [Configure project settings](/docs/projects/settings)
+- [Use the AI Assistant](/docs/ai-assistant)

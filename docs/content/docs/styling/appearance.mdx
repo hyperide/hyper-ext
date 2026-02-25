@@ -1,0 +1,122 @@
+# Appearance
+
+Control colors, opacity, borders, and backgrounds.
+
+## Opacity
+
+Control element transparency:
+
+| Value | Effect |
+|-------|--------|
+| 100% | Fully visible |
+| 50% | Half transparent |
+| 0% | Invisible |
+
+Use arrow keys for fine control:
+- Arrow Up/Down: ±1%
+- Shift + Arrow: ±10%
+
+## Border Radius
+
+Round element corners:
+
+### Unified Radius
+
+Apply same radius to all corners:
+- Click the corner icon
+- Enter pixel value
+- All corners update together
+
+### Individual Corners
+
+Expand the section to set each corner:
+- Top Left
+- Top Right
+- Bottom Right
+- Bottom Left
+
+## Fill (Background)
+
+Set background color or image:
+
+### Color Mode
+
+| Control | Description |
+|---------|-------------|
+| **Color Picker** | Hex color with alpha |
+| **Named Colors** | Project tokens (if configured) |
+| **Opacity** | Background transparency |
+
+### Image Mode
+
+| Control | Description |
+|---------|-------------|
+| **Image Path** | Path to image file |
+| **File Picker** | Browse public directory |
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Image picker only works if `publicDir` is configured in project settings.
+</Callout>
+
+## Text Color
+
+Set the text color for the element:
+- Hex color picker with alpha support
+- Named color selection (project tokens)
+- Inherited by child text elements
+
+## Stroke (Borders)
+
+Add borders to elements:
+
+### Border Properties
+
+| Property | Description |
+|----------|-------------|
+| **Width** | Border thickness in px |
+| **Color** | Border color with alpha |
+| **Style** | solid, dashed, dotted, double, none |
+| **Opacity** | Border transparency |
+
+### Per-Side Borders
+
+Toggle individual sides:
+- Top border
+- Right border
+- Bottom border
+- Left border
+
+## State Variants
+
+Edit styles for different CSS states:
+
+| State | CSS | When Applied |
+|-------|-----|--------------|
+| **Default** | (none) | Normal state |
+| **Hover** | `:hover` | Mouse over |
+| **Focus** | `:focus` | Has focus |
+| **Active** | `:active` | Being clicked |
+| **Focus Visible** | `:focus-visible` | Keyboard focus |
+| **Disabled** | `:disabled` | Disabled state |
+
+<Callout type="info">
+  State variants are only available with Tailwind CSS.
+</Callout>
+
+### Using States
+
+1. Select an element
+2. Choose a state from the State Selector
+3. Edit properties (they apply only to that state)
+4. Switch states to compare
+
+![Appearance section](/screenshots/appearance-section.png)
+
+## Tips
+
+1. **Use opacity** for subtle overlays and disabled states
+2. **Border radius** works best on elements with visible backgrounds
+3. **Test hover states** by switching to Interact mode
+4. **Named colors** help maintain design consistency

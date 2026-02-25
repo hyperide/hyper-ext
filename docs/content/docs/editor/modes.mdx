@@ -1,0 +1,123 @@
+# Editor Modes
+
+HyperIDE has four distinct modes for different workflows.
+
+## Mode Overview
+
+| Mode | Shortcut | Description |
+|------|----------|-------------|
+| **Interact** | `1` | Preview and interact with components |
+| **Board** | `2` | Multi-canvas whiteboard view |
+| **Design** | `3` | Visual editing of structure and styles |
+| **Code** | `4` | Full code editor with Monaco |
+
+Switch between modes using number keys `1`, `2`, `3`, `4` or the mode selector in the toolbar.
+
+## Interact Mode
+
+**Shortcut**: `1` or `Alt+1`
+
+The default mode for previewing your components.
+
+- Click elements to select them
+- View live component behavior
+- Test interactions like hover, focus, click
+- Observe animations and transitions
+
+![Interact mode](/screenshots/interact-mode.png)
+
+Use Interact mode when you want to:
+- Test how components behave
+- Verify styling and layout
+- Debug user interactions
+
+## Design Mode
+
+**Shortcut**: `3` or `Alt+3`
+
+Visual editing mode for modifying component structure and styles.
+
+- Select elements to edit their properties
+- Use the right sidebar to modify styles
+- Insert new elements with keyboard shortcuts
+- Drag and drop to reorder (coming soon)
+
+![Design mode](/screenshots/design-mode.png)
+
+### What You Can Do
+
+| Action | How |
+|--------|-----|
+| Select element | Click on canvas |
+| Edit styles | Use right sidebar panels |
+| Insert element | Press `F`, `T`, `B`, etc. |
+| Delete element | Press `Delete` |
+| Duplicate | Press `Cmd+D` |
+
+import { Callout } from 'nextra/components'
+
+<Callout type="tip">
+  Design mode is the primary mode for visual editing. Spend most of your time here.
+</Callout>
+
+## Board Mode
+
+**Shortcut**: `2` or `Alt+2`
+
+Multi-canvas whiteboard for planning and designing multiple component states.
+
+- View multiple component instances side by side
+- Draw annotations with arrows and text
+- Plan layouts visually
+- Uses Excalidraw for drawing
+
+![Board mode](/screenshots/board-mode.png)
+
+### Drawing Tools
+
+| Tool | Shortcut |
+|------|----------|
+| Select | Default |
+| Arrow/Line | `Shift+A` |
+| Text | `T` |
+
+<Callout type="info">
+  Board mode is only available for multi-canvas projects. Single-canvas projects don't show this option.
+</Callout>
+
+## Code Mode
+
+**Shortcut**: `4` or `Alt+4`
+
+Full code editor for direct file editing.
+
+- Monaco editor with syntax highlighting
+- File tree in left sidebar
+- Real-time changes with HMR
+- AI chat in right sidebar
+
+![Code mode](/screenshots/code-mode.png)
+
+### Features
+
+- TypeScript/TSX support
+- Auto-completion
+- Error highlighting
+- Go to definition
+- Find and replace
+
+## Mode Shortcuts Summary
+
+```
+1 or Alt+1  →  Interact Mode
+2 or Alt+2  →  Board Mode (multi-canvas only)
+3 or Alt+3  →  Design Mode
+4 or Alt+4  →  Code Mode
+```
+
+## Best Practices
+
+1. **Start in Design mode** for visual editing
+2. **Switch to Interact** to test behavior
+3. **Use Code mode** for complex logic changes
+4. **Use Board mode** for planning multi-state designs

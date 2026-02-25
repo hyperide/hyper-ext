@@ -1,0 +1,81 @@
+# Installation
+
+Get HyperIDE up and running on your machine.
+
+## Prerequisites
+
+Before installing HyperIDE, make sure you have:
+
+- **Docker Desktop** — [Download Docker](https://www.docker.com/products/docker-desktop)
+- **Node.js 20+** — [Download Node.js](https://nodejs.org/)
+- **Bun** (recommended) — [Install Bun](https://bun.sh/)
+- **Git** — For cloning repositories
+
+## Installation Steps
+
+### 1. Clone the Repository
+
+```bash
+git clone git@github.com:hyperide/hypercanvas.git
+cd hypercanvas
+```
+
+### 2. Install Dependencies
+
+Using Bun (recommended):
+```bash
+bun install
+```
+
+Or using npm:
+```bash
+npm install
+```
+
+### 3. Start Docker
+
+Make sure Docker Desktop is running. HyperIDE uses Docker to run your projects in isolated containers.
+
+![Docker Desktop running](/screenshots/install-docker.png)
+
+### 4. Start HyperIDE
+
+```bash
+bun run dev
+```
+
+This starts both the server and client. The application will be available at `http://localhost:8080`.
+
+![First launch screen](/screenshots/first-launch.png)
+
+## Verify Installation
+
+1. Open your browser and navigate to `http://localhost:8080`
+2. You should see the Projects page
+3. Docker should show a container starting when you create your first project
+
+## Next Steps
+
+Now that HyperIDE is installed, let's [create your first project](/docs/getting-started/first-project).
+
+## Troubleshooting
+
+### Docker not running
+
+If you see "Docker is not running" error:
+1. Open Docker Desktop
+2. Wait for it to fully start (whale icon in menu bar)
+3. Restart HyperIDE
+
+### Port 8080 already in use
+
+If port 8080 is occupied:
+```bash
+# Find what's using port 8080
+lsof -i :8080
+
+# Kill the process (replace PID with actual process ID)
+kill -9 PID
+```
+
+See more in the [Troubleshooting](/docs/troubleshooting) section.

@@ -1,0 +1,233 @@
+{
+  "name": "hypercanvas-preview",
+  "displayName": "Hyper Preview",
+  "description": "Visual editor for React components - works standalone without SaaS backend",
+  "version": "0.1.0",
+  "publisher": "hyperide",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hypercanvas-explorer",
+          "title": "Hyper",
+          "icon": "media/preview.svg"
+        },
+        {
+          "id": "hypercanvas-inspector",
+          "title": "Hyper",
+          "icon": "media/preview.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "hypercanvas-preview-container",
+          "title": "Hyper AI & Logs",
+          "icon": "media/preview.svg"
+        }
+      ]
+    },
+    "views": {
+      "hypercanvas-explorer": [
+        {
+          "type": "webview",
+          "id": "hypercanvas.explorerView",
+          "name": "Explorer"
+        }
+      ],
+      "hypercanvas-inspector": [
+        {
+          "type": "webview",
+          "id": "hypercanvas.inspectorView",
+          "name": "Inspector"
+        }
+      ],
+      "hypercanvas-preview-container": [
+        {
+          "type": "webview",
+          "id": "hypercanvas.logsAndChatView",
+          "name": "Logs & AI",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "hypercanvas.openPreview",
+        "title": "Hyper: Open Preview"
+      },
+      {
+        "command": "hypercanvas.refreshPreview",
+        "title": "Hyper: Refresh Preview",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hypercanvas.goToVisual",
+        "title": "Hyper: Go to Visual"
+      },
+      {
+        "command": "hypercanvas.startDevServer",
+        "title": "Hyper: Start Dev Server"
+      },
+      {
+        "command": "hypercanvas.stopDevServer",
+        "title": "Hyper: Stop Dev Server"
+      },
+      {
+        "command": "hypercanvas.showDevServerOutput",
+        "title": "Hyper: Show Dev Server Output"
+      },
+      {
+        "command": "hypercanvas.configureAIKey",
+        "title": "Hyper: Configure AI API Key"
+      },
+      {
+        "command": "hypercanvas.openLogsAndChat",
+        "title": "Hyper: Open Logs & AI Chat"
+      },
+      {
+        "command": "hypercanvas.openExplorer",
+        "title": "Hyper: Open Explorer"
+      },
+      {
+        "command": "hypercanvas.openInspector",
+        "title": "Hyper: Open Inspector"
+      },
+      {
+        "command": "hypercanvas.openProjectStructure",
+        "title": "Hyper: Open Project Structure Config"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "hypercanvas.goToVisual",
+        "key": "cmd+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "hypercanvas.refreshPreview",
+          "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "hypercanvas.goToVisual",
+          "group": "navigation",
+          "when": "editorTextFocus && resourceExtname =~ /\\.(tsx|jsx)$/"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Hyper",
+      "properties": {
+        "hypercanvas.ai.provider": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "openai",
+            "glm",
+            "proxy",
+            "opencode"
+          ],
+          "default": "claude",
+          "enumDescriptions": [
+            "Anthropic Claude",
+            "OpenAI or compatible",
+            "GLM (Z.ai)",
+            "Multi-provider proxy (Gemini, DeepSeek, Mistral, Groq)",
+            "OpenCode native SDK (Gemini, DeepSeek, Qwen)"
+          ],
+          "description": "AI provider for project structure analysis"
+        },
+        "hypercanvas.ai.apiKey": {
+          "type": "string",
+          "description": "API key for AI provider"
+        },
+        "hypercanvas.ai.backend": {
+          "type": "string",
+          "enum": ["gemini", "google", "openai", "anthropic", "deepseek", "mistral", "groq", "qwen"],
+          "description": "Backend key type for proxy/opencode providers (e.g. 'gemini', 'anthropic', 'deepseek'). Not needed for claude, glm, or openai providers."
+        },
+        "hypercanvas.ai.model": {
+          "type": "string",
+          "description": "Model identifier (e.g. claude-sonnet-4-20250514, gpt-4o, gemini/gemini-2.5-pro)"
+        },
+        "hypercanvas.ai.baseURL": {
+          "type": "string",
+          "description": "Custom base URL for AI provider API (optional)"
+        },
+        "hypercanvas.devServer.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start dev server when opening preview"
+        },
+        "hypercanvas.preview.defaultPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "Default port for dev server (will use next available if busy)"
+        },
+        "hypercanvas.preview.syncPositions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync cursor position in code with element highlight in preview and vice versa"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production && npm run build:css",
+    "build:css": "npx tailwindcss -i src/webview/styles.css -o out/webview.css --minify",
+    "watch": "node esbuild.js --watch & npx tailwindcss -i src/webview/styles.css -o out/webview.css --watch",
+    "compile": "tsc -p ./",
+    "package": "npm run build && npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.26.5",
+    "@babel/parser": "^7.26.3",
+    "@babel/traverse": "^7.26.5",
+    "@babel/types": "^7.26.5",
+    "recast": "^0.23.11"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.6",
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.20.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-scroll-area": "^1.2.0",
+    "@radix-ui/react-tooltip": "^1.1.3",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@tabler/icons-react": "^3.28.1",
+    "react-markdown": "^9.0.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.5",
+    "class-variance-authority": "^0.7.1",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.4.49",
+    "autoprefixer": "^10.4.20",
+    "tailwindcss-animate": "^1.0.7",
+    "zustand": "^5.0.2"
+  }
+}

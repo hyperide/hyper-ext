@@ -1,0 +1,86 @@
+# Create with AI
+
+Let AI generate a new React project from scratch based on your description.
+
+## How It Works
+
+1. Click **"Create New Project with AI"** on the Projects page
+2. Describe your project in natural language
+3. AI generates the complete project structure
+4. Project is automatically created and ready to use
+
+![AI project creation](/screenshots/ai-creation.png)
+
+## What to Include in Your Description
+
+For best results, describe:
+
+- **Project type**: Landing page, dashboard, e-commerce, etc.
+- **Key features**: Authentication, data tables, forms, etc.
+- **UI framework preference**: Tailwind CSS, Shadcn/ui, etc.
+- **Component structure**: What pages and components you need
+
+### Good Examples
+
+```
+Create a dashboard with a sidebar navigation, header with user menu,
+and main content area. Use Tailwind CSS and include a dark mode toggle.
+```
+
+```
+Build a landing page for a SaaS product with hero section, features grid,
+pricing table, and contact form. Use modern design with animations.
+```
+
+```
+Create a blog with a list of posts, individual post pages, and an admin
+panel for creating new posts. Include markdown support.
+```
+
+## What AI Generates
+
+The AI creates:
+
+- **Project structure** — Organized folders for components, pages, utils
+- **Base components** — Reusable UI components
+- **Page components** — Main application pages
+- **Configuration** — Vite/Next.js config, Tailwind setup
+- **Initial commit** — All files committed to Git
+
+## Project Defaults
+
+AI-generated projects use:
+
+| Setting | Default |
+|---------|---------|
+| Framework | Vite |
+| Styling | Tailwind CSS |
+| Package Manager | bun |
+| TypeScript | Yes |
+
+## After Creation
+
+Once generated:
+
+1. The project appears in your Projects list
+2. Click **"Start"** to launch the Docker container
+3. Click **"Open"** to enter the editor
+4. Continue editing visually or with the AI assistant
+
+## Tips
+
+import { Callout } from 'nextra/components'
+
+<Callout type="tip">
+  Be specific about your requirements. The more detail you provide, the better the generated code.
+</Callout>
+
+<Callout type="warning">
+  AI-generated code should be reviewed before production use. Check for security best practices and business logic correctness.
+</Callout>
+
+## Limitations
+
+- Projects are generated with Vite (no Next.js or Remix generation yet)
+- Complex multi-page applications may need manual adjustments
+- External API integrations require manual configuration

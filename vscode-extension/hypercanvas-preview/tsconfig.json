@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "out",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["../../client/*"],
+      "@shared/*": ["../../shared/*"],
+      "@lib/*": ["../../lib/*"]
+    },
+    "baseUrl": "."
+  },
+  "include": ["src/**/*", "../../shared/**/*", "../../lib/**/*"],
+  "exclude": ["node_modules", "../../lib/**/*.test.ts", "../../lib/testing/**/*"]
+}

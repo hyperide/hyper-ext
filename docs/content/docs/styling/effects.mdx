@@ -1,0 +1,105 @@
+# Effects
+
+Add shadows, blur, and other visual effects.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning">
+  Effects are only available with Tailwind CSS projects. Tamagui projects don't support these features.
+</Callout>
+
+## Drop Shadow
+
+Add a shadow behind the element:
+
+| Property | Description |
+|----------|-------------|
+| **X Offset** | Horizontal shadow position |
+| **Y Offset** | Vertical shadow position |
+| **Blur** | Shadow blur radius |
+| **Spread** | Shadow size expansion |
+| **Color** | Shadow color |
+| **Opacity** | Shadow transparency |
+
+### Shadow Presets
+
+Quick-apply common shadow sizes:
+
+| Preset | Effect |
+|--------|--------|
+| **sm** | Subtle shadow |
+| **default** | Standard shadow |
+| **md** | Medium shadow |
+| **lg** | Large shadow |
+| **xl** | Extra large shadow |
+| **2xl** | Dramatic shadow |
+
+## Inner Shadow
+
+Create an inset shadow for depth effects:
+
+| Property | Description |
+|----------|-------------|
+| **X Offset** | Horizontal offset |
+| **Y Offset** | Vertical offset |
+| **Blur** | Blur radius |
+| **Spread** | Shadow size |
+| **Color** | Shadow color |
+| **Opacity** | Transparency |
+
+Inner shadows are useful for:
+- Input fields (pressed look)
+- Containers (recessed appearance)
+- Buttons (when pressed)
+
+## Blur
+
+Apply blur effect to the element:
+
+| Value | Effect |
+|-------|--------|
+| 0 | No blur |
+| 4 | Subtle blur |
+| 8 | Medium blur |
+| 16+ | Heavy blur |
+
+<Callout type="info">
+  Blur affects the entire element including its content. For background blur only, use CSS `backdrop-filter` in code mode.
+</Callout>
+
+## Adding Effects
+
+1. Select an element
+2. Find the Effects section in the right sidebar
+3. Click "Add Effect" to add a new shadow
+4. Choose drop shadow or inner shadow
+5. Adjust properties
+
+## Removing Effects
+
+Click the trash icon next to an effect to remove it.
+
+![Effects section](/screenshots/effects-section.png)
+
+## Performance Considerations
+
+<Callout type="warning">
+  Heavy use of shadows and blur can impact performance, especially on mobile devices.
+</Callout>
+
+Tips:
+- Use shadow presets instead of custom shadows when possible
+- Avoid blur on frequently-rerendered elements
+- Test on lower-powered devices
+
+## Tailwind Classes Generated
+
+Effects map to Tailwind utility classes:
+
+| Effect | Example Class |
+|--------|---------------|
+| Drop shadow | `shadow-lg` |
+| Custom shadow | `shadow-[0_4px_6px_rgba(0,0,0,0.1)]` |
+| Blur | `blur-sm` |
+
+Custom values use Tailwind's arbitrary value syntax.

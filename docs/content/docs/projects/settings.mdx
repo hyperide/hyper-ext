@@ -1,0 +1,89 @@
+# Project Settings
+
+Configure your project's component directories and UI mappings.
+
+## Accessing Settings
+
+1. Find your project in the Projects list
+2. Click the **gear icon** to open settings
+3. Or navigate to `/projects/{id}/settings`
+
+![Project settings](/screenshots/project-settings.png)
+
+## Settings Tabs
+
+### Project Tab
+
+Configure how HyperIDE interprets your project structure.
+
+#### Public Directory
+
+The directory for static assets (images, fonts, etc.).
+
+- **Example**: `public`
+- **Auto-detect**: Click the button to let AI find it
+
+#### Component Directories
+
+Tell HyperIDE where your components live:
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| **Atom Components** | Small, reusable UI components | `src/components/atoms` |
+| **Composite Components** | Complex, composed components | `src/components/composite` |
+| **Pages** | Page-level components | `src/pages` |
+
+These paths are used for:
+- Component tree in the left sidebar
+- AI context when generating code
+- Auto-imports when inserting elements
+
+#### Toolbar UI Components
+
+Map your custom components to toolbar insert buttons:
+
+| Toolbar Button | Setting | Example Path |
+|----------------|---------|--------------|
+| Container | `containerComponentPath` | `src/ui/Box.tsx` |
+| Text | `textComponentPath` | `src/ui/Text.tsx` |
+| Link | `linkComponentPath` | `src/ui/Link.tsx` |
+| Button | `buttonComponentPath` | `src/ui/Button.tsx` |
+| Image | `imageComponentPath` | `src/ui/Image.tsx` |
+
+When you press `F` (Frame), `T` (Text), or `B` (Button) in the editor, HyperIDE uses these mappings to insert the correct component.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  If not configured, HyperIDE falls back to standard HTML elements (`div`, `span`, `a`, `img`).
+</Callout>
+
+### AI Configuration Tab
+
+Configure AI behavior for your project.
+
+## Saving Settings
+
+Click **"Save Changes"** to persist your configuration.
+
+## Re-indexing with AI
+
+Click **"Re-index with AI"** to:
+
+1. Re-analyze your project structure
+2. Auto-detect component directories
+3. Find UI component mappings
+4. Update all settings automatically
+
+This is useful after:
+- Major refactoring
+- Adding new component directories
+- Changing project structure
+
+## Settings Storage
+
+Settings are stored in the HyperIDE database, not in your project files. This means:
+
+- Your project's `package.json` is not modified
+- Settings persist across Docker restarts
+- Each project has independent settings

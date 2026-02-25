@@ -1,0 +1,137 @@
+# Edit Operations
+
+All the ways to modify elements in the canvas.
+
+## Insert Elements
+
+Add new elements with keyboard shortcuts:
+
+| Element | Shortcut | Description |
+|---------|----------|-------------|
+| Frame | `F` | Insert container/div |
+| Text | `T` | Insert text element |
+| Button | `B` or `Shift+B` | Insert button |
+| Link | `Shift+L` | Insert link |
+| Image | `Shift+I` or `Cmd+Shift+K` | Insert image |
+| Instance | `I` | Add component instance |
+
+Elements are inserted into the currently selected element, or at the root if nothing is selected.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  If you've configured custom UI components in project settings, HyperIDE uses those instead of HTML elements.
+</Callout>
+
+## Clipboard Operations
+
+Standard clipboard shortcuts work with TSX code:
+
+| Action | Shortcut | Description |
+|--------|----------|-------------|
+| Copy | `Cmd+C` | Copy as TSX code |
+| Cut | `Cmd+X` | Copy and delete |
+| Paste | `Cmd+V` | Paste TSX into selection |
+| Duplicate | `Cmd+D` | Create inline copy |
+
+### Copy/Paste Details
+
+- **Copy** puts the selected element's TSX code on your clipboard
+- **Paste** inserts TSX from clipboard into the selected element
+- Works across different components and projects
+- Clipboard must contain valid TSX
+
+```tsx
+// Example: What gets copied when you select a Button
+<Button variant="primary" onClick={handleClick}>
+  Click me
+</Button>
+```
+
+## Delete
+
+Remove selected elements:
+
+| Action | Shortcut |
+|--------|----------|
+| Delete | `Delete` or `Backspace` |
+
+<Callout type="warning">
+  Delete is permanent. Use Undo (`Cmd+Z`) immediately if you delete by mistake.
+</Callout>
+
+## Undo/Redo
+
+Revert or replay changes:
+
+| Action | Shortcut |
+|--------|----------|
+| Undo | `Cmd+Z` |
+| Redo | `Cmd+Shift+Z` |
+
+Undo/redo works for:
+- Style changes
+- Element insertions
+- Element deletions
+- Text content changes
+
+<Callout type="info">
+  Undo/redo is disabled in Board mode — Excalidraw handles its own history.
+</Callout>
+
+## Context Menu
+
+Right-click an element for additional options:
+
+- Copy
+- Cut
+- Paste
+- Duplicate
+- Delete
+- Wrap element (with configurable component)
+- Navigate to code
+
+## Zoom & Viewport
+
+Control the canvas view:
+
+| Action | Shortcut |
+|--------|----------|
+| Reset zoom | `Shift+0` or `Cmd+0` |
+| Pan | Mouse wheel + drag |
+| Zoom in/out | Scroll wheel |
+
+## UI Visibility
+
+| Action | Shortcut |
+|--------|----------|
+| Toggle sidebars | `Cmd+/` |
+
+This maximizes canvas space when you need to focus on the preview.
+
+## Summary Table
+
+```
+Insert:
+  F          → Frame (container)
+  T          → Text
+  B          → Button
+  Shift+L    → Link
+  Shift+I    → Image
+  I          → Instance
+
+Clipboard:
+  Cmd+C      → Copy
+  Cmd+X      → Cut
+  Cmd+V      → Paste
+  Cmd+D      → Duplicate
+
+Edit:
+  Delete     → Delete selected
+  Cmd+Z      → Undo
+  Cmd+Shift+Z → Redo
+
+View:
+  Cmd+/      → Toggle sidebars
+  Shift+0    → Reset zoom
+```

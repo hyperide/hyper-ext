@@ -1,0 +1,87 @@
+# Element Selection
+
+Learn how to select and navigate elements in the canvas.
+
+## Selecting Elements
+
+### Single Selection
+
+Click any element in the canvas to select it. The selected element shows:
+- A blue outline
+- Resize handles (in Design mode)
+- Properties in the right sidebar
+
+### Multiple Selection
+
+Select multiple elements by:
+- Holding `Shift` and clicking additional elements
+- Using the element tree in the left sidebar
+
+## Navigation Shortcuts
+
+Navigate the element tree with keyboard shortcuts:
+
+| Action | Shortcut | Description |
+|--------|----------|-------------|
+| Next sibling | `Tab` | Move to next sibling element |
+| Previous sibling | `Shift+Tab` | Move to previous sibling |
+| Select children | `Enter` | Select all direct children |
+| Select parent | `Shift+Enter` | Move up to parent element |
+| Deselect all | `Esc` | Clear selection |
+
+### Example Workflow
+
+```
+1. Click an element to select it
+2. Press Tab to move to siblings
+3. Press Enter to dive into children
+4. Press Shift+Enter to go back up
+5. Press Esc to deselect
+```
+
+## Element Tree
+
+The left sidebar shows the complete element hierarchy:
+
+- Click element names to select
+- Expand/collapse with arrow icons
+- Visual indentation shows nesting
+
+import { Callout } from 'nextra/components'
+
+<Callout type="tip">
+  Use the element tree when the canvas is too crowded to click precisely.
+</Callout>
+
+## Selection Indicators
+
+When an element is selected:
+
+| Indicator | Location | Purpose |
+|-----------|----------|---------|
+| Blue outline | Canvas | Shows selection boundary |
+| Highlight | Element tree | Shows selected in hierarchy |
+| Header | Right sidebar | Shows element tag name |
+
+## Multi-Select Behavior
+
+When multiple elements are selected:
+
+- Right sidebar shows common properties
+- Changes apply to all selected elements
+- Some operations (like wrap) work on the group
+
+## Root Element
+
+The root element (usually the component's outer wrapper) can be selected to:
+
+- View overall component structure
+- Access component-level metadata
+- But cannot be deleted or cut
+
+## Tips
+
+1. **Use keyboard navigation** for precise selection in nested structures
+2. **Check the element tree** when uncertain about what's selected
+3. **Press Esc** to deselect and start fresh
+4. **Tab through siblings** to quickly compare similar elements

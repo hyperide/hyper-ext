@@ -1,0 +1,111 @@
+# Using AI Chat
+
+HyperIDE includes an AI assistant to help you build and modify components.
+
+## Opening AI Chat
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+K` | Open AI chat modal |
+| `Cmd+P` | Open AI chat modal |
+| `Cmd+Shift+P` | Open AI chat modal |
+
+The AI chat opens as a modal in Design and Interact modes.
+
+![AI chat modal](/screenshots/ai-chat.png)
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  In Code mode, AI chat is available in the right sidebar instead of a modal.
+</Callout>
+
+## Chat Interface
+
+### Message Input
+
+Type your request in natural language:
+- "Add a header with a logo and navigation"
+- "Make this button primary blue with hover effect"
+- "Create a responsive grid of cards"
+
+### Sending Messages
+
+Press `Enter` to send, or `Shift+Enter` for a new line.
+
+### Streaming Responses
+
+AI responses stream in real-time. Click the stop button to cancel a response.
+
+## Chat History
+
+### Accessing History
+
+Click the dropdown in the chat header to see previous conversations.
+
+### Creating New Chat
+
+Click the "+" button to start a fresh conversation with no history.
+
+### Deleting Chats
+
+Use the trash icon to remove individual chats or clear all history.
+
+## What AI Can Help With
+
+### Component Design
+
+```
+"Create a card component with an image, title, description, and action button"
+```
+
+### Styling Changes
+
+```
+"Make this section have a gradient background from blue to purple"
+```
+
+### Layout Modifications
+
+```
+"Convert this to a 3-column grid on desktop, 1 column on mobile"
+```
+
+### Logic Implementation
+
+```
+"Add a click handler that toggles the dropdown visibility"
+```
+
+### Code Explanation
+
+```
+"Explain what this useEffect hook does"
+```
+
+## Best Practices
+
+1. **Be specific** — More detail produces better results
+2. **Reference elements** — "Make the header..." not "Make it..."
+3. **One task at a time** — Break complex requests into steps
+4. **Review generated code** — AI can make mistakes
+
+## Context Awareness
+
+The AI knows:
+- Your current component structure
+- Selected elements
+- Project configuration
+- Framework being used
+
+Use this context in your requests:
+```
+"Add a new section below the selected element"
+```
+
+## Limitations
+
+- AI cannot access external APIs or databases
+- Complex state management may require manual coding
+- Generated code should be reviewed for security
+- Large components may exceed context limits

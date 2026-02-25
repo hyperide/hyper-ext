@@ -1,0 +1,122 @@
+# Keyboard Shortcuts
+
+Complete reference of all keyboard shortcuts in HyperIDE.
+
+## Mode Switching
+
+| Shortcut | Action |
+|----------|--------|
+| `1` or `Alt+1` | Interact Mode |
+| `2` or `Alt+2` | Board Mode (multi-canvas only) |
+| `3` or `Alt+3` | Design Mode |
+| `4` or `Alt+4` | Code Mode |
+
+## Element Insertion
+
+Available in Design and Interact modes:
+
+| Shortcut | Element |
+|----------|---------|
+| `F` | Frame (container) |
+| `T` | Text |
+| `B` or `Shift+B` | Button |
+| `Shift+L` | Link |
+| `Shift+I` or `Cmd+Shift+K` | Image |
+| `I` | Add component instance |
+
+## Selection Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `Tab` | Select next sibling |
+| `Shift+Tab` | Select previous sibling |
+| `Enter` | Select children |
+| `Shift+Enter` | Select parent |
+| `Esc` | Deselect all |
+
+## Clipboard Operations
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+C` | Copy selected as TSX |
+| `Cmd+X` | Cut selected |
+| `Cmd+V` | Paste from clipboard |
+| `Cmd+D` | Duplicate selected |
+
+## Editing
+
+| Shortcut | Action |
+|----------|--------|
+| `Delete` or `Backspace` | Delete selected |
+| `Cmd+Z` | Undo |
+| `Cmd+Shift+Z` | Redo |
+
+## View Controls
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+/` | Toggle sidebars |
+| `Shift+0` or `Cmd+0` | Reset zoom |
+
+## AI Chat
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+K` | Open AI chat |
+| `Cmd+P` | Open AI chat |
+| `Cmd+Shift+P` | Open AI chat |
+
+## Board Mode (Drawing)
+
+| Shortcut | Action |
+|----------|--------|
+| `Shift+A` | Arrow/Line tool |
+| `T` | Text annotation tool |
+
+## Input Fields
+
+When editing numeric values:
+
+| Shortcut | Action |
+|----------|--------|
+| `Arrow Up` | Increase by 1 |
+| `Arrow Down` | Decrease by 1 |
+| `Shift+Arrow Up` | Increase by 10 |
+| `Shift+Arrow Down` | Decrease by 10 |
+
+## Platform Notes
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  On Windows/Linux, replace `Cmd` with `Ctrl` for all shortcuts.
+</Callout>
+
+## Printable Reference
+
+```
+═══════════════════════════════════════════════════
+                 HyperIDE Shortcuts
+═══════════════════════════════════════════════════
+
+MODES                      ELEMENTS
+1 → Interact               F → Frame
+2 → Board                  T → Text
+3 → Design                 B → Button
+4 → Code                   L → Link (Shift+L)
+                           I → Image (Shift+I)
+
+NAVIGATION                 CLIPBOARD
+Tab    → Next sibling      Cmd+C → Copy
+S-Tab  → Prev sibling      Cmd+X → Cut
+Enter  → Children          Cmd+V → Paste
+S-Enter → Parent           Cmd+D → Duplicate
+Esc    → Deselect
+
+EDITING                    VIEW
+Delete → Delete            Cmd+/ → Toggle sidebars
+Cmd+Z  → Undo              Cmd+0 → Reset zoom
+Cmd+S-Z → Redo             Cmd+K → AI Chat
+
+═══════════════════════════════════════════════════
+```
