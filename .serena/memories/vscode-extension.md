@@ -1,0 +1,62 @@
+# VS Code Extension Architecture
+
+## Location
+
+`vscode-extension/hypercanvas-preview/`
+
+## Build
+
+- **ALWAYS use npm** (not bun) — vsce requires npm list
+- Build: `npm run package`
+- Install: `code --install-extension hypercanvas-preview-0.1.0.vsix --force`
+
+## Multi-Webview Design
+
+- Main webview — Component preview (canvas)
+- Left panel — Components tree (shared LeftSidebar)
+- Right panel — Style inspector (shared RightSidebar)
+- Bottom panel — AI chat + dev server logs
+
+## Entry Points
+
+```text
+src/extension.ts          — Extension lifecycle
+src/StateHub.ts           — Central state management
+src/EditorBridge.ts       — Editor ↔ webview communication
+src/PreviewPanel.ts       — Canvas webview provider
+src/LeftPanelProvider.ts  — Components tree
+src/LogsAndChatPanelProvider.ts — Bottom panel
+```
+
+## Webview Apps
+
+```text
+webview-preview/ → PreviewPanelApp.tsx
+webview-left/   → LeftPanelApp.tsx (thin wrapper ~25 lines)
+webview-right/  → RightPanelApp.tsx
+webview/        → App.tsx (chat + logs)
+```
+
+## SaaS Module Stubs (esbuild)
+
+SaaS-only modules stubbed for extension build:
+
+| Module | Stub |
+| -------- | ------ |
+| `utils/authFetch` | `stubs/authFetch.ts` — throws |
+| `contexts/ComponentMetaContext` | `stubs/saas-only.ts` — `{ meta: null }` |
+| `stores/gitStore` | `stubs/saas-only.ts` — `{ isPushPopoverOpen: false }` |
+| `components/SidebarHeader` | `stubs/SidebarHeader.tsx` — null |
+| `components/SourceControlSection` | `stubs/SourceControlSection.tsx` — null |
+
+## Communication
+
+Extension Host → Webview: `webview.postMessage({ type, ...data })`
+Webview → Extension Host: `vscode.postMessage({ type, ...data })`
+
+## Adding New Stubs
+
+When shared components import new SaaS-only modules:
+
+1. Create stub in `src/stubs/`
+2. Add to `esbuild.js` → `createWebviewPlugins()`

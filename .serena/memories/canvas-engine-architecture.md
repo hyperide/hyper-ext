@@ -50,7 +50,7 @@ Insert, Delete, Update, Move, Duplicate, Batch — operate on DocumentTree direc
 All extend BaseOperation, receive ASTApiService via constructor.
 
 | Operation | execute | undo | redo | Key state |
-|-----------|---------|------|------|-----------|
+| ----------- | --------- | ------ | ------ | ----------- |
 | ASTInsert | api.insertElement → store insertedId | api.deleteElement(insertedId) | execute() | insertedId |
 | ASTDelete | storeElementForUndo(tree) → api.deleteElement | api.insertElement(stored structure) | syncDelete() | deletedElement, parentId, elementIndex |
 | ASTBatchDelete | storeElementsForUndo → api.deleteElements | insertElement for each (grouped by parent, sorted by index) | syncBatchDelete() | deletedElements: Map |
