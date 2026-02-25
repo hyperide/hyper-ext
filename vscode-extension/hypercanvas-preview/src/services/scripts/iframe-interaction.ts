@@ -20,11 +20,11 @@ const state = {
 let activeInstanceId: string | null = null;
 
 // === Shared click handler ===
-// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication, same origin within VS Code webview
 attachClickHandler(
 	document,
 	{
 		onElementClick: (id, _el, _e, itemIndex) =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:elementClick',
@@ -34,6 +34,7 @@ attachClickHandler(
 				'*',
 			),
 		onElementHover: (id, _el, itemIndex) =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:elementHover',
@@ -43,6 +44,7 @@ attachClickHandler(
 				'*',
 			),
 		onEmptyClick: () =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{ type: 'hypercanvas:emptyClick' },
 				'*',
@@ -61,6 +63,7 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
 	getDocument: () => document,
 	callbacks: {
 		onSelectElement: (id) =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:elementClick',
@@ -70,6 +73,7 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
 				'*',
 			),
 		onSelectMultiple: (ids) =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:selectMultiple',
@@ -78,11 +82,13 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
 				'*',
 			),
 		onClearSelection: () =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{ type: 'hypercanvas:emptyClick' },
 				'*',
 			),
 		onDeleteElements: (ids) =>
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:deleteElements',
@@ -120,6 +126,7 @@ document.addEventListener(
 			}
 		}
 
+		// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 		window.parent.postMessage(
 			{
 				type: 'hypercanvas:contextMenu',
@@ -226,6 +233,7 @@ function sendOverlayRects(): void {
 	const rectsJSON = JSON.stringify(rects);
 	if (rectsJSON !== prevRectsJSON) {
 		prevRectsJSON = rectsJSON;
+		// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 		window.parent.postMessage(
 			{ type: 'hypercanvas:overlayRects', rects },
 			'*',
@@ -294,6 +302,7 @@ window.addEventListener('message', function (event: MessageEvent) {
 		const el = document.querySelector(
 			`[data-uniq-id="${msg.elementId}"]`,
 		) as HTMLElement | null;
+		// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 		window.parent.postMessage(
 			{
 				type: 'hypercanvas:elementContentResult',
@@ -309,6 +318,7 @@ window.addEventListener('message', function (event: MessageEvent) {
 		const el = document.querySelector(
 			`[data-uniq-id="${msg.elementId}"]`,
 		) as HTMLElement | null;
+		// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 		window.parent.postMessage(
 			{
 				type: 'hypercanvas:elementContentResult',

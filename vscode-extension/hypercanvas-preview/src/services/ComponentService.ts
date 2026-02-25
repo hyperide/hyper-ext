@@ -82,8 +82,8 @@ export class ComponentService {
           this._cache.set(componentInfo.path, componentInfo);
         }
       } catch (error) {
-        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         console.error(
+          // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
           `[ComponentService] Error parsing ${file.fsPath}:`,
           error,
         );
@@ -335,8 +335,8 @@ export class ComponentService {
 
       return this._parseComponent(relativePath, sourceCode);
     } catch (error) {
-      // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       console.error(
+        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         `[ComponentService] Error parsing file ${uri.fsPath}:`,
         error,
       );
@@ -549,8 +549,8 @@ export class ComponentService {
         props,
       };
     } catch (error) {
-      // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       console.error(
+        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         `[ComponentService] Error parsing component ${componentPath}:`,
         error,
       );

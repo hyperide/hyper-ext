@@ -183,6 +183,7 @@ export class DevServerManager {
       const command = this._buildCommand(packageManager, devScript);
 
       // Spawn process
+      // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
       this._process = spawn(command.cmd, command.args, {
         cwd: this._projectPath,
         env: {

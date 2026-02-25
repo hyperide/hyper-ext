@@ -19,6 +19,7 @@ function resolveWithExtensions(basePath) {
   // Try index files (when basePath is a directory)
   for (const ext of extensions) {
     if (!ext) continue;
+    // nosemgrep: path-join-resolve-traversal -- build script path, not user input
     const indexPath = path.join(basePath, 'index' + ext);
     if (fs.existsSync(indexPath)) {
       return indexPath;

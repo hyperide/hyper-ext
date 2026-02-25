@@ -30,8 +30,8 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
 			serverSync: {
 				getFilePath: () => filePathRef.current,
 				onSyncError: (error, operation) => {
-					// nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 					console.error(
+						// nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 						`[ServerSync] Operation "${operation.name}" failed:`,
 						error,
 					);
@@ -324,8 +324,8 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
 							};
 							engine.registerComponent(componentDef);
 						});
-						// nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 						console.log(
+							// nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 							`[Canvas Engine] ✓ Reloaded ${data.definitions.length} Atom components`,
 							data.definitions.map((d: any) => d.type).join(', '),
 						);
