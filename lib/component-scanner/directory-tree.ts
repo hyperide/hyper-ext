@@ -48,12 +48,12 @@ export async function getDirectoryTree(
     }
 
     if (currentDepth === 0) {
-      console.log(`[ComponentScanner] Scanned ${dirPath}: found ${dirCount} directories and ${fileCount} files at root level`);
+      console.log(`[ComponentScanner] Scanned ${dirPath}: found ${dirCount} directories and ${fileCount} files at root level`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
 
     return tree;
   } catch (error) {
-    console.error(`[ComponentScanner] Error reading directory ${dirPath}:`, error);
+    console.error(`[ComponentScanner] Error reading directory ${dirPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     return '';
   }
 }

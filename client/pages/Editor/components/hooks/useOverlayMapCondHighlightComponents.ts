@@ -27,7 +27,7 @@ export function useOverlayMapCondHighlightComponents(
     ) {
       // Clear overlays when not in design mode
       if (overlayContainerRef.current) {
-        overlayContainerRef.current.innerHTML = "";
+        overlayContainerRef.current.innerHTML = ""; // nosemgrep: insecure-document-method -- clearing container, no user data
       }
       return;
     }
@@ -312,7 +312,7 @@ export function useOverlayMapCondHighlightComponents(
         cancelAnimationFrame(rafId);
       }
       if (container) {
-        container.innerHTML = "";
+        container.innerHTML = ""; // nosemgrep: insecure-document-method -- clearing container, no user data
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- meta?.componentName, iframeLoadedCounter, storeUpdateCounter are triggers to re-run effect when AST structure updates

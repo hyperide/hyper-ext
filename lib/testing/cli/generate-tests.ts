@@ -69,7 +69,7 @@ function parseArgs(args: string[]): CliOptions {
       } else if (['unit', 'e2e', 'variants', 'demo'].includes(type)) {
         options.types = [type as 'unit' | 'e2e' | 'variants' | 'demo'];
       } else {
-        console.error(`Unknown type: ${type}`);
+        console.error(`Unknown type: ${type}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         process.exit(1);
       }
     } else if (!arg.startsWith('-')) {
@@ -83,6 +83,7 @@ function parseArgs(args: string[]): CliOptions {
 }
 
 function showHelp(): void {
+  // nosemgrep: unsafe-formatstring
   console.log(`
 Autogen Testing CLI
 
@@ -153,7 +154,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 async function writeFile(filePath: string, content: string, options: CliOptions): Promise<void> {
   if (options.dryRun) {
-    console.log(`  [DRY-RUN] Would write: ${filePath}`);
+    console.log(`  [DRY-RUN] Would write: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     return;
   }
 
@@ -162,7 +163,7 @@ async function writeFile(filePath: string, content: string, options: CliOptions)
   await fs.mkdir(dir, { recursive: true });
 
   await fs.writeFile(filePath, content, 'utf-8');
-  console.log(`  ✓ Written: ${filePath}`);
+  console.log(`  ✓ Written: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 }
 
 async function generateForComponent(
@@ -178,16 +179,16 @@ async function generateForComponent(
     errors: [],
   };
 
-  console.log(`\nProcessing: ${componentPath}`);
+  console.log(`\nProcessing: ${componentPath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
   try {
     // Analyze component
     const analysis = await analyzeComponent(componentPath);
     result.interactiveElementsCount = analysis.interactiveElements.length;
 
-    console.log(`  Found ${analysis.interactiveElements.length} interactive elements`);
+    console.log(`  Found ${analysis.interactiveElements.length} interactive elements`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     if (analysis.cvaVariants?.length) {
-      console.log(`  Found CVA variants: ${analysis.cvaVariants.map(v => v.name).join(', ')}`);
+      console.log(`  Found CVA variants: ${analysis.cvaVariants.map(v => v.name).join(', ')}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
 
     // Determine project root for canvas.json
@@ -205,19 +206,19 @@ async function generateForComponent(
       const relativeComponentPath = path.relative(projectRoot, absolutePath);
       if (hasCanvasVariants(canvasState, relativeComponentPath)) {
         canvasVariants = getVariantsFromCanvas(canvasState, relativeComponentPath);
-        console.log(`  Canvas variants: ${canvasVariants.length}`);
+        console.log(`  Canvas variants: ${canvasVariants.length}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         result.canvasVariantsCount = canvasVariants.length;
         result.variantsCount = canvasVariants.length;
       } else {
-        console.log(`  Canvas: no variants for this component`);
+        console.log(`  Canvas: no variants for this component`); // nosemgrep: unsafe-formatstring
       }
     } else {
-      console.log(`  Canvas: .hyperide/canvas.json not found`);
+      console.log(`  Canvas: .hyperide/canvas.json not found`); // nosemgrep: unsafe-formatstring
     }
 
     // variants.tsx generation is deprecated - use canvas.json instead
     if (options.types.includes('variants')) {
-      console.log(`  [DEPRECATED] variants.tsx generation is deprecated. Use canvas.json instances instead.`);
+      console.log(`  [DEPRECATED] variants.tsx generation is deprecated. Use canvas.json instances instead.`); // nosemgrep: unsafe-formatstring
       result.warnings.push('variants.tsx generation is deprecated. Use canvas.json instances instead.');
     }
 
@@ -236,7 +237,7 @@ async function generateForComponent(
         await writeFile(unitTestPath, content, options);
         result.generatedFiles.push({ path: unitTestPath, type: 'unit' });
       } else {
-        console.log(`  [SKIP] Unit test exists: ${unitTestPath}`);
+        console.log(`  [SKIP] Unit test exists: ${unitTestPath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       }
     }
 
@@ -253,7 +254,7 @@ async function generateForComponent(
         await writeFile(e2eTestPath, content, options);
         result.generatedFiles.push({ path: e2eTestPath, type: 'e2e' });
       } else {
-        console.log(`  [SKIP] E2E test exists: ${e2eTestPath}`);
+        console.log(`  [SKIP] E2E test exists: ${e2eTestPath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       }
     }
 
@@ -267,7 +268,7 @@ async function generateForComponent(
         await writeFile(demoPath, content, options);
         result.generatedFiles.push({ path: demoPath, type: 'demo' });
       } else {
-        console.log(`  [SKIP] Demo file exists: ${demoPath}`);
+        console.log(`  [SKIP] Demo file exists: ${demoPath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       }
 
       // Demo E2E test
@@ -284,7 +285,7 @@ async function generateForComponent(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     result.errors.push(errorMessage);
-    console.error(`  ✗ Error: ${errorMessage}`);
+    console.error(`  ✗ Error: ${errorMessage}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   }
 
   return result;
@@ -301,9 +302,9 @@ async function main(): Promise<void> {
 
   console.log('Autogen Testing CLI');
   console.log('==================');
-  console.log(`Types: ${options.types.join(', ')}`);
-  console.log(`Force: ${options.force}`);
-  console.log(`Dry run: ${options.dryRun}`);
+  console.log(`Types: ${options.types.join(', ')}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`Force: ${options.force}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`Dry run: ${options.dryRun}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
   // Resolve targets to actual files
   const files = await resolveTargets(options.targets);
@@ -313,7 +314,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`\nFound ${files.length} component(s) to process`);
+  console.log(`\nFound ${files.length} component(s) to process`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
   const results: TestGenerationResult[] = [];
 
@@ -333,16 +334,16 @@ async function main(): Promise<void> {
   const totalCanvasVariants = results.reduce((sum, r) => sum + (r.canvasVariantsCount || 0), 0);
   const componentsWithCanvas = results.filter(r => (r.canvasVariantsCount || 0) > 0).length;
 
-  console.log(`Components processed: ${results.length}`);
-  console.log(`Files generated: ${totalGenerated}`);
-  console.log(`Interactive elements found: ${totalInteractive}`);
-  console.log(`Canvas variants used: ${totalCanvasVariants}`);
+  console.log(`Components processed: ${results.length}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`Files generated: ${totalGenerated}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`Interactive elements found: ${totalInteractive}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`Canvas variants used: ${totalCanvasVariants}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   if (componentsWithCanvas > 0) {
-    console.log(`Components with canvas: ${componentsWithCanvas}/${results.length}`);
+    console.log(`Components with canvas: ${componentsWithCanvas}/${results.length}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   }
 
   if (totalErrors > 0) {
-    console.log(`Errors: ${totalErrors}`);
+    console.log(`Errors: ${totalErrors}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     process.exit(1);
   }
 

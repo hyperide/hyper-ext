@@ -661,7 +661,7 @@ export class PreviewPanel {
    */
   public sendGoToVisual(elementId: string): void {
     if (this._panel) {
-      console.log(`[HyperCanvas] Sending goToVisual: ${elementId}`);
+      console.log(`[HyperCanvas] Sending goToVisual: ${elementId}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       this._panel.webview.postMessage({
         type: 'goToVisual',
         elementId,

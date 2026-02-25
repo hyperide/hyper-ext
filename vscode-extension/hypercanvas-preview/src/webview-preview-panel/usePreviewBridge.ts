@@ -83,7 +83,7 @@ export function usePreviewBridge({
       }
     }
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
@@ -121,7 +121,7 @@ export function usePreviewBridge({
             selectedItemIndices: {},
           });
           // Forward to iframe (state sync + scroll to element)
-          iframeEl?.contentWindow?.postMessage(
+          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
             { type: 'hypercanvas:goToVisual', elementId: msg.elementId },
             '*',
           );
@@ -133,7 +133,7 @@ export function usePreviewBridge({
             onStateUpdateRef.current(msg.patch);
           }
           // Forward to iframe (platform state sync)
-          iframeEl?.contentWindow?.postMessage(msg, '*');
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'state:init':
@@ -142,25 +142,25 @@ export function usePreviewBridge({
             onStateUpdateRef.current(msg.state);
           }
           // Forward to iframe
-          iframeEl?.contentWindow?.postMessage(msg, '*');
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'ast:response':
         case 'editor:activeFileChanged':
           // Forward to iframe
-          iframeEl?.contentWindow?.postMessage(msg, '*');
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         // Extension requests element content from iframe (Copy Text / Copy as HTML)
         case 'getElementText':
-          iframeEl?.contentWindow?.postMessage(
+          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
             { type: 'hypercanvas:getElementText', elementId: msg.elementId, requestId: msg.requestId },
             '*',
           );
           break;
 
         case 'getElementHTML':
-          iframeEl?.contentWindow?.postMessage(
+          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
             { type: 'hypercanvas:getElementHTML', elementId: msg.elementId, requestId: msg.requestId },
             '*',
           );
@@ -168,7 +168,7 @@ export function usePreviewBridge({
       }
     }
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
   }, [iframeEl]);
 

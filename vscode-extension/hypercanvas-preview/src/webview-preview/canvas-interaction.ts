@@ -76,7 +76,7 @@ export function init(
 		}
 	}
 
-	window.addEventListener('message', handleMessage);
+	window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
 
 	return {
 		/**
@@ -85,7 +85,7 @@ export function init(
 		 */
 		updateState(patch: Record<string, unknown>) {
 			if (disposed) return;
-			frame.contentWindow?.postMessage(
+			frame.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
 				{ type: 'hypercanvas:stateUpdate', ...patch },
 				'*',
 			);

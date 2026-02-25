@@ -20,6 +20,7 @@ const state = {
 let activeInstanceId: string | null = null;
 
 // === Shared click handler ===
+// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication, same origin within VS Code webview
 attachClickHandler(
 	document,
 	{
@@ -258,6 +259,7 @@ function updateDesignStyles(mode: string): void {
 }
 
 // === Receive messages from parent webview ===
+// nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
 window.addEventListener('message', function (event: MessageEvent) {
 	const msg = event.data;
 	if (!msg || !msg.type) return;

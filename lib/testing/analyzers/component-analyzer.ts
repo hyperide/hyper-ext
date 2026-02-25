@@ -523,7 +523,7 @@ export async function analyzeComponents(
       try {
         return await analyzeComponent(filePath);
       } catch (error) {
-        console.error(`Failed to analyze ${filePath}:`, error);
+        console.error(`Failed to analyze ${filePath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         return null;
       }
     }),

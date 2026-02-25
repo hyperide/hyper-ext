@@ -172,7 +172,7 @@ export async function findUIComponents(
         }
       }
     } catch (error) {
-      console.error(`[ComponentScanner] Error scanning directory ${absolutePath}:`, error);
+      console.error(`[ComponentScanner] Error scanning directory ${absolutePath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
   }
 

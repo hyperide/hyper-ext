@@ -130,6 +130,7 @@ export function useReconnectingEventSource({
         const delay = Math.min(exponentialDelay + jitter, maxDelay);
 
         reconnectAttemptsRef.current++;
+        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         console.log(
           `[SSE] Reconnecting in ${Math.round(delay)}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`,
         );

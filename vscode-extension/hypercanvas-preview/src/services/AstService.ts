@@ -404,6 +404,7 @@ export class AstService {
 
         const result = findElementByUuid(ast, elementId);
         if (!result) {
+          // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
           console.log(
             `[AstService.deleteElements] Element ${elementId.substring(0, 8)} not found (may have been deleted as child)`,
           );
@@ -698,7 +699,7 @@ export class AstService {
 
       if (addedCount > 0) {
         await this._fileParser.writeAST(ast, absolutePath);
-        console.log(`[AstService.injectUniqueIds] Added ${addedCount} UUIDs to ${filePath}`);
+        console.log(`[AstService.injectUniqueIds] Added ${addedCount} UUIDs to ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       }
 
       return { addedCount };

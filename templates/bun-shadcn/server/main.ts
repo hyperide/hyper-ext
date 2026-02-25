@@ -41,4 +41,4 @@ const server = serve({
   },
 });
 
-console.log(`[Bun] Server running on http://localhost:${server.port}`);
+console.log(`[Bun] Server running on http://localhost:${server.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string

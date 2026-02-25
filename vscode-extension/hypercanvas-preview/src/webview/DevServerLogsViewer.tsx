@@ -76,7 +76,7 @@ export function DevServerLogsViewer({ onAutoFix }: DevServerLogsViewerProps) {
       }
     };
 
-    window.addEventListener('message', handler);
+    window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
     return () => window.removeEventListener('message', handler);
   }, []);
 

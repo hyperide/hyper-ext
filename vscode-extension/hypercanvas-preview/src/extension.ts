@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  console.log(`[HyperCanvas] Workspace root: ${workspaceRoot}`);
+  console.log(`[HyperCanvas] Workspace root: ${workspaceRoot}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
   devServerManager = new DevServerManager(workspaceRoot);
 
@@ -267,7 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         if (!res.ok) {
-          console.warn(`[HyperCanvas] code-editor/saved failed: ${res.status}`);
+          console.warn(`[HyperCanvas] code-editor/saved failed: ${res.status}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
       } catch {
         // Server not reachable — ignore silently

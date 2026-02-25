@@ -782,7 +782,7 @@ export function getConflictingPrefixesForProperty(styleKey: string): string[] {
   // e.g., 'items-start' with suffix='start' → 'items-'
   // e.g., 'gap-y-[4px]' with suffix='[4px]' → 'gap-y-'
   const escapedSuffix = testConfig.suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const prefix = generated.replace(new RegExp(`${escapedSuffix}$`), '');
+  const prefix = generated.replace(new RegExp(`${escapedSuffix}$`), ''); // nosemgrep: detect-non-literal-regexp -- escaped user input used for suffix stripping
 
   return prefix ? [prefix] : [];
 }

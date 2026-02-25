@@ -444,7 +444,7 @@ export function useInstanceOverlays({
           // VULN-002: Fixed XSS - use textContent instead of innerHTML for user data
           const instanceSpan = document.createElement('span');
           instanceSpan.textContent = instanceId;
-          badge.innerHTML = '';
+          badge.innerHTML = ''; // nosemgrep: insecure-document-method -- clearing element, no user data
           badge.appendChild(instanceSpan);
           if (chevronSvg) {
             badge.insertAdjacentHTML('beforeend', chevronSvg);

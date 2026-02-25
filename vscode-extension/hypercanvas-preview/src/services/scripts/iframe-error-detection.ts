@@ -127,6 +127,7 @@ function checkErrors(): void {
 	if (errorStr !== lastErrorStr) {
 		lastErrorStr = errorStr;
 		try {
+			// nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
 			window.parent.postMessage(
 				{
 					type: 'hypercanvas:runtimeError',

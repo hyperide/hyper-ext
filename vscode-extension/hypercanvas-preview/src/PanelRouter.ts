@@ -115,7 +115,7 @@ export class PanelRouter {
 			try {
 				await vscode.commands.executeCommand(command, ...(args ?? []));
 			} catch (e) {
-				console.error(`[PanelRouter] Failed to execute command ${command}:`, e);
+				console.error(`[PanelRouter] Failed to execute command ${command}:`, e); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 			}
 			return true;
 		}

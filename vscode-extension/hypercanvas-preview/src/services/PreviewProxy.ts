@@ -62,7 +62,7 @@ export class PreviewProxy {
         const addr = this._server!.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
-          console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`);
+          console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
         resolve();
       });

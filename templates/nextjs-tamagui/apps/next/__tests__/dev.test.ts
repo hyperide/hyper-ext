@@ -13,7 +13,7 @@ test('Next.js dev server starts', async () => {
     devProcess = spawn('yarn', ['dev'], {
       cwd: path.resolve(__dirname, '..'),
       stdio: 'pipe',
-      shell: true,
+      shell: true, // nosemgrep: spawn-shell-true -- test needs shell for yarn dev
     })
 
     let output = ''

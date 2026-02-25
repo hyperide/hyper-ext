@@ -67,7 +67,7 @@ async function openFile(
       );
     }
 
-    console.log(`[EditorBridge] Opened file: ${filePath}`);
+    console.log(`[EditorBridge] Opened file: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   } catch (error) {
     console.error('[EditorBridge] Failed to open file:', error);
     vscode.window.showErrorMessage(`Failed to open file: ${filePath}`);
@@ -99,7 +99,7 @@ export async function goToCode(
       vscode.TextEditorRevealType.InCenter,
     );
 
-    console.log(`[EditorBridge] Navigated to ${filePath}:${line}:${column}`);
+    console.log(`[EditorBridge] Navigated to ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   } catch (error) {
     console.error('[EditorBridge] Failed to navigate:', error);
     vscode.window.showErrorMessage(`Failed to open file: ${filePath}`);
@@ -131,7 +131,7 @@ export function setupActiveFileListener(webview: vscode.Webview): vscode.Disposa
       path,
     });
 
-    console.log(`[EditorBridge] Active file changed: ${path}`);
+    console.log(`[EditorBridge] Active file changed: ${path}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   });
 }
 
