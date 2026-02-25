@@ -70,6 +70,20 @@ function createWebviewPlugins() {
       build.onResolve({ filter: /utils\/authFetch/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/authFetch.ts') };
       });
+
+      // Stub out SaaS-only modules for shared LeftSidebar
+      build.onResolve({ filter: /contexts\/ComponentMetaContext/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/saas-only.ts') };
+      });
+      build.onResolve({ filter: /stores\/gitStore/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/saas-only.ts') };
+      });
+      build.onResolve({ filter: /components\/SidebarHeader/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/SidebarHeader.tsx') };
+      });
+      build.onResolve({ filter: /components\/SourceControlSection/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/SourceControlSection.tsx') };
+      });
     }),
   ];
 }

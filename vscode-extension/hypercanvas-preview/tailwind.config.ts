@@ -10,6 +10,8 @@ export default {
     // Reused shadcn/ui components from main project
     '../../client/components/ui/**/*.{ts,tsx}',
     // Reused components for left panel
+    '../../client/components/LeftSidebar/**/*.{ts,tsx}',
+    '../../client/components/ComponentGroupList.tsx',
     '../../client/components/ElementsTree.tsx',
     '../../client/components/icons/IconSquareRotatedPlus.tsx',
     // Reused components for right panel (inspector)

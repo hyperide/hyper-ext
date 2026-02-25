@@ -7,6 +7,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import {
 	handleEditorMessage,
 	type EditorMessage,
@@ -28,6 +30,7 @@ export class PanelRouter {
 	private _stateHub: StateHub;
 	private _componentService: ComponentService;
 	private _styleReadService: StyleReadService;
+	private _workspaceRoot: string;
 	private _onOpenAIChat?: (prompt: string) => void;
 
 	constructor(config: PanelRouterConfig) {
@@ -35,6 +38,7 @@ export class PanelRouter {
 		this._stateHub = config.stateHub;
 		this._componentService = new ComponentService(config.workspaceRoot);
 		this._styleReadService = new StyleReadService(config.workspaceRoot, new VSCodeFileIO());
+		this._workspaceRoot = config.workspaceRoot;
 	}
 
 	get astBridge(): AstBridge {
@@ -157,6 +161,19 @@ export class PanelRouter {
 				webview.postMessage({ type: 'component:response', requestId, success: true, data: structure });
 			} catch (e) {
 				webview.postMessage({ type: 'component:response', requestId, success: false, error: String(e) });
+			}
+			return true;
+		}
+
+		// File operations (local filesystem)
+		if (type === 'file:read') {
+			const { requestId, filePath } = message as { requestId: string; filePath: string };
+			try {
+				const resolved = path.resolve(this._workspaceRoot, filePath);
+				const content = await fs.readFile(resolved, 'utf-8');
+				webview.postMessage({ type: 'file:response', requestId, success: true, data: content });
+			} catch (e) {
+				webview.postMessage({ type: 'file:response', requestId, success: false, error: String(e) });
 			}
 			return true;
 		}

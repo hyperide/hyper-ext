@@ -7,6 +7,7 @@
 
 import { IconTilde } from '@tabler/icons-react';
 import cn from 'clsx';
+import { usePlatformContext } from '@/lib/platform';
 import type { ComponentGroup, ComponentListItem } from '../../lib/component-scanner/types';
 
 interface ComponentGroupListProps {
@@ -22,6 +23,8 @@ export function ComponentGroupList({
   loadingComponentPath,
   onComponentClick,
 }: ComponentGroupListProps) {
+  const isVSCode = usePlatformContext() === 'vscode-webview';
+
   return (
     <>
       {groups.map((group) => (
@@ -44,9 +47,12 @@ export function ComponentGroupList({
                   key={component.path}
                   type="button"
                   className={cn(
-                    'h-6 px-2 flex items-center gap-2 rounded justify-start',
+                    'h-6 px-2 flex items-center gap-2 justify-start',
+                    isVSCode ? 'rounded-none' : 'rounded',
                     {
-                      'bg-blue-500/20 border border-blue-500/50': isActive,
+                      // VS Code: left border accent; SaaS: rounded border
+                      'bg-blue-500/20 border-l-2 border-blue-500': isActive && isVSCode,
+                      'bg-blue-500/20 border border-blue-500/50 rounded': isActive && !isVSCode,
                       'hover:bg-muted': !isActive,
                       'opacity-70': isLoading,
                     },
