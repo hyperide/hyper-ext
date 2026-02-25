@@ -3,9 +3,9 @@
  * Shows arrows pointing to instances that are outside the visible viewport
  */
 
-import { useEffect, type RefObject } from 'react';
 import type { ViewportState } from '@/../../shared/types/canvas';
 import { getPreviewIframe } from '@/lib/dom-utils';
+import { useEffect, type RefObject } from 'react';
 
 interface UseOffscreenIndicatorsProps {
   enabled: boolean; // Only show in board mode
@@ -232,9 +232,9 @@ export function useOffscreenIndicators({
 
         // Show count if multiple instances
         if (indicator.count > 1) {
-          element.innerHTML = `${arrowSvg(rotation)}<span style="position:absolute;top:-4px;right:-4px;background:#3b82f6;color:white;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;">${indicator.count}</span>`;
+          element.innerHTML = `${arrowSvg(rotation)}<span style="position:absolute;top:-4px;right:-4px;background:#3b82f6;color:white;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;">${indicator.count}</span>`; // nosemgrep: insecure-document-method -- arrowSvg() returns hardcoded SVG with numeric rotation, indicator.count is a number
         } else {
-          element.innerHTML = arrowSvg(rotation);
+          element.innerHTML = arrowSvg(rotation); // nosemgrep: insecure-document-method -- arrowSvg() returns hardcoded SVG with numeric rotation, no user input
         }
       }
 

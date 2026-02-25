@@ -34,7 +34,7 @@ export async function copyElementAsTSX(
 
     // Copy TSX code to system clipboard
     await navigator.clipboard.writeText(result.tsx);
-    console.log(`[TSX Clipboard] Copied to clipboard: ${result.tsx.substring(0, 100)}...`);
+    console.log(`[TSX Clipboard] Copied to clipboard: ${result.tsx.substring(0, 100)}...`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     toast({
       title: 'Copied',
       description: 'Element copied to clipboard',
@@ -138,7 +138,7 @@ export async function copyMultipleElementsAsTSX(
 
     // Copy to system clipboard
     await navigator.clipboard.writeText(combinedTsx);
-    console.log(`[TSX Clipboard] Copied ${elementIds.length} elements to clipboard: ${combinedTsx.substring(0, 100)}...`);
+    console.log(`[TSX Clipboard] Copied ${elementIds.length} elements to clipboard: ${combinedTsx.substring(0, 100)}...`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     toast({
       title: 'Copied',
       description: `${elementIds.length} elements copied to clipboard`,

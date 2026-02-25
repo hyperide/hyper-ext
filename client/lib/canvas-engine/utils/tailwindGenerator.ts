@@ -353,7 +353,7 @@ export function updateTailwindClassName(
 
   const mapping = styleToClassMap[styleKey];
   if (!mapping) {
-    console.warn(`[tailwindGenerator] Unknown style key: ${styleKey}`);
+    console.warn(`[tailwindGenerator] Unknown style key: ${styleKey}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     return currentClassName;
   }
 

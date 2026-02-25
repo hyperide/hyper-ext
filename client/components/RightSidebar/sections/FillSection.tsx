@@ -1,8 +1,7 @@
 import { memo } from 'react';
-import { IconMinus } from '@tabler/icons-react';
-import { Input } from '../../ui/input';
 import { ColorCombobox } from '../../ui/color-combobox';
 import { FillPicker, type FillMode } from '../../ui/fill-picker';
+import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
 import { hexWithAlpha } from '../utils';
 
@@ -71,7 +70,7 @@ export const FillSection = memo(function FillSection({
 	};
 
 	const handleFillOpacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		let value = e.target.value.replace('%', '').trim();
+		const value = e.target.value.replace('%', '').trim(); // nosemgrep: incomplete-sanitization -- stripping '%' from CSS opacity input, not security sanitization
 		onFillOpacityChange(value);
 		if (backgroundColor?.startsWith('#')) {
 			const colorWithAlpha = hexWithAlpha(backgroundColor, value || '100');
@@ -202,7 +201,7 @@ export const SampleDefault = () => {
 			onTextColorChange={(value) => console.log('Text color changed:', value)}
 			onFillModeChange={(mode) => console.log('Fill mode changed:', mode)}
 			syncStyleChange={(key, value) =>
-				console.log(`Style synchronized: ${key} = ${value}`)
+				console.log(`Style synchronized: ${key} = ${value}`) // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 			}
 		/>
 	);

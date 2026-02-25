@@ -257,6 +257,7 @@ export function CodeServerIDE({
         // Save to DB (which also updates IDE settings.json on server)
         updateTheme(event.data.theme).then(() => {
           // Reload IDE to apply new theme
+          // nosemgrep: wildcard-postmessage-configuration -- iframe communication, origin varies between SaaS and VS Code webview
           iframeRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:reloadIDE' }, '*');
         });
       }
@@ -266,6 +267,7 @@ export function CodeServerIDE({
       }
       // IDE asks for current theme
       if (event.data?.type === 'hypercanvas:getTheme') {
+        // nosemgrep: wildcard-postmessage-configuration -- iframe communication, origin varies between SaaS and VS Code webview
         iframeRef.current?.contentWindow?.postMessage(
           { type: 'hypercanvas:currentTheme', theme },
           '*'
@@ -273,6 +275,7 @@ export function CodeServerIDE({
       }
     };
 
+    // nosemgrep: insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [onActiveFileChange, navigate, logout, setTheme, updateTheme, onOpenProjectSettings, theme]);

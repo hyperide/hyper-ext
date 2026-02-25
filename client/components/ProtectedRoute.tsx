@@ -61,10 +61,10 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     // Schedule next retry if under limit
     if (connectionRetryCount < MAX_RETRIES) {
       const delay = RETRY_DELAYS[connectionRetryCount] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
-      console.log(`[Auth] Scheduling retry ${connectionRetryCount + 1}/${MAX_RETRIES} in ${delay}ms`);
+      console.log(`[Auth] Scheduling retry ${connectionRetryCount + 1}/${MAX_RETRIES} in ${delay}ms`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       retryTimeoutRef.current = setTimeout(() => {
         if (navigator.onLine) {
-          console.log(`[Auth] Retry attempt ${connectionRetryCount + 1}/${MAX_RETRIES}`);
+          console.log(`[Auth] Retry attempt ${connectionRetryCount + 1}/${MAX_RETRIES}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
           retryConnection();
         }
       }, delay);

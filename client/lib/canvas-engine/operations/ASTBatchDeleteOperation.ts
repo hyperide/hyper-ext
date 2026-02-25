@@ -239,7 +239,7 @@ export class ASTBatchDeleteOperation extends BaseOperation {
     // Sort elements within each parent by original index
     for (const [parentKey, elements] of elementsByParent.entries()) {
       elements.sort((a, b) => a[1].index - b[1].index);
-      console.log(`[ASTBatchDeleteOperation] Parent ${parentKey}: restoring ${elements.length} elements at indices:`,
+      console.log(`[ASTBatchDeleteOperation] Parent ${parentKey}: restoring ${elements.length} elements at indices:`, // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         elements.map(e => `${e[0].substring(0, 8)}@${e[1].index}`));
     }
 

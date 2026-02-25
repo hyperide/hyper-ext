@@ -195,7 +195,7 @@ function InstanceRenderer({ instanceId, hoveredId, selectedId }: InstanceRendere
 
   const componentDef = engine.registry.get(instance.type);
   if (!componentDef) {
-    console.warn(`[CanvasRenderer] Component definition not found: ${instance.type}`);
+    console.warn(`[CanvasRenderer] Component definition not found: ${instance.type}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     return null;
   }
 

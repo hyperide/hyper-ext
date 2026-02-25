@@ -161,7 +161,7 @@ export class CanvasEngine {
         }
       }
       // ID not found as instance or AST node - log warning but still select
-      console.warn(`[CanvasEngine] Selecting unknown ID: ${id}`);
+      console.warn(`[CanvasEngine] Selecting unknown ID: ${id}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
 
     // Normal instance selection
@@ -650,7 +650,7 @@ export class CanvasEngine {
    * More efficient than multiple deleteASTElement calls
    */
   deleteASTElements(elementIds: string[], filePath: string): void {
-    console.log(`[CanvasEngine.deleteASTElements] Called with ${elementIds.length} elements:`, elementIds.map(id => id.substring(0, 8)));
+    console.log(`[CanvasEngine.deleteASTElements] Called with ${elementIds.length} elements:`, elementIds.map(id => id.substring(0, 8))); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
     if (elementIds.length === 0) {
       console.warn('[CanvasEngine] No elements to delete');
@@ -1141,7 +1141,7 @@ export class CanvasEngine {
    */
   private log(message: string, ...args: any[]): void {
     if (this.debug) {
-      console.log(`[CanvasEngine] ${message}`, ...args);
+      console.log(`[CanvasEngine] ${message}`, ...args); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     }
   }
 }

@@ -639,7 +639,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 	// Handle Go to Visual from code-server IDE (SSE event)
 	const handleGoToVisual = useCallback(
 		(uniqId: string, elementType: string, filePath: string) => {
-			console.log(`[CanvasEditor] Go to Visual: ${uniqId} (${elementType}) in ${filePath}`);
+			console.log(`[CanvasEditor] Go to Visual: ${uniqId} (${elementType}) in ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
 			// Load the component (triggers canvas reload)
 			loadComponent(filePath);

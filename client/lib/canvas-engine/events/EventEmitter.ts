@@ -74,7 +74,7 @@ export class EventEmitter {
         try {
           listener(data);
         } catch (error) {
-          console.error(`Error in event listener for "${event}":`, error);
+          console.error(`Error in event listener for "${event}":`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
       });
     }

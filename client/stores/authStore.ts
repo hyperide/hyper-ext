@@ -64,7 +64,7 @@ const fetchWithRetry = async (
       const response = await fetch(url, options);
       return response;
     } catch (error) {
-      console.log(`[Auth] Fetch attempt ${i + 1}/${retries} failed:`, error);
+      console.log(`[Auth] Fetch attempt ${i + 1}/${retries} failed:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       if (i === retries - 1) throw error;
       // Exponential backoff: 500ms, 1000ms, 2000ms
       await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));

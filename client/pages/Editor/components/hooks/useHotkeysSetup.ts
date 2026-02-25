@@ -203,7 +203,7 @@ export function useHotkeysSetup({
 			const newIds: (string | null)[] = [];
 			for (const id of selectedIds) {
 				const newId = await engine.duplicateASTElement(id, filePath);
-				console.log(`[Hotkey] Duplicated ${id.substring(0, 8)} -> ${newId?.substring(0, 8) || 'null'}`);
+				console.log(`[Hotkey] Duplicated ${id.substring(0, 8)} -> ${newId?.substring(0, 8) || 'null'}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 				newIds.push(newId);
 			}
 
