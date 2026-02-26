@@ -7,41 +7,26 @@
  * Uses shared lib/ast/ utilities with VSCodeFileIO for file operations.
  */
 
-import * as t from '@babel/types';
 import _traverse, { type NodePath } from '@babel/traverse';
-import {
-  parseCode,
-  printAST,
-  createFileParser,
-} from '@lib/ast/parser';
-import {
-  findElementByUuid,
-  getUuidFromElement,
-} from '@lib/ast/traverser';
-import {
-  setAttribute,
-  getAttributeString,
-  valueToJSXAttribute,
-  cloneElement,
-  makeNotSelfClosing,
-  updateElementChildren,
-} from '@lib/ast/mutator';
-import {
-  generateUuid,
-  updateAllChildUuids,
-  hasUuid,
-  ensureUuid,
-} from '@lib/ast/uuid';
+import * as t from '@babel/types';
+import { detectClassNameType, modifyDynamicClassName } from '@lib/ast/dynamic-classname-mutator';
 import type { FileIO } from '@lib/ast/file-io';
+import {
+  cloneElement,
+  getAttributeString,
+  makeNotSelfClosing,
+  setAttribute,
+  updateElementChildren,
+  valueToJSXAttribute,
+} from '@lib/ast/mutator';
+import { createFileParser, parseCode } from '@lib/ast/parser';
+import { findElementByUuid, getUuidFromElement } from '@lib/ast/traverser';
+import { ensureUuid, generateUuid, hasUuid, updateAllChildUuids } from '@lib/ast/uuid';
 import { generateTailwindClasses } from '@lib/tailwind/generator';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
-import {
-  detectClassNameType,
-  modifyDynamicClassName,
-} from '@lib/ast/dynamic-classname-mutator';
 import type { ClassNameLocation } from '@lib/types';
 
-// @ts-ignore - babel/traverse has ESM/CJS issues
+// @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
 
 // ============================================
@@ -161,11 +146,7 @@ export class AstService {
   /**
    * Update element props
    */
-  async updateProps(
-    filePath: string,
-    elementId: string,
-    props: Record<string, unknown>,
-  ): Promise<AstOperationResult> {
+  async updateProps(filePath: string, elementId: string, props: Record<string, unknown>): Promise<AstOperationResult> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -202,11 +183,7 @@ export class AstService {
    * Update text/expression children of a JSX element.
    * Uses shared updateElementChildren utility for proper JSX children replacement.
    */
-  async updateText(
-    filePath: string,
-    elementId: string,
-    text: string,
-  ): Promise<AstOperationResult> {
+  async updateText(filePath: string, elementId: string, text: string): Promise<AstOperationResult> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -252,9 +229,7 @@ export class AstService {
       const newId = targetId || generateUuid();
 
       // Create attributes
-      const attributes: t.JSXAttribute[] = [
-        t.jsxAttribute(t.jsxIdentifier('data-uniq-id'), t.stringLiteral(newId)),
-      ];
+      const attributes: t.JSXAttribute[] = [t.jsxAttribute(t.jsxIdentifier('data-uniq-id'), t.stringLiteral(newId))];
 
       // Extract children from props
       const { children, ...otherProps } = props as { children?: unknown };
@@ -276,20 +251,14 @@ export class AstService {
       // Create element
       const isSelfClosing = childrenContent.length === 0;
       const newElement = t.jsxElement(
-        t.jsxOpeningElement(
-          t.jsxIdentifier(componentType),
-          attributes,
-          isSelfClosing,
-        ),
-        isSelfClosing
-          ? null
-          : t.jsxClosingElement(t.jsxIdentifier(componentType)),
+        t.jsxOpeningElement(t.jsxIdentifier(componentType), attributes, isSelfClosing),
+        isSelfClosing ? null : t.jsxClosingElement(t.jsxIdentifier(componentType)),
         childrenContent,
         isSelfClosing,
       );
 
       let inserted = false;
-      let actualIndex: number | undefined = undefined;
+      let actualIndex: number | undefined;
 
       if (!parentId) {
         // Insert at root level - find return statement
@@ -299,15 +268,10 @@ export class AstService {
               const returnElement = path.node.argument;
               makeNotSelfClosing(returnElement);
 
-              const jsxElementCount = returnElement.children.filter((c) =>
-                t.isJSXElement(c),
-              ).length;
+              const jsxElementCount = returnElement.children.filter((c) => t.isJSXElement(c)).length;
 
               if (index !== undefined && index >= 0 && index <= jsxElementCount) {
-                const realIndex = AstService._calculateRealIndex(
-                  returnElement.children,
-                  index,
-                );
+                const realIndex = AstService._calculateRealIndex(returnElement.children, index);
                 returnElement.children.splice(realIndex, 0, newElement);
                 actualIndex = index;
               } else {
@@ -325,10 +289,7 @@ export class AstService {
         traverse(ast, {
           JSXElement(path: NodePath<t.JSXElement>) {
             const dataUniqIdAttr = path.node.openingElement.attributes.find(
-              (attr) =>
-                t.isJSXAttribute(attr) &&
-                t.isJSXIdentifier(attr.name) &&
-                attr.name.name === 'data-uniq-id',
+              (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
             );
 
             if (
@@ -339,15 +300,10 @@ export class AstService {
             ) {
               makeNotSelfClosing(path.node);
 
-              const jsxElementCount = path.node.children.filter((c) =>
-                t.isJSXElement(c),
-              ).length;
+              const jsxElementCount = path.node.children.filter((c) => t.isJSXElement(c)).length;
 
               if (index !== undefined && index >= 0 && index <= jsxElementCount) {
-                const realIndex = AstService._calculateRealIndex(
-                  path.node.children,
-                  index,
-                );
+                const realIndex = AstService._calculateRealIndex(path.node.children, index);
                 path.node.children.splice(realIndex, 0, newElement);
                 actualIndex = index;
               } else {
@@ -391,10 +347,7 @@ export class AstService {
   /**
    * Delete elements by IDs
    */
-  async deleteElements(
-    filePath: string,
-    elementIds: string[],
-  ): Promise<AstOperationResult> {
+  async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
     try {
       const absolutePath = this._resolvePath(filePath);
       let deletedCount = 0;
@@ -442,10 +395,7 @@ export class AstService {
   /**
    * Duplicate element
    */
-  async duplicateElement(
-    filePath: string,
-    elementId: string,
-  ): Promise<DuplicateElementResult> {
+  async duplicateElement(filePath: string, elementId: string): Promise<DuplicateElementResult> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -517,10 +467,7 @@ export class AstService {
           if (wrapped) return;
 
           const dataUniqIdAttr = path.node.openingElement.attributes.find(
-            (attr) =>
-              t.isJSXAttribute(attr) &&
-              t.isJSXIdentifier(attr.name) &&
-              attr.name.name === 'data-uniq-id',
+            (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
           );
 
           if (
@@ -531,10 +478,7 @@ export class AstService {
           ) {
             // Create wrapper attributes
             const wrapperAttrs: t.JSXAttribute[] = [
-              t.jsxAttribute(
-                t.jsxIdentifier('data-uniq-id'),
-                t.stringLiteral(wrapperId),
-              ),
+              t.jsxAttribute(t.jsxIdentifier('data-uniq-id'), t.stringLiteral(wrapperId)),
             ];
 
             // Add additional wrapper props
@@ -612,10 +556,8 @@ export class AstService {
 
           // Check if position is within this element
           const isWithin =
-            (line > loc.start.line ||
-              (line === loc.start.line && column >= loc.start.column)) &&
-            (line < loc.end.line ||
-              (line === loc.end.line && column <= loc.end.column));
+            (line > loc.start.line || (line === loc.start.line && column >= loc.start.column)) &&
+            (line < loc.end.line || (line === loc.end.line && column <= loc.end.column));
 
           if (!isWithin) return;
 
@@ -624,9 +566,7 @@ export class AstService {
           if (!uuid) return;
 
           // Calculate size
-          const size =
-            (loc.end.line - loc.start.line) * 1000 +
-            (loc.end.column - loc.start.column);
+          const size = (loc.end.line - loc.start.line) * 1000 + (loc.end.column - loc.start.column);
 
           // Keep smallest (most specific)
           if (!bestMatch || size < bestMatch.size) {
@@ -653,10 +593,7 @@ export class AstService {
   /**
    * Get element location (for Go to Code)
    */
-  async getElementLocation(
-    filePath: string,
-    elementId: string,
-  ): Promise<{ line: number; column: number } | null> {
+  async getElementLocation(filePath: string, elementId: string): Promise<{ line: number; column: number } | null> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -712,10 +649,7 @@ export class AstService {
   /**
    * Get element's TSX source code (for Copy operation)
    */
-  async getElementCode(
-    filePath: string,
-    elementId: string,
-  ): Promise<string | null> {
+  async getElementCode(filePath: string, elementId: string): Promise<string | null> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const sourceCode = await this._fileParser.readFileContent(absolutePath);
@@ -730,12 +664,8 @@ export class AstService {
       const lines = sourceCode.split('\n');
 
       // Extract source substring from file using loc positions
-      const startOffset = lines
-        .slice(0, start.line - 1)
-        .reduce((sum, line) => sum + line.length + 1, 0) + start.column;
-      const endOffset = lines
-        .slice(0, end.line - 1)
-        .reduce((sum, line) => sum + line.length + 1, 0) + end.column;
+      const startOffset = lines.slice(0, start.line - 1).reduce((sum, line) => sum + line.length + 1, 0) + start.column;
+      const endOffset = lines.slice(0, end.line - 1).reduce((sum, line) => sum + line.length + 1, 0) + end.column;
 
       return sourceCode.substring(startOffset, endOffset);
     } catch (error) {
@@ -747,10 +677,7 @@ export class AstService {
   /**
    * Find parent element with data-uniq-id (for Select Parent)
    */
-  async getParentElementId(
-    filePath: string,
-    elementId: string,
-  ): Promise<string | null> {
+  async getParentElementId(filePath: string, elementId: string): Promise<string | null> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -780,10 +707,7 @@ export class AstService {
   /**
    * Find direct child elements with data-uniq-id (for Select Child)
    */
-  async getChildElementIds(
-    filePath: string,
-    elementId: string,
-  ): Promise<string[]> {
+  async getChildElementIds(filePath: string, elementId: string): Promise<string[]> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -812,11 +736,7 @@ export class AstService {
    * Insert element from TSX code string (for Paste operation).
    * Parses the TSX code, generates new UUIDs, and inserts after target element.
    */
-  async pasteElement(
-    filePath: string,
-    targetId: string | null,
-    tsxCode: string,
-  ): Promise<InsertElementResult> {
+  async pasteElement(filePath: string, targetId: string | null, tsxCode: string): Promise<InsertElementResult> {
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -924,5 +844,4 @@ export class AstService {
 
     return children.length;
   }
-
 }

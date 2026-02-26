@@ -104,10 +104,7 @@ export {
   PaginationPrevious,
 };
 
-export const SampleDefault = () => {
-  const currentPage = 8;
-  const totalPages = 12;
-
+export const SampleDefault = ({ currentPage = 8, totalPages = 12 }: { currentPage?: number; totalPages?: number }) => {
   // Helper to generate pagination links
   const getVisiblePages = (current: number, total: number) => {
     const delta = 1;

@@ -245,11 +245,13 @@ export default function AIAgentChat({
   }, [isStreaming]);
 
   // Load chats on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect, loadChats is stable
   useEffect(() => {
     loadChats();
   }, [projectPath]);
 
   // Sync initialChatId prop with currentChatId state
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleStopStreaming is stable, only re-run on chat ID changes
   useEffect(() => {
     // Only sync if initialChatId is explicitly set (not null/undefined)
     // This prevents canceling streams when creating new chats (currentChatId changes from null to new ID)
@@ -268,6 +270,7 @@ export default function AIAgentChat({
   }, [initialChatId, currentChatId]);
 
   // Load messages when chat changes (but not during streaming)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadMessages is stable, only re-run on chatId change
   useEffect(() => {
     // Don't reload messages during streaming - it will clear the UI
     if (isStreamingRef.current) return;
@@ -300,6 +303,7 @@ export default function AIAgentChat({
   }, []);
 
   // Auto-scroll to bottom when messages change, but only if user hasn't scrolled up
+  // biome-ignore lint/correctness/useExhaustiveDependencies: messages/currentAssistantMessage are the scroll triggers, no extra deps needed
   useEffect(() => {
     // Skip if user has scrolled up
     if (isUserScrolledUpRef.current) return;
@@ -323,6 +327,7 @@ export default function AIAgentChat({
   }, [initialPrompt]);
 
   // Auto-send initial prompt
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleSendMessage/createNewChat/onPromptSent are stable callbacks
   useEffect(() => {
     if (initialPrompt && !isLoadingChats && !isStreamingRef.current && !initialPromptSentRef.current) {
       initialPromptSentRef.current = true;
@@ -804,10 +809,8 @@ export default function AIAgentChat({
 
                 case 'chat_title_updated': {
                   const title = String(event.data.title ?? '');
-                  if (chatId) {
-                    setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, title } : c)));
-                    onChatTitleUpdate?.(chatId, title);
-                  }
+                  setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, title } : c)));
+                  onChatTitleUpdate?.(chatId, title);
                   break;
                 }
 

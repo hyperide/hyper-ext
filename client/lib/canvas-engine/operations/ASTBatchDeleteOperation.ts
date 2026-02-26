@@ -155,7 +155,6 @@ export class ASTBatchDeleteOperation extends BaseOperation {
                 ? result.element.props.children.substring(0, 50)
                 : undefined,
           });
-          found = true;
           continue;
         }
       }

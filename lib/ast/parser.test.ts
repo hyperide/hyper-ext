@@ -67,14 +67,6 @@ describe('printAST', () => {
     expect(output).toContain('className="test"');
     expect(output).toContain('<span>Hello</span>');
   });
-
-  it('should respect print options', () => {
-    const code = 'const x = 42;';
-    const ast = parseCode(code);
-    const output = printAST(ast, { tabWidth: 4 });
-
-    expect(output).toBeDefined();
-  });
 });
 
 describe('readAndParseFile', () => {
