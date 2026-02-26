@@ -163,8 +163,7 @@ function sendOverlayRects(): void {
   overlayRafScheduled = false;
 
   if (!needsOverlayUpdate) {
-    // Nothing changed, schedule next check
-    scheduleOverlayLoopIfNeeded();
+    // Nothing changed; do not reschedule another frame to avoid a perpetual RAF loop.
     return;
   }
   needsOverlayUpdate = false;
@@ -182,7 +181,7 @@ function sendOverlayRects(): void {
     const id = state.selectedIds[i];
     let selector = `[data-uniq-id="${safeAttrSelectorValue(id)}"]`;
     if (activeInstanceId) {
-      selector = `[data-canvas-instance-id="${activeInstanceId}"] ${selector}`;
+      selector = `[data-canvas-instance-id="${safeAttrSelectorValue(activeInstanceId)}"] ${selector}`;
     }
     const elements = document.querySelectorAll(selector);
     const itemIdx = state.selectedItemIndices[id];
@@ -216,7 +215,7 @@ function sendOverlayRects(): void {
   if (state.hoveredId) {
     let hSelector = `[data-uniq-id="${safeAttrSelectorValue(state.hoveredId)}"]`;
     if (activeInstanceId) {
-      hSelector = `[data-canvas-instance-id="${activeInstanceId}"] ${hSelector}`;
+      hSelector = `[data-canvas-instance-id="${safeAttrSelectorValue(activeInstanceId)}"] ${hSelector}`;
     }
     const hElements = document.querySelectorAll(hSelector);
     const hEl =
@@ -246,12 +245,23 @@ function sendOverlayRects(): void {
   scheduleOverlayLoopIfNeeded();
 }
 
+// Throttle overlay updates triggered by high-frequency DOM/layout events.
+let overlayUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleThrottledOverlayUpdate(): void {
+  needsOverlayUpdate = true;
+  if (overlayUpdateTimeoutId != null) return;
+  overlayUpdateTimeoutId = setTimeout(() => {
+    overlayUpdateTimeoutId = null;
+    scheduleOverlayLoopIfNeeded();
+  }, 50);
+}
+
 // Mark overlays dirty when DOM/layout changes
 const overlayMutationObserver =
   typeof MutationObserver !== 'undefined'
     ? new MutationObserver(() => {
-        needsOverlayUpdate = true;
-        scheduleOverlayLoopIfNeeded();
+        scheduleThrottledOverlayUpdate();
       })
     : null;
 
@@ -267,8 +277,7 @@ if (overlayMutationObserver && document.body) {
 const overlayResizeObserver =
   typeof ResizeObserver !== 'undefined'
     ? new ResizeObserver(() => {
-        needsOverlayUpdate = true;
-        scheduleOverlayLoopIfNeeded();
+        scheduleThrottledOverlayUpdate();
       })
     : null;
 
@@ -278,12 +287,10 @@ if (overlayResizeObserver && document.body) {
 
 // Also mark dirty on scroll and window resize
 const overlayScrollHandler = () => {
-  needsOverlayUpdate = true;
-  scheduleOverlayLoopIfNeeded();
+  scheduleThrottledOverlayUpdate();
 };
 const overlayResizeHandler = () => {
-  needsOverlayUpdate = true;
-  scheduleOverlayLoopIfNeeded();
+  scheduleThrottledOverlayUpdate();
 };
 window.addEventListener('scroll', overlayScrollHandler, true);
 window.addEventListener('resize', overlayResizeHandler);
@@ -293,6 +300,7 @@ scheduleOverlayLoopIfNeeded();
 
 // Clean up observers and listeners when the iframe is unloaded
 window.addEventListener('unload', () => {
+  if (overlayUpdateTimeoutId != null) clearTimeout(overlayUpdateTimeoutId);
   if (overlayMutationObserver) overlayMutationObserver.disconnect();
   if (overlayResizeObserver) overlayResizeObserver.disconnect();
   window.removeEventListener('scroll', overlayScrollHandler, true);
