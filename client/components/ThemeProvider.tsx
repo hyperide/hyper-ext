@@ -89,3 +89,12 @@ export function useTheme(): ThemeContextValue {
   }
   return context;
 }
+
+/** Safe variant — returns system-detected theme outside ThemeProvider (e.g. VS Code webviews). */
+export function useThemeOptional(): ThemeContextValue {
+  const context = useContext(ThemeContext);
+  if (context) return context;
+
+  const resolved = getSystemTheme();
+  return { theme: 'system', resolvedTheme: resolved, setTheme: () => {} };
+}

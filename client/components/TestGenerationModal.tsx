@@ -1,6 +1,6 @@
 import cn from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTheme } from '@/components/ThemeProvider';
+import { useThemeOptional } from '@/components/ThemeProvider';
 import { authFetch } from '@/utils/authFetch';
 import type { InteractiveElementInfo, TestGenerationEvent } from '../../server/routes/generateTests';
 import { LazyEditor, type OnMount } from './LazyMonaco';
@@ -67,7 +67,7 @@ export function TestGenerationModal({
   const logsRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasStarted = useRef(false);
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme } = useThemeOptional();
 
   const handleEditorMount: OnMount = useCallback((_editor, monaco) => {
     // Disable all diagnostics for readonly preview
@@ -110,74 +110,6 @@ export function TestGenerationModal({
     },
     [projectId],
   );
-
-  const startGeneration = useCallback(async () => {
-    setStatus('running');
-    setError(null);
-    setGeneratedFiles([]);
-    setLogs([]);
-    setInteractiveElements([]);
-    setCurrentStep('Starting...');
-    addLog('Starting test generation...');
-
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const response = await authFetch('/api/generate-tests/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          componentPath,
-          types,
-          force,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event: TestGenerationEvent = JSON.parse(line.slice(6));
-              handleEvent(event);
-            } catch {
-              // Skip malformed events
-            }
-          }
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        addLog('Generation cancelled');
-        setStatus('idle');
-      } else {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        setError(message);
-        addLog(`Error: ${message}`);
-        setStatus('error');
-      }
-    }
-  }, [projectId, componentPath, types, force, addLog]);
 
   const handleEvent = useCallback(
     (event: TestGenerationEvent) => {
@@ -273,6 +205,74 @@ export function TestGenerationModal({
     [addLog, loadFileContent],
   );
 
+  const startGeneration = useCallback(async () => {
+    setStatus('running');
+    setError(null);
+    setGeneratedFiles([]);
+    setLogs([]);
+    setInteractiveElements([]);
+    setCurrentStep('Starting...');
+    addLog('Starting test generation...');
+
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const response = await authFetch('/api/generate-tests/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          componentPath,
+          types,
+          force,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event: TestGenerationEvent = JSON.parse(line.slice(6));
+              handleEvent(event);
+            } catch {
+              // Skip malformed events
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        addLog('Generation cancelled');
+        setStatus('idle');
+      } else {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        setError(message);
+        addLog(`Error: ${message}`);
+        setStatus('error');
+      }
+    }
+  }, [projectId, componentPath, types, force, addLog, handleEvent]);
+
   // Auto-start when modal opens
   useEffect(() => {
     if (isOpen && !hasStarted.current && status === 'idle') {
@@ -299,9 +299,9 @@ export function TestGenerationModal({
     }
   }, [isOpen]);
 
-  // Auto-scroll logs
+  // Auto-scroll logs when new entries are added
   useEffect(() => {
-    if (logsRef.current) {
+    if (logs.length > 0 && logsRef.current) {
       logsRef.current.scrollTop = logsRef.current.scrollHeight;
     }
   }, [logs]);

@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { useCanvasEngineOptional, useSelectedIds as useEngineSelectedIds } from '@/lib/canvas-engine';
+import { useCanvasEngineOptional, useSelectedIdsOptional as useEngineSelectedIds } from '@/lib/canvas-engine';
 import { usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,

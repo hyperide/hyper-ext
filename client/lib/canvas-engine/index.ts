@@ -143,6 +143,7 @@ export {
   useParent,
   useRoot,
   useSelectedIds,
+  useSelectedIdsOptional,
   useSelectedInstance,
   useSelectedInstances,
   useSelectedItemIndices,

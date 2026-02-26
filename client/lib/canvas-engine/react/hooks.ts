@@ -4,9 +4,11 @@
 
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
+import { createStore } from 'zustand/vanilla';
 import type { CanvasEngine } from '../core/CanvasEngine';
 import type { ComponentInstance, HistoryState, SelectionState } from '../models/types';
-import { useCanvasEngineContext } from './CanvasEngineProvider';
+import type { CanvasStore } from '../store/createCanvasStore';
+import { useCanvasEngineContext, useCanvasEngineContextOptional } from './CanvasEngineProvider';
 
 /**
  * Get Canvas Engine instance
@@ -201,4 +203,25 @@ export function useTreeSnapshot() {
 export function useForceUpdate() {
   const { store } = useCanvasEngineContext();
   return useStore(store, (state) => state.forceUpdate);
+}
+
+/** Fallback store for optional hooks — static, never updates */
+const EMPTY_STORE = createStore<Pick<CanvasStore, 'selection'>>()(() => ({
+  selection: {
+    selectedIds: [],
+    hoveredId: null,
+    hoveredItemIndex: null,
+    selectedItemIndices: new Map(),
+  },
+}));
+
+/**
+ * Safe variant of useSelectedIds — returns [] outside CanvasEngineProvider.
+ */
+export function useSelectedIdsOptional(): string[] {
+  const context = useCanvasEngineContextOptional();
+  return useStore(
+    context?.store ?? EMPTY_STORE,
+    useShallow((state) => state.selection.selectedIds),
+  );
 }
