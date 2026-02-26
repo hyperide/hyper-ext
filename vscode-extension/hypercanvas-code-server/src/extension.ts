@@ -19,15 +19,36 @@ let sseAbortController: AbortController | null = null;
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperCanvas Code Server] Extension activating...');
 
-  // Get project ID from environment variable (set by IDE container)
+  // Get project ID and auth from environment variables (set by IDE container)
   const projectId = process.env.IDE_PROJECT_ID || 'unknown';
   const origin = process.env.HYPERCANVAS_ORIGIN || 'http://localhost:8080';
+  let accessToken = process.env.HYPERCANVAS_AUTH_TOKEN || '';
+  const refreshToken = process.env.HYPERCANVAS_REFRESH_TOKEN || '';
+
+  /** Auto-refresh access token on 401, return current token */
+  const refreshAccessToken = async (): Promise<string | null> => {
+    if (!refreshToken) return null;
+    try {
+      const res = await fetch(`${origin}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { Cookie: `refresh_token=${refreshToken}` },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { accessToken: string };
+        accessToken = data.accessToken;
+        return accessToken;
+      }
+    } catch {
+      // Server not reachable
+    }
+    return null;
+  };
 
   // Register the webview view provider
-  previewProvider = new PreviewViewProvider(projectId, origin);
+  previewProvider = new PreviewViewProvider(projectId, origin, () => accessToken);
 
   // Set up SSE subscription for commands from canvas (Go to Code)
-  setupCommandSSE(context, projectId, origin);
+  setupCommandSSE(context, projectId, origin, () => accessToken);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PreviewViewProvider.viewType, previewProvider, {
@@ -73,9 +94,12 @@ export function activate(context: vscode.ExtensionContext) {
       const relativePath = filePath.replace(/^\/app\//, '');
 
       try {
-        const response = await fetch(`${origin}/api/projects/${projectId}/ide/go-to-visual`, {
+        const response = await fetch(`${origin}/api/ide/${projectId}/go-to-visual`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({ filePath: relativePath, line, column }),
         });
 
@@ -105,11 +129,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Track file saves for undo/redo snapshots (code-server extension -> HyperCanvas server)
-  // Auth tokens are injected as env vars when the code-server pod starts
-  let accessToken = process.env.HYPERCANVAS_AUTH_TOKEN || '';
-  const refreshToken = process.env.HYPERCANVAS_REFRESH_TOKEN || '';
-
-  // Cache pre-save content so the first IDE save in a session is undoable
   const preSaveContentCache = new Map<string, string>();
 
   context.subscriptions.push(
@@ -147,19 +166,14 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         // Auto-refresh on 401 (access token expired, TTL=15min)
-        if (res.status === 401 && refreshToken) {
-          const refreshRes = await fetch(`${origin}/api/auth/refresh`, {
-            method: 'POST',
-            headers: { Cookie: `refresh_token=${refreshToken}` },
-          });
-          if (refreshRes.ok) {
-            const data = (await refreshRes.json()) as { accessToken: string };
-            accessToken = data.accessToken;
+        if (res.status === 401) {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
             res = await fetch(`${origin}/api/code-editor/saved`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${accessToken}`,
+                Authorization: `Bearer ${newToken}`,
               },
               body: JSON.stringify(payload),
             });
@@ -190,8 +204,13 @@ export function deactivate() {
  * SSE subscription for commands from canvas.
  * Used for Go to Code navigation — canvas sends gotoPosition commands via SSE.
  */
-function setupCommandSSE(context: vscode.ExtensionContext, projectId: string, origin: string) {
-  const url = `${origin}/api/projects/${projectId}/ide/commands/stream`;
+function setupCommandSSE(
+  context: vscode.ExtensionContext,
+  projectId: string,
+  origin: string,
+  getAccessToken: () => string,
+) {
+  const url = `${origin}/api/ide/${projectId}/commands/stream`;
 
   const connect = async () => {
     if (sseAbortController) {
@@ -204,6 +223,7 @@ function setupCommandSSE(context: vscode.ExtensionContext, projectId: string, or
         signal: sseAbortController.signal,
         headers: {
           Accept: 'text/event-stream',
+          Authorization: `Bearer ${getAccessToken()}`,
         },
       });
 
@@ -288,7 +308,8 @@ function setupCommandSSE(context: vscode.ExtensionContext, projectId: string, or
 async function handleGotoPosition(filePath: string, line: number, column: number) {
   try {
     const uri = vscode.Uri.file(filePath);
-    const position = new vscode.Position(line - 1, column - 1);
+    // line is 1-based (Babel), column is 0-based (Babel) — VS Code Position is 0-based for both
+    const position = new vscode.Position(line - 1, column);
 
     const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc);

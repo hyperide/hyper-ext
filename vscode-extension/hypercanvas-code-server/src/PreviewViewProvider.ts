@@ -11,6 +11,7 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _projectId: string,
     private readonly _origin: string,
+    private readonly _getAccessToken: () => string,
   ) {}
 
   public resolveWebviewView(
@@ -79,9 +80,11 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
     }
 
     try {
+      const token = this._getAccessToken();
       const response = await fetch(`${this._origin}/api/get-components?projectId=${this._projectId}`, {
         headers: {
           Accept: 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
       });
 
