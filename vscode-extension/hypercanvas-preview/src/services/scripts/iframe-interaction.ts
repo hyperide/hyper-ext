@@ -6,7 +6,7 @@
  * Communicates with parent webview via postMessage.
  */
 
-import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
+import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 
 // === State (synced from parent webview via postMessage) ===
@@ -17,20 +17,9 @@ const state = {
   selectedItemIndices: {} as Record<string, number | null>,
   engineMode: 'design' as string,
 };
+// Always null until VS Code extension supports component instances (SaaS-only for now).
+// Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
-
-function getItemIndexForElement(elementId: string | null, element: HTMLElement | null): number | null {
-  if (!element || !elementId) return null;
-  let selector = `[data-uniq-id="${elementId}"]`;
-  if (activeInstanceId) {
-    selector = `[data-canvas-instance-id="${activeInstanceId}"] ${selector}`;
-  }
-  const all = document.querySelectorAll(selector);
-  if (all.length > 1) {
-    return Array.prototype.indexOf.call(all, element);
-  }
-  return null;
-}
 
 // === Shared click handler ===
 attachClickHandler(
@@ -120,7 +109,7 @@ document.addEventListener(
     const element = target.closest('[data-uniq-id]') as HTMLElement | null;
     const elementId = element?.dataset.uniqId ?? null;
 
-    const itemIndex = getItemIndexForElement(elementId, element);
+    const itemIndex = element && elementId ? getItemIndex(element, elementId, document, activeInstanceId) : null;
 
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
