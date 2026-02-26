@@ -6,12 +6,16 @@
 
 import { getComputedStylesFromIframe, getPreviewIframe } from './dom-utils';
 
-// Wait after backend response for HMR + React render
+// Wait after backend response for HMR + React render.
+// 300ms is an empirically chosen compromise: usually enough for HMR + React
+// to re-render on typical dev machines without making the UI feel sluggish.
 export const POST_HMR_DELAY_MS = 300;
 // Show "AI analyzing..." toast after this
 export const LONG_WAIT_MS = 3000;
 // Max wait before giving up
 export const SAFETY_TIMEOUT_MS = 15000;
+// Timeout for iframe load during style verification
+export const IFRAME_LOAD_TIMEOUT_MS = 5000;
 
 /**
  * Mapping from ParsedStyles keys to CSS computed property names.
@@ -144,22 +148,23 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     return finish;
   }
 
-  function verifyStyles(): boolean {
-    if (cancelled) return false;
+  function verifyStyles(): void {
+    if (cancelled) return;
     const afterSnapshot = captureComputedStyles(elementId, cssProperties, instanceId);
     if (!afterSnapshot) {
       // Element gone — HMR removed it. Clear syncing.
       finish();
       onVerified();
-      return true;
+      return;
     }
     const unchanged = detectUnchangedProperties(beforeSnapshot, afterSnapshot);
     if (unchanged.length === 0) {
       finish();
       onVerified();
-      return true;
+      return;
     }
-    return false;
+    // Styles not yet applied — caller will force-reload
+    forceReloadAndVerify();
   }
 
   function forceReloadAndVerify(): void {
@@ -199,7 +204,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       iframe.removeEventListener('load', handleLoad);
       finish();
       onNotApplied({ elementId, filePath, styles, unchangedProperties: cssProperties });
-    }, 5000);
+    }, IFRAME_LOAD_TIMEOUT_MS);
 
     iframe.contentWindow.location.reload();
   }
@@ -208,9 +213,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     if (cancelled) return;
     addTimer(() => {
       if (cancelled) return;
-      if (!verifyStyles()) {
-        forceReloadAndVerify();
-      }
+      verifyStyles();
     }, POST_HMR_DELAY_MS);
   }
 

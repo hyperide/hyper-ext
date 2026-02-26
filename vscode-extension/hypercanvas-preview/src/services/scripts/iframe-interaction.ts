@@ -9,6 +9,15 @@
 import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 
+/** Safely escape a value for use inside a CSS attribute selector. */
+function safeAttrSelectorValue(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(value);
+  }
+  // Fallback: escape characters that commonly break attribute selectors
+  return value.replace(/["\\[\]]/g, '\\$&');
+}
+
 // === State (synced from parent webview via postMessage) ===
 const state = {
   selectedIds: [] as string[],
@@ -177,14 +186,14 @@ function sendOverlayRects(): void {
   // Selection rects
   for (let i = 0; i < state.selectedIds.length; i++) {
     const id = state.selectedIds[i];
-    let selector = `[data-uniq-id="${id}"]`;
+    let selector = `[data-uniq-id="${safeAttrSelectorValue(id)}"]`;
     if (activeInstanceId) {
       selector = `[data-canvas-instance-id="${activeInstanceId}"] ${selector}`;
     }
     const elements = document.querySelectorAll(selector);
     const itemIdx = state.selectedItemIndices[id];
 
-    if (itemIdx !== null && itemIdx !== undefined && elements[itemIdx]) {
+    if (itemIdx != null && elements[itemIdx]) {
       const rect = elements[itemIdx].getBoundingClientRect();
       rects.push({
         key: `select-${id}-${itemIdx}`,
@@ -211,7 +220,7 @@ function sendOverlayRects(): void {
 
   // Hover rect
   if (state.hoveredId) {
-    let hSelector = `[data-uniq-id="${state.hoveredId}"]`;
+    let hSelector = `[data-uniq-id="${safeAttrSelectorValue(state.hoveredId)}"]`;
     if (activeInstanceId) {
       hSelector = `[data-canvas-instance-id="${activeInstanceId}"] ${hSelector}`;
     }
@@ -274,21 +283,27 @@ if (overlayResizeObserver && document.body) {
 }
 
 // Also mark dirty on scroll and window resize
-window.addEventListener(
-  'scroll',
-  () => {
-    needsOverlayUpdate = true;
-    scheduleOverlayLoopIfNeeded();
-  },
-  true,
-);
-window.addEventListener('resize', () => {
+const overlayScrollHandler = () => {
   needsOverlayUpdate = true;
   scheduleOverlayLoopIfNeeded();
-});
+};
+const overlayResizeHandler = () => {
+  needsOverlayUpdate = true;
+  scheduleOverlayLoopIfNeeded();
+};
+window.addEventListener('scroll', overlayScrollHandler, true);
+window.addEventListener('resize', overlayResizeHandler);
 
 // Start the loop
 scheduleOverlayLoopIfNeeded();
+
+// Clean up observers and listeners when the iframe is unloaded
+window.addEventListener('unload', () => {
+  if (overlayMutationObserver) overlayMutationObserver.disconnect();
+  if (overlayResizeObserver) overlayResizeObserver.disconnect();
+  window.removeEventListener('scroll', overlayScrollHandler, true);
+  window.removeEventListener('resize', overlayResizeHandler);
+});
 
 // === Design mode CSS ===
 function updateDesignStyles(mode: string): void {
@@ -336,14 +351,14 @@ window.addEventListener('message', function (event: MessageEvent) {
   if (msg.type === 'hypercanvas:goToVisual') {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
-    const el = document.querySelector(`[data-uniq-id="${msg.elementId}"]`);
+    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
   // Content extraction requests from extension (Copy Text / Copy as HTML)
   if (msg.type === 'hypercanvas:getElementText') {
-    const el = document.querySelector(`[data-uniq-id="${msg.elementId}"]`) as HTMLElement | null;
+    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`) as HTMLElement | null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
@@ -357,7 +372,7 @@ window.addEventListener('message', function (event: MessageEvent) {
     return;
   }
   if (msg.type === 'hypercanvas:getElementHTML') {
-    const el = document.querySelector(`[data-uniq-id="${msg.elementId}"]`) as HTMLElement | null;
+    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`) as HTMLElement | null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
