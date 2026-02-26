@@ -18,10 +18,7 @@ export type EditorMessage =
 /**
  * Handle editor-related messages from webview
  */
-export async function handleEditorMessage(
-  message: EditorMessage,
-  webview: vscode.Webview,
-): Promise<void> {
+export async function handleEditorMessage(message: EditorMessage, webview: vscode.Webview): Promise<void> {
   console.log('[EditorBridge] Received message:', message.type);
 
   switch (message.type) {
@@ -30,7 +27,9 @@ export async function handleEditorMessage(
       break;
 
     case 'editor:goToCode':
-      await goToCode(message.path, message.line, message.column);
+      await goToCode(message.path, message.line, message.column, {
+        preserveFocus: false,
+      });
       break;
 
     case 'editor:getActiveFile':
@@ -42,11 +41,7 @@ export async function handleEditorMessage(
 /**
  * Open a file in the editor, optionally at a specific line/column
  */
-async function openFile(
-  filePath: string,
-  line?: number,
-  column?: number,
-): Promise<void> {
+async function openFile(filePath: string, line?: number, column?: number): Promise<void> {
   try {
     // Resolve path relative to workspace
     const uri = resolveFilePath(filePath);
@@ -61,10 +56,7 @@ async function openFile(
         (column ?? 1) - 1,
       );
       editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenter,
-      );
+      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
     }
 
     console.log(`[EditorBridge] Opened file: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
@@ -81,6 +73,7 @@ export async function goToCode(
   filePath: string,
   line: number,
   column: number,
+  options?: { preserveFocus?: boolean },
 ): Promise<void> {
   try {
     const uri = resolveFilePath(filePath);
@@ -90,14 +83,11 @@ export async function goToCode(
     const targetColumn = getNonPreviewColumn();
     const editor = await vscode.window.showTextDocument(doc, {
       viewColumn: targetColumn,
-      preserveFocus: true,
+      preserveFocus: options?.preserveFocus ?? true,
     });
 
     editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(
-      new vscode.Range(position, position),
-      vscode.TextEditorRevealType.InCenter,
-    );
+    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
 
     console.log(`[EditorBridge] Navigated to ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
   } catch (error) {
@@ -144,9 +134,7 @@ function getNonPreviewColumn(): vscode.ViewColumn {
 
   for (const group of vscode.window.tabGroups.all) {
     const hasPreview = group.tabs.some(
-      (tab) =>
-        tab.input instanceof vscode.TabInputWebview &&
-        tab.input.viewType.includes(previewViewType),
+      (tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.includes(previewViewType),
     );
     if (!hasPreview) {
       return group.viewColumn;
