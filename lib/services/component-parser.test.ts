@@ -1,11 +1,16 @@
 /**
- * Tests for duplicate data-uniq-id detection in parseJSXElement
+ * Tests for component-parser: dedup, function/component lookup, JSX parsing
  */
 
 import { describe, expect, it } from 'bun:test';
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
-import { type ParseContext, parseJSXElement } from './component-parser';
+import {
+  findLocalComponentDefinition,
+  findLocalFunctionDefinition,
+  type ParseContext,
+  parseJSXElement,
+} from './component-parser';
 
 // @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
@@ -172,5 +177,185 @@ describe('duplicate data-uniq-id detection', () => {
     // Both keep "aaa" since dedup is not active
     expect(ids[0]).toBe('aaa');
     expect(ids[1]).toBe('aaa');
+  });
+});
+
+// ============================================
+// findLocalFunctionDefinition
+// ============================================
+
+describe('findLocalFunctionDefinition', () => {
+  it('finds arrow function declaration', () => {
+    const code = `const renderItem = (item) => <div>{item}</div>;`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalFunctionDefinition(ctx, 'renderItem');
+    expect(result).not.toBeNull();
+    expect(result?.loc).toBeDefined();
+  });
+
+  it('finds regular function declaration', () => {
+    const code = `function renderHeader() { return <h1>Title</h1>; }`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalFunctionDefinition(ctx, 'renderHeader');
+    expect(result).not.toBeNull();
+  });
+
+  it('returns null when not found', () => {
+    const code = `const x = 42;`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    expect(findLocalFunctionDefinition(ctx, 'renderItem')).toBeNull();
+  });
+
+  it('finds function expression', () => {
+    const code = `const renderFooter = function() { return <footer />; };`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalFunctionDefinition(ctx, 'renderFooter');
+    expect(result).not.toBeNull();
+  });
+});
+
+// ============================================
+// findLocalComponentDefinition
+// ============================================
+
+describe('findLocalComponentDefinition', () => {
+  it('finds component with direct arrow function', () => {
+    const code = `const Button = () => <button>Click</button>;`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalComponentDefinition(ctx, 'Button');
+    expect(result).not.toBeNull();
+  });
+
+  it('finds component wrapped in forwardRef', () => {
+    const code = `const Input = forwardRef((props, ref) => <input ref={ref} />);`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalComponentDefinition(ctx, 'Input');
+    expect(result).not.toBeNull();
+  });
+
+  it('finds component wrapped in memo', () => {
+    const code = `const Card = memo(() => <div className="card" />);`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalComponentDefinition(ctx, 'Card');
+    expect(result).not.toBeNull();
+  });
+
+  it('returns null when not found', () => {
+    const code = `const count = 0;`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    expect(findLocalComponentDefinition(ctx, 'MyComponent')).toBeNull();
+  });
+
+  it('finds function declaration component', () => {
+    const code = `function Header() { return <header>Header</header>; }`;
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast };
+    const result = findLocalComponentDefinition(ctx, 'Header');
+    expect(result).not.toBeNull();
+  });
+});
+
+// ============================================
+// parseJSXElement — key cases
+// ============================================
+
+describe('parseJSXElement (key cases)', () => {
+  function parseCode(code: string) {
+    const ast = createTestAST(code);
+    const ctx: ParseContext = { fileAST: ast, seenIds: new Set<string>() };
+    const rootElement = findRootJSXElement(ast);
+    return parseJSXElement(rootElement, undefined, undefined, undefined, ctx);
+  }
+
+  it('parses simple element with props', () => {
+    const tree = parseCode('<div data-uniq-id="x" className="red" disabled />');
+    expect(tree).not.toBeNull();
+    expect(tree?.type).toBe('div');
+    expect(tree?.props.className).toBe('red');
+    expect(tree?.props.disabled).toBe(true);
+  });
+
+  it('parses element with children', () => {
+    const tree = parseCode(`
+      <div data-uniq-id="parent">
+        <span data-uniq-id="child">Hello</span>
+      </div>
+    `);
+    expect(tree?.children).toHaveLength(1);
+    expect(tree?.children[0].type).toBe('span');
+  });
+
+  it('handles .map() context (marks as list)', () => {
+    const tree = parseCode(`
+      <ul data-uniq-id="list">
+        {items.map(item => <li data-uniq-id="item" key={item}>{item}</li>)}
+      </ul>
+    `);
+    expect(tree?.children).toHaveLength(1);
+    expect(tree?.children[0].mapItem).toBeDefined();
+    expect(tree?.children[0].mapItem?.expression).toBe('items');
+  });
+
+  it('handles ternary conditionals', () => {
+    const tree = parseCode(`
+      <div data-uniq-id="root">
+        {isOpen ? <span data-uniq-id="yes">Open</span> : <span data-uniq-id="no">Closed</span>}
+      </div>
+    `);
+    expect(tree?.children).toHaveLength(2);
+    expect(tree?.children[0].condItem?.branch).toBe('then');
+    expect(tree?.children[1].condItem?.branch).toBe('else');
+  });
+
+  it('handles logical && expressions', () => {
+    const tree = parseCode(`
+      <div data-uniq-id="root">
+        {isVisible && <span data-uniq-id="shown">Visible</span>}
+      </div>
+    `);
+    expect(tree?.children).toHaveLength(1);
+    expect(tree?.children[0].condItem?.type).toBe('if-then');
+  });
+
+  it('extracts text content from JSXText children', () => {
+    const tree = parseCode('<p data-uniq-id="text">Hello world</p>');
+    expect(tree?.props.children).toBe('Hello world');
+  });
+
+  it('extracts string literal props', () => {
+    const tree = parseCode('<input data-uniq-id="inp" type="text" placeholder="Enter..." />');
+    expect(tree?.props.type).toBe('text');
+    expect(tree?.props.placeholder).toBe('Enter...');
+  });
+
+  it('extracts numeric props', () => {
+    const tree = parseCode('<input data-uniq-id="inp" tabIndex={5} />');
+    expect(tree?.props.tabIndex).toBe(5);
+  });
+
+  it('extracts boolean literal props', () => {
+    const tree = parseCode('<input data-uniq-id="inp" readOnly={false} />');
+    expect(tree?.props.readOnly).toBe(false);
+  });
+
+  it('skips technical props (key, ref, data-uniq-id)', () => {
+    const tree = parseCode('<div data-uniq-id="x" key="k" ref={myRef} className="c" />');
+    expect(tree?.props.key).toBeUndefined();
+    expect(tree?.props.ref).toBeUndefined();
+    expect(tree?.props['data-uniq-id']).toBeUndefined();
+    expect(tree?.props.className).toBe('c');
+  });
+
+  it('handles JSXMemberExpression (e.g. Dropdown.Item)', () => {
+    const tree = parseCode('<Dropdown.Item data-uniq-id="x">Choice</Dropdown.Item>');
+    expect(tree?.type).toBe('Dropdown.Item');
   });
 });

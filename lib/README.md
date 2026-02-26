@@ -16,6 +16,13 @@ lib/
 │   ├── parser.ts          # Parse Tailwind classes
 │   ├── generator.ts       # Generate Tailwind classes
 │   └── *.test.ts          # Tests
+├── component-scanner/     # Project structure analysis
+│   ├── directory-tree.ts  # Recursive directory scanner
+│   ├── heuristics.ts      # Project structure heuristics
+│   ├── scanner.ts         # ComponentScanner class
+│   └── types.ts           # Scanner types
+├── services/              # Higher-level services
+│   └── component-parser.ts # Babel-based JSX parsing
 └── types.ts               # Shared types
 ```
 

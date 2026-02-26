@@ -18,5 +18,11 @@
     "baseUrl": "."
   },
   "include": ["src/**/*", "../../shared/**/*", "../../lib/**/*"],
-  "exclude": ["node_modules", "../../lib/**/*.test.ts", "../../lib/testing/**/*"]
+  "exclude": [
+    "node_modules",
+    "../../lib/**/*.test.ts",
+    "../../lib/testing/**/*",
+    "src/**/*.test.ts",
+    "src/**/__tests__/**"
+  ]
 }

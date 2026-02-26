@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { PreviewViewProvider } from './PreviewViewProvider';
+import { parseSSELine, stripAppPrefix, toApiPosition } from './utils';
 
 // Store provider reference at module level for goToVisual command
 let previewProvider: PreviewViewProvider | null = null;
@@ -87,11 +88,9 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const position = editor.selection.active;
-      const line = position.line + 1; // API expects 1-indexed
-      const column = position.character + 1;
+      const { line, column } = toApiPosition(position.line, position.character);
 
-      // Convert /app/src/... to relative path
-      const relativePath = filePath.replace(/^\/app\//, '');
+      const relativePath = stripAppPrefix(filePath);
 
       try {
         const response = await fetch(`${origin}/api/ide/${projectId}/go-to-visual`, {
@@ -262,24 +261,9 @@ function setupCommandSSE(
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr) {
-              try {
-                const data = JSON.parse(jsonStr) as {
-                  type?: string;
-                  filePath?: string;
-                  line?: number;
-                  column?: number;
-                };
-
-                if (data.type === 'gotoPosition' && data.filePath && data.line && data.column) {
-                  await handleGotoPosition(data.filePath, data.line, data.column);
-                }
-              } catch (e) {
-                console.error('[HyperCanvas Code Server] SSE parse error:', e);
-              }
-            }
+          const data = parseSSELine(line);
+          if (data?.type === 'gotoPosition' && data.filePath && data.line && data.column) {
+            await handleGotoPosition(data.filePath, data.line, data.column);
           }
         }
       }
@@ -308,7 +292,7 @@ function setupCommandSSE(
 async function handleGotoPosition(filePath: string, line: number, column: number) {
   try {
     const uri = vscode.Uri.file(filePath);
-    // line is 1-based (Babel), column is 0-based (Babel) — VS Code Position is 0-based for both
+    // Babel: line is 1-based, column is already 0-based — same as VS Code
     const position = new vscode.Position(line - 1, column);
 
     const doc = await vscode.workspace.openTextDocument(uri);

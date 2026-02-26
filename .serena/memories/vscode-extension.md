@@ -1,8 +1,12 @@
 # VS Code Extension Architecture
 
-## Location
+Two extensions: `hypercanvas-preview/` (standalone local editor) and
+`hypercanvas-code-server/` (lightweight Docker IDE preview).
+See `vscode-extension/README.md` for umbrella overview.
 
-`vscode-extension/hypercanvas-preview/`
+## Preview Extension
+
+Location: `vscode-extension/hypercanvas-preview/`
 
 ## Build
 
@@ -60,3 +64,17 @@ When shared components import new SaaS-only modules:
 
 1. Create stub in `src/stubs/`
 2. Add to `esbuild.js` → `createWebviewPlugins()`
+
+## Code Server Extension
+
+Location: `vscode-extension/hypercanvas-code-server/`
+
+Lightweight iframe preview for code-server Docker IDE.
+2 files: `extension.ts` + `PreviewViewProvider.ts`.
+Build: `tsc` (no esbuild, no React, no stubs).
+
+Env vars: IDE_PROJECT_ID, HYPERCANVAS_ORIGIN,
+HYPERCANVAS_AUTH_TOKEN, HYPERCANVAS_REFRESH_TOKEN.
+
+Features: SSE Go to Code, API Go to Visual, file-save tracking.
+See `vscode-extension/hypercanvas-code-server/README.md` for details.

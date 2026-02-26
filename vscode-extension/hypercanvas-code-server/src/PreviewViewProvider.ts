@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { buildPreviewUrl, extractComponentPath } from './utils';
 
 export class PreviewViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.previewView';
@@ -111,21 +112,7 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _extractComponentFromEditor(editor: vscode.TextEditor): string | undefined {
-    const filePath = editor.document.uri.fsPath;
-
-    // Check if it's a component file (.tsx or .jsx)
-    if (!/\.(tsx|jsx)$/.test(filePath)) {
-      return undefined;
-    }
-
-    // Extract relative path from /app/ directory
-    // Path format: /app/src/components/Button.tsx -> src/components/Button.tsx
-    const match = filePath.match(/\/app\/(.+\.(tsx|jsx))$/);
-    if (match) {
-      return match[1];
-    }
-
-    return undefined;
+    return extractComponentPath(editor.document.uri.fsPath);
   }
 
   private _updateComponentFromEditor(editor?: vscode.TextEditor) {
@@ -150,8 +137,7 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
 
   private _updatePreviewUrl() {
     const component = this._currentComponent || this._defaultComponent;
-    const baseUrl = `${this._origin}/project-preview/${this._projectId}/test-preview`;
-    const url = component ? `${baseUrl}?component=${encodeURIComponent(component)}` : baseUrl;
+    const url = buildPreviewUrl(this._origin, this._projectId, component);
 
     if (this._view) {
       this._view.webview.postMessage({ type: 'updateUrl', url });
@@ -185,8 +171,7 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
 
     // Build initial preview URL (may not have component yet)
     const component = this._currentComponent || this._defaultComponent;
-    const baseUrl = `${this._origin}/project-preview/${this._projectId}/test-preview`;
-    const previewUrl = component ? `${baseUrl}?component=${encodeURIComponent(component)}` : baseUrl;
+    const previewUrl = buildPreviewUrl(this._origin, this._projectId, component);
 
     this._view.webview.html = this._getHtmlForWebview(previewUrl);
   }
