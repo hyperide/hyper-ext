@@ -44,7 +44,7 @@ export function attachClickHandler(
   options?: ClickHandlerOptions,
 ): () => void {
   const { onElementClick, onElementHover, onEmptyClick, getMode, shouldIntercept } = callbacks;
-  const activeInstanceId = options?.activeInstanceId;
+  const getActiveInstanceId = options?.getActiveInstanceId ?? (() => options?.activeInstanceId ?? null);
 
   const handleClick = (e: MouseEvent) => {
     const mode = getMode();
@@ -73,7 +73,7 @@ export function attachClickHandler(
     if (mode === 'design') {
       const uniqId = element.dataset.uniqId;
       if (uniqId) {
-        const itemIndex = getItemIndex(element, uniqId, iframeDoc, activeInstanceId);
+        const itemIndex = getItemIndex(element, uniqId, iframeDoc, getActiveInstanceId());
         onElementClick(uniqId, element, e, itemIndex);
       }
     }
@@ -99,7 +99,7 @@ export function attachClickHandler(
     if (element) {
       const uniqId = element.dataset.uniqId;
       if (uniqId) {
-        const itemIndex = getItemIndex(element, uniqId, iframeDoc, activeInstanceId);
+        const itemIndex = getItemIndex(element, uniqId, iframeDoc, getActiveInstanceId());
         onElementHover(uniqId, element, itemIndex);
       }
     }

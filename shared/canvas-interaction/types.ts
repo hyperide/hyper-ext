@@ -51,6 +51,7 @@ export interface ClickHandlerCallbacks {
 
 export interface ClickHandlerOptions {
   activeInstanceId?: string | null;
+  getActiveInstanceId?: () => string | null;
 }
 
 // ============================================================================

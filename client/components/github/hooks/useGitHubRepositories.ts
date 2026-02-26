@@ -38,6 +38,7 @@ export function useGitHubRepositories(options: UseGitHubRepositoriesOptions = {}
   // Track previous values to detect changes
   const prevOrgRef = useRef(org);
   const prevSearchRef = useRef(search);
+  const hasFetchedRef = useRef(false);
 
   const fetchRepositories = useCallback(
     async (pageNum: number, append: boolean = false) => {
@@ -76,6 +77,7 @@ export function useGitHubRepositories(options: UseGitHubRepositoriesOptions = {}
         setHasMore(data.hasMore);
         setTotalCount(data.totalCount);
         setPage(pageNum);
+        hasFetchedRef.current = true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
@@ -92,16 +94,18 @@ export function useGitHubRepositories(options: UseGitHubRepositoriesOptions = {}
       prevSearchRef.current = search;
       setRepositories([]);
       setPage(1);
+      // Mark as fetched to prevent the initial-fetch effect from double-firing
+      hasFetchedRef.current = true;
       fetchRepositories(1, false);
     }
   }, [org, search, fetchRepositories]);
 
   // Initial fetch
   useEffect(() => {
-    if (enabled && accessToken && repositories.length === 0 && !loading && !error) {
+    if (enabled && accessToken && !hasFetchedRef.current && !loading && !error) {
       fetchRepositories(1, false);
     }
-  }, [enabled, accessToken, repositories.length, loading, error, fetchRepositories]);
+  }, [enabled, accessToken, loading, error, fetchRepositories]);
 
   const loadMore = useCallback(() => {
     if (!loading && hasMore) {

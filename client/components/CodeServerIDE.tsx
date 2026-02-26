@@ -42,9 +42,16 @@ export function CodeServerIDE({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const startRequestedRef = useRef(false);
+  const stateRef = useRef<IDEState>('stopped');
+  const startPollingRef = useRef<() => void>(() => {});
   const { logout, updateTheme } = useAuthStore();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const navigate = useNavigate();
+
+  // Keep stateRef in sync with state
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Handle SSE status updates
   const handleSSEMessage = useCallback(
@@ -88,8 +95,8 @@ export function CodeServerIDE({
     onMessage: handleSSEMessage,
     onError: () => {
       // SSE failed, fall back to polling if we're starting
-      if (state === 'starting' && !pollingRef.current) {
-        startPolling();
+      if (stateRef.current === 'starting' && !pollingRef.current) {
+        startPollingRef.current();
       }
     },
   });
@@ -135,7 +142,7 @@ export function CodeServerIDE({
     if (!projectId || pollingRef.current) return;
 
     let attempts = 0;
-    const maxAttempts = 300; // 5 minutes
+    const maxAttempts = 150; // 5 minutes at 2s interval
 
     pollingRef.current = setInterval(async () => {
       attempts++;
@@ -163,6 +170,7 @@ export function CodeServerIDE({
       }
     }, 2000); // Poll every 2 seconds (SSE is primary)
   }, [projectId, onError]);
+  startPollingRef.current = startPolling;
 
   // Restart IDE
   const restartIDE = useCallback(async () => {
