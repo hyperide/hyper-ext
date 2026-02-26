@@ -1,58 +1,42 @@
 /**
- * Logs & AI Chat Panel Provider
+ * Logs Panel Provider
  *
- * Manages a separate webview panel that shows dev server logs
- * and an AI chat for auto-fixing build errors.
+ * Manages a webview panel that shows dev server logs.
+ * AI chat has been moved to AIChatPanelProvider (secondary sidebar).
  */
 
 import * as vscode from 'vscode';
-import { DevServerManager, type LogEntry } from './services/DevServerManager';
-import { AIBridge } from './bridges/AIBridge';
+import type { DevServerManager, LogEntry } from './services/DevServerManager';
 import { getProjectInfo } from './services/ProjectDetector';
 
-export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'hypercanvas.logsAndChatView';
+export class LogsPanelProvider implements vscode.WebviewViewProvider {
+  public static readonly viewType = 'hypercanvas.logsView';
 
   private _view?: vscode.WebviewView;
   private _devServerManager: DevServerManager | null = null;
-  private _aiBridge: AIBridge;
   private _pendingLogs: LogEntry[] = [];
   private _pendingHasErrors = false;
+  private _onOpenAIChat?: (prompt: string) => void;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _workspaceRoot: string,
-    context: vscode.ExtensionContext,
-  ) {
-    this._aiBridge = new AIBridge(_workspaceRoot, context);
-  }
+    _context: vscode.ExtensionContext,
+  ) {}
 
   /**
-   * Send an AI prompt to the chat webview (e.g. from style sync error fallback).
-   * If the webview isn't visible yet, opens the view first.
+   * Set callback for ai:openChat messages from the logs webview.
+   * Extension host wires this to AIChatPanelProvider.
    */
-  sendAIPrompt(prompt: string): void {
-    // Focus the Logs & AI panel so user sees the chat
-    vscode.commands.executeCommand('hypercanvas.logsAndChatView.focus');
-
-    if (this._view) {
-      this._view.webview.postMessage({ type: 'ai:openChat', prompt });
-    } else {
-      // Webview not yet resolved — queue the prompt for when it loads
-      this._pendingAIPrompt = prompt;
-    }
+  setOnOpenAIChat(callback: (prompt: string) => void): void {
+    this._onOpenAIChat = callback;
   }
-
-  private _pendingAIPrompt: string | null = null;
 
   /**
    * Connect to DevServerManager for log streaming
    */
   setDevServerManager(manager: DevServerManager): void {
     this._devServerManager = manager;
-
-    // Pass dev server manager to AI bridge for check_build_status tool
-    this._aiBridge.setDevServerManager(manager);
 
     manager.onLogsUpdate((logs, hasErrors) => {
       this._pendingLogs = logs;
@@ -78,9 +62,7 @@ export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, 'out'),
-      ],
+      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
     };
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
@@ -90,15 +72,8 @@ export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
       await this._handleMessage(message, webviewView.webview);
     });
 
-    // Flush any pending AI prompt that arrived before the webview was ready
-    if (this._pendingAIPrompt) {
-      webviewView.webview.postMessage({ type: 'ai:openChat', prompt: this._pendingAIPrompt });
-      this._pendingAIPrompt = null;
-    }
-
     webviewView.onDidDispose(() => {
       this._view = undefined;
-      this._aiBridge.dispose();
     });
   }
 
@@ -145,21 +120,12 @@ export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // AI chat messages
-    if (message.type === 'ai:chat') {
-      const requestId = message.requestId as string;
-      const messages = message.messages as Array<{ role: 'user' | 'assistant'; content: string }>;
-
-      this._aiBridge.handleChat(requestId, messages, (event) => {
-        webview.postMessage(event);
-      });
-      return;
-    }
-
-    if (message.type === 'ai:abort') {
-      const requestId = message.requestId as string;
-      this._aiBridge.abort(requestId);
-      return;
+    // Forward ai:openChat to AIChatPanelProvider via callback
+    if (message.type === 'ai:openChat') {
+      const prompt = message.prompt as string | undefined;
+      if (this._onOpenAIChat && prompt) {
+        this._onOpenAIChat(prompt);
+      }
     }
   }
 
@@ -172,12 +138,8 @@ export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.js'),
-    );
-    const cssUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'),
-    );
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'));
     const nonce = this._getNonce();
 
     return `<!DOCTYPE html>
@@ -192,7 +154,7 @@ export class LogsAndChatPanelProvider implements vscode.WebviewViewProvider {
     font-src ${webview.cspSource};
   ">
   <link rel="stylesheet" href="${cssUri}">
-  <title>Logs & AI Chat</title>
+  <title>Dev Server Logs</title>
 </head>
 <body>
   <div id="root"></div>

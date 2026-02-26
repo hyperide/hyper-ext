@@ -8,8 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
-
-type AIProvider = 'glm' | 'claude' | 'openai' | 'proxy' | 'opencode';
+import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../shared/ai-provider-defaults';
 
 interface AIConfig {
   id: number;
@@ -269,8 +268,8 @@ export default function AISettings() {
           id: 0,
           provider: 'glm' as const,
           apiKey: '',
-          baseURL: 'https://api.z.ai/api/anthropic',
-          model: 'glm-4.7',
+          baseURL: AI_PROVIDER_DEFAULTS.glm.baseURL,
+          model: AI_PROVIDER_DEFAULTS.glm.model,
           commitPrompt: null,
           braveSearchApiKey: '',
         };
@@ -344,16 +343,16 @@ export default function AISettings() {
     // Set defaults based on provider
     switch (provider) {
       case 'glm':
-        newConfig.baseURL = 'https://api.z.ai/api/anthropic';
-        newConfig.model = 'glm-4.7';
+        newConfig.baseURL = AI_PROVIDER_DEFAULTS.glm.baseURL;
+        newConfig.model = AI_PROVIDER_DEFAULTS.glm.model;
         break;
       case 'claude':
-        newConfig.baseURL = null;
-        newConfig.model = 'claude-sonnet-4-20250514';
+        newConfig.baseURL = AI_PROVIDER_DEFAULTS.claude.baseURL;
+        newConfig.model = AI_PROVIDER_DEFAULTS.claude.model;
         break;
       case 'openai':
-        newConfig.baseURL = null;
-        newConfig.model = 'gpt-4o';
+        newConfig.baseURL = AI_PROVIDER_DEFAULTS.openai.baseURL;
+        newConfig.model = AI_PROVIDER_DEFAULTS.openai.model;
         break;
       case 'proxy':
         // Don't set default model - user must choose
@@ -672,7 +671,7 @@ export default function AISettings() {
                   id="baseURL"
                   value={config.baseURL || ''}
                   onChange={(e) => setConfig({ ...config, baseURL: e.target.value || null })}
-                  placeholder="https://api.z.ai/api/anthropic"
+                  placeholder={AI_PROVIDER_DEFAULTS.glm.baseURL ?? ''}
                 />
               </div>
             </>

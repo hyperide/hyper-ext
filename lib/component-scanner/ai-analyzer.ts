@@ -7,6 +7,7 @@
 
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
+import { AI_PROVIDER_DEFAULTS } from '../../shared/ai-provider-defaults.js';
 import { filterChildPaths } from './directory-tree.js';
 import type { ProjectStructure } from './types.js';
 
@@ -263,7 +264,7 @@ export function resolveAnalyzerConfig(opts: {
       return {
         apiKey,
         model,
-        baseURL: baseURL || 'https://api.z.ai/api/anthropic',
+        baseURL: baseURL || AI_PROVIDER_DEFAULTS.glm.baseURL,
         provider: 'anthropic',
       };
 

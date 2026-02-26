@@ -4,6 +4,7 @@ export default {
   darkMode: ['class'],
   content: [
     './src/webview/**/*.{ts,tsx}',
+    './src/webview-ai-chat/**/*.{ts,tsx}',
     './src/webview-left/**/*.{ts,tsx}',
     './src/webview-right/**/*.{ts,tsx}',
     './src/webview-preview-panel/**/*.{ts,tsx}',

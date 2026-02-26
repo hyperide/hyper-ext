@@ -25,7 +25,7 @@ src/StateHub.ts           — Central state management
 src/EditorBridge.ts       — Editor ↔ webview communication
 src/PreviewPanel.ts       — Canvas webview provider
 src/LeftPanelProvider.ts  — Components tree
-src/LogsAndChatPanelProvider.ts — Bottom panel
+src/LogsPanelProvider.ts  — Bottom panel (dev server logs)
 ```
 
 ## Webview Apps

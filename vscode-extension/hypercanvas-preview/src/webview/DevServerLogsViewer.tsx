@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { IconTrash, IconWand, IconAlertTriangle } from '@tabler/icons-react';
+import { IconAlertTriangle, IconTrash, IconWand } from '@tabler/icons-react';
 import cn from 'clsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { vscode } from './vscodeApi';
 
 interface LogEntry {
@@ -26,11 +26,7 @@ interface RuntimeError {
   fullText: string;
 }
 
-interface DevServerLogsViewerProps {
-  onAutoFix: (prompt: string) => void;
-}
-
-export function DevServerLogsViewer({ onAutoFix }: DevServerLogsViewerProps) {
+export function DevServerLogsViewer() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [hasErrors, setHasErrors] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -80,12 +76,11 @@ export function DevServerLogsViewer({ onAutoFix }: DevServerLogsViewerProps) {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom when logs change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: logs is intentional trigger dependency
   useEffect(() => {
     if (!userScrolledRef.current && scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector(
-        '[data-radix-scroll-area-viewport]',
-      );
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
@@ -94,9 +89,7 @@ export function DevServerLogsViewer({ onAutoFix }: DevServerLogsViewerProps) {
 
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return;
-    const scrollContainer = scrollAreaRef.current.querySelector(
-      '[data-radix-scroll-area-viewport]',
-    );
+    const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
     if (!scrollContainer) return;
 
     const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
@@ -142,7 +135,7 @@ ${recentLogs}
 ${errorLines ? `**Detected errors:**\n\`\`\`\n${errorLines}\n\`\`\`\n` : ''}
 Analyze the errors and fix them. After fixing, use check_build_status to verify the fix worked.`;
 
-    onAutoFix(prompt);
+    vscode.postMessage({ type: 'ai:openChat', prompt });
   };
 
   return (
@@ -151,12 +144,7 @@ Analyze the errors and fix them. After fixing, use check_build_status to verify 
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2 text-xs font-medium">
           <span>Dev Server Logs</span>
-          <span
-            className={cn(
-              'w-2 h-2 rounded-full',
-              isConnected ? 'bg-green-500' : 'bg-muted-foreground/30',
-            )}
-          />
+          <span className={cn('w-2 h-2 rounded-full', isConnected ? 'bg-green-500' : 'bg-muted-foreground/30')} />
         </div>
         <div className="flex items-center gap-1">
           {showAutoFix && (
@@ -170,12 +158,7 @@ Analyze the errors and fix them. After fixing, use check_build_status to verify 
               Auto Fix
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={handleClear}
-          >
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleClear}>
             <IconTrash size={14} />
           </Button>
         </div>
@@ -205,11 +188,8 @@ Analyze the errors and fix them. After fixing, use check_build_status to verify 
           ) : (
             logs.map((entry, i) => (
               <div
-                key={i}
-                className={cn(
-                  'whitespace-pre-wrap break-all',
-                  entry.isError && 'text-red-500 font-medium',
-                )}
+                key={`${entry.timestamp}-${i}`}
+                className={cn('whitespace-pre-wrap break-all', entry.isError && 'text-red-500 font-medium')}
               >
                 {entry.line}
               </div>

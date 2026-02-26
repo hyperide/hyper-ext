@@ -32,7 +32,7 @@
       "panel": [
         {
           "id": "hypercanvas-preview-container",
-          "title": "Hyper AI & Logs",
+          "title": "Hyper Logs",
           "icon": "media/preview.svg"
         }
       ]
@@ -50,13 +50,19 @@
           "type": "webview",
           "id": "hypercanvas.inspectorView",
           "name": "Inspector"
+        },
+        {
+          "type": "webview",
+          "id": "hypercanvas.aiChatView",
+          "name": "AI Chat",
+          "visibility": "visible"
         }
       ],
       "hypercanvas-preview-container": [
         {
           "type": "webview",
-          "id": "hypercanvas.logsAndChatView",
-          "name": "Logs & AI",
+          "id": "hypercanvas.logsView",
+          "name": "Logs",
           "visibility": "visible"
         }
       ]
@@ -92,8 +98,12 @@
         "title": "Hyper: Configure AI API Key"
       },
       {
-        "command": "hypercanvas.openLogsAndChat",
-        "title": "Hyper: Open Logs & AI Chat"
+        "command": "hypercanvas.openLogs",
+        "title": "Hyper: Open Logs"
+      },
+      {
+        "command": "hypercanvas.openAIChat",
+        "title": "Hyper: Open AI Chat"
       },
       {
         "command": "hypercanvas.openExplorer",

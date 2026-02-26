@@ -13,8 +13,9 @@
  */
 
 import * as vscode from 'vscode';
+import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { LeftPanelProvider } from './LeftPanelProvider';
-import { LogsAndChatPanelProvider } from './LogsAndChatPanelProvider';
+import { LogsPanelProvider } from './LogsPanelProvider';
 import { PanelRouter } from './PanelRouter';
 import { PreviewPanel } from './PreviewPanel';
 import { RightPanelProvider } from './RightPanelProvider';
@@ -27,7 +28,8 @@ import { VSCodeFileIO } from './vscode-file-io';
 // Global references
 let previewPanel: PreviewPanel | null = null;
 let devServerManager: DevServerManager | null = null;
-let logsAndChatProvider: LogsAndChatPanelProvider | null = null;
+let logsProvider: LogsPanelProvider | null = null;
+let aiChatProvider: AIChatPanelProvider | null = null;
 let leftPanelProvider: LeftPanelProvider | null = null;
 let rightPanelProvider: RightPanelProvider | null = null;
 let stateHub: StateHub | null = null;
@@ -70,12 +72,20 @@ export function activate(context: vscode.ExtensionContext) {
   // Open preview panel as editor tab on activation
   previewPanel.createOrShow(vscode.ViewColumn.Beside);
 
-  // Register Logs & AI Chat panel
-  logsAndChatProvider = new LogsAndChatPanelProvider(context.extensionUri, workspaceRoot, context);
+  // Register Logs panel (bottom panel)
+  logsProvider = new LogsPanelProvider(context.extensionUri, workspaceRoot, context);
 
-  // Wire ai:openChat from any panel → Logs & AI Chat panel
+  // Register AI Chat panel (secondary sidebar)
+  aiChatProvider = new AIChatPanelProvider(context.extensionUri, workspaceRoot, context, stateHub);
+
+  // Wire ai:openChat from any panel → AI Chat panel
   panelRouter.setOnOpenAIChat((prompt) => {
-    logsAndChatProvider?.sendAIPrompt(prompt);
+    aiChatProvider?.sendAIPrompt(prompt);
+  });
+
+  // Wire ai:openChat from Logs panel → AI Chat panel
+  logsProvider.setOnOpenAIChat((prompt) => {
+    aiChatProvider?.sendAIPrompt(prompt);
   });
 
   // Detect UI kit from package.json and broadcast to all panels
@@ -88,7 +98,8 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
   if (devServerManager) {
-    logsAndChatProvider.setDevServerManager(devServerManager);
+    logsProvider.setDevServerManager(devServerManager);
+    aiChatProvider.setDevServerManager(devServerManager);
 
     // Wire runtime errors from preview iframe to dev server manager
     previewPanel.onRuntimeError((error) => {
@@ -97,7 +108,15 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(LogsAndChatPanelProvider.viewType, logsAndChatProvider, {
+    vscode.window.registerWebviewViewProvider(LogsPanelProvider.viewType, logsProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
+      },
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(AIChatPanelProvider.viewType, aiChatProvider, {
       webviewOptions: {
         retainContextWhenHidden: true,
       },
@@ -213,10 +232,17 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
-  // Open Logs & AI Chat
+  // Open Logs
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openLogsAndChat', () => {
-      vscode.commands.executeCommand('hypercanvas.logsAndChatView.focus');
+    vscode.commands.registerCommand('hypercanvas.openLogs', () => {
+      vscode.commands.executeCommand('hypercanvas.logsView.focus');
+    }),
+  );
+
+  // Open AI Chat
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.openAIChat', () => {
+      vscode.commands.executeCommand('hypercanvas.aiChatView.focus');
     }),
   );
 
@@ -321,10 +347,28 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
-  // Configure AI API key
+  // Configure AI API key — store in secure secrets storage
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.configureAIKey', async () => {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'hypercanvas.ai');
+      const current = await context.secrets.get('hypercanvas.ai.apiKey');
+      const key = await vscode.window.showInputBox({
+        title: 'HyperCanvas: AI API Key',
+        prompt: 'Enter your AI provider API key (stored securely)',
+        password: true,
+        value: current,
+      });
+      if (key !== undefined) {
+        const settings = vscode.workspace.getConfiguration('hypercanvas.ai');
+        if (key) {
+          await context.secrets.store('hypercanvas.ai.apiKey', key);
+          await settings.update('apiKey', key, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('AI API key saved.');
+        } else {
+          await context.secrets.delete('hypercanvas.ai.apiKey');
+          await settings.update('apiKey', undefined, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('AI API key removed.');
+        }
+      }
     }),
   );
 

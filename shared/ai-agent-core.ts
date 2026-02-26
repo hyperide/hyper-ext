@@ -76,7 +76,7 @@ export type ChatEvent =
   | { type: 'tool_use_start'; toolName: string; toolUseId: string }
   | { type: 'tool_use_input'; toolUseId: string; partialJson: string }
   | { type: 'tool_use_end'; toolUseId: string; toolName: string; input: Record<string, unknown> }
-  | { type: 'tool_use_result'; toolUseId: string; result: ToolResult }
+  | { type: 'tool_use_result'; toolUseId: string; toolName: string; result: ToolResult }
   | { type: 'turn_complete'; messages: MessageParam[] }
   | { type: 'error'; error: string };
 
@@ -228,7 +228,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
         if (signal?.aborted) return;
 
         const result = await executor.execute(tool.name, tool.input);
-        yield { type: 'tool_use_result', toolUseId: tool.id, result };
+        yield { type: 'tool_use_result', toolUseId: tool.id, toolName: tool.name, result };
 
         toolResultBlocks.push({
           type: 'tool_result',

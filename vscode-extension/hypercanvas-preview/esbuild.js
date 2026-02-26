@@ -1,6 +1,6 @@
 const esbuild = require('esbuild');
-const path = require('path');
-const fs = require('fs');
+const path = require('node:path');
+const fs = require('node:fs');
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -20,7 +20,7 @@ function resolveWithExtensions(basePath) {
   for (const ext of extensions) {
     if (!ext) continue;
     // nosemgrep: path-join-resolve-traversal -- build script path, not user input
-    const indexPath = path.join(basePath, 'index' + ext);
+    const indexPath = path.join(basePath, `index${ext}`);
     if (fs.existsSync(indexPath)) {
       return indexPath;
     }
@@ -165,6 +165,21 @@ async function main() {
     plugins: createWebviewPlugins(),
   });
 
+  // Webview-ai-chat (browser) build — React app for AI chat panel (secondary sidebar)
+  const webviewAIChatCtx = await esbuild.context({
+    entryPoints: ['src/webview-ai-chat/index.tsx'],
+    bundle: true,
+    format: 'esm',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'browser',
+    outfile: 'out/webview-ai-chat.js',
+    jsx: 'automatic',
+    logLevel: 'info',
+    plugins: createWebviewPlugins(),
+  });
+
   // Iframe interaction script (IIFE) — injected into preview iframe by PreviewProxy
   const iframeInteractionCtx = await esbuild.context({
     entryPoints: ['src/services/scripts/iframe-interaction.ts'],
@@ -189,14 +204,23 @@ async function main() {
     plugins: [createResolveAliasesPlugin()],
   });
 
-  const allContexts = [extensionCtx, webviewCtx, webviewLeftCtx, webviewRightCtx, webviewPreviewPanelCtx, iframeInteractionCtx, iframeErrorDetectionCtx];
+  const allContexts = [
+    extensionCtx,
+    webviewCtx,
+    webviewAIChatCtx,
+    webviewLeftCtx,
+    webviewRightCtx,
+    webviewPreviewPanelCtx,
+    iframeInteractionCtx,
+    iframeErrorDetectionCtx,
+  ];
 
   if (watch) {
-    await Promise.all(allContexts.map(ctx => ctx.watch()));
+    await Promise.all(allContexts.map((ctx) => ctx.watch()));
     console.log('Watching for changes...');
   } else {
-    await Promise.all(allContexts.map(ctx => ctx.rebuild()));
-    await Promise.all(allContexts.map(ctx => ctx.dispose()));
+    await Promise.all(allContexts.map((ctx) => ctx.rebuild()));
+    await Promise.all(allContexts.map((ctx) => ctx.dispose()));
   }
 }
 

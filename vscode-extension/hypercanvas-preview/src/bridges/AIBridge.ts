@@ -6,30 +6,32 @@
  * OpenAI path remains text-only (no tools).
  */
 
-import * as vscode from 'vscode';
+import { exec } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { exec } from 'node:child_process';
+import * as vscode from 'vscode';
 import {
-  runChat,
+  type ChatEvent,
   FetchAnthropicProvider,
+  type MessageParam,
+  runChat,
   type ToolExecutor,
   type ToolResult,
-  type ChatEvent,
-  type MessageParam,
 } from '../../../../shared/ai-agent-core';
-import {
-  FILE_TOOLS,
-  CHECK_BUILD_STATUS,
-  type ToolDefinition,
-} from '../../../../shared/ai-agent-tools';
+import { ASK_USER, CHECK_BUILD_STATUS, FILE_TOOLS, type ToolDefinition } from '../../../../shared/ai-agent-tools';
+import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../../shared/ai-provider-defaults';
+import type { StateHub } from '../StateHub';
 import type { DevServerManager } from '../services/DevServerManager';
 
-type StreamCallback = (event: {
+/** Minimal shape of AST tree nodes from ComponentService.parseStructure() */
+interface AstTreeNode {
+  id: string;
   type: string;
-  requestId: string;
-  [key: string]: unknown;
-}) => void;
+  label: string;
+  children?: AstTreeNode[];
+}
+
+type StreamCallback = (event: { type: string; requestId: string; [key: string]: unknown }) => void;
 
 interface ActiveRequest {
   requestId: string;
@@ -38,14 +40,21 @@ interface ActiveRequest {
 
 /** Tools implemented by LocalToolExecutor */
 const IMPLEMENTED_TOOLS = new Set([
-  'read_file', 'edit_file', 'write_file', 'grep_search',
-  'glob_search', 'list_directory', 'tree', 'check_build_status',
+  'read_file',
+  'edit_file',
+  'write_file',
+  'grep_search',
+  'glob_search',
+  'list_directory',
+  'tree',
+  'check_build_status',
 ]);
 
 /** Tools available in the extension — only those actually implemented */
 const EXTENSION_TOOLS: ToolDefinition[] = [
   ...FILE_TOOLS.filter((t) => IMPLEMENTED_TOOLS.has(t.name)),
   CHECK_BUILD_STATUS,
+  ASK_USER,
 ];
 
 /**
@@ -198,12 +207,7 @@ class LocalToolExecutor implements ToolExecutor {
     return { success: true, output: result || '(empty)' };
   }
 
-  private async _buildTree(
-    dirPath: string,
-    prefix: string,
-    depth: number,
-    includeFiles: boolean,
-  ): Promise<string> {
+  private async _buildTree(dirPath: string, prefix: string, depth: number, includeFiles: boolean): Promise<string> {
     if (depth <= 0) return '';
 
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -273,7 +277,8 @@ class LocalToolExecutor implements ToolExecutor {
 
     if (runtimeError) {
       parts.push(`Runtime error (${runtimeError.framework}): ${runtimeError.type}\n${runtimeError.message}`);
-      if (runtimeError.file) parts.push(`File: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}`);
+      if (runtimeError.file)
+        parts.push(`File: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}`);
       if (runtimeError.codeframe) parts.push(`Code:\n${runtimeError.codeframe}`);
     }
 
@@ -302,11 +307,21 @@ class LocalToolExecutor implements ToolExecutor {
 export class AIBridge {
   private _activeRequest: ActiveRequest | null = null;
   private _devServerManager: DevServerManager | null = null;
+  private _stateHub: StateHub | null = null;
+  /** Pending ask_user responses: toolUseId -> resolve function */
+  private _pendingUserResponses = new Map<string, (response: string) => void>();
 
   constructor(
     private readonly _workspaceRoot: string,
     private readonly _context: vscode.ExtensionContext,
   ) {}
+
+  /**
+   * Set the StateHub for injecting editor context into system prompt
+   */
+  setStateHub(stateHub: StateHub): void {
+    this._stateHub = stateHub;
+  }
 
   /**
    * Set the dev server manager for check_build_status tool
@@ -333,10 +348,11 @@ export class AIBridge {
 
     try {
       const config = vscode.workspace.getConfiguration('hypercanvas.ai');
-      const provider = config.get<string>('provider', 'anthropic');
-      const model = config.get<string>('model', 'claude-sonnet-4-20250514');
+      const provider = config.get<string>('provider', 'claude') as AIProvider;
+      const defaults = AI_PROVIDER_DEFAULTS[provider] ?? AI_PROVIDER_DEFAULTS.claude;
+      const model = config.get<string>('model') || defaults.model;
 
-      const apiKey = await this._getApiKey(provider);
+      const apiKey = await this._getApiKey();
       if (!apiKey) {
         callback({
           type: 'ai:error',
@@ -346,10 +362,28 @@ export class AIBridge {
         return;
       }
 
-      if (provider === 'anthropic') {
-        await this._streamAnthropic(requestId, apiKey, model, messages, abortController.signal, callback);
+      const baseURL = config.get<string>('baseURL') || defaults.baseURL;
+
+      if (defaults.protocol === 'openai') {
+        await this._streamOpenAI(
+          requestId,
+          apiKey,
+          model,
+          baseURL || 'https://api.openai.com/v1',
+          messages,
+          abortController.signal,
+          callback,
+        );
       } else {
-        await this._streamOpenAI(requestId, apiKey, model, messages, abortController.signal, callback);
+        await this._streamAnthropic(
+          requestId,
+          apiKey,
+          model,
+          baseURL ?? undefined,
+          messages,
+          abortController.signal,
+          callback,
+        );
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') return;
@@ -363,12 +397,28 @@ export class AIBridge {
   }
 
   /**
+   * Provide a user response to a pending ask_user tool call
+   */
+  provideUserResponse(toolUseId: string, response: string): void {
+    const resolve = this._pendingUserResponses.get(toolUseId);
+    if (resolve) {
+      resolve(response);
+      this._pendingUserResponses.delete(toolUseId);
+    }
+  }
+
+  /**
    * Abort active request
    */
   abort(requestId: string): void {
     if (this._activeRequest?.requestId === requestId) {
       this._activeRequest.abortController.abort();
       this._activeRequest = null;
+    }
+    // Reject all pending ask_user responses
+    for (const [id, resolve] of this._pendingUserResponses) {
+      resolve('(cancelled)');
+      this._pendingUserResponses.delete(id);
     }
   }
 
@@ -380,14 +430,18 @@ export class AIBridge {
       this._activeRequest.abortController.abort();
       this._activeRequest = null;
     }
+    for (const [id, resolve] of this._pendingUserResponses) {
+      resolve('(cancelled)');
+      this._pendingUserResponses.delete(id);
+    }
   }
 
-  private async _getApiKey(provider: string): Promise<string | undefined> {
-    const secretKey =
-      provider === 'anthropic'
-        ? 'hypercanvas.anthropicApiKey'
-        : 'hypercanvas.openaiApiKey';
-    return this._context.secrets.get(secretKey);
+  private async _getApiKey(): Promise<string | undefined> {
+    // Prefer secrets storage, fallback to plain settings for backward compatibility
+    const secret = await this._context.secrets.get('hypercanvas.ai.apiKey');
+    if (secret) return secret;
+    const config = vscode.workspace.getConfiguration('hypercanvas.ai');
+    return config.get<string>('apiKey');
   }
 
   /**
@@ -397,12 +451,23 @@ export class AIBridge {
     requestId: string,
     apiKey: string,
     model: string,
+    baseUrl: string | undefined,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     signal: AbortSignal,
     callback: StreamCallback,
   ): Promise<void> {
-    const streamProvider = new FetchAnthropicProvider({ apiKey });
-    const executor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager);
+    const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl });
+    const localExecutor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager);
+
+    // Wrap executor to intercept ask_user tool
+    const executor: ToolExecutor = {
+      execute: async (name: string, input: Record<string, unknown>) => {
+        if (name === 'ask_user') {
+          return this._handleAskUser(requestId, input, callback);
+        }
+        return localExecutor.execute(name, input);
+      },
+    };
 
     for await (const event of runChat({
       provider: streamProvider,
@@ -417,6 +482,35 @@ export class AIBridge {
     }
 
     callback({ type: 'ai:done', requestId });
+  }
+
+  /**
+   * Handle ask_user tool: send question to webview, wait for user response
+   */
+  private async _handleAskUser(
+    requestId: string,
+    input: Record<string, unknown>,
+    callback: StreamCallback,
+  ): Promise<ToolResult> {
+    const toolUseId = `ask-${Date.now()}`;
+    const question = String(input.question ?? '');
+    const options = input.options as string[] | undefined;
+
+    // Send ask_user event to webview
+    callback({
+      type: 'ai:askUser',
+      requestId,
+      toolUseId,
+      question,
+      options,
+    });
+
+    // Wait for user response via pending promise
+    const userResponse = await new Promise<string>((resolve) => {
+      this._pendingUserResponses.set(toolUseId, resolve);
+    });
+
+    return { success: true, output: userResponse };
   }
 
   /**
@@ -443,6 +537,7 @@ export class AIBridge {
           type: 'ai:toolResult',
           requestId,
           toolUseId: event.toolUseId,
+          toolName: event.toolName,
           result: event.result,
         });
         break;
@@ -460,11 +555,12 @@ export class AIBridge {
     requestId: string,
     apiKey: string,
     model: string,
+    baseURL: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     signal: AbortSignal,
     callback: StreamCallback,
   ): Promise<void> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -472,10 +568,7 @@ export class AIBridge {
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: this._getSystemPrompt() },
-          ...messages,
-        ],
+        messages: [{ role: 'system', content: this._getSystemPrompt() }, ...messages],
         stream: true,
       }),
       signal,
@@ -539,12 +632,108 @@ export class AIBridge {
 5. Continue until build is clean or 3 fix attempts made`
       : '';
 
+    const editorContext = this._buildEditorContext();
+
     return `You are a helpful coding assistant embedded in a VS Code extension called HyperCanvas.
 You help fix build errors and improve code in React projects.
 The user's project is located at: ${this._workspaceRoot}
 
-You have access to tools for reading, editing, and searching files.${devServerInstructions}
+You have access to tools for reading, editing, and searching files.${devServerInstructions}${editorContext}
 
 Be concise. Focus on fixing the actual error.`;
+  }
+
+  /**
+   * Build editor context section from StateHub snapshot.
+   * Includes current component, selected elements, and AST overview.
+   */
+  private _buildEditorContext(): string {
+    if (!this._stateHub) return '';
+
+    const state = this._stateHub.state;
+    const parts: string[] = [];
+
+    // Current component
+    if (state.currentComponent) {
+      parts.push(`Current file: ${state.currentComponent.path} (component: ${state.currentComponent.name})`);
+    }
+
+    // UI kit
+    if (state.projectUIKit && state.projectUIKit !== 'none') {
+      parts.push(`UI framework: ${state.projectUIKit}`);
+    }
+
+    // Selected elements
+    if (state.selectedIds.length > 0) {
+      const selectedInfo = this._describeSelectedElements(state.selectedIds, state.astStructure);
+      parts.push(
+        `Selected element${state.selectedIds.length > 1 ? 's' : ''} (by data-uniq-id):\n${selectedInfo}\n` +
+          'When the user refers to "this element", "selected element", or "it", they mean these element(s). ' +
+          'Use the data-uniq-id attribute to find corresponding JSX elements in the source code.',
+      );
+    }
+
+    // AST overview (compact tree)
+    if (state.astStructure && Array.isArray(state.astStructure) && state.astStructure.length > 0) {
+      const tree = this._formatAstTree(state.astStructure as AstTreeNode[], 0, 4);
+      if (tree) {
+        parts.push(`Component structure:\n${tree}`);
+      }
+    }
+
+    if (parts.length === 0) return '';
+    return `\n\n## Current editor context\n${parts.join('\n')}`;
+  }
+
+  /**
+   * Describe selected elements by looking them up in the AST tree
+   */
+  private _describeSelectedElements(selectedIds: string[], astStructure: unknown[] | null): string {
+    if (!astStructure || !Array.isArray(astStructure)) {
+      return selectedIds.join(', ');
+    }
+
+    const descriptions: string[] = [];
+    for (const id of selectedIds) {
+      const node = this._findAstNode(id, astStructure as AstTreeNode[]);
+      if (node) {
+        descriptions.push(`- ${node.label} [${node.type}] (data-uniq-id="${id}")`);
+      } else {
+        descriptions.push(`- ${id}`);
+      }
+    }
+    return descriptions.join('\n');
+  }
+
+  /**
+   * Find a node by id in the AST tree (depth-first)
+   */
+  private _findAstNode(id: string, nodes: AstTreeNode[]): AstTreeNode | null {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = this._findAstNode(id, node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Format AST tree as indented text, limited to maxDepth levels
+   */
+  private _formatAstTree(nodes: AstTreeNode[], depth: number, maxDepth: number): string {
+    if (depth >= maxDepth || nodes.length === 0) return '';
+
+    const lines: string[] = [];
+    for (const node of nodes) {
+      const indent = '  '.repeat(depth);
+      lines.push(`${indent}- ${node.label} [${node.type}]`);
+      if (node.children && node.children.length > 0) {
+        const childTree = this._formatAstTree(node.children, depth + 1, maxDepth);
+        if (childTree) lines.push(childTree);
+      }
+    }
+    return lines.join('\n');
   }
 }
