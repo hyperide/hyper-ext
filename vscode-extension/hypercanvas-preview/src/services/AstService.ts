@@ -26,8 +26,9 @@ import { generateTailwindClasses } from '@lib/tailwind/generator';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
 import type { ClassNameLocation } from '@lib/types';
 
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+// Normalize ESM/CJS interop: babel/traverse may export default or be the function directly.
+// biome-ignore lint/suspicious/noExplicitAny: required for ESM/CJS module interop
+const traverse = ((_traverse as any)?.default ?? _traverse) as typeof _traverse;
 
 // ============================================
 // Response Types
@@ -106,13 +107,13 @@ export class AstService {
       }
 
       const changedStyleKeys = Object.keys(styles);
-      const newClasses = generateTailwindClasses(styles, state);
       const classNameType = detectClassNameType(result.element);
 
       if (classNameType === 'string') {
         // Static className — remove conflicts + generate + set
         const existingClassName = getAttributeString(result.element, 'className') || '';
         const { preserved } = removeConflictingClasses(existingClassName, changedStyleKeys, state);
+        const newClasses = generateTailwindClasses(styles, state);
         const newClassName = [preserved, newClasses].filter(Boolean).join(' ').trim();
         setAttribute(result.element, 'className', t.stringLiteral(newClassName));
 
@@ -122,6 +123,7 @@ export class AstService {
 
       // Dynamic className — use modifyDynamicClassName
       const sourceCode = await this._fileParser.readFileContent(absolutePath);
+      const newClasses = generateTailwindClasses(styles, state);
       modifyDynamicClassName(
         ast,
         sourceCode,
@@ -357,7 +359,7 @@ export class AstService {
 
         const result = findElementByUuid(ast, elementId);
         if (!result) {
-          // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+          // nosemgrep: unsafe-formatstring -- safe: only first 8 chars of elementId are logged, preventing injected format specifiers
           console.log(
             `[AstService.deleteElements] Element ${elementId.substring(0, 8)} not found (may have been deleted as child)`,
           );

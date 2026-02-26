@@ -186,7 +186,10 @@ function sendOverlayRects(): void {
     const elements = document.querySelectorAll(selector);
     const itemIdx = state.selectedItemIndices[id];
 
-    if (itemIdx != null && elements[itemIdx]) {
+    const hasValidIndexedElement =
+      typeof itemIdx === 'number' && Number.isInteger(itemIdx) && itemIdx >= 0 && itemIdx < elements.length;
+
+    if (hasValidIndexedElement) {
       const rect = elements[itemIdx].getBoundingClientRect();
       rects.push({
         key: `select-${id}-${itemIdx}`,
@@ -242,7 +245,10 @@ function sendOverlayRects(): void {
     window.parent.postMessage({ type: 'hypercanvas:overlayRects', rects }, '*');
   }
 
-  scheduleOverlayLoopIfNeeded();
+  // Only continue the overlay loop while updates are needed or overlays are active.
+  if (needsOverlayUpdate || state.selectedIds.length > 0 || state.hoveredId !== null) {
+    scheduleOverlayLoopIfNeeded();
+  }
 }
 
 // Throttle overlay updates triggered by high-frequency DOM/layout events.
@@ -358,6 +364,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.selectedItemIndices = {};
     const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    needsOverlayUpdate = true;
+    scheduleOverlayLoopIfNeeded();
     return;
   }
 
