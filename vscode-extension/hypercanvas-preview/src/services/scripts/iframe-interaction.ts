@@ -107,51 +107,45 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
 document.addEventListener('keydown', keydownHandler, true);
 
 // === Context menu handler ===
-document.addEventListener(
-  'contextmenu',
-  function (e: MouseEvent) {
-    if (state.engineMode !== 'design') return;
-    e.preventDefault();
-    e.stopPropagation();
+const contextMenuHandler = (e: MouseEvent) => {
+  if (state.engineMode !== 'design') return;
+  e.preventDefault();
+  e.stopPropagation();
 
-    const target = e.target as HTMLElement;
-    const element = target.closest('[data-uniq-id]') as HTMLElement | null;
-    const elementId = element?.dataset.uniqId ?? null;
+  const target = e.target as HTMLElement;
+  const element = target.closest('[data-uniq-id]') as HTMLElement | null;
+  const elementId = element?.dataset.uniqId ?? null;
 
-    const itemIndex = element && elementId ? getItemIndex(element, elementId, document, activeInstanceId) : null;
+  const itemIndex = element && elementId ? getItemIndex(element, elementId, document, activeInstanceId) : null;
 
-    // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage(
-      {
-        type: 'hypercanvas:contextMenu',
-        elementId,
-        itemIndex,
-        x: e.clientX,
-        y: e.clientY,
-      },
-      '*',
-    );
-  },
-  true,
-);
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage(
+    {
+      type: 'hypercanvas:contextMenu',
+      elementId,
+      itemIndex,
+      x: e.clientX,
+      y: e.clientY,
+    },
+    '*',
+  );
+};
+document.addEventListener('contextmenu', contextMenuHandler, true);
 
 // === Focus prevention in design mode (mousedown, not focusin) ===
-document.addEventListener(
-  'mousedown',
-  function (e: MouseEvent) {
-    if (state.engineMode !== 'design') return;
-    const target = e.target as HTMLElement;
-    if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
-      target.isContentEditable
-    ) {
-      e.preventDefault(); // Actually prevents focus on mousedown
-    }
-  },
-  true,
-);
+const mousedownHandler = (e: MouseEvent) => {
+  if (state.engineMode !== 'design') return;
+  const target = e.target as HTMLElement;
+  if (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  ) {
+    e.preventDefault(); // Actually prevents focus on mousedown
+  }
+};
+document.addEventListener('mousedown', mousedownHandler, true);
 
 // === Overlay rects with dirty-flag optimization ===
 let prevRectsJSON = '';
@@ -303,6 +297,9 @@ window.addEventListener('unload', () => {
   if (overlayResizeObserver) overlayResizeObserver.disconnect();
   window.removeEventListener('scroll', overlayScrollHandler, true);
   window.removeEventListener('resize', overlayResizeHandler);
+  document.removeEventListener('keydown', keydownHandler, true);
+  document.removeEventListener('contextmenu', contextMenuHandler, true);
+  document.removeEventListener('mousedown', mousedownHandler, true);
 });
 
 // === Design mode CSS ===
@@ -329,7 +326,7 @@ function updateDesignStyles(mode: string): void {
 
 // === Receive messages from parent webview ===
 // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
-window.addEventListener('message', function (event: MessageEvent) {
+window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data;
   if (!msg || !msg.type) return;
 
