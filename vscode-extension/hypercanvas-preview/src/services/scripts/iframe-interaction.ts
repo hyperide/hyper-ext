@@ -256,7 +256,7 @@ let overlayUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleThrottledOverlayUpdate(): void {
   needsOverlayUpdate = true;
-  if (overlayUpdateTimeoutId != null) return;
+  if (overlayUpdateTimeoutId !== null) return;
   overlayUpdateTimeoutId = setTimeout(() => {
     overlayUpdateTimeoutId = null;
     scheduleOverlayLoopIfNeeded();
@@ -306,7 +306,7 @@ scheduleOverlayLoopIfNeeded();
 
 // Clean up observers and listeners when the iframe is unloaded
 window.addEventListener('unload', () => {
-  if (overlayUpdateTimeoutId != null) clearTimeout(overlayUpdateTimeoutId);
+  if (overlayUpdateTimeoutId !== null) clearTimeout(overlayUpdateTimeoutId);
   if (overlayMutationObserver) overlayMutationObserver.disconnect();
   if (overlayResizeObserver) overlayResizeObserver.disconnect();
   window.removeEventListener('scroll', overlayScrollHandler, true);
