@@ -1,0 +1,89 @@
+{
+  "name": "hypercanvas-code-server",
+  "displayName": "HyperCanvas Code Server",
+  "description": "Live preview panel for HyperCanvas projects in code-server",
+  "version": "0.1.0",
+  "publisher": "hyperide",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "hypercanvas-preview-container",
+          "title": "Preview",
+          "icon": "media/preview.svg"
+        }
+      ]
+    },
+    "views": {
+      "hypercanvas-preview-container": [
+        {
+          "type": "webview",
+          "id": "hypercanvas.previewView",
+          "name": "Live Preview",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "hypercanvas.openPreview",
+        "title": "HyperCanvas: Open Preview"
+      },
+      {
+        "command": "hypercanvas.refreshPreview",
+        "title": "HyperCanvas: Refresh Preview",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hypercanvas.goToVisual",
+        "title": "HyperCanvas: Go to Visual"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "hypercanvas.goToVisual",
+        "key": "cmd+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "hypercanvas.refreshPreview",
+          "when": "view == hypercanvas.previewView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "hypercanvas.goToVisual",
+          "group": "navigation",
+          "when": "editorTextFocus && resourceExtname =~ /\\.(tsx|jsx)$/"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}

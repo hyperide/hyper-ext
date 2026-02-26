@@ -39,6 +39,7 @@ k8s/base/secrets.yaml
 
 # VSCode extension build artifacts
 vscode-extension/hypercanvas-preview/out
+vscode-extension/hypercanvas-code-server/out
 *.vsix
 
 # Compiled JS alongside TS sources (esbuild/tsc artifacts)

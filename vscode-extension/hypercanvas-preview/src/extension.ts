@@ -13,17 +13,16 @@
  */
 
 import * as vscode from 'vscode';
-import { readFileSync } from 'node:fs';
-import { PreviewPanel } from './PreviewPanel';
-import { DevServerManager } from './services/DevServerManager';
-import { AstService } from './services/AstService';
-import { VSCodeFileIO } from './vscode-file-io';
-import { LogsAndChatPanelProvider } from './LogsAndChatPanelProvider';
 import { LeftPanelProvider } from './LeftPanelProvider';
+import { LogsAndChatPanelProvider } from './LogsAndChatPanelProvider';
+import { PanelRouter } from './PanelRouter';
+import { PreviewPanel } from './PreviewPanel';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
-import { PanelRouter } from './PanelRouter';
+import { AstService } from './services/AstService';
+import { DevServerManager } from './services/DevServerManager';
 import { detectUIKit } from './services/ProjectDetector';
+import { VSCodeFileIO } from './vscode-file-io';
 
 // Global references
 let previewPanel: PreviewPanel | null = null;
@@ -41,9 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
     console.log('[HyperCanvas] No workspace folder open');
-    vscode.window.showWarningMessage(
-      'HyperCanvas: Please open a folder to use the preview.',
-    );
+    vscode.window.showWarningMessage('HyperCanvas: Please open a folder to use the preview.');
     return;
   }
 
@@ -59,12 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Create preview panel instance
-  previewPanel = new PreviewPanel(
-    context.extensionUri,
-    workspaceRoot,
-    stateHub,
-    panelRouter,
-  );
+  previewPanel = new PreviewPanel(context.extensionUri, workspaceRoot, stateHub, panelRouter);
 
   // Register serializer for cross-restart persistence
   context.subscriptions.push(
@@ -79,23 +71,21 @@ export function activate(context: vscode.ExtensionContext) {
   previewPanel.createOrShow(vscode.ViewColumn.Beside);
 
   // Register Logs & AI Chat panel
-  logsAndChatProvider = new LogsAndChatPanelProvider(
-    context.extensionUri,
-    workspaceRoot,
-    context,
-  );
+  logsAndChatProvider = new LogsAndChatPanelProvider(context.extensionUri, workspaceRoot, context);
 
   // Wire ai:openChat from any panel → Logs & AI Chat panel
   panelRouter.setOnOpenAIChat((prompt) => {
-    logsAndChatProvider!.sendAIPrompt(prompt);
+    logsAndChatProvider?.sendAIPrompt(prompt);
   });
 
   // Detect UI kit from package.json and broadcast to all panels
-  detectUIKit(workspaceRoot).then((kit) => {
-    stateHub!.applyUpdate('extension-host', { projectUIKit: kit });
-  }).catch((err) => {
-    console.warn('[HyperCanvas] Failed to detect UI kit:', err);
-  });
+  detectUIKit(workspaceRoot)
+    .then((kit) => {
+      stateHub?.applyUpdate('extension-host', { projectUIKit: kit });
+    })
+    .catch((err) => {
+      console.warn('[HyperCanvas] Failed to detect UI kit:', err);
+    });
 
   if (devServerManager) {
     logsAndChatProvider.setDevServerManager(devServerManager);
@@ -107,27 +97,23 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      LogsAndChatPanelProvider.viewType,
-      logsAndChatProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true,
-        },
+    vscode.window.registerWebviewViewProvider(LogsAndChatPanelProvider.viewType, logsAndChatProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
       },
-    ),
+    }),
   );
 
   // Auto-inject UUIDs and parse component structure when currentComponent changes
-  const unsubStateChange = stateHub.onChange((state, patch) => {
-    if (patch.currentComponent && patch.currentComponent.path) {
+  const unsubStateChange = stateHub.onChange((_state, patch) => {
+    if (patch.currentComponent?.path) {
       const componentPath = patch.currentComponent.path;
       // First inject data-uniq-id attributes into source, then parse structure
-      panelRouter!.astBridge.astService
+      panelRouter?.astBridge.astService
         .injectUniqueIds(componentPath)
-        .then(() => panelRouter!.componentService.parseStructure(componentPath))
+        .then(() => panelRouter?.componentService.parseStructure(componentPath))
         .then((structure) => {
-          stateHub!.applyUpdate('extension-host', { astStructure: structure });
+          stateHub?.applyUpdate('extension-host', { astStructure: structure });
         })
         .catch((err) => {
           console.error('[HyperCanvas] Failed to inject UUIDs / parse structure:', err);
@@ -137,51 +123,32 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: unsubStateChange });
 
   // Register Left Panel (Activity Bar explorer)
-  leftPanelProvider = new LeftPanelProvider(
-    context.extensionUri,
-    stateHub,
-    panelRouter,
-  );
+  leftPanelProvider = new LeftPanelProvider(context.extensionUri, stateHub, panelRouter);
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      LeftPanelProvider.viewType,
-      leftPanelProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true,
-        },
+    vscode.window.registerWebviewViewProvider(LeftPanelProvider.viewType, leftPanelProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
       },
-    ),
+    }),
   );
 
   // Register Right Panel (Inspector)
-  rightPanelProvider = new RightPanelProvider(
-    context.extensionUri,
-    stateHub,
-    panelRouter,
-  );
+  rightPanelProvider = new RightPanelProvider(context.extensionUri, stateHub, panelRouter);
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      RightPanelProvider.viewType,
-      rightPanelProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true,
-        },
+    vscode.window.registerWebviewViewProvider(RightPanelProvider.viewType, rightPanelProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
       },
-    ),
+    }),
   );
 
   // Register commands
   registerCommands(context, workspaceRoot);
 
   // Status bar item
-  const statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100,
-  );
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(eye) Preview';
   statusBarItem.tooltip = 'Open HyperCanvas Preview';
   statusBarItem.command = 'hypercanvas.openPreview';
@@ -189,9 +156,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Auto-start dev server if configured
-  const autoStart = vscode.workspace
-    .getConfiguration('hypercanvas.devServer')
-    .get<boolean>('autoStart', false);
+  const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
 
   if (autoStart) {
     devServerManager.start().then((state) => {
@@ -200,80 +165,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     });
   }
-
-  // Track file saves for undo/redo snapshots (code-server extension → HyperCanvas server)
-  // Auth tokens are injected as env vars when the code-server pod starts
-  let accessToken = process.env.HYPERCANVAS_AUTH_TOKEN || '';
-  const refreshToken = process.env.HYPERCANVAS_REFRESH_TOKEN || '';
-
-  // Cache pre-save content so the first IDE save in a session is undoable
-  const preSaveContentCache = new Map<string, string>();
-
-  context.subscriptions.push(
-    vscode.workspace.onWillSaveTextDocument((event) => {
-      try {
-        const content = readFileSync(event.document.uri.fsPath, 'utf-8');
-        preSaveContentCache.set(event.document.uri.fsPath, content);
-      } catch {
-        // New file or unreadable — no pre-save content
-      }
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument(async (doc) => {
-      if (!accessToken) return;
-
-      const preContent = preSaveContentCache.get(doc.uri.fsPath);
-      preSaveContentCache.delete(doc.uri.fsPath);
-
-      const config = vscode.workspace.getConfiguration('hypercanvas');
-      const serverUrl = config.get<string>('serverUrl', 'http://localhost:8080');
-      const payload = {
-        path: doc.uri.fsPath,
-        source: 'code-server' as const,
-        ...(preContent !== undefined && { preContent }),
-      };
-
-      try {
-        let res = await fetch(`${serverUrl}/api/code-editor/saved`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        // Auto-refresh on 401 (access token expired, TTL=15min)
-        if (res.status === 401 && refreshToken) {
-          const refreshRes = await fetch(`${serverUrl}/api/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Cookie': `refresh_token=${refreshToken}` },
-          });
-          if (refreshRes.ok) {
-            const data = await refreshRes.json() as { accessToken: string };
-            accessToken = data.accessToken;
-            // Retry with new access token
-            res = await fetch(`${serverUrl}/api/code-editor/saved`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify(payload),
-            });
-          }
-        }
-
-        if (!res.ok) {
-          console.warn(`[HyperCanvas] code-editor/saved failed: ${res.status}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        }
-      } catch {
-        // Server not reachable — ignore silently
-      }
-    }),
-  );
 
   console.log('[HyperCanvas] Extension activated successfully');
 }
@@ -314,10 +205,7 @@ function getWorkspaceRoot(): string | null {
 /**
  * Register all commands
  */
-function registerCommands(
-  context: vscode.ExtensionContext,
-  workspaceRoot: string,
-): void {
+function registerCommands(context: vscode.ExtensionContext, workspaceRoot: string): void {
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
@@ -364,9 +252,7 @@ function registerCommands(
 
       const filePath = editor.document.uri.fsPath;
       if (!/\.(tsx|jsx)$/.test(filePath)) {
-        vscode.window.showWarningMessage(
-          'Go to Visual only works in TSX/JSX files',
-        );
+        vscode.window.showWarningMessage('Go to Visual only works in TSX/JSX files');
         return;
       }
 
@@ -375,11 +261,7 @@ function registerCommands(
       const column = position.character + 1;
 
       const astService = new AstService(workspaceRoot, new VSCodeFileIO());
-      const result = await astService.findElementAtPosition(
-        filePath,
-        line,
-        column,
-      );
+      const result = await astService.findElementAtPosition(filePath, line, column);
 
       if (result) {
         previewPanel?.sendGoToVisual(result.uuid);
@@ -405,18 +287,15 @@ function registerCommands(
           cancellable: false,
         },
         async () => {
-          const state = await devServerManager!.start();
+          if (!devServerManager) return;
+          const state = await devServerManager.start();
           console.log('[HyperCanvas] Dev server state:', state.status, state.url);
 
           if (state.status === 'running') {
-            vscode.window.showInformationMessage(
-              `Dev server running at ${state.url}`,
-            );
-            previewPanel?.setPreviewUrl(state.url!);
+            vscode.window.showInformationMessage(`Dev server running at ${state.url}`);
+            if (state.url) previewPanel?.setPreviewUrl(state.url);
           } else if (state.status === 'error') {
-            vscode.window.showErrorMessage(
-              `Failed to start dev server: ${state.error}`,
-            );
+            vscode.window.showErrorMessage(`Failed to start dev server: ${state.error}`);
           }
         },
       );
@@ -437,61 +316,45 @@ function registerCommands(
 
   // Show dev server output
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'hypercanvas.showDevServerOutput',
-      () => {
-        devServerManager?.showOutput();
-      },
-    ),
+    vscode.commands.registerCommand('hypercanvas.showDevServerOutput', () => {
+      devServerManager?.showOutput();
+    }),
   );
 
   // Configure AI API key
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'hypercanvas.configureAIKey',
-      async () => {
-        await vscode.commands.executeCommand(
-          'workbench.action.openSettings',
-          'hypercanvas.ai',
-        );
-      },
-    ),
+    vscode.commands.registerCommand('hypercanvas.configureAIKey', async () => {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'hypercanvas.ai');
+    }),
   );
 
   // Open/create project structure config file
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'hypercanvas.openProjectStructure',
-      async () => {
-        const configDir = vscode.Uri.joinPath(
-          vscode.Uri.file(workspaceRoot),
-          '.hyperide',
-        );
-        const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
+    vscode.commands.registerCommand('hypercanvas.openProjectStructure', async () => {
+      const configDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.hyperide');
+      const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
 
-        try {
-          await vscode.workspace.fs.stat(configFile);
-        } catch {
-          // File doesn't exist — create with template
-          await vscode.workspace.fs.createDirectory(configDir);
+      try {
+        await vscode.workspace.fs.stat(configFile);
+      } catch {
+        // File doesn't exist — create with template
+        await vscode.workspace.fs.createDirectory(configDir);
 
-          const template = {
-            '.atomComponentsPaths': 'Paths to directories with atomic/base UI components (buttons, inputs, etc.)',
-            atomComponentsPaths: [] as string[],
-            '.compositeComponentsPaths': 'Paths to directories with composite components (forms, cards, layouts)',
-            compositeComponentsPaths: [] as string[],
-            '.pagesPaths': 'Paths to directories with page components (Next.js pages, route components)',
-            pagesPaths: [] as string[],
-          };
+        const template = {
+          '.atomComponentsPaths': 'Paths to directories with atomic/base UI components (buttons, inputs, etc.)',
+          atomComponentsPaths: [] as string[],
+          '.compositeComponentsPaths': 'Paths to directories with composite components (forms, cards, layouts)',
+          compositeComponentsPaths: [] as string[],
+          '.pagesPaths': 'Paths to directories with page components (Next.js pages, route components)',
+          pagesPaths: [] as string[],
+        };
 
-          const content = Buffer.from(JSON.stringify(template, null, 2), 'utf-8');
-          await vscode.workspace.fs.writeFile(configFile, content);
-        }
+        const content = Buffer.from(JSON.stringify(template, null, 2), 'utf-8');
+        await vscode.workspace.fs.writeFile(configFile, content);
+      }
 
-        const doc = await vscode.workspace.openTextDocument(configFile);
-        await vscode.window.showTextDocument(doc);
-      },
-    ),
+      const doc = await vscode.workspace.openTextDocument(configFile);
+      await vscode.window.showTextDocument(doc);
+    }),
   );
 }
-
