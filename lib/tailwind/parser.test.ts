@@ -116,7 +116,7 @@ describe('getConflictingPrefixes', () => {
   it('should return prefixes for border radius', () => {
     const prefixes = getConflictingPrefixes(['borderRadius']);
 
-    expect(prefixes).toContain('rounded');
+    expect(prefixes).toContain('rounded-');
   });
 
   it('should handle opacity', () => {
@@ -128,72 +128,74 @@ describe('getConflictingPrefixes', () => {
 
 describe('removeConflictingClasses', () => {
   it('should remove conflicting width classes', () => {
-    const result = removeConflictingClasses('w-32 w-64 h-16', ['width']);
+    const { preserved, removed } = removeConflictingClasses('w-32 w-64 h-16', ['width']);
 
-    expect(result).not.toContain('w-32');
-    expect(result).not.toContain('w-64');
-    expect(result).toContain('h-16');
+    expect(removed).toContain('w-32');
+    expect(removed).toContain('w-64');
+    expect(preserved).toContain('h-16');
   });
 
   it('should remove conflicting margin classes', () => {
-    const result = removeConflictingClasses('mt-4 mt-8 mb-2', ['marginTop']);
+    const { preserved, removed } = removeConflictingClasses('mt-4 mt-8 mb-2', ['marginTop']);
 
-    expect(result).not.toContain('mt-4');
-    expect(result).not.toContain('mt-8');
-    expect(result).toContain('mb-2');
+    expect(removed).toContain('mt-4');
+    expect(removed).toContain('mt-8');
+    expect(preserved).toContain('mb-2');
   });
 
   it('should preserve border width when removing border color', () => {
-    const result = removeConflictingClasses('border border-red-500', ['borderColor']);
+    const { preserved, removed } = removeConflictingClasses('border border-red-500', ['borderColor']);
 
-    expect(result).toContain('border');
-    expect(result).not.toContain('border-red-500');
+    expect(preserved).toContain('border');
+    expect(removed).toContain('border-red-500');
   });
 
   it('should remove position classes', () => {
-    const result = removeConflictingClasses('relative absolute flex', ['position']);
+    const { preserved, removed } = removeConflictingClasses('relative absolute flex', ['position']);
 
-    expect(result).not.toContain('relative');
-    expect(result).not.toContain('absolute');
-    expect(result).toContain('flex');
+    expect(removed).toContain('relative');
+    expect(removed).toContain('absolute');
+    expect(preserved).toContain('flex');
   });
 
   it('should handle negative values', () => {
-    const result = removeConflictingClasses('-mt-4 mt-8 flex', ['marginTop']);
+    const { preserved, removed } = removeConflictingClasses('-mt-4 mt-8 flex', ['marginTop']);
 
-    expect(result).not.toContain('-mt-4');
-    expect(result).not.toContain('mt-8');
-    expect(result).toContain('flex');
+    expect(removed).toContain('-mt-4');
+    expect(removed).toContain('mt-8');
+    expect(preserved).toContain('flex');
   });
 
   it('should handle arbitrary values', () => {
-    const result = removeConflictingClasses('w-[227px] w-64 h-32', ['width']);
+    const { preserved, removed } = removeConflictingClasses('w-[227px] w-64 h-32', ['width']);
 
-    expect(result).not.toContain('w-[227px]');
-    expect(result).not.toContain('w-64');
-    expect(result).toContain('h-32');
+    expect(removed).toContain('w-[227px]');
+    expect(removed).toContain('w-64');
+    expect(preserved).toContain('h-32');
   });
 
   it('should preserve non-conflicting classes', () => {
-    const result = removeConflictingClasses('flex items-center justify-between w-32', ['width']);
+    const { preserved, removed } = removeConflictingClasses('flex items-center justify-between w-32', ['width']);
 
-    expect(result).toContain('flex');
-    expect(result).toContain('items-center');
-    expect(result).toContain('justify-between');
-    expect(result).not.toContain('w-32');
+    expect(preserved).toContain('flex');
+    expect(preserved).toContain('items-center');
+    expect(preserved).toContain('justify-between');
+    expect(removed).toContain('w-32');
   });
 
   it('should handle empty className', () => {
-    expect(removeConflictingClasses('', ['width'])).toBe('');
+    const { preserved, removed } = removeConflictingClasses('', ['width']);
+    expect(preserved).toBe('');
+    expect(removed).toEqual([]);
   });
 
   it('should handle multiple style keys', () => {
-    const result = removeConflictingClasses('w-32 h-16 mt-4 mb-8 flex', ['width', 'marginTop']);
+    const { preserved, removed } = removeConflictingClasses('w-32 h-16 mt-4 mb-8 flex', ['width', 'marginTop']);
 
-    expect(result).not.toContain('w-32');
-    expect(result).not.toContain('mt-4');
-    expect(result).toContain('h-16');
-    expect(result).toContain('mb-8');
-    expect(result).toContain('flex');
+    expect(removed).toContain('w-32');
+    expect(removed).toContain('mt-4');
+    expect(preserved).toContain('h-16');
+    expect(preserved).toContain('mb-8');
+    expect(preserved).toContain('flex');
   });
 });

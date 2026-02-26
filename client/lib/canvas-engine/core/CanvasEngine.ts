@@ -639,9 +639,10 @@ export class CanvasEngine {
    */
   deleteASTElements(elementIds: string[], filePath: string): void {
     console.log(
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       `[CanvasEngine.deleteASTElements] Called with ${elementIds.length} elements:`,
       elementIds.map((id) => id.substring(0, 8)),
-    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    );
 
     if (elementIds.length === 0) {
       console.warn('[CanvasEngine] No elements to delete');

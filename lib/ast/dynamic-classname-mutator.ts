@@ -282,9 +282,10 @@ function findStringLiteralByCodeLine(
     console.log('[DynamicClassName] literalValue looks like ternary/complex expression, extracting strings...');
     const extractedStrings = extractStringLiteralsFromExpression(literalValue);
     console.log(
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       `[DynamicClassName] Extracted ${extractedStrings.length} strings:`,
       extractedStrings.map((s) => `${s.slice(0, 30)}...`),
-    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    );
 
     // Find the longest string that contains classes (most likely the main content)
     // Sort by length descending to prioritize longer strings (they contain more classes)
