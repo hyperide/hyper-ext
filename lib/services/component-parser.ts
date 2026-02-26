@@ -10,9 +10,9 @@ import { randomUUID } from 'node:crypto';
 import _generate from '@babel/generator';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
+import { analyzeJSXChildren } from '../ast/traverser';
 
-// @ts-expect-error - babel/generator has ESM/CJS issues
-const generate = _generate.default || _generate;
+const generate = (_generate as { default?: typeof _generate }).default ?? _generate;
 // @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;
 
@@ -90,6 +90,7 @@ export interface FunctionContext {
 export interface ParseContext {
   fileAST: t.File;
   componentBodyPath?: unknown;
+  seenIds?: Set<string>;
 }
 
 // ============================================
@@ -419,6 +420,37 @@ export function parseLocalFunctionBody(
  * Recursively processes children, handles .map(), ternaries, logical operators,
  * and local function/component expansion.
  */
+
+/** Lightweight check: does the expression contain any JSXElement? No parsing, no side effects. */
+function containsJSX(node: t.Node | null | undefined): boolean {
+  if (!node) return false;
+  if (t.isJSXElement(node) || t.isJSXFragment(node)) return true;
+
+  // Recurse into common expression shapes
+  if (t.isConditionalExpression(node)) {
+    return containsJSX(node.consequent) || containsJSX(node.alternate);
+  }
+  if (t.isLogicalExpression(node)) {
+    return containsJSX(node.left) || containsJSX(node.right);
+  }
+  if (t.isCallExpression(node)) {
+    // .map() callbacks contain JSX in arguments
+    if (node.arguments.some((arg) => containsJSX(arg as t.Node))) return true;
+    // Local function calls (e.g. renderCalendarDays()) — treated as containing JSX
+    // because findJSXInNode will expand them via parseLocalFunctionBody
+    if (t.isIdentifier(node.callee)) return true;
+    return false;
+  }
+  if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
+    if (t.isJSXElement(node.body) || t.isJSXFragment(node.body)) return true;
+    if (t.isBlockStatement(node.body)) {
+      return node.body.body.some((stmt) => t.isReturnStatement(stmt) && containsJSX(stmt.argument));
+    }
+  }
+  if (t.isParenthesizedExpression(node)) return containsJSX(node.expression);
+  return false;
+}
+
 export function parseJSXElement(
   element: t.JSXElement,
   mapContext?: MapContext,
@@ -465,6 +497,18 @@ export function parseJSXElement(
     elementId = dataUniqIdAttr.value.expression.quasis[0].value.raw;
   } else {
     elementId = generateId();
+  }
+
+  // Deduplicate: if this ID was already seen, regenerate
+  if (parseContext?.seenIds) {
+    if (parseContext.seenIds.has(elementId)) {
+      const originalId = elementId;
+      elementId = generateId();
+      console.warn(
+        `[ComponentParser] Duplicate data-uniq-id "${originalId}" on <${name}>, regenerated: ${elementId.substring(0, 8)}`,
+      ); // nosemgrep: unsafe-formatstring
+    }
+    parseContext.seenIds.add(elementId);
   }
 
   // Parse props
@@ -672,20 +716,12 @@ export function parseJSXElement(
     return found;
   };
 
-  // First, detect if there are JSX elements among children
-  let hasJSXElements = false;
-  for (const child of element.children) {
-    if (t.isJSXElement(child)) {
-      hasJSXElements = true;
-      break;
-    } else if (t.isJSXExpressionContainer(child)) {
-      const jsx = findJSXInNode(child.expression as t.Node, mapContext, condContext);
-      if (jsx.length > 0) {
-        hasJSXElements = true;
-        break;
-      }
-    }
-  }
+  // Lightweight check: detect if there are JSX elements among children
+  // IMPORTANT: must NOT call findJSXInNode here — that would parse elements
+  // and register IDs in seenIds, causing false dedup on the actual processing pass
+  const hasJSXElements = element.children.some(
+    (child) => t.isJSXElement(child) || (t.isJSXExpressionContainer(child) && containsJSX(child.expression)),
+  );
 
   // Process children based on what we found
   if (hasJSXElements) {
@@ -707,36 +743,12 @@ export function parseJSXElement(
       }
     }
   } else {
-    // No JSX elements - only text/expressions
-    const childrenCode = element.children
-      .map((child) => {
-        if (t.isJSXText(child)) return child.value;
-        if (t.isJSXExpressionContainer(child)) {
-          return `{${generate(child.expression).code}}`;
-        }
-        return '';
-      })
-      .join('')
-      .trim();
-
-    if (childrenCode) {
-      props.children = childrenCode;
-
-      if (element.children.length === 1) {
-        const onlyChild = element.children[0];
-        if (t.isJSXText(onlyChild)) {
-          childrenType = 'text';
-        } else if (t.isJSXExpressionContainer(onlyChild)) {
-          if (t.isIdentifier(onlyChild.expression)) {
-            childrenType = 'expression';
-          } else {
-            childrenType = 'expression-complex';
-          }
-        } else {
-          childrenType = 'expression-complex';
-        }
-      } else {
-        childrenType = 'expression-complex';
+    // No JSX elements - only text/expressions, use shared utility
+    const analysis = analyzeJSXChildren(element);
+    if (analysis.textContent) {
+      props.children = analysis.textContent;
+      if (analysis.childrenType) {
+        childrenType = analysis.childrenType;
       }
     }
   }

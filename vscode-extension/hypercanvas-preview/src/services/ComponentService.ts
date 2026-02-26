@@ -5,19 +5,19 @@
  * Uses VS Code file system API and Babel for parsing.
  */
 
-import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { parseCode } from '@lib/ast/parser';
-import * as t from '@babel/types';
 import _traverse, { type NodePath } from '@babel/traverse';
+import * as t from '@babel/types';
+import { parseCode } from '@lib/ast/parser';
 import { getUuidFromElement } from '@lib/ast/traverser';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
-import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
-import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
+import * as vscode from 'vscode';
 import { analyzeWithAI, resolveAnalyzerConfig } from '../../../../lib/component-scanner/ai-analyzer';
-import { FileProjectStructureStore } from './FileStructureStore';
+import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
+import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
-import * as fs from 'node:fs/promises';
+import { FileProjectStructureStore } from './FileStructureStore';
 
 // Re-export shared types for convenience
 export type { ComponentInfo, ComponentTree, PropInfo };
@@ -30,8 +30,7 @@ export interface ScanResult {
   setupReason?: SetupReason;
 }
 
-// @ts-ignore - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
 // ============================================
 // ComponentService Class
@@ -40,6 +39,7 @@ const traverse = _traverse.default || _traverse;
 export class ComponentService {
   private _workspaceRoot: string;
   private _cache: Map<string, ComponentInfo> = new Map();
+  private _seenIds = new Set<string>();
 
   constructor(workspaceRoot: string) {
     this._workspaceRoot = workspaceRoot;
@@ -57,10 +57,7 @@ export class ComponentService {
 
     // Find all component files
     const componentGlob = '{src,app}/**/*.{tsx,jsx}';
-    const files = await vscode.workspace.findFiles(
-      componentGlob,
-      '**/node_modules/**',
-    );
+    const files = await vscode.workspace.findFiles(componentGlob, '**/node_modules/**');
 
     for (const file of files) {
       try {
@@ -69,10 +66,7 @@ export class ComponentService {
           // Categorize by directory or naming convention
           if (file.fsPath.includes('/pages/') || file.fsPath.includes('/app/')) {
             tree.pages.push(componentInfo);
-          } else if (
-            file.fsPath.includes('/components/') &&
-            !file.fsPath.includes('/components/ui/')
-          ) {
+          } else if (file.fsPath.includes('/components/') && !file.fsPath.includes('/components/ui/')) {
             tree.composites.push(componentInfo);
           } else {
             tree.atoms.push(componentInfo);
@@ -156,10 +150,7 @@ export class ComponentService {
     });
     const data = await scanner.getComponentsData(this._workspaceRoot);
 
-    const isEmpty =
-      data.atomGroups.length === 0 &&
-      data.compositeGroups.length === 0 &&
-      data.pageGroups.length === 0;
+    const isEmpty = data.atomGroups.length === 0 && data.compositeGroups.length === 0 && data.pageGroups.length === 0;
 
     if (!isEmpty) {
       return { data };
@@ -182,9 +173,7 @@ export class ComponentService {
    * Ported from server/routes/getComponentTests.ts
    */
   async scanComponentTests(componentPath: string): Promise<TestGroup[]> {
-    const absolutePath = path.isAbsolute(componentPath)
-      ? componentPath
-      : path.join(this._workspaceRoot, componentPath);
+    const absolutePath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
 
     const componentName = path.basename(absolutePath, path.extname(absolutePath));
     const componentDir = path.dirname(absolutePath);
@@ -278,9 +267,7 @@ export class ComponentService {
   /**
    * Get component definitions (props types)
    */
-  async getComponentDefinitions(
-    componentPath: string,
-  ): Promise<PropInfo[] | null> {
+  async getComponentDefinitions(componentPath: string): Promise<PropInfo[] | null> {
     const component = await this.getComponent(componentPath);
     return component?.props ?? null;
   }
@@ -302,6 +289,8 @@ export class ComponentService {
       const returnJSX = this._findComponentReturnJSX(ast);
       if (!returnJSX) return [];
 
+      // Reset seen IDs for dedup within this parse pass
+      this._seenIds.clear();
       return this._buildTreeFromJSX(returnJSX);
     } catch (error) {
       console.error(`[ComponentService] Error parsing structure for ${componentPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
@@ -323,9 +312,7 @@ export class ComponentService {
   /**
    * Parse component file
    */
-  private async _parseComponentFile(
-    uri: vscode.Uri,
-  ): Promise<ComponentInfo | null> {
+  private async _parseComponentFile(uri: vscode.Uri): Promise<ComponentInfo | null> {
     try {
       const content = await vscode.workspace.fs.readFile(uri);
       const sourceCode = new TextDecoder().decode(content);
@@ -347,10 +334,7 @@ export class ComponentService {
   /**
    * Parse component source code
    */
-  private _parseComponent(
-    componentPath: string,
-    sourceCode: string,
-  ): ComponentInfo | null {
+  private _parseComponent(componentPath: string, sourceCode: string): ComponentInfo | null {
     try {
       const ast = parseCode(sourceCode);
 
@@ -462,10 +446,7 @@ export class ComponentService {
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
 
-                if (
-                  typeAnnotation &&
-                  t.isTSTypeAnnotation(typeAnnotation)
-                ) {
+                if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
                 }
 
@@ -496,10 +477,7 @@ export class ComponentService {
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
 
-                if (
-                  typeAnnotation &&
-                  t.isTSTypeAnnotation(typeAnnotation)
-                ) {
+                if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
                 }
 
@@ -659,15 +637,28 @@ export class ComponentService {
     const tagName = _getTagName(element);
     if (!tagName) return null;
 
-    const uuid = getUuidFromElement(element);
-    const id = uuid || `_${tagName}_${element.loc?.start.line ?? 0}`;
+    let id = getUuidFromElement(element) || `_${tagName}_${element.loc?.start.line ?? 0}`;
+
+    // Deduplicate: if this ID was already seen, generate a unique fallback
+    if (this._seenIds.has(id)) {
+      id = `_${tagName}_dup_${element.loc?.start.line ?? 0}_${element.loc?.start.column ?? 0}`;
+    }
+    this._seenIds.add(id);
 
     // Determine type
     let type: TreeNode['type'] = 'element';
     const lowerTag = tagName.toLowerCase();
-    if (lowerTag === 'div' || lowerTag === 'section' || lowerTag === 'main' ||
-        lowerTag === 'header' || lowerTag === 'footer' || lowerTag === 'nav' ||
-        lowerTag === 'article' || lowerTag === 'aside' || lowerTag === 'form') {
+    if (
+      lowerTag === 'div' ||
+      lowerTag === 'section' ||
+      lowerTag === 'main' ||
+      lowerTag === 'header' ||
+      lowerTag === 'footer' ||
+      lowerTag === 'nav' ||
+      lowerTag === 'article' ||
+      lowerTag === 'aside' ||
+      lowerTag === 'form'
+    ) {
       type = 'frame';
     } else if (/^[A-Z]/.test(tagName)) {
       type = 'component';
@@ -691,9 +682,7 @@ export class ComponentService {
       }
     }
 
-    const label = textParts.length > 0
-      ? `${tagName} "${textParts.join(' ').slice(0, 30)}"`
-      : tagName;
+    const label = textParts.length > 0 ? `${tagName} "${textParts.join(' ').slice(0, 30)}"` : tagName;
 
     const treeNode: TreeNode = { id, type, label };
     if (jsxChildren.length > 0) {
@@ -740,12 +729,14 @@ export class ComponentService {
             // Wrap in a virtual ".map()" node
             const calleeObj = expr.callee.object;
             const arrayName = t.isIdentifier(calleeObj) ? calleeObj.name : 'items';
-            return [{
-              id: `_map_${expr.loc?.start.line ?? 0}`,
-              type: 'map',
-              label: `${arrayName}.map()`,
-              children: mapChildren,
-            }];
+            return [
+              {
+                id: `_map_${expr.loc?.start.line ?? 0}`,
+                type: 'map',
+                label: `${arrayName}.map()`,
+                children: mapChildren,
+              },
+            ];
           }
         }
       }
@@ -758,10 +749,7 @@ export class ComponentService {
 
     // Ternary: condition ? <A> : <B>
     if (t.isConditionalExpression(expr)) {
-      return [
-        ...this._extractJSXFromExpression(expr.consequent),
-        ...this._extractJSXFromExpression(expr.alternate),
-      ];
+      return [...this._extractJSXFromExpression(expr.consequent), ...this._extractJSXFromExpression(expr.alternate)];
     }
 
     // Direct JSX in expression
@@ -771,9 +759,7 @@ export class ComponentService {
   /**
    * Extract JSX from an arrow/function body.
    */
-  private _extractJSXFromFunctionBody(
-    fn: t.ArrowFunctionExpression | t.FunctionExpression,
-  ): TreeNode[] {
+  private _extractJSXFromFunctionBody(fn: t.ArrowFunctionExpression | t.FunctionExpression): TreeNode[] {
     if (t.isJSXElement(fn.body) || t.isJSXFragment(fn.body)) {
       return this._buildTreeFromJSX(fn.body);
     }

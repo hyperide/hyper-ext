@@ -21,7 +21,7 @@ import {
 } from '@lib/ast/mutator';
 import { createFileParser, parseCode } from '@lib/ast/parser';
 import { findElementByUuid, getUuidFromElement } from '@lib/ast/traverser';
-import { ensureUuid, generateUuid, hasUuid, updateAllChildUuids } from '@lib/ast/uuid';
+import { ensureUuid, generateUuid, updateAllChildUuids } from '@lib/ast/uuid';
 import { generateTailwindClasses } from '@lib/tailwind/generator';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
 import type { ClassNameLocation } from '@lib/types';
@@ -626,19 +626,34 @@ export class AstService {
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       let addedCount = 0;
+      const seenIds = new Set<string>();
 
       traverse(ast, {
         JSXElement(path: NodePath<t.JSXElement>) {
-          if (!hasUuid(path.node)) {
-            ensureUuid(path.node);
+          const existingId = getUuidFromElement(path.node);
+
+          if (!existingId) {
+            // No data-uniq-id — add new one
+            const newId = ensureUuid(path.node);
+            seenIds.add(newId);
             addedCount++;
+          } else if (seenIds.has(existingId)) {
+            // Duplicate — regenerate
+            const newId = ensureUuid(path.node);
+            seenIds.add(newId);
+            addedCount++;
+            console.warn(
+              `[AstService.injectUniqueIds] Duplicate data-uniq-id "${existingId}", replaced: ${newId.substring(0, 8)}`,
+            ); // nosemgrep: unsafe-formatstring
+          } else {
+            seenIds.add(existingId);
           }
         },
       });
 
       if (addedCount > 0) {
         await this._fileParser.writeAST(ast, absolutePath);
-        console.log(`[AstService.injectUniqueIds] Added ${addedCount} UUIDs to ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+        console.log(`[AstService.injectUniqueIds] Added/fixed ${addedCount} UUIDs in ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       }
 
       return { addedCount };
