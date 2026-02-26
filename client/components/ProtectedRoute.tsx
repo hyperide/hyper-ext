@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import cn from 'clsx';
+import { useCallback, useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -80,6 +81,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, [connectionError, connectionRetryCount, retryConnection, resetConnectionRetries]);
 
+  const handleManualRetry = useCallback(() => {
+    resetConnectionRetries();
+    retryConnection();
+  }, [resetConnectionRetries, retryConnection]);
+
   // Show loading while Zustand is hydrating OR while auth check is in progress
   if (!_hasHydrated || isLoading) {
     return (
@@ -89,49 +95,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           <p className="text-lg text-muted-foreground">Loading...</p>
         </div>
       </div>
-    );
-  }
-
-  // Connection error state - subtle banner in corner + content (not blocking)
-  if (connectionError) {
-    const exhausted = connectionRetryCount >= MAX_RETRIES;
-
-    const handleManualRetry = () => {
-      resetConnectionRetries();
-      retryConnection();
-    };
-
-    return (
-      <>
-        <div className="fixed top-4 right-4 z-50 bg-slate-700 dark:bg-slate-600 text-slate-100 px-3 py-1.5 rounded-md text-xs flex items-center gap-2 shadow-lg">
-          {!navigator.onLine ? (
-            <>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>Offline</span>
-            </>
-          ) : exhausted ? (
-            <>
-              <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-              <span>Server Unavailable</span>
-              <button
-                type="button"
-                onClick={handleManualRetry}
-                className="ml-1 px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
-              >
-                Retry
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>
-                Reconnecting... ({connectionRetryCount}/{MAX_RETRIES})
-              </span>
-            </>
-          )}
-        </div>
-        {children}
-      </>
     );
   }
 
@@ -158,9 +121,49 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !connectionError) {
     return <Navigate to="/product" replace />;
   }
 
-  return <>{children}</>;
+  // Connection banner — always in DOM to prevent JSX tree structure change
+  // (different Fragment children count causes full unmount/remount of children)
+  const exhausted = connectionRetryCount >= MAX_RETRIES;
+
+  return (
+    <>
+      <div
+        className={cn(
+          'fixed top-4 right-4 z-50 bg-slate-700 dark:bg-slate-600 text-slate-100 px-3 py-1.5 rounded-md text-xs flex items-center gap-2 shadow-lg',
+          !connectionError && 'hidden',
+        )}
+      >
+        {!navigator.onLine ? (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span>Offline</span>
+          </>
+        ) : exhausted ? (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+            <span>Server Unavailable</span>
+            <button
+              type="button"
+              onClick={handleManualRetry}
+              className="ml-1 px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
+            >
+              Retry
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span>
+              Reconnecting... ({connectionRetryCount}/{MAX_RETRIES})
+            </span>
+          </>
+        )}
+      </div>
+      {children}
+    </>
+  );
 }

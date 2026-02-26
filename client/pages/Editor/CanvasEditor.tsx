@@ -276,7 +276,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     leftSidebarWidth,
     setLeftSidebarWidth,
   } = useEditorStore();
-  const { accessToken } = useAuthStore();
+  const { accessToken, connectionError } = useAuthStore();
 
   // Project control (start/stop/restart, auto-start logic)
   const { handleStartProject, handleRestartProject, handleProjectUpdate, wasRunningRef } = useProjectControl({
@@ -1062,6 +1062,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                         )}
                         <IframeCanvas
                           componentPath={meta.relativeFilePath}
+                          serverOffline={connectionError}
                           boardModeActive={isBoardModeActive}
                           iframeLoadedCounter={iframeLoadedCounter}
                           activeInstanceId={activeDesignInstanceId}

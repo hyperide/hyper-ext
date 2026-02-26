@@ -31,6 +31,7 @@ interface AuthState {
   connectionRetryCount: number;
   sessionExpired: boolean;
   _hasHydrated: boolean;
+  _isRetrying: boolean;
 
   // Actions
   setUser: (user: User | null) => void;
@@ -46,7 +47,7 @@ interface AuthState {
   updateTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
-  checkAuth: () => Promise<boolean>;
+  checkAuth: (options?: { isRetry?: boolean }) => Promise<boolean>;
 }
 
 const CURRENT_WORKSPACE_KEY = 'hypercanvas_current_workspace';
@@ -83,6 +84,7 @@ export const useAuthStore = create<AuthState>()(
       connectionRetryCount: 0,
       sessionExpired: false,
       _hasHydrated: false,
+      _isRetrying: false,
 
       setUser: (user) => {
         set({ user, isAuthenticated: !!user });
@@ -136,12 +138,16 @@ export const useAuthStore = create<AuthState>()(
       },
 
       retryConnection: async () => {
+        if (get()._isRetrying) return;
         set((s) => ({
-          connectionError: false,
+          _isRetrying: true,
           connectionRetryCount: s.connectionRetryCount + 1,
-          isLoading: true,
         }));
-        await get().checkAuth();
+        try {
+          await get().checkAuth({ isRetry: true });
+        } finally {
+          set({ _isRetrying: false });
+        }
       },
 
       updateTheme: async (theme) => {
@@ -245,8 +251,10 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      checkAuth: async () => {
-        set({ isLoading: true, connectionError: false });
+      checkAuth: async (options?: { isRetry?: boolean }) => {
+        if (!options?.isRetry) {
+          set({ isLoading: true, connectionError: false });
+        }
 
         try {
           let token = get().accessToken;

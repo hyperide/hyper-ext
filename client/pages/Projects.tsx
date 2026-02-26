@@ -99,7 +99,8 @@ export default function Projects() {
   const { currentWorkspace, workspaces, setCurrentWorkspace, accessToken, refreshAuth, connectionError } =
     useAuthStore();
   const [workspaceSelectorOpen, setWorkspaceSelectorOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
+  // null = not loaded yet, [] = loaded with zero projects
+  const [projects, setProjects] = useState<Project[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [showGitClone, setShowGitClone] = useState(false);
   const [gitUrl, setGitUrl] = useState('');
@@ -191,6 +192,7 @@ export default function Projects() {
       setProjects(data);
     } catch (err) {
       console.error('[Projects] Failed to load projects:', err);
+      // Don't set projects to [] — leave as null so we don't show "No projects yet"
     } finally {
       setLoading(false);
     }
@@ -199,12 +201,12 @@ export default function Projects() {
   useEffect(() => {
     if (currentWorkspace) {
       // Only show loading spinner on initial load, not on soft-refresh
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally not tracking projects
-      if (projects.length === 0) {
+      if (projects === null) {
         setLoading(true);
       }
       loadProjects();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally not tracking projects
   }, [currentWorkspace, loadProjects]);
 
   // Reload projects when returning via browser back button (bfcache)
@@ -300,16 +302,19 @@ export default function Projects() {
 
         if (data.type === 'initial') {
           // Initial statuses from server - apply to loaded projects
-          setProjects((prev) =>
-            prev.map((project) => ({
-              ...project,
-              status: data.statuses[project.id] || project.status,
-            })),
+          setProjects(
+            (prev) =>
+              prev?.map((project) => ({
+                ...project,
+                status: data.statuses[project.id] || project.status,
+              })) ?? prev,
           );
         } else if (data.projectId && data.status) {
           // Single status update
-          setProjects((prev) =>
-            prev.map((project) => (project.id === data.projectId ? { ...project, status: data.status } : project)),
+          setProjects(
+            (prev) =>
+              prev?.map((project) => (project.id === data.projectId ? { ...project, status: data.status } : project)) ??
+              prev,
           );
         }
       } catch (err) {
@@ -438,7 +443,7 @@ export default function Projects() {
 
       const project = await response.json();
       console.log('[Clone] Success! Project:', project);
-      setProjects([project, ...projects]);
+      setProjects([project, ...(projects ?? [])]);
 
       // Reset form
       setGitUrl('');
@@ -459,7 +464,7 @@ export default function Projects() {
 
   const handleStartProject = async (projectId: string) => {
     // Optimistically update status to 'building'
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, status: 'building' as const } : p)));
+    setProjects((prev) => prev?.map((p) => (p.id === projectId ? { ...p, status: 'building' as const } : p)) ?? prev);
     try {
       await authFetch(`/api/docker/start/${projectId}`, {
         method: 'POST',
@@ -468,13 +473,13 @@ export default function Projects() {
     } catch (err) {
       console.error('Failed to start project:', err);
       // Revert on error
-      setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, status: 'stopped' as const } : p)));
+      setProjects((prev) => prev?.map((p) => (p.id === projectId ? { ...p, status: 'stopped' as const } : p)) ?? prev);
     }
   };
 
   const _handleStopProject = async (projectId: string) => {
     // Optimistically update status to 'stopped'
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, status: 'stopped' as const } : p)));
+    setProjects((prev) => prev?.map((p) => (p.id === projectId ? { ...p, status: 'stopped' as const } : p)) ?? prev);
     try {
       await authFetch(`/api/docker/stop/${projectId}`, {
         method: 'POST',
@@ -489,7 +494,7 @@ export default function Projects() {
 
   const handleRestartProject = async (projectId: string) => {
     // Optimistically update status to 'building'
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, status: 'building' as const } : p)));
+    setProjects((prev) => prev?.map((p) => (p.id === projectId ? { ...p, status: 'building' as const } : p)) ?? prev);
     try {
       await authFetch(`/api/docker/restart/${projectId}`, {
         method: 'POST',
@@ -939,7 +944,7 @@ export default function Projects() {
         )}
 
         <div data-uniq-id="15921f9e-72fc-491b-9243-6c10f55ca65a" className="grid gap-4">
-          {projects.length === 0 ? (
+          {projects !== null && projects.length === 0 ? (
             <Card data-uniq-id="f40f1f12-0709-4b4b-bcc2-ab6d8ceda337">
               <CardContent
                 data-uniq-id="4bcd9370-7641-427c-9d37-5e1356f4fd6a"
@@ -955,7 +960,7 @@ export default function Projects() {
               </CardContent>
             </Card>
           ) : (
-            projects.map((project) => (
+            projects?.map((project) => (
               <Card
                 data-uniq-id="32a94575-5a3c-4910-97ff-f2531571a778"
                 key={project.id}

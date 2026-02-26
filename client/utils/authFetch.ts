@@ -5,6 +5,7 @@
  */
 
 import { useAuthStore } from '../stores/authStore';
+import { NetworkError } from './networkError';
 
 /**
  * Make an authenticated fetch request
@@ -14,9 +15,19 @@ import { useAuthStore } from '../stores/authStore';
  * Uses refreshAuth() instead of low-level refreshTokenOnce() to properly
  * set sessionExpired/connectionError flags when refresh fails, allowing
  * ProtectedRoute to show appropriate UI ("Session Expired" instead of empty state)
+ *
+ * Short-circuits with NetworkError when connectionError is already true,
+ * preventing cascade of doomed requests when the server is down.
  */
 export async function authFetch(url: string, options: RequestInit = {}, _isRetry = false): Promise<Response> {
-  const { accessToken } = useAuthStore.getState();
+  const { accessToken, connectionError } = useAuthStore.getState();
+
+  // Short-circuit: server is known to be down, don't waste a request.
+  // connectionError stays true during retries (checkAuth uses its own internal fetch).
+  // When checkAuth succeeds, it clears connectionError and this guard lifts.
+  if (connectionError) {
+    throw new NetworkError('Server connection lost');
+  }
 
   const headers: HeadersInit = {
     ...options.headers,

@@ -29,6 +29,9 @@ interface IframeCanvasProps {
   onEmptyClick?: () => void;
   onOtherInstanceClick?: (instanceId: string) => void;
   onAddComment?: (position: { x: number; y: number }, elementId: string | null, instanceId: string | null) => void;
+  // When true, the origin server is unreachable (authStore.connectionError).
+  // Guards retry loops: no reload attempts while the server is known to be down.
+  serverOffline?: boolean;
   // Gateway error callback (502, 503, etc.) with optional error message
   onGatewayError?: (hasError: boolean, errorMessage?: string) => void;
   // Runtime error callback (Next.js, Vite, Bun error overlays)
@@ -52,6 +55,7 @@ export default function IframeCanvas({
   onEmptyClick,
   onOtherInstanceClick,
   onAddComment,
+  serverOffline,
   onGatewayError,
   onRuntimeError,
   onErrorChange,
@@ -158,6 +162,11 @@ export default function IframeCanvas({
 
   // Reload iframe with retry logic
   const reloadIframe = useCallback(() => {
+    if (serverOffline) {
+      console.log('[IframeCanvas] Skipping reload, server is offline');
+      return;
+    }
+
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
 
@@ -166,7 +175,7 @@ export default function IframeCanvas({
     setError(null);
     iframe.contentWindow.location.reload();
     setRetryCount((prev) => prev + 1);
-  }, [retryCount]);
+  }, [retryCount, serverOffline]);
 
   // Notify parent about loading state changes
   useEffect(() => {
@@ -321,6 +330,14 @@ export default function IframeCanvas({
         if (errorCheck.hasError) {
           console.log('[IframeCanvas] Gateway error on load, scheduling retry');
           onGatewayError?.(true, errorCheck.errorMessage); // Notify parent with error message
+
+          // When server is known to be offline, don't retry — authStore handles recovery
+          if (serverOffline) {
+            setError('Server offline — preview will reload automatically');
+            setLoading(false);
+            return;
+          }
+
           // Exponential backoff: 1s, 2s, 4s, 8s, max 8s
           const delay = Math.min(1000 * 2 ** retryCount, 8000);
           retryTimeoutRef.current = setTimeout(() => {
@@ -354,11 +371,12 @@ export default function IframeCanvas({
         clearTimeout(retryTimeoutRef.current);
       }
     };
-  }, [previewReady, retryCount, checkForGatewayError, reloadIframe, onGatewayError]);
+  }, [previewReady, retryCount, checkForGatewayError, reloadIframe, onGatewayError, serverOffline]);
 
   // Retry on network recovery and tab activation
   useEffect(() => {
     const handleOnline = () => {
+      if (serverOffline) return; // authStore handles recovery
       console.log('[IframeCanvas] Network online, checking iframe');
       if (checkForGatewayError().hasError) {
         reloadIframe();
@@ -366,6 +384,7 @@ export default function IframeCanvas({
     };
 
     const handleVisibilityChange = () => {
+      if (serverOffline) return; // authStore handles recovery
       if (document.visibilityState === 'visible') {
         console.log('[IframeCanvas] Tab activated, checking iframe');
         // Small delay to let network settle after tab switch
@@ -384,7 +403,23 @@ export default function IframeCanvas({
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [checkForGatewayError, reloadIframe]);
+  }, [checkForGatewayError, reloadIframe, serverOffline]);
+
+  // Recovery: reload iframe when server comes back online (serverOffline: true → false)
+  const prevServerOfflineRef = useRef(serverOffline);
+  useEffect(() => {
+    const wasOffline = prevServerOfflineRef.current;
+    prevServerOfflineRef.current = serverOffline;
+    if (wasOffline && !serverOffline) {
+      setRetryCount(0);
+      if (checkForGatewayError().hasError || error) {
+        console.log('[IframeCanvas] Server back online, reloading iframe');
+        setError(null);
+        setLoading(true);
+        iframeRef.current?.contentWindow?.location.reload();
+      }
+    }
+  }, [serverOffline, checkForGatewayError, error]);
 
   // Inject/update dynamic styles based on mode
   useEffect(() => {

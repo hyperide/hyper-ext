@@ -8,7 +8,8 @@ import { useAiConfigChecker } from './components/hooks/useAiConfigChecker';
 
 export default function Index() {
   const { currentWorkspace } = useAuthStore();
-  const [projects, setProjects] = useState<unknown[]>([]);
+  // null = not loaded yet, [] = confirmed zero projects
+  const [projects, setProjects] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [, setAiConfig] = useState<unknown>(null);
@@ -36,6 +37,7 @@ export default function Index() {
       })
       .catch((err) => {
         console.error('Failed to load projects:', err);
+        // projects stays null — we won't redirect on error
         setLoading(false);
       });
   }, [currentWorkspace]);
@@ -89,8 +91,9 @@ export default function Index() {
     return <ProjectSettings onClose={handleCloseSettings} />;
   }
 
-  // Redirect to projects page if no projects
-  if (projects.length === 0) {
+  // Only redirect when we confirmed zero projects (successful load).
+  // null = fetch failed — don't redirect, show canvas instead.
+  if (projects !== null && projects.length === 0) {
     return <Navigate to="/projects?expand=clone" replace />;
   }
 
