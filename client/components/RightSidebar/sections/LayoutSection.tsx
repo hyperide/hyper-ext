@@ -5,7 +5,6 @@ import {
   IconCheck,
   IconLayout,
   IconLayoutGrid,
-  IconLoader2,
   IconSortDescending2,
   IconX,
 } from '@tabler/icons-react';
@@ -81,8 +80,11 @@ interface LayoutSectionProps {
     setValue: (value: string) => void,
     styleKey?: string,
   ) => void;
-  syncStyleChange: (key: string, value: string) => void;
+  syncStyleChange: (key: string, value: string, options?: { debounceOnly?: boolean }) => void;
 }
+
+/** Trailing-only debounce — disables leading edge for dblclick-capable controls */
+const DB = { debounceOnly: true } as const;
 
 export const LayoutSection = memo(function LayoutSection({
   selectedLayout,
@@ -197,26 +199,22 @@ export const LayoutSection = memo(function LayoutSection({
       const isSpaceBetween = justifyContent === 'space-between';
 
       if (isSpaceBetween) {
-        // In space-between mode: single click changes only cross axis (alignItems)
-        // row: click on rows changes items-start/center/end
-        // col: click on columns changes items-start/center/end
         if (selectedLayout === 'row') {
-          syncStyleChange('alignItems', pos.align);
+          syncStyleChange('alignItems', pos.align, DB);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange('alignItems', pos.justify);
+          syncStyleChange('alignItems', pos.justify, DB);
           onAlignItemsChange(pos.justify);
         }
       } else {
-        // Normal mode: single click sets both values
         if (selectedLayout === 'row') {
-          syncStyleChange('justifyContent', pos.justify);
-          syncStyleChange('alignItems', pos.align);
+          syncStyleChange('justifyContent', pos.justify, DB);
+          syncStyleChange('alignItems', pos.align, DB);
           onJustifyContentChange(pos.justify);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange('justifyContent', pos.align);
-          syncStyleChange('alignItems', pos.justify);
+          syncStyleChange('justifyContent', pos.align, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onJustifyContentChange(pos.align);
           onAlignItemsChange(pos.justify);
         }
@@ -230,27 +228,25 @@ export const LayoutSection = memo(function LayoutSection({
       const isSpaceBetween = justifyContent === 'space-between';
 
       if (isSpaceBetween) {
-        // In space-between mode: double click exits to specific position
         if (selectedLayout === 'row') {
-          syncStyleChange('justifyContent', pos.justify);
-          syncStyleChange('alignItems', pos.align);
+          syncStyleChange('justifyContent', pos.justify, DB);
+          syncStyleChange('alignItems', pos.align, DB);
           onJustifyContentChange(pos.justify);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange('justifyContent', pos.align);
-          syncStyleChange('alignItems', pos.justify);
+          syncStyleChange('justifyContent', pos.align, DB);
+          syncStyleChange('alignItems', pos.justify, DB);
           onJustifyContentChange(pos.align);
           onAlignItemsChange(pos.justify);
         }
       } else {
-        // Normal mode: double click enters space-between mode
-        syncStyleChange('justifyContent', 'space-between');
+        syncStyleChange('justifyContent', 'space-between', DB);
         onJustifyContentChange('space-between');
         if (selectedLayout === 'row') {
-          syncStyleChange('alignItems', pos.align);
+          syncStyleChange('alignItems', pos.align, DB);
           onAlignItemsChange(pos.align);
         } else {
-          syncStyleChange('alignItems', pos.justify);
+          syncStyleChange('alignItems', pos.justify, DB);
           onAlignItemsChange(pos.justify);
         }
       }
@@ -432,9 +428,7 @@ export const LayoutSection = memo(function LayoutSection({
                         isStyleSyncing && 'opacity-50 cursor-not-allowed',
                       )}
                     >
-                      {isStyleSyncing && (isActive || isSpaceBetweenActive) ? (
-                        <IconLoader2 className="w-4 h-4 text-[#027BE5] animate-spin" />
-                      ) : isSpaceBetweenActive ? (
+                      {isSpaceBetweenActive ? (
                         // Space-between: vertical dashes for row, horizontal dashes for col
                         <div
                           className={cn(
@@ -724,14 +718,6 @@ export const LayoutSection = memo(function LayoutSection({
                     const showBothStretchVertDash = isBothStretch && pos.col === 1 && pos.row !== 1;
                     const showBothStretchHorDash = isBothStretch && pos.row === 1 && pos.col !== 1;
 
-                    // Loader position depends on mode
-                    const showLoader =
-                      isStyleSyncing &&
-                      (isActive ||
-                        (showHorStretchDash && pos.col === 1) ||
-                        (showVertStretchDash && pos.row === 1) ||
-                        showBothStretchCross);
-
                     return (
                       <button
                         key={`grid-${pos.col}-${pos.row}`}
@@ -763,16 +749,16 @@ export const LayoutSection = memo(function LayoutSection({
                             }
                           } else if (isHorStretch) {
                             // In horStretch: single click changes vertical alignment
-                            syncStyleChange('alignItems', alignValue);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridAlignItemsChange(pos.align);
                           } else if (isVertStretch) {
                             // In vertStretch: single click changes horizontal alignment
-                            syncStyleChange('justifyItems', justifyValue);
+                            syncStyleChange('justifyItems', justifyValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                           } else {
                             // In normal mode: single click sets both values
-                            syncStyleChange('justifyItems', justifyValue);
-                            syncStyleChange('alignItems', alignValue);
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                             onGridAlignItemsChange(pos.align);
                           }
@@ -787,26 +773,26 @@ export const LayoutSection = memo(function LayoutSection({
                           // Cycle: normal -> horStretch -> vertStretch -> bothStretch -> normal
                           if (isBothStretch) {
                             // bothStretch -> normal (at clicked position)
-                            syncStyleChange('justifyItems', justifyValue);
-                            syncStyleChange('alignItems', alignValue);
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridJustifyItemsChange(pos.justify);
                             onGridAlignItemsChange(pos.align);
                           } else if (isVertStretch) {
                             // vertStretch -> bothStretch
-                            syncStyleChange('justifyItems', 'stretch');
-                            syncStyleChange('alignItems', 'stretch');
+                            syncStyleChange('justifyItems', 'stretch', DB);
+                            syncStyleChange('alignItems', 'stretch', DB);
                             onGridJustifyItemsChange('stretch');
                             onGridAlignItemsChange('stretch');
                           } else if (isHorStretch) {
                             // horStretch -> vertStretch (keep current justify position)
-                            syncStyleChange('justifyItems', justifyValue);
-                            syncStyleChange('alignItems', 'stretch');
+                            syncStyleChange('justifyItems', justifyValue, DB);
+                            syncStyleChange('alignItems', 'stretch', DB);
                             onGridJustifyItemsChange(pos.justify);
                             onGridAlignItemsChange('stretch');
                           } else {
                             // normal -> horStretch (at this row)
-                            syncStyleChange('justifyItems', 'stretch');
-                            syncStyleChange('alignItems', alignValue);
+                            syncStyleChange('justifyItems', 'stretch', DB);
+                            syncStyleChange('alignItems', alignValue, DB);
                             onGridJustifyItemsChange('stretch');
                             onGridAlignItemsChange(pos.align);
                           }
@@ -816,9 +802,7 @@ export const LayoutSection = memo(function LayoutSection({
                           isStyleSyncing && 'opacity-50 cursor-not-allowed',
                         )}
                       >
-                        {showLoader ? (
-                          <IconLoader2 className="w-4 h-4 text-[#027BE5] animate-spin" />
-                        ) : showBothStretchCross ? (
+                        {showBothStretchCross ? (
                           // Cross for both stretch - center only
                           <div className="relative w-3 h-3 flex items-center justify-center">
                             <div className="absolute w-0.5 h-3 rounded-full bg-[#027BE5]" />

@@ -510,7 +510,7 @@ export class CanvasEngine {
       instanceId?: string;
       state?: string;
     },
-  ): void {
+  ): Promise<void> | undefined {
     const operation = new ASTStyleOperation(this.api, {
       elementId,
       filePath,
@@ -527,9 +527,9 @@ export class CanvasEngine {
       this.history.record(operation);
       this.emitHistoryChange();
       this.log(`AST styles updated for element ${elementId}`);
-    } else {
-      console.error('[CanvasEngine] Failed to update AST styles:', result.error);
+      return operation._pendingPromise;
     }
+    console.error('[CanvasEngine] Failed to update AST styles:', result.error);
   }
 
   /**

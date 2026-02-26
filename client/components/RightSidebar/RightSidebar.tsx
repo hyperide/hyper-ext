@@ -1,4 +1,5 @@
 import { IconChevronDown, IconCode, IconPointer } from '@tabler/icons-react';
+import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import type { CanvasEngine } from '@/lib/canvas-engine';
@@ -16,11 +17,13 @@ import {
   usePlatformContext,
 } from '@/lib/platform';
 import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
 import { SetupTailwindButton } from '../SetupTailwindButton';
 import type { FillMode } from '../ui/fill-picker';
 import { Input } from '../ui/input';
+import { ToastAction } from '../ui/toast';
 import { useStyleSync } from './hooks/useStyleSync';
 import {
   AppearanceSection,
@@ -162,6 +165,58 @@ export default function RightSidebar({
     [openAIChat, selectedIds, componentPath],
   );
 
+  // Sync toast lifecycle — show "Applying styles..." only if sync takes >600ms
+  const syncToastRef = useRef<{ dismiss: () => void } | null>(null);
+  const syncToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSyncStart = useCallback(() => {
+    // Timer already running — don't duplicate
+    if (syncToastTimerRef.current) return;
+    // Dismiss any stale toast (e.g. "Style may not have taken effect") before scheduling new one
+    syncToastRef.current?.dismiss();
+    syncToastRef.current = null;
+    // Delay toast — if sync completes within 600ms, no toast shown
+    syncToastTimerRef.current = setTimeout(() => {
+      syncToastTimerRef.current = null;
+      syncToastRef.current = toast({ title: 'Applying styles...' });
+    }, 600);
+  }, []);
+
+  const handleSyncEnd = useCallback(() => {
+    if (syncToastTimerRef.current) {
+      clearTimeout(syncToastTimerRef.current);
+      syncToastTimerRef.current = null;
+    }
+    syncToastRef.current?.dismiss();
+    syncToastRef.current = null;
+  }, []);
+
+  const handleStyleNotApplied = useCallback(
+    (context: StyleNotAppliedContext) => {
+      syncToastRef.current?.dismiss();
+      const styleDesc = context.unchangedProperties.map((key) => `${key}: ${context.styles[key] ?? '?'}`).join(', ');
+
+      syncToastRef.current = toast({
+        title: 'Style may not have taken effect',
+        description: `${context.unchangedProperties.length} property unchanged`,
+        action: (
+          <ToastAction
+            altText="Ask AI for help"
+            onClick={() =>
+              openAIChat({
+                prompt: `I changed styles on element "${context.elementId}" in ${context.filePath}, but the visual result didn't change.\n\nAttempted: ${styleDesc}\nUnchanged: ${context.unchangedProperties.join(', ')}\n\nThis is likely CSS specificity — the component may use variants/cva that override className.\nPlease check the component source and suggest the correct way to apply these styles.`,
+                forceNewChat: true,
+              })
+            }
+          >
+            Ask AI
+          </ToastAction>
+        ),
+      });
+    },
+    [openAIChat],
+  );
+
   // Style sync hook
   const { syncStyleChange, syncTextChange, isStyleSyncing } = useStyleSync({
     selectedIds,
@@ -171,6 +226,9 @@ export default function RightSidebar({
     currentState,
     engine,
     onSyncError: handleSyncError,
+    onSyncStart: handleSyncStart,
+    onSyncEnd: handleSyncEnd,
+    onStyleNotApplied: handleStyleNotApplied,
   });
 
   // Position state
@@ -753,6 +811,9 @@ export default function RightSidebar({
       if (debouncedTextSyncRef.current) {
         clearTimeout(debouncedTextSyncRef.current);
       }
+      if (syncToastTimerRef.current) {
+        clearTimeout(syncToastTimerRef.current);
+      }
     };
   }, []);
 
@@ -942,8 +1003,13 @@ export default function RightSidebar({
             <StateSelectorSection currentState={currentState} onStateChange={setCurrentState} />
           )}
 
-          {/* Editing sections - disabled for readonly */}
-          <div className={isReadonly ? 'opacity-50 pointer-events-none' : ''}>
+          {/* Editing sections - disabled for readonly or during style sync */}
+          <div
+            className={cn(
+              isReadonly && 'opacity-50 pointer-events-none',
+              isStyleSyncing && 'pointer-events-none opacity-60',
+            )}
+          >
             {/* Position Section */}
             {projectUIKit !== 'none' && (
               <PositionSection
