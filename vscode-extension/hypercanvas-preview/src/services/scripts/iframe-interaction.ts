@@ -9,6 +9,22 @@
 import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 
+/**
+ * Scroll an element into view, preferring smooth scrolling when supported.
+ * Falls back to basic scrollIntoView in older environments.
+ */
+function scrollIntoViewCenterSmooth(el: Element): void {
+  try {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch {
+    try {
+      el.scrollIntoView({ block: 'center' });
+    } catch {
+      el.scrollIntoView();
+    }
+  }
+}
+
 /** Safely escape a value for use inside a CSS attribute selector. */
 function safeAttrSelectorValue(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -159,6 +175,13 @@ function scheduleOverlayLoopIfNeeded(): void {
   }
 }
 
+function getIndexedElementOrNull(elements: NodeListOf<Element>, index: number | null | undefined): Element | null {
+  if (typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < elements.length) {
+    return elements[index];
+  }
+  return null;
+}
+
 function sendOverlayRects(): void {
   overlayRafScheduled = false;
 
@@ -186,11 +209,10 @@ function sendOverlayRects(): void {
     const elements = document.querySelectorAll(selector);
     const itemIdx = state.selectedItemIndices[id];
 
-    const hasValidIndexedElement =
-      typeof itemIdx === 'number' && Number.isInteger(itemIdx) && itemIdx >= 0 && itemIdx < elements.length;
+    const primaryElement = getIndexedElementOrNull(elements, itemIdx);
 
-    if (hasValidIndexedElement) {
-      const rect = elements[itemIdx].getBoundingClientRect();
+    if (primaryElement) {
+      const rect = primaryElement.getBoundingClientRect();
       rects.push({
         key: `select-${id}-${itemIdx}`,
         left: rect.left,
@@ -222,9 +244,7 @@ function sendOverlayRects(): void {
     }
     const hElements = document.querySelectorAll(hSelector);
     const hEl =
-      state.hoveredItemIndex !== null && hElements[state.hoveredItemIndex]
-        ? hElements[state.hoveredItemIndex]
-        : hElements[0];
+      getIndexedElementOrNull(hElements, state.hoveredItemIndex) || (hElements.length > 0 ? hElements[0] : null);
     if (hEl) {
       const hRect = hEl.getBoundingClientRect();
       rects.push({
@@ -252,6 +272,8 @@ function sendOverlayRects(): void {
 }
 
 // Throttle overlay updates triggered by high-frequency DOM/layout events.
+// 50 ms (~20 FPS) chosen to balance overlay responsiveness with DOM/layout change frequency.
+const OVERLAY_THROTTLE_DELAY_MS = 50;
 let overlayUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleThrottledOverlayUpdate(): void {
@@ -260,7 +282,7 @@ function scheduleThrottledOverlayUpdate(): void {
   overlayUpdateTimeoutId = setTimeout(() => {
     overlayUpdateTimeoutId = null;
     scheduleOverlayLoopIfNeeded();
-  }, 50);
+  }, OVERLAY_THROTTLE_DELAY_MS);
 }
 
 // Mark overlays dirty when DOM/layout changes
@@ -317,6 +339,35 @@ window.addEventListener('unload', () => {
 });
 
 // === Design mode CSS ===
+const DESIGN_MODE_CSS = `
+body.design-mode, body.design-mode * {
+  cursor: default !important;
+}
+div[data-uniq-id]:empty {
+  min-height: 120px;
+  border: 2px dashed #cbd5e1;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+div[data-uniq-id]:empty::after {
+  content: "Drop elements here";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+}
+div[data-uniq-id]:empty:hover {
+  border-color: #94a3b8;
+  background-color: #f1f5f9;
+}
+`;
+
 function updateDesignStyles(mode: string): void {
   const styleId = 'hyper-canvas-dynamic-styles';
   let style = document.getElementById(styleId) as HTMLStyleElement | null;
@@ -326,11 +377,7 @@ function updateDesignStyles(mode: string): void {
     document.head.appendChild(style);
   }
   if (mode !== 'interact') {
-    style.textContent =
-      'body.design-mode, body.design-mode * { cursor: default !important; }\n' +
-      'div[data-uniq-id]:empty { min-height: 120px; border: 2px dashed #cbd5e1; background-color: #f8fafc; border-radius: 8px; position: relative; transition: all 0.2s ease; }\n' +
-      'div[data-uniq-id]:empty::after { content: "Drop elements here"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #94a3b8; font-size: 14px; font-weight: 500; pointer-events: none; }\n' +
-      'div[data-uniq-id]:empty:hover { border-color: #94a3b8; background-color: #f1f5f9; }';
+    style.textContent = DESIGN_MODE_CSS;
     if (document.body) document.body.classList.add('design-mode');
   } else {
     style.textContent = '';
@@ -363,7 +410,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) scrollIntoViewCenterSmooth(el);
     needsOverlayUpdate = true;
     scheduleOverlayLoopIfNeeded();
     return;
