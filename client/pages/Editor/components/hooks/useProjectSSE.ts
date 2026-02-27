@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { loadPersistedState } from '@/lib/storage';
+import { useConnectionStore } from '@/stores/connectionStore';
+import { useIsOnline } from '@/stores/networkStore';
 import { authFetch } from '@/utils/authFetch';
 import type { ProjectData } from './useProjectControl';
 
@@ -49,8 +51,11 @@ export function useProjectSSE({
     fileWatcher: SSEStatus;
   }>({ projectStream: 'connected', fileWatcher: 'connected' });
 
-  // Network online status
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  // Network online status from unified store
+  const isOnline = useIsOnline();
+
+  // Reconnect trigger — incremented on connection:recovered event
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
 
   // Polling status for stopped projects
   const [pollStatus, setPollStatus] = useState<PollStatus>({
@@ -62,22 +67,26 @@ export function useProjectSSE({
   // Track if we received initial data from project stream (for fallback)
   const receivedProjectDataRef = useRef(false);
 
-  // Track online/offline for UI badge
+  const reportSignal = useConnectionStore((s) => s.reportSignal);
+
+  // Report combined SSE status to connectionStore; reset on unmount so
+  // leaving the editor doesn't leave a stale sse=false in global state
   useEffect(() => {
-    const handleOnline = () => {
-      console.log('[Network] Browser went online');
-      setIsOnline(true);
-    };
-    const handleOffline = () => {
-      console.log('[Network] Browser went offline');
-      setIsOnline(false);
-    };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    const bothConnected = sseStatus.projectStream === 'connected' && sseStatus.fileWatcher === 'connected';
+    reportSignal('sse', bothConnected);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      reportSignal('sse', true);
     };
+  }, [sseStatus.projectStream, sseStatus.fileWatcher, reportSignal]);
+
+  // Listen for connection:recovered → trigger SSE reconnect
+  useEffect(() => {
+    const handler = () => {
+      console.log('[SSE] connection:recovered event, triggering reconnect');
+      setReconnectTrigger((n) => n + 1);
+    };
+    window.addEventListener('connection:recovered', handler);
+    return () => window.removeEventListener('connection:recovered', handler);
   }, []);
 
   // Poll for project status when stopped - detect if pod came back up
@@ -175,6 +184,7 @@ export function useProjectSSE({
     onStatusChange: useCallback((status: SSEStatus) => {
       setSseStatus((prev) => ({ ...prev, projectStream: status }));
     }, []),
+    reconnectTrigger,
   });
 
   // Fallback: if SSE doesn't deliver data within 2s (Cloudflare tunnel buffering issue),
@@ -265,6 +275,7 @@ export function useProjectSSE({
     onStatusChange: useCallback((status: SSEStatus) => {
       setSseStatus((prev) => ({ ...prev, fileWatcher: status }));
     }, []),
+    reconnectTrigger,
   });
 
   return {

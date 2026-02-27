@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import { useNetworkStore } from '@/stores/networkStore';
 
 interface AuthProviderProps {
@@ -12,6 +13,11 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   // Initialize network status tracking (online/offline events)
   useEffect(() => {
     return useNetworkStore.getState()._initialize();
+  }, []);
+
+  // Initialize unified connection status (subscribes to network + auth stores)
+  useEffect(() => {
+    return useConnectionStore.getState()._start();
   }, []);
 
   useEffect(() => {

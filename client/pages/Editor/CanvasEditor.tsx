@@ -1,4 +1,3 @@
-import { IconCloudOff } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -33,11 +32,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useRightSidebarWidth } from '@/hooks/useRightSidebarWidth';
 import {
   useCanvasEngine,
   useCanvasStore,
@@ -49,6 +48,7 @@ import {
 import { getPreviewIframe } from '@/lib/dom-utils';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useGitStore } from '@/stores/gitStore';
 import { authFetch } from '@/utils/authFetch';
@@ -276,7 +276,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     leftSidebarWidth,
     setLeftSidebarWidth,
   } = useEditorStore();
-  const { accessToken, connectionError } = useAuthStore();
+  const { accessToken } = useAuthStore();
+  const serverOffline = useConnectionStore((s) => s.status !== 'connected');
 
   // Project control (start/stop/restart, auto-start logic)
   const { handleStartProject, handleRestartProject, handleProjectUpdate, wasRunningRef } = useProjectControl({
@@ -287,7 +288,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   });
 
   // SSE subscriptions and network status (project stream, file watcher, polling)
-  const { sseStatus, isOnline, pollStatus } = useProjectSSE({
+  const { pollStatus } = useProjectSSE({
     accessToken,
     activeProject,
     setActiveProject,
@@ -326,6 +327,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   });
 
   const isCodeEditorMode = mode === 'code' && !isBoardModeActive;
+
+  // Right sidebar effective width (also sets CSS variable for ConnectionStatus badge)
+  const rightSidebarWidth = useRightSidebarWidth(isCodeEditorMode, sidebarsHidden, commentsSidebarWidth);
 
   // Smart deferred mounting: prioritize component based on initial mode
   // Both components stay mounted after first mount to enable fast switching
@@ -1049,20 +1053,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                             </svg>
                           </button>
                         )}
-                        {/* Sync status badge - shows when SSE disconnected or network offline */}
-                        {(!isOnline ||
-                          sseStatus.projectStream !== 'connected' ||
-                          sseStatus.fileWatcher !== 'connected') && (
-                          <div className="absolute top-0 right-0 z-50">
-                            <Badge variant="destructive" className="flex items-center gap-1.5 animate-pulse">
-                              <IconCloudOff className="w-3 h-3" />
-                              <span>{!isOnline ? 'Offline' : 'Reconnecting...'}</span>
-                            </Badge>
-                          </div>
-                        )}
                         <IframeCanvas
                           componentPath={meta.relativeFilePath}
-                          serverOffline={connectionError}
+                          serverOffline={serverOffline}
                           boardModeActive={isBoardModeActive}
                           iframeLoadedCounter={iframeLoadedCounter}
                           activeInstanceId={activeDesignInstanceId}
@@ -1347,9 +1340,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
           <div
             data-uniq-id="a84b6623-bbf3-4e3e-af79-e7b03056ad45"
             className="flex-shrink-0"
-            style={{
-              width: isAIChatDocked && isAIChatOpen ? aiChatSidebarWidth : showComments ? commentsSidebarWidth : 234,
-            }}
+            style={{ width: rightSidebarWidth }}
           >
             <div className="flex-1 flex flex-col h-full">
               {isAIChatDocked && isAIChatOpen ? // Spacer content is empty — AI chat renders as fixed overlay

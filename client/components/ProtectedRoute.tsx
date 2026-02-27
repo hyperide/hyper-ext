@@ -1,90 +1,22 @@
-import cn from 'clsx';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { ConnectionStatus } from './ConnectionStatus';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const MAX_RETRIES = 3;
-const RETRY_DELAYS = [2000, 5000, 10000];
-
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
-  const {
-    isAuthenticated,
-    isLoading,
-    connectionError,
-    connectionRetryCount,
-    sessionExpired,
-    _hasHydrated,
-    retryConnection,
-    resetConnectionRetries,
-    clearSessionExpired,
-  } = useAuthStore();
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  const { isAuthenticated, isLoading, connectionError, sessionExpired, _hasHydrated, clearSessionExpired } =
+    useAuthStore();
   // Store the attempted URL for redirect after login
   useEffect(() => {
     if (_hasHydrated && !isLoading && !isAuthenticated && !connectionError) {
       sessionStorage.setItem('auth_redirect', location.pathname);
     }
   }, [_hasHydrated, isLoading, isAuthenticated, connectionError, location.pathname]);
-
-  // Auto-retry connection with finite attempts + exponential backoff
-  useEffect(() => {
-    if (!connectionError) {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    const handleOnline = () => {
-      console.log('[Auth] Network online, resetting retries and reconnecting...');
-      resetConnectionRetries();
-      retryConnection();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[Auth] Page visible, resetting retries and reconnecting...');
-        resetConnectionRetries();
-        retryConnection();
-      }
-    };
-
-    window.addEventListener('online', handleOnline);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Schedule next retry if under limit
-    if (connectionRetryCount < MAX_RETRIES) {
-      const delay = RETRY_DELAYS[connectionRetryCount] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
-      console.log(`[Auth] Scheduling retry ${connectionRetryCount + 1}/${MAX_RETRIES} in ${delay}ms`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-      retryTimeoutRef.current = setTimeout(() => {
-        if (navigator.onLine) {
-          console.log(`[Auth] Retry attempt ${connectionRetryCount + 1}/${MAX_RETRIES}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-          retryConnection();
-        }
-      }, delay);
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-    };
-  }, [connectionError, connectionRetryCount, retryConnection, resetConnectionRetries]);
-
-  const handleManualRetry = useCallback(() => {
-    resetConnectionRetries();
-    retryConnection();
-  }, [resetConnectionRetries, retryConnection]);
 
   // Show loading while Zustand is hydrating OR while auth check is in progress
   if (!_hasHydrated || isLoading) {
@@ -121,47 +53,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
+  // connectionError = server unreachable for a previously-logged-in user — keep rendering
   if (!isAuthenticated && !connectionError) {
     return <Navigate to="/product" replace />;
   }
 
-  // Connection banner — always in DOM to prevent JSX tree structure change
-  // (different Fragment children count causes full unmount/remount of children)
-  const exhausted = connectionRetryCount >= MAX_RETRIES;
-
   return (
     <>
-      <div
-        className={cn(
-          'fixed top-4 right-4 z-50 bg-slate-700 dark:bg-slate-600 text-slate-100 px-3 py-1.5 rounded-md text-xs flex items-center gap-2 shadow-lg',
-          !connectionError && 'hidden',
-        )}
-      >
-        {!navigator.onLine ? (
-          <>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span>Offline</span>
-          </>
-        ) : exhausted ? (
-          <>
-            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-            <span>Server Unavailable</span>
-            <button
-              type="button"
-              onClick={handleManualRetry}
-              className="ml-1 px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
-            >
-              Retry
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span>
-              Reconnecting... ({connectionRetryCount}/{MAX_RETRIES})
-            </span>
-          </>
-        )}
+      <div className="fixed top-4 z-50" style={{ right: 'calc(var(--right-sidebar-width, 0px) + 1rem)' }}>
+        <ConnectionStatus />
       </div>
       {children}
     </>

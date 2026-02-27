@@ -12,6 +12,8 @@ export interface UseReconnectingEventSourceOptions {
   baseDelay?: number;
   maxDelay?: number;
   withCredentials?: boolean;
+  /** Increment to force reconnect (resets attempts counter). */
+  reconnectTrigger?: number;
 }
 
 /**
@@ -33,6 +35,7 @@ export function useReconnectingEventSource({
   baseDelay = 1000,
   maxDelay = 30000,
   withCredentials = false,
+  reconnectTrigger,
 }: UseReconnectingEventSourceOptions): void {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -191,4 +194,17 @@ export function useReconnectingEventSource({
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [connect]);
+
+  // External reconnect trigger (e.g. connection:recovered event)
+  const prevTriggerRef = useRef(reconnectTrigger);
+  useEffect(() => {
+    if (reconnectTrigger !== undefined && reconnectTrigger !== prevTriggerRef.current) {
+      prevTriggerRef.current = reconnectTrigger;
+      if (statusRef.current !== 'connected' && urlRef.current) {
+        console.log('[SSE] Reconnect trigger fired, reconnecting...');
+        reconnectAttemptsRef.current = 0;
+        connect();
+      }
+    }
+  }, [reconnectTrigger, connect]);
 }
