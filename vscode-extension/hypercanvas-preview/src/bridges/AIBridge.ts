@@ -347,28 +347,28 @@ export class AIBridge {
     this._activeRequest = { requestId, abortController };
 
     try {
-      const config = vscode.workspace.getConfiguration('hypercanvas.ai');
-      const provider = config.get<string>('provider', 'claude') as AIProvider;
-      const defaults = AI_PROVIDER_DEFAULTS[provider] ?? AI_PROVIDER_DEFAULTS.claude;
-      const model = config.get<string>('model') || defaults.model;
-
-      const apiKey = await this._getApiKey();
+      let apiKey = await this._getApiKey();
       if (!apiKey) {
-        callback({
-          type: 'ai:error',
-          requestId,
-          error: 'No API key configured. Run "HyperCanvas: Configure AI API Key" command first.',
-        });
-        return;
+        await vscode.commands.executeCommand('hypercanvas.configureAIKey');
+        apiKey = await this._getApiKey();
+        if (!apiKey) {
+          callback({ type: 'ai:error', requestId, error: 'API key not configured.' });
+          return;
+        }
       }
 
-      const baseURL = config.get<string>('baseURL') || defaults.baseURL;
+      // Re-read config — user may have changed provider in the wizard
+      const freshConfig = vscode.workspace.getConfiguration('hypercanvas.ai');
+      const freshProvider = freshConfig.get<string>('provider', 'glm') as AIProvider;
+      const freshDefaults = AI_PROVIDER_DEFAULTS[freshProvider] ?? AI_PROVIDER_DEFAULTS.glm;
+      const freshModel = freshConfig.get<string>('model') || freshDefaults.model;
+      const baseURL = freshConfig.get<string>('baseURL') || freshDefaults.baseURL;
 
-      if (defaults.protocol === 'openai') {
+      if (freshDefaults.protocol === 'openai') {
         await this._streamOpenAI(
           requestId,
           apiKey,
-          model,
+          freshModel,
           baseURL || 'https://api.openai.com/v1',
           messages,
           abortController.signal,
@@ -378,7 +378,7 @@ export class AIBridge {
         await this._streamAnthropic(
           requestId,
           apiKey,
-          model,
+          freshModel,
           baseURL ?? undefined,
           messages,
           abortController.signal,
@@ -437,11 +437,7 @@ export class AIBridge {
   }
 
   private async _getApiKey(): Promise<string | undefined> {
-    // Prefer secrets storage, fallback to plain settings for backward compatibility
-    const secret = await this._context.secrets.get('hypercanvas.ai.apiKey');
-    if (secret) return secret;
-    const config = vscode.workspace.getConfiguration('hypercanvas.ai');
-    return config.get<string>('apiKey');
+    return this._context.secrets.get('hypercanvas.ai.apiKey');
   }
 
   /**

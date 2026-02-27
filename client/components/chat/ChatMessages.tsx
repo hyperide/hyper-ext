@@ -14,6 +14,8 @@ interface ChatMessagesProps {
   scrollAreaRef: React.RefObject<HTMLDivElement>;
   onScroll: () => void;
   onViewToolResult: (toolName: string, content: string) => void;
+  hasApiKey?: boolean | null;
+  onConfigureProvider?: () => void;
 }
 
 export function ChatMessages({
@@ -25,6 +27,8 @@ export function ChatMessages({
   scrollAreaRef,
   onScroll,
   onViewToolResult,
+  hasApiKey,
+  onConfigureProvider,
 }: ChatMessagesProps) {
   if (isLoadingMessages) {
     return (
@@ -37,7 +41,9 @@ export function ChatMessages({
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScrollCapture={onScroll}>
       <div className="p-3 space-y-3">
-        {messages.length === 0 && !isStreaming && !currentAssistantMessage && <EmptyState />}
+        {messages.length === 0 && !isStreaming && !currentAssistantMessage && (
+          <EmptyState hasApiKey={hasApiKey} onConfigureProvider={onConfigureProvider} />
+        )}
 
         {messages.map((msg) => (
           <MessageBubble

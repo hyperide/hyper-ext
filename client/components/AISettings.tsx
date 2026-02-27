@@ -9,6 +9,7 @@ import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../shared/ai-provider-defaults';
+import { GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
 
 interface AIConfig {
   id: number;
@@ -512,7 +513,9 @@ export default function AISettings() {
     <Card>
       <CardHeader>
         <CardTitle>AI Configuration</CardTitle>
-        <CardDescription>Configure the AI model used for code generation. Default is GLM-4.6 via Z.ai.</CardDescription>
+        <CardDescription>
+          Configure the AI model used for code generation. {GLM_RECOMMENDATION.tagline}.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className="space-y-6">
@@ -524,11 +527,11 @@ export default function AISettings() {
               value={config.provider}
               onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
             >
-              <option value="glm">GLM (Z.ai)</option>
-              <option value="claude">Claude (Anthropic)</option>
-              <option value="openai">OpenAI or other</option>
-              <option value="proxy">Proxy (Gemini, DeepSeek, Mistral, Groq)</option>
-              <option value="opencode">OpenCode (Gemini, DeepSeek, Qwen)</option>
+              <option value="glm">{PROVIDER_LABELS.glm}</option>
+              <option value="claude">{PROVIDER_LABELS.claude}</option>
+              <option value="openai">{PROVIDER_LABELS.openai}</option>
+              <option value="proxy">{PROVIDER_LABELS.proxy}</option>
+              <option value="opencode">{PROVIDER_LABELS.opencode}</option>
             </select>
           </div>
 
@@ -628,6 +631,22 @@ export default function AISettings() {
             </>
           ) : config.provider === 'glm' ? (
             <>
+              {/* GLM recommendation */}
+              <div className="rounded-md border border-border bg-muted/50 p-3 space-y-1.5">
+                <p className="text-sm font-medium">{GLM_RECOMMENDATION.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {GLM_RECOMMENDATION.plans.map((p) => `${p.name} ${p.price}`).join(' \u00b7 ')}
+                </p>
+                <a
+                  href={GLM_RECOMMENDATION.subscribeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs underline hover:text-foreground"
+                >
+                  Subscribe at Z.ai
+                </a>
+              </div>
+
               {/* GLM provider UI */}
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
@@ -655,7 +674,7 @@ export default function AISettings() {
                     ? 'Enter a new key to update it, or leave blank to keep current.'
                     : 'Your API key will be stored securely.'}{' '}
                   <a
-                    href="https://z.ai/manage-apikey/subscription"
+                    href={GLM_RECOMMENDATION.getKeyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:text-foreground"

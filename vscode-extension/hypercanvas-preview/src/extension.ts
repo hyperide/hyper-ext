@@ -13,6 +13,8 @@
  */
 
 import * as vscode from 'vscode';
+import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
+import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
@@ -55,6 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
   panelRouter = new PanelRouter({
     workspaceRoot,
     stateHub,
+    context,
   });
 
   // Create preview panel instance
@@ -347,25 +350,115 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
-  // Configure AI API key — store in secure secrets storage
+  // Configure AI API key — multi-step wizard
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.configureAIKey', async () => {
-      const current = await context.secrets.get('hypercanvas.ai.apiKey');
-      const key = await vscode.window.showInputBox({
-        title: 'HyperCanvas: AI API Key',
-        prompt: 'Enter your AI provider API key (stored securely)',
-        password: true,
-        value: current,
+      // ── Step 1: Choose provider ──
+      const config = vscode.workspace.getConfiguration('hypercanvas.ai');
+      const currentProvider = config.get<string>('provider', 'glm') as AIProvider;
+      const plansLine = GLM_RECOMMENDATION.plans.map((p) => `${p.name} ${p.price}`).join(' \u00b7 ');
+
+      interface ProviderItem extends vscode.QuickPickItem {
+        providerId: AIProvider | 'settings';
+      }
+
+      const providerItems: ProviderItem[] = [
+        {
+          label: `$(star-full) ${PROVIDER_LABELS.glm}`,
+          detail: `${GLM_RECOMMENDATION.description} ${plansLine}`,
+          description: currentProvider === 'glm' ? 'current' : '',
+          providerId: 'glm',
+        },
+        {
+          label: PROVIDER_LABELS.claude,
+          detail: 'Per-token pricing via Anthropic API',
+          description: currentProvider === 'claude' ? 'current' : '',
+          providerId: 'claude',
+        },
+        {
+          label: PROVIDER_LABELS.openai,
+          detail: 'GPT-4o and OpenAI-compatible APIs',
+          description: currentProvider === 'openai' ? 'current' : '',
+          providerId: 'openai',
+        },
+        {
+          label: '$(gear) Other providers (Gemini, DeepSeek, Mistral, Qwen...)',
+          detail: 'Opens AI Settings to pick provider, model, and backend',
+          providerId: 'settings',
+        },
+      ];
+
+      const pickedProvider = await vscode.window.showQuickPick(providerItems, {
+        title: 'Hyper: Configure AI (Step 1/2) — Choose Provider',
+        placeHolder: 'Which AI provider do you want to use?',
       });
+
+      if (!pickedProvider) return;
+
+      if (pickedProvider.providerId === 'settings') {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'hypercanvas.ai');
+        return;
+      }
+
+      const selectedProvider = pickedProvider.providerId;
+      const defaults = AI_PROVIDER_DEFAULTS[selectedProvider];
+      const providerLabel = PROVIDER_LABELS[selectedProvider];
+
+      // Apply provider + defaults to settings
+      if (selectedProvider !== currentProvider) {
+        await config.update('provider', selectedProvider, vscode.ConfigurationTarget.Global);
+        await config.update('model', defaults.model, vscode.ConfigurationTarget.Global);
+        await config.update('baseURL', defaults.baseURL ?? undefined, vscode.ConfigurationTarget.Global);
+      }
+
+      // ── Step 2: Enter key or get one ──
+      const keyUrl = PROVIDER_KEY_URLS[selectedProvider];
+
+      interface ActionItem extends vscode.QuickPickItem {
+        action: 'enter' | 'get-key';
+      }
+
+      const actionItems: ActionItem[] = [
+        {
+          label: `$(key) Enter API key for ${providerLabel}`,
+          detail: `model=${defaults.model}`,
+          action: 'enter',
+        },
+      ];
+
+      if (keyUrl) {
+        actionItems.push({
+          label: `$(link-external) Get API key from ${keyUrl.label}`,
+          detail: keyUrl.url,
+          action: 'get-key',
+        });
+      }
+
+      const pickedAction = await vscode.window.showQuickPick(actionItems, {
+        title: 'Hyper: Configure AI (Step 2/2) — API Key',
+        placeHolder: `Provider: ${providerLabel}`,
+      });
+
+      if (!pickedAction) return;
+
+      if (pickedAction.action === 'get-key' && keyUrl) {
+        vscode.env.openExternal(vscode.Uri.parse(keyUrl.url));
+        return;
+      }
+
+      // ── Input key ──
+      const key = await vscode.window.showInputBox({
+        title: `${providerLabel} API Key`,
+        prompt: `Enter ${providerLabel} API key (will be stored in OS keychain)`,
+        password: true,
+      });
+
       if (key !== undefined) {
-        const settings = vscode.workspace.getConfiguration('hypercanvas.ai');
         if (key) {
           await context.secrets.store('hypercanvas.ai.apiKey', key);
-          await settings.update('apiKey', key, vscode.ConfigurationTarget.Global);
-          vscode.window.showInformationMessage('AI API key saved.');
+          vscode.window.showInformationMessage(`${providerLabel} API key saved.`);
         } else {
           await context.secrets.delete('hypercanvas.ai.apiKey');
-          await settings.update('apiKey', undefined, vscode.ConfigurationTarget.Global);
           vscode.window.showInformationMessage('AI API key removed.');
         }
       }

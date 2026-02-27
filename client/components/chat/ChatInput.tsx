@@ -19,6 +19,7 @@ interface ChatInputProps {
   messageQueue: QueuedMessage[];
   onCancelQueued: (id: string) => void;
   placeholder: string;
+  disabled?: boolean;
 }
 
 export function ChatInput({
@@ -33,7 +34,16 @@ export function ChatInput({
   messageQueue,
   onCancelQueued,
   placeholder,
+  disabled,
 }: ChatInputProps) {
+  if (disabled) {
+    return (
+      <div className="p-3 border-t border-border">
+        <p className="text-xs text-muted-foreground text-center">Configure an API key to start chatting.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 border-t border-border">
       <QueueIndicator queue={messageQueue} onCancel={onCancelQueued} />

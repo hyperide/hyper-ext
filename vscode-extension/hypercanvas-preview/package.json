@@ -154,7 +154,7 @@
             "proxy",
             "opencode"
           ],
-          "default": "claude",
+          "default": "glm",
           "enumDescriptions": [
             "Anthropic Claude",
             "OpenAI or compatible",
@@ -162,11 +162,8 @@
             "Multi-provider proxy (Gemini, DeepSeek, Mistral, Groq)",
             "OpenCode native SDK (Gemini, DeepSeek, Qwen)"
           ],
+          "markdownDescription": "AI provider. To set API key, run **Hyper: Configure AI API Key** (Ctrl+Shift+P). Recommended: GLM via Z.ai — flat-rate from $10/mo.",
           "description": "AI provider for project structure analysis"
-        },
-        "hypercanvas.ai.apiKey": {
-          "type": "string",
-          "description": "API key for AI provider"
         },
         "hypercanvas.ai.backend": {
           "type": "string",

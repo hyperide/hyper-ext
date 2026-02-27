@@ -24,12 +24,12 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _extensionUri: vscode.Uri,
     workspaceRoot: string,
-    context: vscode.ExtensionContext,
+    private readonly _context: vscode.ExtensionContext,
     stateHub: StateHub,
   ) {
-    this._aiBridge = new AIBridge(workspaceRoot, context);
+    this._aiBridge = new AIBridge(workspaceRoot, _context);
     this._aiBridge.setStateHub(stateHub);
-    this._chatHistory = new ChatHistoryService(context.globalStorageUri.fsPath);
+    this._chatHistory = new ChatHistoryService(_context.globalStorageUri.fsPath);
   }
 
   /**
@@ -77,9 +77,16 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       this._pendingAIPrompt = null;
     }
 
+    // Send initial API key status and listen for changes
+    this._sendKeyStatus(webviewView.webview);
+    const secretsSub = this._context.secrets.onDidChange(() => {
+      this._sendKeyStatus(webviewView.webview);
+    });
+
     webviewView.onDidDispose(() => {
       this._view = undefined;
       this._aiBridge.dispose();
+      secretsSub.dispose();
     });
   }
 
@@ -154,7 +161,24 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
         this._aiBridge.provideUserResponse(toolUseId, response);
         return;
       }
+
+      case 'command:execute': {
+        const command = message.command as string;
+        const args = message.args as string[] | undefined;
+        vscode.commands.executeCommand(command, ...(args ?? []));
+        return;
+      }
+
+      case 'ai:checkKey': {
+        this._sendKeyStatus(webview);
+        return;
+      }
     }
+  }
+
+  private async _sendKeyStatus(webview: vscode.Webview): Promise<void> {
+    const key = await this._context.secrets.get('hypercanvas.ai.apiKey');
+    webview.postMessage({ type: 'ai:keyStatus', hasApiKey: !!key });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

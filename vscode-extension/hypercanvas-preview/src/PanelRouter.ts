@@ -20,6 +20,7 @@ import { VSCodeFileIO } from './vscode-file-io';
 interface PanelRouterConfig {
   workspaceRoot: string;
   stateHub: StateHub;
+  context: vscode.ExtensionContext;
 }
 
 export class PanelRouter {
@@ -33,7 +34,9 @@ export class PanelRouter {
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
     this._stateHub = config.stateHub;
-    this._componentService = new ComponentService(config.workspaceRoot);
+    this._componentService = new ComponentService(config.workspaceRoot, () =>
+      Promise.resolve(config.context.secrets.get('hypercanvas.ai.apiKey')),
+    );
     this._styleReadService = new StyleReadService(config.workspaceRoot, new VSCodeFileIO());
     this._workspaceRoot = config.workspaceRoot;
   }

@@ -48,7 +48,7 @@ export function ChatHeader({
               type="button"
               className="flex items-center gap-1 text-xs font-medium text-foreground hover:bg-accent rounded px-2 py-1 min-w-0 flex-1 text-left"
             >
-              <span className="truncate">{currentChatTitle || 'No chat selected'}</span>
+              <span className="truncate">{currentChatTitle || 'New Chat'}</span>
               <IconChevronDown size={12} className="shrink-0 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>

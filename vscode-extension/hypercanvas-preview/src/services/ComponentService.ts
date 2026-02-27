@@ -38,11 +38,13 @@ const traverse = (_traverse as { default?: typeof _traverse }).default ?? _trave
 
 export class ComponentService {
   private _workspaceRoot: string;
+  private _getApiKey: () => Promise<string | undefined>;
   private _cache: Map<string, ComponentInfo> = new Map();
   private _seenIds = new Set<string>();
 
-  constructor(workspaceRoot: string) {
+  constructor(workspaceRoot: string, getApiKey: () => Promise<string | undefined>) {
     this._workspaceRoot = workspaceRoot;
+    this._getApiKey = getApiKey;
   }
 
   /**
@@ -97,14 +99,14 @@ export class ComponentService {
       const tree = await getDirectoryTree(root);
 
       const config = vscode.workspace.getConfiguration('hypercanvas.ai');
-      const apiKey = config.get<string>('apiKey');
+      const apiKey = await this._getApiKey();
       const model = config.get<string>('model');
-      const provider = config.get<string>('provider', 'claude');
+      const provider = config.get<string>('provider', 'glm');
       const backend = config.get<string>('backend');
 
       if (apiKey && model) {
         const resolved = resolveAnalyzerConfig({
-          provider: provider!,
+          provider: provider as string,
           apiKey,
           model,
           baseURL: config.get<string>('baseURL'),
@@ -157,8 +159,7 @@ export class ComponentService {
     }
 
     // Check if AI is configured
-    const aiConfig = vscode.workspace.getConfiguration('hypercanvas.ai');
-    const hasApiKey = !!aiConfig.get<string>('apiKey');
+    const hasApiKey = !!(await this._getApiKey());
 
     if (!hasApiKey) {
       return { data, needsSetup: true, setupReason: 'no-ai-config' };
@@ -247,7 +248,7 @@ export class ComponentService {
   async getComponent(componentPath: string): Promise<ComponentInfo | null> {
     // Check cache first
     if (this._cache.has(componentPath)) {
-      return this._cache.get(componentPath)!;
+      return this._cache.get(componentPath) ?? null;
     }
 
     // Parse file

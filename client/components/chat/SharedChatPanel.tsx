@@ -42,6 +42,10 @@ export interface SharedChatPanelProps {
   renderToolResult?: (props: { isOpen: boolean; toolName: string; content: string; onClose: () => void }) => ReactNode;
   /** Render a sidebar with chat history. SaaS uses this for the floating modal. */
   renderSidebar?: (props: ChatSidebarRenderProps) => ReactNode;
+  /** Whether an API key is configured. null = unknown (SaaS always has it). false = show setup banner. */
+  hasApiKey?: boolean | null;
+  /** Called when user clicks "Configure AI Provider" in the empty state banner */
+  onConfigureProvider?: () => void;
 }
 
 export function SharedChatPanel({
@@ -56,6 +60,8 @@ export function SharedChatPanel({
   extraHeaderControls,
   renderToolResult,
   renderSidebar,
+  hasApiKey,
+  onConfigureProvider,
 }: SharedChatPanelProps) {
   const [toolResultModal, setToolResultModal] = useState<{
     isOpen: boolean;
@@ -218,7 +224,10 @@ export function SharedChatPanel({
     isStreaming: stream.isStreaming,
     onSelectChat: history.selectChat,
     onNewChat: () => {
-      if (!stream.isStreaming) history.createNewChat();
+      if (!stream.isStreaming) {
+        history.setCurrentChatId(null);
+        history.setMessages([]);
+      }
     },
     onDeleteChat: history.deleteChat,
   });
@@ -233,7 +242,10 @@ export function SharedChatPanel({
           currentChatTitle={history.currentChat?.title}
           onSelectChat={history.selectChat}
           onNewChat={() => {
-            if (!stream.isStreaming) history.createNewChat();
+            if (!stream.isStreaming) {
+              history.setCurrentChatId(null);
+              history.setMessages([]);
+            }
           }}
           onDeleteChat={history.deleteChat}
           isStreaming={stream.isStreaming}
@@ -250,6 +262,8 @@ export function SharedChatPanel({
           scrollAreaRef={scrollAreaRef}
           onScroll={handleScroll}
           onViewToolResult={(name, content) => setToolResultModal({ isOpen: true, toolName: name, content })}
+          hasApiKey={hasApiKey}
+          onConfigureProvider={onConfigureProvider}
         />
 
         <ChatInput
@@ -264,6 +278,7 @@ export function SharedChatPanel({
           messageQueue={input.messageQueue}
           onCancelQueued={input.cancelQueued}
           placeholder={input.placeholder}
+          disabled={hasApiKey === false}
         />
 
         {renderToolResult ? renderToolResult(toolResultProps) : <ToolResultModal {...toolResultProps} />}

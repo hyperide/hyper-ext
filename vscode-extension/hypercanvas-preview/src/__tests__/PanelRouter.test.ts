@@ -23,6 +23,12 @@ mock.module('../services/AstService', () => ({
 }));
 mock.module('../services/ComponentService', () => ({
   ComponentService: class {
+    _root: string;
+    _getApiKey: () => Promise<string | undefined>;
+    constructor(root: string, getApiKey: () => Promise<string | undefined>) {
+      this._root = root;
+      this._getApiKey = getApiKey;
+    }
     scanComponentGroups = mock(() => Promise.resolve({ data: [], needsSetup: false }));
     scanComponents = mock(() => Promise.resolve([]));
     scanComponentTests = mock(() => Promise.resolve([]));
@@ -66,6 +72,17 @@ function createMockStateHub() {
   };
 }
 
+function createMockContext() {
+  return {
+    secrets: {
+      get: mock(() => Promise.resolve(undefined)),
+      store: mock(() => Promise.resolve()),
+      delete: mock(() => Promise.resolve()),
+      onDidChange: mock(),
+    },
+  };
+}
+
 describe('PanelRouter', () => {
   let router: InstanceType<typeof PanelRouter>;
   let stateHub: ReturnType<typeof createMockStateHub>;
@@ -75,6 +92,7 @@ describe('PanelRouter', () => {
     router = new PanelRouter({
       workspaceRoot: '/test-workspace',
       stateHub: stateHub as never,
+      context: createMockContext() as never,
     });
   });
 

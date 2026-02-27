@@ -35,9 +35,8 @@ export function useChatHistory({
         setChats(loaded);
         if (initialChatId) {
           setCurrentChatId(initialChatId);
-        } else if (loaded.length > 0 && !currentChatId) {
-          setCurrentChatId(loaded[0].id);
         }
+        // Don't auto-select first chat — start with "New Chat" (null)
       } catch (error) {
         console.error('Failed to load chats:', error);
       } finally {
