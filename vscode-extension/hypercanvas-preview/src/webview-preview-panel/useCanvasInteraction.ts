@@ -6,6 +6,7 @@
  * manages overlay rendering, and handles context menu events.
  */
 
+import type { SharedEditorState } from '@lib/types';
 import { clearOverlays, renderOverlayRects } from '@shared/canvas-interaction/overlay-renderer';
 import type { OverlayRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -72,13 +73,13 @@ export function useCanvasInteraction(
 
       switch (msg.type) {
         case 'hypercanvas:elementClick': {
-          const patch: Record<string, unknown> = {
+          const patch: Partial<SharedEditorState> = {
             selectedIds: [msg.elementId],
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
             patch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
           }
-          canvas.sendEvent({ type: 'state:update', patch } as never);
+          canvas.sendEvent({ type: 'state:update', patch });
           setContextMenu(null);
           break;
         }
@@ -90,14 +91,14 @@ export function useCanvasInteraction(
               hoveredId: msg.elementId,
               hoveredItemIndex: msg.itemIndex,
             },
-          } as never);
+          });
           break;
 
         case 'hypercanvas:emptyClick':
           canvas.sendEvent({
             type: 'state:update',
             patch: { selectedIds: [] },
-          } as never);
+          });
           setContextMenu(null);
           break;
 
@@ -111,7 +112,7 @@ export function useCanvasInteraction(
           canvas.sendEvent({
             type: 'state:update',
             patch: { selectedIds: msg.elementIds, selectedItemIndices: {} },
-          } as never);
+          });
           setContextMenu(null);
           break;
         }
@@ -120,7 +121,7 @@ export function useCanvasInteraction(
           canvas.sendEvent({
             type: 'keyboard:delete',
             elementIds: msg.elementIds,
-          } as never);
+          });
           break;
         }
 
@@ -148,7 +149,7 @@ export function useCanvasInteraction(
           if (!msg.elementId) break;
 
           // Select the element first
-          const selectPatch: Record<string, unknown> = {
+          const selectPatch: Partial<SharedEditorState> = {
             selectedIds: [msg.elementId],
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
@@ -156,7 +157,7 @@ export function useCanvasInteraction(
               [msg.elementId]: msg.itemIndex,
             };
           }
-          canvas.sendEvent({ type: 'state:update', patch: selectPatch } as never);
+          canvas.sendEvent({ type: 'state:update', patch: selectPatch });
 
           setContextMenu({
             elementId: msg.elementId,

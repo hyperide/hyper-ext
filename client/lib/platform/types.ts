@@ -185,6 +185,13 @@ export type PlatformMessage =
   | { type: 'state:update'; patch: Partial<SharedEditorState> }
   | { type: 'state:init'; state: SharedEditorState }
 
+  // Keyboard operations (visual editor → extension host)
+  | { type: 'keyboard:delete'; elementIds: string[] }
+
+  // Preview lifecycle (preview webview → extension host)
+  | { type: 'previewLoaded' }
+  | { type: 'previewError'; error: string }
+
   // Webview lifecycle (VS Code: webview signals it's ready to receive state)
   | { type: 'webview:ready' };
 

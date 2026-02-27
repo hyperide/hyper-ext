@@ -5,19 +5,19 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
+import { IconBrush, IconLayoutGrid, IconPointer } from '@tabler/icons-react';
+import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
+import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
-  useSharedEditorStateSync,
+  createSharedDispatch,
   useCanvasMode,
   useEngineMode,
-  createSharedDispatch,
+  useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
-import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
-import { IconLayoutGrid, IconPointer, IconBrush } from '@tabler/icons-react';
-import cn from 'clsx';
 
 // ============================================================================
 // Main App
@@ -46,22 +46,16 @@ function PreviewContent() {
   const iframeCallbackRef = useCallback((el: HTMLIFrameElement | null) => setIframeEl(el), []);
   const overlayCallbackRef = useCallback((el: HTMLDivElement | null) => setOverlayEl(el), []);
 
-  const { contextMenu, clearContextMenu, updateState } =
-    useCanvasInteraction(iframeEl, overlayEl, canvas);
+  const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const {
-    devServerRunning,
-    previewUrl,
-    showNoComponentHint,
-    handleStartDevServer,
-  } = usePreviewBridge({
+  const { devServerRunning, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
     iframeEl,
     canvas,
     onStateUpdate: updateState,
   });
 
   const handleIframeLoad = useCallback(() => {
-    canvas.sendEvent({ type: 'previewLoaded' } as never);
+    canvas.sendEvent({ type: 'previewLoaded' });
   }, [canvas]);
 
   const handleIframeError = useCallback(
@@ -69,7 +63,7 @@ function PreviewContent() {
       canvas.sendEvent({
         type: 'previewError',
         error: (e.nativeEvent as ErrorEvent).message || 'iframe load error',
-      } as never);
+      });
     },
     [canvas],
   );
@@ -84,6 +78,7 @@ function PreviewContent() {
       <div style={wrapperStyle}>
         <iframe
           ref={iframeCallbackRef}
+          title="Component Preview"
           style={{
             ...iframeStyle,
             display: showNoComponentHint ? 'none' : undefined,
@@ -102,11 +97,7 @@ function PreviewContent() {
 
       <CanvasElementContextMenu
         selectedIds={contextMenu ? [contextMenu.elementId] : []}
-        externalTarget={
-          contextMenu
-            ? { type: 'design-element', x: contextMenu.x, y: contextMenu.y }
-            : null
-        }
+        externalTarget={contextMenu ? { type: 'design-element', x: contextMenu.x, y: contextMenu.y } : null}
         onExternalClose={clearContextMenu}
       />
     </>
@@ -122,7 +113,7 @@ function StartDevServerScreen({ onStart }: { onStart: () => void }) {
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
-      <button style={buttonStyle} onClick={onStart}>
+      <button type="button" style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
     </div>
@@ -156,17 +147,20 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
   const dispatch = useMemo(() => createSharedDispatch(canvas), [canvas]);
 
   const isBoardMode = canvasMode === 'multi';
-  const activeMode: ToolbarMode = isBoardMode ? 'board' : engineMode as ToolbarMode;
+  const activeMode: ToolbarMode = isBoardMode ? 'board' : (engineMode as ToolbarMode);
 
-  const handleModeChange = useCallback((mode: ToolbarMode) => {
-    if (mode === 'board') {
-      dispatch({ engineMode: 'design', canvasMode: 'multi' });
-    } else if (mode === 'interact') {
-      dispatch({ engineMode: 'interact', canvasMode: 'single', selectedIds: [], hoveredId: null });
-    } else {
-      dispatch({ engineMode: 'design', canvasMode: 'single' });
-    }
-  }, [dispatch]);
+  const handleModeChange = useCallback(
+    (mode: ToolbarMode) => {
+      if (mode === 'board') {
+        dispatch({ engineMode: 'design', canvasMode: 'multi' });
+      } else if (mode === 'interact') {
+        dispatch({ engineMode: 'interact', canvasMode: 'single', selectedIds: [], hoveredId: null });
+      } else {
+        dispatch({ engineMode: 'design', canvasMode: 'single' });
+      }
+    },
+    [dispatch],
+  );
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-background rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
@@ -175,6 +169,7 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
         const isDisabled = boardOnly && canvasMode === 'single';
         return (
           <button
+            type="button"
             key={mode}
             onClick={() => handleModeChange(mode)}
             disabled={isDisabled}
@@ -259,4 +254,3 @@ const buttonStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
 };
-
