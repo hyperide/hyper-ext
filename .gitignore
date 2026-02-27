@@ -37,6 +37,9 @@ dist-ssr
 *.dec.yaml
 k8s/base/secrets.yaml
 
+# Monaco Editor pre-built workers
+public/monaco-workers/
+
 # VSCode extension build artifacts
 vscode-extension/hypercanvas-preview/out
 vscode-extension/hypercanvas-code-server/out

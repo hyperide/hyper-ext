@@ -208,15 +208,15 @@ export default function AIAgentChat({
                   language={detectLanguageFromContent(content)}
                   theme="vs-light"
                   beforeMount={(monaco) => {
-                    monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
+                    monaco.typescript?.typescriptDefaults.setDiagnosticsOptions({
                       noSemanticValidation: true,
                       noSyntaxValidation: true,
                     });
-                    monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
+                    monaco.typescript?.javascriptDefaults.setDiagnosticsOptions({
                       noSemanticValidation: true,
                       noSyntaxValidation: true,
                     });
-                    monaco.json.jsonDefaults.setDiagnosticsOptions({ validate: false });
+                    monaco.json?.jsonDefaults.setDiagnosticsOptions({ validate: false });
                   }}
                   options={{
                     readOnly: true,

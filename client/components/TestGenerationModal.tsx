@@ -71,11 +71,11 @@ export function TestGenerationModal({
 
   const handleEditorMount: OnMount = useCallback((_editor, monaco) => {
     // Disable all diagnostics for readonly preview
-    monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
+    monaco.typescript?.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: true,
     });
-    monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
+    monaco.typescript?.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: true,
     });

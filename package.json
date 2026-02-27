@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build:client": "bun ./scripts/build-client.ts",
+    "build:monaco-workers": "bun scripts/build-monaco-workers.ts",
     "build:css": "bun x tailwindcss -i ./client/global.css -o ./dist/client/global.css",
     "start": "NODE_ENV=production bun server/main.ts",
     "test": "bun test client lib server shared vscode-extension",
@@ -35,6 +36,7 @@
     "@octokit/rest": "^22.0.1",
     "@opencode-ai/sdk": "^1.0.134",
     "@playwright/mcp": "^0.0.68",
+    "@tanstack/react-virtual": "^3.13.19",
     "@types/turndown": "^5.0.6",
     "ansi_up": "^6.0.6",
     "bun-types": "^1.3.2",

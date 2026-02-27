@@ -18,6 +18,12 @@ import { Dialog, DialogContent, DialogFooter } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
+// Extract component name from file path (e.g., "Button.tsx" -> "Button")
+function getComponentNameFromPath(path: string): string | null {
+  const match = path.match(/([A-Z][a-zA-Z0-9]*)\.[tj]sx?$/);
+  return match ? match[1] : null;
+}
+
 type EditMode = 'code' | 'props';
 
 interface InstanceEditPopupProps {
@@ -158,12 +164,6 @@ export function InstanceEditPopup({
 
     loadData();
   }, [isOpen, projectId, componentPath, instanceId, componentName, instanceConfig]);
-
-  // Extract component name from file path (e.g., "Button.tsx" -> "Button")
-  const getComponentNameFromPath = (path: string): string | null => {
-    const match = path.match(/([A-Z][a-zA-Z0-9]*)\.[tj]sx?$/);
-    return match ? match[1] : null;
-  };
 
   // Handle prop value change
   const handlePropChange = useCallback((propName: string, value: SerializableValue) => {
@@ -458,13 +458,15 @@ export function InstanceEditPopup({
     if (!schema || Object.keys(schema.props).length === 0) {
       // No schema or empty props - show raw JSON editor hint
       return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 p-6">
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
           <p className="text-sm mb-2">No props schema available for this component.</p>
-          <p className="text-xs text-gray-400">The component may not have typed props or the file is JavaScript.</p>
+          <p className="text-xs text-muted-foreground/70">
+            The component may not have typed props or the file is JavaScript.
+          </p>
           {Object.keys(propsValues).length > 0 && (
             <div className="mt-4 w-full">
-              <Label className="text-xs text-gray-600 mb-2 block">Current props (JSON):</Label>
-              <pre className="text-xs bg-gray-100 p-3 rounded overflow-auto max-h-40">
+              <Label className="text-xs text-muted-foreground mb-2 block">Current props (JSON):</Label>
+              <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-40">
                 {JSON.stringify(propsValues, null, 2)}
               </pre>
             </div>
@@ -487,20 +489,20 @@ export function InstanceEditPopup({
       <div className="p-4 space-y-4 overflow-y-auto flex-1">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-black">Component Props</span>
-          <span className="text-[10px] text-gray-400">{Object.keys(schema.props).length} props</span>
+          <span className="text-xs font-semibold text-foreground">Component Props</span>
+          <span className="text-[10px] text-muted-foreground">{Object.keys(schema.props).length} props</span>
         </div>
 
         {/* Search */}
         {Object.keys(schema.props).length > 3 && (
-          <div className="h-6 px-2 bg-gray-100 rounded flex items-center gap-1.5">
-            <IconSearch className="w-3.5 h-3.5 text-gray-400" stroke={1.5} />
+          <div className="h-6 px-2 bg-muted rounded flex items-center gap-1.5">
+            <IconSearch className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
             <Input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search props..."
-              className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 placeholder:text-gray-500 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+              className="h-auto border-0 bg-transparent !text-[11px] text-foreground placeholder:text-muted-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
             />
           </div>
         )}
@@ -522,7 +524,7 @@ export function InstanceEditPopup({
             <button
               type="button"
               onClick={() => setShowAllProps(true)}
-              className="w-full h-6 px-2 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center text-[11px] text-gray-600 font-medium transition-colors"
+              className="w-full h-6 px-2 bg-muted hover:bg-accent rounded flex items-center justify-center text-[11px] text-muted-foreground font-medium transition-colors"
             >
               Show all ({propsCount})
             </button>
@@ -535,32 +537,28 @@ export function InstanceEditPopup({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl !h-[70vh] !flex !flex-col !gap-0 !p-0">
-        {/* Header with instance name */}
-        <div className="px-6 pt-4 pb-3 border-b shrink-0 flex items-center gap-3">
+        {/* Header with instance name — pr-12 reserves space for the dialog close button */}
+        <div className="pl-6 pr-12 pt-4 pb-3 border-b border-border shrink-0 flex items-center">
           <Input
             value={instanceName}
             onChange={(e) => {
               const sanitized = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
               setInstanceName(sanitized);
             }}
-            className="h-9 text-base font-semibold border-0 bg-transparent hover:bg-gray-100 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-[0_0_0_2px_rgba(59,130,246,0.5)] px-2 -mx-2 rounded transition-all flex-1"
+            className="h-9 text-base font-semibold border-0 bg-transparent hover:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-[0_0_0_2px_hsl(var(--ring))] px-2 rounded transition-all min-w-0 max-w-xs"
             placeholder="instance-name"
           />
-          {/* Mode indicator */}
-          <span className="text-[10px] text-gray-400 uppercase tracking-wide px-2 py-1 bg-gray-100 rounded">
-            {mode === 'code' ? 'Code' : 'Props'}
-          </span>
         </div>
 
         {/* Content area */}
         <div className="flex-1 min-h-0 flex flex-col">
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-sm text-gray-500">Loading...</div>
+              <div className="text-sm text-muted-foreground">Loading...</div>
             </div>
           ) : error && mode === 'code' ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-sm text-red-500">{error}</div>
+              <div className="text-sm text-destructive">{error}</div>
             </div>
           ) : mode === 'code' ? (
             <LazyMonacoEditor
@@ -576,8 +574,8 @@ export function InstanceEditPopup({
         </div>
 
         {/* Footer with actions */}
-        <div className="px-6 py-4 border-t shrink-0">
-          {error && !loading && mode === 'props' && <div className="text-sm text-red-500 mb-3">{error}</div>}
+        <div className="px-6 py-4 border-t border-border shrink-0">
+          {error && !loading && mode === 'props' && <div className="text-sm text-destructive mb-3">{error}</div>}
 
           <div className="flex items-center">
             {mode === 'code' && !editorReady && !loading && (

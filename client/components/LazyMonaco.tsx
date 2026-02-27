@@ -2,12 +2,19 @@ import type { EditorProps, OnMount } from '@monaco-editor/react';
 import { type ComponentProps, lazy, Suspense } from 'react';
 
 // Lazy load Monaco components to reduce initial bundle size
-// Monaco is ~4-6 MB and only needed when editing code
+// Monaco is ~4-6 MB and only needed when editing code.
+// Both factories import monaco-loader first to configure bundled Monaco before any Editor renders.
 
-const MonacoEditor = lazy(() => import('./MonacoEditor'));
+const MonacoEditor = lazy(async () => {
+  await import('../lib/monaco-loader');
+  return import('./MonacoEditor');
+});
 
 // Lazy load raw Editor from @monaco-editor/react for components that need it directly
-const RawEditor = lazy(() => import('@monaco-editor/react').then((mod) => ({ default: mod.default })));
+const RawEditor = lazy(async () => {
+  const [, mod] = await Promise.all([import('../lib/monaco-loader'), import('@monaco-editor/react')]);
+  return { default: mod.default };
+});
 
 // Re-export OnMount type for convenience
 export type { OnMount };
@@ -34,7 +41,7 @@ export function LazyMonacoEditor(props: ComponentProps<typeof MonacoEditor>) {
 }
 
 export function preloadMonacoEditor() {
-  void import('./MonacoEditor');
+  void import('../lib/monaco-loader').then(() => import('./MonacoEditor'));
 }
 
 // Lazy wrapper for raw Editor from @monaco-editor/react

@@ -121,7 +121,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
     setIsReady(true);
 
     // Configure TypeScript/JavaScript compiler options for better IntelliSense
-    monaco.typescript.typescriptDefaults.setCompilerOptions({
+    monaco.typescript?.typescriptDefaults.setCompilerOptions({
       target: monaco.typescript.ScriptTarget.ESNext,
       module: monaco.typescript.ModuleKind.ESNext,
       moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
@@ -131,7 +131,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       esModuleInterop: true,
     });
 
-    monaco.typescript.javascriptDefaults.setCompilerOptions({
+    monaco.typescript?.javascriptDefaults.setCompilerOptions({
       target: monaco.typescript.ScriptTarget.ESNext,
       module: monaco.typescript.ModuleKind.ESNext,
       moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
@@ -145,7 +145,7 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       .then((files) => {
         Object.entries(files).forEach(([fileName, content]) => {
           const uri = `file:///node_modules/@types/react/${fileName}`;
-          monaco.typescript.typescriptDefaults.addExtraLib(content, uri);
+          monaco.typescript?.typescriptDefaults.addExtraLib(content, uri);
         });
       })
       .catch((error) => {
@@ -183,14 +183,14 @@ export default function MonacoEditor({ filepath, value, onChange, onSave, onRead
       // For sampleRenderer files (with ':' in path), disable TypeScript diagnostics
       // to avoid false errors since Monaco doesn't have the component context
       if (filepath.includes(':')) {
-        monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
+        monaco.typescript?.typescriptDefaults.setDiagnosticsOptions({
           noSemanticValidation: true, // Disable type checking
           noSyntaxValidation: true, // Disable syntax checking (JSX causes false errors)
         });
         console.log('[MonacoEditor] Disabled TypeScript diagnostics for sampleRenderer');
       } else {
         // Re-enable for normal files
-        monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
+        monaco.typescript?.typescriptDefaults.setDiagnosticsOptions({
           noSemanticValidation: false,
           noSyntaxValidation: false,
         });
