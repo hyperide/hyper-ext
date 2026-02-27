@@ -197,9 +197,13 @@ export function useCanvasInteraction(
   const iframeElRef = useRef(iframeEl);
   iframeElRef.current = iframeEl;
 
+  // patch comes from internal React state (usePreviewBridge), not from external
+  // input — no allowlist/sanitization needed. targetOrigin is derived from the
+  // iframe's own src and acts as the postMessage security boundary.
   const updateState = useCallback((patch: Record<string, unknown>) => {
     const frame = iframeElRef.current;
     const targetOrigin = iframeOriginRef.current;
+    // Truthy check intentionally guards both null and undefined for targetOrigin
     if (frame?.contentWindow && targetOrigin) {
       frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
     } else {

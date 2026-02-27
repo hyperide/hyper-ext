@@ -52,6 +52,8 @@ function RightPanelContent() {
     return () => window.removeEventListener('message', handler);
   }, []);
 
+  // canvas from usePlatformCanvas() is a stable singleton ref — listing it in
+  // deps is correct but does not cause re-renders (satisfies exhaustive-deps).
   const handleComponentClick = useCallback(
     (name: string, path: string) => {
       canvas.sendEvent({ type: 'component:open', name, path });

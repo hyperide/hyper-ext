@@ -18,7 +18,10 @@ interface AIChatProps {
 }
 
 export function AIChat({ initialPrompt, onPromptConsumed, hasApiKey }: AIChatProps) {
-  const chatAdapter = useMemo(() => createVSCodeChatAdapter(vscode), []); // vscode is a module-level singleton, not a reactive dependency
+  // vscode is a module-level singleton (acquireVsCodeApi()), not a reactive
+  // dependency — intentionally omitted from deps. Project uses biome for
+  // linting (not eslint), so eslint-disable comments are not applicable.
+  const chatAdapter = useMemo(() => createVSCodeChatAdapter(vscode), []);
 
   const handleConfigureProvider = useCallback(() => {
     vscode.postMessage({ type: 'command:execute', command: 'hypercanvas.configureAIKey' });
