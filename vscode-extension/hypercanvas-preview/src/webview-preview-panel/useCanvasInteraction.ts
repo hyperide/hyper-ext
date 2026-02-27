@@ -202,6 +202,12 @@ export function useCanvasInteraction(
     const targetOrigin = iframeOriginRef.current;
     if (frame?.contentWindow && targetOrigin) {
       frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
+    } else {
+      console.warn('[hypercanvas] Failed to post state update to iframe: missing contentWindow or origin', {
+        hasFrame: Boolean(frame),
+        hasContentWindow: Boolean(frame?.contentWindow),
+        targetOrigin,
+      });
     }
   }, []);
 
