@@ -120,7 +120,38 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   },
   isDesignMode: () => state.engineMode === 'design',
 });
-document.addEventListener('keydown', keydownHandler, true);
+// Forward unhandled modifier keystrokes to parent webview so VS Code's
+// built-in keyboard forwarding picks them up (Cmd+S, Cmd+P, etc.).
+// Without this, the iframe swallows all events and VS Code shortcuts break.
+// See: https://github.com/Microsoft/vscode/issues/65333
+function keydownForwardingHandler(e: KeyboardEvent): void {
+  const consumed = keydownHandler(e);
+  if (consumed) return;
+
+  // In interact mode, keep all events inside the iframe — the user
+  // is interacting with the app (forms, inputs, app-level shortcuts).
+  if (state.engineMode !== 'design') return;
+
+  // Only forward modifier combos — plain keystrokes stay in the iframe
+  if (!e.metaKey && !e.ctrlKey && !e.altKey) return;
+
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage(
+    {
+      type: 'hypercanvas:keydown',
+      key: e.key,
+      code: e.code,
+      keyCode: e.keyCode,
+      ctrlKey: e.ctrlKey,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey,
+      metaKey: e.metaKey,
+      repeat: e.repeat,
+    },
+    '*',
+  );
+}
+document.addEventListener('keydown', keydownForwardingHandler, true);
 
 // === Context menu handler ===
 const contextMenuHandler = (e: MouseEvent) => {
@@ -333,7 +364,7 @@ window.addEventListener('unload', () => {
   if (overlayResizeObserver) overlayResizeObserver.disconnect();
   window.removeEventListener('scroll', overlayScrollHandler, true);
   window.removeEventListener('resize', overlayResizeHandler);
-  document.removeEventListener('keydown', keydownHandler, true);
+  document.removeEventListener('keydown', keydownForwardingHandler, true);
   document.removeEventListener('contextmenu', contextMenuHandler, true);
   document.removeEventListener('mousedown', mousedownHandler, true);
 });

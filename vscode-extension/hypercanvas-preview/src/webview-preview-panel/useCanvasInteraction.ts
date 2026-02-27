@@ -6,12 +6,9 @@
  * manages overlay rendering, and handles context menu events.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  renderOverlayRects,
-  clearOverlays,
-} from '@shared/canvas-interaction/overlay-renderer';
+import { clearOverlays, renderOverlayRects } from '@shared/canvas-interaction/overlay-renderer';
 import type { OverlayRect } from '@shared/canvas-interaction/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter } from '@/lib/platform/types';
 
 export interface ContextMenuState {
@@ -42,7 +39,7 @@ export function useCanvasInteraction(
     const container = overlayEl;
 
     function handleMessage(event: MessageEvent) {
-      if (event.source !== frame!.contentWindow) return;
+      if (event.source !== frame.contentWindow) return;
 
       const msg = event.data;
       if (!msg || typeof msg.type !== 'string') return;
@@ -80,7 +77,7 @@ export function useCanvasInteraction(
 
         case 'hypercanvas:overlayRects': {
           const rects = msg.rects as OverlayRect[];
-          renderOverlayRects(container!, rects, overlayElements.current);
+          renderOverlayRects(container, rects, overlayElements.current);
           break;
         }
 
@@ -98,6 +95,25 @@ export function useCanvasInteraction(
             type: 'keyboard:delete',
             elementIds: msg.elementIds,
           } as never);
+          break;
+        }
+
+        case 'hypercanvas:keydown': {
+          // Re-dispatch on the webview window so VS Code's built-in
+          // keyboard forwarding picks it up and routes to the editor.
+          const kbEvent = new KeyboardEvent('keydown', {
+            key: msg.key,
+            code: msg.code,
+            keyCode: msg.keyCode,
+            ctrlKey: msg.ctrlKey,
+            shiftKey: msg.shiftKey,
+            altKey: msg.altKey,
+            metaKey: msg.metaKey,
+            repeat: msg.repeat,
+            bubbles: true,
+            cancelable: true,
+          });
+          window.dispatchEvent(kbEvent);
           break;
         }
 
@@ -139,18 +155,12 @@ export function useCanvasInteraction(
   const iframeElRef = useRef(iframeEl);
   iframeElRef.current = iframeEl;
 
-  const updateState = useCallback(
-    (patch: Record<string, unknown>) => {
-      const frame = iframeElRef.current;
-      if (frame?.contentWindow) {
-        frame.contentWindow.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-          { type: 'hypercanvas:stateUpdate', ...patch },
-          '*',
-        );
-      }
-    },
-    [],
-  );
+  const updateState = useCallback((patch: Record<string, unknown>) => {
+    const frame = iframeElRef.current;
+    if (frame?.contentWindow) {
+      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, '*'); // nosemgrep: wildcard-postmessage-configuration
+    }
+  }, []);
 
   const clearContextMenu = useCallback(() => setContextMenu(null), []);
 
