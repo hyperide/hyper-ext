@@ -148,6 +148,7 @@ export default function ProjectCreationAIChat({
   }, [refetchInstallations]);
 
   // Load saved form data from localStorage on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect, existingProject is stable prop
   useEffect(() => {
     if (existingProject) return; // Skip for continuing projects
 
@@ -166,7 +167,6 @@ export default function ProjectCreationAIChat({
     } catch {
       // Ignore parse errors
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount
 
   // Restore selectedRepo after repositories load
@@ -633,7 +633,7 @@ export default function ProjectCreationAIChat({
                   projectPath={projectPath}
                   projectId={projectId || undefined}
                   initialChatId={chatId}
-                  hideSidebar={true}
+                  showSidebar={false}
                   apiEndpoint="/api/ai-agent/project-creation-chat"
                   extraParams={{
                     framework,

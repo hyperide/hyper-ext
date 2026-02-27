@@ -1415,7 +1415,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
             forceNewChat={aiChatForceNewChat}
             onPromptSent={clearAIChatPrompt}
             isDocked={isAIChatDocked}
-            hideSidebar={isAIChatDocked}
             onDock={() => setIsAIChatDocked(true)}
             onUndock={() => setIsAIChatDocked(false)}
             onClose={closeAIChat}

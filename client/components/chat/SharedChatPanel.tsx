@@ -9,12 +9,22 @@
  */
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatAdapter, ChatStreamEvent, DisplayMessage } from '../../../shared/ai-chat-display';
+import type { ChatAdapter, ChatSession, ChatStreamEvent, DisplayMessage } from '../../../shared/ai-chat-display';
 import { useAutoScroll, useChatHistory, useChatInput, useChatStream } from '../../hooks/chat';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
 import { ChatMessages } from './ChatMessages';
 import { ToolResultModal } from './ToolResultModal';
+
+export interface ChatSidebarRenderProps {
+  chats: ChatSession[];
+  currentChatId: string | null;
+  isLoadingChats: boolean;
+  isStreaming: boolean;
+  onSelectChat: (chatId: string) => void;
+  onNewChat: () => void;
+  onDeleteChat: (chatId: string) => void;
+}
 
 export interface SharedChatPanelProps {
   chatAdapter: ChatAdapter;
@@ -30,6 +40,8 @@ export interface SharedChatPanelProps {
   extraHeaderControls?: ReactNode;
   /** Custom tool result renderer. When provided, replaces the default ToolResultModal. */
   renderToolResult?: (props: { isOpen: boolean; toolName: string; content: string; onClose: () => void }) => ReactNode;
+  /** Render a sidebar with chat history. SaaS uses this for the floating modal. */
+  renderSidebar?: (props: ChatSidebarRenderProps) => ReactNode;
 }
 
 export function SharedChatPanel({
@@ -43,6 +55,7 @@ export function SharedChatPanel({
   onStreamEvent,
   extraHeaderControls,
   renderToolResult,
+  renderSidebar,
 }: SharedChatPanelProps) {
   const [toolResultModal, setToolResultModal] = useState<{
     isOpen: boolean;
@@ -198,47 +211,63 @@ export function SharedChatPanel({
     onClose: () => setToolResultModal({ isOpen: false, toolName: '', content: '' }),
   };
 
+  const sidebarNode = renderSidebar?.({
+    chats: history.chats,
+    currentChatId: history.currentChatId,
+    isLoadingChats: history.isLoadingChats,
+    isStreaming: stream.isStreaming,
+    onSelectChat: history.selectChat,
+    onNewChat: () => {
+      if (!stream.isStreaming) history.createNewChat();
+    },
+    onDeleteChat: history.deleteChat,
+  });
+
   return (
-    <div className="flex flex-col h-full">
-      <ChatHeader
-        chats={history.chats}
-        currentChatId={history.currentChatId}
-        currentChatTitle={history.currentChat?.title}
-        onSelectChat={history.selectChat}
-        onNewChat={() => {
-          if (!stream.isStreaming) history.createNewChat();
-        }}
-        onDeleteChat={history.deleteChat}
-        isStreaming={stream.isStreaming}
-        extraControls={extraHeaderControls}
-      />
+    <div className="flex h-full">
+      {sidebarNode}
+      <div className="flex flex-col flex-1 min-w-0">
+        <ChatHeader
+          chats={history.chats}
+          currentChatId={history.currentChatId}
+          currentChatTitle={history.currentChat?.title}
+          onSelectChat={history.selectChat}
+          onNewChat={() => {
+            if (!stream.isStreaming) history.createNewChat();
+          }}
+          onDeleteChat={history.deleteChat}
+          isStreaming={stream.isStreaming}
+          extraControls={extraHeaderControls}
+          hideChatSwitcher={!!sidebarNode}
+        />
 
-      <ChatMessages
-        messages={history.messages}
-        isStreaming={stream.isStreaming}
-        isLoadingMessages={history.isLoadingMessages}
-        currentAssistantMessage={stream.currentAssistantMessage}
-        currentToolCalls={stream.currentToolCalls}
-        scrollAreaRef={scrollAreaRef}
-        onScroll={handleScroll}
-        onViewToolResult={(name, content) => setToolResultModal({ isOpen: true, toolName: name, content })}
-      />
+        <ChatMessages
+          messages={history.messages}
+          isStreaming={stream.isStreaming}
+          isLoadingMessages={history.isLoadingMessages}
+          currentAssistantMessage={stream.currentAssistantMessage}
+          currentToolCalls={stream.currentToolCalls}
+          scrollAreaRef={scrollAreaRef}
+          onScroll={handleScroll}
+          onViewToolResult={(name, content) => setToolResultModal({ isOpen: true, toolName: name, content })}
+        />
 
-      <ChatInput
-        inputValue={input.inputValue}
-        onInputChange={input.setInputValue}
-        onKeyDown={input.handleKeyDown}
-        onSend={() => input.handleSendMessage()}
-        onStop={handleStop}
-        isStreaming={stream.isStreaming}
-        pendingAskUser={stream.pendingAskUser}
-        onRespondToAskUser={stream.respondToAskUser}
-        messageQueue={input.messageQueue}
-        onCancelQueued={input.cancelQueued}
-        placeholder={input.placeholder}
-      />
+        <ChatInput
+          inputValue={input.inputValue}
+          onInputChange={input.setInputValue}
+          onKeyDown={input.handleKeyDown}
+          onSend={() => input.handleSendMessage()}
+          onStop={handleStop}
+          isStreaming={stream.isStreaming}
+          pendingAskUser={stream.pendingAskUser}
+          onRespondToAskUser={stream.respondToAskUser}
+          messageQueue={input.messageQueue}
+          onCancelQueued={input.cancelQueued}
+          placeholder={input.placeholder}
+        />
 
-      {renderToolResult ? renderToolResult(toolResultProps) : <ToolResultModal {...toolResultProps} />}
+        {renderToolResult ? renderToolResult(toolResultProps) : <ToolResultModal {...toolResultProps} />}
+      </div>
     </div>
   );
 }

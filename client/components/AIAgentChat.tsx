@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Dialog, DialogHeader, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { createBrowserChatAdapter } from '@/lib/platform/BrowserChatAdapter';
 import type { ChatStreamEvent } from '../../shared/ai-chat-display';
+import { ChatSidebar } from './chat/ChatSidebar';
 import { SharedChatPanel } from './chat/SharedChatPanel';
 import { LazyEditor } from './LazyMonaco';
 
@@ -45,7 +46,7 @@ function detectLanguageFromContent(content: string): string {
 interface AIAgentChatProps {
   projectPath: string;
   initialChatId?: string | null;
-  hideSidebar?: boolean;
+  showSidebar?: boolean;
   initialPrompt?: string;
   forceNewChat?: boolean;
   onPromptSent?: () => void;
@@ -83,11 +84,13 @@ export default function AIAgentChat({
   selectedElementIds,
   apiEndpoint,
   extraParams,
+  showSidebar,
   isDocked = false,
   onDock,
   onUndock,
   onClose,
 }: AIAgentChatProps) {
+  const shouldShowSidebar = showSidebar ?? !isDocked;
   // Ref for mutable context that changes without re-creating the adapter
   const mutableContextRef = useRef({ componentPath, selectedElementIds, extraParams });
   mutableContextRef.current = { componentPath, selectedElementIds, extraParams };
@@ -185,6 +188,7 @@ export default function AIAgentChat({
       onChatTitleUpdate={onChatTitleUpdate}
       onStreamEvent={handleStreamEvent}
       extraHeaderControls={extraHeaderControls}
+      renderSidebar={shouldShowSidebar ? (props) => <ChatSidebar {...props} /> : undefined}
       renderToolResult={({ isOpen, toolName, content, onClose: handleClose }) => (
         <Dialog
           open={isOpen}
