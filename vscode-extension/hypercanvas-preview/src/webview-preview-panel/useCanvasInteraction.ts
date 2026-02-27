@@ -118,9 +118,11 @@ export function useCanvasInteraction(
 
         case 'hypercanvas:selectMultiple': {
           if (!Array.isArray(msg.elementIds)) break;
+          const selectedIds = msg.elementIds.filter((id: unknown) => typeof id === 'string');
+          if (selectedIds.length === 0) break;
           canvas.sendEvent({
             type: 'state:update',
-            patch: { selectedIds: msg.elementIds, selectedItemIndices: {} },
+            patch: { selectedIds, selectedItemIndices: {} },
           });
           setContextMenu(null);
           break;
@@ -128,9 +130,11 @@ export function useCanvasInteraction(
 
         case 'hypercanvas:deleteElements': {
           if (!Array.isArray(msg.elementIds)) break;
+          const idsToDelete = msg.elementIds.filter((id: unknown) => typeof id === 'string');
+          if (idsToDelete.length === 0) break;
           canvas.sendEvent({
             type: 'keyboard:delete',
-            elementIds: msg.elementIds,
+            elementIds: idsToDelete,
           });
           break;
         }
