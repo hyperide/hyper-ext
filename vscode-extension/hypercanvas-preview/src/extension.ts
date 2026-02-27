@@ -155,8 +155,11 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Register Right Panel (Inspector)
-  rightPanelProvider = new RightPanelProvider(context.extensionUri, stateHub, panelRouter);
+  // Register Right Panel (Inspector) — receives leftPanelProvider for component list fallback
+  const pr = panelRouter;
+  rightPanelProvider = new RightPanelProvider(context.extensionUri, stateHub, panelRouter, leftPanelProvider, () =>
+    pr.getComponentGroups(),
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(RightPanelProvider.viewType, rightPanelProvider, {

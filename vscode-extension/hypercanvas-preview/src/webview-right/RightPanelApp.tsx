@@ -5,26 +5,66 @@
  * then renders the shared RightSidebar component.
  */
 
-import {
-	PlatformProvider,
-	usePlatformCanvas,
-} from '@/lib/platform';
-import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
+import { useCallback, useEffect, useState } from 'react';
 import RightSidebar from '@/components/RightSidebar/RightSidebar';
+import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
+import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
+import type { ComponentGroup } from '../../../../lib/component-scanner/types';
+
+interface ComponentGroupsData {
+  atomGroups: ComponentGroup[];
+  compositeGroups: ComponentGroup[];
+}
 
 export function RightPanelApp() {
-	return (
-		<PlatformProvider>
-			<RightPanelContent />
-		</PlatformProvider>
-	);
+  return (
+    <PlatformProvider>
+      <RightPanelContent />
+    </PlatformProvider>
+  );
 }
 
 function RightPanelContent() {
-	const canvas = usePlatformCanvas();
-	useSharedEditorStateSync(canvas);
+  const canvas = usePlatformCanvas();
+  useSharedEditorStateSync(canvas);
 
-	const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
+  const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
 
-	return <RightSidebar projectUIKit={projectUIKit} />;
+  const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);
+  const [explorerVisible, setExplorerVisible] = useState(false);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data?.type) return;
+
+      if (data.type === 'inspector:componentGroups') {
+        setComponentGroups({
+          atomGroups: data.atomGroups ?? [],
+          compositeGroups: data.compositeGroups ?? [],
+        });
+      }
+      if (data.type === 'inspector:explorerVisible') {
+        setExplorerVisible(!!data.visible);
+      }
+    };
+    window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handleComponentClick = useCallback(
+    (name: string, path: string) => {
+      canvas.sendEvent({ type: 'component:open', name, path } as never);
+    },
+    [canvas],
+  );
+
+  return (
+    <RightSidebar
+      projectUIKit={projectUIKit}
+      componentGroups={componentGroups}
+      explorerVisible={explorerVisible}
+      onComponentClick={handleComponentClick}
+    />
+  );
 }

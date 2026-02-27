@@ -49,6 +49,10 @@ export class PanelRouter {
     return this._componentService;
   }
 
+  getComponentGroups() {
+    return this._componentService.scanComponentGroups();
+  }
+
   /**
    * Route a message from a panel to the appropriate handler.
    * Returns true if the message was handled.

@@ -46,6 +46,21 @@ authMiddleware. Check after adding new routes.
 readFile and uploadImage need `path.relative()` checks.
 Never trust user-provided file paths.
 
+## VS Code Webview API
+
+### acquireVsCodeApi() is one-shot
+
+Each webview JS context allows exactly one `acquireVsCodeApi()` call.
+`PlatformProvider` → `VSCodeAdapter` → `getVSCodeApi()` already calls it.
+Never import `vscodeApi.ts` directly in webview components — use
+`canvas.sendEvent()` from the platform layer instead.
+
+### Messages before React mount are lost
+
+Extension host sends `postMessage` synchronously in `resolveWebviewView`,
+but React `useEffect` hasn't attached the listener yet. Fix: webview sends
+`webview:ready` first, extension host responds with initial data.
+
 ## Canvas Engine
 
 ### Fire-and-forget async

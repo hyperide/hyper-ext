@@ -7,19 +7,28 @@
  */
 
 import * as vscode from 'vscode';
-import type { StateHub } from './StateHub';
 import type { PanelRouter } from './PanelRouter';
+import type { StateHub } from './StateHub';
 
 export class LeftPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.explorerView';
 
   private _view?: vscode.WebviewView;
+  private _onVisibilityChange?: (visible: boolean) => void;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _stateHub: StateHub,
     private readonly _panelRouter: PanelRouter,
   ) {}
+
+  get visible(): boolean {
+    return this._view?.visible ?? false;
+  }
+
+  onVisibilityChange(cb: (visible: boolean) => void): void {
+    this._onVisibilityChange = cb;
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -30,9 +39,7 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, 'out'),
-      ],
+      localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
     };
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
@@ -47,12 +54,15 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
         this._stateHub.sendInit(LeftPanelProvider.viewType);
         return;
       }
-      await this._panelRouter.routeMessage(
-        LeftPanelProvider.viewType,
-        message,
-        webviewView.webview,
-      );
+      await this._panelRouter.routeMessage(LeftPanelProvider.viewType, message, webviewView.webview);
     });
+
+    webviewView.onDidChangeVisibility(() => {
+      this._onVisibilityChange?.(webviewView.visible);
+    });
+
+    // Notify initial visibility (onDidChangeVisibility won't fire for the initial state)
+    this._onVisibilityChange?.(webviewView.visible);
 
     webviewView.onDidDispose(() => {
       this._stateHub.unregister(LeftPanelProvider.viewType);
@@ -61,12 +71,8 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtml(webview: vscode.Webview): string {
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-left.js'),
-    );
-    const cssUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'),
-    );
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-left.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'));
     const nonce = this._getNonce();
 
     return `<!DOCTYPE html>

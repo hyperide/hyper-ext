@@ -20,6 +20,11 @@ import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
+import type { ComponentGroup } from '../../../lib/component-scanner/types';
+import { useElementSelection } from '../LeftSidebar/hooks/useElementSelection';
+import { useElementsTree } from '../LeftSidebar/hooks/useElementsTree';
+import { useFunctionNavigate } from '../LeftSidebar/hooks/useFunctionNavigate';
+import { ElementsTreeSection } from '../LeftSidebar/sections/ElementsTreeSection';
 import { SetupTailwindButton } from '../SetupTailwindButton';
 import type { FillMode } from '../ui/fill-picker';
 import { Input } from '../ui/input';
@@ -40,6 +45,62 @@ import {
 } from './sections';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
 import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
+
+// ============================================================================
+// Component quick-list (Inspector empty state, VS Code only)
+// ============================================================================
+
+function ComponentQuickList({
+  atomGroups,
+  compositeGroups,
+  onComponentClick,
+}: {
+  atomGroups: ComponentGroup[];
+  compositeGroups: ComponentGroup[];
+  onComponentClick?: (name: string, path: string) => void;
+}) {
+  return (
+    <div className="px-3 pb-4 space-y-3">
+      {atomGroups.length > 0 && (
+        <ComponentGroupSection title="Atoms" groups={atomGroups} onComponentClick={onComponentClick} />
+      )}
+      {compositeGroups.length > 0 && (
+        <ComponentGroupSection title="Composite" groups={compositeGroups} onComponentClick={onComponentClick} />
+      )}
+    </div>
+  );
+}
+
+function ComponentGroupSection({
+  title,
+  groups,
+  onComponentClick,
+}: {
+  title: string;
+  groups: ComponentGroup[];
+  onComponentClick?: (name: string, path: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-1">{title}</p>
+      <div className="space-y-0.5">
+        {groups.flatMap((group) =>
+          group.components.map((comp) => (
+            <button
+              key={comp.path}
+              type="button"
+              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors text-foreground truncate"
+              onClick={() => onComponentClick?.(comp.name, comp.path)}
+              title={comp.path}
+            >
+              {comp.name}
+            </button>
+          )),
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // Compatibility hooks — work in both SaaS and VS Code
@@ -95,6 +156,9 @@ export default function RightSidebar({
   activeProjectId = null,
   activeProjectName = null,
   publicDirExists = false,
+  componentGroups,
+  explorerVisible,
+  onComponentClick,
 }: RightSidebarProps) {
   const engine = useCanvasEngineOptional();
   const canvas = usePlatformCanvas();
@@ -106,6 +170,13 @@ export default function RightSidebar({
 
   const { openFile, showComments, setShowComments, isReadonly: editorStoreReadonly } = useEditorStore();
   const isReadonly = isVSCode ? false : editorStoreReadonly;
+
+  // Elements tree for Inspector (VS Code only, when Explorer is hidden)
+  const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;
+  const elementsTree = useElementsTree(undefined);
+  const elementSelection = useElementSelection(elementsTree);
+  const handleFunctionNavigate = useFunctionNavigate(componentPath ?? undefined);
+  const [elementsTreeCollapsed, setElementsTreeCollapsed] = useState(false);
 
   // AST operations (platform-aware: authFetch in browser, canvasRPC in VS Code)
   const astOps = usePlatformAst();
@@ -902,7 +973,7 @@ export default function RightSidebar({
 
       {/* No selection */}
       {selectedIds.length === 0 && (
-        <div className="px-4 py-16 text-center flex flex-col items-center gap-3">
+        <div className="px-4 py-8 text-center flex flex-col items-center gap-3">
           <IconPointer className="w-8 h-8 text-muted-foreground/50" stroke={1.5} />
           <p className="text-sm font-medium text-foreground">
             {componentPath ? 'No element selected' : 'No component open'}
@@ -914,6 +985,34 @@ export default function RightSidebar({
           </p>
         </div>
       )}
+
+      {/* Elements tree — shown when component is open, nothing selected, Explorer hidden */}
+      {showTreeInInspector && selectedIds.length === 0 && elementsTree.length > 0 && (
+        <ElementsTreeSection
+          collapsed={elementsTreeCollapsed}
+          hasContent={elementsTree.length > 0}
+          tree={elementsTree}
+          selectedIds={elementSelection.selectedIds}
+          hoveredId={elementSelection.hoveredId}
+          onSelectElement={elementSelection.handleSelect}
+          onHoverElement={elementSelection.handleHover}
+          onFunctionNavigate={handleFunctionNavigate}
+          onToggle={() => setElementsTreeCollapsed((v) => !v)}
+        />
+      )}
+
+      {/* Component list — shown when no component is open and Explorer is hidden */}
+      {selectedIds.length === 0 &&
+        !componentPath &&
+        explorerVisible !== true &&
+        componentGroups &&
+        (componentGroups.atomGroups.length > 0 || componentGroups.compositeGroups.length > 0) && (
+          <ComponentQuickList
+            atomGroups={componentGroups.atomGroups}
+            compositeGroups={componentGroups.compositeGroups}
+            onComponentClick={onComponentClick}
+          />
+        )}
 
       {selectedIds.length > 1 && (
         <div data-uniq-id="36ec40bb-5b54-4829-88b2-2f8bde3d8aa1" className="px-4 py-8 text-center">

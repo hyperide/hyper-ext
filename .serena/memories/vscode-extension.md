@@ -56,7 +56,16 @@ SaaS-only modules stubbed for extension build:
 ## Communication
 
 Extension Host → Webview: `webview.postMessage({ type, ...data })`
-Webview → Extension Host: `vscode.postMessage({ type, ...data })`
+Webview → Extension Host: `canvas.sendEvent({ type, ...data })` via platform layer
+
+**IMPORTANT**: Never import `vscodeApi.ts` directly in webview components.
+`PlatformProvider` → `VSCodeAdapter` already calls `acquireVsCodeApi()`.
+Second call = crash. Use `usePlatformCanvas()` → `canvas.sendEvent()`.
+
+### webview:ready handshake
+
+Messages sent before React mounts are lost. Each provider should wait for
+`webview:ready` message, then send initial data (state, component groups, etc.).
 
 ## Adding New Stubs
 
