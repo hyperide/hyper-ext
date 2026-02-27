@@ -111,12 +111,13 @@ export function useCanvasInteraction(
           break;
 
         case 'hypercanvas:overlayRects': {
-          const rects = msg.rects as OverlayRect[];
-          renderOverlayRects(container, rects, overlayElements.current);
+          if (!Array.isArray(msg.rects)) break;
+          renderOverlayRects(container, msg.rects as OverlayRect[], overlayElements.current);
           break;
         }
 
         case 'hypercanvas:selectMultiple': {
+          if (!Array.isArray(msg.elementIds)) break;
           canvas.sendEvent({
             type: 'state:update',
             patch: { selectedIds: msg.elementIds, selectedItemIndices: {} },
@@ -126,6 +127,7 @@ export function useCanvasInteraction(
         }
 
         case 'hypercanvas:deleteElements': {
+          if (!Array.isArray(msg.elementIds)) break;
           canvas.sendEvent({
             type: 'keyboard:delete',
             elementIds: msg.elementIds,
@@ -194,7 +196,7 @@ export function useCanvasInteraction(
   const updateState = useCallback((patch: Record<string, unknown>) => {
     const frame = iframeElRef.current;
     const targetOrigin = iframeOriginRef.current;
-    if (frame?.contentWindow && targetOrigin !== null) {
+    if (frame?.contentWindow && targetOrigin) {
       frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
     }
   }, []);
