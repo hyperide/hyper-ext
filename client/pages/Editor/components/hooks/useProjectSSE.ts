@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { loadPersistedState } from '@/lib/storage';
-import { useConnectionStore } from '@/stores/connectionStore';
+import { CONNECTION_RECOVERED_EVENT, useConnectionStore } from '@/stores/connectionStore';
 import { useIsOnline } from '@/stores/networkStore';
 import { authFetch } from '@/utils/authFetch';
 import type { ProjectData } from './useProjectControl';
@@ -82,11 +82,11 @@ export function useProjectSSE({
   // Listen for connection:recovered → trigger SSE reconnect
   useEffect(() => {
     const handler = () => {
-      console.log('[SSE] connection:recovered event, triggering reconnect');
+      console.log(`[SSE] ${CONNECTION_RECOVERED_EVENT} event, triggering reconnect`);
       setReconnectTrigger((n) => n + 1);
     };
-    window.addEventListener('connection:recovered', handler);
-    return () => window.removeEventListener('connection:recovered', handler);
+    window.addEventListener(CONNECTION_RECOVERED_EVENT, handler);
+    return () => window.removeEventListener(CONNECTION_RECOVERED_EVENT, handler);
   }, []);
 
   // Poll for project status when stopped - detect if pod came back up

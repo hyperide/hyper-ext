@@ -25,12 +25,18 @@ interface ConnectionState {
   _start: () => () => void;
 }
 
-const BASE_DELAY = 2000;
+const BASE_DELAY = 2_000;
 const MAX_DELAY = 300_000; // 5 min
+
+export const CONNECTION_RECOVERED_EVENT = 'connection:recovered';
+
+function isFullyConnected(signals: Record<ConnectionSignal, boolean>): boolean {
+  return signals.online && signals.auth && signals.sse;
+}
 
 function deriveStatus(signals: Record<ConnectionSignal, boolean>): ConnectionStatus {
   if (!signals.online) return 'offline';
-  if (signals.online && signals.auth && signals.sse) return 'connected';
+  if (isFullyConnected(signals)) return 'connected';
   return 'reconnecting';
 }
 
@@ -51,7 +57,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
 
   async function healthCheck() {
     const { signals } = get();
-    if (signals.online && signals.auth && signals.sse) return; // already fine
+    if (isFullyConnected(signals)) return; // already fine
 
     try {
       const res = await fetch('/api/ping', { method: 'HEAD' });
@@ -74,7 +80,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
     const { signals, backoffMs } = get();
 
     // All good — nothing to schedule
-    if (signals.online && signals.auth && signals.sse) return;
+    if (isFullyConnected(signals)) return;
     // Offline — wait for browser online event, don't burn retries
     if (!signals.online) return;
 
@@ -86,14 +92,18 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
     }
 
     backoffTimer = setTimeout(async () => {
-      await healthCheck();
+      try {
+        await healthCheck();
 
-      const { signals: current } = get();
-      if (!(current.online && current.auth && current.sse)) {
-        // Still broken — escalate backoff
-        const nextDelay = Math.min(get().backoffMs * 2, MAX_DELAY);
-        set({ backoffMs: nextDelay });
-        scheduleBackoff();
+        const { signals: current } = get();
+        if (!isFullyConnected(current)) {
+          // Still broken — escalate backoff
+          const nextDelay = Math.min(get().backoffMs * 2, MAX_DELAY);
+          set({ backoffMs: nextDelay });
+          scheduleBackoff();
+        }
+      } catch (err) {
+        console.error('[Connection] Backoff healthCheck error', err);
       }
     }, backoffMs);
   }
@@ -133,8 +143,8 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
 
       // Auth recovered (from any source) → tell SSE to reconnect immediately
       if (signal === 'auth' && connected && wasAuthDown) {
-        console.log('[Connection] Auth signal recovered, dispatching connection:recovered');
-        window.dispatchEvent(new CustomEvent('connection:recovered'));
+        console.log(`[Connection] Auth signal recovered, dispatching ${CONNECTION_RECOVERED_EVENT}`);
+        window.dispatchEvent(new CustomEvent(CONNECTION_RECOVERED_EVENT));
       }
     },
 
@@ -143,7 +153,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
       set({ backoffMs: BASE_DELAY, status: 'reconnecting' });
       healthCheck().then(() => {
         const { signals } = get();
-        if (!(signals.online && signals.auth && signals.sse)) {
+        if (!isFullyConnected(signals)) {
           scheduleBackoff();
         }
       });
@@ -160,7 +170,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
           set({ backoffMs: BASE_DELAY });
           healthCheck().then(() => {
             const { signals } = get();
-            if (!(signals.online && signals.auth && signals.sse)) {
+            if (!isFullyConnected(signals)) {
               scheduleBackoff();
             }
           });
@@ -181,7 +191,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => {
             set({ backoffMs: BASE_DELAY });
             healthCheck().then(() => {
               const { signals } = get();
-              if (!(signals.online && signals.auth && signals.sse)) {
+              if (!isFullyConnected(signals)) {
                 scheduleBackoff();
               }
             });

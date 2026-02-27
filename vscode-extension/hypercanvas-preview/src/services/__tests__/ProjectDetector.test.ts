@@ -70,6 +70,14 @@ describe('detectProjectType', () => {
     expect(await detectProjectType('/proj')).toBe('vite');
   });
 
+  it('detects vite when present in both dependencies and devDependencies', async () => {
+    setPackageJson('/proj', {
+      dependencies: { vite: '5.0.1' },
+      devDependencies: { vite: '5.0.0' },
+    });
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
   it('detects react-scripts from dependencies', async () => {
     setPackageJson('/proj', { dependencies: { 'react-scripts': '5.0.0' } });
     expect(await detectProjectType('/proj')).toBe('cra');
