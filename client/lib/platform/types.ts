@@ -159,6 +159,7 @@ export type PlatformMessage =
     }
 
   // Component operations (visual editor ↔ extension host)
+  | { type: 'component:open'; name: string; path: string }
   | { type: 'component:list'; requestId: string }
   | { type: 'component:listGroups'; requestId: string }
   | { type: 'component:tests'; requestId: string; componentPath: string }

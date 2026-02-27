@@ -54,7 +54,7 @@ function RightPanelContent() {
 
   const handleComponentClick = useCallback(
     (name: string, path: string) => {
-      canvas.sendEvent({ type: 'component:open', name, path } as never);
+      canvas.sendEvent({ type: 'component:open', name, path });
     },
     [canvas],
   );
