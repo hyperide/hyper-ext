@@ -65,7 +65,15 @@ export function useCanvasInteraction(
 
     function handleMessage(event: MessageEvent) {
       if (event.source !== frame.contentWindow) return;
-      const expectedOrigin = iframeOriginRef.current;
+      let expectedOrigin = iframeOriginRef.current;
+      // If origin is not yet known (e.g. iframe src was relative or not set),
+      // try to derive it lazily from the current iframe src.
+      if (!expectedOrigin) {
+        expectedOrigin = getIframeOrigin(frame);
+        if (expectedOrigin) iframeOriginRef.current = expectedOrigin;
+      }
+      // Reject messages from unexpected origins; if origin still unknown, skip validation
+      // (the source check above already ensures messages come from the iframe)
       if (expectedOrigin && event.origin !== expectedOrigin) return;
 
       const msg = event.data;
@@ -186,7 +194,7 @@ export function useCanvasInteraction(
   const updateState = useCallback((patch: Record<string, unknown>) => {
     const frame = iframeElRef.current;
     const targetOrigin = iframeOriginRef.current;
-    if (frame?.contentWindow && targetOrigin) {
+    if (frame?.contentWindow && targetOrigin !== null) {
       frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
     }
   }, []);
