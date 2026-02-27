@@ -25,6 +25,21 @@ interface UseCanvasInteractionResult {
   updateState: (patch: Record<string, unknown>) => void;
 }
 
+/** Derive the origin from an iframe's src attribute, or null if unknown. */
+function getIframeOrigin(frame: HTMLIFrameElement): string | null {
+  try {
+    const src = frame.src;
+    if (src) {
+      const baseHref = frame.ownerDocument?.location?.href;
+      const url = baseHref ? new URL(src, baseHref) : new URL(src);
+      return url.origin;
+    }
+  } catch {
+    // Malformed URL — fall through
+  }
+  return null;
+}
+
 export function useCanvasInteraction(
   iframeEl: HTMLIFrameElement | null,
   overlayEl: HTMLDivElement | null,
@@ -32,14 +47,25 @@ export function useCanvasInteraction(
 ): UseCanvasInteractionResult {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const overlayElements = useRef(new Map<string, HTMLDivElement>());
+  const iframeOriginRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!iframeEl || !overlayEl) return;
     const frame = iframeEl;
     const container = overlayEl;
 
+    iframeOriginRef.current = getIframeOrigin(frame);
+
+    // Re-derive origin after iframe navigates (e.g. devserver URL update)
+    function handleIframeLoad() {
+      iframeOriginRef.current = getIframeOrigin(frame);
+    }
+    frame.addEventListener('load', handleIframeLoad);
+
     function handleMessage(event: MessageEvent) {
       if (event.source !== frame.contentWindow) return;
+      const expectedOrigin = iframeOriginRef.current;
+      if (expectedOrigin && event.origin !== expectedOrigin) return;
 
       const msg = event.data;
       if (!msg || typeof msg.type !== 'string') return;
@@ -143,10 +169,11 @@ export function useCanvasInteraction(
       }
     }
 
-    window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
+    window.addEventListener('message', handleMessage);
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      frame.removeEventListener('load', handleIframeLoad);
       clearOverlays(overlayElements.current);
     };
   }, [canvas, iframeEl, overlayEl]);
@@ -157,8 +184,9 @@ export function useCanvasInteraction(
 
   const updateState = useCallback((patch: Record<string, unknown>) => {
     const frame = iframeElRef.current;
-    if (frame?.contentWindow) {
-      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, '*'); // nosemgrep: wildcard-postmessage-configuration
+    const targetOrigin = iframeOriginRef.current;
+    if (frame?.contentWindow && targetOrigin) {
+      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
     }
   }, []);
 

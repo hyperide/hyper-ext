@@ -18,7 +18,7 @@ interface AIChatProps {
 }
 
 export function AIChat({ initialPrompt, onPromptConsumed, hasApiKey }: AIChatProps) {
-  const chatAdapter = useMemo(() => createVSCodeChatAdapter(vscode), []);
+  const chatAdapter = useMemo(() => createVSCodeChatAdapter(vscode), []); // vscode is a module-level singleton, not a reactive dependency
 
   const handleConfigureProvider = useCallback(() => {
     vscode.postMessage({ type: 'command:execute', command: 'hypercanvas.configureAIKey' });

@@ -8,14 +8,18 @@ mock.module('../types', () => ({
 // Mock node:fs/promises
 let mockFiles: Record<string, string> = {};
 let mockAccessible: Set<string> = new Set();
+let readFileCalls: string[] = [];
+let accessCalls: string[] = [];
 
 mock.module('node:fs/promises', () => ({
   readFile: async (filePath: string) => {
+    readFileCalls.push(filePath);
     const content = mockFiles[filePath];
     if (content === undefined) throw new Error(`ENOENT: ${filePath}`);
     return content;
   },
   access: async (filePath: string) => {
+    accessCalls.push(filePath);
     if (!mockAccessible.has(filePath)) throw new Error(`ENOENT: ${filePath}`);
   },
 }));
@@ -28,7 +32,7 @@ const {
   detectUIKit,
   detectPackageManager,
   getPackageScripts,
-} = await import('../../services/ProjectDetector');
+} = await import('../ProjectDetector');
 
 function setPackageJson(projectPath: string, content: Record<string, unknown>) {
   mockFiles[`${projectPath}/package.json`] = JSON.stringify(content);
@@ -41,6 +45,8 @@ function setFileExists(filePath: string) {
 afterEach(() => {
   mockFiles = {};
   mockAccessible = new Set();
+  readFileCalls = [];
+  accessCalls = [];
 });
 
 describe('getDevCommand (pure)', () => {
@@ -113,6 +119,18 @@ describe('detectProjectType', () => {
     setPackageJson('/proj', { dependencies: { next: '14.0.0' } });
     setFileExists('/proj/vite.config.ts');
     expect(await detectProjectType('/proj')).toBe('nextjs');
+  });
+
+  it('reads package.json via readFile', async () => {
+    setPackageJson('/project/fs-test', {
+      name: 'fs-test',
+      scripts: { dev: 'vite dev' },
+      dependencies: { vite: '^5.0.0' },
+    });
+
+    await detectProjectType('/project/fs-test');
+
+    expect(readFileCalls).toContain('/project/fs-test/package.json');
   });
 });
 
