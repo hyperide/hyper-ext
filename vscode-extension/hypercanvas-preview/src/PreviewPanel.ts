@@ -12,11 +12,11 @@
  */
 
 import * as vscode from 'vscode';
-import { setupActiveFileListener, handleEditorMessage } from './EditorBridge';
-import type { StateHub } from './StateHub';
+import { handleEditorMessage, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
-import type { DevServerRuntimeError } from './types';
+import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
+import type { DevServerRuntimeError } from './types';
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -97,6 +97,8 @@ export class PreviewPanel {
   private _setupPanel(panel: vscode.WebviewPanel): void {
     this._panel = panel;
 
+    panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.png');
+
     // Ensure scripts are enabled (matters for deserialized panels)
     panel.webview.options = {
       enableScripts: true,
@@ -154,16 +156,13 @@ export class PreviewPanel {
     this._disposables.push(this._syncService);
 
     // Cleanup on dispose
-    panel.onDidDispose(
-      () => {
-        this._disposables.forEach((d) => d.dispose());
-        this._disposables = [];
-        this._stateHub.unregister(PreviewPanel.PANEL_ID);
-        this._syncService = undefined;
-        this._panel = undefined;
-      },
-      undefined,
-    );
+    panel.onDidDispose(() => {
+      for (const d of this._disposables) d.dispose();
+      this._disposables = [];
+      this._stateHub.unregister(PreviewPanel.PANEL_ID);
+      this._syncService = undefined;
+      this._panel = undefined;
+    }, undefined);
 
     // Initialize component
     this._initializeComponent();
@@ -172,10 +171,7 @@ export class PreviewPanel {
   /**
    * Handle message from webview
    */
-  private async _handleMessage(
-    message: unknown,
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleMessage(message: unknown, webview: vscode.Webview): Promise<void> {
     const msg = message as { type?: string; [key: string]: unknown };
 
     if (!msg.type) return;
@@ -224,10 +220,7 @@ export class PreviewPanel {
       const componentPath = this._currentComponent;
       if (!componentPath || !elementIds?.length) return;
 
-      const result = await this._panelRouter.astBridge.astService.deleteElements(
-        componentPath,
-        elementIds,
-      );
+      const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, elementIds);
 
       if (result.success) {
         this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -243,15 +236,15 @@ export class PreviewPanel {
       return;
     }
     if (msg.type === 'contextMenu:duplicate') {
-      await this._handleContextMenuDuplicate(msg, webview);
+      await this._handleContextMenuDuplicate(msg);
       return;
     }
     if (msg.type === 'contextMenu:delete') {
-      await this._handleContextMenuDelete(msg, webview);
+      await this._handleContextMenuDelete(msg);
       return;
     }
     if (msg.type === 'contextMenu:wrapInDiv') {
-      await this._handleContextMenuWrapInDiv(msg, webview);
+      await this._handleContextMenuWrapInDiv(msg);
       return;
     }
     if (msg.type === 'contextMenu:copy') {
@@ -288,11 +281,7 @@ export class PreviewPanel {
     }
 
     // Delegate shared platform messages to PanelRouter
-    const handled = await this._panelRouter.routeMessage(
-      PreviewPanel.PANEL_ID,
-      msg,
-      webview,
-    );
+    const handled = await this._panelRouter.routeMessage(PreviewPanel.PANEL_ID, msg, webview);
 
     if (!handled) {
       console.log('[HyperCanvas] Unknown message type:', msg.type);
@@ -301,18 +290,12 @@ export class PreviewPanel {
 
   // === Context menu handlers ===
 
-  private async _handleContextMenuGoToCode(
-    msg: { [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleContextMenuGoToCode(msg: { [key: string]: unknown }, webview: vscode.Webview): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const loc = await this._panelRouter.astBridge.astService.getElementLocation(
-      componentPath,
-      elementId,
-    );
+    const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, elementId);
 
     if (loc) {
       await handleEditorMessage(
@@ -327,18 +310,12 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuDuplicate(
-    msg: { [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleContextMenuDuplicate(msg: { [key: string]: unknown }): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.duplicateElement(
-      componentPath,
-      elementId,
-    );
+    const result = await this._panelRouter.astBridge.astService.duplicateElement(componentPath, elementId);
 
     if (result.success && result.newId) {
       // Select the new element
@@ -348,18 +325,12 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuDelete(
-    msg: { [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleContextMenuDelete(msg: { [key: string]: unknown }): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.deleteElements(
-      componentPath,
-      [elementId],
-    );
+    const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, [elementId]);
 
     if (result.success) {
       // Clear selection
@@ -369,19 +340,12 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuWrapInDiv(
-    msg: { [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleContextMenuWrapInDiv(msg: { [key: string]: unknown }): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.wrapElement(
-      componentPath,
-      elementId,
-      'div',
-    );
+    const result = await this._panelRouter.astBridge.astService.wrapElement(componentPath, elementId, 'div');
 
     if (result.success && result.wrapperId) {
       // Select the wrapper
@@ -391,19 +355,14 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuCopy(
-    msg: { [key: string]: unknown },
-  ): Promise<void> {
+  private async _handleContextMenuCopy(msg: { [key: string]: unknown }): Promise<void> {
     const elementIds = msg.elementIds as string[] | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementIds?.length) return;
 
     const codes: string[] = [];
     for (const id of elementIds) {
-      const code = await this._panelRouter.astBridge.astService.getElementCode(
-        componentPath,
-        id,
-      );
+      const code = await this._panelRouter.astBridge.astService.getElementCode(componentPath, id);
       if (code) codes.push(code);
     }
 
@@ -412,9 +371,7 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuPaste(
-    msg: { [key: string]: unknown },
-  ): Promise<void> {
+  private async _handleContextMenuPaste(msg: { [key: string]: unknown }): Promise<void> {
     const targetId = (msg.targetId as string) || null;
     const componentPath = this._currentComponent;
     if (!componentPath) return;
@@ -422,11 +379,7 @@ export class PreviewPanel {
     const tsxCode = await vscode.env.clipboard.readText();
     if (!tsxCode.trim()) return;
 
-    const result = await this._panelRouter.astBridge.astService.pasteElement(
-      componentPath,
-      targetId,
-      tsxCode,
-    );
+    const result = await this._panelRouter.astBridge.astService.pasteElement(componentPath, targetId, tsxCode);
 
     if (result.success && result.newId) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -435,9 +388,7 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuCut(
-    msg: { [key: string]: unknown },
-  ): Promise<void> {
+  private async _handleContextMenuCut(msg: { [key: string]: unknown }): Promise<void> {
     // Copy first
     await this._handleContextMenuCopy(msg);
 
@@ -446,10 +397,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementIds?.length) return;
 
-    const result = await this._panelRouter.astBridge.astService.deleteElements(
-      componentPath,
-      elementIds,
-    );
+    const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, elementIds);
 
     if (result.success) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -458,17 +406,12 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuSelectParent(
-    msg: { [key: string]: unknown },
-  ): Promise<void> {
+  private async _handleContextMenuSelectParent(msg: { [key: string]: unknown }): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(
-      componentPath,
-      elementId,
-    );
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, elementId);
 
     if (parentId) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -477,17 +420,12 @@ export class PreviewPanel {
     }
   }
 
-  private async _handleContextMenuSelectChild(
-    msg: { [key: string]: unknown },
-  ): Promise<void> {
+  private async _handleContextMenuSelectChild(msg: { [key: string]: unknown }): Promise<void> {
     const elementId = msg.elementId as string | undefined;
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(
-      componentPath,
-      elementId,
-    );
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, elementId);
 
     if (childIds.length > 0) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -524,9 +462,7 @@ export class PreviewPanel {
     }, 5000);
   }
 
-  private _handleElementContentResult(
-    msg: { [key: string]: unknown },
-  ): void {
+  private _handleElementContentResult(msg: { [key: string]: unknown }): void {
     const requestId = msg.requestId as string | undefined;
     if (!requestId) return;
 
@@ -542,9 +478,7 @@ export class PreviewPanel {
    */
   private _initializeComponent(): void {
     if (vscode.window.activeTextEditor) {
-      const component = this._extractComponentFromEditor(
-        vscode.window.activeTextEditor,
-      );
+      const component = this._extractComponentFromEditor(vscode.window.activeTextEditor);
       if (component) {
         this._currentComponent = component;
         const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
@@ -559,9 +493,7 @@ export class PreviewPanel {
   /**
    * Extract component path from editor (relative to workspace root)
    */
-  private _extractComponentFromEditor(
-    editor: vscode.TextEditor,
-  ): string | undefined {
+  private _extractComponentFromEditor(editor: vscode.TextEditor): string | undefined {
     const filePath = editor.document.uri.fsPath;
 
     if (!/\.(tsx|jsx)$/.test(filePath)) {
@@ -616,9 +548,7 @@ export class PreviewPanel {
     }
 
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
-    const url = component
-      ? `${baseUrl}?component=${encodeURIComponent(component)}`
-      : baseUrl;
+    const url = component ? `${baseUrl}?component=${encodeURIComponent(component)}` : baseUrl;
 
     console.log('[HyperCanvas] Updating URL:', url);
 
@@ -677,15 +607,11 @@ export class PreviewPanel {
    * Generate HTML for webview — minimal shell, React handles all UI
    */
   private _getHtmlForWebview(): string {
-    const webview = this._panel!.webview;
+    const webview = this._panel?.webview;
     const nonce = this._getNonce();
 
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-preview-panel.js'),
-    );
-    const cssUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'),
-    );
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-preview-panel.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview.css'));
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -724,8 +650,7 @@ export class PreviewPanel {
    */
   private _getNonce(): string {
     let text = '';
-    const possible =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     for (let i = 0; i < 32; i++) {
       text += possible.charAt(Math.floor(Math.random() * possible.length));
     }

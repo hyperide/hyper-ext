@@ -8,11 +8,8 @@ no SaaS dependency.
 
 ```bash
 cd vscode-extension/hypercanvas-preview
-npm install
-npm run build
-npm run package
-code --install-extension \
-  hypercanvas-preview-0.1.0.vsix --force
+./build-and-install.sh          # build at current version
+./build-and-install.sh patch    # bump patch, then build
 ```
 
 > **Always use npm**, not bun —

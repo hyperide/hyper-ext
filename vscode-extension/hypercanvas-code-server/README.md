@@ -12,7 +12,7 @@ npm install
 npm run compile
 npm run package
 code --install-extension \
-  hypercanvas-code-server-0.1.0.vsix --force
+  hypercanvas-code-server-*.vsix --force
 ```
 
 > **Always use npm**, not bun —

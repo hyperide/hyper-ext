@@ -85,6 +85,14 @@ function createWebviewPlugins() {
       build.onResolve({ filter: /components\/SourceControlSection/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/SourceControlSection.tsx') };
       });
+      build.onResolve({ filter: /components\/TestGenerationModal/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/TestGenerationModal.tsx') };
+      });
+
+      // Exclude Monaco — not needed in VS Code extension (VS Code has its own editor)
+      build.onResolve({ filter: /monaco-editor|@monaco-editor/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/monaco.ts') };
+      });
     }),
   ];
 }

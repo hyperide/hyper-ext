@@ -2,8 +2,9 @@
   "name": "hypercanvas-preview",
   "displayName": "Hyper Preview",
   "description": "Visual editor for React components - works standalone without SaaS backend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "hyperide",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.74.0"
   },
