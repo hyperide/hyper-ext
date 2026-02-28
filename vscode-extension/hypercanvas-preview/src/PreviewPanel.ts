@@ -608,6 +608,10 @@ export class PreviewPanel {
    */
   private _getHtmlForWebview(): string {
     const webview = this._panel?.webview;
+    if (!webview) {
+      // Fallback HTML if the webview panel is not available
+      return '<!DOCTYPE html><html><body><p>Preview is not available.</p></body></html>';
+    }
     const nonce = this._getNonce();
 
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview-preview-panel.js'));
@@ -618,6 +622,7 @@ export class PreviewPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- unsafe-inline required: React applies styles via style={{}} attributes in PreviewPanelApp -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
     frame-src *;
@@ -628,15 +633,6 @@ export class PreviewPanel {
   ">
   <title>HyperCanvas Preview</title>
   <link rel="stylesheet" href="${cssUri}">
-  <style>
-    html, body, #root {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-  </style>
 </head>
 <body>
   <div id="root"></div>
