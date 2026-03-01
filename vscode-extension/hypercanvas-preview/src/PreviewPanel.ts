@@ -548,7 +548,7 @@ export class PreviewPanel {
     }
 
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
-    const url = component ? `${baseUrl}?component=${encodeURIComponent(component)}` : baseUrl;
+    const url = `${baseUrl}?component=${encodeURIComponent(component)}`;
 
     console.log('[HyperCanvas] Updating URL:', url);
 
