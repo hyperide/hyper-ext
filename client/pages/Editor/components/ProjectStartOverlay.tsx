@@ -3,10 +3,13 @@
  */
 
 import { IconPlayerPlay, IconRefresh } from '@tabler/icons-react';
+import { useCallback } from 'react';
 import { Panel, Group as PanelGroup } from 'react-resizable-panels';
-import { DockerLogsViewer } from '@/components/DockerLogsViewer';
+import { DiagnosticLogsViewer } from '@/components/DiagnosticLogsViewer';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
+import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 import type { ProjectData } from './hooks/useProjectControl';
 
 interface ProjectStartOverlayProps {
@@ -22,6 +25,11 @@ interface ProjectStartOverlayProps {
 }
 
 export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, pollStatus }: ProjectStartOverlayProps) {
+  const openAIChat = useOpenAIChat();
+  const { clear: persistedClear } = useDiagnosticSync({ projectId: project?.id, containerStatus: project?.status });
+
+  const handleAutoFix = useCallback((prompt: string) => openAIChat({ prompt, forceNewChat: true }), [openAIChat]);
+
   // Show spinner with logs while starting/building
   if (isStarting || project?.status === 'building') {
     return (
@@ -50,21 +58,7 @@ export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, p
               paddingBottom: '80px',
             }}
           >
-            <DockerLogsViewer
-              projectId={project?.id || ''}
-              height="100%"
-              containerStatus={project?.status}
-              projectInfo={
-                project
-                  ? {
-                      name: project.name,
-                      framework: project.framework,
-                      path: project.path,
-                      devCommand: project.devCommand,
-                    }
-                  : undefined
-              }
-            />
+            <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={persistedClear} />
           </div>
         </Panel>
       </PanelGroup>

@@ -18,8 +18,9 @@ import {
   type ToolExecutor,
   type ToolResult,
 } from '../../../../shared/ai-agent-core';
-import { ASK_USER, CHECK_BUILD_STATUS, FILE_TOOLS, type ToolDefinition } from '../../../../shared/ai-agent-tools';
+import { ASK_USER, FILE_TOOLS, GET_DIAGNOSTICS, type ToolDefinition } from '../../../../shared/ai-agent-tools';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../../shared/ai-provider-defaults';
+import type { DiagnosticHub } from '../DiagnosticHub';
 import type { StateHub } from '../StateHub';
 import type { DevServerManager } from '../services/DevServerManager';
 
@@ -47,13 +48,13 @@ const IMPLEMENTED_TOOLS = new Set([
   'glob_search',
   'list_directory',
   'tree',
-  'check_build_status',
+  'get_diagnostics',
 ]);
 
 /** Tools available in the extension — only those actually implemented */
 const EXTENSION_TOOLS: ToolDefinition[] = [
   ...FILE_TOOLS.filter((t) => IMPLEMENTED_TOOLS.has(t.name)),
-  CHECK_BUILD_STATUS,
+  GET_DIAGNOSTICS,
   ASK_USER,
 ];
 
@@ -64,6 +65,7 @@ class LocalToolExecutor implements ToolExecutor {
   constructor(
     private readonly _workspaceRoot: string,
     private readonly _devServerManager: DevServerManager | null,
+    private readonly _diagnosticHub: DiagnosticHub | null,
   ) {}
 
   async execute(name: string, input: Record<string, unknown>): Promise<ToolResult> {
@@ -83,8 +85,8 @@ class LocalToolExecutor implements ToolExecutor {
           return await this._listDirectory(input);
         case 'tree':
           return await this._tree(input);
-        case 'check_build_status':
-          return await this._checkBuildStatus(input);
+        case 'get_diagnostics':
+          return await this._getDiagnostics(input);
         default:
           return { success: false, error: `Unknown tool: ${name}` };
       }
@@ -243,48 +245,88 @@ class LocalToolExecutor implements ToolExecutor {
     return lines.join('\n');
   }
 
-  private async _checkBuildStatus(input: Record<string, unknown>): Promise<ToolResult> {
-    if (!this._devServerManager) {
-      return { success: false, error: 'Dev server not available' };
+  private async _getDiagnostics(input: Record<string, unknown>): Promise<ToolResult> {
+    const sourcesRaw = (input.sources as string[] | undefined) ?? ['all'];
+    const sources = sourcesRaw.includes('all') ? ['server', 'console', 'runtime_error', 'build_status'] : sourcesRaw;
+    const maxLines = Math.min(Math.max(Number(input.lines) || 50, 1), 200);
+    const levelFilter = (input.level as string) ?? 'all';
+    const pattern = input.pattern as string | undefined;
+    const since = input.since as number | undefined;
+
+    // If build_status requested, wait a moment for settle
+    if (sources.includes('build_status')) {
+      await new Promise((r) => setTimeout(r, 3000));
     }
 
-    const waitSec = Math.min(Math.max(Number(input.waitSeconds) || 3, 1), 10);
-    await new Promise((r) => setTimeout(r, waitSec * 1000));
+    const results: string[] = [];
 
-    const logs = this._devServerManager.getLogs();
-    const hasBuildErrors = this._devServerManager.hasErrors;
-    const runtimeError = this._devServerManager.runtimeError;
-
-    const recentLogs = logs
-      .slice(-30)
-      .map((l) => l.line)
-      .join('\n');
-
-    if (!hasBuildErrors && !runtimeError) {
-      return { success: true, output: 'Status: OK\nNo build errors or runtime errors detected.' };
+    // Server logs from DiagnosticHub (preferred) or fallback to DevServerManager
+    if (sources.includes('server')) {
+      if (this._diagnosticHub) {
+        let logs = this._diagnosticHub.state.logs.filter((l) => l.source === 'server');
+        if (since) logs = logs.filter((l) => l.timestamp > since);
+        logs = this._filterByLevel(logs, levelFilter);
+        if (pattern) {
+          // nosemgrep: detect-non-literal-regexp -- AI tool input pattern, extension-local
+          const re = new RegExp(pattern, 'i');
+          logs = logs.filter((l) => re.test(l.line));
+        }
+        const lines = logs.slice(-maxLines).map((l) => l.line);
+        results.push(`=== Server Logs (${lines.length}) ===\n${lines.join('\n') || '(no logs)'}`);
+      } else if (this._devServerManager) {
+        const logs = this._devServerManager.getLogs().slice(-maxLines);
+        results.push(`=== Server Logs (${logs.length}) ===\n${logs.map((l) => l.line).join('\n') || '(no logs)'}`);
+      }
     }
 
-    const parts: string[] = ['Status: ERROR'];
-
-    if (hasBuildErrors) {
-      const errorLines = logs
-        .filter((l) => l.isError)
-        .slice(-10)
-        .map((l) => l.line)
-        .join('\n');
-      parts.push(`Build errors:\n${errorLines}`);
+    // Console logs
+    if (sources.includes('console') && this._diagnosticHub) {
+      let logs = this._diagnosticHub.state.logs.filter((l) => l.source === 'console');
+      if (since) logs = logs.filter((l) => l.timestamp > since);
+      logs = this._filterByLevel(logs, levelFilter);
+      if (pattern) {
+        // nosemgrep: detect-non-literal-regexp -- AI tool input pattern, extension-local
+        const re = new RegExp(pattern, 'i');
+        logs = logs.filter((l) => re.test(l.line));
+      }
+      const lines = logs.slice(-maxLines).map((l) => `[${l.level ?? 'log'}] ${l.line}`);
+      if (lines.length > 0) {
+        results.push(`=== Console Output (${lines.length}) ===\n${lines.join('\n')}`);
+      }
     }
 
-    if (runtimeError) {
-      parts.push(`Runtime error (${runtimeError.framework}): ${runtimeError.type}\n${runtimeError.message}`);
-      if (runtimeError.file)
-        parts.push(`File: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}`);
-      if (runtimeError.codeframe) parts.push(`Code:\n${runtimeError.codeframe}`);
+    // Runtime error
+    if (sources.includes('runtime_error')) {
+      const runtimeError = this._diagnosticHub?.runtimeError ?? this._devServerManager?.runtimeError ?? null;
+      if (runtimeError) {
+        const parts = [`${runtimeError.type}: ${runtimeError.message}`];
+        if (runtimeError.file) {
+          parts.push(`File: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}`);
+        }
+        if (runtimeError.codeframe) parts.push(`Code:\n${runtimeError.codeframe}`);
+        results.push(`=== Runtime Error (${runtimeError.framework}) ===\n${parts.join('\n')}`);
+      }
     }
 
-    parts.push(`Recent logs:\n${recentLogs}`);
+    // Build status
+    if (sources.includes('build_status')) {
+      const status = this._diagnosticHub?.state.buildStatus ?? 'unknown';
+      const hasErrors = this._devServerManager?.hasErrors ?? false;
+      results.push(`=== Build Status ===\nStatus: ${status}\nErrors: ${hasErrors ? 'yes' : 'no'}`);
+    }
 
-    return { success: true, output: parts.join('\n\n') };
+    if (results.length === 0) {
+      return { success: true, output: 'No diagnostic data available.' };
+    }
+
+    return { success: true, output: results.join('\n\n') };
+  }
+
+  private _filterByLevel(logs: Array<{ isError: boolean; level?: string }>, levelFilter: string): typeof logs {
+    if (levelFilter === 'all') return logs;
+    if (levelFilter === 'error') return logs.filter((l) => l.isError || l.level === 'error');
+    if (levelFilter === 'warn') return logs.filter((l) => l.isError || l.level === 'error' || l.level === 'warn');
+    return logs;
   }
 
   private _shellEscape(str: string): string {
@@ -307,6 +349,7 @@ class LocalToolExecutor implements ToolExecutor {
 export class AIBridge {
   private _activeRequest: ActiveRequest | null = null;
   private _devServerManager: DevServerManager | null = null;
+  private _diagnosticHub: DiagnosticHub | null = null;
   private _stateHub: StateHub | null = null;
   /** Pending ask_user responses: toolUseId -> resolve function */
   private _pendingUserResponses = new Map<string, (response: string) => void>();
@@ -324,10 +367,17 @@ export class AIBridge {
   }
 
   /**
-   * Set the dev server manager for check_build_status tool
+   * Set the dev server manager for fallback log access
    */
   setDevServerManager(manager: DevServerManager): void {
     this._devServerManager = manager;
+  }
+
+  /**
+   * Set the diagnostic hub for get_diagnostics tool
+   */
+  setDiagnosticHub(hub: DiagnosticHub): void {
+    this._diagnosticHub = hub;
   }
 
   /**
@@ -453,7 +503,7 @@ export class AIBridge {
     callback: StreamCallback,
   ): Promise<void> {
     const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl });
-    const localExecutor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager);
+    const localExecutor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager, this._diagnosticHub);
 
     // Wrap executor to intercept ask_user tool
     const executor: ToolExecutor = {
@@ -618,12 +668,12 @@ export class AIBridge {
   }
 
   private _getSystemPrompt(): string {
-    const hasDevServer = this._devServerManager !== null;
-    const devServerInstructions = hasDevServer
+    const hasDiagnostics = this._diagnosticHub !== null || this._devServerManager !== null;
+    const devServerInstructions = hasDiagnostics
       ? `\n\nWhen fixing errors:
 1. Read the relevant files to understand the issue
 2. Make targeted edits to fix the problem
-3. After editing, ALWAYS use check_build_status to verify the fix worked
+3. After editing, use get_diagnostics with sources: ["build_status", "server"] to verify the fix
 4. If errors persist, analyze the new error and iterate
 5. Continue until build is clean or 3 fix attempts made`
       : '';

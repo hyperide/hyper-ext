@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface ProjectConfigError {
   projectId: string;
@@ -37,6 +38,7 @@ export function useGatewayErrorHandling({
 }: UseGatewayErrorHandlingProps): UseGatewayErrorHandlingReturn {
   const [hasGatewayError, setHasGatewayError] = useState(false);
   const [gatewayErrorMessage, setGatewayErrorMessage] = useState<string | null>(null);
+  const openAIChat = useOpenAIChat();
 
   // Handle Auto Fix button click for project config errors
   const handleAutoFix = useCallback(() => {
@@ -48,16 +50,8 @@ ${JSON.stringify({ error: projectConfigError.error }, null, 2)}
 \`\`\`
 
 Please analyze and fix this error.`;
-    window.dispatchEvent(
-      new CustomEvent('openAIChat', {
-        detail: {
-          prompt,
-          forceNewChat: true,
-          projectId: projectConfigError.projectId,
-        },
-      }),
-    );
-  }, [projectConfigError]);
+    openAIChat({ prompt, forceNewChat: true });
+  }, [projectConfigError, openAIChat]);
 
   // Handle retry loading component after parse error
   const handleRetryLoad = useCallback(() => {

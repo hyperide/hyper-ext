@@ -47,6 +47,7 @@ export type ToolName =
   // Server management tools
   | 'restart_dev_server'
   | 'get_container_logs'
+  | 'get_diagnostics'
   // Web tools
   | 'brave_web_search'
   | 'url_fetch'

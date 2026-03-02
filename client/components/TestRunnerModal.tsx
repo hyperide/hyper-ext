@@ -1,6 +1,7 @@
 import { AnsiUp } from 'ansi_up';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 import { authFetch } from '@/utils/authFetch';
 
 import type { TestRunnerEvent } from '../../server/routes/runTests';
@@ -21,6 +22,7 @@ interface TestResult {
 }
 
 export function TestRunnerModal({ isOpen, onClose, projectId, testPaths }: TestRunnerModalProps) {
+  const openAIChat = useOpenAIChat();
   const [status, setStatus] = useState<RunnerStatus>('idle');
   const [runner, setRunner] = useState<string>('');
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -264,15 +266,7 @@ Please analyze the errors and fix the issues. Common fixes:
 
 After fixing, use the run_tests tool to verify the tests pass.`;
 
-    // Open AI chat with the prompt
-    window.dispatchEvent(
-      new CustomEvent('openAIChat', {
-        detail: {
-          prompt,
-          forceNewChat: true,
-        },
-      }),
-    );
+    openAIChat({ prompt, forceNewChat: true });
 
     // Close the modal
     onClose();

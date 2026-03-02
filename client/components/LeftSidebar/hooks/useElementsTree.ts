@@ -59,8 +59,10 @@ type StoreApi = {
 function buildTreeFromEngine(engine: CanvasEngine, store: StoreApi): TreeNode[] {
   const root = engine.getRoot();
 
-  if (root.metadata?.astStructure && Array.isArray(root.metadata.astStructure)) {
-    return root.metadata.astStructure.map(convertASTNodeToTreeNode);
+  // Prefer sampleStructure (what the iframe actually renders) over astStructure (component definition)
+  const structure = root.metadata?.sampleStructure ?? root.metadata?.astStructure;
+  if (structure && Array.isArray(structure)) {
+    return structure.map(convertASTNodeToTreeNode);
   }
 
   const state = store.getState();

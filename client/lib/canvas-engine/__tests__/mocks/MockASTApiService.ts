@@ -114,8 +114,8 @@ export class MockASTApiService implements ASTApiService {
     return { ...this.editConditionResult };
   }
 
-  async parseComponent(filePath: string): Promise<ParseComponentResult> {
-    this.calls.push({ method: 'parseComponent', args: [filePath] });
+  async parseComponent(filePath: string, sampleName?: string): Promise<ParseComponentResult> {
+    this.calls.push({ method: 'parseComponent', args: [filePath, sampleName] });
     return { ...this.parseComponentResult };
   }
 
@@ -125,12 +125,12 @@ export class MockASTApiService implements ASTApiService {
     return { success: true, snapshotId: this.snapshotCounter };
   }
 
-  async restoreFileSnapshot(snapshotId: number, filePath: string): Promise<void> {
-    this.calls.push({ method: 'restoreFileSnapshot', args: [snapshotId, filePath] });
+  async restoreFileSnapshot(snapshotId: number, filePath: string, sampleName?: string): Promise<void> {
+    this.calls.push({ method: 'restoreFileSnapshot', args: [snapshotId, filePath, sampleName] });
   }
 
-  async reloadComponent(filePath: string): Promise<void> {
-    this.calls.push({ method: 'reloadComponent', args: [filePath] });
+  async reloadComponent(filePath: string, sampleName?: string): Promise<void> {
+    this.calls.push({ method: 'reloadComponent', args: [filePath, sampleName] });
   }
 
   // Test helpers

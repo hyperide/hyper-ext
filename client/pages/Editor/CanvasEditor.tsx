@@ -225,7 +225,15 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   const engine = useCanvasEngine();
   const store = useCanvasStore();
   const storeUpdateCounter = useStore(store, (state) => state._updateCounter);
-  const { meta, loadComponent, parseError } = useComponentMeta();
+  const { meta, loadComponent, parseError, currentSampleName, setCurrentSampleName } = useComponentMeta();
+
+  // Reparse with new sampleName when active design instance changes
+  useEffect(() => {
+    if (!activeDesignInstanceId || !meta?.relativeFilePath) return;
+    if (activeDesignInstanceId === currentSampleName) return;
+    setCurrentSampleName(activeDesignInstanceId);
+    loadComponent(meta.relativeFilePath, activeDesignInstanceId);
+  }, [activeDesignInstanceId, meta?.relativeFilePath, currentSampleName, setCurrentSampleName, loadComponent]);
 
   // Convert parseError string to RuntimeError format for LogsPanel
   const parseErrorAsRuntimeError = useMemo((): RuntimeError | null => {
@@ -988,7 +996,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                 {projectConfigError && !configErrorDismissed ? (
                   <ConfigErrorOverlay
                     error={projectConfigError.error}
-                    projectId={projectConfigError.projectId}
                     onDismiss={() => setConfigErrorDismissed(true)}
                     onOpenSettings={onOpenSettings}
                   />
@@ -1322,12 +1329,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                 <LogsPanel
                   projectId={activeProject.id}
                   containerStatus={activeProject.status}
-                  projectInfo={{
-                    name: activeProject.name,
-                    framework: activeProject.framework ?? '',
-                    path: activeProject.path ?? '',
-                    devCommand: activeProject.devCommand ?? '',
-                  }}
                   proxyError={gatewayErrorMessage}
                   runtimeError={runtimeError || parseErrorAsRuntimeError}
                   height={logsHeight}

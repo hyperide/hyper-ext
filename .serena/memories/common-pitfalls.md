@@ -118,3 +118,45 @@ Fix: put real-module integration tests in a different directory subtree
 
 ASTUpdateOperation uses `getPreviewIframe()` from `@/lib/dom-utils`.
 For testing: `mock.module('@/lib/dom-utils', () => ({ getPreviewIframe: () => null }))`
+
+## Tailwind JIT Does Not Scan Record/Object Values
+
+Tailwind JIT content scanner does NOT extract class names from:
+
+- `Record<string, string>` objects
+- Object literals / lookup tables
+- Array-of-objects configs (e.g. `SOURCE_PILLS[].activeColor`)
+- `switch` return values stored in variables
+
+Classes like `bg-cyan-500/20` or `w-[3px]` in these patterns will NOT be generated into CSS.
+
+### Safe Alternatives
+
+1. **Inline styles** for lookup objects:
+
+   ```ts
+   const COLORS: Record<string, { bg: string; text: string }> = {
+     proxy: { bg: 'rgba(6,182,212,0.2)', text: '#22d3ee' },
+   };
+   // <div style={{ backgroundColor: COLORS[source].bg }} />
+   ```
+
+2. **Classes directly in JSX** via `cn()`:
+
+   ```tsx
+   <div className={cn(
+     type === 'added' && 'bg-green-500/20 text-green-700',
+     type === 'removed' && 'bg-red-500/20 text-red-700',
+   )} />
+   ```
+
+### Why Not Safelist?
+
+Relying on a class being "safe" because it's used in JSX elsewhere is fragile —
+someone removes that JSX and the lookup silently breaks with invisible styles.
+
+### Known Fixed Instances
+
+- `DiagnosticLogsViewer.tsx` — SOURCE_STYLE_* uses inline hex colors
+- `DiagnosticFilterBar.tsx` — SOURCE_PILLS uses inline styles for active state
+- `EditFileDiff.tsx` — lineClass moved to direct `cn()` conditionals in JSX

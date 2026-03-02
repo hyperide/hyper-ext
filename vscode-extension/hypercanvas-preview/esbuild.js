@@ -212,6 +212,17 @@ async function main() {
     plugins: [createResolveAliasesPlugin()],
   });
 
+  // Iframe console capture script (plain JS IIFE) — injected into preview iframe by PreviewProxy
+  const iframeConsoleCaptureCtx = await esbuild.context({
+    entryPoints: ['../../shared/scripts/iframe-console-capture.js'],
+    bundle: true,
+    format: 'iife',
+    minify: production,
+    platform: 'browser',
+    outfile: 'out/iframe-console-capture.js',
+    logLevel: 'info',
+  });
+
   const allContexts = [
     extensionCtx,
     webviewCtx,
@@ -221,6 +232,7 @@ async function main() {
     webviewPreviewPanelCtx,
     iframeInteractionCtx,
     iframeErrorDetectionCtx,
+    iframeConsoleCaptureCtx,
   ];
 
   if (watch) {

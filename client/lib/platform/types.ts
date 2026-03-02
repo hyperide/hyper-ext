@@ -7,6 +7,7 @@
  */
 
 import type { SharedEditorState } from '../../../lib/types';
+import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -193,6 +194,14 @@ export type PlatformMessage =
   | { type: 'previewLoaded' }
   | { type: 'previewError'; error: string }
 
+  // Diagnostics (cross-webview sync in ext, local in SaaS)
+  | { type: 'diagnostic:log'; entries: DiagnosticLogEntry[] }
+  | { type: 'diagnostic:runtimeError'; error: import('../../../shared/runtime-error').RuntimeError | null }
+  | { type: 'diagnostic:buildStatus'; status: DiagnosticState['buildStatus'] }
+  | { type: 'diagnostic:clear' }
+  | { type: 'diagnostic:state'; state: DiagnosticState }
+  | { type: 'diagnostic:requestState' }
+  | { type: 'diagnostic:console'; level: ConsoleLevel; args: string[] }
   // Webview lifecycle (VS Code: webview signals it's ready to receive state)
   | { type: 'webview:ready' };
 

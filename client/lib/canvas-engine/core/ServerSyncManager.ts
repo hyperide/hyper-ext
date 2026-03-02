@@ -139,10 +139,12 @@ export class ServerSyncManager {
    * Reparse file to sync engine state with server
    * Called after undo/redo to ensure consistency
    */
-  async reparseFile(filePath: string): Promise<Record<string, unknown>> {
-    const response = await authFetch(
-      `${this.baseUrl}/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`,
-    );
+  async reparseFile(filePath: string, sampleName?: string): Promise<Record<string, unknown>> {
+    let url = `${this.baseUrl}/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`;
+    if (sampleName) {
+      url += `&sampleName=${encodeURIComponent(sampleName)}`;
+    }
+    const response = await authFetch(url);
 
     if (!response.ok) {
       throw new Error('Failed to reparse component file');

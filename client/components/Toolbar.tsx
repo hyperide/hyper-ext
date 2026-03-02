@@ -15,11 +15,12 @@ import {
   IconSquarePlus2,
   IconTextSize,
 } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
 import { useSelectedIds } from '@/lib/canvas-engine';
 import { useCanvasEngineContext } from '@/lib/canvas-engine/react/CanvasEngineProvider';
+import { usePlatformEvent } from '@/lib/platform/PlatformContext';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
 // AIAgentChat is now rendered in CanvasEditor for dock support
@@ -207,21 +208,16 @@ export default function Toolbar({
     }
   };
 
-  // Listen for openAIChat custom events
-  useEffect(() => {
-    const handleOpenAIChat = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        prompt: string;
-        forceNewChat?: boolean;
-      }>;
-      openAIChat(customEvent.detail.prompt, customEvent.detail.forceNewChat);
-    };
-
-    window.addEventListener('openAIChat', handleOpenAIChat);
-    return () => {
-      window.removeEventListener('openAIChat', handleOpenAIChat);
-    };
-  }, [openAIChat]);
+  // Listen for ai:openChat platform events
+  usePlatformEvent(
+    'ai:openChat',
+    useCallback(
+      (msg) => {
+        openAIChat(msg.prompt, msg.forceNewChat);
+      },
+      [openAIChat],
+    ),
+  );
 
   // mode is now a controlled prop - no need for internal state synchronization
 

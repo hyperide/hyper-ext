@@ -1,26 +1,23 @@
 /**
  * Logs Panel Provider
  *
- * Manages a webview panel that shows dev server logs.
- * AI chat has been moved to AIChatPanelProvider (secondary sidebar).
+ * Manages a webview panel that shows diagnostic logs.
+ * Registers with DiagnosticHub for diagnostic:* messages.
+ * Routes ai:openChat to AIChatPanelProvider via callback.
  */
 
 import * as vscode from 'vscode';
-import type { DevServerManager, LogEntry } from './services/DevServerManager';
-import { getProjectInfo } from './services/ProjectDetector';
+import type { DiagnosticHub } from './DiagnosticHub';
 
 export class LogsPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.logsView';
 
-  private _view?: vscode.WebviewView;
-  private _devServerManager: DevServerManager | null = null;
-  private _pendingLogs: LogEntry[] = [];
-  private _pendingHasErrors = false;
+  private _diagnosticHub: DiagnosticHub | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private readonly _workspaceRoot: string,
+    _workspaceRoot: string,
     _context: vscode.ExtensionContext,
   ) {}
 
@@ -33,24 +30,10 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Connect to DevServerManager for log streaming
+   * Connect to DiagnosticHub for centralized diagnostic broadcasts.
    */
-  setDevServerManager(manager: DevServerManager): void {
-    this._devServerManager = manager;
-
-    manager.onLogsUpdate((logs, hasErrors) => {
-      this._pendingLogs = logs;
-      this._pendingHasErrors = hasErrors;
-      this._pushLogsToWebview(logs, hasErrors);
-    });
-
-    // Forward runtime errors to webview
-    manager.onRuntimeErrorChange((error) => {
-      this._view?.webview.postMessage({
-        type: 'devserver:runtimeError',
-        error,
-      });
-    });
+  setDiagnosticHub(hub: DiagnosticHub): void {
+    this._diagnosticHub = hub;
   }
 
   public resolveWebviewView(
@@ -67,56 +50,36 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+    // Register with DiagnosticHub for broadcasts
+    if (this._diagnosticHub) {
+      this._diagnosticHub.register(LogsPanelProvider.viewType, webviewView.webview);
+    }
+
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(async (message) => {
-      await this._handleMessage(message, webviewView.webview);
+      await this._handleMessage(message);
     });
 
     webviewView.onDidDispose(() => {
+      if (this._diagnosticHub) {
+        this._diagnosticHub.unregister(LogsPanelProvider.viewType);
+      }
       this._view = undefined;
     });
   }
 
-  private async _handleMessage(
-    message: { type?: string; [key: string]: unknown },
-    webview: vscode.Webview,
-  ): Promise<void> {
+  private async _handleMessage(message: { type?: string; [key: string]: unknown }): Promise<void> {
     if (!message.type) return;
 
-    // Dev server log messages
-    if (message.type === 'devserver:requestLogs') {
-      const logs = this._devServerManager?.getLogs() ?? this._pendingLogs;
-      const hasErrors = this._devServerManager?.hasErrors ?? this._pendingHasErrors;
-      webview.postMessage({
-        type: 'devserver:logs',
-        logs,
-        hasErrors,
-      });
-
-      // Always send current runtime error state (including null to clear banner)
-      webview.postMessage({
-        type: 'devserver:runtimeError',
-        error: this._devServerManager?.runtimeError ?? null,
-      });
-
-      // Also send project info
-      try {
-        const info = await getProjectInfo(this._workspaceRoot);
-        webview.postMessage({
-          type: 'devserver:projectInfo',
-          projectInfo: {
-            framework: info.type,
-            path: this._workspaceRoot,
-          },
-        });
-      } catch {
-        // Project info is optional
-      }
+    // Webview requests full diagnostic state (on mount)
+    if (message.type === 'diagnostic:requestState') {
+      this._diagnosticHub?.sendState(LogsPanelProvider.viewType);
       return;
     }
 
-    if (message.type === 'devserver:clearLogs') {
-      this._devServerManager?.clearLogs();
+    // Webview requests clear
+    if (message.type === 'diagnostic:clear') {
+      this._diagnosticHub?.clear();
       return;
     }
 
@@ -126,15 +89,8 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
       if (this._onOpenAIChat && prompt) {
         this._onOpenAIChat(prompt);
       }
+      return;
     }
-  }
-
-  private _pushLogsToWebview(logs: LogEntry[], hasErrors: boolean): void {
-    this._view?.webview.postMessage({
-      type: 'devserver:logs',
-      logs,
-      hasErrors,
-    });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -154,7 +110,7 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
     font-src ${webview.cspSource};
   ">
   <link rel="stylesheet" href="${cssUri}">
-  <title>Dev Server Logs</title>
+  <title>Diagnostics</title>
 </head>
 <body>
   <div id="root"></div>

@@ -1,19 +1,13 @@
-import { memo } from 'react';
-import type { RuntimeError } from '@/../../shared/runtime-error';
-import { DockerLogsViewer } from '@/components/DockerLogsViewer';
+import type { RuntimeError } from '@shared/runtime-error';
+import { memo, useCallback } from 'react';
+import { DiagnosticLogsViewer } from '@/components/DiagnosticLogsViewer';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
-
-interface ProjectInfo {
-  name: string;
-  framework: string;
-  path: string;
-  devCommand: string;
-}
+import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface LogsPanelProps {
   projectId: string;
   containerStatus?: string;
-  projectInfo: ProjectInfo;
   proxyError?: string | null;
   runtimeError?: RuntimeError | null;
   height: number;
@@ -21,18 +15,29 @@ interface LogsPanelProps {
 }
 
 /**
- * Panel for displaying Docker container logs with resize handle.
- * Shown when gateway error is detected (502, etc.).
+ * Panel for displaying diagnostic logs with resize handle.
+ * Shown when gateway/runtime error is detected.
  */
 export const LogsPanel = memo(function LogsPanel({
   projectId,
   containerStatus,
-  projectInfo,
   proxyError,
   runtimeError,
   height,
   onHeightChange,
 }: LogsPanelProps) {
+  const openAIChat = useOpenAIChat();
+
+  // Connect data sources to diagnosticStore
+  const { clear: persistedClear } = useDiagnosticSync({ projectId, containerStatus, runtimeError, proxyError });
+
+  const handleAutoFix = useCallback(
+    (prompt: string) => {
+      openAIChat({ prompt, forceNewChat: true });
+    },
+    [openAIChat],
+  );
+
   return (
     <div
       data-logs-panel
@@ -54,14 +59,7 @@ export const LogsPanel = memo(function LogsPanel({
           zIndex: 10,
         }}
       />
-      <DockerLogsViewer
-        projectId={projectId}
-        height="100%"
-        containerStatus={containerStatus}
-        projectInfo={projectInfo}
-        proxyError={proxyError}
-        runtimeError={runtimeError}
-      />
+      <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={persistedClear} collapsible />
     </div>
   );
 });

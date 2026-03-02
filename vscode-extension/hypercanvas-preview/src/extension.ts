@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
 import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
+import { DiagnosticHub } from './DiagnosticHub';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { PanelRouter } from './PanelRouter';
@@ -36,6 +37,7 @@ let leftPanelProvider: LeftPanelProvider | null = null;
 let rightPanelProvider: RightPanelProvider | null = null;
 let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
+let diagnosticHub: DiagnosticHub | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperCanvas] Extension activating...');
@@ -100,13 +102,43 @@ export function activate(context: vscode.ExtensionContext) {
       console.warn('[HyperCanvas] Failed to detect UI kit:', err);
     });
 
+  // Create DiagnosticHub for centralized diagnostic data
+  diagnosticHub = new DiagnosticHub(context.globalStorageUri.fsPath);
+  diagnosticHub.init().catch((err) => {
+    console.error('[HyperCanvas] Failed to init DiagnosticHub:', err);
+  });
+
+  // Wire DiagnosticHub to logs panel and AI chat
+  logsProvider.setDiagnosticHub(diagnosticHub);
+  aiChatProvider.setDiagnosticHub(diagnosticHub);
+
   if (devServerManager) {
-    logsProvider.setDevServerManager(devServerManager);
     aiChatProvider.setDevServerManager(devServerManager);
 
-    // Wire runtime errors from preview iframe to dev server manager
+    // Feed DiagnosticHub from DevServerManager (without overwriting single-callback APIs)
+    devServerManager.onLogsUpdate((logs) => {
+      diagnosticHub?.pushServerLogs(logs);
+    });
+
+    devServerManager.onStatusChange((state) => {
+      const statusMap: Record<string, 'building' | 'ready' | 'error' | 'idle'> = {
+        starting: 'building',
+        running: 'ready',
+        error: 'error',
+        stopped: 'idle',
+      };
+      diagnosticHub?.setBuildStatus(statusMap[state.status] ?? 'idle');
+    });
+
+    // Wire runtime errors from preview iframe to dev server manager + diagnostic hub
     previewPanel.onRuntimeError((error) => {
       devServerManager?.setRuntimeError(error ?? null);
+      diagnosticHub?.setRuntimeError(error ?? null);
+    });
+
+    // Wire console capture from preview iframe to diagnostic hub
+    previewPanel.onConsoleCapture((entries) => {
+      diagnosticHub?.handleConsoleCapture(entries);
     });
   }
 
@@ -214,6 +246,11 @@ export function deactivate() {
   if (panelRouter) {
     panelRouter.dispose();
     panelRouter = null;
+  }
+
+  if (diagnosticHub) {
+    diagnosticHub.dispose();
+    diagnosticHub = null;
   }
 
   if (stateHub) {

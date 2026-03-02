@@ -2,14 +2,17 @@
  * Overlay shown when project configuration has an error
  */
 
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
+
 interface ConfigErrorOverlayProps {
   error: string;
-  projectId: string;
   onDismiss: () => void;
   onOpenSettings: () => void;
 }
 
-export function ConfigErrorOverlay({ error, projectId, onDismiss, onOpenSettings }: ConfigErrorOverlayProps) {
+export function ConfigErrorOverlay({ error, onDismiss, onOpenSettings }: ConfigErrorOverlayProps) {
+  const openAIChat = useOpenAIChat();
+
   const handleAutoFix = () => {
     const prompt = `Project configuration error:
 
@@ -18,15 +21,7 @@ ${JSON.stringify({ error }, null, 2)}
 \`\`\`
 
 Please analyze and fix this error.`;
-    window.dispatchEvent(
-      new CustomEvent('openAIChat', {
-        detail: {
-          prompt,
-          forceNewChat: true,
-          projectId,
-        },
-      }),
-    );
+    openAIChat({ prompt, forceNewChat: true });
   };
 
   return (

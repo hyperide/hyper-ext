@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
+import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface UsePanelManagementProps {
   engine: CanvasEngine;
@@ -32,6 +33,7 @@ interface UsePanelManagementReturn {
  * Manages floating panels state (ComponentNavigator, InsertInstance)
  */
 export function usePanelManagement({ engine, selectedIds }: UsePanelManagementProps): UsePanelManagementReturn {
+  const openAIChat = useOpenAIChat();
   const [elementY, setElementY] = useState<number>(0);
   const [panelOpenForId, setPanelOpenForId] = useState<string | null>(null);
   const [showInsertPanel, setShowInsertPanel] = useState(false);
@@ -79,26 +81,12 @@ export function usePanelManagement({ engine, selectedIds }: UsePanelManagementPr
   }, []);
 
   const handleCreatePage = useCallback(() => {
-    window.dispatchEvent(
-      new CustomEvent('openAIChat', {
-        detail: {
-          prompt: 'Create a new page component',
-          forceNewChat: true,
-        },
-      }),
-    );
-  }, []);
+    openAIChat({ prompt: 'Create a new page component', forceNewChat: true });
+  }, [openAIChat]);
 
   const handleCreateComponent = useCallback(() => {
-    window.dispatchEvent(
-      new CustomEvent('openAIChat', {
-        detail: {
-          prompt: 'Create a new component',
-          forceNewChat: true,
-        },
-      }),
-    );
-  }, []);
+    openAIChat({ prompt: 'Create a new component', forceNewChat: true });
+  }, [openAIChat]);
 
   return {
     elementY,

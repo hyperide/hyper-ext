@@ -129,24 +129,22 @@ function DiffSegment({ segment, onExpand }: DiffSegmentProps) {
     );
   }
 
-  const lineClass = {
-    context: 'text-foreground bg-transparent',
-    added: 'bg-green-500/20 text-green-700 dark:text-green-400',
-    removed: 'bg-red-500/20 text-red-700 dark:text-red-400 line-through',
-  };
-
-  const prefix = {
-    context: ' ',
-    added: '+',
-    removed: '-',
-  };
-
   return (
     <>
       {segment.lines.map((line, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have no stable id
-        <div key={i} className={cn('px-2 py-px', lineClass[segment.type])}>
-          <span className="select-none opacity-50 mr-2">{prefix[segment.type]}</span>
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have no stable id
+          key={i}
+          className={cn(
+            'px-2 py-px',
+            segment.type === 'added' && 'bg-green-500/20 text-green-700 dark:text-green-400',
+            segment.type === 'removed' && 'bg-red-500/20 text-red-700 dark:text-red-400 line-through',
+            segment.type === 'context' && 'text-foreground bg-transparent',
+          )}
+        >
+          <span className="select-none opacity-50 mr-2">
+            {segment.type === 'added' ? '+' : segment.type === 'removed' ? '-' : ' '}
+          </span>
           {line || ' '}
         </div>
       ))}

@@ -14,15 +14,10 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
-const interactionScriptContent = fs.readFileSync(
-  path.join(__dirname, 'iframe-interaction.js'),
-  'utf-8',
-);
-const errorDetectionScriptContent = fs.readFileSync(
-  path.join(__dirname, 'iframe-error-detection.js'),
-  'utf-8',
-);
-const INJECTED_SCRIPTS = `<script>${interactionScriptContent}</script><script>${errorDetectionScriptContent}</script>`;
+const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
+const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-error-detection.js'), 'utf-8');
+const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-console-capture.js'), 'utf-8');
+const INJECTED_SCRIPTS = `<script>${interactionScriptContent}</script><script>${errorDetectionScriptContent}</script><script>${consoleCaptureScriptContent}</script>`;
 
 export class PreviewProxy {
   private _server: http.Server | null = null;
@@ -58,15 +53,15 @@ export class PreviewProxy {
 
     // Find random port and listen
     await new Promise<void>((resolve, reject) => {
-      this._server!.listen(0, '127.0.0.1', () => {
-        const addr = this._server!.address();
+      this._server?.listen(0, '127.0.0.1', () => {
+        const addr = this._server?.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
           console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
         resolve();
       });
-      this._server!.on('error', reject);
+      this._server?.on('error', reject);
     });
   }
 
@@ -147,11 +142,7 @@ export class PreviewProxy {
   /**
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
-  private _handleUpgrade(
-    req: http.IncomingMessage,
-    clientSocket: net.Socket,
-    head: Buffer,
-  ): void {
+  private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
     const targetSocket = net.connect(this._targetPort, '127.0.0.1', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;

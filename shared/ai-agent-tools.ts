@@ -808,6 +808,7 @@ export const RESTART_DEV_SERVER: ToolDefinition = {
   },
 };
 
+/** @deprecated Use GET_DIAGNOSTICS with sources: ['server'] instead */
 export const GET_CONTAINER_LOGS: ToolDefinition = {
   name: 'get_container_logs',
   description:
@@ -832,7 +833,53 @@ export const GET_CONTAINER_LOGS: ToolDefinition = {
   },
 };
 
-export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_CONTAINER_LOGS];
+export const GET_DIAGNOSTICS: ToolDefinition = {
+  name: 'get_diagnostics',
+  description:
+    'Get diagnostic information from the development environment: server logs, runtime errors, ' +
+    'browser console output, and build status. Use to investigate issues, verify fixes, or understand ' +
+    'the current state of the application. Replaces get_container_logs and check_build_status.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      sources: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['server', 'server_previous', 'console', 'runtime_error', 'build_status', 'events', 'all'],
+        },
+        description:
+          'Which diagnostic sources to include. Default: ["all"]. ' +
+          '"server" = current dev server logs, "server_previous" = logs before last restart (K8s), ' +
+          '"console" = browser console output from preview iframe, ' +
+          '"runtime_error" = current framework error overlay state, ' +
+          '"build_status" = wait for build to settle and report status, ' +
+          '"events" = K8s events (SaaS only).',
+      },
+      lines: {
+        type: 'number',
+        description: 'Max log lines to return per source. Default: 50, max: 200.',
+      },
+      level: {
+        type: 'string',
+        enum: ['all', 'error', 'warn', 'info'],
+        description:
+          'Filter by minimum severity level. Default: "all". "error" returns only errors, "warn" returns errors + warnings, etc.',
+      },
+      pattern: {
+        type: 'string',
+        description: 'Regex pattern to filter log lines. Applied after level filter.',
+      },
+      since: {
+        type: 'number',
+        description:
+          'Only return entries newer than this Unix timestamp (ms). Useful for "what happened after my last fix".',
+      },
+    },
+  },
+};
+
+export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_DIAGNOSTICS];
 
 // ============================================
 // Web Tools
@@ -881,9 +928,10 @@ export const URL_FETCH: ToolDefinition = {
 export const WEB_TOOLS: ToolDefinition[] = [BRAVE_WEB_SEARCH, URL_FETCH];
 
 // ============================================
-// Extension-Only Tools
+// Extension-Only Tools (legacy — kept for backward compat, new code uses GET_DIAGNOSTICS)
 // ============================================
 
+/** @deprecated Use GET_DIAGNOSTICS with sources: ['build_status'] instead */
 export const CHECK_BUILD_STATUS: ToolDefinition = {
   name: 'check_build_status',
   description:

@@ -119,8 +119,14 @@ export function createBrowserCanvasAdapter(): CanvasAdapter {
     sendEvent<T extends PlatformMessage>(message: T): void {
       window.dispatchEvent(new CustomEvent(PLATFORM_EVENT, { detail: message }));
 
-      // Also dispatch legacy events for backwards compatibility during migration
-      dispatchLegacyEvent(message);
+      // Dispatch editor:goToCode as legacy monaco-goto-position event
+      if (message.type === 'editor:goToCode') {
+        window.dispatchEvent(
+          new CustomEvent('monaco-goto-position', {
+            detail: { filePath: message.path, line: message.line, column: message.column },
+          }),
+        );
+      }
     },
 
     onEvent<K extends PlatformMessage['type']>(type: K, callback: (message: MessageOfType<K>) => void): () => void {
@@ -133,76 +139,11 @@ export function createBrowserCanvasAdapter(): CanvasAdapter {
 
       window.addEventListener(PLATFORM_EVENT, handler);
 
-      // Also listen to legacy events during migration
-      const legacyCleanup = listenLegacyEvent(type, callback);
-
       return () => {
         window.removeEventListener(PLATFORM_EVENT, handler);
-        legacyCleanup?.();
       };
     },
   };
-}
-
-// ============================================================================
-// Legacy event bridge (for gradual migration)
-// ============================================================================
-
-function dispatchLegacyEvent(message: PlatformMessage): void {
-  switch (message.type) {
-    case 'ai:openChat':
-      window.dispatchEvent(
-        new CustomEvent('openAIChat', {
-          detail: {
-            prompt: message.prompt,
-            forceNewChat: message.forceNewChat,
-          },
-        }),
-      );
-      break;
-
-    case 'editor:goToCode':
-      window.dispatchEvent(
-        new CustomEvent('monaco-goto-position', {
-          detail: {
-            filePath: message.path,
-            line: message.line,
-            column: message.column,
-          },
-        }),
-      );
-      break;
-
-    case 'editor:goToVisual':
-      // goToVisual is handled via SSE in SaaS, not direct event
-      break;
-  }
-}
-
-function listenLegacyEvent<K extends PlatformMessage['type']>(
-  type: K,
-  callback: (message: MessageOfType<K>) => void,
-): (() => void) | undefined {
-  switch (type) {
-    case 'ai:openChat': {
-      const handler = (event: Event) => {
-        const customEvent = event as CustomEvent<{
-          prompt?: string;
-          forceNewChat?: boolean;
-        }>;
-        callback({
-          type: 'ai:openChat',
-          prompt: customEvent.detail?.prompt,
-          forceNewChat: customEvent.detail?.forceNewChat,
-        } as MessageOfType<K>);
-      };
-      window.addEventListener('openAIChat', handler);
-      return () => window.removeEventListener('openAIChat', handler);
-    }
-
-    default:
-      return undefined;
-  }
 }
 
 // ============================================================================

@@ -5,18 +5,14 @@
  * Detects project type and runs appropriate dev command.
  */
 
-import { spawn, ChildProcess } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import * as net from 'node:net';
 import * as vscode from 'vscode';
-import type { DevServerStatus, DevServerState } from '../types';
-import {
-  getProjectInfo,
-  getPackageScripts,
-  detectPackageManager,
-} from './ProjectDetector';
 import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/fix-session';
 import type { RuntimeError } from '../../../../shared/runtime-error';
+import type { DevServerState, DevServerStatus } from '../types';
 import { PreviewProxy } from './PreviewProxy';
+import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
 
 const MAX_LOG_ENTRIES = 200;
 
@@ -33,18 +29,18 @@ export class DevServerManager {
   private _error: string | undefined;
   private _projectPath: string;
   private _outputChannel: vscode.OutputChannel;
-  private _onStatusChange: ((state: DevServerState) => void) | null = null;
+  private _onStatusChangeListeners: Array<(state: DevServerState) => void> = [];
 
   // Log buffer and error detection
   private _logs: LogEntry[] = [];
   private _hasErrors = false;
-  private _onLogsUpdate: ((logs: LogEntry[], hasErrors: boolean) => void) | null = null;
+  private _onLogsUpdateListeners: Array<(logs: LogEntry[], hasErrors: boolean) => void> = [];
   private _onError: ((errorLines: string) => void) | null = null;
 
   // Preview proxy and runtime errors
   private _previewProxy: PreviewProxy | null = null;
   private _runtimeError: RuntimeError | null = null;
-  private _onRuntimeErrorChange: ((error: RuntimeError | null) => void) | null = null;
+  private _onRuntimeErrorChangeListeners: Array<(error: RuntimeError | null) => void> = [];
 
   constructor(projectPath: string) {
     this._projectPath = projectPath;
@@ -55,14 +51,14 @@ export class DevServerManager {
    * Set callback for status changes
    */
   onStatusChange(callback: (state: DevServerState) => void): void {
-    this._onStatusChange = callback;
+    this._onStatusChangeListeners.push(callback);
   }
 
   /**
-   * Set callback for log updates (real-time push to webview)
+   * Add listener for log updates (real-time push to webview)
    */
   onLogsUpdate(callback: (logs: LogEntry[], hasErrors: boolean) => void): void {
-    this._onLogsUpdate = callback;
+    this._onLogsUpdateListeners.push(callback);
   }
 
   /**
@@ -73,10 +69,10 @@ export class DevServerManager {
   }
 
   /**
-   * Set callback for runtime error changes (from iframe error overlays)
+   * Add listener for runtime error changes (from iframe error overlays)
    */
   onRuntimeErrorChange(callback: (error: RuntimeError | null) => void): void {
-    this._onRuntimeErrorChange = callback;
+    this._onRuntimeErrorChangeListeners.push(callback);
   }
 
   /**
@@ -84,7 +80,7 @@ export class DevServerManager {
    */
   setRuntimeError(error: RuntimeError | null): void {
     this._runtimeError = error;
-    this._onRuntimeErrorChange?.(error);
+    for (const cb of this._onRuntimeErrorChangeListeners) cb(error);
   }
 
   /**
@@ -114,7 +110,7 @@ export class DevServerManager {
   clearLogs(): void {
     this._logs = [];
     this._hasErrors = false;
-    this._onLogsUpdate?.(this._logs, this._hasErrors);
+    for (const cb of this._onLogsUpdateListeners) cb(this._logs, this._hasErrors);
   }
 
   /**
@@ -159,8 +155,8 @@ export class DevServerManager {
       let devScript = projectInfo.devCommand;
       if (!scripts[devScript]) {
         // Fallback to available scripts
-        if (scripts['dev']) devScript = 'dev';
-        else if (scripts['start']) devScript = 'start';
+        if (scripts.dev) devScript = 'dev';
+        else if (scripts.start) devScript = 'start';
         else {
           throw new Error('No dev or start script found in package.json');
         }
@@ -174,7 +170,9 @@ export class DevServerManager {
       await this._previewProxy.start();
       console.log(`[HyperCanvas] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
-      console.log(`[HyperCanvas] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      console.log(
+        `[HyperCanvas] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`,
+      ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       this._outputChannel.appendLine(`[DevServer] Starting ${packageManager} run ${devScript}`);
       this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
       this._outputChannel.appendLine(`[DevServer] Port: ${this._port}`);
@@ -224,11 +222,7 @@ export class DevServerManager {
 
         // Some servers log to stderr
         if (this._status === 'starting') {
-          if (
-            text.includes('ready') ||
-            text.includes('Local:') ||
-            text.includes('localhost:')
-          ) {
+          if (text.includes('ready') || text.includes('Local:') || text.includes('localhost:')) {
             this._updateStatus('running');
           }
         }
@@ -465,7 +459,7 @@ export class DevServerManager {
     }
 
     if (newEntries.length > 0) {
-      this._onLogsUpdate?.(this._logs, this._hasErrors);
+      for (const cb of this._onLogsUpdateListeners) cb(newEntries, this._hasErrors);
 
       // Notify about new errors
       const errorEntries = newEntries.filter((e) => e.isError);
@@ -490,6 +484,6 @@ export class DevServerManager {
       error,
     };
 
-    this._onStatusChange?.(state);
+    for (const cb of this._onStatusChangeListeners) cb(state);
   }
 }

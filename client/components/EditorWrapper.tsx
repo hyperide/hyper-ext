@@ -13,6 +13,8 @@ interface ComponentLoadData {
   componentName?: string;
   filePath?: string;
   structure?: ASTNode[];
+  sampleStructure?: ASTNode[] | null;
+  sampleName?: string | null;
   repoPath?: string;
   projectName?: string;
   projectId?: string;
@@ -28,8 +30,12 @@ import { authFetch } from '@/utils/authFetch';
 const canvasComponents: ComponentDefinition[] = [];
 
 function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
-  const { setMeta, setParseError } = useComponentMeta();
+  const { setMeta, setParseError, currentSampleName } = useComponentMeta();
   const filePathRef = useRef<string | null>(null);
+  const sampleNameRef = useRef<string | null>(null);
+
+  // Keep ref in sync with context state
+  sampleNameRef.current = currentSampleName;
 
   const engine = useMemo(() => {
     const eng = new CanvasEngine({
@@ -129,6 +135,7 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
           root.metadata = {
             ...root.metadata,
             astStructure: data.structure,
+            sampleStructure: data.sampleStructure ?? null,
             filePath,
           };
 
@@ -151,6 +158,17 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
             idMap[index.toString()] = id;
           });
 
+          // Build Sample* idMap if sampleStructure exists
+          let sampleIdMap: Record<string, string> | undefined;
+          if (data.sampleStructure && data.sampleStructure.length > 0) {
+            const sampleIds = collectIds(data.sampleStructure);
+            const map: Record<string, string> = {};
+            sampleIds.forEach((id, index) => {
+              map[index.toString()] = id;
+            });
+            sampleIdMap = map;
+          }
+
           try {
             console.log(
               '[Canvas Engine] Injecting unique IDs for',
@@ -165,6 +183,8 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
                 filePath,
                 idMap,
                 componentName: data.componentName,
+                sampleName: data.sampleName ?? undefined,
+                sampleIdMap,
               }),
             });
             const injectResult = await injectResponse.json();
@@ -180,11 +200,16 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
               if (injectResult.addedCount && injectResult.addedCount > 0) {
                 // nosemgrep: unsafe-formatstring -- no template literal, but multiline log
                 console.log('[Canvas Engine] Re-parsing component to get updated IDs');
-                const reParseResponse = await authFetch(`/api/parse-component?path=${encodeURIComponent(filePath)}`);
+                let reParseUrl = `/api/parse-component?path=${encodeURIComponent(filePath)}`;
+                if (data.sampleName) {
+                  reParseUrl += `&sampleName=${encodeURIComponent(data.sampleName)}`;
+                }
+                const reParseResponse = await authFetch(reParseUrl);
                 const reParseData = await reParseResponse.json();
                 if (reParseData.success && reParseData.structure) {
                   // Update root metadata with new structure
                   root.metadata.astStructure = reParseData.structure;
+                  root.metadata.sampleStructure = reParseData.sampleStructure ?? null;
                   console.log('[Canvas Engine] ✓ Updated AST structure with new IDs');
                   // Trigger store update so components react to astStructure change
                   eng.events.emit('tree:change', {
@@ -236,7 +261,11 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
       if (currentFilePath) {
         console.log('[Canvas Engine] Files changed, reloading current component:', currentFilePath);
         // Re-parse component to inject missing IDs
-        authFetch(`/api/parse-component?path=${encodeURIComponent(currentFilePath)}`)
+        let reloadUrl = `/api/parse-component?path=${encodeURIComponent(currentFilePath)}`;
+        if (sampleNameRef.current) {
+          reloadUrl += `&sampleName=${encodeURIComponent(sampleNameRef.current)}`;
+        }
+        authFetch(reloadUrl)
           .then((res) => res.json())
           .then((data) => {
             if (data.success) {

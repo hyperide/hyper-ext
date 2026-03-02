@@ -163,6 +163,26 @@ export class ComponentScanner {
     for (const categoryPath of categoryPaths) {
       if (!fs.existsSync(categoryPath)) continue;
 
+      const stat = fs.statSync(categoryPath);
+
+      // File path is a marker — scan its parent directory instead
+      if (stat.isFile()) {
+        const dir = path.dirname(categoryPath);
+        if (fs.existsSync(dir)) {
+          const components =
+            kind === 'page'
+              ? this.scanPagesDirectory(dir, dir, projectRoot)
+              : this.scanComponentDirectory(dir, dir, projectRoot);
+          if (components.length > 0) {
+            groups.push({
+              dirPath: path.relative(projectRoot, dir),
+              components,
+            });
+          }
+        }
+        continue;
+      }
+
       const components =
         kind === 'page'
           ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)

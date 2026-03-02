@@ -133,10 +133,10 @@ export interface ASTApiService {
   updatePropsBatch(params: UpdatePropsBatchParams): Promise<ApiResult>;
   updateText(params: UpdateTextParams): Promise<ApiResult>;
   editCondition(params: EditConditionParams): Promise<EditConditionResult>;
-  parseComponent(filePath: string): Promise<ParseComponentResult>;
+  parseComponent(filePath: string, sampleName?: string): Promise<ParseComponentResult>;
   saveFileSnapshot(filePath: string): Promise<SaveSnapshotResult>;
-  restoreFileSnapshot(snapshotId: number, filePath: string): Promise<void>;
+  restoreFileSnapshot(snapshotId: number, filePath: string, sampleName?: string): Promise<void>;
 
   /** Parse component and dispatch component-loaded event */
-  reloadComponent(filePath: string): Promise<void>;
+  reloadComponent(filePath: string, sampleName?: string): Promise<void>;
 }

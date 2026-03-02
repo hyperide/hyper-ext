@@ -134,10 +134,12 @@ export class ASTApiServiceImpl implements ASTApiService {
     return response.json();
   }
 
-  async parseComponent(filePath: string): Promise<ParseComponentResult> {
-    const response = await authFetch(
-      `/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`,
-    );
+  async parseComponent(filePath: string, sampleName?: string): Promise<ParseComponentResult> {
+    let url = `/api/parse-component?path=${encodeURIComponent(filePath)}&skipSampleDefault=true`;
+    if (sampleName) {
+      url += `&sampleName=${encodeURIComponent(sampleName)}`;
+    }
+    const response = await authFetch(url);
     return response.json();
   }
 
@@ -150,7 +152,7 @@ export class ASTApiServiceImpl implements ASTApiService {
     return response.json();
   }
 
-  async restoreFileSnapshot(snapshotId: number, filePath: string): Promise<void> {
+  async restoreFileSnapshot(snapshotId: number, filePath: string, sampleName?: string): Promise<void> {
     const response = await authFetch('/api/file-snapshot/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -161,11 +163,11 @@ export class ASTApiServiceImpl implements ASTApiService {
       throw new Error(data.error || 'Failed to restore file snapshot');
     }
 
-    await this.reloadComponent(filePath);
+    await this.reloadComponent(filePath, sampleName);
   }
 
-  async reloadComponent(filePath: string): Promise<void> {
-    const parseResult = await this.parseComponent(filePath);
+  async reloadComponent(filePath: string, sampleName?: string): Promise<void> {
+    const parseResult = await this.parseComponent(filePath, sampleName);
     if (parseResult.success) {
       window.dispatchEvent(new CustomEvent('component-loaded', { detail: parseResult }));
     }

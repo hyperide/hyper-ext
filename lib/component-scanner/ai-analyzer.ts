@@ -45,6 +45,9 @@ TASK: Identify ALL directories containing components and categorize them IN THIS
    - Common directory names: "examples", "features", "modules", "composites", "molecules"
    - Look for directories with larger .tsx files or subdirectories organizing features
    - Examples: "src/features", "app/modules", "packages/examples"
+   - SIMPLE PROJECTS: If a root source file like App.tsx composes atoms, include its PARENT DIRECTORY
+     (e.g., "src/") in the list. Entry point bootstrappers (main.tsx, index.tsx) are NOT composites.
+   - A directory already listed in atomComponentsPaths MUST NOT appear in compositeComponentsPaths
 
 3. **pagesPaths** (ARRAY of paths): Directories with PAGE/ROUTE components
    - Definition: Top-level pages/routes that represent entire application screens
@@ -125,7 +128,7 @@ CRITICAL RULES:
 Return ONLY a JSON object (no markdown, no backticks, no explanation):
 {
   "atomComponentsPaths": ["path/to/atoms1", "path/to/atoms2"] or null,
-  "compositeComponentsPaths": ["path/to/composites1", "path/to/features"] or null,
+  "compositeComponentsPaths": ["path/to/composites1", "path/to/features", "src/App.tsx"] or null,
   "pagesPaths": ["path/to/pages1", "path/to/routes"] or null,
   "textComponentPath": "path/to/Text.tsx" or null,
   "linkComponentPath": "path/to/Link.tsx" or null,

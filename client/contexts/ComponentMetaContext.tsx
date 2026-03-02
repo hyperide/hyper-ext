@@ -14,10 +14,12 @@ interface ComponentMeta {
 interface ComponentMetaContextType {
   meta: ComponentMeta | null;
   setMeta: (meta: ComponentMeta) => void;
-  loadComponent: (componentPath: string) => Promise<void>;
+  loadComponent: (componentPath: string, sampleName?: string) => Promise<void>;
   loadingComponent: string | null;
   parseError: string | null;
   setParseError: (error: string | null) => void;
+  currentSampleName: string | null;
+  setCurrentSampleName: (name: string | null) => void;
 }
 
 export const ComponentMetaContext = createContext<ComponentMetaContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
   const [meta, setMetaInternal] = useState<ComponentMeta | null>(null);
   const [loadingComponent, setLoadingComponent] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [currentSampleName, setCurrentSampleName] = useState<string | null>(null);
 
   const setMeta = useCallback((newMeta: ComponentMeta) => {
     setMetaInternal(newMeta);
@@ -35,12 +38,18 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loadComponent = useCallback(async (componentPath: string) => {
+  const loadComponent = useCallback(async (componentPath: string, sampleName?: string) => {
     try {
       setLoadingComponent(componentPath);
       setParseError(null);
 
-      const response = await authFetch(`/api/parse-component?path=${encodeURIComponent(componentPath)}`);
+      const effectiveSampleName = sampleName ?? 'default';
+      setCurrentSampleName(effectiveSampleName);
+
+      let url = `/api/parse-component?path=${encodeURIComponent(componentPath)}`;
+      url += `&sampleName=${encodeURIComponent(effectiveSampleName)}`;
+
+      const response = await authFetch(url);
       const data = await response.json();
 
       if (data.success) {
@@ -69,6 +78,8 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
         loadingComponent,
         parseError,
         setParseError,
+        currentSampleName,
+        setCurrentSampleName,
       }}
     >
       {children}

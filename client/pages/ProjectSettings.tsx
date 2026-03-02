@@ -2,11 +2,12 @@ import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconTrash } from '@table
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MemoryRouter, useNavigate, useParams } from 'react-router-dom';
 import AIAgentChat from '@/components/AIAgentChat';
-import { DockerLogsViewer } from '@/components/DockerLogsViewer';
+import { DiagnosticLogsViewer } from '@/components/DiagnosticLogsViewer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { authFetch } from '@/utils/authFetch';
 
@@ -44,22 +45,12 @@ export default function ProjectSettings() {
 
   useDocumentTitle(project ? `Settings - ${project.name}` : 'Project Settings');
 
-  // Listen for openAIChat events from DockerLogsViewer
-  useEffect(() => {
-    const handleOpenAIChat = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        prompt: string;
-        forceNewChat?: boolean;
-      }>;
-      setIsAIAgentOpen(true);
-      setInitialPrompt(customEvent.detail.prompt);
-      setForceNewChat(customEvent.detail.forceNewChat ?? false);
-    };
+  const { clear: persistedClear } = useDiagnosticSync({ projectId: project?.id, containerStatus: project?.status });
 
-    window.addEventListener('openAIChat', handleOpenAIChat);
-    return () => {
-      window.removeEventListener('openAIChat', handleOpenAIChat);
-    };
+  const handleAutoFix = useCallback((prompt: string) => {
+    setIsAIAgentOpen(true);
+    setInitialPrompt(prompt);
+    setForceNewChat(true);
   }, []);
 
   // Fetch project data
@@ -426,17 +417,11 @@ export default function ProjectSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent data-uniq-id="7b3bd749-b9f7-4865-a82d-18ec58b06f5d">
-          <DockerLogsViewer
+          <DiagnosticLogsViewer
             data-uniq-id="91dd0388-0e9f-4988-8e26-0937bc7c0b74"
-            projectId={project.id}
             height="500px"
-            containerStatus={project.status}
-            projectInfo={{
-              name: project.name,
-              framework: project.framework,
-              path: project.path,
-              devCommand: project.devCommand,
-            }}
+            onAutoFix={handleAutoFix}
+            onClear={persistedClear}
           />
         </CardContent>
       </Card>

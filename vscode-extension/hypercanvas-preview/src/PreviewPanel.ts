@@ -30,6 +30,11 @@ export class PreviewPanel {
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
 
+  // Console capture callback (from iframe console intercept)
+  private _onConsoleCaptureCallback:
+    | ((entries: Array<{ level: string; args: string[]; timestamp: number }>) => void)
+    | null = null;
+
   // Pending content requests (for Copy Text / Copy as HTML round-trip)
   private _pendingContentRequests = new Map<string, (result: { text?: string; html?: string }) => void>();
 
@@ -203,6 +208,13 @@ export class PreviewPanel {
     if (msg.type === 'runtime:error') {
       const error = (msg as { error?: DevServerRuntimeError | null }).error ?? null;
       this._onRuntimeErrorCallback?.(error);
+      return;
+    }
+    if (msg.type === 'diagnostic:console') {
+      const entries = (msg as { entries?: Array<{ level: string; args: string[]; timestamp: number }> }).entries;
+      if (entries) {
+        this._onConsoleCaptureCallback?.(entries);
+      }
       return;
     }
     if (msg.type === 'command:startDevServer') {
@@ -584,6 +596,15 @@ export class PreviewPanel {
    */
   public onRuntimeError(callback: (error: DevServerRuntimeError | null) => void): void {
     this._onRuntimeErrorCallback = callback;
+  }
+
+  /**
+   * Set callback for console capture messages from iframe preview
+   */
+  public onConsoleCapture(
+    callback: (entries: Array<{ level: string; args: string[]; timestamp: number }>) => void,
+  ): void {
+    this._onConsoleCaptureCallback = callback;
   }
 
   /**

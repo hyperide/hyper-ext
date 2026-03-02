@@ -26,11 +26,7 @@ interface UsePreviewBridgeResult {
   handleRefresh: () => void;
 }
 
-export function usePreviewBridge({
-  iframeEl,
-  canvas,
-  onStateUpdate,
-}: UsePreviewBridgeOptions): UsePreviewBridgeResult {
+export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
   const [devServerRunning, setDevServerRunning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
@@ -44,7 +40,7 @@ export function usePreviewBridge({
     if (!iframeEl) return;
 
     function handleMessage(event: MessageEvent) {
-      if (event.source !== iframeEl!.contentWindow) return;
+      if (event.source !== iframeEl?.contentWindow) return;
 
       const msg = event.data;
       if (!msg?.type) return;
@@ -54,6 +50,9 @@ export function usePreviewBridge({
       if (msg.type.startsWith('hypercanvas:')) {
         if (msg.type === 'hypercanvas:runtimeError') {
           canvas.sendEvent({ type: 'runtime:error', error: msg.error } as unknown as PlatformMessage);
+        }
+        if (msg.type === 'hypercanvas:console') {
+          canvas.sendEvent({ type: 'diagnostic:console', entries: msg.entries } as unknown as PlatformMessage);
         }
         if (msg.type === 'hypercanvas:elementContentResult') {
           canvas.sendEvent({
@@ -86,6 +85,21 @@ export function usePreviewBridge({
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
+
+  // Keep iframeEl in a ref so doRefresh callback stays stable
+  const iframeElRef = useRef(iframeEl);
+  iframeElRef.current = iframeEl;
+
+  // === Refresh logic ===
+  const doRefresh = useCallback(() => {
+    const frame = iframeElRef.current;
+    if (!frame) return;
+    const currentSrc = frame.src;
+    frame.src = '';
+    setTimeout(() => {
+      frame.src = currentSrc;
+    }, 50);
+  }, []);
 
   // === extension -> webview message handling ===
   useEffect(() => {
@@ -121,10 +135,8 @@ export function usePreviewBridge({
             selectedItemIndices: {},
           });
           // Forward to iframe (state sync + scroll to element)
-          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-            { type: 'hypercanvas:goToVisual', elementId: msg.elementId },
-            '*',
-          );
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId: msg.elementId }, '*');
           break;
 
         case 'state:update':
@@ -153,14 +165,16 @@ export function usePreviewBridge({
 
         // Extension requests element content from iframe (Copy Text / Copy as HTML)
         case 'getElementText':
-          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          iframeEl?.contentWindow?.postMessage(
             { type: 'hypercanvas:getElementText', elementId: msg.elementId, requestId: msg.requestId },
             '*',
           );
           break;
 
         case 'getElementHTML':
-          iframeEl?.contentWindow?.postMessage( // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          iframeEl?.contentWindow?.postMessage(
             { type: 'hypercanvas:getElementHTML', elementId: msg.elementId, requestId: msg.requestId },
             '*',
           );
@@ -170,27 +184,12 @@ export function usePreviewBridge({
 
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
-  }, [iframeEl]);
+  }, [iframeEl, doRefresh]);
 
   // === Signal webview ready to extension ===
   useEffect(() => {
     canvas.sendEvent({ type: 'webview:ready' });
   }, [canvas]);
-
-  // Keep iframeEl in a ref so doRefresh callback stays stable
-  const iframeElRef = useRef(iframeEl);
-  iframeElRef.current = iframeEl;
-
-  // === Refresh logic ===
-  const doRefresh = useCallback(() => {
-    const frame = iframeElRef.current;
-    if (!frame) return;
-    const currentSrc = frame.src;
-    frame.src = '';
-    setTimeout(() => {
-      frame.src = currentSrc;
-    }, 50);
-  }, []);
 
   const handleStartDevServer = useCallback(() => {
     canvas.sendEvent({ type: 'command:startDevServer' } as unknown as PlatformMessage);

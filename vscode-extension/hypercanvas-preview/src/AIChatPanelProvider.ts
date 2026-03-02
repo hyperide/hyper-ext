@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 import type { DisplayMessage } from '../../../shared/ai-chat-display';
 import { AIBridge } from './bridges/AIBridge';
+import type { DiagnosticHub } from './DiagnosticHub';
 import type { StateHub } from './StateHub';
 import { ChatHistoryService } from './services/ChatHistoryService';
 import type { DevServerManager } from './services/DevServerManager';
@@ -47,10 +48,17 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Connect to DevServerManager for check_build_status tool
+   * Connect to DevServerManager for fallback log access
    */
   setDevServerManager(manager: DevServerManager): void {
     this._aiBridge.setDevServerManager(manager);
+  }
+
+  /**
+   * Connect to DiagnosticHub for get_diagnostics tool
+   */
+  setDiagnosticHub(hub: DiagnosticHub): void {
+    this._aiBridge.setDiagnosticHub(hub);
   }
 
   public resolveWebviewView(
