@@ -8,6 +8,7 @@ export class Delayer {
       try {
         return Promise.resolve(task());
       } catch {
+        // Intentionally silent — this is a build-time stub, never runs in production
         return Promise.resolve(undefined);
       }
     }
