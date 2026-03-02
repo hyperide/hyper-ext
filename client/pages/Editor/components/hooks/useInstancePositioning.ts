@@ -3,6 +3,7 @@
  * Handles all position/size state and related callbacks for instances
  */
 
+import type { CommentStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isArrowAnnotation } from '@/../../shared/types/annotations';
 import type { AnnotationStoreApi } from '@/lib/annotation-store';
@@ -13,7 +14,7 @@ import type { InstancePosition } from './useCanvasComposition';
 interface Comment {
   id: string;
   parentId: string | null;
-  status: string;
+  status: CommentStatus;
 }
 
 interface UseInstancePositioningProps {

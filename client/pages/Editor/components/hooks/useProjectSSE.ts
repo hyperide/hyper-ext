@@ -3,6 +3,7 @@
  * Handles project stream, file watcher, and polling for stopped projects
  */
 
+import type { ContainerPhase, ProjectStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { loadPersistedState } from '@/lib/storage';
@@ -13,7 +14,7 @@ import type { ProjectData } from './useProjectControl';
 
 interface PollStatus {
   lastPoll: Date | null;
-  lastResult: { running: boolean; status: string; phase?: string } | null;
+  lastResult: { running: boolean; status: ProjectStatus; phase?: ContainerPhase } | null;
   isPolling: boolean;
 }
 

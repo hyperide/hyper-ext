@@ -1,4 +1,5 @@
 import type { RuntimeError } from '@shared/runtime-error';
+import type { ProjectStatus } from '@shared/types/statuses';
 import { memo, useCallback } from 'react';
 import { DiagnosticLogsViewer } from '@/components/DiagnosticLogsViewer';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
@@ -7,7 +8,7 @@ import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 
 interface LogsPanelProps {
   projectId: string;
-  containerStatus?: string;
+  containerStatus?: ProjectStatus;
   proxyError?: string | null;
   runtimeError?: RuntimeError | null;
   height: number;

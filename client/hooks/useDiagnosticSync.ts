@@ -8,6 +8,7 @@
 import type { ConsoleCaptureMessage, DiagnosticLogEntry } from '@shared/diagnostic-types';
 import { CONSOLE_CAPTURE_EVENT } from '@shared/diagnostic-types';
 import type { RuntimeError } from '@shared/runtime-error';
+import type { ProjectStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
@@ -26,7 +27,7 @@ interface ProxyLogEntry {
 
 interface UseDiagnosticSyncOptions {
   projectId: string | undefined;
-  containerStatus?: string;
+  containerStatus?: ProjectStatus;
   runtimeError?: RuntimeError | null;
   proxyError?: string | null;
 }

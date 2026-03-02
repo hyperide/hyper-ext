@@ -2,6 +2,7 @@
  * Overlay shown when project is starting or building
  */
 
+import type { ContainerPhase, ProjectStatus } from '@shared/types/statuses';
 import { IconPlayerPlay, IconRefresh } from '@tabler/icons-react';
 import { useCallback } from 'react';
 import { Panel, Group as PanelGroup } from 'react-resizable-panels';
@@ -19,7 +20,7 @@ interface ProjectStartOverlayProps {
   onStart: () => void;
   pollStatus: {
     lastPoll: Date | null;
-    lastResult: { running: boolean; status: string; phase?: string } | null;
+    lastResult: { running: boolean; status: ProjectStatus; phase?: ContainerPhase } | null;
     isPolling: boolean;
   };
 }

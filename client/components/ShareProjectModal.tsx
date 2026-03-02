@@ -1,3 +1,4 @@
+import type { ProjectRole } from '@shared/types/statuses';
 import { IconCheck, IconCopy, IconLink, IconMail, IconTrash, IconUserPlus, IconX } from '@tabler/icons-react';
 import { useState } from 'react';
 import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
@@ -68,9 +69,10 @@ export function ShareProjectModal({ isOpen, onClose, projectId, projectName }: S
     },
   );
 
-  const members: { userId: string; role: string; user: { name: string | null; email: string } }[] =
+  const members: { userId: string; role: ProjectRole; user: { name: string | null; email: string } }[] =
     membersData?.members || [];
-  const invites: { id: string; email: string | null; role: string; expiresAt: string }[] = invitesData?.invites || [];
+  const invites: { id: string; email: string | null; role: ProjectRole; expiresAt: string }[] =
+    invitesData?.invites || [];
   const loading = membersLoading || invitesLoading;
   const hasNetworkError = membersNetworkError || invitesNetworkError;
 

@@ -1,3 +1,4 @@
+import type { ProjectStatus } from '@shared/types/statuses';
 import { useEffect, useState } from 'react';
 import { authFetch } from '@/utils/authFetch';
 import type { UIKitType } from '../types';
@@ -19,7 +20,7 @@ interface UseProjectUIKitReturn {
 export interface ActiveProjectParam {
   id: string;
   name: string;
-  status: string;
+  status: ProjectStatus;
   publicDir?: string;
 }
 
