@@ -13,6 +13,7 @@ interface LogsPanelProps {
   runtimeError?: RuntimeError | null;
   height: number;
   onHeightChange: (height: number) => void;
+  onDismiss?: () => void;
 }
 
 /**
@@ -26,6 +27,7 @@ export const LogsPanel = memo(function LogsPanel({
   runtimeError,
   height,
   onHeightChange,
+  onDismiss,
 }: LogsPanelProps) {
   const openAIChat = useOpenAIChat();
 
@@ -60,7 +62,7 @@ export const LogsPanel = memo(function LogsPanel({
           zIndex: 10,
         }}
       />
-      <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={persistedClear} collapsible />
+      <DiagnosticLogsViewer height="100%" onAutoFix={handleAutoFix} onClear={persistedClear} onDismiss={onDismiss} />
     </div>
   );
 });

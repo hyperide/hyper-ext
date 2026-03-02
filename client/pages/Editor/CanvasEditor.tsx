@@ -1,3 +1,4 @@
+import { IconTerminal2 } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -70,6 +71,7 @@ import { useInstanceInteraction } from './components/hooks/useInstanceInteractio
 import { useInstanceOperations } from './components/hooks/useInstanceOperations';
 import { useInstanceOverlays } from './components/hooks/useInstanceOverlays';
 import { useInstancePositioning } from './components/hooks/useInstancePositioning';
+import { useLogsPanelState } from './components/hooks/useLogsPanelState';
 import { useOffscreenIndicators } from './components/hooks/useOffscreenIndicators';
 import { useOverlayMapCondHighlightComponents } from './components/hooks/useOverlayMapCondHighlightComponents';
 import { usePanelManagement } from './components/hooks/usePanelManagement';
@@ -480,6 +482,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     componentPath: meta?.relativeFilePath,
     loadComponent,
   });
+
+  const { isLogsPanelOpen, isLogsPanelCollapsed, handleLogsDismiss, handleExpandLogs, handleToggleLogs } =
+    useLogsPanelState({ hasGatewayError, runtimeError, parseErrorAsRuntimeError });
 
   const handleIframeErrorChange = useCallback((error: string | null, retryCount: number) => {
     setIframeError({ message: error, retryCount });
@@ -1194,19 +1199,33 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   componentFilePath={selectedComponentFilePath}
                 />
               )}
-              <Toolbar
-                data-uniq-id="d984a864-d10e-465b-8747-cc7bb9612f5e"
-                mode={isBoardModeActive ? 'board' : (mode ?? 'design')}
-                onModeChange={handleToolbarModeChange}
-                onResetZoom={resetZoomToTopLeftInstance}
-                boardTool={boardTool}
-                onBoardToolChange={setBoardTool}
-                drawingStyle={effectiveDrawingStyle}
-                onDrawingStyleChange={handleDrawingStyleChange}
-                canvasMode={canvasMode}
-                onBeforeAddComment={handleBeforeAddComment}
-                onOpenInsertPanel={handleOpenInsertPanel}
-              />
+              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-[1000]">
+                <Toolbar
+                  data-uniq-id="d984a864-d10e-465b-8747-cc7bb9612f5e"
+                  mode={isBoardModeActive ? 'board' : (mode ?? 'design')}
+                  onModeChange={handleToolbarModeChange}
+                  onResetZoom={resetZoomToTopLeftInstance}
+                  boardTool={boardTool}
+                  onBoardToolChange={setBoardTool}
+                  drawingStyle={effectiveDrawingStyle}
+                  onDrawingStyleChange={handleDrawingStyleChange}
+                  canvasMode={canvasMode}
+                  onBeforeAddComment={handleBeforeAddComment}
+                  onOpenInsertPanel={handleOpenInsertPanel}
+                />
+                {!isCodeEditorMode &&
+                  isLogsPanelCollapsed &&
+                  (hasGatewayError || runtimeError || parseErrorAsRuntimeError) && (
+                    <button
+                      type="button"
+                      onClick={handleExpandLogs}
+                      className="h-12 w-12 bg-background rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border flex items-center justify-center"
+                      title="Show logs"
+                    >
+                      <IconTerminal2 className="w-5 h-5 text-destructive" stroke={1.5} />
+                    </button>
+                  )}
+              </div>
 
               {/* Selection overlay container - for design/interact mode (NOT transformed) */}
               {/* Always render to keep ref stable, hide via CSS when not needed */}
@@ -1324,7 +1343,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
             {/* LogsPanel — outside scroll container so it stays pinned at bottom */}
             {!isCodeEditorMode &&
-              (hasGatewayError || runtimeError || parseErrorAsRuntimeError) &&
+              !isLogsPanelCollapsed &&
+              (hasGatewayError || runtimeError || parseErrorAsRuntimeError || isLogsPanelOpen) &&
               activeProject?.id && (
                 <LogsPanel
                   projectId={activeProject.id}
@@ -1333,6 +1353,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   runtimeError={runtimeError || parseErrorAsRuntimeError}
                   height={logsHeight}
                   onHeightChange={setLogsHeight}
+                  onDismiss={handleLogsDismiss}
                 />
               )}
           </div>
@@ -1412,6 +1433,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
             onDock={() => setIsAIChatDocked(true)}
             onUndock={() => setIsAIChatDocked(false)}
             onClose={closeAIChat}
+            isLogsPanelOpen={isLogsPanelOpen}
+            onToggleLogs={handleToggleLogs}
           />
         </div>
       )}

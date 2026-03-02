@@ -29,16 +29,11 @@ interface DiagnosticLogsViewerProps {
   onAutoFix?: (prompt: string) => void;
   /** Called when user clicks Clear. If not set, clears store directly. */
   onClear?: () => void;
-  /** Show collapse/expand toggle (for SaaS LogsPanel). */
-  collapsible?: boolean;
+  /** Called when user dismisses the panel (chevron-down button). */
+  onDismiss?: () => void;
 }
 
-export function DiagnosticLogsViewer({
-  height = '100%',
-  onAutoFix,
-  onClear,
-  collapsible = false,
-}: DiagnosticLogsViewerProps) {
+export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDismiss }: DiagnosticLogsViewerProps) {
   const { logs, runtimeError, isConnected, buildStatus, clear, getAIContext } = useDiagnosticStore();
   const { filter, updateFilter, filteredLogs } = useDiagnosticFilter(logs);
   const { resolvedTheme } = useThemeOptional();
@@ -46,7 +41,6 @@ export function DiagnosticLogsViewer({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const isAutoScrollingRef = useRef(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Get the Radix ScrollArea viewport as scroll container
   const getScrollElement = useCallback(
@@ -103,10 +97,6 @@ export function DiagnosticLogsViewer({
     setIsAtBottom(true);
   }, [clear, onClear]);
 
-  const handleToggleCollapse = useCallback(() => {
-    setIsCollapsed((prev) => !prev);
-  }, []);
-
   const hasErrors = logs.some((l) => l.isError) || runtimeError !== null;
 
   return (
@@ -140,94 +130,88 @@ export function DiagnosticLogsViewer({
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleClear} title="Clear logs">
             <IconTrash size={14} />
           </Button>
-          {collapsible && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleToggleCollapse}>
-              <IconChevronDown size={14} className={cn('transition-transform', isCollapsed && '-rotate-90')} />
+          {onDismiss && (
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onDismiss} title="Dismiss logs">
+              <IconChevronDown size={14} />
             </Button>
           )}
         </div>
       </div>
 
-      {!isCollapsed && (
-        <>
-          {/* Runtime error banner */}
-          {runtimeError && (
-            <div className="px-3 py-2 bg-destructive/10 border-b border-destructive/30 text-xs shrink-0">
-              <div className="flex items-center gap-1.5 text-destructive font-medium mb-1">
-                <IconAlertTriangle size={14} />
-                <span>
-                  {runtimeError.type}
-                  {runtimeError.file
-                    ? ` in ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}`
-                    : ''}
-                </span>
-              </div>
-              <div className="text-destructive/80 line-clamp-3">{runtimeError.message}</div>
-              {runtimeError.codeframe && (
-                <pre className="mt-1 p-2 bg-black/20 rounded text-[11px] overflow-auto max-h-[120px] whitespace-pre-wrap break-all">
-                  {runtimeError.codeframe}
-                </pre>
-              )}
+      {/* Runtime error banner */}
+      {runtimeError && (
+        <div className="px-3 py-2 bg-destructive/10 border-b border-destructive/30 text-xs shrink-0">
+          <div className="flex items-center gap-1.5 text-destructive font-medium mb-1">
+            <IconAlertTriangle size={14} />
+            <span>
+              {runtimeError.type}
+              {runtimeError.file ? ` in ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}` : ''}
+            </span>
+          </div>
+          <div className="text-destructive/80 line-clamp-3">{runtimeError.message}</div>
+          {runtimeError.codeframe && (
+            <pre className="mt-1 p-2 bg-black/20 rounded text-[11px] overflow-auto max-h-[120px] whitespace-pre-wrap break-all">
+              {runtimeError.codeframe}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {/* Filter bar */}
+      <DiagnosticFilterBar
+        filter={filter}
+        onFilterChange={updateFilter}
+        filteredCount={filteredLogs.length}
+        totalCount={logs.length}
+      />
+
+      {/* Virtualized log content */}
+      <div className="relative flex-1 min-h-0">
+        <ScrollArea ref={scrollAreaRef} className="h-full" onScrollCapture={handleScroll}>
+          {filteredLogs.length === 0 ? (
+            <div className="text-muted-foreground text-center py-8 text-xs">No logs yet.</div>
+          ) : (
+            <div
+              className="p-2 font-mono text-xs leading-relaxed relative"
+              style={{ height: virtualizer.getTotalSize() }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const entry = filteredLogs[virtualRow.index];
+                const prev = virtualRow.index > 0 ? filteredLogs[virtualRow.index - 1] : null;
+                const showDivider = prev !== null && prev.source !== entry.source && !isSystemDivider(entry);
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute left-0 right-0 px-2"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <LogLine
+                      entry={entry}
+                      searchQuery={filter.searchQuery}
+                      showDivider={showDivider}
+                      isDark={resolvedTheme === 'dark'}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
+        </ScrollArea>
 
-          {/* Filter bar */}
-          <DiagnosticFilterBar
-            filter={filter}
-            onFilterChange={updateFilter}
-            filteredCount={filteredLogs.length}
-            totalCount={logs.length}
-          />
-
-          {/* Virtualized log content */}
-          <div className="relative flex-1 min-h-0">
-            <ScrollArea ref={scrollAreaRef} className="h-full" onScrollCapture={handleScroll}>
-              {filteredLogs.length === 0 ? (
-                <div className="text-muted-foreground text-center py-8 text-xs">No logs yet.</div>
-              ) : (
-                <div
-                  className="p-2 font-mono text-xs leading-relaxed relative"
-                  style={{ height: virtualizer.getTotalSize() }}
-                >
-                  {virtualizer.getVirtualItems().map((virtualRow) => {
-                    const entry = filteredLogs[virtualRow.index];
-                    const prev = virtualRow.index > 0 ? filteredLogs[virtualRow.index - 1] : null;
-                    const showDivider = prev !== null && prev.source !== entry.source && !isSystemDivider(entry);
-                    return (
-                      <div
-                        key={virtualRow.key}
-                        data-index={virtualRow.index}
-                        ref={virtualizer.measureElement}
-                        className="absolute left-0 right-0 px-2"
-                        style={{ transform: `translateY(${virtualRow.start}px)` }}
-                      >
-                        <LogLine
-                          entry={entry}
-                          searchQuery={filter.searchQuery}
-                          showDivider={showDivider}
-                          isDark={resolvedTheme === 'dark'}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </ScrollArea>
-
-            {/* Jump to bottom */}
-            {!isAtBottom && filteredLogs.length > 0 && (
-              <button
-                type="button"
-                onClick={jumpToBottom}
-                className="absolute bottom-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-accent text-accent-foreground text-[10px] font-medium shadow-md hover:bg-accent/80 transition-colors"
-              >
-                <IconArrowDown size={12} />
-                Jump to bottom
-              </button>
-            )}
-          </div>
-        </>
-      )}
+        {/* Jump to bottom */}
+        {!isAtBottom && filteredLogs.length > 0 && (
+          <button
+            type="button"
+            onClick={jumpToBottom}
+            className="absolute bottom-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-accent text-accent-foreground text-[10px] font-medium shadow-md hover:bg-accent/80 transition-colors"
+          >
+            <IconArrowDown size={12} />
+            Jump to bottom
+          </button>
+        )}
+      </div>
     </div>
   );
 }

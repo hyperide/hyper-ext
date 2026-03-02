@@ -9,7 +9,8 @@
  */
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { IconArrowsMaximize, IconLayoutSidebarRight, IconX } from '@tabler/icons-react';
+import { IconArrowsMaximize, IconLayoutSidebarRight, IconTerminal2, IconX } from '@tabler/icons-react';
+import cn from 'clsx';
 import { useCallback, useMemo, useRef } from 'react';
 import { Dialog, DialogHeader, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { createBrowserChatAdapter } from '@/lib/platform/BrowserChatAdapter';
@@ -61,6 +62,8 @@ interface AIAgentChatProps {
   onDock?: () => void;
   onUndock?: () => void;
   onClose?: () => void;
+  isLogsPanelOpen?: boolean;
+  onToggleLogs?: () => void;
 }
 
 const CANVAS_TOOLS = new Set([
@@ -89,6 +92,8 @@ export default function AIAgentChat({
   onDock,
   onUndock,
   onClose,
+  isLogsPanelOpen = false,
+  onToggleLogs,
 }: AIAgentChatProps) {
   const shouldShowSidebar = showSidebar ?? !isDocked;
   // Ref for mutable context that changes without re-creating the adapter
@@ -133,6 +138,25 @@ export default function AIAgentChat({
   const extraHeaderControls = useMemo(
     () => (
       <div className="flex items-center gap-1 flex-shrink-0">
+        {onToggleLogs && (
+          <>
+            <button
+              type="button"
+              onClick={onToggleLogs}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors',
+                isLogsPanelOpen
+                  ? 'bg-accent text-foreground'
+                  : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+              )}
+              title={isLogsPanelOpen ? 'Hide logs' : 'Show logs'}
+            >
+              <IconTerminal2 className="w-4 h-4" stroke={1.5} />
+              <span>Logs</span>
+            </button>
+            <div className="w-px h-4 bg-border" />
+          </>
+        )}
         {isDocked
           ? onUndock && (
               <button
@@ -166,7 +190,7 @@ export default function AIAgentChat({
         )}
       </div>
     ),
-    [isDocked, onDock, onUndock, onClose],
+    [isDocked, onDock, onUndock, onClose, isLogsPanelOpen, onToggleLogs],
   );
 
   if (!chatAdapter) {

@@ -42,6 +42,8 @@ export interface PersistedState {
   // AI Chat settings
   isAIChatDocked: boolean;
   aiChatSidebarWidth: number;
+  // Logs panel
+  isLogsPanelOpen: boolean;
   // Left sidebar width
   leftSidebarWidth: number;
 }
@@ -57,6 +59,7 @@ const DEFAULT_STATE: PersistedState = {
   splitOrientation: 'horizontal',
   isAIChatDocked: false,
   aiChatSidebarWidth: 400,
+  isLogsPanelOpen: false,
   leftSidebarWidth: 280,
 };
 

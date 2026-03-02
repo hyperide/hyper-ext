@@ -30,6 +30,8 @@ interface EditorState {
   aiChatSidebarWidth: number;
   aiChatInitialPrompt: string | undefined;
   aiChatForceNewChat: boolean;
+  // Logs panel
+  isLogsPanelOpen: boolean;
   // Left sidebar width
   leftSidebarWidth: number;
 
@@ -58,6 +60,8 @@ interface EditorState {
   openAIChat: (prompt?: string, forceNewChat?: boolean) => void;
   closeAIChat: () => void;
   clearAIChatPrompt: () => void;
+  // Logs panel actions
+  toggleLogsPanelWithDock: () => void;
   // Left sidebar width actions
   setLeftSidebarWidth: (width: number) => void;
 }
@@ -85,6 +89,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   aiChatSidebarWidth: persistedState.aiChatSidebarWidth ?? 400,
   aiChatInitialPrompt: undefined,
   aiChatForceNewChat: false,
+  // Logs panel
+  isLogsPanelOpen: persistedState.isLogsPanelOpen ?? false,
   // Left sidebar width
   leftSidebarWidth: persistedState.leftSidebarWidth ?? 280,
 
@@ -277,6 +283,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       aiChatInitialPrompt: undefined,
       aiChatForceNewChat: false,
     });
+  },
+
+  toggleLogsPanelWithDock: () => {
+    const newOpen = !get().isLogsPanelOpen;
+    if (newOpen && !get().isAIChatDocked) {
+      savePersistedState({ isLogsPanelOpen: newOpen, isAIChatDocked: true });
+      set({ isLogsPanelOpen: newOpen, isAIChatDocked: true });
+    } else {
+      savePersistedState({ isLogsPanelOpen: newOpen });
+      set({ isLogsPanelOpen: newOpen });
+    }
   },
 
   setLeftSidebarWidth: (width: number) => {
