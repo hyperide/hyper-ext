@@ -287,13 +287,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   toggleLogsPanelWithDock: () => {
     const newOpen = !get().isLogsPanelOpen;
-    if (newOpen && !get().isAIChatDocked) {
-      savePersistedState({ isLogsPanelOpen: newOpen, isAIChatDocked: true });
-      set({ isLogsPanelOpen: newOpen, isAIChatDocked: true });
-    } else {
-      savePersistedState({ isLogsPanelOpen: newOpen });
-      set({ isLogsPanelOpen: newOpen });
-    }
+    const patch =
+      newOpen && !get().isAIChatDocked
+        ? { isLogsPanelOpen: newOpen, isAIChatDocked: true as const }
+        : { isLogsPanelOpen: newOpen };
+    savePersistedState(patch);
+    set(patch);
   },
 
   setLeftSidebarWidth: (width: number) => {
