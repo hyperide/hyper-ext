@@ -30,6 +30,7 @@ export function RightPanelApp() {
 function RightPanelContent() {
   const canvas = usePlatformCanvas();
   const astOps = usePlatformAst();
+  // RightPanelContent mounts once; canvas is a stable singleton — no duplicate subscriptions
   useSharedEditorStateSync(canvas);
 
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
@@ -69,6 +70,7 @@ function RightPanelContent() {
 
   // ── Component insertion ──────────────────────────────────────
 
+  // Both conditions required: show navigator only when a target exists AND groups are loaded
   const showInsertPanel = !!insertTargetId && !!componentGroups;
 
   const handleInsertComponent = useCallback(
@@ -102,6 +104,7 @@ function RightPanelContent() {
           onClose={handleCloseInsertPanel}
         />
       )}
+      {/* Tailwind 'hidden' preserves RightSidebar state while insert panel is shown */}
       <div className={showInsertPanel ? 'hidden' : undefined}>
         <RightSidebar
           projectUIKit={projectUIKit}

@@ -5,7 +5,11 @@ export const loader = { config: () => {} };
 export class Delayer {
   trigger<T>(task?: () => T | Promise<T>): Promise<T | undefined> {
     if (typeof task === 'function') {
-      return Promise.resolve(task());
+      try {
+        return Promise.resolve(task());
+      } catch {
+        return Promise.resolve(undefined);
+      }
     }
     return Promise.resolve(undefined);
   }
