@@ -192,7 +192,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
   // === Signal webview ready to extension ===
   // 'webview:ready' is an internal extension event, not a PlatformMessage —
-  // no type cast needed (unlike platform-bridged commands below)
+  // no type cast needed (unlike platform-bridged commands below).
+  // canvas is a stable CanvasAdapter singleton — this effect fires exactly once on mount.
   useEffect(() => {
     canvas.sendEvent({ type: 'webview:ready' });
   }, [canvas]);
