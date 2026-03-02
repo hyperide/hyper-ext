@@ -131,8 +131,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
-    "vaul": "^1.1.2",
-    "vitest": "^3.2.4"
+    "vaul": "^1.1.2"
   },
   "trustedDependencies": [
     "@swc/core"
