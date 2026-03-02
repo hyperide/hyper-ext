@@ -45,10 +45,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       const msg = event.data;
       if (!msg?.type) return;
 
-      // hypercanvas:* messages are handled by useCanvasInteraction,
-      // except runtimeError and elementContentResult which need to go to extension
-      // hypercanvas:* → PlatformMessage bridge: iframe protocol messages are adapted
-      // to platform messages via type casts (these types are extension-only, not in the union)
+      // Iframe → extension bridge: hypercanvas:* messages are adapted to PlatformMessage channel.
+      // These event types (runtime:error, diagnostic:console, elementContentResult, previewLoaded)
+      // are extension-only and intentionally NOT in the PlatformMessage union — adding them
+      // would pollute the shared type used by all platform consumers (browser, CLI, etc.).
+      // The 'as unknown as PlatformMessage' casts are the deliberate bridging pattern here.
       if (msg.type.startsWith('hypercanvas:')) {
         if (msg.type === 'hypercanvas:runtimeError') {
           canvas.sendEvent({ type: 'runtime:error', error: msg.error } as unknown as PlatformMessage);
@@ -79,6 +80,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       }
 
       if (msg.type === 'previewLoaded') {
+        // Same bridging pattern as hypercanvas:* above — extension-only event type
         canvas.sendEvent({ type: 'previewLoaded' } as unknown as PlatformMessage);
         return;
       }
@@ -195,6 +197,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     canvas.sendEvent({ type: 'webview:ready' });
   }, [canvas]);
 
+  // Extension-only command — same bridging pattern, not a PlatformMessage type
   const handleStartDevServer = useCallback(() => {
     canvas.sendEvent({ type: 'command:startDevServer' } as unknown as PlatformMessage);
   }, [canvas]);
