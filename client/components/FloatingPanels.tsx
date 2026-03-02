@@ -1,19 +1,25 @@
 import { IconChevronDown, IconComponents, IconSearch, IconTrash, IconX } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import cn from 'clsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
-import { useCanvasEngine } from '@/lib/canvas-engine';
+import { useCanvasEngine, useCanvasEngineOptional } from '@/lib/canvas-engine';
 import type { ComponentDefinition, FieldsMap } from '@/lib/canvas-engine/models/types';
 import { authFetch } from '@/utils/authFetch';
+import type { ComponentGroup } from '../../lib/component-scanner/types';
 import type { NestedComponent } from '../../shared/api';
 
 interface ComponentNavigatorPanelProps {
   onClose?: () => void;
   elementY?: number;
-  onComponentClick?: (componentType: string) => void;
+  onComponentClick?: (componentType: string, componentFilePath?: string) => void;
   selectedComponentType?: string | null;
   onSelectComponent?: (type: string) => void;
+  /** External component data (VS Code ext — no engine available) */
+  componentGroups?: { atomGroups: ComponentGroup[]; compositeGroups: ComponentGroup[] };
+  /** Layout: floating (SaaS, absolute positioned) or inline (ext sidebar) */
+  variant?: 'floating' | 'inline';
 }
 
 export function ComponentNavigatorPanel({
@@ -22,97 +28,181 @@ export function ComponentNavigatorPanel({
   onComponentClick,
   selectedComponentType,
   onSelectComponent,
+  componentGroups,
+  variant = 'floating',
 }: ComponentNavigatorPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [topPosition, setTopPosition] = useState<number>(0);
-  const engine = useCanvasEngine();
+  const engine = useCanvasEngineOptional();
+  const [search, setSearch] = useState('');
 
-  const handleComponentClick = (type: string) => {
+  const handleComponentClick = (type: string, filePath?: string) => {
     onSelectComponent?.(type);
-    onComponentClick?.(type);
+    onComponentClick?.(type, filePath);
   };
 
   useEffect(() => {
+    if (variant !== 'floating') return;
     if (panelRef.current && elementY) {
       const panelHeight = panelRef.current.offsetHeight;
       const viewportHeight = window.innerHeight;
       // Toolbar height (h-12 = 48px) + bottom offset (bottom-8 = 32px) + gap (20px)
       const TOOLBAR_RESERVED_HEIGHT = 48 + 32 + 20;
 
-      // Вычисляем позицию так, чтобы панель не перекрывалась с Toolbar
+      // Position panel so it doesn't overlap with the Toolbar
       let calculatedTop = elementY;
       if (elementY + panelHeight > viewportHeight - TOOLBAR_RESERVED_HEIGHT) {
         calculatedTop = viewportHeight - panelHeight - TOOLBAR_RESERVED_HEIGHT;
       }
 
-      setTopPosition(Math.max(20, calculatedTop)); // минимум 20px от верха
+      setTopPosition(Math.max(20, calculatedTop)); // min 20px from top
     }
-  }, [elementY]);
+  }, [elementY, variant]);
 
-  // Группируем по категориям
-  const categories = engine.registry.getCategories();
+  // Build unified category list from engine OR from componentGroups prop
+  const categoryEntries = useMemo(() => {
+    if (engine) {
+      return engine.registry.getCategories().map((cat) => ({
+        name: cat,
+        items: engine.registry.getVisibleByCategory(cat).map((c) => ({
+          type: c.type,
+          label: c.label,
+          filePath: c.filePath,
+        })),
+      }));
+    }
+    if (componentGroups) {
+      // c.name may include extension and subdirectory (e.g. "Label.tsx", "icons/Icon.tsx")
+      // Extract clean component name: basename without extension
+      const cleanName = (raw: string) => raw.replace(/^.*[\\/]/, '').replace(/\.\w+$/, '');
+
+      const entries: Array<{ name: string; items: Array<{ type: string; label: string; filePath?: string }> }> = [];
+      if (componentGroups.atomGroups.length > 0) {
+        entries.push({
+          name: 'Atoms',
+          items: componentGroups.atomGroups.flatMap((g) =>
+            g.components.map((c) => ({ type: cleanName(c.name), label: cleanName(c.name), filePath: c.path })),
+          ),
+        });
+      }
+      if (componentGroups.compositeGroups.length > 0) {
+        entries.push({
+          name: 'Composite',
+          items: componentGroups.compositeGroups.flatMap((g) =>
+            g.components.map((c) => ({ type: cleanName(c.name), label: cleanName(c.name), filePath: c.path })),
+          ),
+        });
+      }
+      return entries;
+    }
+    return [];
+  }, [engine, componentGroups]);
+
+  // Filter by search
+  const filteredEntries = useMemo(() => {
+    if (!search) return categoryEntries;
+    const q = search.toLowerCase();
+    return categoryEntries
+      .map((cat) => ({
+        ...cat,
+        items: cat.items.filter((item) => item.label.toLowerCase().includes(q)),
+      }))
+      .filter((cat) => cat.items.length > 0);
+  }, [categoryEntries, search]);
+
+  const isInline = variant === 'inline';
 
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 w-80 rounded-xl bg-background shadow-[0_4px_11px_rgba(0,0,0,0.25)] z-20"
-      style={{
-        top: topPosition ? `${topPosition}px` : 'auto',
-        bottom: topPosition ? 'auto' : '128px',
-      }}
+      className={cn(
+        'bg-background z-20',
+        isInline ? 'border-b border-border' : 'absolute left-0 w-80 rounded-xl shadow-[0_4px_11px_rgba(0,0,0,0.25)]',
+      )}
+      style={
+        isInline
+          ? undefined
+          : {
+              top: topPosition ? `${topPosition}px` : 'auto',
+              bottom: topPosition ? 'auto' : '128px',
+            }
+      }
     >
-      <div className="p-4 flex items-center justify-between border-b border-border">
+      <div className={cn('flex items-center justify-between border-b border-border', isInline ? 'px-3 py-2' : 'p-4')}>
         <div className="flex items-center gap-1">
           <IconComponents className="w-4 h-4" stroke={1.5} />
-          <span className="text-sm font-semibold text-black">Components</span>
+          <span className={cn('font-semibold text-foreground', isInline ? 'text-xs' : 'text-sm')}>
+            Insert component
+          </span>
         </div>
-        <button type="button" onClick={onClose}>
-          <IconX className="w-5 h-5" stroke={1.5} />
-        </button>
+        {onClose && (
+          <button type="button" onClick={onClose}>
+            <IconX className="w-4 h-4 text-muted-foreground hover:text-foreground" stroke={1.5} />
+          </button>
+        )}
       </div>
-      <div className="p-4 border-b border-border">
-        <div className="h-6 px-2 bg-gray-100 rounded flex items-center gap-1">
-          <IconSearch className="w-4 h-4" stroke={1.5} />
-          <span className="text-xs font-medium text-gray-500">Search component</span>
+      <div className={cn('border-b border-border', isInline ? 'px-3 py-2' : 'p-4')}>
+        <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+          <IconSearch className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search component"
+            className="bg-transparent text-xs font-medium text-foreground placeholder:text-muted-foreground outline-none flex-1"
+          />
         </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-3 max-h-96 overflow-y-auto">
-        {/* Категории */}
-        {categories.map((category) => {
-          const categoryComponents = engine.registry.getVisibleByCategory(category);
-          if (categoryComponents.length === 0) return null;
-
-          return (
-            <div key={category}>
-              <div className="flex items-center gap-1 mb-2">
-                <IconChevronDown className="w-2 h-2 text-gray-400 rotate-[-90deg]" stroke={1.5} />
-                <span className="text-xs font-medium text-black">{category}</span>
+      <div className={cn('flex flex-col gap-3 max-h-96 overflow-y-auto', isInline ? 'px-3 py-3' : 'p-4')}>
+        {/* Categories */}
+        {filteredEntries.map((category) => (
+          <div key={category.name}>
+            <div className="flex items-center gap-1 mb-1.5">
+              <IconChevronDown className="w-2 h-2 text-muted-foreground rotate-[-90deg]" stroke={1.5} />
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{category.name}</span>
+            </div>
+            {isInline ? (
+              <div className="space-y-0.5">
+                {category.items.map((comp) => (
+                  <button
+                    type="button"
+                    key={comp.type}
+                    className={cn(
+                      'w-full text-left text-xs px-2 py-1 rounded transition-colors truncate',
+                      selectedComponentType === comp.type
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground hover:bg-muted',
+                    )}
+                    onClick={() => handleComponentClick(comp.type, comp.filePath)}
+                  >
+                    {comp.label}
+                  </button>
+                ))}
               </div>
+            ) : (
               <div className="grid grid-cols-2 gap-4">
-                {categoryComponents.map((comp) => (
+                {category.items.map((comp) => (
                   <button
                     type="button"
                     key={comp.type}
                     className="flex flex-col gap-2 cursor-pointer text-left"
-                    onClick={() => handleComponentClick(comp.type)}
+                    onClick={() => handleComponentClick(comp.type, comp.filePath)}
                   >
                     <div
-                      className={`h-24 rounded-md flex flex-col items-center justify-center ${
-                        selectedComponentType === comp.type
-                          ? 'border-2 border-button-primary'
-                          : 'border border-gray-400'
-                      } bg-gray-100`}
+                      className={cn(
+                        'h-24 rounded-md flex flex-col items-center justify-center bg-muted',
+                        selectedComponentType === comp.type ? 'border-2 border-button-primary' : 'border border-border',
+                      )}
                     >
-                      <span className="text-xs font-medium text-gray-600">{comp.label}</span>
+                      <span className="text-xs font-medium text-muted-foreground">{comp.label}</span>
                     </div>
-                    <span className="text-xs font-medium text-black">{comp.label}</span>
                   </button>
                 ))}
               </div>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -336,23 +426,26 @@ export function InsertInstancePanel({
   const { meta } = useComponentMeta();
 
   // Helper to get componentDef with fallback to native elements
-  const getComponentDefWithFallback = (type: string): ComponentDefinition | undefined => {
-    const def = engine.registry.get(type);
-    if (def) return def;
+  const getComponentDefWithFallback = useCallback(
+    (type: string): ComponentDefinition | undefined => {
+      const def = engine.registry.get(type);
+      if (def) return def;
 
-    // Fallback for native HTML elements
-    const nativeDef = NATIVE_ELEMENT_DEFINITIONS[type];
-    if (nativeDef) {
-      return {
-        type,
-        label: nativeDef.label,
-        defaultProps: nativeDef.defaultProps,
-        fields: (nativeDef.fields || {}) as FieldsMap,
-        render: () => null,
-      } satisfies ComponentDefinition;
-    }
-    return undefined;
-  };
+      // Fallback for native HTML elements
+      const nativeDef = NATIVE_ELEMENT_DEFINITIONS[type];
+      if (nativeDef) {
+        return {
+          type,
+          label: nativeDef.label,
+          defaultProps: nativeDef.defaultProps,
+          fields: (nativeDef.fields || {}) as FieldsMap,
+          render: () => null,
+        } satisfies ComponentDefinition;
+      }
+      return undefined;
+    },
+    [engine.registry],
+  );
 
   // Track componentDef in state so it updates when registry changes
   const [componentDef, setComponentDef] = useState(() => getComponentDefWithFallback(selectedComponentType));
@@ -367,7 +460,7 @@ export function InsertInstancePanel({
       def?.defaultProps,
     );
     setComponentDef(def);
-  }, [engine, selectedComponentType]);
+  }, [selectedComponentType, getComponentDefWithFallback]);
 
   // Initialize field values from defaultProps
   const [fieldValues, setFieldValues] = useState<Record<string, unknown>>(() => {
@@ -427,7 +520,7 @@ export function InsertInstancePanel({
     return () => {
       window.removeEventListener('reload-component-definitions', handleReload);
     };
-  }, [engine, selectedComponentType]);
+  }, [selectedComponentType, getComponentDefWithFallback]);
 
   // Generate defaultProps with AI if empty
   useEffect(() => {

@@ -295,6 +295,52 @@ export function getJSXTagName(element: t.JSXElement): string {
   return resolveJSXName(element.openingElement.name);
 }
 
+/**
+ * Find the most specific JSX element with a data-uniq-id at a given source position.
+ * Combines findElementAtPosition + getUuidFromElement + getJSXTagName.
+ * Fixes the member expression bug from AstService (returns 'Dialog.Portal' instead of 'unknown').
+ */
+export function findElementWithUuidAtPosition(
+  ast: t.File,
+  line: number,
+  column: number,
+): { uuid: string; tagName: string } | null {
+  let bestMatch: {
+    uuid: string;
+    tagName: string;
+    size: number;
+  } | null = null;
+
+  traverse(ast, {
+    JSXElement(path: NodePath<t.JSXElement>) {
+      const loc = path.node.loc;
+      if (!loc) return;
+
+      const isWithin =
+        (line > loc.start.line || (line === loc.start.line && column >= loc.start.column)) &&
+        (line < loc.end.line || (line === loc.end.line && column <= loc.end.column));
+
+      if (!isWithin) return;
+
+      const uuid = getUuidFromElement(path.node);
+      if (!uuid) return;
+
+      const size = (loc.end.line - loc.start.line) * 1000 + (loc.end.column - loc.start.column);
+
+      if (!bestMatch || size < bestMatch.size) {
+        bestMatch = { uuid, tagName: getJSXTagName(path.node), size };
+      }
+    },
+  });
+
+  if (bestMatch) {
+    const { uuid, tagName } = bestMatch;
+    return { uuid, tagName };
+  }
+
+  return null;
+}
+
 function resolveJSXName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string {
   if (t.isJSXIdentifier(name)) {
     return name.name;

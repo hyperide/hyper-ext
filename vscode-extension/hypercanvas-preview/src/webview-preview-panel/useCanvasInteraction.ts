@@ -7,8 +7,12 @@
  */
 
 import type { SharedEditorState } from '@lib/types';
-import { clearOverlays, renderOverlayRects } from '@shared/canvas-interaction/overlay-renderer';
-import type { OverlayRect } from '@shared/canvas-interaction/types';
+import {
+  clearOverlays,
+  renderOverlayRects,
+  renderPlaceholderOverlays,
+} from '@shared/canvas-interaction/overlay-renderer';
+import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter } from '@/lib/platform/types';
 
@@ -49,6 +53,7 @@ export function useCanvasInteraction(
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const overlayElements = useRef(new Map<string, HTMLDivElement>());
   const iframeOriginRef = useRef<string | null>(null);
+  const placeholderElements = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     if (!iframeEl || !overlayEl) return;
@@ -83,6 +88,7 @@ export function useCanvasInteraction(
         case 'hypercanvas:elementClick': {
           const patch: Partial<SharedEditorState> = {
             selectedIds: [msg.elementId],
+            insertTargetId: null,
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
             patch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
@@ -102,17 +108,29 @@ export function useCanvasInteraction(
           });
           break;
 
-        case 'hypercanvas:emptyClick':
+        case 'hypercanvas:emptyClick': {
+          const emptyPatch: Partial<SharedEditorState> = {
+            selectedIds: [],
+            insertTargetId: null,
+          };
+          canvas.sendEvent({ type: 'state:update', patch: emptyPatch });
+          setContextMenu(null);
+          break;
+        }
+
+        case 'hypercanvas:openPanel':
           canvas.sendEvent({
             type: 'state:update',
-            patch: { selectedIds: [] },
-          });
-          setContextMenu(null);
+            patch: { selectedIds: [msg.elementId], insertTargetId: msg.elementId },
+          } as never);
           break;
 
         case 'hypercanvas:overlayRects': {
           if (!Array.isArray(msg.rects)) break;
           renderOverlayRects(container, msg.rects as OverlayRect[], overlayElements.current);
+
+          const pRects = (msg.placeholderRects ?? []) as PlaceholderRect[];
+          renderPlaceholderOverlays(container, pRects, placeholderElements.current);
           break;
         }
 
@@ -190,6 +208,7 @@ export function useCanvasInteraction(
       window.removeEventListener('message', handleMessage);
       frame.removeEventListener('load', handleIframeLoad);
       clearOverlays(overlayElements.current);
+      clearOverlays(placeholderElements.current);
     };
   }, [canvas, iframeEl, overlayEl]);
 

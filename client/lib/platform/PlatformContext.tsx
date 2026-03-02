@@ -446,6 +446,7 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
           props: params.props,
           index: params.index,
           targetId: params.targetId,
+          componentFilePath: params.componentFilePath,
         },
         'ast:response',
       );

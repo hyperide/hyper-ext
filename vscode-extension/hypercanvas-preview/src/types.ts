@@ -65,6 +65,7 @@ export type AstMessage =
       props: Record<string, unknown>;
       index?: number;
       targetId?: string;
+      componentFilePath?: string;
     }
   | {
       type: 'ast:deleteElements';
@@ -364,9 +365,9 @@ export interface Chat {
 // ============================================
 
 export type {
-  ParsedFile,
-  JSXElementWithPath,
   FindElementResult,
+  JSXElementWithPath,
+  ParsedFile,
   ParseOptions,
   PrintOptions,
   SharedEditorState,

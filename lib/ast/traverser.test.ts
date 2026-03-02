@@ -8,6 +8,7 @@ import {
   analyzeJSXChildren,
   findAllJSXElements,
   findElementByUuid,
+  findElementWithUuidAtPosition,
   getChildrenLocation,
   getJSXTagName,
   getUuidFromElement,
@@ -431,5 +432,78 @@ describe('getJSXTagName', () => {
   it('should return deeply nested member expression', () => {
     const el = getFirstElement('<A.B.C>text</A.B.C>');
     expect(getJSXTagName(el)).toBe('A.B.C');
+  });
+});
+
+describe('findElementWithUuidAtPosition', () => {
+  it('should find element at cursor position', () => {
+    // Line numbers are 1-based in Babel
+    const code = `const App = () => (
+  <div data-uniq-id="root">
+    <span data-uniq-id="child">Hello</span>
+  </div>
+);`;
+    const ast = parseCode(code);
+
+    // Position inside the span (line 3, somewhere inside)
+    const result = findElementWithUuidAtPosition(ast, 3, 10);
+    expect(result).not.toBeNull();
+    expect(result?.uuid).toBe('child');
+    expect(result?.tagName).toBe('span');
+  });
+
+  it('should return null when no element at position', () => {
+    const code = `const x = 42;
+const y = 'hello';`;
+    const ast = parseCode(code);
+
+    const result = findElementWithUuidAtPosition(ast, 1, 5);
+    expect(result).toBeNull();
+  });
+
+  it('should return null when element at position has no uuid', () => {
+    const code = `const App = () => (
+  <div>
+    <span>Hello</span>
+  </div>
+);`;
+    const ast = parseCode(code);
+
+    const result = findElementWithUuidAtPosition(ast, 3, 5);
+    expect(result).toBeNull();
+  });
+
+  it('should pick the smallest (most specific) element', () => {
+    const code = `const App = () => (
+  <div data-uniq-id="outer">
+    <div data-uniq-id="inner">
+      <span data-uniq-id="deepest">Text</span>
+    </div>
+  </div>
+);`;
+    const ast = parseCode(code);
+
+    // Position inside the deepest span
+    const result = findElementWithUuidAtPosition(ast, 4, 15);
+    expect(result).not.toBeNull();
+    expect(result?.uuid).toBe('deepest');
+    expect(result?.tagName).toBe('span');
+  });
+
+  it('should handle JSXMemberExpression tag names (Dialog.Portal)', () => {
+    const code = `const App = () => (
+  <Dialog.Portal data-uniq-id="portal">
+    <span data-uniq-id="child">Content</span>
+  </Dialog.Portal>
+);`;
+    const ast = parseCode(code);
+
+    // Position on the Dialog.Portal line
+    const result = findElementWithUuidAtPosition(ast, 2, 5);
+    expect(result).not.toBeNull();
+    // The child is smaller, so if cursor is at column 5 of line 2, it should be portal
+    // Actually line 2 col 5 is inside Dialog.Portal opening tag
+    expect(result?.tagName).toBe('Dialog.Portal');
+    expect(result?.uuid).toBe('portal');
   });
 });

@@ -144,6 +144,14 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push({ dispose: unsubStateChange });
 
+  // Auto-reveal Inspector when component insertion UI opens
+  const unsubInsertReveal = stateHub.onChange((_state, patch) => {
+    if (patch.insertTargetId) {
+      vscode.commands.executeCommand('hypercanvas.inspectorView.focus');
+    }
+  });
+  context.subscriptions.push({ dispose: unsubInsertReveal });
+
   // Register Left Panel (Activity Bar explorer)
   leftPanelProvider = new LeftPanelProvider(context.extensionUri, stateHub, panelRouter);
 

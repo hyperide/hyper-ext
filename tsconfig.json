@@ -30,15 +30,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./client/*"],
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@lib/*": ["./lib/*"]
     }
   },
-  "include": [
-    "client/**/*",
-    "server/**/*",
-    "shared/**/*",
-    "vite.config.ts",
-    "vite.config.server.ts"
-  ],
+  "include": ["client/**/*", "server/**/*", "shared/**/*", "vite.config.ts", "vite.config.server.ts"],
   "exclude": ["node_modules", "dist"]
 }

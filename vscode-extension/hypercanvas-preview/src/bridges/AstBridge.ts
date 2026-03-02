@@ -4,10 +4,10 @@
  * Routes ast:* messages to AstService and sends responses back.
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { AstService } from '../services/AstService';
-import { VSCodeFileIO } from '../vscode-file-io';
 import type { AstMessage, AstResponse } from '../types';
+import { VSCodeFileIO } from '../vscode-file-io';
 
 export class AstBridge {
   private _astService: AstService;
@@ -92,9 +92,7 @@ export class AstBridge {
   /**
    * Handle updateStyles message
    */
-  private async _handleUpdateStyles(
-    message: Extract<AstMessage, { type: 'ast:updateStyles' }>,
-  ): Promise<AstResponse> {
+  private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
     const result = await this._astService.updateStyles(
       message.filePath,
       message.elementId,
@@ -114,14 +112,8 @@ export class AstBridge {
   /**
    * Handle updateProps message
    */
-  private async _handleUpdateProps(
-    message: Extract<AstMessage, { type: 'ast:updateProps' }>,
-  ): Promise<AstResponse> {
-    const result = await this._astService.updateProps(
-      message.filePath,
-      message.elementId,
-      message.props,
-    );
+  private async _handleUpdateProps(message: Extract<AstMessage, { type: 'ast:updateProps' }>): Promise<AstResponse> {
+    const result = await this._astService.updateProps(message.filePath, message.elementId, message.props);
 
     return {
       type: 'ast:response',
@@ -134,14 +126,8 @@ export class AstBridge {
   /**
    * Handle updateText message
    */
-  private async _handleUpdateText(
-    message: Extract<AstMessage, { type: 'ast:updateText' }>,
-  ): Promise<AstResponse> {
-    const result = await this._astService.updateText(
-      message.filePath,
-      message.elementId,
-      message.text,
-    );
+  private async _handleUpdateText(message: Extract<AstMessage, { type: 'ast:updateText' }>): Promise<AstResponse> {
+    const result = await this._astService.updateText(message.filePath, message.elementId, message.text);
 
     return {
       type: 'ast:response',
@@ -164,15 +150,14 @@ export class AstBridge {
       message.props,
       message.index,
       message.targetId,
+      message.componentFilePath,
     );
 
     return {
       type: 'ast:response',
       requestId: message.requestId,
       success: result.success,
-      data: result.success
-        ? { newId: result.newId, index: result.index }
-        : undefined,
+      data: result.success ? { newId: result.newId, index: result.index } : undefined,
       error: result.error,
     };
   }
@@ -183,10 +168,7 @@ export class AstBridge {
   private async _handleDeleteElements(
     message: Extract<AstMessage, { type: 'ast:deleteElements' }>,
   ): Promise<AstResponse> {
-    const result = await this._astService.deleteElements(
-      message.filePath,
-      message.elementIds,
-    );
+    const result = await this._astService.deleteElements(message.filePath, message.elementIds);
 
     return {
       type: 'ast:response',
@@ -203,10 +185,7 @@ export class AstBridge {
   private async _handleDuplicateElement(
     message: Extract<AstMessage, { type: 'ast:duplicateElement' }>,
   ): Promise<AstResponse> {
-    const result = await this._astService.duplicateElement(
-      message.filePath,
-      message.elementId,
-    );
+    const result = await this._astService.duplicateElement(message.filePath, message.elementId);
 
     return {
       type: 'ast:response',
@@ -220,9 +199,7 @@ export class AstBridge {
   /**
    * Handle wrapElement message
    */
-  private async _handleWrapElement(
-    message: Extract<AstMessage, { type: 'ast:wrapElement' }>,
-  ): Promise<AstResponse> {
+  private async _handleWrapElement(message: Extract<AstMessage, { type: 'ast:wrapElement' }>): Promise<AstResponse> {
     const result = await this._astService.wrapElement(
       message.filePath,
       message.elementId,

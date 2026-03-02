@@ -73,6 +73,8 @@ export interface SharedEditorState {
   engineMode: 'design' | 'interact';
   /** Detected UI kit from project dependencies */
   projectUIKit?: 'tailwind' | 'tamagui' | 'none';
+  /** Element ID for which the component insertion UI is open */
+  insertTargetId?: string | null;
 }
 
 // ============================================================================

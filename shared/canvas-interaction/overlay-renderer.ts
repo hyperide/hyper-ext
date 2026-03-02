@@ -7,7 +7,9 @@
  *   - createOverlayRenderer(): high-level, RAF loop with DOM queries (SaaS)
  */
 
-import type { OverlayRect, OverlayRendererOptions, OverlayState } from './types';
+import { buildSquareRotatedPlusSvg } from '../icons/square-rotated-plus';
+import { getEmptyContainerRects } from './empty-container-placeholders';
+import type { OverlayRect, OverlayRendererOptions, OverlayState, PlaceholderRect } from './types';
 
 const HOVER_BORDER = '2px solid rgba(59, 130, 246, 0.5)';
 const SELECTION_BORDER = '2px solid rgb(59, 130, 246)';
@@ -64,6 +66,103 @@ export function clearOverlays(overlayElements: Map<string, HTMLDivElement>): voi
     element.remove();
   }
   overlayElements.clear();
+}
+
+// ============================================================================
+// Placeholder overlays (empty container dashed border + add icon)
+// Vanilla DOM — overlays render outside React tree, inside the overlay container.
+// pointer-events:auto on each placeholder overrides container's pointer-events:none.
+// For React icon component see client/components/icons/IconSquareRotatedPlus.tsx
+// ============================================================================
+
+const ICON_SIZE = 20;
+const ICON_SVG = buildSquareRotatedPlusSvg(ICON_SIZE);
+
+/**
+ * Render placeholder overlays for empty containers.
+ * Each overlay = dashed border + centered diamond-plus icon.
+ *
+ * When `onClick` is provided (SaaS), overlays are interactive: pointer-events:auto,
+ * cursor:pointer, hover effects, and click handling.
+ * When omitted (VS Code extension), overlays are purely visual: pointer-events:none,
+ * so clicks pass through to the iframe where iframe-interaction.ts handles them.
+ */
+export function renderPlaceholderOverlays(
+  container: HTMLElement,
+  rects: PlaceholderRect[],
+  overlayElements: Map<string, HTMLDivElement>,
+  onClick?: (elementId: string) => void,
+): void {
+  const interactive = !!onClick;
+  const currentKeys = new Set<string>();
+
+  for (let i = 0; i < rects.length; i++) {
+    const rect = rects[i];
+    const key = `placeholder-${rect.elementId}-${i}`;
+    currentKeys.add(key);
+
+    let outer = overlayElements.get(key);
+    if (!outer) {
+      outer = document.createElement('div');
+      outer.setAttribute('data-placeholder-overlay', 'true');
+      outer.style.position = 'absolute';
+      outer.style.pointerEvents = interactive ? 'auto' : 'none';
+      outer.style.border = '1.5px dashed rgba(128,128,128,0.35)';
+      outer.style.backgroundColor = 'rgba(128,128,128,0.04)';
+      outer.style.borderRadius = '6px';
+      outer.style.boxSizing = 'border-box';
+
+      const inner = document.createElement('div');
+      inner.style.position = 'absolute';
+      inner.style.top = '50%';
+      inner.style.left = '50%';
+      inner.style.transform = 'translate(-50%, -50%)';
+      inner.style.width = `${ICON_SIZE}px`;
+      inner.style.height = `${ICON_SIZE}px`;
+      inner.style.color = 'rgba(128,128,128,0.45)';
+      inner.style.transition = 'color 0.15s ease';
+      // nosemgrep: javascript.browser.security.insecure-document-method.insecure-document-method -- static SVG constant, not user-controlled
+      inner.innerHTML = ICON_SVG;
+
+      if (interactive) {
+        outer.style.cursor = 'pointer';
+        outer.addEventListener('mouseenter', () => {
+          inner.style.color = 'rgba(128,128,128,0.7)';
+        });
+        outer.addEventListener('mouseleave', () => {
+          inner.style.color = 'rgba(128,128,128,0.45)';
+        });
+      }
+
+      outer.appendChild(inner);
+      container.appendChild(outer);
+      overlayElements.set(key, outer);
+    }
+
+    // Update click handler — elementId can change when rects reorder
+    if (onClick) {
+      const cb = onClick;
+      outer.onclick = (e) => {
+        e.stopPropagation();
+        cb(rect.elementId);
+      };
+    } else {
+      outer.onclick = null;
+    }
+
+    outer.style.left = `${rect.left}px`;
+    outer.style.top = `${rect.top}px`;
+    outer.style.width = `${rect.width}px`;
+    outer.style.height = `${rect.height}px`;
+  }
+
+  // Remove unused placeholder overlays
+  for (const [key, element] of overlayElements.entries()) {
+    if (!currentKeys.has(key)) {
+      element.remove();
+      overlayElements.delete(key);
+    }
+  }
 }
 
 // ============================================================================
@@ -175,7 +274,7 @@ export function createOverlayRenderer(
   container: HTMLElement,
   options?: OverlayRendererOptions,
 ): {
-  update: (state: OverlayState) => void;
+  update: (state: Partial<OverlayState> & { editorMode?: string }) => void;
   dispose: () => void;
 } {
   const state: OverlayState = {
@@ -184,26 +283,61 @@ export function createOverlayRenderer(
     viewportZoom: options?.viewportZoom ?? 1,
   };
   const overlayElements = new Map<string, HTMLDivElement>();
+  const placeholderElements = new Map<string, HTMLDivElement>();
+  let editorMode: string = options?.editorMode ?? 'design';
+  const onPlaceholderClick = options?.onPlaceholderClick;
   let rafId = 0;
   let disposed = false;
 
   function tick() {
     if (disposed) return;
+
     const rects = computeOverlayRects(iframe, container, state);
     renderOverlayRects(container, rects, overlayElements);
+
+    // Placeholder overlays for empty containers
+    const doc = iframe.contentDocument;
+    if (doc && onPlaceholderClick && editorMode !== 'interact') {
+      const containerRect = container.getBoundingClientRect();
+      const iframeRect = iframe.getBoundingClientRect();
+      const offsetX = iframeRect.left - containerRect.left;
+      const offsetY = iframeRect.top - containerRect.top;
+      const zoom = state.viewportZoom ?? 1;
+
+      const rawRects = getEmptyContainerRects(doc);
+      const transformedRects: PlaceholderRect[] = rawRects.map((r) => ({
+        elementId: r.elementId,
+        left: offsetX + r.left * zoom,
+        top: offsetY + r.top * zoom,
+        width: r.width * zoom,
+        height: r.height * zoom,
+      }));
+
+      renderPlaceholderOverlays(container, transformedRects, placeholderElements, onPlaceholderClick);
+    } else {
+      // Clear placeholders when in interact mode or no callback
+      if (placeholderElements.size > 0) {
+        clearOverlays(placeholderElements);
+      }
+    }
+
     rafId = requestAnimationFrame(tick);
   }
 
   rafId = requestAnimationFrame(tick);
 
   return {
-    update(newState: Partial<OverlayState>) {
+    update(newState: Partial<OverlayState> & { editorMode?: string }) {
+      if (newState.editorMode !== undefined) {
+        editorMode = newState.editorMode;
+      }
       Object.assign(state, newState);
     },
     dispose() {
       disposed = true;
       cancelAnimationFrame(rafId);
       clearOverlays(overlayElements);
+      clearOverlays(placeholderElements);
     },
   };
 }

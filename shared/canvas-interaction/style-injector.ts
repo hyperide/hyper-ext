@@ -16,7 +16,7 @@ const STYLE_ELEMENT_ID = 'hyper-canvas-dynamic-styles';
  * (e.g. VS Code injected script).
  */
 export function buildDesignStylesCSS(options: DesignStylesOptions): string {
-  const { mode, boardModeActive = false, canvasMode = 'single', transparentBackground = false } = options;
+  const { boardModeActive = false, canvasMode = 'single', transparentBackground = false } = options;
 
   const parts: string[] = [];
 
@@ -50,35 +50,12 @@ body.design-mode, body.design-mode * {
 }`);
   }
 
-  // Empty container styling (design mode only)
-  if (mode !== 'interact') {
-    parts.push(`
-div[data-uniq-id]:empty {
-  min-height: 120px;
-  border: 2px dashed #cbd5e1;
-  background-color: #f8fafc;
-  border-radius: 8px;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-div[data-uniq-id]:empty::after {
-  content: 'Drop elements here';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #94a3b8;
-  font-size: 14px;
-  font-weight: 500;
-  pointer-events: none;
-}
-
-div[data-uniq-id]:empty:hover {
-  border-color: #94a3b8;
-  background-color: #f1f5f9;
+  // Empty containers: min-height prevents collapse to 0px so overlays are visible.
+  // Scoped to design mode — interact mode must not alter the real layout.
+  parts.push(`
+body.design-mode .hc-empty {
+  min-height: 28px !important;
 }`);
-  }
 
   return parts.join('\n');
 }

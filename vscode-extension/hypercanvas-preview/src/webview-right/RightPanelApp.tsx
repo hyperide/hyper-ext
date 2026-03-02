@@ -3,13 +3,16 @@
  *
  * Sets up PlatformProvider + SharedEditorState sync,
  * then renders the shared RightSidebar component.
+ * Handles component insertion UI entirely on the ext side.
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { ComponentNavigatorPanel } from '@/components/FloatingPanels';
 import RightSidebar from '@/components/RightSidebar/RightSidebar';
-import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
+import { PlatformProvider, usePlatformAst, usePlatformCanvas } from '@/lib/platform';
 import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
 import type { ComponentGroup } from '../../../../lib/component-scanner/types';
+import type { SharedEditorState } from '../../../../lib/types';
 
 interface ComponentGroupsData {
   atomGroups: ComponentGroup[];
@@ -26,9 +29,12 @@ export function RightPanelApp() {
 
 function RightPanelContent() {
   const canvas = usePlatformCanvas();
+  const astOps = usePlatformAst();
   useSharedEditorStateSync(canvas);
 
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
+  const componentPath = useSharedEditorState((s) => s.componentPath);
+  const insertTargetId = useSharedEditorState((s) => s.insertTargetId);
 
   const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);
   const [explorerVisible, setExplorerVisible] = useState(false);
@@ -61,12 +67,49 @@ function RightPanelContent() {
     [canvas],
   );
 
+  // ── Component insertion ──────────────────────────────────────
+
+  const showInsertPanel = !!insertTargetId && !!componentGroups;
+
+  const handleInsertComponent = useCallback(
+    async (componentType: string, componentFilePath?: string) => {
+      if (!componentPath || !insertTargetId) return;
+      await astOps.insertElement({
+        filePath: componentPath,
+        parentId: insertTargetId,
+        componentType,
+        props: {},
+        componentFilePath,
+      });
+      const patch: Partial<SharedEditorState> = { insertTargetId: null };
+      canvas.sendEvent({ type: 'state:update', patch });
+    },
+    [astOps, canvas, componentPath, insertTargetId],
+  );
+
+  const handleCloseInsertPanel = useCallback(() => {
+    const patch: Partial<SharedEditorState> = { insertTargetId: null };
+    canvas.sendEvent({ type: 'state:update', patch });
+  }, [canvas]);
+
   return (
-    <RightSidebar
-      projectUIKit={projectUIKit}
-      componentGroups={componentGroups}
-      explorerVisible={explorerVisible}
-      onComponentClick={handleComponentClick}
-    />
+    <>
+      {showInsertPanel && (
+        <ComponentNavigatorPanel
+          variant="inline"
+          componentGroups={componentGroups}
+          onComponentClick={handleInsertComponent}
+          onClose={handleCloseInsertPanel}
+        />
+      )}
+      <div className={showInsertPanel ? 'hidden' : undefined}>
+        <RightSidebar
+          projectUIKit={projectUIKit}
+          componentGroups={componentGroups}
+          explorerVisible={explorerVisible}
+          onComponentClick={handleComponentClick}
+        />
+      </div>
+    </>
   );
 }

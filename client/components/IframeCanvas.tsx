@@ -553,13 +553,13 @@ export default function IframeCanvas({
 
       // In design or interact mode: handle clicks
       if (mode === 'design' || mode === 'interact') {
+        const target = e.target as HTMLElement;
+
         // In design mode prevent default behavior, in interact mode allow it
         if (mode === 'design') {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        const target = e.target as HTMLElement;
 
         // Find closest element with data-uniq-id
         const element = target.closest('[data-uniq-id]') as HTMLElement;

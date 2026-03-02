@@ -36,6 +36,7 @@ export const useSharedEditorState = create<SharedEditorStore>((set) => ({
   astStructure: null,
   canvasMode: 'single',
   engineMode: 'design',
+  insertTargetId: null,
 
   // Actions
   applyPatch: (patch) => set((state) => ({ ...state, ...patch })),

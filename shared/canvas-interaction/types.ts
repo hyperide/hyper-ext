@@ -18,6 +18,8 @@ export interface OverlayState {
 
 export interface OverlayRendererOptions {
   viewportZoom?: number;
+  onPlaceholderClick?: (elementId: string) => void;
+  editorMode?: 'design' | 'interact' | 'code';
 }
 
 export interface OverlayRect {
@@ -27,6 +29,14 @@ export interface OverlayRect {
   width: number;
   height: number;
   type: 'selection' | 'hover';
+}
+
+export interface PlaceholderRect {
+  elementId: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 // ============================================================================

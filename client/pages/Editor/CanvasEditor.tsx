@@ -837,7 +837,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     return () => window.removeEventListener('hypercanvas:externalFileChange', handler);
   }, [engine]);
 
-  // Selection overlays (hover + selection rectangles) via RAF
+  // Selection overlays (hover + selection rectangles + empty container placeholders) via RAF
   useSelectionOverlays({
     enabled: !!activeProject && activeProject.status === 'running' && !isCodeEditorMode && !isAddingComment,
     overlayContainerRef,
@@ -848,6 +848,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     activeDesignInstanceId,
     viewportZoom: viewport.zoom,
     iframeLoadedCounter,
+    editorMode: mode,
+    onPlaceholderClick: handleOpenPanel,
   });
 
   // Handle single mode badge click

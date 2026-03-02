@@ -7,21 +7,10 @@ describe('buildDesignStylesCSS', () => {
     expect(css).toContain('cursor: default !important');
   });
 
-  it('includes empty container styles when mode is design', () => {
+  it('includes min-height for empty containers scoped to design mode', () => {
     const css = buildDesignStylesCSS({ mode: 'design' });
-    expect(css).toContain('min-height: 120px');
-    expect(css).toContain('border: 2px dashed');
-  });
-
-  it('includes ::after content for empty containers', () => {
-    const css = buildDesignStylesCSS({ mode: 'design' });
-    expect(css).toContain("content: 'Drop elements here'");
-  });
-
-  it('omits empty container styles in interact mode', () => {
-    const css = buildDesignStylesCSS({ mode: 'interact' });
-    expect(css).not.toContain('min-height: 120px');
-    expect(css).not.toContain("content: 'Drop elements here'");
+    expect(css).toContain('body.design-mode .hc-empty');
+    expect(css).toContain('min-height: 28px');
   });
 
   it('handles board mode (pointer-events on body)', () => {

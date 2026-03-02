@@ -7,7 +7,9 @@
  */
 
 import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
+import { getEmptyContainerRects, isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 
 /**
  * Scroll an element into view, preferring smooth scrolling when supported.
@@ -50,7 +52,7 @@ const activeInstanceId: string | null = null;
 attachClickHandler(
   document,
   {
-    onElementClick: (id, _el, _e, itemIndex) =>
+    onElementClick: (id, el, _e, itemIndex) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
@@ -59,7 +61,22 @@ attachClickHandler(
           itemIndex,
         },
         '*',
-      ),
+      );
+
+      // Empty container clicked → also trigger openPanel so the extension can
+      // show the component insertion UI. Overlay click events don't reach the
+      // parent frame reliably, so we detect empty containers at the source.
+      if (el && isContainerEmpty(el)) {
+        // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+        window.parent.postMessage(
+          {
+            type: 'hypercanvas:openPanel',
+            elementId: id,
+          },
+          '*',
+        );
+      }
+    },
     onElementHover: (id, _el, itemIndex) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
@@ -289,15 +306,18 @@ function sendOverlayRects(): void {
     }
   }
 
-  const rectsJSON = JSON.stringify(rects);
-  if (rectsJSON !== prevRectsJSON) {
-    prevRectsJSON = rectsJSON;
+  // Placeholder rects for empty containers (design mode only)
+  const placeholderRects = state.engineMode !== 'interact' ? getEmptyContainerRects(document) : [];
+
+  const payload = JSON.stringify({ rects, placeholderRects });
+  if (payload !== prevRectsJSON) {
+    prevRectsJSON = payload;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage({ type: 'hypercanvas:overlayRects', rects }, '*');
+    window.parent.postMessage({ type: 'hypercanvas:overlayRects', rects, placeholderRects }, '*');
   }
 
   // Only continue the overlay loop while updates are needed or overlays are active.
-  if (needsOverlayUpdate || state.selectedIds.length > 0 || state.hoveredId !== null) {
+  if (needsOverlayUpdate || state.selectedIds.length > 0 || state.hoveredId !== null || placeholderRects.length > 0) {
     scheduleOverlayLoopIfNeeded();
   }
 }
@@ -369,36 +389,7 @@ window.addEventListener('unload', () => {
   document.removeEventListener('mousedown', mousedownHandler, true);
 });
 
-// === Design mode CSS ===
-const DESIGN_MODE_CSS = `
-body.design-mode, body.design-mode * {
-  cursor: default !important;
-}
-div[data-uniq-id]:empty {
-  min-height: 120px;
-  border: 2px dashed #cbd5e1;
-  background-color: #f8fafc;
-  border-radius: 8px;
-  position: relative;
-  transition: all 0.2s ease;
-}
-div[data-uniq-id]:empty::after {
-  content: "Drop elements here";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #94a3b8;
-  font-size: 14px;
-  font-weight: 500;
-  pointer-events: none;
-}
-div[data-uniq-id]:empty:hover {
-  border-color: #94a3b8;
-  background-color: #f1f5f9;
-}
-`;
-
+// === Design mode CSS (shared) ===
 function updateDesignStyles(mode: string): void {
   const styleId = 'hyper-canvas-dynamic-styles';
   let style = document.getElementById(styleId) as HTMLStyleElement | null;
@@ -407,11 +398,14 @@ function updateDesignStyles(mode: string): void {
     style.id = styleId;
     document.head.appendChild(style);
   }
+
+  style.textContent = buildDesignStylesCSS({
+    mode: mode === 'interact' ? 'interact' : 'design',
+  });
+
   if (mode !== 'interact') {
-    style.textContent = DESIGN_MODE_CSS;
     if (document.body) document.body.classList.add('design-mode');
   } else {
-    style.textContent = '';
     if (document.body) document.body.classList.remove('design-mode');
   }
 }

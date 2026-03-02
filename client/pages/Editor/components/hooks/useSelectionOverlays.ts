@@ -12,10 +12,13 @@ interface UseSelectionOverlaysOptions {
   activeDesignInstanceId: string | null;
   viewportZoom: number;
   iframeLoadedCounter: number;
+  editorMode?: 'design' | 'interact' | 'code';
+  onPlaceholderClick?: (elementId: string) => void;
 }
 
 /**
- * RAF loop for rendering selection overlays (hover + selection rectangles).
+ * RAF loop for rendering selection overlays (hover + selection rectangles)
+ * and empty container placeholder overlays.
  * Uses direct DOM manipulation for performance.
  *
  * Thin wrapper around shared createOverlayRenderer.
@@ -30,6 +33,8 @@ export function useSelectionOverlays({
   activeDesignInstanceId,
   viewportZoom,
   iframeLoadedCounter,
+  editorMode,
+  onPlaceholderClick,
 }: UseSelectionOverlaysOptions) {
   useEffect(() => {
     if (!enabled) {
@@ -37,6 +42,11 @@ export function useSelectionOverlays({
         // Clear only selection overlays
         const selectionElements = overlayContainerRef.current.querySelectorAll('[data-selection-overlay]');
         for (const el of selectionElements) {
+          el.remove();
+        }
+        // Clear placeholder overlays
+        const placeholderElements = overlayContainerRef.current.querySelectorAll('[data-placeholder-overlay]');
+        for (const el of placeholderElements) {
           el.remove();
         }
       }
@@ -53,6 +63,8 @@ export function useSelectionOverlays({
 
     const renderer = createOverlayRenderer(iframe, container, {
       viewportZoom,
+      editorMode,
+      onPlaceholderClick,
     });
 
     renderer.update({
@@ -62,6 +74,7 @@ export function useSelectionOverlays({
       selectedItemIndices,
       activeInstanceId: activeDesignInstanceId,
       viewportZoom,
+      editorMode,
     });
 
     return () => renderer.dispose();
@@ -75,5 +88,7 @@ export function useSelectionOverlays({
     activeDesignInstanceId,
     viewportZoom,
     iframeLoadedCounter,
+    editorMode,
+    onPlaceholderClick,
   ]);
 }

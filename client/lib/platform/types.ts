@@ -89,6 +89,7 @@ export type PlatformMessage =
       props: Record<string, unknown>;
       index?: number;
       targetId?: string;
+      componentFilePath?: string;
     }
   | {
       type: 'ast:deleteElements';
@@ -303,6 +304,7 @@ export interface AstOperations {
     props: Record<string, unknown>;
     index?: number;
     targetId?: string;
+    componentFilePath?: string;
   }): Promise<{ success: boolean; data?: unknown; error?: string }>;
 
   /** Delete JSX elements by ID */

@@ -35,6 +35,11 @@ export function getItemIndex(
  * Attach click, hover, and focus handlers to an iframe document.
  * Returns a dispose function to remove all listeners.
  *
+ * Uses pointerdown/pointerup instead of click — `click` events were not
+ * firing reliably inside VS Code webview preview iframes (possibly OOPIF
+ * or event interception by the webview host). A distance threshold
+ * distinguishes clicks from drags.
+ *
  * Design mode: preventDefault + stopPropagation, find element, call onElementClick.
  * Interact mode: allow pass-through, only call onEmptyClick on empty space.
  */
@@ -46,7 +51,18 @@ export function attachClickHandler(
   const { onElementClick, onElementHover, onEmptyClick, getMode, shouldIntercept } = callbacks;
   const getActiveInstanceId = options?.getActiveInstanceId ?? (() => options?.activeInstanceId ?? null);
 
-  const handleClick = (e: MouseEvent) => {
+  // Track pointerdown position for distance-based click detection
+  const CLICK_DISTANCE_THRESHOLD_SQ = 5 * 5; // 5px
+  let pointerDownPos: { x: number; y: number } | null = null;
+
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return; // left button only
+    pointerDownPos = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerUp = (e: PointerEvent) => {
+    if (e.button !== 0) return; // left button only
+
     const mode = getMode();
 
     // External interceptor (e.g. comment mode, board mode)
@@ -56,12 +72,23 @@ export function attachClickHandler(
 
     if (mode !== 'design' && mode !== 'interact') return;
 
+    // Skip if pointer moved too far — this is a drag, not a click
+    if (pointerDownPos) {
+      const dx = e.clientX - pointerDownPos.x;
+      const dy = e.clientY - pointerDownPos.y;
+      pointerDownPos = null;
+      if (dx * dx + dy * dy > CLICK_DISTANCE_THRESHOLD_SQ) {
+        return;
+      }
+    }
+
+    const target = e.target as HTMLElement;
+
     if (mode === 'design') {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    const target = e.target as HTMLElement;
     const element = target.closest('[data-uniq-id]') as HTMLElement | null;
 
     if (!element) {
@@ -114,21 +141,17 @@ export function attachClickHandler(
     }
   };
 
-  iframeDoc.addEventListener('click', handleClick, { capture: true });
+  iframeDoc.addEventListener('pointerdown', handlePointerDown, { capture: true });
+  iframeDoc.addEventListener('pointerup', handlePointerUp, { capture: true });
   iframeDoc.addEventListener('mousedown', handleMouseDown, { capture: true });
   iframeDoc.addEventListener('mouseover', handleMouseOver, { capture: true });
   iframeDoc.addEventListener('mouseout', handleMouseOut, { capture: true });
 
   return () => {
-    iframeDoc.removeEventListener('click', handleClick, { capture: true });
-    iframeDoc.removeEventListener('mousedown', handleMouseDown, {
-      capture: true,
-    });
-    iframeDoc.removeEventListener('mouseover', handleMouseOver, {
-      capture: true,
-    });
-    iframeDoc.removeEventListener('mouseout', handleMouseOut, {
-      capture: true,
-    });
+    iframeDoc.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+    iframeDoc.removeEventListener('pointerup', handlePointerUp, { capture: true });
+    iframeDoc.removeEventListener('mousedown', handleMouseDown, { capture: true });
+    iframeDoc.removeEventListener('mouseover', handleMouseOver, { capture: true });
+    iframeDoc.removeEventListener('mouseout', handleMouseOut, { capture: true });
   };
 }
