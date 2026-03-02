@@ -13,6 +13,11 @@ import type { RuntimeError } from '../../../shared/runtime-error';
 import type { LogEntry } from './services/DevServerManager';
 import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
 
+/** Max server log entries included in AI diagnostic context */
+const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
+/** Max console log entries included in AI diagnostic context */
+const CONSOLE_LOG_AI_CONTEXT_LIMIT = 30;
+
 export class DiagnosticHub {
   private _panels = new Map<string, vscode.Webview>();
   private _logs: DiagnosticLogEntry[] = [];
@@ -148,14 +153,14 @@ export class DiagnosticHub {
       );
     }
 
-    const serverLogs = this._logs.filter((l) => l.source === 'server').slice(-50);
+    const serverLogs = this._logs.filter((l) => l.source === 'server').slice(-SERVER_LOG_AI_CONTEXT_LIMIT);
     if (serverLogs.length > 0) {
       parts.push(
         `Server logs (last ${serverLogs.length}):\n\`\`\`\n${serverLogs.map((l) => l.line).join('\n')}\n\`\`\``,
       );
     }
 
-    const consoleLogs = this._logs.filter((l) => l.source === 'console').slice(-30);
+    const consoleLogs = this._logs.filter((l) => l.source === 'console').slice(-CONSOLE_LOG_AI_CONTEXT_LIMIT);
     if (consoleLogs.length > 0) {
       parts.push(
         `Console output (last ${consoleLogs.length}):\n\`\`\`\n${consoleLogs.map((l) => `[${l.level ?? 'log'}] ${l.line}`).join('\n')}\n\`\`\``,

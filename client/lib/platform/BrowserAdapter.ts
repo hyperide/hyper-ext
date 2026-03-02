@@ -247,8 +247,9 @@ function isInVSCodeWebviewIframe(): boolean {
     // Check if we're in an iframe
     if (window.parent === window) return false;
 
-    // Try to access parent — cross-origin access throws SecurityError.
-    // This is the standard and reliable way to detect cross-origin iframes.
+    // Try to access parent.document — cross-origin access throws SecurityError.
+    // This is the standard way to detect cross-origin iframes.
+    // Console security warnings are expected and harmless — the catch handles them.
     const parentDoc = window.parent.document;
 
     // Check for VS Code webview markers
