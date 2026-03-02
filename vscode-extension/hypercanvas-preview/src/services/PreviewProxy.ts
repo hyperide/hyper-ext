@@ -57,6 +57,7 @@ export class PreviewProxy {
         const addr = this._server?.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
+          // Server-side startup log — useful for debugging proxy configuration in extension host
           console.log(`[PreviewProxy] Listening on port ${this._proxyPort}, proxying to ${this._targetPort}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
         resolve();

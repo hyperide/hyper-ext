@@ -47,6 +47,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
       // hypercanvas:* messages are handled by useCanvasInteraction,
       // except runtimeError and elementContentResult which need to go to extension
+      // hypercanvas:* → PlatformMessage bridge: iframe protocol messages are adapted
+      // to platform messages via type casts (these types are extension-only, not in the union)
       if (msg.type.startsWith('hypercanvas:')) {
         if (msg.type === 'hypercanvas:runtimeError') {
           canvas.sendEvent({ type: 'runtime:error', error: msg.error } as unknown as PlatformMessage);

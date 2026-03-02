@@ -82,6 +82,7 @@ export class DiagnosticHub {
     }));
     this._isConnected = true;
     this._appendLogs(entries);
+    // Broadcast to all registered webview panels (logs panel, preview panel, etc.)
     this._broadcast({ type: 'diagnostic:log', entries });
   }
 
