@@ -202,6 +202,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // 'webview:ready' is an internal extension event, not a PlatformMessage —
   // no type cast needed (unlike platform-bridged commands below).
   // canvas is a stable CanvasAdapter singleton — this effect fires exactly once on mount.
+  // [canvas] is kept in deps for React exhaustive-deps lint compliance (biome enforces it);
+  // using [] would trigger a lint error. Since canvas never changes, the behavior is identical.
   useEffect(() => {
     canvas.sendEvent({ type: 'webview:ready' });
   }, [canvas]);

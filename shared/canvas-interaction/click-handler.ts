@@ -104,7 +104,9 @@ export function attachClickHandler(
   const handleMouseDown = (e: MouseEvent) => {
     if (getMode() !== 'design') return;
     if (isInteractiveElement(e.target as HTMLElement)) {
-      e.preventDefault(); // Actually prevents focus on mousedown
+      // In design mode, prevent native focus on interactive elements so the canvas
+      // selection/interaction handling stays in control instead of the form control.
+      e.preventDefault();
     }
   };
 
