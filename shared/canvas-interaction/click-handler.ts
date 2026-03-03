@@ -8,6 +8,16 @@
 
 import type { ClickHandlerCallbacks, ClickHandlerOptions } from './types';
 
+/** Check if target is a form/editable element that should retain native focus behavior. */
+function isInteractiveElement(target: HTMLElement): boolean {
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  );
+}
+
 /**
  * Calculate item index for map-rendered elements.
  * When multiple elements share the same data-uniq-id (e.g. inside .map()),
@@ -93,13 +103,7 @@ export function attachClickHandler(
 
   const handleMouseDown = (e: MouseEvent) => {
     if (getMode() !== 'design') return;
-    const target = e.target as HTMLElement;
-    if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
-      target.isContentEditable
-    ) {
+    if (isInteractiveElement(e.target as HTMLElement)) {
       e.preventDefault(); // Actually prevents focus on mousedown
     }
   };
@@ -119,11 +123,23 @@ export function attachClickHandler(
 
   const handleMouseOut = (e: MouseEvent) => {
     if (getMode() !== 'design') return;
-    const target = e.target as HTMLElement;
-    const element = target.closest('[data-uniq-id]') as HTMLElement | null;
-    if (element) {
-      onElementHover(null, null, null);
+
+    const target = e.target as HTMLElement | null;
+    const element = target?.closest('[data-uniq-id]') as HTMLElement | null;
+    if (!element) {
+      // We only care about mouseout from within a data-uniq-id region.
+      return;
     }
+
+    // Only clear hover if the mouse actually left all data-uniq-id elements.
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    const relatedElement = relatedTarget?.closest('[data-uniq-id]') as HTMLElement | null;
+    if (relatedElement) {
+      // Pointer moved to another data-uniq-id element; keep hover state managed by mouseover.
+      return;
+    }
+
+    onElementHover(null, null, null);
   };
 
   iframeDoc.addEventListener('pointerdown', handlePointerDown, { capture: true });

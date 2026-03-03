@@ -9,6 +9,11 @@ interface EditorFile {
 
 type SplitOrientation = 'horizontal' | 'vertical';
 
+const MIN_AI_CHAT_SIDEBAR_WIDTH = 300;
+const MAX_AI_CHAT_SIDEBAR_WIDTH = 600;
+const MIN_LEFT_SIDEBAR_WIDTH = 200;
+const MAX_LEFT_SIDEBAR_WIDTH = 600;
+
 export type ProjectRole = 'editor' | 'viewer';
 
 interface EditorState {
@@ -155,28 +160,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateFileContent: (path: string, content: string) => {
-    console.log('[editorStore] updateFileContent called:', {
-      path,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 50),
-    });
     set((state) => {
       const newOpenFiles = new Map(state.openFiles);
       const file = newOpenFiles.get(path);
 
       if (file) {
-        console.log(
-          '[editorStore] Updating file in store. Old length:',
-          file.content.length,
-          'New length:',
-          content.length,
-        );
         newOpenFiles.set(path, {
           ...file,
           content,
         });
-      } else {
-        console.warn('[editorStore] File not found in openFiles:', path);
       }
 
       return { openFiles: newOpenFiles };
@@ -261,7 +253,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setAIChatSidebarWidth: (width: number) => {
-    const clampedWidth = Math.max(300, Math.min(600, width));
+    const clampedWidth = Math.max(MIN_AI_CHAT_SIDEBAR_WIDTH, Math.min(MAX_AI_CHAT_SIDEBAR_WIDTH, width));
     savePersistedState({ aiChatSidebarWidth: clampedWidth });
     set({ aiChatSidebarWidth: clampedWidth });
   },
@@ -296,7 +288,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setLeftSidebarWidth: (width: number) => {
-    const clampedWidth = Math.max(200, Math.min(600, width));
+    const clampedWidth = Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.min(MAX_LEFT_SIDEBAR_WIDTH, width));
     savePersistedState({ leftSidebarWidth: clampedWidth });
     set({ leftSidebarWidth: clampedWidth });
   },

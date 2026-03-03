@@ -36,6 +36,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   onStateUpdateRef.current = onStateUpdate;
 
   // === iframe -> extension message forwarding ===
+  // Origin validation: event.source check ensures only messages from our iframe are processed.
+  // In VS Code webviews, origin strings are opaque (vscode-webview://<session-id>) so
+  // source-based validation is the correct approach, not origin string comparison.
   useEffect(() => {
     if (!iframeEl) return;
 
@@ -106,6 +109,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   }, []);
 
   // === extension -> webview message handling ===
+  // SECURITY NOTE: All postMessage calls below use '*' as targetOrigin intentionally.
+  // In VS Code webviews, the iframe origin is opaque (vscode-webview://<session-id>)
+  // and changes every session — specifying a concrete origin is not possible.
+  // Messages are scoped to the iframe's contentWindow, which is same-origin within
+  // the webview, so '*' does not widen the attack surface.
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       const msg = event.data;
