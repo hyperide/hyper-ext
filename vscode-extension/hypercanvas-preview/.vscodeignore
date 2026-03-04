@@ -6,3 +6,9 @@ tsconfig.json
 **/*.map
 **/*.ts
 node_modules/**
+esbuild.js
+build-and-install.sh
+DEVELOPMENT.md
+package-lock.json
+tailwind.config.*
+postcss.config.*

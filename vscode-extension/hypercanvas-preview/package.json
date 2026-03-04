@@ -4,6 +4,24 @@
   "description": "Visual editor for React components - works standalone without SaaS backend",
   "version": "0.1.1",
   "publisher": "hyperide",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperide/hyper-ext"
+  },
+  "homepage": "https://hyperide.ai",
+  "bugs": {
+    "url": "https://github.com/hyperide/hyper-ext/issues"
+  },
+  "keywords": [
+    "react",
+    "visual-editor",
+    "preview",
+    "tailwind",
+    "component-editor",
+    "tamagui",
+    "react-native"
+  ],
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.74.0"
@@ -234,7 +252,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/vscode": "^1.74.0",
-    "@vscode/vsce": "^2.22.0",
+    "@vscode/vsce": "^3.0.0",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -1,155 +1,74 @@
-# Hyper Preview — VS Code Extension
+# Hyper Preview
 
-Standalone local visual editor for React projects.
-Runs entirely on the developer's machine —
-no SaaS dependency.
+Visual editor for React components inside VS Code.
+Edit styles, inspect props, and preview changes — all without leaving your editor.
 
-## Build and Install
+## Features
 
-```bash
-cd vscode-extension/hypercanvas-preview
-./build-and-install.sh          # build at current version
-./build-and-install.sh patch    # bump patch, then build
-```
+- **Live Preview** — see your React components rendered in real time
+- **Component Explorer** — browse and navigate your project's component tree
+- **Style Inspector** — view and edit Tailwind classes and CSS properties
+- **AI Chat** — ask AI to modify components, generate code, and explain patterns
+- **Dev Server** — start and manage your project's dev server from VS Code
+- **Code ↔ Canvas** — click an element in preview to jump to source, and vice versa
 
-> **Always use npm**, not bun —
-> `@vscode/vsce` requires `npm list`.
+## Quick Start
 
-## Architecture
+1. Install the extension from the VS Code Marketplace
+2. Open a React project in VS Code
+3. Run `Cmd+Shift+P` → **Hyper: Open Preview**
+4. (Optional) Start the dev server: `Cmd+Shift+P` → **Hyper: Start Dev Server**
 
-### Panels
+## AI Configuration
 
-The extension creates 4 webview panels:
+The extension includes an AI assistant for component editing and code generation.
 
-- **Preview** — `PreviewPanel` →
-  `webview-preview/PreviewPanelApp.tsx` (Editor tab)
-- **Explorer** — `LeftPanelProvider` →
-  `webview-left/LeftPanelApp.tsx` (Activity Bar)
-- **Inspector** — `RightPanelProvider` →
-  `webview-right/RightPanelApp.tsx` (Activity Bar)
-- **Logs and Chat** — `LogsAndChatPanelProvider` →
-  `webview/App.tsx` (Bottom panel)
+1. Run `Cmd+Shift+P` → **Hyper: Configure AI API Key**
+2. Select your preferred provider in settings (see table below)
 
-### Key Entry Points
+Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 
-```text
-src/extension.ts               — Lifecycle
-src/StateHub.ts                — State sync
-src/EditorBridge.ts            — Editor ↔ webview
-src/PanelRouter.ts             — Message routing
-src/PreviewPanel.ts            — Canvas webview
-src/LeftPanelProvider.ts       — Components tree
-src/RightPanelProvider.ts      — Style inspector
-src/LogsAndChatPanelProvider.ts — Bottom panel
-```
+## Settings
 
-### Commands
+| Setting | Default | Description |
+|---|---|---|
+| `hypercanvas.ai.provider` | `glm` | AI provider: `claude`, `openai`, `glm`, `proxy`, `opencode` |
+| `hypercanvas.ai.backend` | — | Backend for proxy/opencode providers (e.g. `gemini`, `deepseek`) |
+| `hypercanvas.ai.model` | — | Model identifier (e.g. `claude-sonnet-4-20250514`, `gpt-4o`) |
+| `hypercanvas.ai.baseURL` | — | Custom base URL for AI provider API |
+| `hypercanvas.devServer.autoStart` | `false` | Auto-start dev server when opening preview |
+| `hypercanvas.preview.defaultPort` | `3000` | Default port for dev server |
+| `hypercanvas.preview.syncPositions` | `true` | Sync cursor position with canvas selection |
 
-- `hypercanvas.openPreview` — Open preview panel
-- `hypercanvas.refreshPreview` — Refresh iframe
-- `hypercanvas.goToVisual` (`Cmd+Shift+V`) —
-  Go to canvas from code (TSX/JSX)
-- `hypercanvas.startDevServer` — Start dev server
-- `hypercanvas.stopDevServer` — Stop dev server
-- `hypercanvas.configureAIKey` — Set AI API key
+## Commands
 
-## Communication
+| Command | Keybinding | Description |
+|---|---|---|
+| Hyper: Open Preview | — | Open the visual preview panel |
+| Hyper: Refresh Preview | — | Refresh the preview iframe |
+| Hyper: Go to Visual | `Cmd+Shift+V` | Jump from code to canvas element |
+| Hyper: Start Dev Server | — | Start the project dev server |
+| Hyper: Stop Dev Server | — | Stop the running dev server |
+| Hyper: Configure AI API Key | — | Set API key for the selected AI provider |
+| Hyper: Open Explorer | — | Open the component explorer sidebar |
+| Hyper: Open Inspector | — | Open the style inspector sidebar |
+| Hyper: Open AI Chat | — | Open the AI chat panel |
 
-### StateHub
+## Requirements
 
-Central source of truth for `SharedEditorState`:
-
-- `selectedIds[]` — selected element UUIDs
-- `hoveredId` — hovered element UUID
-- `currentComponent` — active component path
-- `astStructure` — parsed component DOM tree
-- `canvasMode` — `'single'` or `'multi'`
-- `engineMode` — `'design'` or `'inspect'`
-
-Protocol:
-
-- `state:init` — panel registers, receives state
-- `state:update` — broadcast patch to all panels
-
-### PanelRouter
-
-Routes messages from webview panels:
-
-- `editor:*` → `EditorBridge`
-- `ast:*` → `AstBridge` (response routed back)
-- `component:*` → `ComponentService`
-- `file:read` → VS Code filesystem
-- `styles:readClassName` → `StyleReadService`
-- `ai:openChat` → `LogsAndChatPanelProvider`
-- `command:execute` → `vscode.commands`
-
-## Services
-
-- **AstService** — Babel AST manipulation
-  (styles, props, elements)
-- **ComponentService** — Scan workspace
-  for React components, parse structure
-- **CompositionStorage** — Local storage
-  for test compositions
-- **DevServerManager** — Spawn/manage dev server,
-  detect project type, buffer logs
-- **FileStructureStore** — Persist structure
-  to `.hyperide/project-structure.json`
-- **PreviewProxy** — HTTP/WS proxy
-  with script injection for preview iframe
-- **ProjectDetector** — Detect UI kit,
-  package manager, dev commands
-- **StyleReadService** — Read resolved
-  Tailwind classes from component elements
-- **SyncPositionService** — Auto-sync
-  cursor position to canvas selection
-
-## esbuild and Stubs
-
-The extension uses esbuild with 7 build contexts:
-
-- **Extension** — CJS (Node.js) → `out/extension.js`
-- **Webview** — ESM → `out/webview.js`
-- **Webview-left** — ESM → `out/webview-left.js`
-- **Webview-right** — ESM → `out/webview-right.js`
-- **Webview-preview-panel** — ESM →
-  `out/webview-preview-panel.js`
-- **Iframe-interaction** — IIFE →
-  `out/iframe-interaction.js`
-- **Iframe-error-detection** — IIFE →
-  `out/iframe-error-detection.js`
-
-### SaaS Module Stubs
-
-Shared components import SaaS-only modules
-that don't exist in the extension.
-Replaced at build time via `createWebviewPlugins()`:
-
-- `utils/authFetch` → `stubs/authFetch.ts`
-  (throws on call)
-- `contexts/ComponentMetaContext` →
-  `stubs/saas-only.ts` (`{ meta: null }`)
-- `stores/gitStore` →
-  `stubs/saas-only.ts`
-  (`{ isPushPopoverOpen: false }`)
-- `components/SidebarHeader` →
-  `stubs/SidebarHeader.tsx` (returns `null`)
-- `components/SourceControlSection` →
-  `stubs/SourceControlSection.tsx` (returns `null`)
-
-To add a new stub:
-
-1. Create stub file in `src/stubs/`
-2. Add entry to `esbuild.js` →
-   `createWebviewPlugins()`
+- VS Code 1.74 or later
+- A React project (JSX/TSX)
 
 ## Development
 
-```bash
-npm run watch     # Watch mode (rebuilds on change)
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
 
-Debug: press `F5` in VS Code →
-"Extension Development Host" window opens.
-After code changes, reload the dev host
-window (`Cmd+R`).
+## License
+
+[Elastic License 2.0](https://www.elastic.co/licensing/elastic-license)
+
+**You can:** use, copy, modify, and redistribute the code for internal or commercial projects.
+
+**You cannot:** provide this software (or a modified version) as a hosted/managed service
+competing with HyperIDE, or publish editor extensions (VS Code, JetBrains, etc.)
+derived from this code.

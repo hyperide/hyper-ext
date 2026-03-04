@@ -8,11 +8,17 @@ See `vscode-extension/README.md` for umbrella overview.
 
 Location: `vscode-extension/hypercanvas-preview/`
 
-## Build
+## Build & Publish
 
 - **ALWAYS use npm** (not bun) — vsce requires npm list
 - Build: `npm run package`
-- Install: `code --install-extension hypercanvas-preview-0.1.0.vsix --force`
+- Install: `code --install-extension hypercanvas-preview-0.1.1.vsix --force`
+- Local build+install: `./build-and-install.sh [patch|minor|major]`
+- **Publish**: CI-only via `.github/workflows/publish-extension.yml`
+  - Trigger: push tag `ext-v*` or `workflow_dispatch` (dry_run option)
+  - Secret: `VSCE_PAT` in GitHub
+  - Publisher: `hyperide` on VS Code Marketplace
+- Dev docs: `DEVELOPMENT.md` (not README — README is user-facing for marketplace)
 
 ## Multi-Webview Design
 

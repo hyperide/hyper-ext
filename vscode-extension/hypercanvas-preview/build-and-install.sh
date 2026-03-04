@@ -38,8 +38,9 @@ if [[ "$BUMPED" == true ]]; then
   git -C "$REPO_ROOT" add "$SCRIPT_DIR/package.json"
   git -C "$REPO_ROOT" commit -m "chore: bump hypercanvas-preview to v${VERSION}"
   git -C "$REPO_ROOT" tag -a "$TAG" -m "hypercanvas-preview v${VERSION}"
+  git -C "$REPO_ROOT" push origin HEAD
   git -C "$REPO_ROOT" push origin "$TAG"
-  echo "=== Pushed tag ${TAG} ==="
+  echo "=== Pushed branch and tag ${TAG} ==="
 fi
 
 echo "=== Done. Reload VS Code window (Cmd+Shift+P → 'Reload Window') ==="
