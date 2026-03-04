@@ -93,7 +93,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
-  // Keep iframeEl in a ref so doRefresh callback stays stable
+  // Keep iframeEl in a ref so doRefresh callback stays stable.
+  // Direct assignment during render is intentional — this is the standard React pattern
+  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
+  // between render and effect execution, which is worse than synchronous assignment.
   const iframeElRef = useRef(iframeEl);
   iframeElRef.current = iframeEl;
 
@@ -109,6 +112,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   }, []);
 
   // === extension -> webview message handling ===
+  // NOTE: This is a separate message listener from the iframe handler above — intentionally.
+  // Each effect has its own dependency array and lifecycle. Merging them would widen
+  // the dependency surface, causing unnecessary re-subscriptions. There is no race
+  // condition: the two handlers process disjoint message type domains (hypercanvas:*
+  // vs extension commands), and postMessage ordering within each domain is preserved.
+  //
   // SECURITY NOTE: All postMessage calls below use '*' as targetOrigin intentionally.
   // In VS Code webviews, the iframe origin is opaque (vscode-webview://<session-id>)
   // and changes every session — specifying a concrete origin is not possible.
