@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { loadPersistedState } from '@/lib/storage';
-import { authFetch } from '@/utils/authFetch';
+import { type ComponentsAPIResponse, fetchComponentsJSON } from '@/utils/fetchComponents';
 
-interface ComponentInfo {
+export interface ComponentInfo {
   name: string;
   path: string;
 }
@@ -19,6 +19,51 @@ interface UseComponentAutoLoadOptions {
   currentComponentName: string | undefined;
   mode: 'design' | 'interact' | 'code';
   loadComponent: (path: string) => void;
+}
+
+/** Entry point files that should not be used as displayable components */
+const ENTRY_POINT_NAMES = ['main', 'index', '_app'];
+
+export function isEntryPoint(name: string): boolean {
+  const baseName = name.toLowerCase().replace(/\.(tsx|ts|jsx|js)$/, '');
+  return ENTRY_POINT_NAMES.includes(baseName);
+}
+
+/** Flatten grouped API response into flat arrays. Returns null on server error. */
+export function flattenComponentGroups(
+  data: ComponentsAPIResponse,
+): { atoms: ComponentInfo[]; composites: ComponentInfo[] } | null {
+  if (!data.success) return null;
+  return {
+    atoms: data.atomGroups?.flatMap((g) => g.components) || [],
+    composites: data.compositeGroups?.flatMap((g) => g.components) || [],
+  };
+}
+
+/** Determine which component to auto-load. Returns path or null. */
+export function selectComponentToLoad(opts: {
+  atoms: ComponentInfo[];
+  composites: ComponentInfo[];
+  currentComponentName: string | undefined;
+  mode: 'design' | 'interact' | 'code';
+  persistedOpenedComponent: string | undefined;
+}): string | null {
+  const { atoms, composites, currentComponentName, mode, persistedOpenedComponent } = opts;
+
+  // Try to restore previously opened component
+  if (persistedOpenedComponent && !currentComponentName) {
+    const all = [...atoms, ...composites];
+    const found = all.find((c) => c.path === persistedOpenedComponent);
+    if (found) return found.path;
+  }
+
+  // Skip auto-select in code mode
+  if (mode === 'code') return null;
+
+  const currentIsEntryPoint = currentComponentName && isEntryPoint(currentComponentName);
+  if (currentComponentName && !currentIsEntryPoint) return null;
+
+  return composites[0]?.path ?? atoms[0]?.path ?? null;
 }
 
 /**
@@ -38,86 +83,70 @@ export function useComponentAutoLoad({
     isLoaded: false,
   });
 
+  const fetchAndAutoSelect = useCallback(async () => {
+    try {
+      const data = await fetchComponentsJSON();
+      const flattened = flattenComponentGroups(data);
+      if (!flattened) {
+        // HTTP error (!res.ok) returns { success: false } — mark as loaded,
+        // retrying won't help (infrastructure issue).
+        // Business error (e.g. "No active project") — DON'T mark as loaded,
+        // next project-activated/components_updated event will retry.
+        const isHttpError = typeof data.error === 'string' && data.error.startsWith('HTTP ');
+        if (isHttpError) {
+          console.log('[useComponentAutoLoad] Failed to load components:', data.error);
+          setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
+        } else {
+          console.warn('[useComponentAutoLoad] Server error:', data.error);
+        }
+        return;
+      }
+
+      const { atoms, composites } = flattened;
+      console.log('[useComponentAutoLoad] Available components:', data);
+      setAvailableComponents({ atoms, composites, isLoaded: true });
+
+      const persistedState = loadPersistedState();
+      const selectedPath = selectComponentToLoad({
+        atoms,
+        composites,
+        currentComponentName,
+        mode,
+        persistedOpenedComponent: persistedState.openedComponent,
+      });
+
+      if (selectedPath) {
+        console.log('[useComponentAutoLoad] Loading component:', selectedPath);
+        loadComponent(selectedPath);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      console.error('Failed to load components:', err);
+      setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
+    }
+  }, [currentComponentName, mode, loadComponent]);
+
   useEffect(() => {
     if (!activeProjectId || activeProjectStatus !== 'running') return;
 
     // Reset loaded state when starting a new fetch
     setAvailableComponents((prev) => ({ ...prev, isLoaded: false }));
+    fetchAndAutoSelect();
+  }, [activeProjectId, activeProjectStatus, fetchAndAutoSelect]);
 
-    const loadComponents = async () => {
-      try {
-        const res = await authFetch('/api/get-components');
-        if (!res.ok) {
-          console.log('[useComponentAutoLoad] Failed to load components');
-          setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
-          return;
-        }
+  // Retry on components_updated if initial fetch returned empty results
+  useEffect(() => {
+    if (!activeProjectId || activeProjectStatus !== 'running') return;
+    if (!availableComponents.isLoaded) return;
+    if (availableComponents.atoms.length > 0 || availableComponents.composites.length > 0) return;
 
-        const data = await res.json();
-        console.log('[useComponentAutoLoad] Available components:', data);
-
-        // Flatten grouped components into flat arrays
-        const atoms = data.atomGroups?.flatMap((group: { components: ComponentInfo[] }) => group.components) || [];
-        const composites =
-          data.compositeGroups?.flatMap((group: { components: ComponentInfo[] }) => group.components) || [];
-
-        setAvailableComponents({ atoms, composites, isLoaded: true });
-
-        // Entry point files that should not be used as displayable components
-        const entryPointNames = ['main', 'index', '_app'];
-        const isEntryPoint = (name: string) => {
-          const baseName = name.toLowerCase().replace(/\.(tsx|ts|jsx|js)$/, '');
-          return entryPointNames.includes(baseName);
-        };
-
-        // Try to restore previously opened component first
-        const persistedState = loadPersistedState();
-        let componentLoaded = false;
-
-        if (persistedState.openedComponent && !currentComponentName) {
-          // Try to find and load the persisted component
-          const allComponents = [...atoms, ...composites];
-          const persistedComponent = allComponents.find((comp) => comp.path === persistedState.openedComponent);
-
-          if (persistedComponent) {
-            console.log('[useComponentAutoLoad] Restoring previously opened component:', persistedComponent.name);
-            loadComponent(persistedComponent.path);
-            componentLoaded = true;
-          }
-        }
-
-        // Auto-select first available component if no component is loaded OR if current is an entry point
-        // Skip auto-select in code mode — code editor doesn't need a visual component loaded
-        if (!componentLoaded && mode !== 'code') {
-          const currentIsEntryPoint = currentComponentName && isEntryPoint(currentComponentName);
-
-          if (!currentComponentName || currentIsEntryPoint) {
-            if (currentIsEntryPoint) {
-              console.log('[useComponentAutoLoad] Current component is entry point, auto-selecting first available');
-            }
-
-            const firstComposite = composites[0];
-            const firstAtom = atoms[0];
-
-            if (firstComposite) {
-              console.log('[useComponentAutoLoad] Auto-loading first composite:', firstComposite.name);
-              loadComponent(firstComposite.path);
-            } else if (firstAtom) {
-              console.log('[useComponentAutoLoad] Auto-loading first atom:', firstAtom.name);
-              loadComponent(firstAtom.path);
-            } else {
-              console.log('[useComponentAutoLoad] No components available');
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load components:', err);
-        setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
-      }
+    const handleRetry = () => {
+      console.log('[useComponentAutoLoad] Retrying after components_updated (previous result was empty)');
+      fetchAndAutoSelect();
     };
-
-    loadComponents();
-  }, [activeProjectId, activeProjectStatus, currentComponentName, loadComponent, mode]);
+    window.addEventListener('components_updated', handleRetry, { once: true });
+    return () => window.removeEventListener('components_updated', handleRetry);
+  }, [activeProjectId, activeProjectStatus, availableComponents, fetchAndAutoSelect]);
 
   return availableComponents;
 }

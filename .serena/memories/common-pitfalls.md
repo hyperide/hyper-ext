@@ -66,6 +66,14 @@ sends to litellm asking for a model it doesn't have. Use `config.model`.
 
 ## Project Switching
 
+### Window event listeners miss events on component remount
+
+When a component unmounts (e.g. sidebar hidden, code→design switch) and remounts,
+`project-activated` has already fired. Event-only data loading leaves the component
+permanently empty. Fix: always do an initial fetch on mount AND listen for events.
+Handle `success: false` gracefully (don't mark as loaded) so events can retry.
+Found in HYP-224 via codex review.
+
 ### localStorage.projectId must be updated BEFORE window.location.href reload
 
 `handleOpenProject` calls `/api/projects/:id/activate` (server updates in-memory

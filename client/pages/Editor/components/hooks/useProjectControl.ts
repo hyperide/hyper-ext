@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { loadPersistedState, resetStateForProject, savePersistedState } from '@/lib/storage';
+import { useProjectActivationStore } from '@/stores/projectActivationStore';
 import { authFetch } from '@/utils/authFetch';
 
 export interface ProjectData {
@@ -126,6 +127,7 @@ export function useProjectControl({
       // not on every status update (stopped → building → running)
       if (project.id !== activatedProjectIdRef.current) {
         activatedProjectIdRef.current = project.id;
+        useProjectActivationStore.getState().setActivatedProject(project.id);
         window.dispatchEvent(new Event('project-activated'));
       }
 
