@@ -49,8 +49,8 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
         })
         .catch(() => ({ success: false, error: 'Failed to parse components response as JSON' }));
     })
-    // Network errors (DNS, timeout, etc.) propagate to callers — useComponentsData
-    // catches AbortError separately and logs everything else. No catch needed here.
+    // Network errors (DNS, timeout, etc.) propagate to callers — all consumers
+    // (see JSDoc) catch AbortError separately and handle other errors. No catch here.
     .finally(() => {
       // Only clean up if this is still the active request —
       // a cancel→refetch sequence may have already replaced the handles.
