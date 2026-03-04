@@ -46,6 +46,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       if (event.source !== iframeEl?.contentWindow) return;
 
       const msg = event.data;
+      // Guard: only process well-formed messages. Property-level validation is not needed —
+      // messages originate from our own iframe bundle (controlled code, not external input).
       if (!msg?.type) return;
 
       // Iframe → extension bridge: hypercanvas:* messages are adapted to PlatformMessage channel.
@@ -56,11 +58,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       if (msg.type.startsWith('hypercanvas:')) {
         if (msg.type === 'hypercanvas:runtimeError') {
           canvas.sendEvent({ type: 'runtime:error', error: msg.error } as unknown as PlatformMessage);
-        }
-        if (msg.type === 'hypercanvas:console') {
+        } else if (msg.type === 'hypercanvas:console') {
           canvas.sendEvent({ type: 'diagnostic:console', entries: msg.entries } as unknown as PlatformMessage);
-        }
-        if (msg.type === 'hypercanvas:elementContentResult') {
+        } else if (msg.type === 'hypercanvas:elementContentResult') {
           canvas.sendEvent({
             type: 'elementContentResult',
             requestId: msg.requestId,
@@ -114,6 +114,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // and changes every session — specifying a concrete origin is not possible.
   // Messages are scoped to the iframe's contentWindow, which is same-origin within
   // the webview, so '*' does not widen the attack surface.
+  //
+  // ORIGIN VALIDATION: Messages here come from the VS Code extension host via the
+  // webview API (acquireVsCodeApi().postMessage). The extension host is a trusted
+  // origin — there is no untrusted sender to validate against. Iframe messages
+  // are filtered out by the event.source check below.
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       const msg = event.data;

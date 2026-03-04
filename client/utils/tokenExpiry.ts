@@ -16,7 +16,7 @@ function decodeJwtPayload(token: string): { exp?: number } {
   return JSON.parse(json);
 }
 
-/** Returns true when the token is null, expired, or expires within 60 seconds. */
+/** Returns true when the token is expired or expires within 60 seconds. Null/empty tokens return false (nothing to refresh). */
 export function isTokenExpiringSoon(token: string | null): boolean {
   if (!token) return false;
 
