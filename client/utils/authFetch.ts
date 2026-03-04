@@ -6,6 +6,8 @@
 
 import { useAuthStore } from '../stores/authStore';
 import { NetworkError } from './networkError';
+import { refreshTokenOnce } from './refreshToken';
+import { isTokenExpiringSoon } from './tokenExpiry';
 
 /**
  * Make an authenticated fetch request
@@ -29,12 +31,26 @@ export async function authFetch(url: string, options: RequestInit = {}, _isRetry
     throw new NetworkError('Server connection lost');
   }
 
+  // Proactive refresh: if token expires within 60s, refresh before the request.
+  // refreshTokenOnce is a singleton — safe against concurrent calls.
+  // On failure we silently proceed; the 401-retry fallback will handle it.
+  if (!_isRetry && !url.includes('/api/auth/') && isTokenExpiringSoon(accessToken)) {
+    try {
+      await refreshTokenOnce();
+    } catch {
+      // refreshTokenOnce doesn't throw, but just in case
+    }
+  }
+
+  // Re-read token: refreshTokenOnce updates the store via setAccessToken()
+  const currentToken = useAuthStore.getState().accessToken;
+
   const headers: HeadersInit = {
     ...options.headers,
   };
 
-  if (accessToken) {
-    (headers as Record<string, string>).Authorization = `Bearer ${accessToken}`;
+  if (currentToken) {
+    (headers as Record<string, string>).Authorization = `Bearer ${currentToken}`;
   }
 
   const response = await fetch(url, {

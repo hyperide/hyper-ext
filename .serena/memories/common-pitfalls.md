@@ -211,6 +211,18 @@ mock.module('../modules/projects/service', () => ({
 }));
 ```
 
+### globalThis.fetch mock leaks across test files
+
+Assigning `globalThis.fetch = mockFetch` in a test file persists for ALL
+subsequent test files in the bun process. Always save and restore the original:
+
+```typescript
+const originalFetch = globalThis.fetch;
+// @ts-expect-error — Bun's fetch has extra properties (preconnect)
+globalThis.fetch = mockFetch;
+afterAll(() => { globalThis.fetch = originalFetch; });
+```
+
 ### bun mockClear vs mockReset
 
 `mockClear()` only clears call tracking, NOT pending `mockResolvedValueOnce`
