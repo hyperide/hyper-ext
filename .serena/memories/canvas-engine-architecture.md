@@ -13,6 +13,13 @@ UI (CanvasEditor, hooks)
     → StyleAdapters (Tailwind: className, Tamagui: props)
 ```
 
+## data-uniq-id Semantics
+
+`data-uniq-id` is unique per **JSX source element**, NOT per rendered DOM element.
+Inside `.map()`, all rendered items share the same `data-uniq-id` — this is by design.
+Dedup should only fix actual source-level duplicates (copy-paste, AI generation).
+Map items in DOM intentionally have duplicate IDs — don't "fix" these.
+
 ## Two Environments
 
 **Design Mode** (single instance):

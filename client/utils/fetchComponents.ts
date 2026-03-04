@@ -34,14 +34,17 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
   abortController = new AbortController();
   const thisPromise = authFetch('/api/get-components', { signal: abortController.signal })
     .then((res) => {
-      if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
-      return res.json().then((json: ComponentsAPIResponse) => {
-        if (json.success) {
-          cachedResult = json;
-          cachedAt = Date.now();
-        }
-        return json;
-      });
+      if (!res.ok) return { success: false, error: `HTTP ${res.status} ${res.statusText}`.trim() };
+      return res
+        .json()
+        .then((json: ComponentsAPIResponse) => {
+          if (json.success) {
+            cachedResult = json;
+            cachedAt = Date.now();
+          }
+          return json;
+        })
+        .catch(() => ({ success: false, error: 'Failed to parse components response as JSON' }));
     })
     .finally(() => {
       // Only clean up if this is still the active request —

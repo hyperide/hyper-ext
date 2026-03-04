@@ -142,7 +142,7 @@ export function useProjectControl({
       }
 
       // Auto-start if stopped (only once per project)
-      if (project && project.status === 'stopped' && !startAttemptedRef.current) {
+      if (project.status === 'stopped' && !startAttemptedRef.current) {
         console.log('[useProjectControl] Auto-starting project...');
         startAttemptedRef.current = true;
         setIsStarting(true);

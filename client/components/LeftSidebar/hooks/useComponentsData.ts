@@ -113,6 +113,7 @@ export function useComponentsData(): UseComponentsDataResult {
 
     return () => {
       window.removeEventListener('components_updated', handleReload);
+      cancelComponentsFetch();
     };
   }, [loadComponents, engine, activatedProjectId]);
 

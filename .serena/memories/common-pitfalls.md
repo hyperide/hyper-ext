@@ -195,13 +195,21 @@ AST operations return success synchronously, launch API calls in
 background. Some store `_pendingPromise`. Engine's `undo()` awaits
 the promise before completing.
 
-### bun mock.module is process-global
+### bun mock.module is process-global and has NO restore
 
 `mock.module('path')` replaces the module for ALL test files in the same bun
-process, not just the current file. If `AstBridge.test.ts` mocks `AstService`,
-any other test importing `AstService` in the same run gets the mock.
-Fix: put real-module integration tests in a different directory subtree
-(e.g. `shared/` vs `vscode-extension/`), or use `mock.restore()`.
+process, not just the current file. `mock.restore()` explicitly does NOT reset
+module mocks ([bun#12823](https://github.com/oven-sh/bun/issues/12823)).
+`mock.restoreModule()` PR ([bun#25844](https://github.com/oven-sh/bun/pull/25844))
+exists but NOT merged yet (as of bun 1.3.10).
+
+**Strategy**: avoid `mock.module` when possible. Extract pure logic into
+lightweight files (zero heavy deps) and test those directly. If `mock.module`
+is unavoidable — run the file in isolation (`bun test <file>`).
+
+If `AstBridge.test.ts` mocks `AstService`, any other test importing `AstService`
+in the same run gets the mock. Fix: put real-module integration tests in a
+different directory subtree (e.g. `shared/` vs `vscode-extension/`).
 
 **When multiple test files mock the same module differently:** both files must
 include ALL exported functions in their mocks (not just the ones they use).
@@ -241,6 +249,35 @@ everything and set a safe default.
 
 ASTUpdateOperation uses `getPreviewIframe()` from `@/lib/dom-utils`.
 For testing: `mock.module('@/lib/dom-utils', () => ({ getPreviewIframe: () => null }))`
+
+### Heavy imports contaminate test suite
+
+Module resolution errors from one test file cascade to unrelated test files
+in the same bun process. Keep test imports lightweight.
+
+### `console.error(Error)` in error-path tests
+
+Bun counts `console.error(new Error(...))` as "1 error" in the full test suite
+summary. Suppress `console.error` in tests that exercise caught error paths.
+
+### `Promise.reject` in mockImplementation
+
+`Promise.reject(new Error(...))` in `mockImplementation` triggers unhandled
+rejection when tests run in parallel. Use `async () => { throw new Error(...); }`
+instead.
+
+## Tooling Gotchas
+
+### Serena `write_memory` overwrites entire file
+
+`write_memory` replaces the file, not appends. To add content to an existing
+memory file, use `edit_memory` or read the file first and write back with additions.
+
+### `node:child_process` has no promise-based variant
+
+`node:child_process/promises` does NOT exist. Use `promisify(execFile)`.
+Don't confuse with `node:fs/promises` which does exist. In general, verify the
+`/promises` subpath actually exists before assuming.
 
 ## Tailwind JIT Does Not Scan Record/Object Values
 

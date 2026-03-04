@@ -52,3 +52,17 @@ When need to stage part of changes:
 - English only
 - Tests in same commit as functionality
 - fixup! for amendments to specific commits
+
+## Local Development
+
+- **SaaS local URL**: `https://local.hyperi.de/`
+- Server must be restarted manually after code changes (no auto-reload for server-side)
+
+## Full-Vibe (AI Findings)
+
+- **Recurring finding generators**: `useCanvasInteraction.ts` and `usePreviewBridge.ts` —
+  each commit to these files triggers 2-4 new false positive findings. Stop condition applies.
+- **remark-gfm** may be missing in worktrees — run `bun install` if tsc fails on it.
+- **Worktree merge gotcha**: `gh pr merge --delete-branch` fails in worktrees because
+  it can't checkout main. Use `gh pr merge --squash` (without `--delete-branch`),
+  then `git push origin --delete <branch>` manually.
