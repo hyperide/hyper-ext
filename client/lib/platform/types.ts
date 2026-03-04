@@ -189,6 +189,8 @@ export type PlatformMessage =
 
   // Keyboard operations (visual editor → extension host)
   | { type: 'keyboard:delete'; elementIds: string[] }
+  | { type: 'canvas:undo' }
+  | { type: 'canvas:redo' }
 
   // Preview lifecycle (preview webview → extension host)
   | { type: 'previewLoaded' }

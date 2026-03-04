@@ -105,11 +105,35 @@ const window = {
   tabGroups: { all: [] as unknown[] },
 };
 
+/* ---------- WorkspaceEdit ---------- */
+
+class MockWorkspaceEdit {
+  private _edits: Array<{ uri: MockUri; range: MockRange; newText: string }> = [];
+
+  replace(uri: MockUri, range: MockRange, newText: string) {
+    this._edits.push({ uri, range, newText });
+  }
+
+  /** Expose recorded edits for test assertions */
+  get edits() {
+    return this._edits;
+  }
+}
+
 /* ---------- namespace: workspace ---------- */
 
 const workspace = {
   workspaceFolders: [{ uri: MockUri.file('/test-workspace'), name: 'test', index: 0 }],
-  openTextDocument: mock(() => Promise.resolve({ getText: () => '', uri: MockUri.file('/test') })),
+  openTextDocument: mock(() =>
+    Promise.resolve({
+      getText: () => '',
+      positionAt: (o: number) => new MockPosition(0, o),
+      uri: MockUri.file('/test'),
+      save: mock(() => Promise.resolve(true)),
+    }),
+  ),
+  applyEdit: mock(() => Promise.resolve(true)),
+  textDocuments: [] as Array<{ uri: MockUri; getText: () => string }>,
   fs: {
     readFile: mock(() => Promise.resolve(new Uint8Array())),
     writeFile: mock(() => Promise.resolve()),
@@ -135,6 +159,7 @@ mock.module('vscode', () => ({
   Range: MockRange,
   Selection: MockSelection,
   EventEmitter: MockEventEmitter,
+  WorkspaceEdit: MockWorkspaceEdit,
   ViewColumn,
   TextEditorRevealType,
   FileType,
@@ -154,6 +179,7 @@ const allMockFns = [
   window.createOutputChannel,
   window.onDidChangeActiveTextEditor,
   workspace.openTextDocument,
+  workspace.applyEdit,
   workspace.fs.readFile,
   workspace.fs.writeFile,
   workspace.fs.delete,
@@ -166,6 +192,23 @@ const allMockFns = [
 
 beforeEach(() => {
   for (const fn of allMockFns) fn.mockClear();
+
+  // Restore default implementations — mockClear does NOT reset mockImplementation,
+  // so overrides from one test file leak into the next (e.g. EditorBridge → AstBridge).
+  workspace.openTextDocument.mockImplementation(() =>
+    Promise.resolve({
+      getText: () => '',
+      positionAt: (o: number) => new MockPosition(0, o),
+      uri: MockUri.file('/test'),
+      save: mock(() => Promise.resolve(true)),
+      isDirty: false,
+    }),
+  );
+  workspace.applyEdit.mockImplementation(() => Promise.resolve(true));
+  window.showTextDocument.mockImplementation(() => Promise.resolve({ selection: null, revealRange: mock() }));
+  commands.executeCommand.mockImplementation(() => Promise.resolve());
+
   window.activeTextEditor = undefined;
   window.tabGroups = { all: [] as unknown[] };
+  workspace.textDocuments.length = 0;
 });

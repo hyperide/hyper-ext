@@ -41,9 +41,9 @@ mock.module('../services/StyleReadService', () => ({
     readElementClassName = mock(() => Promise.resolve({ className: 'test' }));
   },
 }));
-mock.module('../vscode-file-io', () => ({
-  VSCodeFileIO: class {},
-}));
+// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService/StyleReadService
+// are mocked above, so VSCodeFileIO methods are never called. Mocking it with `class {}`
+// would poison VSCodeFileIO.test.ts (mock.module is global).
 mock.module('node:fs/promises', () => ({
   readFile: mock(() => Promise.resolve('file content')),
 }));

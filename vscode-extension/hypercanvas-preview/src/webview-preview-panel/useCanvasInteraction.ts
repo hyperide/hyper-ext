@@ -158,6 +158,14 @@ export function useCanvasInteraction(
         }
 
         case 'hypercanvas:keydown': {
+          const isMod = msg.metaKey || msg.ctrlKey;
+          const isZ = msg.code === 'KeyZ' || msg.key?.toLowerCase() === 'z';
+
+          if (isMod && isZ) {
+            canvas.sendEvent({ type: msg.shiftKey ? 'canvas:redo' : 'canvas:undo' });
+            break;
+          }
+
           // Re-dispatch on the webview window so VS Code's built-in
           // keyboard forwarding picks it up and routes to the editor.
           const kbEvent = new KeyboardEvent('keydown', {

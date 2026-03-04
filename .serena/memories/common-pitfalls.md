@@ -122,6 +122,14 @@ Extension host sends `postMessage` synchronously in `resolveWebviewView`,
 but React `useEffect` hasn't attached the listener yet. Fix: webview sends
 `webview:ready` first, extension host responds with initial data.
 
+### New PlatformMessage types must be added to the union
+
+`canvas.sendEvent<T extends PlatformMessage>(message)` in VSCodeAdapter is
+generic-constrained to `PlatformMessage`. If a message type (e.g. `canvas:undo`)
+is NOT in the union at `client/lib/platform/types.ts`, TypeScript won't complain
+(due to `as never` casts at call sites), but the message silently fails to send.
+Always add new message types to `PlatformMessage` before using them.
+
 ### Click events unreliable in VS Code webview iframes
 
 `click` events were not firing reliably inside VS Code webview preview

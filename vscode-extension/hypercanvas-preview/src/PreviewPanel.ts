@@ -226,13 +226,35 @@ export class PreviewPanel {
       return;
     }
 
+    // === Canvas undo/redo (from iframe Cmd+Z / Shift+Cmd+Z) ===
+    // Falls back to VS Code's native undo/redo when canvas stack is empty,
+    // so Cmd+Z always does something useful.
+    if (msg.type === 'canvas:undo') {
+      const panel = this._panel;
+      if (!panel) return;
+      const handled = await this._panelRouter.astBridge.undo(panel);
+      if (!handled) {
+        await vscode.commands.executeCommand('undo');
+      }
+      return;
+    }
+    if (msg.type === 'canvas:redo') {
+      const panel = this._panel;
+      if (!panel) return;
+      const handled = await this._panelRouter.astBridge.redo(panel);
+      if (!handled) {
+        await vscode.commands.executeCommand('redo');
+      }
+      return;
+    }
+
     // === Keyboard-driven delete (from iframe keyboard handler) ===
     if (msg.type === 'keyboard:delete') {
       const elementIds = msg.elementIds as string[] | undefined;
       const componentPath = this._currentComponent;
       if (!componentPath || !elementIds?.length) return;
 
-      const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, elementIds);
+      const result = await this._panelRouter.astBridge.deleteElements(componentPath, elementIds);
 
       if (result.success) {
         this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -327,7 +349,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.duplicateElement(componentPath, elementId);
+    const result = await this._panelRouter.astBridge.duplicateElement(componentPath, elementId);
 
     if (result.success && result.newId) {
       // Select the new element
@@ -342,7 +364,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, [elementId]);
+    const result = await this._panelRouter.astBridge.deleteElements(componentPath, [elementId]);
 
     if (result.success) {
       // Clear selection
@@ -357,7 +379,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const result = await this._panelRouter.astBridge.astService.wrapElement(componentPath, elementId, 'div');
+    const result = await this._panelRouter.astBridge.wrapElement(componentPath, elementId, 'div');
 
     if (result.success && result.wrapperId) {
       // Select the wrapper
@@ -391,7 +413,7 @@ export class PreviewPanel {
     const tsxCode = await vscode.env.clipboard.readText();
     if (!tsxCode.trim()) return;
 
-    const result = await this._panelRouter.astBridge.astService.pasteElement(componentPath, targetId, tsxCode);
+    const result = await this._panelRouter.astBridge.pasteElement(componentPath, targetId, tsxCode);
 
     if (result.success && result.newId) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
@@ -409,7 +431,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementIds?.length) return;
 
-    const result = await this._panelRouter.astBridge.astService.deleteElements(componentPath, elementIds);
+    const result = await this._panelRouter.astBridge.deleteElements(componentPath, elementIds);
 
     if (result.success) {
       this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {

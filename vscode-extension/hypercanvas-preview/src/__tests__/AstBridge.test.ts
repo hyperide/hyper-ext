@@ -5,10 +5,11 @@ const mockAstService = {
   updateStyles: mock(() => Promise.resolve({ success: true, className: 'text-red' })),
   updateProps: mock(() => Promise.resolve({ success: true })),
   insertElement: mock(() => Promise.resolve({ success: true, newId: 'new-1', index: 0 })),
-  deleteElements: mock(() => Promise.resolve({ success: true, data: { deleted: ['e1'] } })),
+  deleteElements: mock(() => Promise.resolve({ success: true, data: { deletedCount: 1 } })),
   duplicateElement: mock(() => Promise.resolve({ success: true, newId: 'dup-1' })),
   updateText: mock(() => Promise.resolve({ success: true })),
   wrapElement: mock(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' })),
+  pasteElement: mock(() => Promise.resolve({ success: true, newId: 'paste-1' })),
 };
 
 mock.module('../services/AstService', () => ({
@@ -20,11 +21,17 @@ mock.module('../services/AstService', () => ({
     duplicateElement = mockAstService.duplicateElement;
     updateText = mockAstService.updateText;
     wrapElement = mockAstService.wrapElement;
+    pasteElement = mockAstService.pasteElement;
   },
 }));
-mock.module('../vscode-file-io', () => ({
-  VSCodeFileIO: class {},
-}));
+
+// Real UndoRedoService is used — do NOT mock it (mock.module is global in bun,
+// would poison UndoRedoService.test.ts). vscode is already mocked via test/mock-vscode.ts preload.
+// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService is mocked above,
+// so VSCodeFileIO methods are never called. Mocking it with `class {}` would poison
+// VSCodeFileIO.test.ts (mock.module is global).
+
+import * as vscode from 'vscode';
 
 const { AstBridge } = await import('../bridges/AstBridge');
 
@@ -47,6 +54,16 @@ describe('AstBridge', () => {
     for (const fn of Object.values(mockAstService)) {
       fn.mockClear();
     }
+    // vscode mocks are reset in mock-vscode.ts preload beforeEach
+    // Restore defaults
+    mockAstService.updateStyles.mockImplementation(() => Promise.resolve({ success: true, className: 'text-red' }));
+    mockAstService.updateProps.mockImplementation(() => Promise.resolve({ success: true }));
+    mockAstService.deleteElements.mockImplementation(() =>
+      Promise.resolve({ success: true, data: { deletedCount: 1 } }),
+    );
+    mockAstService.duplicateElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'dup-1' }));
+    mockAstService.wrapElement.mockImplementation(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' }));
+    mockAstService.pasteElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'paste-1' }));
   });
 
   it('routes ast:updateStyles and returns className', async () => {
@@ -198,5 +215,121 @@ describe('AstBridge', () => {
       props: {},
     } as never);
     // Just verify it doesn't throw
+  });
+
+  // === Undo tracking tests (uses real UndoRedoService with mocked vscode) ===
+
+  describe('undo tracking via handleMessage', () => {
+    it('enables undo after successful ast:updateStyles', async () => {
+      const wv = createMockWebview();
+      // filePath must resolve inside /workspace for recordEdit to accept it
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r20',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        wv as never,
+      );
+      // Real UndoRedoService should now have an entry
+      const panel = { reveal: mock(() => {}) } as never;
+      const canUndo = await bridge.undo(panel);
+      expect(canUndo).toBe(true);
+    });
+
+    it('does not enable undo on failed operation', async () => {
+      mockAstService.updateProps.mockImplementation(() => Promise.resolve({ success: false, error: 'fail' }));
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateProps',
+          requestId: 'r21',
+          filePath: '/workspace/f.tsx',
+          elementId: 'e1',
+          props: {},
+        } as never,
+        wv as never,
+      );
+      const panel = { reveal: mock(() => {}) } as never;
+      const canUndo = await bridge.undo(panel);
+      expect(canUndo).toBe(false);
+    });
+  });
+
+  describe('public mutation methods', () => {
+    it('deleteElements delegates to astService and enables undo', async () => {
+      const result = await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+      expect(mockAstService.deleteElements).toHaveBeenCalledWith('/workspace/comp.tsx', ['e1']);
+      expect(result.success).toBe(true);
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+    });
+
+    it('deleteElements with multiple elements records N undo entries', async () => {
+      mockAstService.deleteElements.mockImplementation(() =>
+        Promise.resolve({ success: true, data: { deletedCount: 3 } }),
+      );
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1', 'e2', 'e3']);
+      const panel = { reveal: mock(() => {}) } as never;
+      // Should be able to undo 3 times (one per deleted element / write)
+      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe(true);
+      // 4th undo should fail — stack exhausted
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('deleteElements does not enable undo on failure', async () => {
+      mockAstService.deleteElements.mockImplementation(() => Promise.resolve({ success: false }));
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('duplicateElement delegates and enables undo', async () => {
+      const result = await bridge.duplicateElement('/workspace/comp.tsx', 'e1');
+      expect(mockAstService.duplicateElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1');
+      expect(result.success).toBe(true);
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+    });
+
+    it('wrapElement delegates and enables undo', async () => {
+      const result = await bridge.wrapElement('/workspace/comp.tsx', 'e1', 'div');
+      expect(mockAstService.wrapElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1', 'div');
+      expect(result.success).toBe(true);
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+    });
+
+    it('pasteElement delegates and enables undo', async () => {
+      const result = await bridge.pasteElement('/workspace/comp.tsx', 'target-1', '<div />');
+      expect(mockAstService.pasteElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'target-1', '<div />');
+      expect(result.success).toBe(true);
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+    });
+  });
+
+  describe('undo/redo delegation', () => {
+    it('undo executes vscode undo command', async () => {
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+      const panel = { reveal: mock(() => {}) } as never;
+      const result = await bridge.undo(panel);
+      expect(result).toBe(true);
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+    });
+
+    it('redo executes vscode redo command after undo', async () => {
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+      const panel = { reveal: mock(() => {}) } as never;
+      await bridge.undo(panel);
+      (vscode.commands.executeCommand as ReturnType<typeof mock>).mockClear();
+      const result = await bridge.redo(panel);
+      expect(result).toBe(true);
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith('redo');
+    });
   });
 });
