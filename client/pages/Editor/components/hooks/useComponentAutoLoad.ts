@@ -64,7 +64,7 @@ export function useComponentAutoLoad({
         setAvailableComponents({ atoms, composites, isLoaded: true });
 
         // Entry point files that should not be used as displayable components
-        const entryPointNames = ['main', 'index', 'App', '_app', 'app'];
+        const entryPointNames = ['main', 'index', '_app'];
         const isEntryPoint = (name: string) => {
           const baseName = name.toLowerCase().replace(/\.(tsx|ts|jsx|js)$/, '');
           return entryPointNames.includes(baseName);

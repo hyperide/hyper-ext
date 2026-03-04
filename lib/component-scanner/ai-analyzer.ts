@@ -6,8 +6,7 @@
  */
 
 import { join } from 'node:path';
-import Anthropic from '@anthropic-ai/sdk';
-import { AI_PROVIDER_DEFAULTS } from '../../shared/ai-provider-defaults.js';
+import { callAI, type ResolvedAIConfig } from '../ai-client/index.js';
 import { filterChildPaths } from './directory-tree.js';
 import type { ProjectStructure } from './types.js';
 
@@ -138,34 +137,6 @@ Return ONLY a JSON object (no markdown, no backticks, no explanation):
 }`;
 
 /**
- * Call an OpenAI Chat Completions-compatible API via fetch.
- * Works with OpenAI, Gemini, DeepSeek, Mistral, Groq, Qwen, etc.
- */
-async function callOpenAICompatible(apiKey: string, baseURL: string, model: string, prompt: string): Promise<string> {
-  const url = `${baseURL.replace(/\/+$/, '')}/chat/completions`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenAI-compatible API error ${response.status}: ${text}`);
-  }
-  const data = (await response.json()) as {
-    choices: { message: { content: string } }[];
-  };
-  return data.choices[0].message.content;
-}
-
-/**
  * Analyze project structure using AI.
  * Supports both Anthropic SDK and OpenAI-compatible APIs based on options.provider.
  * Throws on failure — caller decides fallback strategy.
@@ -178,30 +149,13 @@ export async function analyzeWithAI(
   options: AIAnalyzerOptions,
 ): Promise<ProjectStructure> {
   const prompt = AI_PROMPT.replace('{TREE}', tree);
-  let text: string;
-
-  if (options.provider === 'openai') {
-    const baseURL = options.baseURL || 'https://api.openai.com/v1';
-    text = await callOpenAICompatible(apiKey, baseURL, options.model, prompt);
-  } else {
-    // Anthropic SDK path (claude, glm, resolved proxy)
-    const anthropic = new Anthropic({
-      apiKey,
-      baseURL: options.baseURL || undefined,
-    });
-
-    const response = await anthropic.messages.create({
-      model: options.model,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected AI response type');
-    }
-    text = content.text;
-  }
+  const resolvedConfig: ResolvedAIConfig = {
+    apiKey,
+    model: options.model,
+    baseURL: options.baseURL,
+    provider: options.provider ?? 'anthropic',
+  };
+  const text = await callAI(resolvedConfig, prompt);
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -227,75 +181,6 @@ export async function analyzeWithAI(
   };
 }
 
-/** Default base URLs for OpenAI Chat Completions-compatible providers */
-const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  google: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  deepseek: 'https://api.deepseek.com/v1',
-  mistral: 'https://api.mistral.ai/v1',
-  groq: 'https://api.groq.com/openai/v1',
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  openai: 'https://api.openai.com/v1',
-};
-
-export interface ResolvedAIConfig {
-  apiKey: string;
-  model: string;
-  baseURL?: string;
-  provider: 'anthropic' | 'openai';
-}
-
-/**
- * Resolve provider config into a normalized form for analyzeWithAI.
- * For proxy/opencode providers, requires `backend` to identify the key type.
- * Returns null if the provider or config is unrecognized.
- */
-export function resolveAnalyzerConfig(opts: {
-  provider: string;
-  apiKey: string;
-  model: string;
-  baseURL?: string;
-  backend?: string;
-}): ResolvedAIConfig | null {
-  const { provider, apiKey, model, baseURL, backend } = opts;
-
-  switch (provider) {
-    case 'claude':
-      return { apiKey, model, baseURL, provider: 'anthropic' };
-
-    case 'glm':
-      return {
-        apiKey,
-        model,
-        baseURL: baseURL || AI_PROVIDER_DEFAULTS.glm.baseURL,
-        provider: 'anthropic',
-      };
-
-    case 'openai':
-      return {
-        apiKey,
-        model,
-        baseURL: baseURL || 'https://api.openai.com/v1',
-        provider: 'openai',
-      };
-
-    case 'proxy':
-    case 'opencode': {
-      const b = backend;
-      if (!b) return null;
-
-      // anthropic key type still uses Anthropic SDK
-      if (b === 'anthropic') {
-        return { apiKey, model, provider: 'anthropic' };
-      }
-
-      const resolvedBaseURL = OPENAI_COMPATIBLE_BASE_URLS[b];
-      if (!resolvedBaseURL) return null;
-
-      return { apiKey, model, baseURL: resolvedBaseURL, provider: 'openai' };
-    }
-
-    default:
-      return null;
-  }
-}
+// Re-export from lib/ai-client for backward compatibility
+// Re-export callAI for consumers that import from component-scanner
+export { callAI, type ResolvedAIConfig, resolveAIConfig as resolveAnalyzerConfig } from '../ai-client/index.js';

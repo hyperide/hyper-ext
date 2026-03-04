@@ -1,5 +1,6 @@
 import { IconLoader2 } from '@tabler/icons-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { DisplayToolCall } from '../../../shared/ai-chat-display';
 import { ToolCallCard } from './ToolCallCard';
 
@@ -16,7 +17,7 @@ export function StreamingContent({ currentAssistantMessage, currentToolCalls, is
     <div className="bg-muted/50 rounded-lg p-3 text-sm mr-8">
       {currentAssistantMessage && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <ReactMarkdown>{currentAssistantMessage}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentAssistantMessage}</ReactMarkdown>
         </div>
       )}
       {Array.from(currentToolCalls.values()).map((tc) => (

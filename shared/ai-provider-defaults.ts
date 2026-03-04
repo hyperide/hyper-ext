@@ -4,6 +4,20 @@
  * Single source of truth — used by SaaS client, VS Code extension, and lib/.
  */
 
+/**
+ * Provider capability matrix:
+ *
+ * | Provider | callAI (text) | Server Agent (tools) | Extension chat |
+ * |----------|---------------|----------------------|----------------|
+ * | claude   | Yes           | Yes                  | Yes (tools)    |
+ * | glm      | Yes           | Yes                  | Yes (tools)    |
+ * | openai   | Yes           | Text-only            | Text-only      |
+ * | proxy    | Yes           | Yes (litellm)        | Text-only      |
+ * | opencode | Via SDK       | Text-only            | Text-only      |
+ *
+ * "Text-only" = callAI/callAIStream works, but Anthropic SDK tool calling is not available.
+ * OpenAI function calling uses a different format — not implemented (low ROI).
+ */
 export type AIProvider = 'claude' | 'openai' | 'glm' | 'proxy' | 'opencode';
 
 export interface AIProviderDefaults {

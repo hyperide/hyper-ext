@@ -53,11 +53,33 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
   const sseReceivedDataRef = useRef(false);
   const prevStatusRef = useRef(containerStatus);
   const wasConnectedRef = useRef(false);
+  // Dedup key for runtimeError → console log injection (avoid duplicates from polling)
+  const prevRuntimeErrorKeyRef = useRef<string | null>(null);
 
-  // Sync runtime error to store
+  // Sync runtime error to store + inject into console log stream
+  // so it gets persisted to server and is visible to the AI agent
   useEffect(() => {
     setRuntimeError(runtimeError ?? null);
-  }, [runtimeError, setRuntimeError]);
+
+    if (runtimeError) {
+      const errorKey = `${runtimeError.type}:${runtimeError.message}`;
+      if (prevRuntimeErrorKeyRef.current !== errorKey) {
+        prevRuntimeErrorKeyRef.current = errorKey;
+        const fileSuffix = runtimeError.file
+          ? ` (${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''})`
+          : '';
+        addConsoleLogs([
+          {
+            level: 'error',
+            args: [`[${runtimeError.type}]${fileSuffix} ${runtimeError.message}`],
+            timestamp: Date.now(),
+          },
+        ]);
+      }
+    } else {
+      prevRuntimeErrorKeyRef.current = null;
+    }
+  }, [runtimeError, setRuntimeError, addConsoleLogs]);
 
   // Sync proxy error as system log
   useEffect(() => {
@@ -209,9 +231,8 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
           const isError =
             isProxy &&
             event.proxyEntry &&
-            (event.proxyEntry.status === 'timeout' ||
-              event.proxyEntry.status === 'error' ||
-              (typeof event.proxyEntry.status === 'number' && event.proxyEntry.status >= 400));
+            typeof event.proxyEntry.status === 'number' &&
+            event.proxyEntry.status >= 500;
 
           addLogs([
             {

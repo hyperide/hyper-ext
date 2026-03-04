@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { DisplayMessage } from '../../../shared/ai-chat-display';
 import { ToolCallCard } from './ToolCallCard';
 
@@ -21,7 +22,7 @@ export function MessageBubble({ message, onViewToolResult }: MessageBubbleProps)
     <div className="bg-muted/50 rounded-lg p-3 mr-8">
       {message.content && (
         <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-          <ReactMarkdown>{message.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
         </div>
       )}
 

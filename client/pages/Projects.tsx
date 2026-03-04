@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { loadPersistedState, resetStateForProject, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useIsOnline, useOnReconnect } from '@/stores/networkStore';
 import { authFetch } from '@/utils/authFetch';
@@ -512,6 +513,12 @@ export default function Projects() {
       await authFetch(`/api/projects/${projectId}/activate`, {
         method: 'POST',
       });
+      // Persist new projectId BEFORE reload so SSE picks up the correct project
+      if (loadPersistedState().projectId !== projectId) {
+        resetStateForProject(projectId);
+      } else {
+        savePersistedState({ projectId });
+      }
       // Full page reload to reinitialize CanvasEngine with new project
       window.location.href = '/';
     } catch (err) {

@@ -249,6 +249,21 @@
     scrollbar-width: none;
   }
 
+  /* GFM table styling for AI Agent Chat */
+  .prose table {
+    border-collapse: collapse;
+  }
+
+  .prose th,
+  .prose td {
+    border: 1px solid hsl(var(--border));
+    padding: 0.5rem 0.75rem;
+  }
+
+  .prose th {
+    background-color: hsl(var(--muted));
+  }
+
   /* Fix ScrollArea viewport layout in AI Agent Chat */
   .ai-agent-chat [data-radix-scroll-area-viewport] > div {
     /* biome-ignore lint/complexity/noImportantStyles: override inline-styles in <ScrollArea /> */

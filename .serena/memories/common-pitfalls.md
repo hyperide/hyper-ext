@@ -43,7 +43,51 @@ the OS/editor preference, not the actual project background. Fix: use neutral
 semi-transparent grays (e.g. `rgba(128,128,128,0.3)`) that work on any background.
 See `overlay-renderer.ts`.
 
+## AI Provider Routing
+
+### Anthropic SDK + non-Anthropic provider = crash
+
+`new Anthropic({ baseURL: 'https://api.openai.com/v1' })` sends Anthropic
+Messages API format to an OpenAI endpoint → HTTP 404/401. Before calling
+`getAnthropicClient()` or `anthropic.messages.*`, check that
+`resolvedConfig.provider !== 'openai'`. Use `callAI()`/`callAIStream()`
+from `lib/ai-client` instead — they route by protocol internally.
+
+### resolveServerAIConfig() throws for opencode
+
+It's not just "returns null" — it throws `AppError` for opencode provider.
+All callers must either check provider before calling, or wrap in try/catch.
+`parseComponent.ts` already has try/catch; `project-doctor.ts` was missing it.
+
+### generateArrayItems() must respect user's model
+
+Was hardcoding `claude-sonnet-4-20250514`. If user has proxy+gemini, this
+sends to litellm asking for a model it doesn't have. Use `config.model`.
+
+## Project Switching
+
+### localStorage.projectId must be updated BEFORE window.location.href reload
+
+`handleOpenProject` calls `/api/projects/:id/activate` (server updates in-memory
+`activeProjectId`), then `window.location.href = '/'`. But `useProjectSSE` reads
+`loadPersistedState().projectId` from localStorage on mount to build the SSE URL.
+If localStorage wasn't updated before reload, SSE connects with the **old** project ID.
+All project-scoped features (AI agent, diagnostics, SSE) then operate on the wrong project.
+
+Fix: call `resetStateForProject(newProjectId)` before `window.location.href`.
+Conditional: only reset when projectId actually changed, otherwise `savePersistedState`
+to avoid losing `openedComponent`/`openFiles`/`activeFilePath` on same-project reopen.
+
 ## Auth & Security
+
+### Handlers must not bypass middleware with direct service calls
+
+When using `setProjectRole` (non-blocking middleware), handlers MUST use
+`c.get('checkedProject')` — never fall back to direct service calls like
+`getActiveProjectService()`. The middleware validates access; the fallback
+doesn't. Also: SSE handlers must only register clients for broadcasts
+**after** confirming access (don't add to `projectStatusClients` if
+`checkedProject` is undefined). Found in HYP-219 codex review.
 
 ### Missing auth on read endpoints
 
@@ -98,7 +142,44 @@ AST mutation produces `<>(<Row />)(<Clone />)</>` — recast preserves the
 original parentheses as JSXText `"("`. Don't mutate arrow function bodies
 directly; use Babel's path API or restructure the callback to a block body first.
 
+## Preview Generator
+
+### Regex vs AST for source code scanning
+
+Never use regex to extract exports, component names, or parse code structure from
+TypeScript/TSX source files. Regex matches inside comments, string literals, and
+template literals, producing false positives. Use `@babel/parser` with
+`errorRecovery: true` instead. Learned in HYP-203 when 12+ tests revealed regex
+false positives in `scanner.ts` and `parseExistingPreview`.
+
+### Babel errorRecovery still throws on broken JSX
+
+`@babel/parser` with `errorRecovery: true` still throws on some broken code
+(e.g. unterminated JSX `<div>`). Always wrap scanner calls in try/catch when
+processing user-edited files that may be mid-edit.
+
 ## Canvas Engine
+
+### ParseContext seenIds must be separate per tree
+
+When parsing main component AND Sample* variant from the same file,
+each must use its own `ParseContext` with independent `seenIds` Set.
+If shared, the second parse gets regenerated UUIDs for any elements
+that appeared in the first parse (via `{...props}` spread sharing IDs).
+
+### Recast: separate processJSX functions for main vs Sample*
+
+`processJSXElement` / `processJSXInNode` are mutually recursive.
+If Sample* reuses the main component's `processJSXInNode`, nested
+expressions (`{expr}`) will incorrectly use `idMap` instead of `sampleIdMap`.
+Always create separate `processSampleJSX` / `processSampleJSXInNode`.
+
+### findExportJSX: skipDefaultExport for Sample* lookups
+
+`findExportJSX` falls back to `ExportDefaultDeclaration` when no named
+export matches. For Sample* lookups, this fallback must be disabled
+(`skipDefaultExport=true`), otherwise `SampleDefault` matches the
+component's default export instead of the named Sample* export.
 
 ### Fire-and-forget async
 
@@ -113,6 +194,28 @@ process, not just the current file. If `AstBridge.test.ts` mocks `AstService`,
 any other test importing `AstService` in the same run gets the mock.
 Fix: put real-module integration tests in a different directory subtree
 (e.g. `shared/` vs `vscode-extension/`), or use `mock.restore()`.
+
+**When multiple test files mock the same module differently:** both files must
+include ALL exported functions in their mocks (not just the ones they use).
+Dynamic `await import()` caches the first mock's exports — if file A mocks
+`service` with `{getProject, getChat}` and file B mocks it with `{getChat}`,
+file B may get file A's mock missing `getChat`. Include cross-pollinating stubs:
+
+```typescript
+// projectRole.test.ts mocks service
+mock.module('../modules/projects/service', () => ({
+  getProject: mockGetProject,
+  getActiveProject: mockGetActiveProject,
+  // Include getChat to prevent mock bleed from workspace.test.ts
+  getChat: mock(() => Promise.resolve(null)),
+}));
+```
+
+### bun mockClear vs mockReset
+
+`mockClear()` only clears call tracking, NOT pending `mockResolvedValueOnce`
+queue. Use `mockReset().mockResolvedValue(null)` in `beforeEach` to clear
+everything and set a safe default.
 
 ### DOM dependency in operations
 
@@ -160,3 +263,34 @@ someone removes that JSX and the lookup silently breaks with invisible styles.
 - `DiagnosticLogsViewer.tsx` — SOURCE_STYLE_* uses inline hex colors
 - `DiagnosticFilterBar.tsx` — SOURCE_PILLS uses inline styles for active state
 - `EditFileDiff.tsx` — lineClass moved to direct `cn()` conditionals in JSX
+
+## Preview Pipeline
+
+### injectUniqueIds validates paths against process.cwd(), not project path
+
+Container sends absolute paths like `/app/src/card.tsx`. Server CWD is the
+HyperIDE project root, not the user project root. `path.relative(cwd, containerPath)`
+starts with `..` → 403 "path traversal detected". Fix: use `getActiveProject().path`
+as the base for validation.
+
+### parseComponent derives componentName from filename, not actual export
+
+`card.tsx` → `componentName = "card"`, but actual export is `export function Card`.
+The generated `__canvas_preview__.tsx` imports `{ SampleDefault } from './card'` as
+`cardSampleDefault` — wrong identifier in SampleDefaultMap and sampleRenderersMap.
+Fix: `findActualExportName(ast, matchFn)` resolves the real export name from AST.
+
+### Module SyntaxErrors are invisible to ALL JS error APIs
+
+`SyntaxError: does not provide an export named 'X'` is a V8 module linking error.
+It does NOT fire `window.error`, `console.error()`, or `unhandledrejection`.
+Framework overlays (Vite/Next.js/Bun) don't detect it either.
+
+**Only working capture method**: dynamic `import(script.src)` returns a Promise
+that rejects on linking failures. Added to `iframe-console-capture.js` on
+DOMContentLoaded — re-imports each `<script type="module" src>` to detect errors.
+ES modules are cached, so no double execution on success.
+
+IframeCanvas.tsx receives the error via `hypercanvas:runtimeError` postMessage
+with `event.source` validation against the iframe. Uses `errorSourceRef` (useRef)
+to track error origin and prevent polling from clearing postMessage-sourced errors.

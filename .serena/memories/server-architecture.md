@@ -27,11 +27,31 @@ Domain-scoped modules with service + routes:
 
 ## Middleware
 
-- `auth.ts` — JWT/token verification, requireEditor
-- `workspace.ts` — Workspace context injection
-- `projectRole.ts` — Role-based access control
+- `auth.ts` — JWT/token verification, sets `userId` and `user` in context
+- `workspace.ts` — `requireWorkspaceAccess` (resolves workspaceId from param/query/body,
+  checks membership, sets `workspaceId` + `workspaceRole`), `requireChatAccess`
+  (loads chat, validates workspace membership), `checkWorkspaceAccess()` helper,
+  `checkProjectAccess()` helper
+- `projectRole.ts` — `requireEditor` (editor-only routes, uses `resolveProjectId()`
+  with 5-step chain: param → query → body → bodyPath → active, sets `checkedProject`),
+  `requireProjectAccess` (viewer-safe), `setProjectRole` (non-blocking),
+  `resolveProjectId()` shared helper. All throw AppError (not HTTPException).
 - `fileSnapshot.ts` — File snapshot for undo/redo tracking
-- `errorHandler.ts` — Global error handler
+- `errorHandler.ts` — Global error handler (handles AppError, HTTPException, DB errors)
+
+### Access control pattern (HYP-219)
+
+All authorization is at route registration level — handlers never check access:
+
+```typescript
+app.get('/api/projects', authMiddleware, requireWorkspaceAccess, listProjects);
+app.put('/api/projects/:id', authMiddleware, requireEditor, updateProject);
+// Handler uses c.get('checkedProject'), c.get('workspaceId')
+```
+
+Write handlers MUST use `c.get('workspaceId')` (not body value) to prevent
+workspace ID mismatch bypass. AI agent handlers use `checkedProject.path` (not
+body `projectPath`) to prevent IDOR.
 
 ## Proxy Architecture (main.ts)
 
@@ -50,7 +70,9 @@ Domain-scoped modules with service + routes:
 ## Key Services
 
 - `container-manager.ts` — Docker/K8s abstraction
-- `ast-manipulator.ts` — Recast-based code editing
+- `ast-manipulator.ts` — Recast-based code editing (includes `toSampleExportName()`)
+- `parseComponent.ts` — Parses component JSX → AST tree; supports `sampleName` param to parse Sample* variant alongside main component; uses `extractJSXFromFunction` + `findExportJSX` helpers
+- `injectUniqueIds.ts` — Injects `data-uniq-id` into source; supports `sampleIdMap` for Sample* exports; cache key includes componentName + sampleName
 - `component-analyzer.ts` — Babel AST analysis
-- `ai-agent*.ts` — AI orchestration
+- `ai-agent*.ts` — AI orchestration (routes by provider: anthropic→SDK tools, openai→text-only via callAIStream, opencode→session SDK)
 - `fileChangeTracker.ts` — File change tracking

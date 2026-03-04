@@ -12,6 +12,8 @@
  * - AI integration with user's API key
  */
 
+import { isAbsolute, join, relative } from 'node:path';
+import { ensureSample, PreviewFileManager } from '@lib/preview-generator';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
 import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
@@ -26,6 +28,7 @@ import { StateHub } from './StateHub';
 import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { detectUIKit } from './services/ProjectDetector';
+import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 
 // Global references
@@ -158,10 +161,26 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Auto-inject UUIDs and parse component structure when currentComponent changes
+  // Deterministic preview file manager (no AI, no network)
+  const vsCodeIO = new VSCodeFileIO();
+  const previewManager = new PreviewFileManager({
+    projectRoot: workspaceRoot,
+    io: vsCodeIO,
+  });
+
+  // AI-powered sample generator (uses extension's API key config)
+  const sampleGenerator = createExtensionSampleGenerator(context);
+
+  // Auto-inject UUIDs and parse component structure when currentComponent changes.
+  // Serial queue prevents race conditions on rapid component switching:
+  // each new switch cancels the previous ensureSample/ensureComponent chain.
+  let previewAbortController: AbortController | null = null;
+
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {
       const componentPath = patch.currentComponent.path;
+      const componentName = patch.currentComponent.name;
+
       // First inject data-uniq-id attributes into source, then parse structure
       panelRouter?.astBridge.astService
         .injectUniqueIds(componentPath)
@@ -171,6 +190,38 @@ export function activate(context: vscode.ExtensionContext) {
         })
         .catch((err) => {
           console.error('[HyperCanvas] Failed to inject UUIDs / parse structure:', err);
+        });
+
+      // Cancel previous ensureSample/ensureComponent chain
+      previewAbortController?.abort();
+      const ac = new AbortController();
+      previewAbortController = ac;
+
+      // Normalize: currentComponent.path may be relative or absolute
+      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
+
+      // 1. Ensure component has SampleDefault (AI-based, silent skip if no API key)
+      ensureSample({
+        io: vsCodeIO,
+        absolutePath: absComponentPath,
+        componentName,
+        sampleName: 'SampleDefault',
+        generate: sampleGenerator,
+      })
+        .then(() => {
+          if (ac.signal.aborted) return;
+          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
+          const relativePath = relative(workspaceRoot, absComponentPath);
+          return previewManager.ensureComponent([relativePath]);
+        })
+        .then(() => {
+          if (ac.signal.aborted) return;
+          // 3. Refresh iframe to pick up regenerated __canvas_preview__.tsx
+          previewPanel?.refresh();
+        })
+        .catch((err) => {
+          if (ac.signal.aborted) return;
+          console.error('[HyperCanvas] Failed to ensure sample/preview:', err);
         });
     }
   });

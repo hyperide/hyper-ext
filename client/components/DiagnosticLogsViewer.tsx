@@ -120,7 +120,7 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs text-foreground hover:text-foreground/80"
+              className="h-6 px-2 text-xs bg-destructive/15 text-destructive hover:bg-destructive/25 hover:text-destructive animate-pulse"
               onClick={handleAutoFix}
             >
               <IconWand size={14} className="mr-1" />

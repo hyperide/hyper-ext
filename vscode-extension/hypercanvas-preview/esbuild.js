@@ -85,11 +85,19 @@ function createWebviewPlugins() {
       build.onResolve({ filter: /components\/SourceControlSection/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/SourceControlSection.tsx') };
       });
-      build.onResolve({ filter: /components\/TestGenerationModal/ }, () => {
+      // Stub out Monaco editor components (not needed in VS Code, saves ~5MB)
+      build.onResolve({ filter: /TestGenerationModal/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/TestGenerationModal.tsx') };
       });
-
-      // Exclude Monaco — not needed in VS Code extension (VS Code has its own editor)
+      build.onResolve({ filter: /LazyMonaco/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/LazyMonaco.tsx') };
+      });
+      build.onResolve({ filter: /MonacoEditor/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/LazyMonaco.tsx') };
+      });
+      build.onResolve({ filter: /monaco-loader/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/LazyMonaco.tsx') };
+      });
       build.onResolve({ filter: /monaco-editor|@monaco-editor/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/monaco.ts') };
       });

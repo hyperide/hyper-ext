@@ -4,6 +4,61 @@ import { useState } from 'react';
 import type { DisplayToolCall } from '../../../shared/ai-chat-display';
 import { EditFileDiff } from '../EditFileDiff';
 
+function truncate(str: string, max: number): string {
+  return str.length > max ? `${str.slice(0, max)}…` : str;
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+export function getToolSummary(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case 'read_file':
+    case 'edit_file':
+    case 'write_file':
+    case 'delete_file':
+      return str(input.path);
+    case 'move_file':
+      return `${str(input.sourcePath) || str(input.source)} → ${str(input.destPath) || str(input.destination)}`;
+    case 'grep_search':
+      return input.path ? `"${str(input.pattern)}" in ${str(input.path)}` : `"${str(input.pattern)}"`;
+    case 'glob_search':
+      return input.path ? `${str(input.pattern)} in ${str(input.path)}` : str(input.pattern);
+    case 'bash_exec':
+      return truncate(str(input.command), 80);
+    case 'git_command': {
+      const args = Array.isArray(input.args) ? input.args.join(' ') : str(input.args);
+      return [str(input.command), args].filter(Boolean).join(' ');
+    }
+    case 'list_directory':
+    case 'tree':
+      return str(input.path);
+    case 'browser_navigate':
+      return str(input.url);
+    case 'browser_click':
+      return str(input.selector) || str(input.ref);
+    case 'browser_type':
+      return truncate(str(input.text), 60);
+    case 'run_tests':
+      return Array.isArray(input.testPaths) ? input.testPaths.join(', ') : str(input.testPaths);
+    case 'brave_web_search':
+      return str(input.query);
+    case 'url_fetch':
+      return str(input.url);
+    case 'ask_user':
+      return '';
+    default: {
+      if (name.startsWith('canvas_')) {
+        return str(input.componentId) || str(input.name);
+      }
+      // Unknown tool: show first string value
+      const first = Object.values(input).find((v) => typeof v === 'string');
+      return typeof first === 'string' ? truncate(first, 80) : '';
+    }
+  }
+}
+
 interface ToolCallCardProps {
   toolCall: DisplayToolCall;
   onViewResult?: () => void;
@@ -11,6 +66,7 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({ toolCall, onViewResult }: ToolCallCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const toolSummary = getToolSummary(toolCall.name, toolCall.input);
 
   const isEditFile = toolCall.name === 'edit_file';
   const editInput = isEditFile
@@ -55,6 +111,10 @@ export function ToolCallCard({ toolCall, onViewResult }: ToolCallCardProps) {
         )}
         {!toolCall.result && <IconLoader2 size={12} className="inline-block ml-1 animate-spin text-amber-500" />}
       </button>
+      {/* Compact argument summary — always visible */}
+      {toolSummary && (
+        <span className="block text-[10px] font-mono text-muted-foreground truncate mt-0.5">{toolSummary}</span>
+      )}
 
       {/* Expanded: show input (or diff for edit_file) */}
       {isExpanded && (

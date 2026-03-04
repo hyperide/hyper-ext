@@ -329,7 +329,10 @@ export default function IframeCanvas({
         const errorCheck = checkForGatewayError();
         if (errorCheck.hasError) {
           console.log('[IframeCanvas] Gateway error on load, scheduling retry');
-          onGatewayError?.(true, errorCheck.errorMessage); // Notify parent with error message
+          // Only notify parent after enough retries to rule out transient startup errors
+          if (retryCount >= 2) {
+            onGatewayError?.(true, errorCheck.errorMessage);
+          }
 
           // When server is known to be offline, don't retry — authStore handles recovery
           if (serverOffline) {
@@ -407,6 +410,13 @@ export default function IframeCanvas({
 
   // Recovery: reload iframe when server comes back online (serverOffline: true → false)
   const prevServerOfflineRef = useRef(serverOffline);
+  // Tracks whether current runtime error came from overlay polling or postMessage.
+  // Must be a ref (not local variable) to survive useEffect re-runs on iframeLoadedCounter change.
+  const errorSourceRef = useRef<'overlay' | 'postMessage' | null>(null);
+  // Timestamp of the last postMessage error — used to distinguish "from current load"
+  // vs "stale from previous load". Module errors fire just before the iframe load event,
+  // so a postMessage within ~2s of effect start is from the same load cycle.
+  const postMessageTimeRef = useRef(0);
   useEffect(() => {
     const wasOffline = prevServerOfflineRef.current;
     prevServerOfflineRef.current = serverOffline;
@@ -845,8 +855,15 @@ export default function IframeCanvas({
   }, [editorMode, iframeLoadedCounter]);
 
   // Poll iframe for runtime errors (Next.js, Vite, Bun error overlays)
+  // Also listens for postMessage-based errors from iframe-console-capture.js
+  // (catches module SyntaxErrors that don't produce framework overlays)
   useEffect(() => {
     if (!onRuntimeError) return;
+
+    const effectStartTime = Date.now();
+    // Reset postMessage timestamp on new effect cycle (iframe reload) so stale
+    // errors from the previous load don't survive a quick reload (< 2s).
+    postMessageTimeRef.current = 0;
 
     const checkForRuntimeError = (): RuntimeError | null => {
       const iframe = iframeRef.current;
@@ -860,12 +877,6 @@ export default function IframeCanvas({
       const nextjsPortal = doc.querySelector('nextjs-portal');
       const nextjsShadow = nextjsPortal?.shadowRoot;
       const nextjsOverlay = nextjsShadow?.querySelector('[data-nextjs-dialog-overlay]');
-      // console.log('[IframeCanvas] Runtime error check:', {
-      // 	hasNextjsPortal: !!nextjsPortal,
-      // 	hasNextjsOverlay: !!nextjsOverlay,
-      // 	hasViteOverlay: !!doc.querySelector('vite-error-overlay'),
-      // 	hasBunHmr: !!doc.querySelector('bun-hmr'),
-      // });
       if (nextjsOverlay && nextjsShadow) {
         // Extract error type (Build Error, Runtime Error)
         const errorLabel = nextjsShadow.querySelector('#nextjs__container_errors_label');
@@ -974,25 +985,85 @@ export default function IframeCanvas({
         }
       }
 
+      // Blank page detection: if React never mounted after sufficient time,
+      // likely a module linking error (e.g., "does not provide an export named").
+      // Only check after 2s from effect start to avoid false positives during
+      // normal React mount time. Dynamic import() in iframe-console-capture.js
+      // provides the actual error message; this is a fallback.
+      if (Date.now() - effectStartTime > 2000) {
+        const root = doc.getElementById('root') || doc.getElementById('__next') || doc.getElementById('app');
+        if (root && root.children.length === 0) {
+          return {
+            framework: 'vite',
+            type: 'Module Error',
+            message: 'Component failed to render. Check browser console for import errors.',
+            fullText:
+              'The component module loaded but React never mounted. ' +
+              'This usually means a module import error (e.g., wrong export name). ' +
+              'Open browser DevTools console for the exact error.',
+          };
+        }
+      }
+
       return null;
     };
+
+    // Listen for runtime errors posted from iframe via iframe-console-capture.js
+    // Catches module SyntaxErrors and unhandled exceptions that don't create overlays
+    const handleRuntimeMessage = (event: MessageEvent) => {
+      // Only accept messages from the preview iframe (ignore other frames/scripts)
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (event.data?.type !== 'hypercanvas:runtimeError') return;
+      const error = event.data.error as RuntimeError;
+      if (error) {
+        errorSourceRef.current = 'postMessage';
+        postMessageTimeRef.current = Date.now();
+        onRuntimeError(error);
+      }
+    };
+    window.addEventListener('message', handleRuntimeMessage);
 
     // Initial check (with small delay to let iframe settle after load)
     const timeoutId = setTimeout(() => {
       const initialError = checkForRuntimeError();
-      console.log('[IframeCanvas] Initial runtime error check:', initialError);
-      onRuntimeError(initialError);
+      if (initialError) {
+        // Only set overlay error if postMessage hasn't already delivered
+        // a more specific error message (e.g., actual module linking error)
+        if (errorSourceRef.current !== 'postMessage') {
+          errorSourceRef.current = 'overlay';
+          onRuntimeError(initialError);
+        }
+      } else if (errorSourceRef.current === 'postMessage' && effectStartTime - postMessageTimeRef.current < 2000) {
+        // postMessage error arrived just before this effect cycle (same page load) — keep it.
+        // Module errors fire before iframe load event, so the timestamp is always
+        // slightly before effectStartTime.
+      } else {
+        errorSourceRef.current = null;
+        onRuntimeError(null);
+      }
     }, 500);
 
-    // Poll every 2 seconds
+    // Poll every 2 seconds — detect new overlay errors, clear resolved ones
     const intervalId = setInterval(() => {
       const error = checkForRuntimeError();
-      onRuntimeError(error);
+      if (error) {
+        // Don't override postMessage errors — they have the actual error message
+        if (errorSourceRef.current !== 'postMessage') {
+          errorSourceRef.current = 'overlay';
+          onRuntimeError(error);
+        }
+      } else if (errorSourceRef.current === 'overlay') {
+        // Overlay disappeared — clear error
+        errorSourceRef.current = null;
+        onRuntimeError(null);
+      }
+      // If errorSource is 'postMessage', don't clear — error persists until iframe reloads
     }, 2000);
 
     return () => {
       clearTimeout(timeoutId);
       clearInterval(intervalId);
+      window.removeEventListener('message', handleRuntimeMessage);
     };
   }, [onRuntimeError, iframeLoadedCounter]);
 
