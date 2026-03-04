@@ -34,7 +34,10 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
   abortController = new AbortController();
   const thisPromise = authFetch('/api/get-components', { signal: abortController.signal })
     .then((res) => {
-      if (!res.ok) return { success: false, error: `HTTP ${res.status} ${res.statusText}`.trim() };
+      if (!res.ok) {
+        const status = res.statusText ? `HTTP ${res.status} ${res.statusText}` : `HTTP ${res.status}`;
+        return { success: false, error: status };
+      }
       return res
         .json()
         .then((json: ComponentsAPIResponse) => {
@@ -46,6 +49,8 @@ export function fetchComponentsJSON(): Promise<ComponentsAPIResponse> {
         })
         .catch(() => ({ success: false, error: 'Failed to parse components response as JSON' }));
     })
+    // Network errors (DNS, timeout, etc.) propagate to callers — useComponentsData
+    // catches AbortError separately and logs everything else. No catch needed here.
     .finally(() => {
       // Only clean up if this is still the active request —
       // a cancel→refetch sequence may have already replaced the handles.
