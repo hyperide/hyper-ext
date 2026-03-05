@@ -1,4 +1,4 @@
-import { IconChevronDown, IconCode, IconPointer } from '@tabler/icons-react';
+import { IconCode, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
@@ -1036,10 +1036,7 @@ export default function RightSidebar({
         <>
           {/* Frame type */}
           <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-foreground">{getFrameType()}</span>
-              <IconChevronDown className="w-3 h-3" stroke={1.5} />
-            </div>
+            <span className="text-sm font-semibold text-foreground">{getFrameType()}</span>
           </div>
 
           {/* Text Content */}

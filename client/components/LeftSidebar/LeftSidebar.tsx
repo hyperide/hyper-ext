@@ -1,4 +1,3 @@
-import { IconChevronDown } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
@@ -206,10 +205,7 @@ export default function LeftSidebar({
         <>
           <SidebarHeader />
           <div className="px-4 py-3 border-b border-border">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-foreground">{meta?.componentName || 'Untitled'}</span>
-              <IconChevronDown className="w-3 h-3" stroke={1.5} />
-            </div>
+            <span className="text-sm font-semibold text-foreground">{meta?.componentName || 'Untitled'}</span>
             <p className="text-xs text-muted-foreground mt-1">
               {meta?.projectName || meta?.repoPath?.split('/').pop() || 'No project'}
             </p>
