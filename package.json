@@ -18,8 +18,8 @@
     "build:css": "bun x tailwindcss -i ./client/global.css -o ./dist/client/global.css",
     "start": "NODE_ENV=production bun server/main.ts",
     "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/",
-    "lint": "biome check client server shared lib scripts && tsc --noEmit",
-    "lint:fix": "biome check --write client server shared lib scripts",
+    "lint": "biome check . && tsc --noEmit",
+    "lint:fix": "biome check --write .",
     "typecheck": "tsc",
     "postinstall": "npx playwright install chromium"
   },

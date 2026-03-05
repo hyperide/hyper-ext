@@ -16,7 +16,6 @@ import type { ScanResult } from './services/ComponentService';
 
 export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
-  private _view?: vscode.WebviewView;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -31,8 +30,6 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
-    this._view = webviewView;
-
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
@@ -76,7 +73,6 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.onDidDispose(() => {
       this._stateHub.unregister(RightPanelProvider.viewType);
-      this._view = undefined;
     });
   }
 

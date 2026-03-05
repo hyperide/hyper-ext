@@ -35,11 +35,13 @@ code --install-extension "$VSIX_FILE" --force
 if [[ "$BUMPED" == true ]]; then
   TAG="ext-v${VERSION}"
   echo "=== Committing version bump and tagging ${TAG} ==="
-  git -C "$REPO_ROOT" add "$SCRIPT_DIR/package.json"
+  git -C "$REPO_ROOT" add "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/package-lock.json"
   git -C "$REPO_ROOT" commit -m "chore: bump hypercanvas-preview to v${VERSION}"
   git -C "$REPO_ROOT" tag -a "$TAG" -m "hypercanvas-preview v${VERSION}"
-  git -C "$REPO_ROOT" push origin HEAD
-  git -C "$REPO_ROOT" push origin "$TAG"
+  if ! git -C "$REPO_ROOT" push origin HEAD || ! git -C "$REPO_ROOT" push origin "$TAG"; then
+    echo "ERROR: Failed to push branch and/or tag ${TAG}. Please resolve the issue and push manually." >&2
+    exit 1
+  fi
   echo "=== Pushed branch and tag ${TAG} ==="
 fi
 

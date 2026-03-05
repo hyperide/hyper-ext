@@ -6,17 +6,10 @@
  * finds element by data-uniq-id -> extracts className, childrenType, etc.
  */
 
-import { parseCode } from '@lib/ast/parser';
-import {
-  findElementByUuid,
-  analyzeJSXChildren,
-  getChildrenLocation,
-  getJSXTagName,
-} from '@lib/ast/traverser';
-import {
-  getAttributeString,
-} from '@lib/ast/mutator';
 import type { FileIO } from '@lib/ast/file-io';
+import { getAttributeString } from '@lib/ast/mutator';
+import { parseCode } from '@lib/ast/parser';
+import { analyzeJSXChildren, findElementByUuid, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
 
 export interface StyleReadResult {
   className: string;
@@ -48,10 +41,7 @@ export class StyleReadService {
   /**
    * Read className and metadata from an element in the AST
    */
-  async readElementClassName(
-    elementId: string,
-    componentPath: string,
-  ): Promise<StyleReadResult> {
+  async readElementClassName(elementId: string, componentPath: string): Promise<StyleReadResult> {
     const absolutePath = this._resolvePath(componentPath);
 
     try {
@@ -99,5 +89,4 @@ export class StyleReadService {
       };
     }
   }
-
 }

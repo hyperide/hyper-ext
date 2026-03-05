@@ -1,8 +1,8 @@
-import nextra from 'nextra'
+import nextra from 'nextra';
 
 const withNextra = nextra({
   contentDirBasePath: '/docs',
-})
+});
 
 export default withNextra({
   reactStrictMode: true,
@@ -14,4 +14,4 @@ export default withNextra({
       'next-mdx-import-source-file': './mdx-components.tsx',
     },
   },
-})
+});

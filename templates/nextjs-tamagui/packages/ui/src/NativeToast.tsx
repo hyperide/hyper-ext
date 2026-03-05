@@ -1,11 +1,11 @@
-import { Toast, useToastState } from '@tamagui/toast'
-import { YStack } from 'tamagui'
+import { Toast, useToastState } from '@tamagui/toast';
+import { YStack } from 'tamagui';
 
 export const NativeToast = () => {
-  const currentToast = useToastState()
+  const currentToast = useToastState();
 
   if (!currentToast || currentToast.isHandledNatively) {
-    return null
+    return null;
   }
 
   return (
@@ -20,13 +20,10 @@ export const NativeToast = () => {
       scale={1}
       animation="quick"
     >
-      <YStack
-        py="$1.5"
-        px="$2"
-      >
+      <YStack py="$1.5" px="$2">
         <Toast.Title lineHeight="$1">{currentToast.title}</Toast.Title>
         {!!currentToast.message && <Toast.Description>{currentToast.message}</Toast.Description>}
       </YStack>
     </Toast>
-  )
-}
+  );
+};

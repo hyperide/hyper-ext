@@ -2,15 +2,15 @@
  * Services for HyperCanvas VS Code Extension
  */
 
-export { DevServerManager } from './DevServerManager';
 export { AstService } from './AstService';
-export { ComponentService, type ComponentInfo, type PropInfo, type ComponentTree } from './ComponentService';
+export { type ComponentInfo, ComponentService, type ComponentTree, type PropInfo } from './ComponentService';
 export { CompositionStorage } from './CompositionStorage';
+export { DevServerManager } from './DevServerManager';
 export {
-  detectProjectType,
-  getDevCommand,
-  getDefaultPort,
-  getProjectInfo,
-  getPackageScripts,
   detectPackageManager,
+  detectProjectType,
+  getDefaultPort,
+  getDevCommand,
+  getPackageScripts,
+  getProjectInfo,
 } from './ProjectDetector';

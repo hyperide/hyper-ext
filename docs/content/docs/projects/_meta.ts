@@ -1,11 +1,11 @@
 export default {
-  'cloning': {
+  cloning: {
     title: 'Clone from Git',
   },
   'ai-creation': {
     title: 'Create with AI',
   },
-  'settings': {
+  settings: {
     title: 'Project Settings',
   },
-}
+};

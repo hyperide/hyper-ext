@@ -1,7 +1,7 @@
-import 'setimmediate'
+import 'setimmediate';
 
 if (!global?.setImmediate) {
-  global.setImmediate = setTimeout
+  global.setImmediate = setTimeout;
 }
 
-import 'expo-router/entry'
+import 'expo-router/entry';

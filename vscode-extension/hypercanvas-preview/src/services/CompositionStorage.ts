@@ -5,8 +5,8 @@
  * All data is stored locally in the user's project.
  */
 
-import * as vscode from 'vscode';
 import * as path from 'node:path';
+import * as vscode from 'vscode';
 import type { CanvasComposition, Chat, ChatMessage } from '../types';
 
 // ============================================
@@ -44,7 +44,7 @@ export class CompositionStorage {
       const content = await vscode.workspace.fs.readFile(uri);
       const json = new TextDecoder().decode(content);
       return JSON.parse(json) as CanvasComposition;
-    } catch (error) {
+    } catch {
       // File doesn't exist or can't be read
       return null;
     }
@@ -53,10 +53,7 @@ export class CompositionStorage {
   /**
    * Save composition for a component
    */
-  async saveComposition(
-    componentPath: string,
-    composition: CanvasComposition,
-  ): Promise<void> {
+  async saveComposition(componentPath: string, composition: CanvasComposition): Promise<void> {
     // Ensure directory exists
     await this._ensureDir(path.join(HYPERCANVAS_DIR, COMPOSITIONS_DIR));
 
@@ -89,11 +86,7 @@ export class CompositionStorage {
    */
   async listCompositions(): Promise<CanvasComposition[]> {
     try {
-      const dirPath = path.join(
-        this._workspaceRoot,
-        HYPERCANVAS_DIR,
-        COMPOSITIONS_DIR,
-      );
+      const dirPath = path.join(this._workspaceRoot, HYPERCANVAS_DIR, COMPOSITIONS_DIR);
       const uri = vscode.Uri.file(dirPath);
 
       const entries = await vscode.workspace.fs.readDirectory(uri);
@@ -195,9 +188,7 @@ export class CompositionStorage {
       }
 
       // Sort by updatedAt descending
-      chats.sort((a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
+      chats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
       return chats;
     } catch {
@@ -216,7 +207,7 @@ export class CompositionStorage {
       // Create new chat
       chat = {
         id: chatId,
-        title: message.content.substring(0, 50) + '...',
+        title: `${message.content.substring(0, 50)}...`,
         messages: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -236,11 +227,7 @@ export class CompositionStorage {
    */
   async getSettings(): Promise<Record<string, unknown>> {
     try {
-      const filePath = path.join(
-        this._workspaceRoot,
-        HYPERCANVAS_DIR,
-        SETTINGS_FILE,
-      );
+      const filePath = path.join(this._workspaceRoot, HYPERCANVAS_DIR, SETTINGS_FILE);
       const uri = vscode.Uri.file(filePath);
 
       const content = await vscode.workspace.fs.readFile(uri);
@@ -257,11 +244,7 @@ export class CompositionStorage {
   async saveSettings(settings: Record<string, unknown>): Promise<void> {
     await this._ensureDir(HYPERCANVAS_DIR);
 
-    const filePath = path.join(
-      this._workspaceRoot,
-      HYPERCANVAS_DIR,
-      SETTINGS_FILE,
-    );
+    const filePath = path.join(this._workspaceRoot, HYPERCANVAS_DIR, SETTINGS_FILE);
     const uri = vscode.Uri.file(filePath);
 
     const content = new TextEncoder().encode(JSON.stringify(settings, null, 2));
@@ -277,29 +260,16 @@ export class CompositionStorage {
    */
   private _getCompositionPath(componentPath: string): string {
     // Convert component path to safe filename
-    const safeName = componentPath
-      .replace(/\//g, '_')
-      .replace(/\\/g, '_')
-      .replace(/\./g, '_');
+    const safeName = componentPath.replace(/\//g, '_').replace(/\\/g, '_').replace(/\./g, '_');
 
-    return path.join(
-      this._workspaceRoot,
-      HYPERCANVAS_DIR,
-      COMPOSITIONS_DIR,
-      `${safeName}.json`,
-    );
+    return path.join(this._workspaceRoot, HYPERCANVAS_DIR, COMPOSITIONS_DIR, `${safeName}.json`);
   }
 
   /**
    * Get chat file path
    */
   private _getChatPath(chatId: string): string {
-    return path.join(
-      this._workspaceRoot,
-      HYPERCANVAS_DIR,
-      CHATS_DIR,
-      `${chatId}.json`,
-    );
+    return path.join(this._workspaceRoot, HYPERCANVAS_DIR, CHATS_DIR, `${chatId}.json`);
   }
 
   /**

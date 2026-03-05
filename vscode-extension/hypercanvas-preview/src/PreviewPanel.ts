@@ -11,6 +11,7 @@
  * - message bridging between iframe and extension
  */
 
+import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { handleEditorMessage, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
@@ -211,7 +212,11 @@ export class PreviewPanel {
       return;
     }
     if (msg.type === 'diagnostic:console') {
-      const entries = (msg as { entries?: Array<{ level: string; args: string[]; timestamp: number }> }).entries;
+      const entries = (
+        msg as {
+          entries?: Array<{ level: string; args: string[]; timestamp: number }>;
+        }
+      ).entries;
       if (entries) {
         this._onConsoleCaptureCallback?.(entries);
       }
@@ -476,7 +481,7 @@ export class PreviewPanel {
     const elementId = msg.elementId as string | undefined;
     if (!elementId) return;
 
-    const requestId = `content-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `content-${Date.now()}-${this._generateRandomId(6)}`;
     this._pendingContentRequests.set(requestId, (result) => {
       const value = mode === 'text' ? result.text : result.html;
       if (value) {
@@ -685,14 +690,17 @@ export class PreviewPanel {
   }
 
   /**
+   * Generate a random alphanumeric string of the given length
+   * using cryptographically secure randomness.
+   */
+  private _generateRandomId(length: number): string {
+    return crypto.randomBytes(length).toString('base64url').slice(0, length);
+  }
+
+  /**
    * Generate nonce for CSP
    */
   private _getNonce(): string {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+    return this._generateRandomId(32);
   }
 }

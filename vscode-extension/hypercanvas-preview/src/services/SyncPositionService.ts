@@ -9,9 +9,9 @@
  */
 
 import * as vscode from 'vscode';
-import type { AstService } from './AstService';
-import type { StateHub } from '../StateHub';
 import { goToCode } from '../EditorBridge';
+import type { StateHub } from '../StateHub';
+import type { AstService } from './AstService';
 
 const CURSOR_DEBOUNCE_MS = 300;
 const SUPPRESS_DURATION_MS = 100;
@@ -29,9 +29,7 @@ export class SyncPositionService implements vscode.Disposable {
     private readonly _sendGoToVisual: (elementId: string) => void,
     private readonly _getCurrentComponent: () => string | undefined,
   ) {
-    this._enabled = vscode.workspace
-      .getConfiguration('hypercanvas.preview')
-      .get<boolean>('syncPositions', true);
+    this._enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('syncPositions', true);
   }
 
   start(): void {
@@ -54,9 +52,7 @@ export class SyncPositionService implements vscode.Disposable {
     this._disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('hypercanvas.preview.syncPositions')) {
-          this._enabled = vscode.workspace
-            .getConfiguration('hypercanvas.preview')
-            .get<boolean>('syncPositions', true);
+          this._enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('syncPositions', true);
         }
       }),
     );
@@ -66,7 +62,9 @@ export class SyncPositionService implements vscode.Disposable {
     if (this._debounceTimer) {
       clearTimeout(this._debounceTimer);
     }
-    this._disposables.forEach((d) => d.dispose());
+    for (const d of this._disposables) {
+      d.dispose();
+    }
     this._disposables = [];
   }
 
@@ -99,11 +97,7 @@ export class SyncPositionService implements vscode.Disposable {
 
     this._debounceTimer = setTimeout(async () => {
       try {
-        const result = await this._astService.findElementAtPosition(
-          filePath,
-          line,
-          column,
-        );
+        const result = await this._astService.findElementAtPosition(filePath, line, column);
 
         if (result) {
           // Suppress reverse sync (Preview→Code) before updating StateHub
@@ -121,9 +115,7 @@ export class SyncPositionService implements vscode.Disposable {
 
   // -- Preview -> Code --
 
-  private async _onPreviewSelectionChange(
-    selectedIds: string[],
-  ): Promise<void> {
+  private async _onPreviewSelectionChange(selectedIds: string[]): Promise<void> {
     if (!this._enabled) return;
     if (this._suppressCursorSync) return;
     if (selectedIds.length !== 1) return;
@@ -134,10 +126,7 @@ export class SyncPositionService implements vscode.Disposable {
     const elementId = selectedIds[0];
 
     try {
-      const loc = await this._astService.getElementLocation(
-        component,
-        elementId,
-      );
+      const loc = await this._astService.getElementLocation(component, elementId);
 
       if (loc) {
         // Suppress cursor listener to prevent feedback loop

@@ -1,7 +1,7 @@
-import { Footer, Layout, Navbar } from 'nextra-theme-docs'
-import { Head } from 'nextra/components'
-import { getPageMap } from 'nextra/page-map'
-import 'nextra-theme-docs/style.css'
+import { Head } from 'nextra/components';
+import { getPageMap } from 'nextra/page-map';
+import { Footer, Layout, Navbar } from 'nextra-theme-docs';
+import 'nextra-theme-docs/style.css';
 
 export const metadata = {
   title: {
@@ -14,18 +14,14 @@ export const metadata = {
     description: 'Visual React component editor with AI assistant',
     siteName: 'HyperIDE Docs',
   },
-}
+};
 
 const navbar = (
   <Navbar
-    logo={
-      <span className="font-bold text-lg">
-        HyperIDE
-      </span>
-    }
+    logo={<span className="font-bold text-lg">HyperIDE</span>}
     projectLink="https://github.com/hyperide/hypercanvas"
   />
-)
+);
 
 const footer = (
   <Footer>
@@ -36,14 +32,10 @@ const footer = (
       </a>
     </div>
   </Footer>
-)
+);
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const pageMap = await getPageMap()
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const pageMap = await getPageMap();
 
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
@@ -62,5 +54,5 @@ export default async function RootLayout({
         </Layout>
       </body>
     </html>
-  )
+  );
 }

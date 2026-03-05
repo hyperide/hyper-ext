@@ -135,7 +135,11 @@ function NoComponentHint() {
 
 type ToolbarMode = 'board' | 'interact' | 'design';
 
-const TOOLBAR_BUTTONS: { mode: ToolbarMode; icon: typeof IconLayoutGrid; boardOnly?: boolean }[] = [
+const TOOLBAR_BUTTONS: {
+  mode: ToolbarMode;
+  icon: typeof IconLayoutGrid;
+  boardOnly?: boolean;
+}[] = [
   { mode: 'board', icon: IconLayoutGrid, boardOnly: true },
   { mode: 'interact', icon: IconPointer },
   { mode: 'design', icon: IconBrush },
@@ -154,7 +158,12 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
       if (mode === 'board') {
         dispatch({ engineMode: 'design', canvasMode: 'multi' });
       } else if (mode === 'interact') {
-        dispatch({ engineMode: 'interact', canvasMode: 'single', selectedIds: [], hoveredId: null });
+        dispatch({
+          engineMode: 'interact',
+          canvasMode: 'single',
+          selectedIds: [],
+          hoveredId: null,
+        });
       } else {
         dispatch({ engineMode: 'design', canvasMode: 'single' });
       }
@@ -175,7 +184,7 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
             disabled={isDisabled}
             className={cn(
               'w-8 h-8 rounded-md flex items-center justify-center transition-colors',
-              isActive && 'bg-[#4597F7]',
+              isActive && 'bg-primary',
               !isActive && !isDisabled && 'hover:bg-accent',
               isDisabled && 'opacity-50 cursor-not-allowed',
             )}

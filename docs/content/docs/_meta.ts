@@ -1,32 +1,32 @@
 export default {
-  'index': {
+  index: {
     title: 'Introduction',
   },
   'getting-started': {
     title: 'Getting Started',
   },
-  'projects': {
+  projects: {
     title: 'Projects',
   },
-  'editor': {
+  editor: {
     title: 'Visual Editor',
   },
-  'styling': {
+  styling: {
     title: 'Styling Components',
   },
   'ai-assistant': {
     title: 'AI Assistant',
   },
-  'shortcuts': {
+  shortcuts: {
     title: 'Keyboard Shortcuts',
   },
-  'troubleshooting': {
+  troubleshooting: {
     title: 'Troubleshooting',
   },
-  'faq': {
+  faq: {
     title: 'FAQ',
   },
-  'adr': {
+  adr: {
     title: 'Architecture (ADR)',
   },
-}
+};

@@ -7,14 +7,12 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ProjectType, ProjectInfo } from '../types';
+import type { ProjectInfo, ProjectType } from '../types';
 
 /**
  * Read and parse package.json from project directory
  */
-async function readPackageJson(
-  projectPath: string,
-): Promise<Record<string, unknown> | null> {
+async function readPackageJson(projectPath: string): Promise<Record<string, unknown> | null> {
   try {
     const packageJsonPath = path.join(projectPath, 'package.json');
     const content = await fs.readFile(packageJsonPath, 'utf-8');
@@ -39,9 +37,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 /**
  * Detect project type from package.json dependencies and config files
  */
-export async function detectProjectType(
-  projectPath: string,
-): Promise<ProjectType> {
+export async function detectProjectType(projectPath: string): Promise<ProjectType> {
   const packageJson = await readPackageJson(projectPath);
 
   if (!packageJson) {
@@ -54,8 +50,8 @@ export async function detectProjectType(
   };
 
   // Check dependencies first
-  if (deps['next']) return 'nextjs';
-  if (deps['vite']) return 'vite';
+  if (deps.next) return 'nextjs';
+  if (deps.vite) return 'vite';
   if (deps['react-scripts']) return 'cra';
   if (deps['@remix-run/react']) return 'remix';
 
@@ -120,7 +116,7 @@ async function hasTypeScript(projectPath: string): Promise<boolean> {
     ...(packageJson.devDependencies as Record<string, string> | undefined),
   };
 
-  if (deps['typescript']) return true;
+  if (deps.typescript) return true;
 
   // Check for tsconfig
   if (await fileExists(path.join(projectPath, 'tsconfig.json'))) return true;
@@ -145,9 +141,7 @@ export async function getProjectInfo(projectPath: string): Promise<ProjectInfo> 
 /**
  * Detect UI kit used in project (tailwind, tamagui, or none)
  */
-export async function detectUIKit(
-  projectPath: string,
-): Promise<'tailwind' | 'tamagui' | 'none'> {
+export async function detectUIKit(projectPath: string): Promise<'tailwind' | 'tamagui' | 'none'> {
   const packageJson = await readPackageJson(projectPath);
 
   if (!packageJson) {
@@ -160,12 +154,12 @@ export async function detectUIKit(
   };
 
   // Check for Tamagui
-  if (deps['tamagui'] || deps['@tamagui/core'] || deps['@tamagui/cli']) {
+  if (deps.tamagui || deps['@tamagui/core'] || deps['@tamagui/cli']) {
     return 'tamagui';
   }
 
   // Check for Tailwind
-  if (deps['tailwindcss']) {
+  if (deps.tailwindcss) {
     return 'tailwind';
   }
 
@@ -175,9 +169,7 @@ export async function detectUIKit(
 /**
  * Get scripts from package.json
  */
-export async function getPackageScripts(
-  projectPath: string,
-): Promise<Record<string, string>> {
+export async function getPackageScripts(projectPath: string): Promise<Record<string, string>> {
   const packageJson = await readPackageJson(projectPath);
 
   if (!packageJson) {
@@ -190,9 +182,7 @@ export async function getPackageScripts(
 /**
  * Detect package manager used in project
  */
-export async function detectPackageManager(
-  projectPath: string,
-): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
+export async function detectPackageManager(projectPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
   // Check for lock files
   if (await fileExists(path.join(projectPath, 'bun.lockb'))) return 'bun';
   if (await fileExists(path.join(projectPath, 'bun.lock'))) return 'bun';

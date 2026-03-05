@@ -1,5 +1,5 @@
 export default {
-  'tenants': {
+  tenants: {
     title: 'Multi-Tenant Architecture',
   },
-}
+};

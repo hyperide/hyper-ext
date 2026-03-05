@@ -1,11 +1,11 @@
 export default {
-  'modes': {
+  modes: {
     title: 'Editor Modes',
   },
-  'selection': {
+  selection: {
     title: 'Element Selection',
   },
-  'operations': {
+  operations: {
     title: 'Edit Operations',
   },
-}
+};

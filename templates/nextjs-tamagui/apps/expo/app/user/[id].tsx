@@ -1,9 +1,9 @@
-import { UserDetailScreen } from 'app/features/user/detail-screen'
-import { Stack } from 'expo-router'
-import { useParams } from 'solito/navigation'
+import { UserDetailScreen } from 'app/features/user/detail-screen';
+import { Stack } from 'expo-router';
+import { useParams } from 'solito/navigation';
 
 export default function Screen() {
-  const { id } = useParams()
+  const { id } = useParams();
   return (
     <>
       <Stack.Screen
@@ -17,5 +17,5 @@ export default function Screen() {
       />
       <UserDetailScreen id={id as string} />
     </>
-  )
+  );
 }

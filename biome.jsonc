@@ -81,6 +81,17 @@
           }
         }
       }
+    },
+    {
+      // Tailwind v3 @tailwind directives are not recognized by biome's CSS parser
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUnknownAtRules": "off"
+          }
+        }
+      }
     }
   ]
 }

@@ -6,7 +6,9 @@
   --radius: 0.5rem;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
@@ -50,9 +52,12 @@ body.vscode-light {
   --card-foreground: var(--vscode-foreground);
 }
 
-input, select {
+input,
+select {
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border-color: var(--vscode-input-border, transparent);
 }
-input:focus { outline-color: var(--vscode-focusBorder); }
+input:focus {
+  outline-color: var(--vscode-focusBorder);
+}

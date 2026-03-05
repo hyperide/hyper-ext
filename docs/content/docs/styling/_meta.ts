@@ -1,14 +1,14 @@
 export default {
-  'layout': {
+  layout: {
     title: 'Layout',
   },
-  'appearance': {
+  appearance: {
     title: 'Appearance',
   },
-  'position': {
+  position: {
     title: 'Position',
   },
-  'effects': {
+  effects: {
     title: 'Effects',
   },
-}
+};

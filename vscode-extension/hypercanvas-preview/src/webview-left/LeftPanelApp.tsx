@@ -5,9 +5,9 @@
  * then renders the shared LeftSidebar used by both SaaS and VS Code.
  */
 
+import LeftSidebar from '@/components/LeftSidebar';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import { useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
-import LeftSidebar from '@/components/LeftSidebar';
 
 export function LeftPanelApp() {
   return (

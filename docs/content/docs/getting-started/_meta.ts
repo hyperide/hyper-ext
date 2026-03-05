@@ -1,8 +1,8 @@
 export default {
-  'index': {
+  index: {
     title: 'Installation',
   },
   'first-project': {
     title: 'First Project',
   },
-}
+};
