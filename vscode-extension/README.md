@@ -2,10 +2,10 @@
 
 Two independent extensions for different environments:
 
-- **Hyper Preview** (`hypercanvas-preview/`) —
+- **HyperIDE** (`hypercanvas-preview/`) —
   Standalone local editor (4 panels, AST, DevServer, AI).
   Build: esbuild.
-- **HyperCanvas Code Server** (`hypercanvas-code-server/`) —
+- **HyperIDE Code Server** (`hypercanvas-code-server/`) —
   Lightweight iframe preview for Docker IDE.
   Build: tsc.
 

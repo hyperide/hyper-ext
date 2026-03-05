@@ -67,6 +67,10 @@ export function ChatInput({
           className="min-h-[36px] text-xs resize-none"
           autoResize
           maxRows={5}
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
         />
         {isStreaming && !pendingAskUser ? (
           <Button variant="destructive" size="sm" className="h-9 w-9 p-0 shrink-0" onClick={onStop}>

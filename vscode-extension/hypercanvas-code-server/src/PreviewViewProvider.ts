@@ -191,7 +191,7 @@ export class PreviewViewProvider implements vscode.WebviewViewProvider {
     script-src 'nonce-${nonce}';
     connect-src *;
   ">
-  <title>HyperCanvas Preview</title>
+  <title>HyperIDE Preview</title>
   <style>
     html, body {
       margin: 0;

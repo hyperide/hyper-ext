@@ -1,5 +1,5 @@
 /**
- * HyperCanvas Preview Extension
+ * HyperIDE Preview Extension
  *
  * Standalone VS Code extension for visual React component editing.
  * Works completely locally — no remote backend dependency.
@@ -43,17 +43,17 @@ let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('[HyperCanvas] Extension activating...');
+  console.log('[HyperIDE] Extension activating...');
 
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
-    console.log('[HyperCanvas] No workspace folder open');
-    vscode.window.showWarningMessage('HyperCanvas: Please open a folder to use the preview.');
+    console.log('[HyperIDE] No workspace folder open');
+    vscode.window.showWarningMessage('HyperIDE: Please open a folder to use the preview.');
     return;
   }
 
-  console.log(`[HyperCanvas] Workspace root: ${workspaceRoot}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+  console.log(`[HyperIDE] Workspace root: ${workspaceRoot}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
   devServerManager = new DevServerManager(workspaceRoot);
 
@@ -77,9 +77,6 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Open preview panel as editor tab on activation
-  previewPanel.createOrShow(vscode.ViewColumn.Beside);
-
   // Register Logs panel (bottom panel)
   logsProvider = new LogsPanelProvider(context.extensionUri, workspaceRoot, context);
 
@@ -102,13 +99,13 @@ export function activate(context: vscode.ExtensionContext) {
       stateHub?.applyUpdate('extension-host', { projectUIKit: kit });
     })
     .catch((err) => {
-      console.warn('[HyperCanvas] Failed to detect UI kit:', err);
+      console.warn('[HyperIDE] Failed to detect UI kit:', err);
     });
 
   // Create DiagnosticHub for centralized diagnostic data
   diagnosticHub = new DiagnosticHub(context.globalStorageUri.fsPath);
   diagnosticHub.init().catch((err) => {
-    console.error('[HyperCanvas] Failed to init DiagnosticHub:', err);
+    console.error('[HyperIDE] Failed to init DiagnosticHub:', err);
   });
 
   // Wire DiagnosticHub to logs panel and AI chat
@@ -189,7 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
           stateHub?.applyUpdate('extension-host', { astStructure: structure });
         })
         .catch((err) => {
-          console.error('[HyperCanvas] Failed to inject UUIDs / parse structure:', err);
+          console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
         });
 
       // Cancel previous ensureSample/ensureComponent chain
@@ -221,7 +218,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
         .catch((err) => {
           if (ac.signal.aborted) return;
-          console.error('[HyperCanvas] Failed to ensure sample/preview:', err);
+          console.error('[HyperIDE] Failed to ensure sample/preview:', err);
         });
     }
   });
@@ -266,7 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(eye) Preview';
-  statusBarItem.tooltip = 'Open HyperCanvas Preview';
+  statusBarItem.tooltip = 'Open HyperIDE Preview';
   statusBarItem.command = 'hypercanvas.openPreview';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
@@ -282,11 +279,11 @@ export function activate(context: vscode.ExtensionContext) {
     });
   }
 
-  console.log('[HyperCanvas] Extension activated successfully');
+  console.log('[HyperIDE] Extension activated successfully');
 }
 
 export function deactivate() {
-  console.log('[HyperCanvas] Extension deactivating...');
+  console.log('[HyperIDE] Extension deactivating...');
 
   // Stop dev server if running
   if (devServerManager) {
@@ -309,7 +306,7 @@ export function deactivate() {
     stateHub = null;
   }
 
-  console.log('[HyperCanvas] Extension deactivated');
+  console.log('[HyperIDE] Extension deactivated');
 }
 
 /**
@@ -402,7 +399,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Start dev server
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.startDevServer', async () => {
-      console.log('[HyperCanvas] startDevServer command triggered');
+      console.log('[HyperIDE] startDevServer command triggered');
 
       if (!devServerManager) {
         return;
@@ -411,13 +408,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'HyperCanvas: Starting dev server...',
+          title: 'HyperIDE: Starting dev server...',
           cancellable: false,
         },
         async () => {
           if (!devServerManager) return;
           const state = await devServerManager.start();
-          console.log('[HyperCanvas] Dev server state:', state.status, state.url);
+          console.log('[HyperIDE] Dev server state:', state.status, state.url);
 
           if (state.status === 'running') {
             vscode.window.showInformationMessage(`Dev server running at ${state.url}`);

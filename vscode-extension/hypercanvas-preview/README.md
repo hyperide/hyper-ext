@@ -1,4 +1,4 @@
-# Hyper Preview
+# HyperIDE
 
 Visual editor for React components inside VS Code.
 Edit styles, inspect props, and preview changes — all without leaving your editor.

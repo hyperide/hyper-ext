@@ -7,6 +7,13 @@ function generateMessageId(): string {
   return `${Date.now()}-${messageIdCounter++}`;
 }
 
+const MAX_NETWORK_RETRIES = 3;
+const RETRY_DELAYS = [1000, 2000, 4000];
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'TypeError' && error.message.includes('fetch');
+}
+
 export interface PendingAskUser {
   toolUseId: string;
   question: string;
@@ -64,115 +71,142 @@ export function useChatStream({
         }
       };
 
-      try {
-        await chatAdapter.sendMessage({
-          chatId,
-          messages: messagesToSend,
-          signal: abortController.signal,
-          onEvent(event: ChatStreamEvent) {
-            // Enrich tool_result with toolName from pending map when not provided by adapter
-            if (event.type === 'tool_result' && !event.toolName) {
-              const pending = currentToolCallsRef.current.get(event.toolUseId);
-              if (pending) {
-                (event as { toolName?: string }).toolName = pending.name;
-              }
-            }
+      const onEvent = (event: ChatStreamEvent) => {
+        // Enrich tool_result with toolName from pending map when not provided by adapter
+        if (event.type === 'tool_result' && !event.toolName) {
+          const pending = currentToolCallsRef.current.get(event.toolUseId);
+          if (pending) {
+            (event as { toolName?: string }).toolName = pending.name;
+          }
+        }
 
-            onStreamEvent?.(event);
+        onStreamEvent?.(event);
 
-            switch (event.type) {
-              case 'text_delta':
-                assistantContent += event.text;
-                flushSync(() => {
-                  setCurrentAssistantMessage((prev) => prev + event.text);
-                });
-                break;
+        switch (event.type) {
+          case 'text_delta':
+            assistantContent += event.text;
+            flushSync(() => {
+              setCurrentAssistantMessage((prev) => prev + event.text);
+            });
+            break;
 
-              case 'user_message':
-                // Note: user messages are added by SharedChatPanel before calling sendMessage.
-                // This event is only emitted by SaaS SSE for server-injected messages.
-                // Skip to avoid duplicates — the caller is responsible for adding user messages.
-                break;
+          case 'user_message':
+            // User messages are added by SharedChatPanel before calling sendMessage.
+            // This event is only emitted by SaaS SSE for server-injected messages.
+            // Skip to avoid duplicates — the caller is responsible for adding user messages.
+            break;
 
-              case 'tool_use':
-                saveAccumulatedText();
-                currentToolCallsRef.current.set(event.toolUseId, {
-                  id: event.toolUseId,
-                  name: event.toolName,
-                  input: event.input,
-                });
-                setCurrentToolCalls(new Map(currentToolCallsRef.current));
-                break;
+          case 'tool_use':
+            saveAccumulatedText();
+            currentToolCallsRef.current.set(event.toolUseId, {
+              id: event.toolUseId,
+              name: event.toolName,
+              input: event.input,
+            });
+            setCurrentToolCalls(new Map(currentToolCallsRef.current));
+            break;
 
-              case 'tool_result':
-                {
-                  const toolCall = currentToolCallsRef.current.get(event.toolUseId);
-                  if (toolCall) {
-                    toolCall.result = event.result;
-                    onMessagesAppend([
-                      {
-                        id: generateMessageId(),
-                        role: 'assistant',
-                        content: '',
-                        toolCalls: [{ ...toolCall }],
-                      },
-                    ]);
-                    currentToolCallsRef.current.delete(event.toolUseId);
-                    setCurrentToolCalls(new Map(currentToolCallsRef.current));
-                  }
-                }
-                break;
-
-              case 'ask_user':
-                setPendingAskUser({
-                  toolUseId: event.toolUseId,
-                  question: event.question,
-                  options: event.options,
-                });
-                break;
-
-              case 'chat_title_updated':
-                onChatTitleUpdate?.(event.chatId, event.title);
-                break;
-
-              case 'error':
+          case 'tool_result':
+            {
+              const toolCall = currentToolCallsRef.current.get(event.toolUseId);
+              if (toolCall) {
+                toolCall.result = event.result;
                 onMessagesAppend([
                   {
                     id: generateMessageId(),
                     role: 'assistant',
-                    content: `Error: ${event.error}`,
+                    content: '',
+                    toolCalls: [{ ...toolCall }],
                   },
                 ]);
-                break;
-
-              case 'done':
-                saveAccumulatedText();
-                break;
-
-              case 'keepalive':
-                break;
+                currentToolCallsRef.current.delete(event.toolUseId);
+                setCurrentToolCalls(new Map(currentToolCallsRef.current));
+              }
             }
-          },
-        });
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
+            break;
 
-        let errorMessage = 'Unknown error';
-        if (error instanceof Error) {
-          if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            errorMessage = 'Network error: Unable to connect to the server.';
-          } else {
-            errorMessage = error.message;
+          case 'ask_user':
+            setPendingAskUser({
+              toolUseId: event.toolUseId,
+              question: event.question,
+              options: event.options,
+            });
+            break;
+
+          case 'chat_title_updated':
+            onChatTitleUpdate?.(event.chatId, event.title);
+            break;
+
+          case 'error':
+            onMessagesAppend([
+              {
+                id: generateMessageId(),
+                role: 'assistant',
+                content: `Error: ${event.error}`,
+              },
+            ]);
+            break;
+
+          case 'done':
+            saveAccumulatedText();
+            break;
+
+          case 'keepalive':
+            break;
+        }
+      };
+
+      try {
+        let lastError: unknown = null;
+
+        for (let attempt = 0; attempt <= MAX_NETWORK_RETRIES; attempt++) {
+          if (attempt > 0) {
+            setCurrentAssistantMessage(`Network error. Retrying (${attempt}/${MAX_NETWORK_RETRIES})...`);
+            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt - 1]));
+            if (abortController.signal.aborted) return;
+            assistantContent = '';
+            setCurrentAssistantMessage('');
+            currentToolCallsRef.current = new Map();
+            setCurrentToolCalls(new Map());
+          }
+
+          try {
+            await chatAdapter.sendMessage({
+              chatId,
+              messages: messagesToSend,
+              signal: abortController.signal,
+              onEvent,
+            });
+            lastError = null;
+            break;
+          } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') return;
+
+            if (isNetworkError(error) && attempt < MAX_NETWORK_RETRIES) {
+              lastError = error;
+              continue;
+            }
+
+            lastError = error;
+            break;
           }
         }
 
-        onMessagesAppend([
-          {
-            id: generateMessageId(),
-            role: 'assistant',
-            content: `Error: ${errorMessage}`,
-          },
-        ]);
+        if (lastError) {
+          const errorMessage = isNetworkError(lastError)
+            ? `Network error: Unable to connect after ${MAX_NETWORK_RETRIES} retries.`
+            : lastError instanceof Error
+              ? lastError.message
+              : 'Unknown error';
+
+          onMessagesAppend([
+            {
+              id: generateMessageId(),
+              role: 'assistant',
+              content: `Error: ${errorMessage}`,
+            },
+          ]);
+        }
       } finally {
         saveAccumulatedText();
         setIsStreaming(false);

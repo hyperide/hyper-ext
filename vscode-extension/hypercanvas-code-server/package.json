@@ -1,7 +1,7 @@
 {
   "name": "hypercanvas-code-server",
-  "displayName": "HyperCanvas Code Server",
-  "description": "Live preview panel for HyperCanvas projects in code-server",
+  "displayName": "HyperIDE Code Server",
+  "description": "Live preview panel for HyperIDE projects in code-server",
   "version": "0.1.0",
   "publisher": "hyperide",
   "engines": {
@@ -37,16 +37,16 @@
     "commands": [
       {
         "command": "hypercanvas.openPreview",
-        "title": "HyperCanvas: Open Preview"
+        "title": "HyperIDE: Open Preview"
       },
       {
         "command": "hypercanvas.refreshPreview",
-        "title": "HyperCanvas: Refresh Preview",
+        "title": "HyperIDE: Refresh Preview",
         "icon": "$(refresh)"
       },
       {
         "command": "hypercanvas.goToVisual",
-        "title": "HyperCanvas: Go to Visual"
+        "title": "HyperIDE: Go to Visual"
       }
     ],
     "keybindings": [

@@ -143,7 +143,7 @@ export class PreviewPanel {
         const component = patch.currentComponent;
         if (component && this._currentComponent !== component.path) {
           this._currentComponent = component.path;
-          console.log('[HyperCanvas] Component changed via state:', component.path);
+          console.log('[HyperIDE] Component changed via state:', component.path);
           this._updatePreviewUrl();
         }
       }
@@ -182,7 +182,7 @@ export class PreviewPanel {
 
     if (!msg.type) return;
 
-    console.log('[HyperCanvas] Message from webview:', msg.type);
+    console.log('[HyperIDE] Message from webview:', msg.type);
 
     // === Webview lifecycle ===
     if (msg.type === 'webview:ready') {
@@ -203,7 +203,7 @@ export class PreviewPanel {
 
     // === Preview-specific lifecycle messages (not routed) ===
     if (msg.type === 'previewLoaded') {
-      console.log('[HyperCanvas] Preview iframe loaded');
+      console.log('[HyperIDE] Preview iframe loaded');
       return;
     }
     if (msg.type === 'runtime:error') {
@@ -227,7 +227,7 @@ export class PreviewPanel {
       return;
     }
     if (msg.type === 'previewError') {
-      console.error('[HyperCanvas] Preview error:', (msg as { error?: string }).error);
+      console.error('[HyperIDE] Preview error:', (msg as { error?: string }).error);
       return;
     }
 
@@ -323,7 +323,7 @@ export class PreviewPanel {
     const handled = await this._panelRouter.routeMessage(PreviewPanel.PANEL_ID, msg, webview);
 
     if (!handled) {
-      console.log('[HyperCanvas] Unknown message type:', msg.type);
+      console.log('[HyperIDE] Unknown message type:', msg.type);
     }
   }
 
@@ -556,7 +556,7 @@ export class PreviewPanel {
     const component = this._extractComponentFromEditor(editor);
     if (component && this._currentComponent !== component) {
       this._currentComponent = component;
-      console.log('[HyperCanvas] Component from editor:', component);
+      console.log('[HyperIDE] Component from editor:', component);
 
       // Dispatch to StateHub so Inspector and other panels sync
       const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
@@ -581,7 +581,7 @@ export class PreviewPanel {
 
     // No component selected — show hint instead of loading bare URL
     if (!component) {
-      console.log('[HyperCanvas] No component selected, showing hint');
+      console.log('[HyperIDE] No component selected, showing hint');
       this._panel?.webview.postMessage({ type: 'showNoComponentHint' });
       return;
     }
@@ -589,7 +589,7 @@ export class PreviewPanel {
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
     const url = `${baseUrl}?component=${encodeURIComponent(component)}`;
 
-    console.log('[HyperCanvas] Updating URL:', url);
+    console.log('[HyperIDE] Updating URL:', url);
 
     this._panel?.webview.postMessage({ type: 'updateUrl', url });
   }
@@ -639,7 +639,7 @@ export class PreviewPanel {
    */
   public sendGoToVisual(elementId: string): void {
     if (this._panel) {
-      console.log(`[HyperCanvas] Sending goToVisual: ${elementId}`);
+      console.log(`[HyperIDE] Sending goToVisual: ${elementId}`);
       this._panel.webview.postMessage({
         type: 'goToVisual',
         elementId,
@@ -679,7 +679,7 @@ export class PreviewPanel {
     script-src 'nonce-${nonce}';
     connect-src *;
   ">
-  <title>HyperCanvas Preview</title>
+  <title>HyperIDE Preview</title>
   <link rel="stylesheet" href="${cssUri}">
 </head>
 <body>

@@ -743,7 +743,7 @@ export class AIBridge {
 
     const editorContext = this._buildEditorContext();
 
-    return `You are a helpful coding assistant embedded in a VS Code extension called HyperCanvas.
+    return `You are a helpful coding assistant embedded in a VS Code extension called HyperIDE.
 You help fix build errors and improve code in React projects.
 The user's project is located at: ${this._workspaceRoot}
 

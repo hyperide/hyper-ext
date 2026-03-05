@@ -1,6 +1,6 @@
 {
   "name": "hypercanvas-preview",
-  "displayName": "Hyper Preview",
+  "displayName": "HyperIDE",
   "description": "Visual editor for React components - works standalone without SaaS backend",
   "version": "0.1.1",
   "publisher": "hyperide",
@@ -39,12 +39,12 @@
       "activitybar": [
         {
           "id": "hypercanvas-explorer",
-          "title": "Hyper",
+          "title": "HyperIDE",
           "icon": "media/preview.svg"
         },
         {
           "id": "hypercanvas-inspector",
-          "title": "Hyper",
+          "title": "HyperIDE",
           "icon": "media/preview.svg"
         }
       ],
@@ -162,7 +162,7 @@
       ]
     },
     "configuration": {
-      "title": "Hyper",
+      "title": "HyperIDE",
       "properties": {
         "hypercanvas.ai.provider": {
           "type": "string",

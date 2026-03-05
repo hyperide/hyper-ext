@@ -122,7 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(eye) Preview';
-  statusBarItem.tooltip = 'Open HyperCanvas Preview';
+  statusBarItem.tooltip = 'Open HyperIDE Preview';
   statusBarItem.command = 'hypercanvas.openPreview';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);

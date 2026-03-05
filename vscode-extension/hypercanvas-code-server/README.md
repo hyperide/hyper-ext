@@ -1,4 +1,4 @@
-# HyperCanvas Code Server — VS Code Extension
+# HyperIDE Code Server — VS Code Extension
 
 Lightweight iframe preview for code-server Docker IDE.
 Embeds the SaaS preview panel inside VS Code's

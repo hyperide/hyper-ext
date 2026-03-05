@@ -44,7 +44,7 @@ export class DevServerManager {
 
   constructor(projectPath: string) {
     this._projectPath = projectPath;
-    this._outputChannel = vscode.window.createOutputChannel('HyperCanvas Dev Server');
+    this._outputChannel = vscode.window.createOutputChannel('HyperIDE Dev Server');
   }
 
   /**
@@ -168,10 +168,10 @@ export class DevServerManager {
       // Start preview proxy for script injection (error detection)
       this._previewProxy = new PreviewProxy(this._port);
       await this._previewProxy.start();
-      console.log(`[HyperCanvas] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+      console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
       console.log(
-        `[HyperCanvas] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`,
+        `[HyperIDE] DevServer: ${packageManager} run ${devScript} (port ${this._port}) in ${this._projectPath}`,
       ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       this._outputChannel.appendLine(`[DevServer] Starting ${packageManager} run ${devScript}`);
       this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
@@ -216,7 +216,7 @@ export class DevServerManager {
       // Handle stderr
       this._process.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
-        console.log('[HyperCanvas] DevServer stderr:', text.trim());
+        console.log('[HyperIDE] DevServer stderr:', text.trim());
         this._outputChannel.append(text);
         this._appendLog(text);
 
@@ -230,7 +230,7 @@ export class DevServerManager {
 
       // Handle process exit
       this._process.on('exit', (code) => {
-        console.log(`[HyperCanvas] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+        console.log(`[HyperIDE] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
         this._process = null;
         this._port = null;
@@ -240,7 +240,7 @@ export class DevServerManager {
 
       // Handle process error
       this._process.on('error', (error) => {
-        console.error('[HyperCanvas] DevServer process error:', error.message);
+        console.error('[HyperIDE] DevServer process error:', error.message);
         this._outputChannel.appendLine(`[DevServer] Process error: ${error.message}`);
         this._updateStatus('error', error.message);
       });
@@ -251,7 +251,7 @@ export class DevServerManager {
       return this.getState();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[HyperCanvas] Dev server failed:', errorMessage);
+      console.error('[HyperIDE] Dev server failed:', errorMessage);
       this._outputChannel.appendLine(`[DevServer] Failed to start: ${errorMessage}`);
       this._stopProxy();
       this._updateStatus('error', errorMessage);
