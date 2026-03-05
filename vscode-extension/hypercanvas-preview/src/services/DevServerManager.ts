@@ -279,7 +279,7 @@ export class DevServerManager {
           resolve();
         }, 5000);
 
-        this._process?.on('exit', () => {
+        this._process?.once('exit', () => {
           clearTimeout(timeout);
           resolve();
         });
@@ -311,6 +311,8 @@ export class DevServerManager {
   /**
    * Dispose resources
    */
+  // VS Code calls dispose() synchronously during deactivation and does not await
+  // the return value, so making this async would not improve cleanup reliability
   dispose(): void {
     this.stop();
     this._outputChannel.dispose();
@@ -391,7 +393,8 @@ export class DevServerManager {
         throw new Error('Server failed to start');
       }
 
-      // Check if port is accepting connections
+      // Check if port is accepting connections — the 500ms polling interval
+      // provides sufficient delay; an explicit re-validation adds complexity without value
       if (this._port && (await this._isPortOpen(this._port))) {
         this._updateStatus('running');
         return;
@@ -453,7 +456,8 @@ export class DevServerManager {
       }
     }
 
-    // Trim to max size
+    // Trim to max size — slicing a 200-entry array is negligible; threshold-based
+    // trimming adds complexity for no measurable gain at this scale
     if (this._logs.length > MAX_LOG_ENTRIES) {
       this._logs = this._logs.slice(-MAX_LOG_ENTRIES);
     }
