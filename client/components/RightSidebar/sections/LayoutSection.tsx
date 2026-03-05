@@ -289,7 +289,7 @@ export const LayoutSection = memo(function LayoutSection({
       </div>
 
       {/* Layout type buttons */}
-      <div className="flex items-center mb-3 w-sidebar-content">
+      <div className="flex items-center mb-3">
         <button
           type="button"
           onClick={() => onLayoutChange('layout')}
@@ -337,7 +337,7 @@ export const LayoutSection = memo(function LayoutSection({
 
       {/* Width/Height */}
       <div className="flex items-center gap-1.5 mb-3">
-        <div className="flex items-center gap-1.5 w-sidebar-content">
+        <div className="flex items-center gap-1.5 flex-1">
           <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
             <span className="text-xs text-muted-foreground">W</span>
             <Input
@@ -509,8 +509,8 @@ export const LayoutSection = memo(function LayoutSection({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 mb-3 w-sidebar-content">
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">T</span>
                 <Input
                   type="text"
@@ -526,7 +526,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">R</span>
                 <Input
                   type="text"
@@ -542,7 +542,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">B</span>
                 <Input
                   type="text"
@@ -558,7 +558,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">L</span>
                 <Input
                   type="text"
@@ -908,8 +908,8 @@ export const LayoutSection = memo(function LayoutSection({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 mb-3 w-sidebar-content">
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">T</span>
                 <Input
                   type="text"
@@ -925,7 +925,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">R</span>
                 <Input
                   type="text"
@@ -941,7 +941,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">B</span>
                 <Input
                   type="text"
@@ -957,7 +957,7 @@ export const LayoutSection = memo(function LayoutSection({
                   className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                 />
               </div>
-              <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">L</span>
                 <Input
                   type="text"

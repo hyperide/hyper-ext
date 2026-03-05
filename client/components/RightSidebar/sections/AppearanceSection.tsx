@@ -151,7 +151,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <IconBorderCorners className="w-4 h-4 text-[#3479DE]" stroke={1.5} />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2 w-sidebar-content">
+          <div className="grid grid-cols-2 gap-2">
             <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">TL</span>
               <Input

@@ -151,7 +151,7 @@ export const FillSection = memo(function FillSection({
             syncStyleChange('color', val);
           }}
           inputPlaceholder="000000"
-          className="w-sidebar-content"
+          className="flex-1"
           tokenSystem={projectUIKit === 'tamagui' ? 'tamagui' : 'tailwind'}
         />
       </div>

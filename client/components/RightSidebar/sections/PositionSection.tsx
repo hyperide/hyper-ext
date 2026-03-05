@@ -36,7 +36,7 @@ export const PositionSection = memo(function PositionSection({
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">Position</span>
       </div>
-      <div className="flex items-center mb-2 whitespace-nowrap w-sidebar-content justify-stretch">
+      <div className="flex items-center mb-2 whitespace-nowrap">
         <button
           type="button"
           onClick={() => onPositionChange('static')}
@@ -86,8 +86,8 @@ export const PositionSection = memo(function PositionSection({
         )}
       </div>
       {selectedPosition !== 'static' && (
-        <div className="grid grid-cols-2 gap-2 mb-2 w-sidebar-content">
-          <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
             <span className="text-xs text-muted-foreground">left</span>
             <Input
               type="text"
@@ -98,7 +98,7 @@ export const PositionSection = memo(function PositionSection({
               className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
             />
           </div>
-          <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+          <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
             <span className="text-xs text-muted-foreground">top</span>
             <Input
               type="text"
@@ -109,7 +109,7 @@ export const PositionSection = memo(function PositionSection({
               className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
             />
           </div>
-          <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+          <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
             <span className="text-xs text-muted-foreground">right</span>
             <Input
               type="text"
@@ -120,7 +120,7 @@ export const PositionSection = memo(function PositionSection({
               className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
             />
           </div>
-          <div className="w-24 h-6 px-2 bg-muted rounded flex items-center gap-1">
+          <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
             <span className="text-xs text-muted-foreground">bottom</span>
             <Input
               type="text"
