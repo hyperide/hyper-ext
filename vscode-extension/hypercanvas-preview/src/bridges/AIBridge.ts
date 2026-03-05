@@ -18,8 +18,16 @@ import {
   type ToolExecutor,
   type ToolResult,
 } from '../../../../shared/ai-agent-core';
-import { ASK_USER, FILE_TOOLS, GET_DIAGNOSTICS, type ToolDefinition } from '../../../../shared/ai-agent-tools';
+import {
+  ASK_USER,
+  BASH_EXEC,
+  FILE_TOOLS,
+  GET_DIAGNOSTICS,
+  GIT_COMMAND,
+  type ToolDefinition,
+} from '../../../../shared/ai-agent-tools';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../../shared/ai-provider-defaults';
+import { ALLOWED_COMMANDS } from '../../../../shared/allowed-bash-commands';
 import type { DiagnosticHub } from '../DiagnosticHub';
 import type { StateHub } from '../StateHub';
 import type { DevServerManager } from '../services/DevServerManager';
@@ -49,11 +57,15 @@ const IMPLEMENTED_TOOLS = new Set([
   'list_directory',
   'tree',
   'get_diagnostics',
+  'git_command',
+  'bash_exec',
 ]);
 
 /** Tools available in the extension — only those actually implemented */
 const EXTENSION_TOOLS: ToolDefinition[] = [
   ...FILE_TOOLS.filter((t) => IMPLEMENTED_TOOLS.has(t.name)),
+  GIT_COMMAND,
+  BASH_EXEC,
   GET_DIAGNOSTICS,
   ASK_USER,
 ];
@@ -87,6 +99,10 @@ class LocalToolExecutor implements ToolExecutor {
           return await this._tree(input);
         case 'get_diagnostics':
           return await this._getDiagnostics(input);
+        case 'git_command':
+          return await this._gitCommand(input);
+        case 'bash_exec':
+          return await this._bashExec(input);
         default:
           return { success: false, error: `Unknown tool: ${name}` };
       }
@@ -333,9 +349,56 @@ class LocalToolExecutor implements ToolExecutor {
     return `'${str.replace(/'/g, "'\\''")}'`;
   }
 
-  private _execCommand(cmd: string): Promise<ToolResult> {
+  private _execCommand(cmd: string, cwd?: string): Promise<ToolResult> {
     return new Promise((resolve) => {
-      exec(cmd, { maxBuffer: 1024 * 1024, timeout: 15000 }, (error, stdout, stderr) => {
+      exec(cmd, { maxBuffer: 1024 * 1024, timeout: 15000, cwd }, (error, stdout, stderr) => {
+        if (error && !stdout) {
+          resolve({ success: false, error: stderr || error.message });
+          return;
+        }
+        resolve({ success: true, output: stdout || stderr || '(no output)' });
+      });
+    });
+  }
+
+  /** Derived from GIT_COMMAND tool schema enum (shared/ai-agent-tools.ts) */
+  private static readonly ALLOWED_GIT_COMMANDS = new Set(
+    (GIT_COMMAND.input_schema.properties.command as { enum: string[] }).enum,
+  );
+
+  private async _gitCommand(input: Record<string, unknown>): Promise<ToolResult> {
+    const command = input.command as string;
+    if (!LocalToolExecutor.ALLOWED_GIT_COMMANDS.has(command)) {
+      return {
+        success: false,
+        error: `Unsupported git command: ${command}. Allowed: ${[...LocalToolExecutor.ALLOWED_GIT_COMMANDS].join(', ')}`,
+      };
+    }
+
+    const args = (input.args as string[] | undefined) ?? [];
+    const escapedArgs = args.map((a) => this._shellEscape(a)).join(' ');
+    const cmd = escapedArgs ? `git ${command} ${escapedArgs}` : `git ${command}`;
+
+    return this._execCommand(cmd, this._workspaceRoot);
+  }
+
+  private async _bashExec(input: Record<string, unknown>): Promise<ToolResult> {
+    const command = input.command as string;
+
+    // Validate first word against allowlist
+    // TODO(HYP-240): replace with shared shell-validator (first-word check is bypassable via compound commands)
+    const firstWord = command.trimStart().split(/[\s;|&]/)[0];
+    if (!ALLOWED_COMMANDS.has(firstWord)) {
+      return {
+        success: false,
+        error: `Command '${firstWord}' is not allowed. Allowed: ${[...LocalToolExecutor.ALLOWED_BASH_COMMANDS].slice(0, 10).join(', ')}...`,
+      };
+    }
+
+    const timeout = Math.min(Math.max(Number(input.timeout) || 30000, 1000), 120000);
+
+    return new Promise((resolve) => {
+      exec(command, { cwd: this._workspaceRoot, maxBuffer: 1024 * 1024, timeout }, (error, stdout, stderr) => {
         if (error && !stdout) {
           resolve({ success: false, error: stderr || error.message });
           return;

@@ -75,4 +75,6 @@ body `projectPath`) to prevent IDOR.
 - `injectUniqueIds.ts` — Injects `data-uniq-id` into source; supports `sampleIdMap` for Sample* exports; cache key includes componentName + sampleName
 - `component-analyzer.ts` — Babel AST analysis
 - `ai-agent*.ts` — AI orchestration (routes by provider: anthropic→SDK tools, openai→text-only via callAIStream, opencode→session SDK)
+- `remote-git-parser.ts` — Parser for remote git commands (fetch/pull/push). Uses `shell-parser.ts` (shell-quote) for proper tokenization. Used by `ai-agent.ts` to intercept remote ops before sandbox, execute server-side with GitHub App credentials via `execFile`
+- `lib/shell-parser.ts` — Generic shell command parser wrapping shell-quote. Splits input into commands + operators with proper quoting/escaping support
 - `fileChangeTracker.ts` — File change tracking

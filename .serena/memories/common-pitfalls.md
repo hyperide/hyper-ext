@@ -329,6 +329,20 @@ someone removes that JSX and the lookup silently breaks with invisible styles.
 - `DiagnosticFilterBar.tsx` — SOURCE_PILLS uses inline styles for active state
 - `EditFileDiff.tsx` — lineClass moved to direct `cn()` conditionals in JSX
 
+## Shell Parsing (shell-quote)
+
+### shell-quote treats newlines as whitespace
+
+`parse("a\nb")` returns `['a', 'b']` (single command), not two commands.
+In shell, `\n` is a command separator like `;`. Fix: split input on `\n`
+before passing to shell-quote, merge results with `;` operators.
+
+### shell-quote glob and comment tokens
+
+`parse("echo *.ts")` returns `[{op: 'glob', pattern: '*.ts'}]`, not a string.
+`parse("echo #foo")` returns `[{comment: 'foo'}]`. Both need explicit handling
+in the token loop — don't assume all `{op}` objects are control operators.
+
 ## Preview Pipeline
 
 ### injectUniqueIds validates paths against process.cwd(), not project path

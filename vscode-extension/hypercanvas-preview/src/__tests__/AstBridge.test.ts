@@ -169,13 +169,23 @@ describe('AstBridge', () => {
   });
 
   it('catches exceptions and returns error response', async () => {
-    mockAstService.updateStyles.mockImplementation(() => Promise.reject(new Error('parse fail')));
-    const wv = createMockWebview();
-    await bridge.handleMessage(
-      { type: 'ast:updateStyles', requestId: 'r9', filePath: 'f.tsx', elementId: 'e1', styles: {} } as never,
-      wv as never,
-    );
-    expect(wv.messages[0]).toEqual(expect.objectContaining({ requestId: 'r9', success: false, error: 'parse fail' }));
+    // Suppress console.error — handleMessage logs the caught error, and bun test
+    // runner treats Error objects in console.error as uncaught errors in full suite
+    const origError = console.error;
+    console.error = mock();
+    try {
+      mockAstService.updateStyles.mockImplementation(async () => {
+        throw new Error('parse fail');
+      });
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        { type: 'ast:updateStyles', requestId: 'r9', filePath: 'f.tsx', elementId: 'e1', styles: {} } as never,
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ requestId: 'r9', success: false, error: 'parse fail' }));
+    } finally {
+      console.error = origError;
+    }
   });
 
   it('sends to default webview when no target provided', async () => {

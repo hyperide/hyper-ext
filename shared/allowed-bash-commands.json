@@ -1,0 +1,21 @@
+{
+  "categories": {
+    "package_managers": ["npm", "npx", "yarn", "pnpm", "bun"],
+    "version_control": ["git"],
+    "runtime": ["node", "python", "python3"],
+    "file_operations": ["ls", "cat", "touch", "mkdir", "mv", "cp", "rm", "chmod", "chown"],
+    "file_info": ["file", "stat", "basename", "dirname", "du", "df", "tree"],
+    "text_processing": ["grep", "awk", "sed", "tr", "cut", "paste", "column"],
+    "file_reading": ["head", "tail", "less", "more"],
+    "text_utilities": ["wc", "sort", "uniq", "diff", "patch"],
+    "output": ["echo", "printf"],
+    "system_info": ["pwd", "cd", "which", "whoami", "uname", "env"],
+    "search": ["find"],
+    "network": ["curl", "wget"],
+    "archives": ["tar", "gzip", "gunzip", "zip", "unzip"],
+    "data_processing": ["jq", "yq"],
+    "build_tools": ["make", "cmake"],
+    "process": ["ps", "kill", "killall", "pkill", "pgrep", "sleep"],
+    "testing": ["test"]
+  }
+}

@@ -33,6 +33,7 @@ Location: `vscode-extension/hypercanvas-preview/`
 src/extension.ts          — Extension lifecycle
 src/StateHub.ts           — Central state management
 src/EditorBridge.ts       — Editor ↔ webview communication
+src/bridges/AIBridge.ts   — AI chat tool execution (git_command, bash_exec, file ops)
 src/PreviewPanel.ts       — Canvas webview provider
 src/LeftPanelProvider.ts  — Components tree
 src/LogsPanelProvider.ts  — Bottom panel (dev server logs)

@@ -113,11 +113,19 @@ describe('EditorBridge', () => {
     });
 
     it('shows error message on failure', async () => {
-      (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mockImplementation(() =>
-        Promise.reject(new Error('not found')),
-      );
-      await goToCode('/missing.tsx', 1, 1);
-      expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+      // Suppress console.error — goToCode logs the caught error, and bun test
+      // runner treats Error objects in console.error as uncaught errors in full suite
+      const origError = console.error;
+      console.error = mock();
+      try {
+        (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mockImplementation(async () => {
+          throw new Error('not found');
+        });
+        await goToCode('/missing.tsx', 1, 1);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+      } finally {
+        console.error = origError;
+      }
     });
   });
 });
