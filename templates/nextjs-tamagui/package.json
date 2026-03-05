@@ -51,7 +51,8 @@
     "tmp": ">=0.2.4",
     "on-headers": ">=1.1.0",
     "@babel/runtime": ">=7.26.10",
-    "@babel/helpers": ">=7.26.10"
+    "@babel/helpers": ">=7.26.10",
+    "@tootallnate/once": ">=3.0.1"
   },
   "dependencies": {
     "@babel/runtime": "^7.24.6",
