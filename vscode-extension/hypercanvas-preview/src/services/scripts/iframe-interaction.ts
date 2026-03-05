@@ -7,7 +7,7 @@
  */
 
 import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
-import { getEmptyContainerRects, isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
+import { getEmptyContainerRects } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 
@@ -52,7 +52,7 @@ const activeInstanceId: string | null = null;
 attachClickHandler(
   document,
   {
-    onElementClick: (id, el, _e, itemIndex) => {
+    onElementClick: (id, _el, _e, itemIndex) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
@@ -62,20 +62,6 @@ attachClickHandler(
         },
         '*',
       );
-
-      // Empty container clicked → also trigger openPanel so the extension can
-      // show the component insertion UI. Overlay click events don't reach the
-      // parent frame reliably, so we detect empty containers at the source.
-      if (el && isContainerEmpty(el)) {
-        // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-        window.parent.postMessage(
-          {
-            type: 'hypercanvas:openPanel',
-            elementId: id,
-          },
-          '*',
-        );
-      }
     },
     onElementHover: (id, _el, itemIndex) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview

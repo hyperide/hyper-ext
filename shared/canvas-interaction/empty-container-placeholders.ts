@@ -5,14 +5,17 @@
  * meaningful children (only whitespace text nodes). Used by the overlay
  * system to render placeholder overlays outside the iframe.
  *
- * Side effect: toggles `hc-empty` CSS class on containers so that
- * design-mode styles (min-height) can keep them from collapsing to 0px.
+ * Enforces a minimum height on returned rects so that overlays remain
+ * visible and clickable even when the container collapses to 0px —
+ * without injecting any CSS that would alter the iframe layout.
  */
 
 import type { PlaceholderRect } from './types';
 
 const CONTAINER_SELECTOR = '[data-uniq-id]';
-export const EMPTY_CLASS = 'hc-empty';
+
+/** Minimum overlay height so collapsed containers remain visible/clickable. */
+export const MIN_PLACEHOLDER_HEIGHT = 28;
 
 // Node type constants (avoid relying on global Node which may not exist in test envs)
 const ELEMENT_NODE = 1;
@@ -29,8 +32,7 @@ export function isContainerEmpty(el: Element): boolean {
 
 /**
  * Find all empty containers and return their bounding rects.
- * Marks empty containers with `hc-empty` class (for min-height CSS),
- * removes class from non-empty containers.
+ * Enforces MIN_PLACEHOLDER_HEIGHT so overlays stay visible on collapsed containers.
  */
 export function getEmptyContainerRects(doc: Document): PlaceholderRect[] {
   if (!doc.body) return [];
@@ -39,23 +41,20 @@ export function getEmptyContainerRects(doc: Document): PlaceholderRect[] {
   const rects: PlaceholderRect[] = [];
 
   for (const container of containers) {
-    if (!isContainerEmpty(container)) {
-      container.classList.remove(EMPTY_CLASS);
-      continue;
-    }
+    if (!isContainerEmpty(container)) continue;
 
     const elementId = container.getAttribute('data-uniq-id');
     if (!elementId) continue;
 
-    container.classList.add(EMPTY_CLASS);
-
     const rect = container.getBoundingClientRect();
+    const effectiveHeight = Math.max(rect.height, MIN_PLACEHOLDER_HEIGHT);
+    const topOffset = (effectiveHeight - rect.height) / 2;
     rects.push({
       elementId,
       left: rect.left,
-      top: rect.top,
+      top: rect.top - topOffset,
       width: rect.width,
-      height: rect.height,
+      height: effectiveHeight,
     });
   }
 

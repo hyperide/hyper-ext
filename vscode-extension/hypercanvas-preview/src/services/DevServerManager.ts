@@ -151,7 +151,8 @@ export class DevServerManager {
       const scripts = await getPackageScripts(this._projectPath);
       const packageManager = await detectPackageManager(this._projectPath);
 
-      // Determine dev command
+      // Determine dev command — truthiness check on scripts[devScript] is intentional:
+      // getPackageScripts returns Record<string, string>, so truthy ≡ key exists with value
       let devScript = projectInfo.devCommand;
       if (!scripts[devScript]) {
         // Fallback to available scripts
@@ -263,23 +264,26 @@ export class DevServerManager {
    * Stop the dev server
    */
   async stop(): Promise<void> {
-    if (this._process) {
+    // Capture to local — this._process may be nullified by the exit handler
+    // between the guard and the async operations below
+    const proc = this._process;
+    if (proc) {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
 
       // Try graceful shutdown first
-      this._process.kill('SIGTERM');
+      proc.kill('SIGTERM');
 
       // Wait for process to exit (with timeout)
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
           // Force kill if still running
-          if (this._process) {
-            this._process.kill('SIGKILL');
+          if (!proc.killed) {
+            proc.kill('SIGKILL');
           }
           resolve();
         }, 5000);
 
-        this._process?.once('exit', () => {
+        proc.once('exit', () => {
           clearTimeout(timeout);
           resolve();
         });
@@ -314,7 +318,7 @@ export class DevServerManager {
   // VS Code calls dispose() synchronously during deactivation and does not await
   // the return value, so making this async would not improve cleanup reliability
   dispose(): void {
-    this.stop();
+    void this.stop();
     this._outputChannel.dispose();
   }
 
@@ -393,9 +397,11 @@ export class DevServerManager {
         throw new Error('Server failed to start');
       }
 
-      // Check if port is accepting connections — the 500ms polling interval
-      // provides sufficient delay; an explicit re-validation adds complexity without value
-      if (this._port && (await this._isPortOpen(this._port))) {
+      // Check if port is accepting connections — capture port to a local variable
+      // to avoid a race where the exit handler nullifies this._port between the
+      // truthiness check and the async _isPortOpen call
+      const port = this._port;
+      if (port && (await this._isPortOpen(port))) {
         this._updateStatus('running');
         return;
       }
@@ -443,6 +449,8 @@ export class DevServerManager {
 
     for (const line of lines) {
       const isError = ERROR_PATTERNS.some((pattern) => pattern.test(line));
+      // Both checks are needed independently: isSuccess clears _hasErrors even for non-error lines.
+      // Short-circuiting on isError would skip success detection for error-free log lines.
       const isSuccess = SUCCESS_PATTERNS.some((pattern) => pattern.test(line));
       const entry: LogEntry = { line, timestamp: now, isError };
       this._logs.push(entry);

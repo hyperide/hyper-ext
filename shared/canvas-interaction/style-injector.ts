@@ -50,13 +50,6 @@ body.design-mode, body.design-mode * {
 }`);
   }
 
-  // Empty containers: min-height prevents collapse to 0px so overlays are visible.
-  // Scoped to design mode — interact mode must not alter the real layout.
-  parts.push(`
-body.design-mode .hc-empty {
-  min-height: 28px !important;
-}`);
-
   return parts.join('\n');
 }
 

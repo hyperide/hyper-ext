@@ -161,10 +161,11 @@ describe('renderPlaceholderOverlays', () => {
 
     const el = getEl(elements, 'placeholder-e1-0');
     expect(el.style.pointerEvents).toBe('none');
-    expect(el.style.cursor).not.toBe('pointer');
+    const icon = el.firstElementChild as HTMLElement;
+    expect(icon.style.cursor).not.toBe('pointer');
   });
 
-  it('renders interactive with onClick handler', () => {
+  it('renders interactive icon with onClick handler', () => {
     const onClick = mock((_id: string) => {});
 
     renderPlaceholderOverlays(
@@ -175,10 +176,11 @@ describe('renderPlaceholderOverlays', () => {
     );
 
     const el = getEl(elements, 'placeholder-e1-0');
-    expect(el.style.pointerEvents).toBe('auto');
-    expect(el.style.cursor).toBe('pointer');
+    const icon = el.firstElementChild as HTMLElement;
+    expect(icon.style.pointerEvents).toBe('auto');
+    expect(icon.style.cursor).toBe('pointer');
 
-    el.click();
+    icon.click();
     expect(onClick).toHaveBeenCalledWith('e1');
   });
 
@@ -193,7 +195,7 @@ describe('renderPlaceholderOverlays', () => {
       onClick,
     );
 
-    elements.get('placeholder-first-0')?.click();
+    (elements.get('placeholder-first-0')?.firstElementChild as HTMLElement)?.click();
     expect(clicks).toEqual(['first']);
 
     renderPlaceholderOverlays(
@@ -203,7 +205,7 @@ describe('renderPlaceholderOverlays', () => {
       onClick,
     );
 
-    elements.get('placeholder-second-0')?.click();
+    (elements.get('placeholder-second-0')?.firstElementChild as HTMLElement)?.click();
     expect(clicks).toEqual(['first', 'second']);
   });
 
@@ -244,10 +246,21 @@ describe('renderPlaceholderOverlays', () => {
       onClick,
     );
 
-    expect(getEl(elements, 'placeholder-e1-0').onclick).toBeTruthy();
+    const icon = getEl(elements, 'placeholder-e1-0').firstElementChild as HTMLElement;
+    expect(icon.onclick).toBeTruthy();
 
     renderPlaceholderOverlays(container, [{ elementId: 'e1', left: 0, top: 0, width: 50, height: 50 }], elements);
 
-    expect(getEl(elements, 'placeholder-e1-0').onclick).toBeNull();
+    expect(icon.onclick).toBeNull();
+  });
+
+  it('contains tooltip element', () => {
+    renderPlaceholderOverlays(container, [{ elementId: 'e1', left: 0, top: 0, width: 50, height: 50 }], elements);
+
+    const el = getEl(elements, 'placeholder-e1-0');
+    const tooltip = el.children[1] as HTMLElement;
+    expect(tooltip).toBeTruthy();
+    expect(tooltip.textContent).toBe('Insert element');
+    expect(tooltip.style.opacity).toBe('0');
   });
 });

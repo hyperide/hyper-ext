@@ -68,6 +68,14 @@ export function useCanvasInteraction(
     }
     frame.addEventListener('load', handleIframeLoad);
 
+    /** Select element and open insert panel — shared by overlay click and openPanel message. */
+    function openInsertPanel(elementId: string) {
+      canvas.sendEvent({
+        type: 'state:update',
+        patch: { selectedIds: [elementId], insertTargetId: elementId },
+      } as never);
+    }
+
     function handleMessage(event: MessageEvent) {
       if (event.source !== frame.contentWindow) return;
       let expectedOrigin = iframeOriginRef.current;
@@ -119,10 +127,7 @@ export function useCanvasInteraction(
         }
 
         case 'hypercanvas:openPanel':
-          canvas.sendEvent({
-            type: 'state:update',
-            patch: { selectedIds: [msg.elementId], insertTargetId: msg.elementId },
-          } as never);
+          openInsertPanel(msg.elementId);
           break;
 
         case 'hypercanvas:overlayRects': {
@@ -130,7 +135,7 @@ export function useCanvasInteraction(
           renderOverlayRects(container, msg.rects as OverlayRect[], overlayElements.current);
 
           const pRects = (msg.placeholderRects ?? []) as PlaceholderRect[];
-          renderPlaceholderOverlays(container, pRects, placeholderElements.current);
+          renderPlaceholderOverlays(container, pRects, placeholderElements.current, openInsertPanel);
           break;
         }
 

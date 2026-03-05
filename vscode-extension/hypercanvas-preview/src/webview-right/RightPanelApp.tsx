@@ -6,6 +6,7 @@
  * Handles component insertion UI entirely on the ext side.
  */
 
+import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ComponentNavigatorPanel } from '@/components/FloatingPanels';
 import RightSidebar from '@/components/RightSidebar/RightSidebar';
@@ -39,6 +40,7 @@ function RightPanelContent() {
 
   const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);
   const [explorerVisible, setExplorerVisible] = useState(false);
+  const [insertPanelExpanded, setInsertPanelExpanded] = useState(false);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -95,17 +97,8 @@ function RightPanelContent() {
   }, [canvas]);
 
   return (
-    <>
-      {showInsertPanel && (
-        <ComponentNavigatorPanel
-          variant="inline"
-          componentGroups={componentGroups}
-          onComponentClick={handleInsertComponent}
-          onClose={handleCloseInsertPanel}
-        />
-      )}
-      {/* Tailwind 'hidden' preserves RightSidebar state while insert panel is shown */}
-      <div className={showInsertPanel ? 'hidden' : undefined}>
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className={showInsertPanel ? 'flex-1 min-h-0 overflow-y-auto' : 'h-full overflow-y-auto'}>
         <RightSidebar
           projectUIKit={projectUIKit}
           componentGroups={componentGroups}
@@ -113,6 +106,34 @@ function RightPanelContent() {
           onComponentClick={handleComponentClick}
         />
       </div>
-    </>
+      {showInsertPanel && (
+        <div
+          className="min-h-0 flex flex-col border-t border-border transition-[height] duration-[233ms] ease-in-out"
+          style={{ height: insertPanelExpanded ? '66.67%' : '33.33%' }}
+        >
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <ComponentNavigatorPanel
+              variant="inline"
+              componentGroups={componentGroups}
+              onComponentClick={handleInsertComponent}
+              onClose={handleCloseInsertPanel}
+              headerExtra={
+                <button
+                  type="button"
+                  className="hover:bg-muted rounded p-0.5 transition-colors"
+                  onClick={() => setInsertPanelExpanded((v) => !v)}
+                >
+                  {insertPanelExpanded ? (
+                    <IconChevronDown className="w-4 h-4 text-muted-foreground hover:text-foreground" stroke={1.5} />
+                  ) : (
+                    <IconChevronUp className="w-4 h-4 text-muted-foreground hover:text-foreground" stroke={1.5} />
+                  )}
+                </button>
+              }
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

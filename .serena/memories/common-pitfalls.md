@@ -143,6 +143,19 @@ distance threshold instead of `click` listener.
 which includes `.tsx`/`.ts` extension. Strip with `name.replace(/\.\w+$/, '')`
 before using as JSX component type.
 
+### "Разбери" ≠ "сделай"
+
+When user says "разбери" (analyze/review), they want analysis — not code changes.
+Do NOT edit files, switch branches, or run git commands based on review findings
+unless explicitly asked to implement the fix. Same applies to "посмотри",
+"проверь", "оцени" — all are read-only requests.
+
+### Never merge PRs without explicit approval
+
+`gh pr merge` runs under user's GitHub credentials. Merging without explicit
+"мержи" / "merge" from the user is unauthorized action. Review comments must
+be checked BEFORE proposing merge.
+
 ### AstService insertElement doesn't add imports (ext only)
 
 The SaaS server route (`server/routes/insertElement.ts`) resolves imports,

@@ -187,15 +187,64 @@ describe('getEmptyContainerRects', () => {
     expect(rects[0].elementId).toBe('sec1');
   });
 
-  it('adds hc-empty class to empty containers and removes from non-empty', () => {
-    const empty = mkEl('div', { 'data-uniq-id': 'e1' });
-    const nonEmpty = mkEl('div', { 'data-uniq-id': 'e2' }, [mkEl('span')]);
-    nonEmpty._classes.add('hc-empty'); // simulate previously empty
-    const doc = createDoc([empty, nonEmpty]);
+  it('enforces minimum height on collapsed containers (height 0) and centers vertically', () => {
+    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
+      left: 0,
+      top: 100,
+      width: 200,
+      height: 0,
+    });
+    const doc = createDoc([container]);
 
-    getEmptyContainerRects(doc);
+    const rects = getEmptyContainerRects(doc);
 
-    expect(empty._classes.has('hc-empty')).toBe(true);
-    expect(nonEmpty._classes.has('hc-empty')).toBe(false);
+    expect(rects).toHaveLength(1);
+    expect(rects[0].height).toBe(28);
+    expect(rects[0].top).toBe(86); // 100 - 28/2 = centered around original top
+    expect(rects[0].width).toBe(200);
+  });
+
+  it('enforces minimum height on tiny containers and centers vertically', () => {
+    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
+      left: 0,
+      top: 50,
+      width: 150,
+      height: 10,
+    });
+    const doc = createDoc([container]);
+
+    const rects = getEmptyContainerRects(doc);
+
+    expect(rects[0].height).toBe(28);
+    expect(rects[0].top).toBe(41); // 50 - (28-10)/2 = centered around original center
+  });
+
+  it('preserves height and top when container is taller than minimum', () => {
+    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
+      left: 0,
+      top: 20,
+      width: 100,
+      height: 40,
+    });
+    const doc = createDoc([container]);
+
+    const rects = getEmptyContainerRects(doc);
+
+    expect(rects[0].height).toBe(40);
+    expect(rects[0].top).toBe(20);
+  });
+
+  it('does not enforce minimum width on zero-width containers', () => {
+    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 50,
+    });
+    const doc = createDoc([container]);
+
+    const rects = getEmptyContainerRects(doc);
+
+    expect(rects[0].width).toBe(0);
   });
 });

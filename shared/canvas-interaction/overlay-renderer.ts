@@ -106,11 +106,7 @@ export function renderPlaceholderOverlays(
       outer = document.createElement('div');
       outer.setAttribute('data-placeholder-overlay', 'true');
       outer.style.position = 'absolute';
-      outer.style.pointerEvents = interactive ? 'auto' : 'none';
-      outer.style.border = '1.5px dashed rgba(128,128,128,0.35)';
-      outer.style.backgroundColor = 'rgba(128,128,128,0.04)';
-      outer.style.borderRadius = '6px';
-      outer.style.boxSizing = 'border-box';
+      outer.style.pointerEvents = 'none';
 
       const inner = document.createElement('div');
       inner.style.position = 'absolute';
@@ -120,34 +116,58 @@ export function renderPlaceholderOverlays(
       inner.style.width = `${ICON_SIZE}px`;
       inner.style.height = `${ICON_SIZE}px`;
       inner.style.color = 'rgba(128,128,128,0.45)';
-      inner.style.transition = 'color 0.15s ease';
+      inner.style.transition = 'color 0.15s ease, transform 0.15s ease';
       // nosemgrep: javascript.browser.security.insecure-document-method.insecure-document-method -- static SVG constant, not user-controlled
       inner.innerHTML = ICON_SVG;
 
+      const tooltip = document.createElement('div');
+      tooltip.textContent = 'Insert element';
+      tooltip.style.position = 'absolute';
+      tooltip.style.bottom = `calc(50% + ${ICON_SIZE / 2 + 6}px)`;
+      tooltip.style.left = '50%';
+      tooltip.style.transform = 'translateX(-50%)';
+      tooltip.style.background = 'hsl(0 0% 9%)';
+      tooltip.style.color = 'hsl(0 0% 98%)';
+      tooltip.style.fontSize = '12px';
+      tooltip.style.lineHeight = '1';
+      tooltip.style.padding = '4px 8px';
+      tooltip.style.borderRadius = '6px';
+      tooltip.style.whiteSpace = 'nowrap';
+      tooltip.style.pointerEvents = 'none';
+      tooltip.style.opacity = '0';
+      tooltip.style.transition = 'opacity 0.15s ease';
+
       if (interactive) {
-        outer.style.cursor = 'pointer';
-        outer.addEventListener('mouseenter', () => {
+        inner.style.pointerEvents = 'auto';
+        inner.style.cursor = 'pointer';
+        inner.addEventListener('mouseenter', () => {
           inner.style.color = 'rgba(128,128,128,0.7)';
+          inner.style.transform = 'translate(-50%, -50%) scale(1.15)';
+          tooltip.style.opacity = '1';
         });
-        outer.addEventListener('mouseleave', () => {
+        inner.addEventListener('mouseleave', () => {
           inner.style.color = 'rgba(128,128,128,0.45)';
+          inner.style.transform = 'translate(-50%, -50%)';
+          tooltip.style.opacity = '0';
         });
       }
 
       outer.appendChild(inner);
+      outer.appendChild(tooltip);
       container.appendChild(outer);
       overlayElements.set(key, outer);
     }
 
     // Update click handler — elementId can change when rects reorder
+    const iconEl = outer.firstElementChild as HTMLElement;
     if (onClick) {
       const cb = onClick;
-      outer.onclick = (e) => {
+      iconEl.onclick = (e) => {
         e.stopPropagation();
         cb(rect.elementId);
       };
     } else {
-      outer.onclick = null;
+      iconEl.onclick = null;
     }
 
     outer.style.left = `${rect.left}px`;

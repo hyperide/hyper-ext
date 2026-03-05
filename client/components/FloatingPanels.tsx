@@ -20,6 +20,8 @@ interface ComponentNavigatorPanelProps {
   componentGroups?: { atomGroups: ComponentGroup[]; compositeGroups: ComponentGroup[] };
   /** Layout: floating (SaaS, absolute positioned) or inline (ext sidebar) */
   variant?: 'floating' | 'inline';
+  /** Extra elements rendered in the header next to the close button */
+  headerExtra?: React.ReactNode;
 }
 
 export function ComponentNavigatorPanel({
@@ -30,6 +32,7 @@ export function ComponentNavigatorPanel({
   onSelectComponent,
   componentGroups,
   variant = 'floating',
+  headerExtra,
 }: ComponentNavigatorPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [topPosition, setTopPosition] = useState<number>(0);
@@ -135,10 +138,15 @@ export function ComponentNavigatorPanel({
             Insert component
           </span>
         </div>
-        {onClose && (
-          <button type="button" onClick={onClose}>
-            <IconX className="w-4 h-4 text-muted-foreground hover:text-foreground" stroke={1.5} />
-          </button>
+        {(headerExtra || onClose) && (
+          <div className="flex items-center gap-1">
+            {headerExtra}
+            {onClose && (
+              <button type="button" onClick={onClose}>
+                <IconX className="w-4 h-4 text-muted-foreground hover:text-foreground" stroke={1.5} />
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div className={cn('border-b border-border', isInline ? 'px-3 py-2' : 'p-4')}>

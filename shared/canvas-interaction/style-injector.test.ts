@@ -7,10 +7,10 @@ describe('buildDesignStylesCSS', () => {
     expect(css).toContain('cursor: default !important');
   });
 
-  it('includes min-height for empty containers scoped to design mode', () => {
+  it('does not inject min-height for empty containers (overlays handle visibility)', () => {
     const css = buildDesignStylesCSS({ mode: 'design' });
-    expect(css).toContain('body.design-mode .hc-empty');
-    expect(css).toContain('min-height: 28px');
+    expect(css).not.toContain('hc-empty');
+    expect(css).not.toContain('min-height');
   });
 
   it('handles board mode (pointer-events on body)', () => {
