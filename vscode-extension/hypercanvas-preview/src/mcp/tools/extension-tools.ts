@@ -101,7 +101,7 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
         .describe('File path to save the screenshot to. When set, returns the file path instead of inline image'),
     },
     async ({ saveTo }) => {
-      return takeScreenshot(services, undefined, 'preview', saveTo);
+      return takeScreenshot(services, undefined, saveTo);
     },
   );
 
@@ -116,7 +116,7 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
         .describe('File path to save the screenshot to. When set, returns the file path instead of inline image'),
     },
     async ({ elementId, saveTo }) => {
-      return takeScreenshot(services, elementId, elementId, saveTo);
+      return takeScreenshot(services, elementId, saveTo);
     },
   );
 }
@@ -124,7 +124,6 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
 async function takeScreenshot(
   services: HyperMcpServices,
   elementId: string | undefined,
-  label: string,
   saveTo: string | undefined,
 ): Promise<{
   content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>;
