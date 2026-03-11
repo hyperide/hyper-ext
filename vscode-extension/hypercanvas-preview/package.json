@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
@@ -194,28 +194,28 @@
         "command": "hypercanvas.canvasDelete",
         "key": "backspace",
         "mac": "backspace",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       },
       {
         "command": "hypercanvas.canvasDelete",
         "key": "delete",
         "mac": "delete",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       },
       {
         "command": "hypercanvas.canvasSelectChildren",
         "key": "enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       },
       {
         "command": "hypercanvas.canvasSelectParent",
         "key": "shift+enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       },
       {
         "command": "hypercanvas.canvasEscape",
         "key": "escape",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       }
     ],
     "menus": {
