@@ -1,6 +1,4 @@
 import { writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type HyperMcpServices, resolveFilePath } from '../types';
@@ -95,29 +93,39 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
 
   server.tool(
     'hyper_screenshot_preview',
-    'Take a screenshot of the entire preview canvas. Returns the image inline and saves to /tmp. Requires the preview panel to be open with a running dev server.',
-    {},
-    async () => {
-      return takeScreenshotAndSave(services, undefined, 'preview');
+    'Take a screenshot of the entire preview canvas. By default returns the image inline. Pass saveTo to save to a file and return the path instead. Requires the preview panel to be open with a running dev server.',
+    {
+      saveTo: z
+        .string()
+        .optional()
+        .describe('File path to save the screenshot to. When set, returns the file path instead of inline image'),
+    },
+    async ({ saveTo }) => {
+      return takeScreenshot(services, undefined, 'preview', saveTo);
     },
   );
 
   server.tool(
     'hyper_screenshot_element',
-    'Take a screenshot of a specific element in the preview by its data-uniq-id. Returns the image inline and saves to /tmp.',
+    'Take a screenshot of a specific element in the preview by its data-uniq-id. By default returns the image inline. Pass saveTo to save to a file and return the path instead.',
     {
       elementId: z.string().describe('data-uniq-id of the element to screenshot'),
+      saveTo: z
+        .string()
+        .optional()
+        .describe('File path to save the screenshot to. When set, returns the file path instead of inline image'),
     },
-    async ({ elementId }) => {
-      return takeScreenshotAndSave(services, elementId, elementId);
+    async ({ elementId, saveTo }) => {
+      return takeScreenshot(services, elementId, elementId, saveTo);
     },
   );
 }
 
-async function takeScreenshotAndSave(
+async function takeScreenshot(
   services: HyperMcpServices,
   elementId: string | undefined,
   label: string,
+  saveTo: string | undefined,
 ): Promise<{
   content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>;
   isError?: boolean;
@@ -132,15 +140,12 @@ async function takeScreenshotAndSave(
   }
 
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
-  const filename = `hyper-screenshot-${label.replace(/[^a-zA-Z0-9-]/g, '_')}-${Date.now()}.png`;
-  const filePath = join(tmpdir(), filename);
 
-  await writeFile(filePath, Buffer.from(base64, 'base64'));
+  if (saveTo) {
+    await writeFile(saveTo, Buffer.from(base64, 'base64'));
+  }
 
   return {
-    content: [
-      { type: 'text' as const, text: `Screenshot saved to ${filePath}` },
-      { type: 'image' as const, data: base64, mimeType: 'image/png' },
-    ],
+    content: [{ type: 'image' as const, data: base64, mimeType: 'image/png' }],
   };
 }

@@ -1098,7 +1098,7 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
     const McpHttpServerDefinition = (vscode as Record<string, unknown>).McpHttpServerDefinition as
       | (new (config: {
           label: string;
-          uri: string;
+          uri: vscode.Uri;
           headers?: Record<string, string>;
           version?: string;
         }) => unknown)
@@ -1119,7 +1119,7 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
       provideMcpServerDefinitions: async () => [
         new McpHttpServerDefinition({
           label: 'HyperCanvas',
-          uri: `http://127.0.0.1:${port}/mcp`,
+          uri: vscode.Uri.parse(`http://127.0.0.1:${port}/mcp`),
           version: context.extension.packageJSON.version,
         }),
       ],
