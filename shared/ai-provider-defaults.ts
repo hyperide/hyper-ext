@@ -7,16 +7,18 @@
 /**
  * Provider capability matrix:
  *
- * | Provider | callAI (text) | Server Agent (tools) | Extension chat |
- * |----------|---------------|----------------------|----------------|
- * | claude   | Yes           | Yes                  | Yes (tools)    |
- * | glm      | Yes           | Yes                  | Yes (tools)    |
- * | openai   | Yes           | Text-only            | Text-only      |
- * | proxy    | Yes           | Yes (litellm)        | Text-only      |
- * | opencode | Via SDK       | Text-only            | Text-only      |
+ * | Provider | callAI (text) | Server Agent (tools)         | Extension chat |
+ * |----------|---------------|------------------------------|----------------|
+ * | claude   | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | glm      | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | openai   | Yes           | Yes (OpenAI function calling) | Text-only      |
+ * | proxy    | Yes           | Yes (litellm + Anthropic)    | Text-only      |
+ * | opencode | Yes (via SDK) | Yes (MCP bridge + SSE)       | Text-only      |
  *
- * "Text-only" = callAI/callAIStream works, but Anthropic SDK tool calling is not available.
- * OpenAI function calling uses a different format — not implemented (low ROI).
+ * Tool support per provider:
+ * - claude/glm/proxy: Anthropic Messages API with native tool_use
+ * - openai: OpenAI Chat Completions with function calling (chatWithOpenAITools)
+ * - opencode: Tools via SaaS MCP server (/api/mcp), streaming via promptAsync + event.subscribe
  */
 export type AIProvider = 'claude' | 'openai' | 'glm' | 'proxy' | 'opencode';
 

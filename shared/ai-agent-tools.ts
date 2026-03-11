@@ -962,3 +962,31 @@ export const ALL_TOOLS: ToolDefinition[] = [
   ...SERVER_TOOLS,
   ...WEB_TOOLS,
 ];
+
+/** Tool names that mutate files (for snapshot tracking before/after execution) */
+export const FILE_MUTATING_TOOL_NAMES: readonly string[] = ['edit_file', 'write_file', 'delete_file'];
+
+// ============================================
+// OpenAI Function Calling Format
+// ============================================
+
+export interface OpenAIToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** Convert Anthropic tool definitions to OpenAI function calling format */
+export function toOpenAITools(): OpenAIToolDefinition[] {
+  return ALL_TOOLS.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  }));
+}

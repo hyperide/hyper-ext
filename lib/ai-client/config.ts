@@ -67,15 +67,19 @@ export function resolveAIConfig(opts: {
       const b = backend;
       if (!b) return null;
 
+      // OpenCode stores model as "provider/model" (e.g. "google/gemini-2.5-pro").
+      // Strip the provider prefix for direct API calls.
+      const resolvedModel = provider === 'opencode' && model.includes('/') ? model.split('/', 2)[1] : model;
+
       // anthropic backend still uses Anthropic SDK
       if (b === 'anthropic') {
-        return { apiKey, model, baseURL: baseURL || undefined, provider: 'anthropic' };
+        return { apiKey, model: resolvedModel, baseURL: baseURL || undefined, provider: 'anthropic' };
       }
 
       const resolvedBaseURL = baseURL || OPENAI_COMPATIBLE_BASE_URLS[b];
       if (!resolvedBaseURL) return null;
 
-      return { apiKey, model, baseURL: resolvedBaseURL, provider: 'openai' };
+      return { apiKey, model: resolvedModel, baseURL: resolvedBaseURL, provider: 'openai' };
     }
 
     default:

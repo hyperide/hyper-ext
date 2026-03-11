@@ -243,6 +243,10 @@ export class PreviewPanel {
       const handled = await this._panelRouter.astBridge.undo(panel);
       if (!handled) {
         await vscode.commands.executeCommand('undo');
+        const editor = vscode.window.activeTextEditor;
+        if (editor?.document.isDirty) {
+          await editor.document.save();
+        }
       }
       return;
     }
@@ -252,6 +256,10 @@ export class PreviewPanel {
       const handled = await this._panelRouter.astBridge.redo(panel);
       if (!handled) {
         await vscode.commands.executeCommand('redo');
+        const editor = vscode.window.activeTextEditor;
+        if (editor?.document.isDirty) {
+          await editor.document.save();
+        }
       }
       return;
     }

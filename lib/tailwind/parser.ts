@@ -112,6 +112,32 @@ function modifierToCamelCase(modifier: string): string {
  * @param state - Optional state modifier (hover, focus, etc.). If provided, only removes classes with matching state.
  * @returns Object with preserved classes and removed classes
  */
+const TAILWIND_TEXT_NON_COLOR_CLASSES = new Set([
+  'text-xs',
+  'text-sm',
+  'text-base',
+  'text-lg',
+  'text-xl',
+  'text-2xl',
+  'text-3xl',
+  'text-4xl',
+  'text-5xl',
+  'text-6xl',
+  'text-7xl',
+  'text-8xl',
+  'text-9xl',
+  'text-wrap',
+  'text-nowrap',
+  'text-balance',
+  'text-pretty',
+  'text-left',
+  'text-center',
+  'text-right',
+  'text-justify',
+  'text-start',
+  'text-end',
+]);
+
 export function removeConflictingClasses(
   className: string,
   styleKeys: string[],
@@ -161,6 +187,11 @@ export function removeConflictingClasses(
         // Special case: don't remove flex-col/flex-row when removing display classes
         // 'flex-col'.startsWith('flex') is true, but flex-col is flexDirection, not display
         if (prefix === 'flex' && (baseClass === 'flex-col' || baseClass === 'flex-row')) {
+          continue;
+        }
+        // Special case: don't remove font-size, text-align, text-wrap classes when removing text color
+        // 'text-3xl'.startsWith('text-') is true, but text-3xl is font-size, not color
+        if (prefix === 'text-' && TAILWIND_TEXT_NON_COLOR_CLASSES.has(baseClass)) {
           continue;
         }
         shouldRemove = true;

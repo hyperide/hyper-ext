@@ -198,4 +198,32 @@ describe('removeConflictingClasses', () => {
     expect(preserved).toContain('mb-8');
     expect(preserved).toContain('flex');
   });
+
+  it('should not remove text-3xl when removing color conflicts', () => {
+    const { preserved, removed } = removeConflictingClasses(
+      'text-cyan-400 font-mono tabular-nums tracking-wide text-3xl',
+      ['color'],
+    );
+
+    expect(preserved).toContain('text-3xl');
+    expect(removed).toContain('text-cyan-400');
+    expect(preserved).toContain('font-mono');
+  });
+
+  it('should not remove text-align or text-wrap classes when removing color', () => {
+    const { preserved, removed } = removeConflictingClasses('text-red-500 text-center text-wrap text-2xl', ['color']);
+
+    expect(removed).toContain('text-red-500');
+    expect(preserved).toContain('text-center');
+    expect(preserved).toContain('text-wrap');
+    expect(preserved).toContain('text-2xl');
+  });
+
+  it('should still remove old color when setting new text color', () => {
+    const { preserved, removed } = removeConflictingClasses('text-blue-500 text-3xl font-bold', ['color']);
+
+    expect(removed).toContain('text-blue-500');
+    expect(preserved).toContain('text-3xl');
+    expect(preserved).toContain('font-bold');
+  });
 });

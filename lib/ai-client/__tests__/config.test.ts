@@ -150,4 +150,39 @@ describe('resolveAIConfig', () => {
     expect(result?.provider).toBe('openai');
     expect(result?.baseURL).toBe('https://api.openai.com/v1');
   });
+
+  it('should strip provider prefix from opencode model', () => {
+    const result = resolveAIConfig({
+      provider: 'opencode',
+      apiKey: 'key',
+      model: 'google/gemini-2.5-pro',
+      backend: 'google',
+    });
+    expect(result).not.toBeNull();
+    expect(result?.model).toBe('gemini-2.5-pro');
+    expect(result?.provider).toBe('openai');
+  });
+
+  it('should strip provider prefix from opencode model with anthropic backend', () => {
+    const result = resolveAIConfig({
+      provider: 'opencode',
+      apiKey: 'key',
+      model: 'anthropic/claude-sonnet-4-20250514',
+      backend: 'anthropic',
+    });
+    expect(result).not.toBeNull();
+    expect(result?.model).toBe('claude-sonnet-4-20250514');
+    expect(result?.provider).toBe('anthropic');
+  });
+
+  it('should NOT strip model prefix for proxy provider', () => {
+    const result = resolveAIConfig({
+      provider: 'proxy',
+      apiKey: 'key',
+      model: 'gemini-2.5-pro',
+      backend: 'google',
+    });
+    expect(result).not.toBeNull();
+    expect(result?.model).toBe('gemini-2.5-pro');
+  });
 });
