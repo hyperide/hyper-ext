@@ -145,6 +145,30 @@
       {
         "command": "hypercanvas.setupMcp",
         "title": "Hyper: Setup MCP for AI Agents"
+      },
+      {
+        "command": "hypercanvas.canvasUndo",
+        "title": "Hyper: Undo Canvas Operation"
+      },
+      {
+        "command": "hypercanvas.canvasRedo",
+        "title": "Hyper: Redo Canvas Operation"
+      },
+      {
+        "command": "hypercanvas.canvasDelete",
+        "title": "Hyper: Delete Selected Elements"
+      },
+      {
+        "command": "hypercanvas.canvasSelectChildren",
+        "title": "Hyper: Select Children"
+      },
+      {
+        "command": "hypercanvas.canvasSelectParent",
+        "title": "Hyper: Select Parent"
+      },
+      {
+        "command": "hypercanvas.canvasEscape",
+        "title": "Hyper: Clear Selection"
       }
     ],
     "keybindings": [
@@ -153,6 +177,45 @@
         "key": "cmd+shift+v",
         "mac": "cmd+shift+v",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "hypercanvas.canvasUndo",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' || focusedView == 'hypercanvas.inspectorView' || focusedView == 'hypercanvas.explorerView'"
+      },
+      {
+        "command": "hypercanvas.canvasRedo",
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' || focusedView == 'hypercanvas.inspectorView' || focusedView == 'hypercanvas.explorerView'"
+      },
+      {
+        "command": "hypercanvas.canvasDelete",
+        "key": "backspace",
+        "mac": "backspace",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
+        "command": "hypercanvas.canvasDelete",
+        "key": "delete",
+        "mac": "delete",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
+        "command": "hypercanvas.canvasSelectChildren",
+        "key": "enter",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
+        "command": "hypercanvas.canvasSelectParent",
+        "key": "shift+enter",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
+        "command": "hypercanvas.canvasEscape",
+        "key": "escape",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
       }
     ],
     "menus": {

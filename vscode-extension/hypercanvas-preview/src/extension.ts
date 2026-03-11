@@ -451,6 +451,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
+  // Canvas keybinding commands (VS Code intercepts keys before they reach the webview iframe)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.canvasUndo', () => previewPanel?.undo()),
+    vscode.commands.registerCommand('hypercanvas.canvasRedo', () => previewPanel?.redo()),
+    vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
+    vscode.commands.registerCommand('hypercanvas.canvasEscape', () => previewPanel?.clearSelection()),
+  );
+
   // Go to Visual - navigate from code to canvas
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.goToVisual', async () => {

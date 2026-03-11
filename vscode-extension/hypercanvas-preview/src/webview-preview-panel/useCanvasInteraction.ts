@@ -167,7 +167,8 @@ export function useCanvasInteraction(
           const isZ = msg.code === 'KeyZ' || msg.key?.toLowerCase() === 'z';
 
           if (isMod && isZ) {
-            canvas.sendEvent({ type: msg.shiftKey ? 'canvas:redo' : 'canvas:undo' });
+            const eventType = msg.shiftKey ? 'canvas:redo' : 'canvas:undo';
+            canvas.sendEvent({ type: eventType });
             break;
           }
 

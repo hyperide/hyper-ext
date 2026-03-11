@@ -685,6 +685,97 @@ export class PreviewPanel {
   }
 
   /**
+   * Delete selected elements (called from VS Code keybinding command).
+   */
+  public async deleteSelected(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const result = await this._panelRouter.astBridge.deleteElements(componentPath, selectedIds);
+    if (result.success) {
+      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [] });
+    }
+  }
+
+  /**
+   * Select children of selected element (called from VS Code keybinding command).
+   */
+  public async selectChildren(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, selectedIds[0]);
+    if (childIds.length > 0) {
+      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: childIds });
+    }
+  }
+
+  /**
+   * Select parent of selected element (called from VS Code keybinding command).
+   */
+  public async selectParent(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, selectedIds[0]);
+    if (parentId) {
+      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [parentId] });
+    } else {
+      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [] });
+    }
+  }
+
+  /**
+   * Clear selection (called from VS Code keybinding command).
+   */
+  public clearSelection(): void {
+    this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [], insertTargetId: null });
+  }
+
+  /**
+   * Undo last canvas operation (called from VS Code keybinding command).
+   * Falls back to VS Code native undo when canvas stack is empty.
+   */
+  public async undo(): Promise<void> {
+    const panel = this._panel;
+    if (!panel) {
+      await vscode.commands.executeCommand('undo');
+      return;
+    }
+    const handled = await this._panelRouter.astBridge.undo(panel);
+    if (!handled) {
+      await vscode.commands.executeCommand('default:undo');
+      const editor = vscode.window.activeTextEditor;
+      if (editor?.document.isDirty) {
+        await editor.document.save();
+      }
+    }
+  }
+
+  /**
+   * Redo last canvas operation (called from VS Code keybinding command).
+   * Falls back to VS Code native redo when canvas stack is empty.
+   */
+  public async redo(): Promise<void> {
+    const panel = this._panel;
+    if (!panel) {
+      await vscode.commands.executeCommand('default:redo');
+      return;
+    }
+    const handled = await this._panelRouter.astBridge.redo(panel);
+    if (!handled) {
+      await vscode.commands.executeCommand('default:redo');
+      const editor = vscode.window.activeTextEditor;
+      if (editor?.document.isDirty) {
+        await editor.document.save();
+      }
+    }
+  }
+
+  /**
    * Set callback for runtime errors from iframe preview
    */
   public onRuntimeError(callback: (error: DevServerRuntimeError | null) => void): void {
