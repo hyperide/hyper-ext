@@ -279,44 +279,61 @@ export function isValidTamaguiToken(token: string): boolean {
   return false;
 }
 
+export function hexToRgb(h: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
+  return result
+    ? {
+        r: Number.parseInt(result[1], 16),
+        g: Number.parseInt(result[2], 16),
+        b: Number.parseInt(result[3], 16),
+      }
+    : null;
+}
+
+export function colorDistance(hex1: string, hex2: string): number {
+  const rgb1 = hexToRgb(hex1);
+  const rgb2 = hexToRgb(hex2);
+  if (!rgb1 || !rgb2) return Infinity;
+  return Math.sqrt((rgb1.r - rgb2.r) ** 2 + (rgb1.g - rgb2.g) ** 2 + (rgb1.b - rgb2.b) ** 2);
+}
+
+/**
+ * Get all Tamagui colors as a flat list of {token, hex} entries.
+ * Useful for iteration and nearest-color search.
+ */
+let _cachedAllColors: Array<{ token: string; hex: string }> | null = null;
+
+export function getAllTamaguiColors(): Array<{ token: string; hex: string }> {
+  if (_cachedAllColors) return _cachedAllColors;
+  const entries: Array<{ token: string; hex: string }> = [];
+  for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
+    for (const [shade, shadeHex] of Object.entries(shades)) {
+      entries.push({ token: `${colorName}${shade}`, hex: shadeHex });
+    }
+  }
+  _cachedAllColors = entries;
+  return entries;
+}
+
 /**
  * Find closest Tamagui color to a given hex
  */
 export function findClosestTamaguiColor(hex: string): { token: string; hex: string } | null {
   if (!hex) return null;
+  const results = findNearestTamaguiTokens(hex, 1);
+  return results.length > 0 ? { token: results[0].token, hex: results[0].hex } : null;
+}
 
-  function hexToRgb(h: string): { r: number; g: number; b: number } | null {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
-    return result
-      ? {
-          r: Number.parseInt(result[1], 16),
-          g: Number.parseInt(result[2], 16),
-          b: Number.parseInt(result[3], 16),
-        }
-      : null;
-  }
-
-  function colorDistance(hex1: string, hex2: string): number {
-    const rgb1 = hexToRgb(hex1);
-    const rgb2 = hexToRgb(hex2);
-    if (!rgb1 || !rgb2) return Infinity;
-    return Math.sqrt((rgb1.r - rgb2.r) ** 2 + (rgb1.g - rgb2.g) ** 2 + (rgb1.b - rgb2.b) ** 2);
-  }
-
-  let closestToken = '';
-  let closestHex = '';
-  let minDistance = Infinity;
-
-  for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
-    for (const [shade, shadeHex] of Object.entries(shades)) {
-      const distance = colorDistance(hex, shadeHex);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestToken = `${colorName}${shade}`;
-        closestHex = shadeHex;
-      }
-    }
-  }
-
-  return closestToken ? { token: closestToken, hex: closestHex } : null;
+/**
+ * Find N nearest Tamagui color tokens to a given hex value, sorted by distance.
+ */
+export function findNearestTamaguiTokens(
+  hex: string,
+  count: number,
+): Array<{ token: string; hex: string; distance: number }> {
+  if (!hex) return [];
+  return getAllTamaguiColors()
+    .map((c) => ({ ...c, distance: colorDistance(hex, c.hex) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, count);
 }

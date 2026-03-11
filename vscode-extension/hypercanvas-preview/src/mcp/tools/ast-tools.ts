@@ -3,73 +3,7 @@ import { z } from 'zod';
 import type { StateHub } from '../../StateHub';
 import type { AstService } from '../../services/AstService';
 import { resolveFilePath } from '../types';
-
-// Map of Tailwind class prefixes to CSS property names
-const TW_PREFIX_TO_CSS: Record<string, string> = {
-  bg: 'backgroundColor',
-  text: 'color',
-  border: 'borderColor',
-  ring: 'ringColor',
-  shadow: 'shadowColor',
-  p: 'padding',
-  px: 'paddingLeft',
-  py: 'paddingTop',
-  pt: 'paddingTop',
-  pr: 'paddingRight',
-  pb: 'paddingBottom',
-  pl: 'paddingLeft',
-  m: 'margin',
-  mx: 'marginLeft',
-  my: 'marginTop',
-  mt: 'marginTop',
-  mr: 'marginRight',
-  mb: 'marginBottom',
-  ml: 'marginLeft',
-  w: 'width',
-  h: 'height',
-  gap: 'gap',
-  rounded: 'borderRadius',
-  opacity: 'opacity',
-};
-
-/**
- * Normalize styles input from AI agents that may pass Tailwind classes
- * instead of CSS properties, or mix formats in creative ways.
- */
-function normalizeStylesInput(raw: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(raw)) {
-    // Case 1: AI passed "className" with full Tailwind string — skip, not a style property
-    if (key === 'className' || key === 'class') continue;
-
-    // Case 2: Key looks like a Tailwind class (e.g. "bg-red-500": "" or "flex": "")
-    // Detect: key contains a dash and matches known TW prefix, or is a known utility
-    const twPrefixMatch = key.match(
-      /^(bg|text|border|ring|shadow|rounded|opacity|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|w|h|gap)-(.+)$/,
-    );
-    if (twPrefixMatch && (!value || value === 'true')) {
-      const cssKey = TW_PREFIX_TO_CSS[twPrefixMatch[1]];
-      if (cssKey) {
-        result[cssKey] = twPrefixMatch[2];
-        continue;
-      }
-    }
-
-    // Case 3: Value looks like a Tailwind class (e.g. {"backgroundColor": "bg-red-500"})
-    const valueTwMatch = value.match(/^(bg|text|border|ring|shadow)-(.+)$/);
-    if (valueTwMatch) {
-      const cssKey = TW_PREFIX_TO_CSS[valueTwMatch[1]] ?? key;
-      result[cssKey] = valueTwMatch[2];
-      continue;
-    }
-
-    // Case 4: Normal CSS property — pass through
-    result[key] = value;
-  }
-
-  return result;
-}
+import { getStyleAdapter } from './color-token-provider';
 
 export function registerAstTools(server: McpServer, astService: AstService, stateHub: StateHub): void {
   server.tool(
@@ -131,7 +65,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
 
   server.tool(
     'hyper_update_styles',
-    'Update Tailwind CSS classes on a JSX element. Provide CSS properties as key-value pairs (e.g. {"display": "flex", "backgroundColor": "#3b82f6", "gap": "1rem"}). Values are auto-converted to Tailwind tokens. Use color names/hex — avoid arbitrary values like rgb(). Use hyper_suggest_color_token to find the right token.',
+    'Update styles on a JSX element. Provide CSS properties as key-value pairs (e.g. {"display": "flex", "backgroundColor": "#3b82f6", "gap": "1rem"}). Values are auto-converted to the project\'s design tokens. Use hyper_suggest_color_token to find the right token.',
     {
       filePath: z
         .string()
@@ -150,27 +84,16 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
           isError: true,
         };
       }
-      const normalizedStyles = normalizeStylesInput(styles);
-      const result = await astService.updateStyles(resolved, elementId, normalizedStyles);
-      if (!result.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+
+      const adapter = getStyleAdapter(stateHub.state.projectUIKit);
+      const { success, result, warning, error } = await adapter.applyStyles(astService, resolved, elementId, styles);
+
+      if (!success) {
+        return { content: [{ type: 'text' as const, text: `Error: ${error}` }], isError: true };
       }
 
-      const mainText = result.className ? `className="${result.className}"` : 'Styles updated';
-
-      // Warn about arbitrary color values — recommend using hyper_suggest_color_token
-      const arbitraryColors = (result.className ?? '').match(
-        /(?:bg|text|border|ring|shadow)-\[[^\]]*(?:rgb|hsl|#)[^\]]*\]/g,
-      );
-      if (arbitraryColors) {
-        const warning =
-          `\n\nWarning: arbitrary color values detected (${arbitraryColors.join(', ')}). ` +
-          'These may not match the project design system. ' +
-          'Use hyper_suggest_color_token to find the nearest Tailwind token.';
-        return { content: [{ type: 'text' as const, text: mainText + warning }] };
-      }
-
-      return { content: [{ type: 'text' as const, text: mainText }] };
+      const text = warning ? `${result}\n\nWarning: ${warning}` : (result ?? 'Styles updated');
+      return { content: [{ type: 'text' as const, text }] };
     },
   );
 

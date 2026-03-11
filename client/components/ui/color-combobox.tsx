@@ -1,10 +1,3 @@
-import { IconCheck, IconChevronDown, IconLink, IconLinkOff } from '@tabler/icons-react';
-import cn from 'clsx';
-import * as React from 'react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { getColorHex, getColorNames, TAILWIND_COLORS } from '@/lib/tailwind/tailwind-values';
 import {
   findClosestTamaguiColor,
   getTamaguiColorHex,
@@ -13,7 +6,14 @@ import {
   getTamaguiTokenFromHex,
   TAMAGUI_COLORS,
   TAMAGUI_SEMANTIC_TOKENS,
-} from '@/lib/tamagui/tamagui-values';
+} from '@lib/tamagui/values';
+import { IconCheck, IconChevronDown, IconLink, IconLinkOff } from '@tabler/icons-react';
+import cn from 'clsx';
+import * as React from 'react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getColorHex, getColorNames, TAILWIND_COLORS } from '@/lib/tailwind/tailwind-values';
 
 export type TokenSystem = 'tailwind' | 'tamagui';
 

@@ -4,7 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { registerAstTools } from './tools/ast-tools';
 import { registerComponentTools } from './tools/component-tools';
 import { registerExtensionTools } from './tools/extension-tools';
-import { registerTailwindTools } from './tools/tailwind-tools';
+import { registerStylingTools } from './tools/styling-tools';
 import type { HyperMcpServices } from './types';
 
 export class HyperMcpServer {
@@ -21,7 +21,7 @@ export class HyperMcpServer {
 
     registerAstTools(server, this._services.astService, this._services.stateHub);
     registerComponentTools(server, this._services.componentService, this._services.astService, this._services.stateHub);
-    registerTailwindTools(server);
+    registerStylingTools(server, this._services.stateHub);
     registerExtensionTools(server, this._services);
 
     return server;
