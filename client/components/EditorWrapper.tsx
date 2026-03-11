@@ -71,18 +71,6 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
     // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     console.log(`[Canvas Engine] Registered ${htmlComponents.length + canvasComponents.length} base components`);
 
-    // Helper to collect all IDs from AST structure in order
-    function collectIds(nodes: ASTNode[]): string[] {
-      const ids: string[] = [];
-      for (const node of nodes) {
-        ids.push(node.id);
-        if (node.children && node.children.length > 0) {
-          ids.push(...collectIds(node.children));
-        }
-      }
-      return ids;
-    }
-
     // Function to load component structure
     async function loadComponentStructure(data: ComponentLoadData) {
       if (data.success && data.componentName) {
@@ -149,43 +137,13 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
           // Update current file path
           filePathRef.current = filePath;
 
-          // Inject unique IDs into source file
-          // parseComponent generates UUIDs for all elements (either reads from file or creates new)
-          // injectUniqueIds will only write to file if IDs are missing
-          const allIds = collectIds(data.structure);
-          const idMap: Record<string, string> = {};
-          allIds.forEach((id, index) => {
-            idMap[index.toString()] = id;
-          });
-
-          // Build Sample* idMap if sampleStructure exists
-          let sampleIdMap: Record<string, string> | undefined;
-          if (data.sampleStructure && data.sampleStructure.length > 0) {
-            const sampleIds = collectIds(data.sampleStructure);
-            const map: Record<string, string> = {};
-            sampleIds.forEach((id, index) => {
-              map[index.toString()] = id;
-            });
-            sampleIdMap = map;
-          }
-
+          // Inject data-uniq-id into JSX elements that don't have one.
+          // If IDs were added, re-parse to pick up the file's actual UUIDs.
           try {
-            console.log(
-              '[Canvas Engine] Injecting unique IDs for',
-              allIds.length,
-              'elements in component:',
-              data.componentName,
-            );
             const injectResponse = await authFetch('/api/inject-unique-ids', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                filePath,
-                idMap,
-                componentName: data.componentName,
-                sampleName: data.sampleName ?? undefined,
-                sampleIdMap,
-              }),
+              body: JSON.stringify({ filePath }),
             });
             const injectResult = await injectResponse.json();
             if (!injectResult.success) {
