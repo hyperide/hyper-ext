@@ -10,7 +10,8 @@ import * as path from 'node:path';
 import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { parseCode } from '@lib/ast/parser';
-import { getUuidFromElement } from '@lib/ast/traverser';
+import { type ComponentNode, type ParseContext, parseJSXElement } from '@lib/services/component-parser';
+import { convertComponentNodesToTreeNodes } from '@lib/services/tree-adapter';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
 import * as vscode from 'vscode';
 import { analyzeWithAI, resolveAnalyzerConfig } from '../../../../lib/component-scanner/ai-analyzer';
@@ -40,7 +41,6 @@ export class ComponentService {
   private _workspaceRoot: string;
   private _getApiKey: () => Promise<string | undefined>;
   private _cache: Map<string, ComponentInfo> = new Map();
-  private _seenIds = new Set<string>();
 
   constructor(workspaceRoot: string, getApiKey: () => Promise<string | undefined>) {
     this._workspaceRoot = workspaceRoot;
@@ -290,13 +290,25 @@ export class ComponentService {
       const returnJSX = this._findComponentReturnJSX(ast);
       if (!returnJSX) return [];
 
-      // Reset seen IDs for dedup within this parse pass
-      this._seenIds.clear();
-      return this._buildTreeFromJSX(returnJSX);
+      const parseContext: ParseContext = { fileAST: ast, seenIds: new Set() };
+      const componentNodes = this._parseRootJSX(returnJSX, parseContext);
+      return convertComponentNodesToTreeNodes(componentNodes);
     } catch (error) {
       console.error(`[ComponentService] Error parsing structure for ${componentPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       return [];
     }
+  }
+
+  private _parseRootJSX(root: t.JSXElement | t.JSXFragment, parseContext: ParseContext): ComponentNode[] {
+    if (t.isJSXElement(root)) {
+      const node = parseJSXElement(root, undefined, undefined, undefined, parseContext);
+      return node ? [node] : [];
+    }
+    // Fragment: parse each child element
+    return root.children
+      .filter((c): c is t.JSXElement => t.isJSXElement(c))
+      .map((c) => parseJSXElement(c, undefined, undefined, undefined, parseContext))
+      .filter((n): n is ComponentNode => n !== null);
   }
 
   /**
@@ -619,193 +631,6 @@ export class ComponentService {
   }
 
   /**
-   * Recursively build TreeNode[] from a JSX element or fragment.
-   */
-  private _buildTreeFromJSX(node: t.JSXElement | t.JSXFragment): TreeNode[] {
-    if (t.isJSXFragment(node)) {
-      // Fragment: flatten children
-      return this._processJSXChildren(node.children);
-    }
-
-    const treeNode = this._jsxElementToTreeNode(node);
-    return treeNode ? [treeNode] : [];
-  }
-
-  /**
-   * Convert a single JSX element to a TreeNode.
-   */
-  private _jsxElementToTreeNode(element: t.JSXElement): TreeNode | null {
-    const tagName = _getTagName(element);
-    if (!tagName) return null;
-
-    let id = getUuidFromElement(element) || `_${tagName}_${element.loc?.start.line ?? 0}`;
-
-    // Deduplicate: if this ID was already seen, generate a unique fallback
-    if (this._seenIds.has(id)) {
-      id = `_${tagName}_dup_${element.loc?.start.line ?? 0}_${element.loc?.start.column ?? 0}`;
-    }
-    this._seenIds.add(id);
-
-    // Determine type
-    let type: TreeNode['type'] = 'element';
-    const lowerTag = tagName.toLowerCase();
-    if (
-      lowerTag === 'div' ||
-      lowerTag === 'section' ||
-      lowerTag === 'main' ||
-      lowerTag === 'header' ||
-      lowerTag === 'footer' ||
-      lowerTag === 'nav' ||
-      lowerTag === 'article' ||
-      lowerTag === 'aside' ||
-      lowerTag === 'form'
-    ) {
-      type = 'frame';
-    } else if (/^[A-Z]/.test(tagName)) {
-      type = 'component';
-    }
-
-    // Collect text content from direct text children
-    const textParts: string[] = [];
-    const jsxChildren: TreeNode[] = [];
-
-    for (const child of element.children) {
-      if (t.isJSXText(child)) {
-        const trimmed = child.value.trim();
-        if (trimmed) textParts.push(trimmed);
-      } else if (t.isJSXElement(child)) {
-        const childNode = this._jsxElementToTreeNode(child);
-        if (childNode) jsxChildren.push(childNode);
-      } else if (t.isJSXFragment(child)) {
-        jsxChildren.push(...this._processJSXChildren(child.children));
-      } else if (t.isJSXExpressionContainer(child)) {
-        jsxChildren.push(...this._processExpression(child.expression));
-      }
-    }
-
-    const label = textParts.length > 0 ? `${tagName} "${textParts.join(' ').slice(0, 30)}"` : tagName;
-
-    const treeNode: TreeNode = { id, type, label };
-    if (jsxChildren.length > 0) {
-      treeNode.children = jsxChildren;
-    }
-
-    return treeNode;
-  }
-
-  /**
-   * Process JSX children array into TreeNode[].
-   */
-  private _processJSXChildren(children: t.Node[]): TreeNode[] {
-    const nodes: TreeNode[] = [];
-
-    for (const child of children) {
-      if (t.isJSXElement(child)) {
-        const node = this._jsxElementToTreeNode(child);
-        if (node) nodes.push(node);
-      } else if (t.isJSXFragment(child)) {
-        nodes.push(...this._processJSXChildren(child.children));
-      } else if (t.isJSXExpressionContainer(child)) {
-        nodes.push(...this._processExpression(child.expression));
-      }
-    }
-
-    return nodes;
-  }
-
-  /**
-   * Process JSX expression containers — handles .map(), ternaries, && chains.
-   */
-  private _processExpression(expr: t.Expression | t.JSXEmptyExpression): TreeNode[] {
-    if (t.isJSXEmptyExpression(expr)) return [];
-
-    // .map() call — recurse into callback body
-    if (t.isCallExpression(expr) && t.isMemberExpression(expr.callee)) {
-      const prop = expr.callee.property;
-      if (t.isIdentifier(prop) && prop.name === 'map') {
-        const callback = expr.arguments[0];
-        if (t.isArrowFunctionExpression(callback) || t.isFunctionExpression(callback)) {
-          const mapChildren = this._extractJSXFromFunctionBody(callback);
-          if (mapChildren.length > 0) {
-            // Wrap in a virtual ".map()" node
-            const calleeObj = expr.callee.object;
-            const arrayName = t.isIdentifier(calleeObj) ? calleeObj.name : 'items';
-            return [
-              {
-                id: `_map_${expr.loc?.start.line ?? 0}`,
-                type: 'map',
-                label: `${arrayName}.map()`,
-                children: mapChildren,
-              },
-            ];
-          }
-        }
-      }
-    }
-
-    // Conditional: condition && <JSX>
-    if (t.isLogicalExpression(expr) && expr.operator === '&&') {
-      return this._extractJSXFromExpression(expr.right);
-    }
-
-    // Ternary: condition ? <A> : <B>
-    if (t.isConditionalExpression(expr)) {
-      return [...this._extractJSXFromExpression(expr.consequent), ...this._extractJSXFromExpression(expr.alternate)];
-    }
-
-    // Direct JSX in expression
-    return this._extractJSXFromExpression(expr);
-  }
-
-  /**
-   * Extract JSX from an arrow/function body.
-   */
-  private _extractJSXFromFunctionBody(fn: t.ArrowFunctionExpression | t.FunctionExpression): TreeNode[] {
-    if (t.isJSXElement(fn.body) || t.isJSXFragment(fn.body)) {
-      return this._buildTreeFromJSX(fn.body);
-    }
-
-    if (t.isBlockStatement(fn.body)) {
-      for (const stmt of fn.body.body) {
-        if (t.isReturnStatement(stmt) && stmt.argument) {
-          if (t.isJSXElement(stmt.argument)) {
-            return this._buildTreeFromJSX(stmt.argument);
-          }
-          if (t.isJSXFragment(stmt.argument)) {
-            return this._buildTreeFromJSX(stmt.argument);
-          }
-          // Parenthesized expression
-          if (t.isParenthesizedExpression(stmt.argument)) {
-            const inner = stmt.argument.expression;
-            if (t.isJSXElement(inner) || t.isJSXFragment(inner)) {
-              return this._buildTreeFromJSX(inner);
-            }
-          }
-        }
-      }
-    }
-
-    return [];
-  }
-
-  /**
-   * Extract TreeNode[] from a single expression (might be JSX).
-   */
-  private _extractJSXFromExpression(expr: t.Expression): TreeNode[] {
-    if (t.isJSXElement(expr)) {
-      const node = this._jsxElementToTreeNode(expr);
-      return node ? [node] : [];
-    }
-    if (t.isJSXFragment(expr)) {
-      return this._processJSXChildren(expr.children);
-    }
-    if (t.isParenthesizedExpression(expr)) {
-      return this._extractJSXFromExpression(expr.expression);
-    }
-    return [];
-  }
-
-  /**
    * Get type string from TypeScript AST node
    */
   private _getTypeString(node: t.TSType): string {
@@ -856,30 +681,6 @@ function _extractReturnJSX(body: t.BlockStatement): t.JSXElement | t.JSXFragment
         }
       }
     }
-  }
-  return null;
-}
-
-/**
- * Get tag name from a JSX element.
- */
-function _getTagName(element: t.JSXElement): string | null {
-  const name = element.openingElement.name;
-  if (t.isJSXIdentifier(name)) {
-    return name.name;
-  }
-  if (t.isJSXMemberExpression(name)) {
-    // e.g. Motion.div → "Motion.div"
-    const parts: string[] = [];
-    let current: t.JSXMemberExpression | t.JSXIdentifier = name;
-    while (t.isJSXMemberExpression(current)) {
-      parts.unshift(current.property.name);
-      current = current.object;
-    }
-    if (t.isJSXIdentifier(current)) {
-      parts.unshift(current.name);
-    }
-    return parts.join('.');
   }
   return null;
 }
