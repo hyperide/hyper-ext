@@ -5,14 +5,35 @@ Edit styles, inspect props, and preview changes — all without leaving your edi
 
 ![HyperIDE Screenshot](media/screenshot.png)
 
+## Why HyperIDE
+
+Most visual tools rely on AI to rewrite your code for every change — even a simple
+color tweak burns through tokens and takes seconds to apply. HyperIDE takes a
+fundamentally different approach:
+
+- **Zero-token editing.** Style and layout changes go directly through AST
+  manipulation — no LLM round-trip, no token cost, instant feedback.
+- **Works with your existing codebase.** Open any React project and start editing
+  visually. No migration, no vendor lock-in, no opinionated stack.
+- **Deterministic and reliable.** AST operations produce precise, predictable code
+  changes. No hallucinations, no regressions, no "fix one thing, break two others."
+- **Stays inside VS Code.** No separate app, no cloud IDE, no context switching.
+  Your files, your git, your workflow.
+- **AI when you want it.** The visual editor works independently. AI Chat is an
+  optional power-up for generation and refactoring — not a requirement.
+- **MCP server for AI agents.** 20 tools that let any AI assistant (Copilot, Claude
+  Code, Cursor) control the visual editor programmatically. HyperIDE becomes the
+  visual layer for your existing AI workflow.
+
 ## Features
 
 - **Live Preview** — see your React components rendered in real time
 - **Component Explorer** — browse and navigate your project's component tree
-- **Style Inspector** — view and edit Tailwind classes and CSS properties
+- **Style Inspector** — view and edit Tailwind classes and CSS properties visually
 - **AI Chat** — ask AI to modify components, generate code, and explain patterns
 - **Dev Server** — start and manage your project's dev server from VS Code
 - **Code ↔ Canvas** — click an element in preview to jump to source, and vice versa
+- **MCP Server** — expose AST tools to external AI agents for automated editing
 
 ## Quick Start
 
