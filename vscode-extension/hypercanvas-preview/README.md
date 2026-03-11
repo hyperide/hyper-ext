@@ -3,6 +3,8 @@
 Visual editor for React components inside VS Code.
 Edit styles, inspect props, and preview changes — all without leaving your editor.
 
+![HyperIDE Screenshot](media/screenshot.png)
+
 ## Features
 
 - **Live Preview** — see your React components rendered in real time
@@ -61,7 +63,7 @@ Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
+See [DEVELOPMENT.md](https://github.com/hyperide/hyper-ext/blob/main/DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
 
 ## License
 

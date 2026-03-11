@@ -47,6 +47,31 @@ bun test vscode-extension
 - CompositionStorage (compositions CRUD, chats CRUD,
   settings, directory creation) — 14 tests
 
+## Publishing to VS Code Marketplace
+
+Publisher: `hyperide` ([manage](https://marketplace.visualstudio.com/manage/publishers/hyperide))
+
+**Automated (CI):**
+
+1. Bump `version` in `hypercanvas-preview/package.json`
+2. Commit and push to `main`
+3. Tag with matching version: `git tag ext-v0.1.2 && git push origin ext-v0.1.2`
+4. CI workflow (`publish-extension.yml`) builds, validates tag vs package.json, and publishes
+
+**Manual:**
+
+```bash
+cd vscode-extension/hypercanvas-preview
+npm run build
+npx @vscode/vsce publish -p "$VSCE_PAT"
+```
+
+**Dry run (CI):** trigger `publish-extension` workflow manually with `dry_run: true` --
+builds VSIX artifact without publishing.
+
+**Secrets:** `VSCE_PAT` (GitHub repo secret) -- Azure DevOps PAT with
+Marketplace Manage scope, all accessible organizations. Expires 2026-04-06.
+
 **Not covered:**
 
 - Extension lifecycle
