@@ -105,6 +105,21 @@ export function activate(context: vscode.ExtensionContext) {
       console.warn('[HyperIDE] Failed to detect UI kit:', err);
     });
 
+  // Flush .hyperide/ to disk on first component open (deferred write).
+  // Only unsubscribe after flush actually writes — scan may still be in progress.
+  const unsubFlush = stateHub.onChange((_state, patch) => {
+    if (patch.currentComponent) {
+      panelRouter
+        ?.flushStructureStore()
+        .then((flushed) => {
+          if (flushed) unsubFlush();
+        })
+        .catch((err) => {
+          console.error('[HyperIDE] Failed to flush structure store:', err);
+        });
+    }
+  });
+
   // Create DiagnosticHub for centralized diagnostic data
   diagnosticHub = new DiagnosticHub(context.globalStorageUri.fsPath);
   diagnosticHub.init().catch((err) => {
@@ -362,8 +377,15 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperIDE] Extension activated successfully');
 }
 
-export function deactivate() {
+export async function deactivate() {
   console.log('[HyperIDE] Extension deactivating...');
+
+  // Flush deferred .hyperide writes before teardown
+  if (panelRouter) {
+    await panelRouter.flushStructureStore().catch((err) => {
+      console.error('[HyperIDE] Failed to flush structure store on deactivate:', err);
+    });
+  }
 
   // Stop dev server if running
   if (devServerManager) {

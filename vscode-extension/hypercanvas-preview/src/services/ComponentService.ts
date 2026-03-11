@@ -41,10 +41,16 @@ export class ComponentService {
   private _workspaceRoot: string;
   private _getApiKey: () => Promise<string | undefined>;
   private _cache: Map<string, ComponentInfo> = new Map();
+  private _structureStore = new FileProjectStructureStore();
 
   constructor(workspaceRoot: string, getApiKey: () => Promise<string | undefined>) {
     this._workspaceRoot = workspaceRoot;
     this._getApiKey = getApiKey;
+  }
+
+  /** Flush deferred .hyperide writes to disk. Returns true if anything was written. */
+  flushStructureStore(): Promise<boolean> {
+    return this._structureStore.flush();
   }
 
   /**
@@ -94,8 +100,7 @@ export class ComponentService {
    * Returns directory-based groups (atoms, composites, pages) with filename-based names.
    */
   async scanComponentGroups(): Promise<ScanResult> {
-    const store = new FileProjectStructureStore();
-    const scanner = new ComponentScanner(store, async (root) => {
+    const scanner = new ComponentScanner(this._structureStore, async (root) => {
       const tree = await getDirectoryTree(root);
 
       const config = vscode.workspace.getConfiguration('hypercanvas.ai');

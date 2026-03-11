@@ -41,6 +41,8 @@ export interface ProjectStructure extends ProjectStructurePaths {
 export interface ProjectStructureStore {
   load(projectRoot: string): Promise<ProjectStructurePaths | null>;
   save(projectRoot: string, paths: ProjectStructurePaths): Promise<void>;
+  /** Persist any buffered writes. Called on graceful shutdown. */
+  flush(): Promise<boolean>;
 }
 
 /** Test info */

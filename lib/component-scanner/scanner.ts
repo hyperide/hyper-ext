@@ -49,7 +49,13 @@ export class ComponentScanner {
         compositeComponentsPaths: structure.compositeComponentsPaths ?? [],
         pagesPaths: structure.pagesPaths ?? [],
       };
-      await this.store.save(projectRoot, paths);
+      const hasData =
+        paths.atomComponentsPaths.length > 0 ||
+        paths.compositeComponentsPaths.length > 0 ||
+        paths.pagesPaths.length > 0;
+      if (hasData) {
+        await this.store.save(projectRoot, paths);
+      }
     }
 
     return this.buildComponentsData(paths, projectRoot);

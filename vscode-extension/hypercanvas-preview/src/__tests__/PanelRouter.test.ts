@@ -46,6 +46,8 @@ mock.module('../services/StyleReadService', () => ({
 // would poison VSCodeFileIO.test.ts (mock.module is global).
 mock.module('node:fs/promises', () => ({
   readFile: mock(() => Promise.resolve('file content')),
+  mkdir: mock(() => Promise.resolve(undefined)),
+  writeFile: mock(() => Promise.resolve(undefined)),
 }));
 
 const { PanelRouter } = await import('../PanelRouter');

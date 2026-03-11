@@ -53,6 +53,11 @@ export class PanelRouter {
     return this._componentService.scanComponentGroups();
   }
 
+  /** Flush deferred .hyperide writes to disk. Returns true if anything was written. */
+  flushStructureStore(): Promise<boolean> {
+    return this._componentService.flushStructureStore();
+  }
+
   /**
    * Route a message from a panel to the appropriate handler.
    * Returns true if the message was handled.

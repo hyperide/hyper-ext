@@ -6,10 +6,14 @@ import type { ProjectStructurePaths, ProjectStructureStore } from './types';
 
 const TMP_DIR = path.join(import.meta.dir, '__test_fixtures__');
 
-function createMockStore(data: ProjectStructurePaths | null): ProjectStructureStore {
+function createMockStore(data: ProjectStructurePaths | null): ProjectStructureStore & { saved: boolean } {
   return {
+    saved: false,
     load: async () => data,
-    save: async () => {},
+    save: async function () {
+      this.saved = true;
+    },
+    flush: async () => false,
   };
 }
 
@@ -106,6 +110,42 @@ describe('ComponentScanner.getComponentsData', () => {
 
     // Cleanup
     fs.unlinkSync(path.join(projectRoot, 'src', 'styles.css'));
+  });
+
+  it('should not save when analysis returns empty paths', async () => {
+    const store = createMockStore(null);
+
+    const scanner = new ComponentScanner(store, async () => ({
+      atomComponentsPaths: [],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+      textComponentPath: null,
+      linkComponentPath: null,
+      buttonComponentPath: null,
+      imageComponentPath: null,
+      containerComponentPath: null,
+    }));
+
+    await scanner.getComponentsData(projectRoot);
+    expect(store.saved).toBe(false);
+  });
+
+  it('should save when analysis returns non-empty paths', async () => {
+    const store = createMockStore(null);
+
+    const scanner = new ComponentScanner(store, async () => ({
+      atomComponentsPaths: [path.join(projectRoot, 'src', 'components', 'ui')],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+      textComponentPath: null,
+      linkComponentPath: null,
+      buttonComponentPath: null,
+      imageComponentPath: null,
+      containerComponentPath: null,
+    }));
+
+    await scanner.getComponentsData(projectRoot);
+    expect(store.saved).toBe(true);
   });
 
   it('should mix file and directory paths in the same category', async () => {
