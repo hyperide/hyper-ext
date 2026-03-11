@@ -7,6 +7,7 @@ describe('escapeRegExp', () => {
   });
 
   it('escapes all special RegExp characters', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: regex metacharacters test, not template interpolation
     const specials = '.*+?^' + '${}()|[]\\';
     const escaped = escapeRegExp(specials);
     // Every special char should be preceded by a backslash

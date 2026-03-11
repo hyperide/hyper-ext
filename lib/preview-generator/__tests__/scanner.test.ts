@@ -177,7 +177,6 @@ export function Button() { return <button />; }`;
   });
 
   it('should not match exports inside template literals', () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal content, not an actual interpolation
     const source = 'const template = `export const SampleDefault = () => <div/>`;';
     expect(scanSampleExports(source)).toEqual([]);
   });
@@ -216,6 +215,7 @@ export default React.memo(MyButton);`;
 
 describe('escapeRegex', () => {
   it('should escape all regex metacharacters', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: regex metacharacters test, not template interpolation
     const input = '.*+?^${}()|[]\\';
     const escaped = escapeRegex(input);
     // Every metacharacter should be preceded by backslash
