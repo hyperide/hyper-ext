@@ -185,23 +185,24 @@ class TamaguiColorTokenProvider implements ColorTokenProvider {
 // StyleAdapter — Tailwind
 // ---------------------------------------------------------------------------
 
-// Map of Tailwind class prefixes to CSS property names
-const TW_PREFIX_TO_CSS: Record<string, string> = {
+// Map of Tailwind class prefixes to CSS property names.
+// Axis shorthands (px, py, mx, my) map to both sides.
+const TW_PREFIX_TO_CSS: Record<string, string | string[]> = {
   bg: 'backgroundColor',
   text: 'color',
   border: 'borderColor',
   ring: 'ringColor',
   shadow: 'shadowColor',
   p: 'padding',
-  px: 'paddingLeft',
-  py: 'paddingTop',
+  px: ['paddingLeft', 'paddingRight'],
+  py: ['paddingTop', 'paddingBottom'],
   pt: 'paddingTop',
   pr: 'paddingRight',
   pb: 'paddingBottom',
   pl: 'paddingLeft',
   m: 'margin',
-  mx: 'marginLeft',
-  my: 'marginTop',
+  mx: ['marginLeft', 'marginRight'],
+  my: ['marginTop', 'marginBottom'],
   mt: 'marginTop',
   mr: 'marginRight',
   mb: 'marginBottom',
@@ -237,7 +238,11 @@ function normalizeStylesInput(raw: Record<string, string>): Record<string, strin
     if (twPrefixMatch && (!value || value === 'true')) {
       const cssKey = TW_PREFIX_TO_CSS[twPrefixMatch[1]];
       if (cssKey) {
-        result[cssKey] = twPrefixMatch[2];
+        if (Array.isArray(cssKey)) {
+          for (const k of cssKey) result[k] = twPrefixMatch[2];
+        } else {
+          result[cssKey] = twPrefixMatch[2];
+        }
         continue;
       }
     }
@@ -345,6 +350,8 @@ class TamaguiStyleAdapter implements StyleAdapter {
     const resolved: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(params.styleProps)) {
+      // Defensive: MCP input from external AI agents may bypass Zod at runtime
+      if (typeof value !== 'string') continue;
       if (value.startsWith('$')) {
         const hex = getTamaguiColorHex(value);
         resolved[key] = hex ?? value;

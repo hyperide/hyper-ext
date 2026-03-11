@@ -57,11 +57,14 @@ export function registerStylingTools(server: McpServer, stateHub: StateHub): voi
   // -----------------------------------------------------------------------
   // hyper_suggest_color_token
   // -----------------------------------------------------------------------
-  server.tool(
+  server.registerTool(
     'hyper_suggest_color_token',
-    "Find the nearest design token colors for a given color value. Accepts hex (#ff0000) or rgb(r,g,b). Returns top 5 closest tokens with distance. Tokens depend on the project's styling system (Tailwind or Tamagui).",
     {
-      color: z.string().describe('Color value: hex (#ff0000) or rgb(127,29,29)'),
+      description:
+        "Find the nearest design token colors for a given color value. Accepts hex (#ff0000) or rgb(r,g,b). Returns top 5 closest tokens with distance. Tokens depend on the project's styling system (Tailwind or Tamagui).",
+      inputSchema: z.object({
+        color: z.string().describe('Color value: hex (#ff0000) or rgb(127,29,29)'),
+      }),
     },
     async ({ color }) => {
       const uiKit = stateHub.state.projectUIKit;
@@ -95,11 +98,14 @@ export function registerStylingTools(server: McpServer, stateHub: StateHub): voi
   // -----------------------------------------------------------------------
   // hyper_list_color_tokens
   // -----------------------------------------------------------------------
-  server.tool(
+  server.registerTool(
     'hyper_list_color_tokens',
-    'List available design token colors for the project\'s styling system. Optionally filter by color family (e.g. "red", "blue").',
     {
-      family: z.string().optional().describe('Color family to filter: red, blue, green, etc. Omit for all colors.'),
+      description:
+        'List available design token colors for the project\'s styling system. Optionally filter by color family (e.g. "red", "blue").',
+      inputSchema: z.object({
+        family: z.string().optional().describe('Color family to filter: red, blue, green, etc. Omit for all colors.'),
+      }),
     },
     async ({ family }) => {
       const uiKit = stateHub.state.projectUIKit;
