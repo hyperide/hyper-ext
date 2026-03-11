@@ -33,6 +33,7 @@ __pycache__/
 .playwright-mcp/
 .claude/worktrees
 .claude/state.json
+.claude/tmp/
 
 # SOPS decrypted secrets (never commit!)
 *.dec.yaml
