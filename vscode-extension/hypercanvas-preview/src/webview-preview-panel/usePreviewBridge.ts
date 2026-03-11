@@ -67,6 +67,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             text: msg.text,
             html: msg.html,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:screenshotResult') {
+          canvas.sendEvent({
+            type: 'screenshotResult',
+            requestId: msg.requestId,
+            dataUrl: msg.dataUrl,
+          } as unknown as PlatformMessage);
         }
         return;
       }
@@ -202,6 +208,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           iframeEl?.contentWindow?.postMessage(
             { type: 'hypercanvas:getElementHTML', elementId: msg.elementId, requestId: msg.requestId },
+            '*',
+          );
+          break;
+
+        case 'takeScreenshot':
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          iframeEl?.contentWindow?.postMessage(
+            { type: 'hypercanvas:takeScreenshot', elementId: msg.elementId, requestId: msg.requestId },
             '*',
           );
           break;

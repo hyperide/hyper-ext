@@ -265,8 +265,27 @@ function toColorClass(type: 'bg' | 'text' | 'border' | 'shadow', value: string |
     }
   }
 
-  // Use arbitrary value for custom colors
-  return `${type}-[${value}]`;
+  // Try to match rgb/rgba values to Tailwind colors
+  const rgbMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/);
+  if (rgbMatch) {
+    const r = Number.parseInt(rgbMatch[1], 10);
+    const g = Number.parseInt(rgbMatch[2], 10);
+    const b = Number.parseInt(rgbMatch[3], 10);
+    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    const twClassFromRgb = HEX_TO_TW_CLASS[hex];
+    if (twClassFromRgb) {
+      const alpha = rgbMatch[4] ? Number.parseFloat(rgbMatch[4]) : 1;
+      if (alpha < 1) {
+        const opacityPercent = Math.round(alpha <= 1 ? alpha * 100 : alpha);
+        return `${type}-${twClassFromRgb}/${opacityPercent}`;
+      }
+      return `${type}-${twClassFromRgb}`;
+    }
+  }
+
+  // Use arbitrary value for custom colors — replace commas/spaces per Tailwind v3 syntax
+  const escaped = value.replace(/,\s*/g, '_').replace(/\s+/g, '_');
+  return `${type}-[${escaped}]`;
 }
 
 /**

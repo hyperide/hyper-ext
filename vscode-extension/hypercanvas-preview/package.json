@@ -35,6 +35,12 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "hypercanvas.mcpServer",
+        "label": "HyperCanvas MCP"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -135,6 +141,10 @@
       {
         "command": "hypercanvas.openProjectStructure",
         "title": "Hyper: Open Project Structure Config"
+      },
+      {
+        "command": "hypercanvas.setupMcp",
+        "title": "Hyper: Setup MCP for AI Agents"
       }
     ],
     "keybindings": [
@@ -238,8 +248,11 @@
     "@babel/parser": "^7.26.3",
     "@babel/traverse": "^7.26.5",
     "@babel/types": "^7.26.5",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "html2canvas": "^1.4.1",
     "react-resizable-panels": "^4.6.5",
-    "recast": "^0.23.11"
+    "recast": "^0.23.11",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

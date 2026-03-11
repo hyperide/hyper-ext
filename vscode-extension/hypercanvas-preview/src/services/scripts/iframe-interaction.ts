@@ -10,6 +10,7 @@ import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/cli
 import { getEmptyContainerRects } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
+import html2canvas from 'html2canvas';
 
 /**
  * Scroll an element into view, preferring smooth scrolling when supported.
@@ -396,6 +397,31 @@ function updateDesignStyles(mode: string): void {
   }
 }
 
+// === Screenshot handler ===
+function handleScreenshotRequest(requestId: string, elementId: string | null): void {
+  const target = elementId
+    ? (document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(elementId)}"]`) as HTMLElement | null)
+    : document.body;
+
+  if (!target) {
+    // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+    window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl: null }, '*');
+    return;
+  }
+
+  html2canvas(target, { useCORS: true, allowTaint: true, backgroundColor: null, scale: 1 })
+    .then((canvas) => {
+      const dataUrl = canvas.toDataURL('image/png');
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl }, '*');
+    })
+    .catch((err) => {
+      console.error('[HyperCanvas] Screenshot failed:', err);
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage({ type: 'hypercanvas:screenshotResult', requestId, dataUrl: null }, '*');
+    });
+}
+
 // === Receive messages from parent webview ===
 // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
 window.addEventListener('message', (event: MessageEvent) => {
@@ -454,6 +480,12 @@ window.addEventListener('message', (event: MessageEvent) => {
       },
       '*',
     );
+    return;
+  }
+
+  // Screenshot request from MCP tool
+  if (msg.type === 'hypercanvas:takeScreenshot') {
+    handleScreenshotRequest(msg.requestId as string, msg.elementId as string | null);
     return;
   }
 });

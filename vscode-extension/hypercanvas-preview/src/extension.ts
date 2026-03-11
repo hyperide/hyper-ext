@@ -19,8 +19,10 @@ import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provid
 import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
+import { goToCode } from './EditorBridge';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
+import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
 import { PreviewPanel } from './PreviewPanel';
 import { RightPanelProvider } from './RightPanelProvider';
@@ -32,6 +34,7 @@ import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 
 // Global references
+let mcpServer: HyperMcpServer | null = null;
 let previewPanel: PreviewPanel | null = null;
 let devServerManager: DevServerManager | null = null;
 let logsProvider: LogsPanelProvider | null = null;
@@ -178,6 +181,9 @@ export function activate(context: vscode.ExtensionContext) {
       const componentPath = patch.currentComponent.path;
       const componentName = patch.currentComponent.name;
 
+      // Auto-open Preview Panel if not already visible
+      previewPanel?.createOrShow(vscode.ViewColumn.Beside);
+
       // First inject data-uniq-id attributes into source, then parse structure
       panelRouter?.astBridge.astService
         .injectUniqueIds(componentPath)
@@ -260,10 +266,84 @@ export function activate(context: vscode.ExtensionContext) {
   // Register commands
   registerCommands(context, workspaceRoot);
 
+  // --- MCP Server for AI Agents ---
+  const astService = panelRouter.astBridge.astService;
+  const componentService = panelRouter.componentService;
+
+  mcpServer = new HyperMcpServer({
+    astService,
+    componentService,
+    stateHub,
+    diagnosticHub,
+    workspaceRoot,
+    onNavigate: async (filePath, elementId) => {
+      const location = await astService.getElementLocation(filePath, elementId);
+      if (location) {
+        await goToCode(filePath, location.line, location.column);
+      }
+    },
+    onRefresh: () => previewPanel?.refresh(),
+    onOpenComponent: (path) => {
+      stateHub?.applyUpdate('mcp-server', {
+        currentComponent: {
+          path,
+          name:
+            path
+              .split('/')
+              .pop()
+              ?.replace(/\.\w+$/, '') ?? path,
+        },
+      });
+    },
+    onScreenshot: (elementId) => previewPanel?.takeScreenshot(elementId) ?? Promise.resolve(null),
+  });
+
+  // MCP status bar item (shown after server starts)
+  const mcpStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+  mcpStatusBarItem.command = 'hypercanvas.setupMcp';
+  context.subscriptions.push(mcpStatusBarItem);
+
+  mcpServer
+    .start()
+    .then((port) => {
+      // Auto-update existing MCP config files with new port
+      autoUpdateMcpConfigs(workspaceRoot, port);
+
+      // Register with VS Code Copilot (VS Code 1.99+)
+      registerCopilotMcp(context, port);
+
+      // Show MCP status bar
+      mcpStatusBarItem.text = '$(plug) Hyper MCP';
+      mcpStatusBarItem.tooltip = `HyperCanvas MCP: http://127.0.0.1:${port}/mcp\nClick to configure AI agents`;
+      mcpStatusBarItem.show();
+
+      // One-time notification for MCP discoverability
+      const notificationShown = context.globalState.get<boolean>('mcpNotificationShown', false);
+      if (!notificationShown) {
+        vscode.window
+          .showInformationMessage(
+            'HyperCanvas MCP server is running — AI agents can now use visual editing tools.',
+            'Setup Agents',
+            'Dismiss',
+          )
+          .then((choice) => {
+            if (choice === 'Setup Agents') {
+              vscode.commands.executeCommand('hypercanvas.setupMcp');
+            }
+          });
+        context.globalState.update('mcpNotificationShown', true);
+      }
+    })
+    .catch((err) => {
+      console.error('[HyperIDE] Failed to start MCP server:', err);
+    });
+
+  context.subscriptions.push({ dispose: () => mcpServer?.dispose() });
+
   // Status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.text = '$(eye) Preview';
-  statusBarItem.tooltip = 'Open HyperIDE Preview';
+  statusBarItem.text = '$(eye) Hyper Canvas';
+  statusBarItem.tooltip = 'Open HyperCanvas Preview';
   statusBarItem.command = 'hypercanvas.openPreview';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
@@ -289,6 +369,11 @@ export function deactivate() {
   if (devServerManager) {
     devServerManager.dispose();
     devServerManager = null;
+  }
+
+  if (mcpServer) {
+    mcpServer.dispose();
+    mcpServer = null;
   }
 
   if (panelRouter) {
@@ -590,4 +675,461 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       await vscode.window.showTextDocument(doc);
     }),
   );
+
+  // Setup MCP for AI agents (Copilot, Claude Code, Codex, OpenCode)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.setupMcp', async () => {
+      if (!mcpServer || mcpServer.port === 0) {
+        vscode.window.showErrorMessage('HyperCanvas MCP server is not running');
+        return;
+      }
+
+      // Step 1: Choose AI agents — pre-check already configured ones
+      interface AgentItem extends vscode.QuickPickItem {
+        agentId: 'copilot' | 'claude-code' | 'codex' | 'opencode';
+      }
+
+      const configured = await detectConfiguredAgents(workspaceRoot);
+
+      const agents: AgentItem[] = [
+        {
+          label: 'VS Code Copilot',
+          detail: 'Write .vscode/mcp.json — auto-discovered by GitHub Copilot',
+          agentId: 'copilot',
+          picked: configured.copilot,
+        },
+        {
+          label: 'Claude Code',
+          detail: 'Write .mcp.json — auto-discovered by Claude Code CLI',
+          agentId: 'claude-code',
+          picked: configured.claudeCode,
+        },
+        {
+          label: 'Codex',
+          detail: 'Write .codex/config.toml — auto-discovered by OpenAI Codex CLI',
+          agentId: 'codex',
+          picked: configured.codex,
+        },
+        {
+          label: 'OpenCode',
+          detail: 'Write opencode.json — auto-discovered by OpenCode CLI',
+          agentId: 'opencode',
+          picked: configured.opencode,
+        },
+      ];
+
+      const picked = await vscode.window.showQuickPick(agents, {
+        title: 'Hyper: Setup MCP (Step 1/2) — Choose AI Agents',
+        placeHolder: 'Select AI agents to configure (multi-select)',
+        canPickMany: true,
+      });
+
+      if (!picked || picked.length === 0) return;
+
+      const url = mcpServer.url;
+
+      for (const agent of picked) {
+        if (agent.agentId === 'copilot') {
+          await writeVsCodeMcpJson(workspaceRoot, url);
+        } else if (agent.agentId === 'claude-code') {
+          await writeMcpJson(workspaceRoot, url);
+        } else if (agent.agentId === 'codex') {
+          await writeCodexConfig(workspaceRoot, url);
+        } else if (agent.agentId === 'opencode') {
+          await writeOpenCodeJson(workspaceRoot, url);
+        }
+      }
+
+      // Step 2: Companion MCP servers
+      interface CompanionItem extends vscode.QuickPickItem {
+        companionId: string;
+        npxPackage: string;
+      }
+
+      const companions: CompanionItem[] = [
+        {
+          label: 'Playwright MCP',
+          detail: 'Browser automation & visual testing — take screenshots, click elements, fill forms',
+          picked: true,
+          companionId: 'playwright',
+          npxPackage: '@playwright/mcp@latest',
+        },
+        {
+          label: 'Serena MCP',
+          detail: 'Semantic code navigation & refactoring — find symbols, references, rename across codebase',
+          picked: true,
+          companionId: 'serena',
+          npxPackage: '@anthropic/serena-mcp@latest',
+        },
+        {
+          label: 'Context7 MCP',
+          detail: 'Up-to-date library docs — pulls latest API references for any npm/pip package',
+          picked: true,
+          companionId: 'context7',
+          npxPackage: '@upstash/context7-mcp@latest',
+        },
+      ];
+
+      const pickedCompanions = await vscode.window.showQuickPick(companions, {
+        title: 'Hyper: Setup MCP (Step 2/2) — Companion Servers',
+        placeHolder: 'These MCP servers work great alongside HyperCanvas (optional)',
+        canPickMany: true,
+      });
+
+      // Write companion servers into the same config files selected in step 1
+      const companionConfigs = (pickedCompanions ?? []).map((c) => ({
+        id: c.companionId,
+        command: 'npx',
+        args: ['-y', c.npxPackage],
+      }));
+
+      const agentIds = picked.map((a) => a.agentId);
+      if (companionConfigs.length > 0) {
+        await writeCompanionServers(workspaceRoot, agentIds, companionConfigs);
+      }
+
+      const allNames = [...picked.map((a) => a.label), ...(pickedCompanions ?? []).map((c) => c.label)];
+      vscode.window.showInformationMessage(`MCP configured: ${allNames.join(', ')}`);
+    }),
+  );
+}
+
+/**
+ * Auto-update existing MCP config files with the new port.
+ * Called on every extension activation to keep port in sync.
+ */
+async function autoUpdateMcpConfigs(workspaceRoot: string, port: number): Promise<void> {
+  const url = `http://127.0.0.1:${port}/mcp`;
+
+  // Check and update .mcp.json (Claude Code)
+  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.mcp.json');
+  try {
+    const content = await vscode.workspace.fs.readFile(mcpJsonPath);
+    const config = JSON.parse(new TextDecoder().decode(content));
+    if (config?.mcpServers?.['hyper-canvas']) {
+      config.mcpServers['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated .mcp.json with new port');
+    }
+  } catch {
+    // File doesn't exist or no hyper-canvas entry — skip
+  }
+
+  // Check and update .vscode/mcp.json (Copilot)
+  const vscodeMcpPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.vscode', 'mcp.json');
+  try {
+    const content = await vscode.workspace.fs.readFile(vscodeMcpPath);
+    const config = JSON.parse(new TextDecoder().decode(content));
+    if (config?.servers?.['hyper-canvas']) {
+      config.servers['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(vscodeMcpPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated .vscode/mcp.json with new port');
+    }
+  } catch {
+    // File doesn't exist or no hyper-canvas entry — skip
+  }
+
+  // Check and update opencode.json
+  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), 'opencode.json');
+  try {
+    const content = await vscode.workspace.fs.readFile(opencodePath);
+    const config = JSON.parse(new TextDecoder().decode(content));
+    if (config?.mcp?.['hyper-canvas']) {
+      config.mcp['hyper-canvas'].url = url;
+      await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+      console.log('[HyperMCP] Updated opencode.json with new port');
+    }
+  } catch {
+    // File doesn't exist or no hyper-canvas entry — skip
+  }
+
+  // Check and update .codex/config.toml (Codex)
+  const codexConfigPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex', 'config.toml');
+  try {
+    const content = await vscode.workspace.fs.readFile(codexConfigPath);
+    const toml = new TextDecoder().decode(content);
+    if (toml.includes('hyper-canvas')) {
+      const updated = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
+      await vscode.workspace.fs.writeFile(codexConfigPath, Buffer.from(updated, 'utf-8'));
+      console.log('[HyperMCP] Updated .codex/config.toml with new port');
+    }
+  } catch {
+    // File doesn't exist or no hyper-canvas entry — skip
+  }
+}
+
+interface ConfiguredAgents {
+  copilot: boolean;
+  claudeCode: boolean;
+  codex: boolean;
+  opencode: boolean;
+}
+
+async function detectConfiguredAgents(workspaceRoot: string): Promise<ConfiguredAgents> {
+  const result: ConfiguredAgents = { copilot: false, claudeCode: false, codex: false, opencode: false };
+
+  const tryRead = async (relativePath: string): Promise<string | null> => {
+    try {
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), relativePath);
+      const content = await vscode.workspace.fs.readFile(uri);
+      return new TextDecoder().decode(content);
+    } catch {
+      return null;
+    }
+  };
+
+  const vscodeMcp = await tryRead('.vscode/mcp.json');
+  if (vscodeMcp) {
+    try {
+      result.copilot = !!JSON.parse(vscodeMcp)?.servers?.['hyper-canvas'];
+    } catch {
+      /* invalid json */
+    }
+  }
+
+  const mcpJson = await tryRead('.mcp.json');
+  if (mcpJson) {
+    try {
+      result.claudeCode = !!JSON.parse(mcpJson)?.mcpServers?.['hyper-canvas'];
+    } catch {
+      /* invalid json */
+    }
+  }
+
+  const codexToml = await tryRead('.codex/config.toml');
+  if (codexToml) {
+    result.codex = codexToml.includes('hyper-canvas');
+  }
+
+  const opencodeJson = await tryRead('opencode.json');
+  if (opencodeJson) {
+    try {
+      result.opencode = !!JSON.parse(opencodeJson)?.mcp?.['hyper-canvas'];
+    } catch {
+      /* invalid json */
+    }
+  }
+
+  return result;
+}
+
+async function writeVsCodeMcpJson(workspaceRoot: string, url: string): Promise<void> {
+  const vscodeDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.vscode');
+  try {
+    await vscode.workspace.fs.stat(vscodeDir);
+  } catch {
+    await vscode.workspace.fs.createDirectory(vscodeDir);
+  }
+
+  const mcpJsonPath = vscode.Uri.joinPath(vscodeDir, 'mcp.json');
+  let config: Record<string, unknown> = { servers: {} };
+
+  try {
+    const content = await vscode.workspace.fs.readFile(mcpJsonPath);
+    config = JSON.parse(new TextDecoder().decode(content));
+    if (!config.servers) config.servers = {};
+  } catch {
+    // File doesn't exist — use default
+  }
+
+  (config.servers as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'http',
+    url,
+  };
+
+  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+}
+
+async function writeMcpJson(workspaceRoot: string, url: string): Promise<void> {
+  const mcpJsonPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.mcp.json');
+  let config: Record<string, unknown> = { mcpServers: {} };
+
+  try {
+    const content = await vscode.workspace.fs.readFile(mcpJsonPath);
+    config = JSON.parse(new TextDecoder().decode(content));
+    if (!config.mcpServers) config.mcpServers = {};
+  } catch {
+    // File doesn't exist — use default
+  }
+
+  (config.mcpServers as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'http',
+    url,
+  };
+
+  await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+}
+
+async function writeOpenCodeJson(workspaceRoot: string, url: string): Promise<void> {
+  const opencodePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), 'opencode.json');
+  let config: Record<string, unknown> = {};
+
+  try {
+    const content = await vscode.workspace.fs.readFile(opencodePath);
+    config = JSON.parse(new TextDecoder().decode(content));
+  } catch {
+    // File doesn't exist — use default
+  }
+
+  if (!config.mcp) config.mcp = {};
+  (config.mcp as Record<string, unknown>)['hyper-canvas'] = {
+    type: 'remote',
+    url,
+  };
+
+  await vscode.workspace.fs.writeFile(opencodePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+}
+
+async function writeCodexConfig(workspaceRoot: string, url: string): Promise<void> {
+  const codexDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex');
+  try {
+    await vscode.workspace.fs.stat(codexDir);
+  } catch {
+    await vscode.workspace.fs.createDirectory(codexDir);
+  }
+
+  const configPath = vscode.Uri.joinPath(codexDir, 'config.toml');
+  let toml = '';
+
+  try {
+    const content = await vscode.workspace.fs.readFile(configPath);
+    toml = new TextDecoder().decode(content);
+  } catch {
+    // File doesn't exist — start fresh
+  }
+
+  if (toml.includes('[mcp_servers.hyper-canvas]')) {
+    // Update existing entry
+    toml = toml.replace(/url\s*=\s*"http:\/\/127\.0\.0\.1:\d+\/mcp"/, `url = "${url}"`);
+  } else {
+    // Append new entry
+    const entry = `\n[mcp_servers.hyper-canvas]\ntype = "http"\nurl = "${url}"\n`;
+    toml = `${toml.trimEnd()}\n${entry}`;
+  }
+
+  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, 'utf-8'));
+}
+
+interface CompanionConfig {
+  id: string;
+  command: string;
+  args: string[];
+}
+
+async function writeCompanionServers(
+  workspaceRoot: string,
+  agentIds: Array<'copilot' | 'claude-code' | 'codex' | 'opencode'>,
+  companions: CompanionConfig[],
+): Promise<void> {
+  for (const agentId of agentIds) {
+    if (agentId === 'copilot') {
+      await mergeStdioServers('.vscode/mcp.json', 'servers', workspaceRoot, companions);
+    } else if (agentId === 'claude-code') {
+      await mergeStdioServers('.mcp.json', 'mcpServers', workspaceRoot, companions);
+    } else if (agentId === 'opencode') {
+      await mergeStdioServers('opencode.json', 'mcp', workspaceRoot, companions);
+    } else if (agentId === 'codex') {
+      await appendCodexCompanions(workspaceRoot, companions);
+    }
+  }
+}
+
+async function mergeStdioServers(
+  relativePath: string,
+  serversKey: string,
+  workspaceRoot: string,
+  companions: CompanionConfig[],
+): Promise<void> {
+  const filePath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), relativePath);
+  let config: Record<string, Record<string, unknown>> = {};
+
+  try {
+    const content = await vscode.workspace.fs.readFile(filePath);
+    config = JSON.parse(new TextDecoder().decode(content));
+  } catch {
+    return; // File should already exist from step 1
+  }
+
+  const servers = (config[serversKey] ?? {}) as Record<string, unknown>;
+  for (const c of companions) {
+    if (!servers[c.id]) {
+      servers[c.id] = { command: c.command, args: c.args };
+    }
+  }
+  config[serversKey] = servers;
+
+  await vscode.workspace.fs.writeFile(filePath, Buffer.from(JSON.stringify(config, null, 2), 'utf-8'));
+}
+
+async function appendCodexCompanions(workspaceRoot: string, companions: CompanionConfig[]): Promise<void> {
+  const configPath = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.codex', 'config.toml');
+  let toml = '';
+
+  try {
+    const content = await vscode.workspace.fs.readFile(configPath);
+    toml = new TextDecoder().decode(content);
+  } catch {
+    return; // File should already exist from step 1
+  }
+
+  for (const c of companions) {
+    if (!toml.includes(`[mcp_servers.${c.id}]`)) {
+      const argsToml = c.args.map((a) => `"${a}"`).join(', ');
+      const entry = `\n[mcp_servers.${c.id}]\ncommand = "${c.command}"\nargs = [${argsToml}]\n`;
+      toml = `${toml.trimEnd()}\n${entry}`;
+    }
+  }
+
+  await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, 'utf-8'));
+}
+
+/**
+ * Register MCP server with VS Code Copilot (1.99+).
+ * Uses runtime check — no engine version bump needed.
+ */
+function registerCopilotMcp(context: vscode.ExtensionContext, port: number): void {
+  const lm = vscode.lm as Record<string, unknown> | undefined;
+  if (typeof lm?.registerMcpServerDefinitionProvider !== 'function') {
+    console.log('[HyperMCP] vscode.lm.registerMcpServerDefinitionProvider not available (VS Code < 1.99)');
+    return;
+  }
+
+  try {
+    const McpHttpServerDefinition = (vscode as Record<string, unknown>).McpHttpServerDefinition as
+      | (new (config: {
+          label: string;
+          uri: string;
+          headers?: Record<string, string>;
+          version?: string;
+        }) => unknown)
+      | undefined;
+
+    if (!McpHttpServerDefinition) {
+      console.log('[HyperMCP] vscode.McpHttpServerDefinition not available');
+      return;
+    }
+
+    const didChangeEmitter = new vscode.EventEmitter<void>();
+    context.subscriptions.push(didChangeEmitter);
+
+    type RegisterFn = (id: string, provider: Record<string, unknown>) => vscode.Disposable | undefined;
+    const register = lm.registerMcpServerDefinitionProvider as RegisterFn;
+    const disposable = register('hypercanvas.mcpServer', {
+      onDidChangeMcpServerDefinitions: didChangeEmitter.event,
+      provideMcpServerDefinitions: async () => [
+        new McpHttpServerDefinition({
+          label: 'HyperCanvas',
+          uri: `http://127.0.0.1:${port}/mcp`,
+          version: context.extension.packageJSON.version,
+        }),
+      ],
+    });
+
+    if (disposable) {
+      context.subscriptions.push(disposable);
+      console.log('[HyperMCP] Registered Copilot MCP server provider');
+    }
+  } catch (err) {
+    console.error('[HyperMCP] Failed to register Copilot MCP provider:', err);
+  }
 }

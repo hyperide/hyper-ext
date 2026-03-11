@@ -85,7 +85,7 @@ describe('generateTailwindClasses', () => {
     });
 
     expect(result).toContain('bg-[#ff0000]');
-    expect(result).toContain('border-[rgba(0,0,0,0.5)]');
+    expect(result).toContain('border-black/50');
   });
 
   it('should generate common color classes', () => {

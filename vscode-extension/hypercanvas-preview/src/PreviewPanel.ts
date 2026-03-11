@@ -39,6 +39,9 @@ export class PreviewPanel {
   // Pending content requests (for Copy Text / Copy as HTML round-trip)
   private _pendingContentRequests = new Map<string, (result: { text?: string; html?: string }) => void>();
 
+  // Pending screenshot requests (MCP tool round-trip)
+  private _pendingScreenshotRequests = new Map<string, (result: { dataUrl: string | null }) => void>();
+
   // Preview URL (set dynamically when dev server starts)
   private _previewBaseUrl = 'http://localhost:3000';
 
@@ -318,6 +321,10 @@ export class PreviewPanel {
       this._handleElementContentResult(msg);
       return;
     }
+    if (msg.type === 'screenshotResult') {
+      this._handleScreenshotResult(msg);
+      return;
+    }
 
     // Delegate shared platform messages to PanelRouter
     const handled = await this._panelRouter.routeMessage(PreviewPanel.PANEL_ID, msg, webview);
@@ -512,6 +519,48 @@ export class PreviewPanel {
     }
   }
 
+  private _handleScreenshotResult(msg: { [key: string]: unknown }): void {
+    const requestId = msg.requestId as string | undefined;
+    if (!requestId) return;
+
+    const callback = this._pendingScreenshotRequests.get(requestId);
+    if (callback) {
+      callback({ dataUrl: (msg.dataUrl as string) ?? null });
+      this._pendingScreenshotRequests.delete(requestId);
+    }
+  }
+
+  /**
+   * Take a screenshot of the preview or a specific element.
+   * Returns base64 PNG data URL, or null if screenshot failed.
+   */
+  takeScreenshot(elementId?: string): Promise<string | null> {
+    const webview = this._panel?.webview;
+    if (!webview) return Promise.resolve(null);
+
+    const requestId = `screenshot-${Date.now()}-${this._generateRandomId(6)}`;
+
+    return new Promise((resolve) => {
+      this._pendingScreenshotRequests.set(requestId, (result) => {
+        resolve(result.dataUrl);
+      });
+
+      webview.postMessage({
+        type: 'takeScreenshot',
+        elementId: elementId ?? null,
+        requestId,
+      });
+
+      // Timeout: 10 seconds for screenshot rendering
+      setTimeout(() => {
+        if (this._pendingScreenshotRequests.has(requestId)) {
+          this._pendingScreenshotRequests.delete(requestId);
+          resolve(null);
+        }
+      }, 10000);
+    });
+  }
+
   /**
    * Initialize component from active editor
    */
@@ -526,6 +575,15 @@ export class PreviewPanel {
         });
       }
     }
+
+    // Fallback: pick component from StateHub (e.g. opened via Explorer click)
+    if (!this._currentComponent) {
+      const stateComponent = this._stateHub.state.currentComponent;
+      if (stateComponent?.path) {
+        this._currentComponent = stateComponent.path;
+      }
+    }
+
     this._updatePreviewUrl();
   }
 
