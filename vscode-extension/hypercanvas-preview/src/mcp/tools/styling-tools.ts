@@ -22,6 +22,8 @@ export function registerStylingTools(server: McpServer, stateHub: StateHub): voi
         "- Tailwind projects: pass className (e.g. {className: 'flex gap-4 bg-blue-500'})\n" +
         '- Tamagui projects: pass styleProps (e.g. {styleProps: {backgroundColor: "$blue9"}})\n' +
         'Use hyper_get_state to check the active framework if unsure.',
+      // .strict() is required: without it, z.union() can't discriminate branches
+      // (both would accept extra properties and match ambiguously)
       inputSchema: z.union([
         z.object({ className: z.string().describe('Tailwind className string to parse') }).strict(),
         z

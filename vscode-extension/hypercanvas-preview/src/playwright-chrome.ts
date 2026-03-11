@@ -39,8 +39,10 @@ export function playwrightCacheDir(): string {
     case 'darwin':
       return join(homedir(), 'Library', 'Caches', 'ms-playwright');
     case 'win32':
+      // || is intentional: empty LOCALAPPDATA should fall through to homedir() (not use '' as path)
       return join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'ms-playwright');
     default:
+      // || is intentional: empty XDG_CACHE_HOME should fall through to homedir() (not use '' as path)
       return join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'ms-playwright');
   }
 }
