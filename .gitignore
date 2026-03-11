@@ -31,6 +31,8 @@ __pycache__/
 /cloned-projects/
 /data/
 .playwright-mcp/
+.claude/worktrees
+.claude/state.json
 
 # SOPS decrypted secrets (never commit!)
 *.dec.yaml
