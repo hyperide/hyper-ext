@@ -148,7 +148,7 @@ export const CommentInput = memo(function CommentInput({
   }, [autoFocus]);
 
   return (
-    <div className="space-y-2 relative">
+    <div data-testid="CommentInput" className="space-y-2 relative">
       <div className="relative">
         <Textarea
           ref={textareaRef}
@@ -213,7 +213,12 @@ export const CommentInput = memo(function CommentInput({
               Cancel
             </Button>
           )}
-          <Button size="sm" onClick={handleSubmit} disabled={!content.trim() || isSubmitting}>
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={!content.trim() || isSubmitting}
+            testId="CommentInput-submitButton"
+          >
             {submitLabel}
           </Button>
         </div>

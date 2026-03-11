@@ -5,10 +5,12 @@ import { cn } from '@/lib/utils';
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   autoResize?: boolean;
   maxRows?: number;
+  /** Optional data-testid for testing */
+  testId?: string;
 }
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, autoResize = false, maxRows = 5, onChange, ...props }, ref) => {
+  ({ className, autoResize = false, maxRows = 5, onChange, testId, ...props }, ref) => {
     const internalRef = React.useRef<HTMLTextAreaElement>(null);
     const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || internalRef;
 
@@ -57,6 +59,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={textareaRef}
         onChange={handleChange}
         {...props}
+        data-testid={testId}
       />
     );
   },

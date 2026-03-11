@@ -131,7 +131,7 @@ export function TestGenerationModal({
           addLog(`Component: ${event.componentName}`);
           addLog(`Found ${event.interactiveElements.length} interactive elements:`);
           for (const el of event.interactiveElements) {
-            addLog(`  • ${el.type} → data-test-id="${el.suggestedTestId}" (line ${el.line})`);
+            addLog(`  • ${el.type} → data-testid="${el.suggestedTestId}" (line ${el.line})`);
           }
           if (event.cvaVariants.length > 0) {
             addLog(`CVA variants: ${event.cvaVariants.join(', ')}`);
@@ -405,7 +405,7 @@ export function TestGenerationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div data-testid="TestGenerationModal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-border">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -451,11 +451,11 @@ export function TestGenerationModal({
             </div>
           )}
 
-          {/* Interactive Elements - data-test-id report */}
+          {/* Interactive Elements - data-testid report */}
           {interactiveElements.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-foreground mb-2">
-                Interactive Elements ({interactiveElements.length}) - suggested data-test-id
+                Interactive Elements ({interactiveElements.length}) - suggested data-testid
               </h3>
               <div className="bg-muted rounded-lg p-3 space-y-1.5 max-h-40 overflow-y-auto">
                 {interactiveElements.map((el) => (
@@ -464,7 +464,7 @@ export function TestGenerationModal({
                     className="text-xs font-mono flex items-center gap-2"
                   >
                     <span className="text-purple-500 w-24 flex-shrink-0">{el.type}</span>
-                    <span className="text-green-600">data-test-id="{el.suggestedTestId}"</span>
+                    <span className="text-green-600">data-testid="{el.suggestedTestId}"</span>
                     <span className="text-muted-foreground">:L{el.line}</span>
                     {el.text && <span className="text-muted-foreground truncate">"{el.text}"</span>}
                   </div>

@@ -197,7 +197,7 @@ export function ShareProjectModal({ isOpen, onClose, projectId, projectName }: S
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent testId="ShareProjectModal" className="max-w-md">
         <DialogHeader>
           <DialogTitle>Share Project</DialogTitle>
           <DialogDescription>Invite people to collaborate on &quot;{projectName}&quot;</DialogDescription>

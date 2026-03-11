@@ -37,7 +37,7 @@ export const SizeSelectionDialog = memo(function SizeSelectionDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent data-testid="SizeSelectionDialog">
         <AlertDialogHeader>
           <AlertDialogTitle>Select viewport size</AlertDialogTitle>
           <AlertDialogDescription>

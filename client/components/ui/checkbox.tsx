@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 
 const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & { testId?: string }
+>(({ className, testId, ...props }, ref) => (
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
@@ -15,6 +15,7 @@ const Checkbox = React.forwardRef<
       className,
     )}
     {...props}
+    data-testid={testId}
   >
     <CheckboxPrimitive.Indicator className={cn('flex items-center justify-center text-current')}>
       <IconCheck className="h-4 w-4" stroke={1.5} />

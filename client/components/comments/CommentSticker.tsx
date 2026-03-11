@@ -27,6 +27,7 @@ export const CommentSticker = memo(function CommentSticker({
   return (
     <button
       type="button"
+      data-testid="CommentSticker"
       onClick={handleClick}
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}

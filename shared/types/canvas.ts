@@ -63,7 +63,7 @@ export interface InstanceTestConfig {
     e2e?: boolean;
     snapshot?: boolean;
   };
-  /** Expected data-test-id attributes that should be present */
+  /** Expected data-testid attributes that should be present */
   expectedTestIds?: string[];
   /** Interaction sequence for E2E testing */
   interactions?: CanvasTestInteraction[];

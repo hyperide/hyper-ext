@@ -20,7 +20,10 @@ export const HeaderSection = memo(function HeaderSection({
 
   return (
     <>
-      <div className="h-12 px-3 flex items-center justify-between border-b border-border sticky top-0 bg-background z-10">
+      <div
+        data-testid="HeaderSection"
+        className="h-12 px-3 flex items-center justify-between border-b border-border sticky top-0 bg-background z-10"
+      >
         <div className="flex items-center gap-3">
           <UserMenu onOpenProjectSettings={onOpenSettings} />
           {isReadonly && (

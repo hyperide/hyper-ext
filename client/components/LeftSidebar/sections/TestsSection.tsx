@@ -52,7 +52,7 @@ export function TestsSection({
   };
 
   return (
-    <div className="h-full overflow-hidden flex flex-col">
+    <div data-testid="TestsSection" className="h-full overflow-hidden flex flex-col">
       <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
         <button type="button" onClick={onToggle} className="flex items-center gap-1 flex-1" disabled={!hasContent}>
           <IconChevronDown

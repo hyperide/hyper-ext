@@ -92,7 +92,7 @@ export function EditFileDiff({ path, oldContent, newContent, contextLines = 3 }:
   };
 
   return (
-    <div className="font-mono text-xs">
+    <div data-testid="EditFileDiff" className="font-mono text-xs">
       <div className="text-muted-foreground mb-1 flex items-center gap-1">
         <span>📄</span>
         <span>{path}</span>

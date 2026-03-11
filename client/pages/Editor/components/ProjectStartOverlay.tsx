@@ -34,7 +34,7 @@ export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, p
   // Show spinner with logs while starting/building
   if (isStarting || project?.status === 'building') {
     return (
-      <PanelGroup orientation="vertical" id="startup-logs-panel" className="h-full">
+      <PanelGroup orientation="vertical" id="startup-logs-panel" className="h-full" data-testid="ProjectStartOverlay">
         <Panel id="startup-spinner" defaultSize="75%" minSize="30%">
           <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-4">
@@ -68,7 +68,11 @@ export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, p
 
   // Show stopped state with start button
   return (
-    <div data-uniq-id="3ae5d415-2b23-4611-aa49-49f9be686100" className="h-full flex items-center justify-center">
+    <div
+      data-testid="ProjectStartOverlay"
+      data-uniq-id="3ae5d415-2b23-4611-aa49-49f9be686100"
+      className="h-full flex items-center justify-center"
+    >
       <div data-uniq-id="90c45f36-57af-487f-9a9b-4708dd7a2bfb" className="text-center space-y-4">
         <p data-uniq-id="ad066f8c-0edc-46de-baf3-1ac5c9ef769f" className="text-lg text-muted-foreground">
           {project ? `Project "${project.name}" is stopped` : 'No active project'}

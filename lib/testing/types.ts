@@ -1,7 +1,7 @@
 /**
  * Autogen Testing System - Type Definitions
  *
- * Core interfaces for automatic test generation with data-test-id
+ * Core interfaces for automatic test generation with data-testid
  */
 
 import type { JSX } from 'react';
@@ -12,7 +12,7 @@ import type { JSX } from 'react';
 export type TestRunner = 'bun' | 'vitest' | 'jest';
 
 /**
- * Interactive element types that should receive data-test-id
+ * Interactive element types that should receive data-testid
  */
 export type InteractiveElementType =
   | 'button'
@@ -39,7 +39,7 @@ export type InteractiveElementType =
 export interface TestInteraction {
   /** Interaction type */
   type: 'click' | 'type' | 'hover' | 'focus' | 'blur' | 'select' | 'check' | 'uncheck' | 'wait' | 'press';
-  /** Target selector (data-test-id or CSS selector) */
+  /** Target selector (data-testid or CSS selector) */
   target: string;
   /** Value for type/select actions */
   value?: string;
@@ -93,7 +93,7 @@ export interface TestVariant<Props = Record<string, unknown>> {
 export interface InteractiveElement {
   /** Type of interactive element */
   type: InteractiveElementType;
-  /** Suggested data-test-id based on context */
+  /** Suggested data-testid based on context */
   suggestedTestId: string;
   /** JSX element tag name */
   tagName: string;
@@ -118,7 +118,7 @@ export interface InteractiveElement {
     /** onClick/onChange handler name */
     handler?: string;
   };
-  /** Existing data-test-id if any */
+  /** Existing data-testid if any */
   existingTestId?: string;
   /** Existing data-uniq-id if any */
   existingUniqId?: string;

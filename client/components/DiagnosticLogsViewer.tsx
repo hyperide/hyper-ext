@@ -100,7 +100,7 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
   const hasErrors = logs.some((l) => l.isError) || runtimeError !== null;
 
   return (
-    <div className="flex flex-col" style={{ height }}>
+    <div data-testid="DiagnosticLogsViewer" className="flex flex-col" style={{ height }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted/30 shrink-0">
         <div className="flex items-center gap-2 text-xs font-medium">

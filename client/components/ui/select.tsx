@@ -12,8 +12,8 @@ const SelectValue = SelectPrimitive.Value;
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & { testId?: string }
+>(({ className, children, testId, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
@@ -21,6 +21,7 @@ const SelectTrigger = React.forwardRef<
       className,
     )}
     {...props}
+    data-testid={testId}
   >
     {children}
     <SelectPrimitive.Icon asChild>
@@ -60,8 +61,8 @@ SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayNam
 
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = 'popper', ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { testId?: string }
+>(({ className, children, position = 'popper', testId, ...props }, ref) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
@@ -73,6 +74,7 @@ const SelectContent = React.forwardRef<
       )}
       position={position}
       {...props}
+      data-testid={testId}
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport

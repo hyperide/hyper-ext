@@ -195,7 +195,7 @@ export default function AIAgentChat({
 
   if (!chatAdapter) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      <div data-testid="AIAgentChat" className="flex items-center justify-center h-full text-sm text-muted-foreground">
         Project ID required for AI chat
       </div>
     );

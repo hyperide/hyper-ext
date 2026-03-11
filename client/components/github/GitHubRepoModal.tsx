@@ -116,7 +116,7 @@ export function GitHubRepoModal({ open, onOpenChange, onSelect, onCreate }: GitH
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+      <DialogContent testId="GitHubRepoModal" className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2">

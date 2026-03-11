@@ -54,8 +54,8 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & { testId?: string }
+>(({ className, sideOffset = 4, testId, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
@@ -65,6 +65,7 @@ const DropdownMenuContent = React.forwardRef<
         className,
       )}
       {...props}
+      data-testid={testId}
     />
   </DropdownMenuPrimitive.Portal>
 ));

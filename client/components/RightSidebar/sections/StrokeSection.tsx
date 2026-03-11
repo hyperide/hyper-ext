@@ -41,7 +41,10 @@ export const StrokeSection = memo(function StrokeSection({
 
   if (strokes.length === 0) {
     return (
-      <div className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden">
+      <div
+        data-testid="StrokeSection"
+        className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      >
         <div className="flex items-center justify-between">
           <button
             type="button"
@@ -59,7 +62,7 @@ export const StrokeSection = memo(function StrokeSection({
   }
 
   return (
-    <div className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden">
+    <div data-testid="StrokeSection" className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-foreground">Stroke</span>
         <button type="button" onClick={handleRemoveStroke} className="hover:bg-muted rounded p-0.5">

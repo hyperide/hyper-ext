@@ -9,8 +9,8 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & { testId?: string }
+>(({ className, align = 'center', sideOffset = 4, testId, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
@@ -21,6 +21,7 @@ const PopoverContent = React.forwardRef<
         className,
       )}
       {...props}
+      data-testid={testId}
     />
   </PopoverPrimitive.Portal>
 ));

@@ -10,7 +10,7 @@ type Props = {
 
 export function IframeFailed({ activeProject, setIsStarting, setActiveProject, onOpenSettings }: Props) {
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div data-testid="IframeFailed" className="flex flex-col items-center gap-4">
       <p className="text-lg text-destructive">Failed to start project "{activeProject.name}"</p>
       <p className="text-sm text-muted-foreground">Docker failed to start the container</p>
       <div className="flex gap-2 justify-center flex-wrap">

@@ -53,13 +53,19 @@ export default function SidebarHeader() {
     (isPushPopoverOpen && hasChanges && !commitMessage.trim());
 
   return (
-    <div className="p-3 flex items-center justify-between border-b border-border">
-      <button type="button" onClick={() => navigate('/projects')} className="hover:bg-accent rounded p-1">
+    <div data-testid="SidebarHeader" className="p-3 flex items-center justify-between border-b border-border">
+      <button
+        type="button"
+        data-testid="SidebarHeader-homeButton"
+        onClick={() => navigate('/projects')}
+        className="hover:bg-accent rounded p-1"
+      >
         <IconHome className="w-5 h-5" stroke={1.5} />
       </button>
 
       <button
         type="button"
+        data-testid="SidebarHeader-pushButton"
         onClick={handleClick}
         disabled={isDisabled}
         className="h-7 px-2 rounded-md bg-muted hover:bg-accent text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed relative"

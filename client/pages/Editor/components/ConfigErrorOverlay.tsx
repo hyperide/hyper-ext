@@ -25,7 +25,10 @@ Please analyze and fix this error.`;
   };
 
   return (
-    <div className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+    <div
+      data-testid="ConfigErrorOverlay"
+      className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900"
+    >
       <div className="flex flex-col items-center gap-4">
         <p className="text-lg text-destructive">Project configuration error</p>
         <p className="text-sm text-muted-foreground max-w-md text-center">{error}</p>

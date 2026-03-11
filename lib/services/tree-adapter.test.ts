@@ -123,11 +123,11 @@ describe('tree-adapter', () => {
       expect(result.functionLoc).toEqual(fnLoc);
     });
 
-    it('uses data-test-id for frame label', () => {
+    it('uses data-testid for frame label', () => {
       const node: ComponentNode = {
         id: '1',
         type: 'div',
-        props: { 'data-test-id': 'sidebar' },
+        props: { 'data-testid': 'sidebar' },
         children: [],
       };
       const result = convertComponentNodeToTreeNode(node);

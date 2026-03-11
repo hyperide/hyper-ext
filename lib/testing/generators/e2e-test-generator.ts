@@ -71,9 +71,7 @@ function generateVisualTests(componentName: string, componentPath: string, varia
     tests.push(`    await page.waitForLoadState('networkidle');`);
     tests.push(``);
     tests.push(`    // Wait for component to render`);
-    tests.push(
-      `    await page.waitForSelector('[data-test-id]', { state: 'visible', timeout: 5000 }).catch(() => {});`,
-    );
+    tests.push(`    await page.waitForSelector('[data-testid]', { state: 'visible', timeout: 5000 }).catch(() => {});`);
     tests.push(``);
     tests.push(`    await expect(page).toHaveScreenshot('${snapshotName}', {`);
     tests.push(`      animations: 'disabled',`);
@@ -115,7 +113,7 @@ function generateInteractionTests(
 
     for (const button of buttons) {
       const testId = button.suggestedTestId;
-      const selector = testId ? `[data-test-id="${testId}"]` : 'button';
+      const selector = testId ? `[data-testid="${testId}"]` : 'button';
 
       tests.push(`    test('click: ${testId || 'button'}', async ({ page }) => {`);
       tests.push(`      const button = page.locator('${selector}').first();`);
@@ -142,7 +140,7 @@ function generateInteractionTests(
 
     for (const input of inputs) {
       const testId = input.suggestedTestId;
-      const selector = testId ? `[data-test-id="${testId}"]` : 'input';
+      const selector = testId ? `[data-testid="${testId}"]` : 'input';
       const inputType = input.context.inputType || 'text';
 
       tests.push(`    test('type: ${testId || 'input'}', async ({ page }) => {`);
@@ -178,7 +176,7 @@ function generateInteractionTests(
 
     for (const link of links) {
       const testId = link.suggestedTestId;
-      const selector = testId ? `[data-test-id="${testId}"]` : 'a';
+      const selector = testId ? `[data-testid="${testId}"]` : 'a';
 
       tests.push(`    test('navigate: ${testId || 'link'}', async ({ page }) => {`);
       tests.push(`      const link = page.locator('${selector}').first();`);
@@ -312,7 +310,7 @@ function generateVariantInteractionTests(
  */
 function generateInteractionStep(interaction: TestInteraction): string[] {
   const lines: string[] = [];
-  const selector = interaction.target.startsWith('[') ? interaction.target : `[data-test-id="${interaction.target}"]`;
+  const selector = interaction.target.startsWith('[') ? interaction.target : `[data-testid="${interaction.target}"]`;
 
   if (interaction.delay) {
     lines.push(`    await page.waitForTimeout(${interaction.delay});`);

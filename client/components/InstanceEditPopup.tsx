@@ -536,7 +536,7 @@ export function InstanceEditPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl !h-[70vh] !flex !flex-col !gap-0 !p-0">
+      <DialogContent testId="InstanceEditPopup" className="max-w-4xl !h-[70vh] !flex !flex-col !gap-0 !p-0">
         {/* Header with instance name — pr-12 reserves space for the dialog close button */}
         <div className="pl-6 pr-12 pt-4 pb-3 border-b border-border shrink-0 flex items-center">
           <Input

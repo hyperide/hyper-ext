@@ -107,7 +107,7 @@ export const CommentsSection = memo(function CommentsSection({
   const selectedComment = selectedCommentId ? comments.find((c) => c.id === selectedCommentId) : null;
 
   return (
-    <div className="border-t border-border">
+    <div data-testid="CommentsSection" className="border-t border-border">
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">

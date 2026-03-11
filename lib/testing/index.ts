@@ -1,7 +1,7 @@
 /**
  * Autogen Testing System
  *
- * Public API for automatic test generation with data-test-id
+ * Public API for automatic test generation with data-testid
  */
 
 // Analyzers

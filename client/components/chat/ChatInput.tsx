@@ -38,14 +38,14 @@ export function ChatInput({
 }: ChatInputProps) {
   if (disabled) {
     return (
-      <div className="p-3 border-t border-border">
+      <div data-testid="ChatInput" className="p-3 border-t border-border">
         <p className="text-xs text-muted-foreground text-center">Configure an API key to start chatting.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-3 border-t border-border">
+    <div data-testid="ChatInput" className="p-3 border-t border-border">
       <QueueIndicator queue={messageQueue} onCancel={onCancelQueued} />
 
       {pendingAskUser && (
@@ -71,9 +71,16 @@ export function ChatInput({
           data-1p-ignore
           data-lpignore="true"
           data-form-type="other"
+          testId="ChatInput-textarea"
         />
         {isStreaming && !pendingAskUser ? (
-          <Button variant="destructive" size="sm" className="h-9 w-9 p-0 shrink-0" onClick={onStop}>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-9 w-9 p-0 shrink-0"
+            onClick={onStop}
+            testId="ChatInput-stopButton"
+          >
             <IconSquare size={14} />
           </Button>
         ) : (
@@ -89,6 +96,7 @@ export function ChatInput({
               onSend();
             }}
             disabled={!inputValue.trim()}
+            testId="ChatInput-sendButton"
           >
             <IconSend size={14} />
           </Button>

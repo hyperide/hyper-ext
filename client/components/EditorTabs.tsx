@@ -21,11 +21,18 @@ export default function EditorTabs({ tabs, activeTab, onTabClick, onTabClose, di
   }
 
   return (
-    <div className="h-10 flex-shrink-0 bg-muted border-b border-border flex items-center overflow-x-auto">
+    <div
+      data-testid="EditorTabs"
+      className="h-10 flex-shrink-0 bg-muted border-b border-border flex items-center overflow-x-auto"
+    >
       {tabs.map((tab) => (
         <button
           key={tab.path}
           type="button"
+          data-testid={`EditorTabs-tab-${tab.path
+            .split('/')
+            .pop()
+            ?.replace(/\.\w+$/, '')}`}
           onClick={() => onTabClick(tab.path)}
           className={`group h-full px-3 flex items-center gap-2 border-r border-border min-w-0 max-w-[200px] ${
             activeTab === tab.path ? 'bg-background' : 'bg-muted hover:bg-accent'

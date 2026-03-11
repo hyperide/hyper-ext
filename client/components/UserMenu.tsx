@@ -61,7 +61,7 @@ export default function UserMenu({ onOpenProjectSettings }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="flex items-center gap-1">
+        <button type="button" data-testid="UserMenu-trigger" className="flex items-center gap-1">
           <Avatar className="w-6 h-6">
             <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || user?.email || 'User'} />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>

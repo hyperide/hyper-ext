@@ -946,6 +946,7 @@ export default function RightSidebar({
 
   return (
     <div
+      data-testid="RightSidebar"
       data-uniq-id="442cbdd6-8543-4489-b0c5-a6de4aa5b92f"
       ref={rootRef}
       className="h-full w-full border-l border-border bg-background overflow-y-auto overflow-x-hidden relative z-20"

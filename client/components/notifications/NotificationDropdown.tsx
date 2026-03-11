@@ -50,6 +50,7 @@ export const NotificationDropdown = memo(function NotificationDropdown({
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-testid="NotificationBell"
           className="relative p-2 rounded-md hover:bg-muted transition-colors"
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         >

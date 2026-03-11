@@ -214,7 +214,7 @@ export default function ElementsTree({
   };
 
   return (
-    <div className="flex flex-col gap-1 px-2">
+    <div data-testid="ElementsTree" className="flex flex-col gap-1 px-2">
       {filteredTree.map((node) => (
         <TreeNodeItem
           key={node.id}

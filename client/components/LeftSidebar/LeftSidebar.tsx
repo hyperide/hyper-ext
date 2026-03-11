@@ -195,6 +195,7 @@ export default function LeftSidebar({
 
   return (
     <div
+      data-testid="LeftSidebar"
       className={cn('h-full border-r border-border bg-background flex flex-col whitespace-nowrap relative z-20', {
         'select-none': isShiftPressed,
       })}

@@ -64,12 +64,12 @@ function generateRenderTest(componentName: string): string[] {
 function generateTestIdTest(componentName: string): string[] {
   return [
     `  describe('testId prop', () => {`,
-    `    it('should apply data-test-id when testId prop is provided', () => {`,
+    `    it('should apply data-testid when testId prop is provided', () => {`,
     `      render(<${componentName} testId="my-test-id">Content</${componentName}>);`,
     `      expect(screen.getByTestId('my-test-id')).toBeInTheDocument();`,
     `    });`,
     ``,
-    `    it('should not have data-test-id when testId is not provided', () => {`,
+    `    it('should not have data-testid when testId is not provided', () => {`,
     `      render(<${componentName}>Content</${componentName}>);`,
     `      expect(screen.queryByTestId('my-test-id')).not.toBeInTheDocument();`,
     `    });`,

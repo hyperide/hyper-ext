@@ -5,6 +5,7 @@
 export function NoComponentsOverlay() {
   return (
     <div
+      data-testid="NoComponentsOverlay"
       data-uniq-id="eb442acd-60db-4937-b711-bf005df76cb9"
       className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900"
     >

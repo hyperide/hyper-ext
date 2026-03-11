@@ -117,6 +117,7 @@ export function ComponentNavigatorPanel({
 
   return (
     <div
+      data-testid="ComponentNavigatorPanel"
       ref={panelRef}
       className={cn(
         'bg-background z-20',
@@ -668,6 +669,7 @@ export function InsertInstancePanel({
 
   return (
     <div
+      data-testid="InsertInstancePanel"
       ref={panelRef}
       className="absolute left-80 w-80 rounded-xl bg-background shadow-[0_4px_11px_rgba(0,0,0,0.25)] z-20"
       style={{

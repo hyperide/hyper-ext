@@ -327,7 +327,7 @@ After fixing, use the run_tests tool to verify the tests pass.`;
   const isRunning = status === 'running' || status === 'installing';
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50">
+    <div data-testid="TestRunnerModal" className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50">
       <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-border">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">

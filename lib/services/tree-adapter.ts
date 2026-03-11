@@ -48,7 +48,7 @@ function computeLabel(node: ComponentNode): string {
   }
 
   if (FRAME_TAGS.has(tag)) {
-    if (node.props?.['data-test-id']) return `${tag} "${node.props['data-test-id']}"`;
+    if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
     const text = extractTextFromNode(node);
     if (text) return `${tag} "${text}"`;
     return tag;
@@ -60,7 +60,7 @@ function computeLabel(node: ComponentNode): string {
     return tag;
   }
 
-  if (node.props?.['data-test-id']) return `${tag} "${node.props['data-test-id']}"`;
+  if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
   const elementText = extractTextFromNode(node);
   if (elementText) return `${tag} "${elementText}"`;
   return tag;

@@ -32,7 +32,7 @@ export const PositionSection = memo(function PositionSection({
   );
 
   return (
-    <div className="px-4 py-3 max-w-sidebar-section overflow-hidden">
+    <div data-testid="PositionSection" className="px-4 py-3 max-w-sidebar-section overflow-hidden">
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">Position</span>
       </div>

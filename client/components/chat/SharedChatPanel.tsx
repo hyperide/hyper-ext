@@ -233,7 +233,7 @@ export function SharedChatPanel({
   });
 
   return (
-    <div className="flex h-full">
+    <div data-testid="SharedChatPanel" className="flex h-full">
       {sidebarNode}
       <div className="flex flex-col flex-1 min-w-0">
         <ChatHeader

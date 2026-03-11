@@ -43,6 +43,7 @@ export const LogsPanel = memo(function LogsPanel({
 
   return (
     <div
+      data-testid="LogsPanel"
       data-logs-panel
       className="absolute bottom-20 left-0 right-0 bg-background border-t border-border shadow-lg z-50"
       style={{ height: `${height}px` }}

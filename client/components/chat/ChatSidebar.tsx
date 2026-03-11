@@ -16,9 +16,16 @@ export function ChatSidebar({
 }: ChatSidebarRenderProps) {
   return (
     <TooltipProvider>
-      <div className="w-48 shrink-0 border-r border-border flex flex-col">
+      <div data-testid="ChatSidebar" className="w-48 shrink-0 border-r border-border flex flex-col">
         <div className="p-2 border-b border-border">
-          <Button onClick={onNewChat} disabled={isStreaming} size="sm" variant="outline" className="w-full">
+          <Button
+            onClick={onNewChat}
+            disabled={isStreaming}
+            size="sm"
+            variant="outline"
+            className="w-full"
+            testId="ChatSidebar-newChatButton"
+          >
             <IconPlus className="w-4 h-4 mr-1" />
             New Chat
           </Button>

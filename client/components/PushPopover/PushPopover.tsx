@@ -191,7 +191,7 @@ export function PushPopover({ disabled, fileCount }: PushPopoverProps) {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-4" align="end">
+      <PopoverContent testId="PushPopover" className="w-96 p-4" align="end">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-medium">Commit Message</h4>

@@ -93,6 +93,7 @@ export const FillSection = memo(function FillSection({
 
   return (
     <div
+      data-testid="FillSection"
       data-uniq-id="2f95e299-d823-4ec1-ba66-9d71ab8c8074"
       className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >

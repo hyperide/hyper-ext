@@ -483,7 +483,7 @@ export default function AISettings() {
   // Network error - show banner with retry
   if (isConfigNetworkError) {
     return (
-      <Card>
+      <Card testId="AISettings">
         <CardContent className="py-6">
           <NetworkStatusIndicator variant="banner" isOffline={isOffline} onRetry={refetchConfig} />
         </CardContent>
@@ -494,7 +494,7 @@ export default function AISettings() {
   // Server error or no config
   if (!config) {
     return (
-      <Card>
+      <Card testId="AISettings">
         <CardContent className="py-12 text-center">
           <p className="text-destructive">{configError || 'Failed to load AI configuration'}</p>
         </CardContent>
@@ -510,7 +510,7 @@ export default function AISettings() {
   const hasExistingOpenCodeKey = isOpenCodeProvider && config.apiKey && config.apiKey.length > 0;
 
   return (
-    <Card>
+    <Card testId="AISettings">
       <CardHeader>
         <CardTitle>AI Configuration</CardTitle>
         <CardDescription>

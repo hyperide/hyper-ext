@@ -562,6 +562,7 @@ export default function Projects() {
 
   return (
     <div
+      data-testid="ProjectsPage"
       data-uniq-id="34183626-b607-43c2-b519-077308a2648a"
       className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-8"
     >

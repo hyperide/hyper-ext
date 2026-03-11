@@ -174,7 +174,7 @@ export function SourceControlSection({
   const hasContent = changedFiles.length > 0 || isLoadingChanges;
 
   return (
-    <div className={cn('flex flex-col', className)}>
+    <div data-testid="SourceControlSection" className={cn('flex flex-col', className)}>
       {showHeader && (
         <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
           <button

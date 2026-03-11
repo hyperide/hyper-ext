@@ -36,7 +36,7 @@ export function ChatHeader({
   hideChatSwitcher = false,
 }: ChatHeaderProps) {
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border shrink-0">
+    <div data-testid="ChatHeader" className="flex items-center gap-1 px-2 py-1.5 border-b border-border shrink-0">
       {hideChatSwitcher ? (
         <span className="text-xs font-medium text-foreground px-2 py-1 min-w-0 flex-1 truncate">
           {currentChatTitle || 'AI Chat'}

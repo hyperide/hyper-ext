@@ -267,7 +267,11 @@ export default function ProjectSettings() {
   }
 
   return (
-    <div data-uniq-id="56165b69-acae-4d4b-b563-07976721e1a2" className="container mx-auto p-8 space-y-6">
+    <div
+      data-testid="ProjectSettingsPage"
+      data-uniq-id="56165b69-acae-4d4b-b563-07976721e1a2"
+      className="container mx-auto p-8 space-y-6"
+    >
       <div data-uniq-id="af50f324-d55d-40c4-9a47-626fcf512c73" className="flex items-center justify-between">
         <div data-uniq-id="156cf6a2-a407-40b4-bbae-8cc8574d6a9d" className="flex items-center gap-4">
           <Button

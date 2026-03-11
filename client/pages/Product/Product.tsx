@@ -7,7 +7,7 @@ import HowItWorks from './components/HowItWorks';
 
 export default function Product() {
   return (
-    <div className="min-h-screen bg-background">
+    <div data-testid="ProductPage" className="min-h-screen bg-background">
       <Hero />
       <Features />
       <HowItWorks />

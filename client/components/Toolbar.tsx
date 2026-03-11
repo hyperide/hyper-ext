@@ -578,7 +578,10 @@ export default function Toolbar({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-2 h-12 px-2 bg-background rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border">
+      <div
+        data-testid="Toolbar"
+        className="flex items-center gap-2 h-12 px-2 bg-background rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border"
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <button

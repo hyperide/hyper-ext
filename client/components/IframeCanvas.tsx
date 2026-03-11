@@ -1155,6 +1155,7 @@ export default function IframeCanvas({
 
   return (
     <div
+      data-testid="IframeCanvas"
       className="relative"
       style={{
         overflow: 'visible',

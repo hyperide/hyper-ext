@@ -39,7 +39,7 @@ export function ChatMessages({
   }
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="flex-1" onScrollCapture={onScroll}>
+    <ScrollArea ref={scrollAreaRef} className="flex-1" onScrollCapture={onScroll} data-testid="ChatMessages">
       <div className="p-3 space-y-3">
         {messages.length === 0 && !isStreaming && !currentAssistantMessage && (
           <EmptyState hasApiKey={hasApiKey} onConfigureProvider={onConfigureProvider} />

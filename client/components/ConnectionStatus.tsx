@@ -19,7 +19,11 @@ export function ConnectionStatus() {
   const pulse = status === 'offline' || status === 'reconnecting';
 
   return (
-    <Badge variant="destructive" className={cn('flex items-center gap-1.5', pulse && 'animate-pulse')}>
+    <Badge
+      data-testid="ConnectionStatus"
+      variant="destructive"
+      className={cn('flex items-center gap-1.5', pulse && 'animate-pulse')}
+    >
       <IconCloudOff className="w-3.5 h-3.5" />
       <span>{labels[status]}</span>
       {status === 'unavailable' && (

@@ -255,7 +255,10 @@ export default function WorkspaceSettings() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-8">
+    <div
+      data-testid="WorkspaceSettingsPage"
+      className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-8"
+    >
       <div className="max-w-2xl mx-auto">
         <Button variant="ghost" className="mb-6" onClick={() => navigate('/projects')}>
           <IconArrowLeft className="w-4 h-4 mr-2" />

@@ -208,7 +208,7 @@ export function PropsEditor() {
   // Loading state
   if (loading) {
     return (
-      <div className="px-4 py-3 border-b border-gray-200">
+      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-2 text-[11px] text-gray-400">
           <div className="animate-spin h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full" />
           Loading props...
@@ -236,14 +236,14 @@ export function PropsEditor() {
   // No props to edit
   if (propsCount === 0) {
     return (
-      <div className="px-4 py-3 border-b border-gray-200">
+      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
         <div className="text-[11px] text-gray-400 italic">No editable props</div>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-3 border-b border-gray-200">
+    <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}

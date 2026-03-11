@@ -1,7 +1,7 @@
 /**
  * Interactive Element Detector
  *
- * Identifies JSX elements that should receive data-test-id attributes
+ * Identifies JSX elements that should receive data-testid attributes
  * based on element type, attributes, and event handlers
  */
 
@@ -286,7 +286,7 @@ export function detectInteractiveElement(
   const handler = getHandlerName(element, ['onClick', 'onChange', 'onSubmit']);
 
   // Check for existing test IDs
-  const existingTestId = getAttributeStringValue(getAttribute(element, 'data-test-id')?.value ?? null);
+  const existingTestId = getAttributeStringValue(getAttribute(element, 'data-testid')?.value ?? null);
   const existingUniqId = getAttributeStringValue(getAttribute(element, 'data-uniq-id')?.value ?? null);
 
   const context = {

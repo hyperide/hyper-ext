@@ -50,7 +50,7 @@ export const CommentThread = memo(function CommentThread({
   };
 
   return (
-    <div className="space-y-4">
+    <div data-testid="CommentThread" className="space-y-4">
       {/* Main comment */}
       <div className="space-y-2">
         <div className="flex items-start gap-2">
