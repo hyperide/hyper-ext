@@ -20,6 +20,7 @@ interface MarginSectionProps {
     value: string,
     setValue: (v: string) => void,
     styleKey?: string,
+    defaultValue?: string,
   ) => void;
 }
 

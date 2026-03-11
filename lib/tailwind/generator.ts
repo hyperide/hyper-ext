@@ -579,8 +579,8 @@ export function generateTailwindClasses(styles: StyleUpdate, state?: string): st
     if (radius) classes.push(radius);
   }
 
-  // Opacity
-  if (styles.opacity !== undefined) {
+  // Opacity (empty string = remove property, so skip class generation)
+  if (styles.opacity !== undefined && styles.opacity !== '') {
     const opacityValue = styles.opacity;
     // Tailwind supports: 0, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 100
     const validOpacities = ['0', '5', '10', '20', '25', '30', '40', '50', '60', '70', '75', '80', '90', '95', '100'];

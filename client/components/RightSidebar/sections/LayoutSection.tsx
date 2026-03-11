@@ -79,6 +79,7 @@ interface LayoutSectionProps {
     currentValue: string,
     setValue: (value: string) => void,
     styleKey?: string,
+    defaultValue?: string,
   ) => void;
   syncStyleChange: (key: string, value: string, options?: { debounceOnly?: boolean }) => void;
 }

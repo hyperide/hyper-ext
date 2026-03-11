@@ -160,6 +160,12 @@ describe('generateTailwindClasses', () => {
     expect(result).toContain('opacity-[0.33]');
   });
 
+  it('should skip opacity class for empty value (property removal)', () => {
+    const result = generateTailwindClasses({ opacity: '' });
+
+    expect(result).not.toContain('opacity');
+  });
+
   it('should handle empty styles', () => {
     const result = generateTailwindClasses({});
 

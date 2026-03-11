@@ -373,6 +373,7 @@ export default function RightSidebar({
       currentValue: string,
       setValue: (value: string) => void,
       styleKey?: string,
+      defaultValue?: string,
     ) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
         return;
@@ -386,15 +387,20 @@ export default function RightSidebar({
       const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
 
       if (!match) {
+        const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+        const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
+        const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
+
         const increment = e.key === 'ArrowUp' ? 1 : -1;
         const step = e.shiftKey || e.altKey ? 10 : 1;
-        let newNum = increment * step;
+        let newNum = baseNum + increment * step;
 
         if (styleKey === 'opacity') {
           newNum = Math.max(0, Math.min(100, newNum));
         }
 
-        const newValue = isUnitless ? `${newNum}` : `${newNum}px`;
+        const unit = isUnitless ? '' : baseUnit || 'px';
+        const newValue = `${newNum}${unit}`;
         setValue(newValue);
         if (styleKey) syncStyleChange(styleKey, newValue);
         return;

@@ -13,6 +13,7 @@ interface AppearanceSectionProps {
     currentValue: string,
     setValue: (value: string) => void,
     styleKey?: string,
+    defaultValue?: string,
   ) => void;
   syncStyleChange: (key: string, value: string) => void;
 }
@@ -34,6 +35,11 @@ export const AppearanceSection = memo(function AppearanceSection({
   const handleOpacityChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
+      if (value === '') {
+        onOpacityChange('');
+        syncStyleChange('opacity', '');
+        return;
+      }
       const num = Number.parseFloat(value);
       if (!Number.isNaN(num)) {
         const clamped = Math.max(0, Math.min(100, num));
@@ -94,7 +100,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               type="text"
               value={opacity}
               onChange={handleOpacityChange}
-              onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity')}
+              onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity', '100')}
               placeholder="100"
               className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
             />
@@ -134,7 +140,7 @@ export const AppearanceSection = memo(function AppearanceSection({
                 type="text"
                 value={opacity}
                 onChange={handleOpacityChange}
-                onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity')}
+                onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity', '100')}
                 placeholder="100"
                 className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
               />
