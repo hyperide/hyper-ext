@@ -112,6 +112,102 @@ function modifierToCamelCase(modifier: string): string {
  * @param state - Optional state modifier (hover, focus, etc.). If provided, only removes classes with matching state.
  * @returns Object with preserved classes and removed classes
  */
+/** Shadow utility classes that are NOT shadow color (box-shadow size/preset) */
+const TAILWIND_SHADOW_NON_COLOR_CLASSES = new Set([
+  'shadow-sm',
+  'shadow-md',
+  'shadow-lg',
+  'shadow-xl',
+  'shadow-2xl',
+  'shadow-inner',
+  'shadow-none',
+  'shadow',
+]);
+
+/** Background utility classes that are NOT background color */
+const TAILWIND_BG_NON_COLOR_CLASSES = new Set([
+  'bg-cover',
+  'bg-contain',
+  'bg-center',
+  'bg-bottom',
+  'bg-left',
+  'bg-left-bottom',
+  'bg-left-top',
+  'bg-right',
+  'bg-right-bottom',
+  'bg-right-top',
+  'bg-top',
+  'bg-repeat',
+  'bg-no-repeat',
+  'bg-repeat-x',
+  'bg-repeat-y',
+  'bg-repeat-round',
+  'bg-repeat-space',
+  'bg-auto',
+  'bg-fixed',
+  'bg-local',
+  'bg-scroll',
+  'bg-clip-border',
+  'bg-clip-padding',
+  'bg-clip-content',
+  'bg-clip-text',
+  'bg-origin-border',
+  'bg-origin-padding',
+  'bg-origin-content',
+  'bg-none',
+]);
+
+/** Border utility classes that are NOT border color (width, style) */
+const TAILWIND_BORDER_NON_COLOR_CLASSES = new Set([
+  'border-0',
+  'border-2',
+  'border-4',
+  'border-8',
+  'border-solid',
+  'border-dashed',
+  'border-dotted',
+  'border-double',
+  'border-hidden',
+  'border-none',
+  'border-collapse',
+  'border-separate',
+]);
+
+/** Side-specific border width: border-t-2, border-b-[3px], border-x-4.
+ *  Arbitrary values must start with a digit (border-t-[3px]), NOT a color (#, rgb, etc.) */
+const BORDER_SIDE_WIDTH_RE = /^border-[trblxy]-(\d|\[\d)/;
+
+/**
+ * Checks if a border-* class is a non-color utility (width, style, spacing, side-width).
+ * Used to avoid false removals when updating borderColor.
+ */
+function isBorderNonColorClass(baseClass: string): boolean {
+  if (TAILWIND_BORDER_NON_COLOR_CLASSES.has(baseClass)) return true;
+  if (baseClass.startsWith('border-spacing-')) return true;
+  if (BORDER_SIDE_WIDTH_RE.test(baseClass)) return true;
+  return false;
+}
+
+/**
+ * Checks if a shadow-[...] arbitrary value is a color (not a box-shadow definition).
+ * Pure color: shadow-[#ff0000], shadow-[rgba(0,0,0,0.5)]
+ * Box-shadow: shadow-[0_4px_6px_...], shadow-[rgba(0,0,0,0.25)_0_4px_6px_-1px]
+ * Key heuristic: underscores outside parens indicate multi-part box-shadow syntax.
+ */
+function isArbitraryShadowColor(baseClass: string): boolean {
+  const match = baseClass.match(/^shadow-\[(.+)\]$/);
+  if (!match) return false;
+  const value = match[1];
+  // Strip balanced parens to check for underscores in the top-level structure.
+  // e.g. "rgba(0,0,0,0.25)_0_4px" → after stripping parens → "rgba_0_4px" → has underscore
+  // e.g. "rgba(0,0,0,0.5)" → after stripping parens → "rgba" → no underscore
+  const withoutParens = value.replace(/\([^)]*\)/g, '');
+  if (withoutParens.includes('_')) return false;
+  if (value.startsWith('#')) return true;
+  if (/^(?:rgb|rgba|hsl|hsla|oklch|oklab|lch|lab|color)\(/.test(value)) return true;
+  return false;
+}
+
 const TAILWIND_TEXT_NON_COLOR_CLASSES = new Set([
   'text-xs',
   'text-sm',
@@ -137,6 +233,60 @@ const TAILWIND_TEXT_NON_COLOR_CLASSES = new Set([
   'text-start',
   'text-end',
 ]);
+
+/**
+ * Determines if a class matched by prefix should be preserved (not removed).
+ * Handles Tailwind prefix overlaps where different CSS properties share the same prefix
+ * (e.g. shadow-md is boxShadow, shadow-red-500 is shadowColor — both start with "shadow").
+ */
+function shouldPreserveClass(prefix: string, baseClass: string): boolean {
+  switch (prefix) {
+    case 'border-':
+      // 'border' (bare width) is not a color
+      if (baseClass === 'border') return true;
+      return isBorderNonColorClass(baseClass);
+
+    case 'gap-':
+      // gap-x-* / gap-y-* belong to columnGap/rowGap, not gap
+      return baseClass.startsWith('gap-x-') || baseClass.startsWith('gap-y-');
+
+    case 'justify-':
+      // justify-items-* belongs to justifyItems, not justifyContent
+      return baseClass.startsWith('justify-items-');
+
+    case 'flex':
+      // flex-col/flex-row belong to flexDirection, not display
+      return baseClass === 'flex-col' || baseClass === 'flex-row';
+
+    case 'text-':
+      return TAILWIND_TEXT_NON_COLOR_CLASSES.has(baseClass);
+
+    case 'shadow-':
+      // shadow-md/lg/xl are boxShadow, not shadowColor
+      return TAILWIND_SHADOW_NON_COLOR_CLASSES.has(baseClass);
+
+    case 'shadow':
+      // When removing boxShadow, preserve shadow color classes
+      if (TAILWIND_SHADOW_NON_COLOR_CLASSES.has(baseClass)) return false;
+      if (!baseClass.startsWith('shadow-')) return false;
+      if (baseClass.startsWith('shadow-[')) {
+        // Arbitrary: preserve colors (#hex, rgb(), hsl()), remove box-shadow values
+        return isArbitraryShadowColor(baseClass);
+      }
+      // Named color (shadow-red-500) — preserve
+      return true;
+
+    case 'bg-':
+      return (
+        TAILWIND_BG_NON_COLOR_CLASSES.has(baseClass) ||
+        baseClass.startsWith('bg-gradient-') ||
+        baseClass.startsWith('bg-opacity-')
+      );
+
+    default:
+      return false;
+  }
+}
 
 export function removeConflictingClasses(
   className: string,
@@ -172,28 +322,7 @@ export function removeConflictingClasses(
     // Check if base class (without modifier) matches any conflicting prefix
     for (const prefix of prefixes) {
       if (baseClass === prefix || baseClass.startsWith(prefix)) {
-        // Special case: don't remove 'border' (border-width) when removing borderColor
-        if (prefix === 'border-' && baseClass === 'border') {
-          continue;
-        }
-        // Special case: don't remove gap-x-* or gap-y-* when removing generic gap-*
-        if (prefix === 'gap-' && (baseClass.startsWith('gap-x-') || baseClass.startsWith('gap-y-'))) {
-          continue;
-        }
-        // Special case: don't remove justify-items-* when removing justify-* (justifyContent)
-        if (prefix === 'justify-' && baseClass.startsWith('justify-items-')) {
-          continue;
-        }
-        // Special case: don't remove flex-col/flex-row when removing display classes
-        // 'flex-col'.startsWith('flex') is true, but flex-col is flexDirection, not display
-        if (prefix === 'flex' && (baseClass === 'flex-col' || baseClass === 'flex-row')) {
-          continue;
-        }
-        // Special case: don't remove font-size, text-align, text-wrap classes when removing text color
-        // 'text-3xl'.startsWith('text-') is true, but text-3xl is font-size, not color
-        if (prefix === 'text-' && TAILWIND_TEXT_NON_COLOR_CLASSES.has(baseClass)) {
-          continue;
-        }
+        if (shouldPreserveClass(prefix, baseClass)) continue;
         shouldRemove = true;
         break;
       }

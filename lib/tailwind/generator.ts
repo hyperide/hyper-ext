@@ -730,6 +730,8 @@ const SPECIAL_CASE_PREFIXES: Record<string, string[]> = {
   // Shadow includes multiple variants
   shadow: ['shadow'],
   boxShadow: ['shadow'],
+  // Filter utilities (not standard CSS properties)
+  blur: ['blur-', 'blur'],
 };
 
 /**
