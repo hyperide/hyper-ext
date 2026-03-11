@@ -5,7 +5,8 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json bun.lock ./
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
 
 # Copy source
 COPY . .

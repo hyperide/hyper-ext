@@ -13,6 +13,8 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
