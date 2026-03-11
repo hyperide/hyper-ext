@@ -198,6 +198,43 @@ describe('TamaguiColorTokenProvider', () => {
     expect(nearest[0].token).toBe('blue9');
     expect(nearest[0].distance).toBe(0);
   });
+
+  it('should include semantic families in getFamilies()', () => {
+    provider = getColorTokenProvider('tamagui');
+    const families = provider.getFamilies();
+    expect(families).toContain('color');
+    expect(families).toContain('background');
+  });
+
+  it('should list semantic color tokens by family', () => {
+    provider = getColorTokenProvider('tamagui');
+    const colorTokens = provider.listColors('color');
+    expect(colorTokens).toHaveLength(12);
+    for (const c of colorTokens) {
+      expect(c.token).toMatch(/^color\d+$/);
+    }
+
+    const bgTokens = provider.listColors('background');
+    expect(bgTokens).toHaveLength(12);
+    for (const c of bgTokens) {
+      expect(c.token).toMatch(/^background\d+$/);
+    }
+  });
+
+  it('should include semantic tokens in full listing', () => {
+    provider = getColorTokenProvider('tamagui');
+    const colors = provider.listColors();
+    expect(colors.find((c) => c.token === 'color1')).toBeTruthy();
+    expect(colors.find((c) => c.token === 'background12')).toBeTruthy();
+    expect(colors).toHaveLength(144);
+  });
+
+  it('should prefer palette token over semantic in findNearest for shared hex', () => {
+    provider = getColorTokenProvider('tamagui');
+    // #8d8d8d is gray9, color9, background9
+    const nearest = provider.findNearest('#8d8d8d', 3);
+    expect(nearest[0].token).toBe('gray9');
+  });
 });
 
 describe('getStyleAdapter', () => {

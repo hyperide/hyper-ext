@@ -15,6 +15,7 @@ import {
   getTamaguiColorHex,
   hexToRgb,
   TAMAGUI_COLORS,
+  TAMAGUI_SEMANTIC_TOKENS,
 } from '@lib/tamagui/values';
 import twColors from 'tailwindcss/colors';
 import type { AstService } from '../../services/AstService';
@@ -172,7 +173,7 @@ class TamaguiColorTokenProvider implements ColorTokenProvider {
   }
 
   getFamilies(): string[] {
-    return Object.keys(TAMAGUI_COLORS);
+    return [...Object.keys(TAMAGUI_COLORS), ...Object.keys(TAMAGUI_SEMANTIC_TOKENS)];
   }
 
   findNearest(hex: string, count: number): Array<ColorEntry & { distance: number }> {

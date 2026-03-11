@@ -298,8 +298,8 @@ export function colorDistance(hex1: string, hex2: string): number {
 }
 
 /**
- * Get all Tamagui colors as a flat list of {token, hex} entries.
- * Useful for iteration and nearest-color search.
+ * Get all Tamagui colors as a flat list of {token, hex} entries (palette + semantic).
+ * Palette tokens come first so stable sort prefers them over semantic tokens at equal distance.
  */
 let _cachedAllColors: Array<{ token: string; hex: string }> | null = null;
 
@@ -309,6 +309,11 @@ export function getAllTamaguiColors(): Array<{ token: string; hex: string }> {
   for (const [colorName, shades] of Object.entries(TAMAGUI_COLORS)) {
     for (const [shade, shadeHex] of Object.entries(shades)) {
       entries.push({ token: `${colorName}${shade}`, hex: shadeHex });
+    }
+  }
+  for (const [semanticName, shades] of Object.entries(TAMAGUI_SEMANTIC_TOKENS)) {
+    for (const [shade, shadeHex] of Object.entries(shades)) {
+      entries.push({ token: `${semanticName}${shade}`, hex: shadeHex });
     }
   }
   _cachedAllColors = entries;

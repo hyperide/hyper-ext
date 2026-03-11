@@ -106,6 +106,16 @@ describe('hyper_get_element_styles', () => {
     expect(parsed.backgroundColor).toBe('#0090ff');
   });
 
+  it('should resolve Tamagui semantic token $color12 to hex', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_get_element_styles');
+
+    const result = await handler({ styleProps: { color: '$color12' } });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.color).toBe('#202020');
+  });
+
   it('should pass through non-token Tamagui values', async () => {
     const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
     const handler = getHandler('hyper_get_element_styles');
@@ -171,6 +181,18 @@ describe('hyper_suggest_color_token', () => {
     expect(result.content[0].text).toContain('Exact match: blue9');
   });
 
+  it('should find semantic tokens in Tamagui nearest results', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_suggest_color_token');
+
+    // #202020 is gray12, color12, and background12
+    const result = await handler({ color: '#202020' });
+    const text = result.content[0].text;
+
+    // Palette token preferred as exact match
+    expect(text).toContain('Exact match: gray12');
+  });
+
   it('should return nearest tokens when no exact match', async () => {
     const getHandler = captureToolHandlers(createMockStateHub('tailwind'));
     const handler = getHandler('hyper_suggest_color_token');
@@ -234,6 +256,43 @@ describe('hyper_list_color_tokens', () => {
     const result = await handler({ family: 'blue' });
 
     expect(result.content[0].text).toContain('blue9: #0090ff');
+  });
+
+  it('should list semantic color family for Tamagui', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_list_color_tokens');
+
+    const result = await handler({ family: 'color' });
+
+    expect(result.isError).toBeUndefined();
+    const lines = result.content[0].text.split('\n');
+    expect(lines).toHaveLength(12);
+    expect(result.content[0].text).toContain('color1:');
+    expect(result.content[0].text).toContain('color12:');
+  });
+
+  it('should list semantic background family for Tamagui', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_list_color_tokens');
+
+    const result = await handler({ family: 'background' });
+
+    expect(result.isError).toBeUndefined();
+    const lines = result.content[0].text.split('\n');
+    expect(lines).toHaveLength(12);
+    expect(result.content[0].text).toContain('background1:');
+  });
+
+  it('should include semantic families in Tamagui unknown family error', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_list_color_tokens');
+
+    const result = await handler({ family: 'nonexistent' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Unknown family');
+    expect(result.content[0].text).toContain('color');
+    expect(result.content[0].text).toContain('background');
   });
 
   it('should return error for unknown family', async () => {
