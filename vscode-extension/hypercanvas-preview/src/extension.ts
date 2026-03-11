@@ -12,6 +12,7 @@
  * - AI integration with user's API key
  */
 
+import { execFile } from 'node:child_process';
 import { isAbsolute, join, relative } from 'node:path';
 import { ensureSample, PreviewFileManager } from '@lib/preview-generator';
 import * as vscode from 'vscode';
@@ -25,6 +26,7 @@ import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
 import { PreviewPanel } from './PreviewPanel';
+import { detectBrowserForPlaywright } from './playwright-chrome';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { AstService } from './services/AstService';
@@ -782,21 +784,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         {
           label: 'Playwright MCP',
           detail: 'Browser automation & visual testing — take screenshots, click elements, fill forms',
-          picked: true,
           companionId: 'playwright',
           npxPackage: '@playwright/mcp@latest',
         },
         {
           label: 'Serena MCP',
           detail: 'Semantic code navigation & refactoring — find symbols, references, rename across codebase',
-          picked: true,
           companionId: 'serena',
           npxPackage: '@anthropic/serena-mcp@latest',
         },
         {
           label: 'Context7 MCP',
           detail: 'Up-to-date library docs — pulls latest API references for any npm/pip package',
-          picked: true,
           companionId: 'context7',
           npxPackage: '@upstash/context7-mcp@latest',
         },
@@ -808,14 +807,31 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         canPickMany: true,
       });
 
+      // Detect browser for Playwright before building configs
+      let playwrightExtraArgs: string[] = [];
+      const playwrightPicked = (pickedCompanions ?? []).some((c) => c.companionId === 'playwright');
+      if (playwrightPicked) {
+        const detection = detectBrowserForPlaywright();
+        if (detection.found) {
+          playwrightExtraArgs = detection.extraArgs;
+        } else {
+          try {
+            await installChromeForPlaywright();
+          } catch {
+            // Error already shown to user, continue with config writing
+          }
+        }
+      }
+
       // Write companion servers into the same config files selected in step 1
       const companionConfigs = (pickedCompanions ?? []).map((c) => ({
         id: c.companionId,
         command: 'npx',
-        args: ['-y', c.npxPackage],
+        args: ['-y', c.npxPackage, ...(c.companionId === 'playwright' ? playwrightExtraArgs : [])],
       }));
 
       const agentIds = picked.map((a) => a.agentId);
+
       if (companionConfigs.length > 0) {
         await writeCompanionServers(workspaceRoot, agentIds, companionConfigs);
       }
@@ -1040,6 +1056,30 @@ async function writeCodexConfig(workspaceRoot: string, url: string): Promise<voi
   }
 
   await vscode.workspace.fs.writeFile(configPath, Buffer.from(toml, 'utf-8'));
+}
+
+async function installChromeForPlaywright(): Promise<void> {
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Installing Chrome for Playwright MCP...',
+      cancellable: false,
+    },
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+        execFile(npx, ['playwright', 'install', 'chrome'], { timeout: 120_000 }, (error) => {
+          if (error) {
+            vscode.window.showErrorMessage(
+              'Failed to install Chrome for Playwright. Run manually: npx playwright install chrome',
+            );
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      }),
+  );
 }
 
 interface CompanionConfig {
