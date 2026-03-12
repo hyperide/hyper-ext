@@ -40,7 +40,7 @@ export const PositionSection = memo(function PositionSection({
         <button
           type="button"
           onClick={() => onPositionChange('static')}
-          className={`flex-1 h-6 px-2 text-xs rounded-l flex items-center justify-center w-10 ${
+          className={`flex-[1.4] h-6 px-2 text-xs rounded-l flex items-center justify-center ${
             selectedPosition === 'static' ? 'bg-background border border-border font-medium' : 'bg-muted'
           }`}
         >
@@ -49,7 +49,7 @@ export const PositionSection = memo(function PositionSection({
         <button
           type="button"
           onClick={() => onPositionChange('rel')}
-          className={`flex-1 h-6 px-2 text-xs flex items-center justify-center ${
+          className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
             selectedPosition === 'rel' ? 'bg-background border border-border font-medium' : 'bg-muted'
           }`}
         >
@@ -58,7 +58,7 @@ export const PositionSection = memo(function PositionSection({
         <button
           type="button"
           onClick={() => onPositionChange('abs')}
-          className={`flex-1 h-6 px-2 text-xs flex items-center justify-center ${
+          className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
             selectedPosition === 'abs' ? 'bg-background border border-border font-medium' : 'bg-muted'
           }`}
         >
