@@ -12,16 +12,16 @@
     ]
   },
   "scripts": {
-    "dev": "bun scripts/dev.ts",
+    "dev": "bun install && bun run scripts/dev.ts && echo 'Development server started'",
     "build:client": "bun ./scripts/build-client.ts",
     "build:monaco-workers": "bun scripts/build-monaco-workers.ts",
     "build:css": "bun x tailwindcss -i ./client/global.css -o ./dist/client/global.css",
     "start": "NODE_ENV=production bun server/main.ts",
     "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/",
-    "lint": "biome check . && tsc --noEmit",
-    "lint:fix": "biome check --write .",
+    "lint": "biome check ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ && tsc --noEmit",
+    "lint:fix": "biome check --write ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/",
     "typecheck": "tsc",
-    "postinstall": "npx playwright install chromium"
+    "postinstall": "npx playwright install chromium && bun scripts/fix-bun-shim.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
