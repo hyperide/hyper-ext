@@ -1,4 +1,8 @@
 import { memo, useCallback } from 'react';
+import IconPositionBottom from '../../icons/IconPositionBottom';
+import IconPositionLeft from '../../icons/IconPositionLeft';
+import IconPositionRight from '../../icons/IconPositionRight';
+import IconPositionTop from '../../icons/IconPositionTop';
 import { Input } from '../../ui/input';
 import type { PositionType, UIKitType } from '../types';
 
@@ -24,6 +28,11 @@ export const PositionSection = memo(function PositionSection({
   onPositionValueChange,
   onPositionKeyDown,
 }: PositionSectionProps) {
+  const focusInput = (e: React.MouseEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).parentElement?.querySelector('input')?.focus();
+  };
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>, key: 'top' | 'right' | 'bottom' | 'left') => {
       onPositionKeyDown(e, posValues[key], (v: string) => onPositionValueChange(key, v), key);
@@ -88,7 +97,7 @@ export const PositionSection = memo(function PositionSection({
       {selectedPosition !== 'static' && (
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">left</span>
+            <IconPositionLeft className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
             <Input
               type="text"
               value={posValues.left}
@@ -99,7 +108,7 @@ export const PositionSection = memo(function PositionSection({
             />
           </div>
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">top</span>
+            <IconPositionTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
             <Input
               type="text"
               value={posValues.top}
@@ -110,7 +119,7 @@ export const PositionSection = memo(function PositionSection({
             />
           </div>
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">right</span>
+            <IconPositionRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
             <Input
               type="text"
               value={posValues.right}
@@ -121,7 +130,7 @@ export const PositionSection = memo(function PositionSection({
             />
           </div>
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">bottom</span>
+            <IconPositionBottom className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
             <Input
               type="text"
               value={posValues.bottom}

@@ -13,6 +13,10 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import IconFlexRow from '../../icons/IconFlexRow';
 import IconHorizontalPadding from '../../icons/IconHorizontalPadding';
 import IconLayoutChart from '../../icons/IconLayoutChart';
+import IconPaddingBottom from '../../icons/IconPaddingBottom';
+import IconPaddingLeft from '../../icons/IconPaddingLeft';
+import IconPaddingRight from '../../icons/IconPaddingRight';
+import IconPaddingTop from '../../icons/IconPaddingTop';
 import IconSpacingHorizontal from '../../icons/IconSpacingHorizontal';
 import IconVerticalPadding from '../../icons/IconVerticalPadding';
 import { Input } from '../../ui/input';
@@ -126,6 +130,11 @@ export const LayoutSection = memo(function LayoutSection({
   onNumericKeyDown,
   syncStyleChange,
 }: LayoutSectionProps) {
+  const focusInput = (e: React.MouseEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).parentElement?.querySelector('input')?.focus();
+  };
+
   const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [paddingExpanded, setPaddingExpanded] = useState(false);
@@ -473,117 +482,134 @@ export const LayoutSection = memo(function LayoutSection({
           </div>
 
           {/* Padding controls */}
-          {!paddingExpanded ? (
-            <div className="flex items-center gap-1.5 mb-3">
-              <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <IconHorizontalPadding className="w-3 h-3 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={paddingLeft || paddingRight}
-                  onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
-                  }
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                  placeholder="0px"
-                />
-              </div>
-              <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <IconVerticalPadding className="w-3 h-3 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={paddingTop || paddingBottom}
-                  onChange={(e) => handleVerticalPaddingChange(e.target.value)}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
-                  }
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                  placeholder="0px"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setPaddingExpanded(true)}
-                className="w-6 h-6 rounded flex items-center justify-center"
-              >
-                <IconBorderSides className="w-4 h-4 text-foreground" stroke={1.5} />
-              </button>
+          <div className="flex items-start gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 flex-1">
+              {paddingExpanded ? (
+                <>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingLeft
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingLeft}
+                      onChange={(e) => {
+                        onPaddingChange('paddingLeft', e.target.value);
+                        syncStyleChange('paddingLeft', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+                    <Input
+                      type="text"
+                      value={paddingTop}
+                      onChange={(e) => {
+                        onPaddingChange('paddingTop', e.target.value);
+                        syncStyleChange('paddingTop', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingRight
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingRight}
+                      onChange={(e) => {
+                        onPaddingChange('paddingRight', e.target.value);
+                        syncStyleChange('paddingRight', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingBottom
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingBottom}
+                      onChange={(e) => {
+                        onPaddingChange('paddingBottom', e.target.value);
+                        syncStyleChange('paddingBottom', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconHorizontalPadding
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingLeft || paddingRight}
+                      onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                      }
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                      placeholder="0px"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconVerticalPadding
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingTop || paddingBottom}
+                      onChange={(e) => handleVerticalPaddingChange(e.target.value)}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                      }
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                      placeholder="0px"
+                    />
+                  </div>
+                </>
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">T</span>
-                <Input
-                  type="text"
-                  value={paddingTop}
-                  onChange={(e) => {
-                    onPaddingChange('paddingTop', e.target.value);
-                    syncStyleChange('paddingTop', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">R</span>
-                <Input
-                  type="text"
-                  value={paddingRight}
-                  onChange={(e) => {
-                    onPaddingChange('paddingRight', e.target.value);
-                    syncStyleChange('paddingRight', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">B</span>
-                <Input
-                  type="text"
-                  value={paddingBottom}
-                  onChange={(e) => {
-                    onPaddingChange('paddingBottom', e.target.value);
-                    syncStyleChange('paddingBottom', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">L</span>
-                <Input
-                  type="text"
-                  value={paddingLeft}
-                  onChange={(e) => {
-                    onPaddingChange('paddingLeft', e.target.value);
-                    syncStyleChange('paddingLeft', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setPaddingExpanded(false)}
-                className="col-span-2 text-xs text-muted-foreground hover:text-muted-foreground"
-              >
-                Collapse
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setPaddingExpanded(!paddingExpanded)}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
+            >
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
+            </button>
+          </div>
         </>
       )}
 
@@ -872,118 +898,261 @@ export const LayoutSection = memo(function LayoutSection({
           </div>
 
           {/* Padding controls for grid */}
-          {!paddingExpanded ? (
-            <div className="flex items-center gap-1.5 mb-3">
-              <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <IconHorizontalPadding className="w-3 h-3 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={paddingLeft || paddingRight}
-                  onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
-                  }
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                  placeholder="0px"
-                />
-              </div>
-              <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <IconVerticalPadding className="w-3 h-3 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={paddingTop || paddingBottom}
-                  onChange={(e) => handleVerticalPaddingChange(e.target.value)}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
-                  }
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                  placeholder="0px"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setPaddingExpanded(true)}
-                className="w-6 h-6 rounded flex items-center justify-center"
-              >
-                <IconBorderSides className="w-4 h-4 text-foreground" stroke={1.5} />
-              </button>
+          <div className="flex items-start gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 flex-1">
+              {paddingExpanded ? (
+                <>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingLeft
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingLeft}
+                      onChange={(e) => {
+                        onPaddingChange('paddingLeft', e.target.value);
+                        syncStyleChange('paddingLeft', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+                    <Input
+                      type="text"
+                      value={paddingTop}
+                      onChange={(e) => {
+                        onPaddingChange('paddingTop', e.target.value);
+                        syncStyleChange('paddingTop', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingRight
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingRight}
+                      onChange={(e) => {
+                        onPaddingChange('paddingRight', e.target.value);
+                        syncStyleChange('paddingRight', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconPaddingBottom
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingBottom}
+                      onChange={(e) => {
+                        onPaddingChange('paddingBottom', e.target.value);
+                        syncStyleChange('paddingBottom', e.target.value);
+                      }}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
+                      }
+                      placeholder="0px"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconHorizontalPadding
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingLeft || paddingRight}
+                      onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                      }
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                      placeholder="0px"
+                    />
+                  </div>
+                  <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                    <IconVerticalPadding
+                      className="w-3 h-3 text-muted-foreground cursor-pointer"
+                      onMouseDown={focusInput}
+                    />
+                    <Input
+                      type="text"
+                      value={paddingTop || paddingBottom}
+                      onChange={(e) => handleVerticalPaddingChange(e.target.value)}
+                      onKeyDown={(e) =>
+                        onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                      }
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                      placeholder="0px"
+                    />
+                  </div>
+                </>
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">T</span>
-                <Input
-                  type="text"
-                  value={paddingTop}
-                  onChange={(e) => {
-                    onPaddingChange('paddingTop', e.target.value);
-                    syncStyleChange('paddingTop', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">R</span>
-                <Input
-                  type="text"
-                  value={paddingRight}
-                  onChange={(e) => {
-                    onPaddingChange('paddingRight', e.target.value);
-                    syncStyleChange('paddingRight', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">B</span>
-                <Input
-                  type="text"
-                  value={paddingBottom}
-                  onChange={(e) => {
-                    onPaddingChange('paddingBottom', e.target.value);
-                    syncStyleChange('paddingBottom', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">L</span>
-                <Input
-                  type="text"
-                  value={paddingLeft}
-                  onChange={(e) => {
-                    onPaddingChange('paddingLeft', e.target.value);
-                    syncStyleChange('paddingLeft', e.target.value);
-                  }}
-                  onKeyDown={(e) =>
-                    onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
-                  }
-                  placeholder="0px"
-                  className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setPaddingExpanded(false)}
-                className="col-span-2 text-xs text-muted-foreground hover:text-muted-foreground"
-              >
-                Collapse
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setPaddingExpanded(!paddingExpanded)}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
+            >
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
+            </button>
+          </div>
         </>
+      )}
+
+      {/* Padding controls for block layout */}
+      {selectedLayout === 'layout' && (
+        <div className="flex items-start gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2 flex-1">
+            {paddingExpanded ? (
+              <>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconPaddingLeft className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+                  <Input
+                    type="text"
+                    value={paddingLeft}
+                    onChange={(e) => {
+                      onPaddingChange('paddingLeft', e.target.value);
+                      syncStyleChange('paddingLeft', e.target.value);
+                    }}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingLeft, (v) => onPaddingChange('paddingLeft', v), 'paddingLeft')
+                    }
+                    placeholder="0px"
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  />
+                </div>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+                  <Input
+                    type="text"
+                    value={paddingTop}
+                    onChange={(e) => {
+                      onPaddingChange('paddingTop', e.target.value);
+                      syncStyleChange('paddingTop', e.target.value);
+                    }}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingTop, (v) => onPaddingChange('paddingTop', v), 'paddingTop')
+                    }
+                    placeholder="0px"
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  />
+                </div>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconPaddingRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+                  <Input
+                    type="text"
+                    value={paddingRight}
+                    onChange={(e) => {
+                      onPaddingChange('paddingRight', e.target.value);
+                      syncStyleChange('paddingRight', e.target.value);
+                    }}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingRight, (v) => onPaddingChange('paddingRight', v), 'paddingRight')
+                    }
+                    placeholder="0px"
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  />
+                </div>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconPaddingBottom
+                    className="w-3 h-3 text-muted-foreground cursor-pointer"
+                    onMouseDown={focusInput}
+                  />
+                  <Input
+                    type="text"
+                    value={paddingBottom}
+                    onChange={(e) => {
+                      onPaddingChange('paddingBottom', e.target.value);
+                      syncStyleChange('paddingBottom', e.target.value);
+                    }}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingBottom, (v) => onPaddingChange('paddingBottom', v), 'paddingBottom')
+                    }
+                    placeholder="0px"
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconHorizontalPadding
+                    className="w-3 h-3 text-muted-foreground cursor-pointer"
+                    onMouseDown={focusInput}
+                  />
+                  <Input
+                    type="text"
+                    value={paddingLeft || paddingRight}
+                    onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingLeft, (v) => handleHorizontalPaddingChange(v), 'paddingLeft')
+                    }
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    placeholder="0px"
+                  />
+                </div>
+                <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
+                  <IconVerticalPadding
+                    className="w-3 h-3 text-muted-foreground cursor-pointer"
+                    onMouseDown={focusInput}
+                  />
+                  <Input
+                    type="text"
+                    value={paddingTop || paddingBottom}
+                    onChange={(e) => handleVerticalPaddingChange(e.target.value)}
+                    onKeyDown={(e) =>
+                      onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')
+                    }
+                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                    placeholder="0px"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPaddingExpanded(!paddingExpanded)}
+            className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+              paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+            }`}
+          >
+            <IconBorderSides
+              className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+              stroke={1.5}
+            />
+          </button>
+        </div>
       )}
 
       {/* Clip content */}

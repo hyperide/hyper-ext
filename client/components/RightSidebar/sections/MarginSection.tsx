@@ -5,6 +5,12 @@ import {
   handleSpacingArrowKey,
   updateSpacingFromInput,
 } from '@/lib/canvas-engine/utils/spacingValue';
+import IconMarginBottom from '../../icons/IconMarginBottom';
+import IconMarginHorizontal from '../../icons/IconMarginHorizontal';
+import IconMarginLeft from '../../icons/IconMarginLeft';
+import IconMarginRight from '../../icons/IconMarginRight';
+import IconMarginTop from '../../icons/IconMarginTop';
+import IconMarginVertical from '../../icons/IconMarginVertical';
 import { Input } from '../../ui/input';
 
 interface MarginSectionProps {
@@ -34,6 +40,11 @@ export const MarginSection = memo(function MarginSection({
   onMarginLinkedToggle,
   onNumericKeyDown,
 }: MarginSectionProps) {
+  const focusInput = (e: React.MouseEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).parentElement?.querySelector('input')?.focus();
+  };
+
   const handleHorizontalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const result = updateSpacingFromInput(e.target.value, marginLeft, marginRight, marginLinked);
     if (result.firstChanged) {
@@ -112,7 +123,11 @@ export const MarginSection = memo(function MarginSection({
       <div className="flex items-start gap-2 mb-2">
         <div className="grid grid-cols-2 gap-2 flex-1">
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">{marginLinked ? 'Left' : 'Hor'}</span>
+            {marginLinked ? (
+              <IconMarginLeft className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+            ) : (
+              <IconMarginHorizontal className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+            )}
             <Input
               type="text"
               value={getSpacingDisplayValue(marginLeft, marginRight, marginLinked)}
@@ -123,7 +138,11 @@ export const MarginSection = memo(function MarginSection({
             />
           </div>
           <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">{marginLinked ? 'Top' : 'Vert'}</span>
+            {marginLinked ? (
+              <IconMarginTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+            ) : (
+              <IconMarginVertical className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
+            )}
             <Input
               type="text"
               value={getSpacingDisplayValue(marginTop, marginBottom, marginLinked)}
@@ -136,7 +155,7 @@ export const MarginSection = memo(function MarginSection({
           {marginLinked && (
             <>
               <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Right</span>
+                <IconMarginRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
                   value={marginRight}
@@ -149,7 +168,7 @@ export const MarginSection = memo(function MarginSection({
                 />
               </div>
               <div className="h-6 px-2 bg-muted rounded flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Bottom</span>
+                <IconMarginBottom className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
                   value={marginBottom}
