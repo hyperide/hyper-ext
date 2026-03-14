@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "paths": {
+      "vector-wasm": ["../vector-wasm/src"]
+    }
+  },
+  "include": ["src"]
+}

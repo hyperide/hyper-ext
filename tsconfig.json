@@ -33,9 +33,13 @@
     "paths": {
       "@/*": ["./client/*"],
       "@shared/*": ["./shared/*"],
-      "@lib/*": ["./lib/*"]
+      "@lib/*": ["./lib/*"],
+      "@vector-engine/*": ["./packages/vector-engine/src/*"],
+      "@vector-wasm/*": ["./packages/vector-wasm/src/*"],
+      "vector-engine": ["./packages/vector-engine/src"],
+      "vector-wasm": ["./packages/vector-wasm/src"]
     }
   },
-  "include": ["client/**/*", "server/**/*", "shared/**/*", "vite.config.ts", "vite.config.server.ts"],
+  "include": ["client/**/*", "server/**/*", "shared/**/*", "vite.config.ts", "vite.config.server.ts", "packages/**/*"],
   "exclude": ["node_modules", "dist"]
 }

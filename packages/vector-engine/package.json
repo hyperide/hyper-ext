@@ -1,0 +1,13 @@
+{
+  "name": "vector-engine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "graphology": "^0.25.4",
+    "graphology-dag": "^0.4.1",
+    "graphology-types": "^0.24.7"
+  }
+}

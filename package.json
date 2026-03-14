@@ -3,6 +3,9 @@
   "private": true,
   "license": "Elastic-2.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "pkg": {
     "assets": [
       "dist/spa/*"
@@ -17,9 +20,9 @@
     "build:monaco-workers": "bun scripts/build-monaco-workers.ts",
     "build:css": "bun x tailwindcss -i ./client/global.css -o ./dist/client/global.css",
     "start": "NODE_ENV=production bun server/main.ts",
-    "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/",
-    "lint": "biome check ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ && tsc --noEmit",
-    "lint:fix": "biome check --write ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/",
+    "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/",
+    "lint": "biome check ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/ && tsc --noEmit",
+    "lint:fix": "biome check --write ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/",
     "typecheck": "tsc",
     "postinstall": "npx playwright install chromium && bun scripts/fix-bun-shim.ts"
   },
