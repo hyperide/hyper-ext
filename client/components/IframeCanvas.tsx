@@ -456,6 +456,7 @@ export default function IframeCanvas({
   }, [previewReady, boardModeActive, editorMode, canvasMode]);
 
   // Apply instance sizes to DOM elements
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     if (!instanceSizes) return;
 
@@ -839,6 +840,7 @@ export default function IframeCanvas({
   }, [activeInstanceId, boardModeActive]);
 
   // Toggle design-mode class on iframe body based on editor mode
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentDocument) return;
@@ -851,12 +853,12 @@ export default function IframeCanvas({
     } else {
       body.classList.remove('design-mode');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- need to re-run after iframe reload
   }, [editorMode, iframeLoadedCounter]);
 
   // Poll iframe for runtime errors (Next.js, Vite, Bun error overlays)
   // Also listens for postMessage-based errors from iframe-console-capture.js
   // (catches module SyntaxErrors that don't produce framework overlays)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-check after iframe reload
   useEffect(() => {
     if (!onRuntimeError) return;
 
@@ -1126,6 +1128,7 @@ export default function IframeCanvas({
   }, [canvasMode, canvasComposition]);
 
   // Sync iframe body dimensions with iframe element size
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const body = iframeRef.current?.contentDocument?.body;
     if (!body) return;

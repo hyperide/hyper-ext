@@ -28,7 +28,7 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
       elementIds: z.array(z.string()).describe('Array of data-uniq-id values to select'),
     },
     async ({ elementIds }) => {
-      services.stateHub.applyUpdate('mcp-server', { selectedIds: elementIds });
+      services.stateHub.applyUpdate({ selectedIds: elementIds });
       return { content: [{ type: 'text' as const, text: `Selected ${elementIds.length} element(s)` }] };
     },
   );

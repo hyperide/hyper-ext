@@ -57,6 +57,7 @@ export function useIframeLoadTracking({
 
   // Watch for instance elements appearing in iframe DOM
   // This triggers when React components inside iframe finish rendering
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter is an intentional trigger to re-attach observer after iframe reload
   useEffect(() => {
     const iframe = getPreviewIframe();
     const iframeDoc = iframe?.contentDocument;

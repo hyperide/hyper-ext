@@ -31,6 +31,7 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
   const [publicDirExists, setPublicDirExists] = useState(false);
   const [configError, setConfigError] = useState<ConfigError | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on activeProject?.id — avoid re-fetching when name/publicDir change without id change
   useEffect(() => {
     // Reset when project changes
     setConfigError(null);

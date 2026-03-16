@@ -87,6 +87,7 @@ export function CanvasElementContextMenu({
   // ========================================================================
   // Setup iframe context menu handler (SaaS only — needs engine)
   // ========================================================================
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!engine) return;
 

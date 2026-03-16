@@ -36,6 +36,7 @@ export function useSelectionOverlays({
   editorMode,
   onPlaceholderClick,
 }: UseSelectionOverlaysOptions) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!enabled) {
       if (overlayContainerRef.current) {

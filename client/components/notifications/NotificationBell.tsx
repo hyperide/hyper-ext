@@ -36,7 +36,7 @@ export const NotificationBell = memo(function NotificationBell({ onNavigateToCom
     const newOffset = offset + limit;
     await fetchNotifications({ limit, offset: newOffset });
     setOffset(newOffset);
-  }, [offset, limit, fetchNotifications]);
+  }, [offset, fetchNotifications]);
 
   return (
     <NotificationDropdown

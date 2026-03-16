@@ -101,7 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Detect UI kit from package.json and broadcast to all panels
   detectUIKit(workspaceRoot)
     .then((kit) => {
-      stateHub?.applyUpdate('extension-host', { projectUIKit: kit });
+      stateHub?.applyUpdate({ projectUIKit: kit });
     })
     .catch((err) => {
       console.warn('[HyperIDE] Failed to detect UI kit:', err);
@@ -206,7 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
         .injectUniqueIds(componentPath)
         .then(() => panelRouter?.componentService.parseStructure(componentPath))
         .then((structure) => {
-          stateHub?.applyUpdate('extension-host', { astStructure: structure });
+          stateHub?.applyUpdate({ astStructure: structure });
         })
         .catch((err) => {
           console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
@@ -301,7 +301,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
     onRefresh: () => previewPanel?.refresh(),
     onOpenComponent: (path) => {
-      stateHub?.applyUpdate('mcp-server', {
+      stateHub?.applyUpdate({
         currentComponent: {
           path,
           name:
