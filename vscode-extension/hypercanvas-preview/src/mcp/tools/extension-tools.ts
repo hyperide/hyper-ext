@@ -141,7 +141,18 @@ async function takeScreenshot(
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
 
   if (saveTo) {
-    await writeFile(saveTo, Buffer.from(base64, 'base64'));
+    try {
+      await writeFile(saveTo, Buffer.from(base64, 'base64'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return {
+        content: [{ type: 'text' as const, text: `Screenshot captured but failed to save to "${saveTo}": ${message}` }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: 'text' as const, text: saveTo }],
+    };
   }
 
   return {
