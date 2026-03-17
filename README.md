@@ -2,6 +2,8 @@
 
 Visual editor for React components inside VS Code. Edit styles, inspect elements, and use AI assistance — all without leaving your editor.
 
+![Hyper Preview — visual editing in VS Code](docs/public/screenshots/hero.png)
+
 ## Features
 
 - **Live Preview** — see your React components rendered in real-time as you edit code
