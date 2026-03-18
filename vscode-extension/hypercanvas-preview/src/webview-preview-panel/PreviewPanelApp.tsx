@@ -49,11 +49,12 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
-    iframeEl,
-    canvas,
-    onStateUpdate: updateState,
-  });
+  const { devServerRunning, devServerUrl, disconnected, previewUrl, showNoComponentHint, handleStartDevServer } =
+    usePreviewBridge({
+      iframeEl,
+      canvas,
+      onStateUpdate: updateState,
+    });
 
   const handleIframeLoad = useCallback(() => {
     canvas.sendEvent({ type: 'previewLoaded' });
@@ -69,9 +70,14 @@ function PreviewContent() {
     [canvas],
   );
 
-  // Dev server not running — show start button
+  // Dev server not running — show start button (with reconnecting banner if was connected)
   if (!devServerRunning) {
-    return <StartDevServerScreen onStart={handleStartDevServer} />;
+    return (
+      <>
+        {disconnected && <ReconnectingBanner />}
+        <StartDevServerScreen onStart={handleStartDevServer} />
+      </>
+    );
   }
 
   return (
@@ -94,6 +100,8 @@ function PreviewContent() {
       </div>
 
       {showNoComponentHint && <NoComponentHint />}
+
+      <DevServerStatusBadge running={devServerRunning} url={devServerUrl} />
 
       <ModeToolbar canvas={canvas} />
 
@@ -127,6 +135,38 @@ function NoComponentHint() {
     <div style={{ ...centerScreenStyle, ...absoluteFillStyle }}>
       <h2 style={headingStyle}>No component selected</h2>
       <p style={subtextStyle}>Open a .tsx or .jsx file to preview it</p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Reconnecting Banner (shown when dev server disconnects)
+// ============================================================================
+
+function ReconnectingBanner() {
+  return (
+    <div data-testid="hyper-preview-reconnecting" style={reconnectingBannerStyle}>
+      Dev server disconnected
+    </div>
+  );
+}
+
+// ============================================================================
+// Dev Server Status Badge (floating top-right of preview)
+// ============================================================================
+
+function DevServerStatusBadge({ running, url }: { running: boolean; url: string | null }) {
+  const label = running ? 'Running' : 'Stopped';
+  return (
+    <div data-testid={TID.devServer.statusBadge} style={statusBadgeStyle}>
+      <span
+        style={{
+          ...statusDotStyle,
+          backgroundColor: running ? '#22c55e' : '#94a3b8',
+        }}
+      />
+      <span>{label}</span>
+      {running && url && <span style={statusUrlStyle}>{url.replace(/^https?:\/\//, '')}</span>}
     </div>
   );
 }
@@ -265,4 +305,48 @@ const buttonStyle: React.CSSProperties = {
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
+};
+
+const reconnectingBannerStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  padding: '8px 16px',
+  background: 'var(--vscode-editorWarning-foreground, #e5a100)',
+  color: '#fff',
+  fontSize: 12,
+  fontFamily: 'var(--vscode-font-family)',
+  textAlign: 'center',
+  zIndex: 1001,
+};
+
+const statusBadgeStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 8,
+  right: 8,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '4px 10px',
+  borderRadius: 12,
+  background: 'var(--vscode-badge-background, #333)',
+  color: 'var(--vscode-badge-foreground, #fff)',
+  fontSize: 11,
+  fontFamily: 'var(--vscode-font-family)',
+  zIndex: 1000,
+  pointerEvents: 'none',
+  opacity: 0.85,
+};
+
+const statusDotStyle: React.CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: '50%',
+  flexShrink: 0,
+};
+
+const statusUrlStyle: React.CSSProperties = {
+  opacity: 0.7,
+  marginLeft: 2,
 };

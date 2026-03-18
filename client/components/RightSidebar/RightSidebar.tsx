@@ -195,6 +195,8 @@ export default function RightSidebar({
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
+  // External refresh trigger (e.g. undo/redo from extension host)
+  const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
   const {
     parsedStyles,
     childrenType,
@@ -209,7 +211,7 @@ export default function RightSidebar({
     engine,
     styleAdapter,
     activeInstanceId,
-    refreshKey: styleRefreshKey,
+    refreshKey: styleRefreshKey + styleVersion,
   });
 
   // Apply state filter to parsedStyles

@@ -248,6 +248,9 @@ export class PreviewPanel {
           await editor.document.save();
         }
       }
+      if (handled) {
+        this._bumpStyleVersion();
+      }
       return;
     }
     if (msg.type === 'canvas:redo') {
@@ -260,6 +263,9 @@ export class PreviewPanel {
         if (editor?.document.isDirty) {
           await editor.document.save();
         }
+      }
+      if (handled) {
+        this._bumpStyleVersion();
       }
       return;
     }
@@ -678,6 +684,18 @@ export class PreviewPanel {
   }
 
   /**
+   * Notify webview that the dev server has stopped.
+   */
+  public notifyDevServerStopped(): void {
+    this._devServerRunning = false;
+    this._panel?.webview.postMessage({
+      type: 'devserver:statusChanged',
+      running: false,
+      url: null,
+    });
+  }
+
+  /**
    * Refresh preview
    */
   public refresh(): void {
@@ -753,6 +771,9 @@ export class PreviewPanel {
         await editor.document.save();
       }
     }
+    if (handled) {
+      this._bumpStyleVersion();
+    }
   }
 
   /**
@@ -773,6 +794,18 @@ export class PreviewPanel {
         await editor.document.save();
       }
     }
+    if (handled) {
+      this._bumpStyleVersion();
+    }
+  }
+
+  /**
+   * Increment styleVersion in shared state so the inspector re-reads styles.
+   * Called after undo/redo completes to sync the inspector with file changes.
+   */
+  private _bumpStyleVersion(): void {
+    const current = this._stateHub.state.styleVersion ?? 0;
+    this._stateHub.applyUpdate({ styleVersion: current + 1 });
   }
 
   /**

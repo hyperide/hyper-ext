@@ -148,6 +148,11 @@ export function activate(context: vscode.ExtensionContext) {
         stopped: 'idle',
       };
       diagnosticHub?.setBuildStatus(statusMap[state.status] ?? 'idle');
+
+      // Notify preview panel when dev server stops so the status badge updates
+      if (state.status === 'stopped' || state.status === 'error') {
+        previewPanel?.notifyDevServerStopped();
+      }
     });
 
     // Wire runtime errors from preview iframe to dev server manager + diagnostic hub
