@@ -27,6 +27,10 @@ interface ColorComboboxProps {
   beforeUnlinkSlot?: React.ReactNode;
   /** Whether the value is currently a hex color (unlinked from tokens) */
   isUnlinked?: boolean;
+  /** data-testid on the root container */
+  testId?: string;
+  /** data-testid on the hex input (unlinked mode) */
+  inputTestId?: string;
 }
 
 type ColorShades = Record<string, string>;
@@ -236,6 +240,8 @@ export function ColorCombobox({
   tokenSystem,
   beforeUnlinkSlot,
   isUnlinked: controlledIsUnlinked,
+  testId,
+  inputTestId,
 }: ColorComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -360,7 +366,7 @@ export function ColorCombobox({
   const displayHex = currentHex?.replace('#', '') || '';
 
   return (
-    <div className={cn('flex items-center gap-0.5', className)}>
+    <div className={cn('flex items-center gap-0.5', className)} {...(testId != null ? { 'data-testid': testId } : {})}>
       {isLinked ? (
         <Popover
           open={open}
@@ -497,6 +503,7 @@ export function ColorCombobox({
           </label>
           <Input
             type="text"
+            testId={inputTestId}
             value={displayHex}
             placeholder={inputPlaceholder}
             onChange={(e) => handleHexInput(e.target.value)}

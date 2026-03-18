@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconCode, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1043,7 +1044,9 @@ export default function RightSidebar({
         <>
           {/* Frame type */}
           <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
-            <span className="text-sm font-semibold text-foreground">{getFrameType()}</span>
+            <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
+              {getFrameType()}
+            </span>
           </div>
 
           {/* Text Content */}
