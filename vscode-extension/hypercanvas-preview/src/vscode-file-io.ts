@@ -23,21 +23,37 @@ export class VSCodeFileIO implements FileIO {
 
   async writeFile(absolutePath: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(absolutePath);
-    const doc = await vscode.workspace.openTextDocument(uri);
 
-    const edit = new vscode.WorkspaceEdit();
-    const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-    edit.replace(uri, fullRange, content);
-
-    const success = await vscode.workspace.applyEdit(edit);
-    if (!success) {
-      throw new Error(`WorkspaceEdit failed for ${absolutePath}`);
+    // Check if the file exists — use different strategy for new vs existing files.
+    // WorkspaceEdit is preferred for existing files (enables Cmd+Z undo in editor).
+    // vscode.workspace.fs.writeFile is needed for new files (WorkspaceEdit can't create).
+    let fileExists = false;
+    try {
+      await vscode.workspace.fs.stat(uri);
+      fileExists = true;
+    } catch {
+      // File doesn't exist — will create via fs.writeFile
     }
 
-    // Save to disk so Vite HMR picks up the change
-    const saved = await doc.save();
-    if (!saved) {
-      throw new Error(`Document save failed for ${absolutePath}`);
+    if (fileExists) {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const edit = new vscode.WorkspaceEdit();
+      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+      edit.replace(uri, fullRange, content);
+
+      const success = await vscode.workspace.applyEdit(edit);
+      if (!success) {
+        throw new Error(`WorkspaceEdit failed for ${absolutePath}`);
+      }
+
+      // Save to disk so Vite HMR picks up the change
+      const saved = await doc.save();
+      if (!saved) {
+        throw new Error(`Document save failed for ${absolutePath}`);
+      }
+    } else {
+      // Create new file directly on disk
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
     }
   }
 
