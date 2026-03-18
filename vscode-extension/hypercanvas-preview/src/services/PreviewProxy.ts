@@ -53,7 +53,7 @@ export class PreviewProxy {
 
     // Find random port and listen
     await new Promise<void>((resolve, reject) => {
-      this._server?.listen(0, '127.0.0.1', () => {
+      this._server?.listen(0, 'localhost', () => {
         const addr = this._server?.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
@@ -82,7 +82,7 @@ export class PreviewProxy {
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
     const options: http.RequestOptions = {
-      hostname: '127.0.0.1',
+      hostname: 'localhost',
       port: this._targetPort,
       path: clientReq.url,
       method: clientReq.method,
@@ -144,7 +144,7 @@ export class PreviewProxy {
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
-    const targetSocket = net.connect(this._targetPort, '127.0.0.1', () => {
+    const targetSocket = net.connect(this._targetPort, 'localhost', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)
