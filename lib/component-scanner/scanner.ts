@@ -126,7 +126,7 @@ export class ComponentScanner {
    * - app/components/ → composites (Remix)
    * - src/pages/, app/routes/, src/screens/ → pages
    * - app/ with page.tsx → Next.js App Router pages
-   * - Root-level App.tsx → composite marker
+   * - src/ with PascalCase .tsx at root → pages (Vite/React fallback)
    */
   detectProjectStructure(projectRoot: string): ProjectStructure {
     const atoms: string[] = [];
@@ -202,10 +202,18 @@ export class ComponentScanner {
       }
 
       // Remix: app/routes/ already handled above
-      // Note: root-level files like App.tsx are not added separately —
-      // they are composition entry points, not reusable components.
-      // If the project has no components/ dir at all, we detect nothing
-      // (which is correct — AI is needed for non-standard layouts).
+
+      // Fallback for simple React/Vite projects: if no pages/ directory was found,
+      // but src/ has .tsx/.jsx files at top level (e.g. App.tsx), treat src/ as pages source.
+      // This covers the common pattern where there's no explicit pages/ directory.
+      if (dirName === 'src' && framework === 'react' && pages.length === 0) {
+        const hasTsxAtRoot = entries.some(
+          (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
+        );
+        if (hasTsxAtRoot) {
+          pages.push(sourceRoot);
+        }
+      }
     }
 
     return {
