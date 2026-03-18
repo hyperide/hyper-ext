@@ -1,6 +1,6 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
 // SaaS-only imports — conditionally used when engine is available
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
@@ -10,6 +10,7 @@ import { useCanvasEngineOptional } from '@/lib/canvas-engine';
 import { usePlatformContext } from '@/lib/platform';
 import { panelLayoutStorage } from '@/lib/storage';
 import { useGitStore } from '@/stores/gitStore';
+import type { ComponentListItem } from '../../../lib/component-scanner/types';
 import SidebarHeader from '../SidebarHeader';
 import { SourceControlSection } from '../SourceControlSection';
 import { TestGenerationModal } from '../TestGenerationModal';
@@ -69,6 +70,27 @@ export default function LeftSidebar({
           loadingComponent: saasComponentMeta.loadingComponent,
         }
       : null,
+  );
+
+  // Track which section (pages/components) was last clicked to prevent dual highlights
+  const [selectionSource, setSelectionSource] = useState<'pages' | 'components'>('pages');
+  const pagesActivePath = selectionSource === 'pages' ? componentNav.activePath : null;
+  const componentsActivePath = selectionSource === 'components' ? componentNav.activePath : null;
+
+  const onPageClick = useCallback(
+    (component: ComponentListItem) => {
+      setSelectionSource('pages');
+      componentNav.onComponentClick(component);
+    },
+    [componentNav],
+  );
+
+  const onComponentItemClick = useCallback(
+    (component: ComponentListItem) => {
+      setSelectionSource('components');
+      componentNav.onComponentClick(component);
+    },
+    [componentNav],
   );
 
   const currentComponentPath = engine ? meta?.relativeFilePath : (componentNav.activePath ?? undefined);
@@ -262,9 +284,9 @@ export default function LeftSidebar({
             collapsed={pagesCollapsed}
             hasContent={hasPagesContent}
             groups={components.pageGroups}
-            activePath={componentNav.activePath}
+            activePath={pagesActivePath}
             loadingComponent={componentNav.loadingComponent}
-            onComponentClick={componentNav.onComponentClick}
+            onComponentClick={onPageClick}
             onToggle={() => handleUserToggle('pages', pagesPanel.toggle, pagesPanelRef)}
             onCreatePage={onCreatePage}
             isVSCode={isVSCode}
@@ -287,9 +309,9 @@ export default function LeftSidebar({
             hasContent={hasComponentsContent}
             atomGroups={components.atomGroups}
             compositeGroups={components.compositeGroups}
-            activePath={componentNav.activePath}
+            activePath={componentsActivePath}
             loadingComponent={componentNav.loadingComponent}
-            onComponentClick={componentNav.onComponentClick}
+            onComponentClick={onComponentItemClick}
             onToggle={() => handleUserToggle('components', componentsPanel.toggle, componentsPanelRef)}
             onReload={loadComponents}
             isReloading={isLoadingComponents}

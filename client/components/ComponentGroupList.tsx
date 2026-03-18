@@ -47,8 +47,8 @@ export function ComponentGroupList({
                     'h-6 px-2 flex items-center gap-2 justify-start',
                     isVSCode ? 'rounded-none' : 'rounded',
                     {
-                      // VS Code: left border accent; SaaS: rounded border
-                      'bg-blue-500/20 border-l-2 border-blue-500': isActive && isVSCode,
+                      // VS Code: use native selection vars; SaaS: blue accent
+                      'tree-item-selected': isActive && isVSCode,
                       'bg-blue-500/20 border border-blue-500/50 rounded': isActive && !isVSCode,
                       'hover:bg-muted': !isActive,
                       'opacity-70': isLoading,
@@ -60,7 +60,7 @@ export function ComponentGroupList({
                   {isLoading && <div className="animate-spin rounded-full h-3 w-3 border-b border-muted-foreground" />}
                   <span
                     className={cn('text-xs', {
-                      'font-semibold text-foreground': isActive,
+                      'font-semibold': isActive,
                       'text-foreground': !isActive,
                     })}
                   >
