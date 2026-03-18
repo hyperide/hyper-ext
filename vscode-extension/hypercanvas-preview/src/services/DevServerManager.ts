@@ -189,6 +189,8 @@ export class DevServerManager {
         command.args.push('--', '--port', String(this._port));
       } else if (projectInfo.type === 'nextjs') {
         command.args.push('--', '-p', String(this._port));
+      } else if (projectInfo.type === 'webpack') {
+        command.args.push('--', '--port', String(this._port));
       }
       // CRA reads PORT env var — no CLI flag needed
 
@@ -213,15 +215,8 @@ export class DevServerManager {
         this._appendLog(text);
 
         // Detect when server is ready
-        if (this._status === 'starting') {
-          if (
-            text.includes('ready') ||
-            text.includes('Local:') ||
-            text.includes('localhost:') ||
-            text.includes('Started')
-          ) {
-            this._updateStatus('running');
-          }
+        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
+          this._updateStatus('running');
         }
       });
 
@@ -232,11 +227,9 @@ export class DevServerManager {
         this._outputChannel.append(text);
         this._appendLog(text);
 
-        // Some servers log to stderr
-        if (this._status === 'starting') {
-          if (text.includes('ready') || text.includes('Local:') || text.includes('localhost:')) {
-            this._updateStatus('running');
-          }
+        // Some servers log to stderr (e.g. Next.js, webpack-dev-server)
+        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
+          this._updateStatus('running');
         }
       });
 
@@ -448,6 +441,24 @@ export class DevServerManager {
 
       socket.connect(port, '127.0.0.1');
     });
+  }
+
+  /**
+   * Check if output text indicates the dev server is ready to accept connections.
+   * Covers Vite, Next.js, webpack-dev-server, Remix, CRA, and generic patterns.
+   */
+  private _isServerReadyMessage(text: string): boolean {
+    const lower = text.toLowerCase();
+    return (
+      lower.includes('ready') || // Vite "ready in", Next.js "Ready in"
+      text.includes('Local:') || // Vite "Local: http://..."
+      text.includes('localhost:') || // webpack-dev-server "Loopback: http://localhost:"
+      text.includes('Started') || // Generic
+      lower.includes('compiled successfully') || // webpack/CRA
+      lower.includes('compiled client') || // Next.js "Compiled client and server"
+      lower.includes('listening on') || // Generic servers
+      text.includes('Loopback:') // webpack-dev-server
+    );
   }
 
   /**

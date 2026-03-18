@@ -78,13 +78,25 @@ export class PreviewProxy {
   }
 
   /**
-   * Handle HTTP requests: proxy to target, inject script into HTML
+   * Handle HTTP requests: proxy to target, inject script into HTML.
+   * Rewrites /test-preview to / so file-based routing frameworks (Next.js, Remix)
+   * serve their root page instead of returning 404.
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
+    // Rewrite /test-preview path to / — file-based routing frameworks (Next.js, Remix)
+    // don't have a /test-preview route. SPA frameworks work with / too (same index.html).
+    let proxyPath = clientReq.url || '/';
+    if (proxyPath.startsWith('/test-preview')) {
+      proxyPath = `/${proxyPath.slice('/test-preview'.length)}`;
+      // Normalize double slashes: '/test-preview/' → '/' not '//'
+      if (proxyPath.startsWith('//')) proxyPath = proxyPath.slice(1);
+      if (proxyPath === '') proxyPath = '/';
+    }
+
     const options: http.RequestOptions = {
       hostname: 'localhost',
       port: this._targetPort,
-      path: clientReq.url,
+      path: proxyPath,
       method: clientReq.method,
       headers: {
         ...clientReq.headers,
