@@ -47,9 +47,7 @@
           "id": "hypercanvas-explorer",
           "title": "HyperIDE",
           "icon": "media/preview.svg"
-        }
-      ],
-      "auxiliarybar": [
+        },
         {
           "id": "hypercanvas-inspector",
           "title": "HyperIDE",
