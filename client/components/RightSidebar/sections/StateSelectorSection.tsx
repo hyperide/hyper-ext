@@ -80,6 +80,7 @@ export const StateSelectorSection = memo(function StateSelectorSection({
               <button
                 key={option.label}
                 type="button"
+                data-testid={TID.inspector.stateSelect}
                 onClick={() => onStateChange(option.value)}
                 className={cn(
                   'px-3 text-xs font-medium rounded transition-colors flex-shrink-0 flex items-center h-full',

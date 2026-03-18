@@ -73,7 +73,12 @@ export const EffectsSection = memo(function EffectsSection({
         ) : (
           <span className="text-xs font-semibold text-foreground">Effects</span>
         )}
-        <button type="button" onClick={handleAddEffect} className="hover:bg-muted rounded p-0.5">
+        <button
+          type="button"
+          data-testid={TID.inspector.shadowAdd}
+          onClick={handleAddEffect}
+          className="hover:bg-muted rounded p-0.5"
+        >
           <IconPlus className="w-4 h-4" stroke={1.5} />
         </button>
       </div>

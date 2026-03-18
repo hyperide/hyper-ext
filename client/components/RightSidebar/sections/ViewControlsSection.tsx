@@ -90,6 +90,7 @@ export const ViewControlsSection = memo(function ViewControlsSection({
       <div className="relative" data-size-dropdown>
         <button
           type="button"
+          data-testid={TID.inspector.viewToggle('size')}
           onClick={() => setShowSizeDropdown(!showSizeDropdown)}
           className="flex items-center gap-2 hover:bg-muted rounded px-1 py-0.5 -mx-1 max-w-[120px]"
         >
@@ -138,6 +139,7 @@ export const ViewControlsSection = memo(function ViewControlsSection({
             <input
               ref={zoomInputRef}
               type="text"
+              data-testid={TID.inspector.viewToggle('zoom')}
               value={zoomInputValue}
               onChange={handleZoomInputChange}
               onBlur={handleZoomInputBlur}

@@ -306,6 +306,7 @@ export const LayoutSection = memo(function LayoutSection({
       <div className="flex items-center mb-3">
         <button
           type="button"
+          data-testid={TID.inspector.layoutDisplaySelect}
           onClick={() => onLayoutChange('layout')}
           className={cn(
             'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
@@ -316,6 +317,7 @@ export const LayoutSection = memo(function LayoutSection({
         </button>
         <button
           type="button"
+          data-testid={TID.inspector.layoutFlexDirection}
           onClick={() => onLayoutChange('col')}
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
@@ -326,6 +328,7 @@ export const LayoutSection = memo(function LayoutSection({
         </button>
         <button
           type="button"
+          data-testid={TID.inspector.viewToggle('row')}
           onClick={() => onLayoutChange('row')}
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
@@ -338,6 +341,7 @@ export const LayoutSection = memo(function LayoutSection({
         {projectUIKit !== 'tamagui' && (
           <button
             type="button"
+            data-testid={TID.inspector.viewToggle('grid')}
             onClick={() => onLayoutChange('grid')}
             className={cn(
               'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
@@ -356,6 +360,7 @@ export const LayoutSection = memo(function LayoutSection({
             <span className="text-xs text-muted-foreground">W</span>
             <Input
               type="text"
+              testId={TID.inspector.layoutWidth}
               value={width.replace(' Auto', '')}
               onChange={(e) => handleWidthInputChange(e.target.value)}
               onBlur={onWidthBlur}
@@ -376,6 +381,7 @@ export const LayoutSection = memo(function LayoutSection({
             <span className="text-xs text-muted-foreground">H</span>
             <Input
               type="text"
+              testId={TID.inspector.layoutHeight}
               value={height.replace(' Auto', '')}
               onChange={(e) => handleHeightInputChange(e.target.value)}
               onBlur={onHeightBlur}
@@ -469,6 +475,7 @@ export const LayoutSection = memo(function LayoutSection({
               />
               <Input
                 type="text"
+                testId={TID.inspector.layoutGap}
                 value={gap}
                 onChange={(e) => {
                   onGapChange(e.target.value);
@@ -497,6 +504,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'left')}
                       value={paddingLeft}
                       onChange={(e) => {
                         onPaddingChange('paddingLeft', e.target.value);
@@ -513,6 +521,7 @@ export const LayoutSection = memo(function LayoutSection({
                     <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'top')}
                       value={paddingTop}
                       onChange={(e) => {
                         onPaddingChange('paddingTop', e.target.value);
@@ -532,6 +541,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'right')}
                       value={paddingRight}
                       onChange={(e) => {
                         onPaddingChange('paddingRight', e.target.value);
@@ -551,6 +561,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'bottom')}
                       value={paddingBottom}
                       onChange={(e) => {
                         onPaddingChange('paddingBottom', e.target.value);
@@ -573,6 +584,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'horizontal')}
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -589,6 +601,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'vertical')}
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -603,6 +616,7 @@ export const LayoutSection = memo(function LayoutSection({
             </div>
             <button
               type="button"
+              data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
                 paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
@@ -626,6 +640,7 @@ export const LayoutSection = memo(function LayoutSection({
               <span className="text-xs text-muted-foreground">Cols</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('gridCols')}
                 value={gridCols}
                 onChange={(e) => {
                   onGridColsChange(e.target.value);
@@ -640,6 +655,7 @@ export const LayoutSection = memo(function LayoutSection({
               <span className="text-xs text-muted-foreground">Rows</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('gridRows')}
                 value={gridRows}
                 onChange={(e) => {
                   onGridRowsChange(e.target.value);
@@ -870,6 +886,7 @@ export const LayoutSection = memo(function LayoutSection({
                 <IconSpacingHorizontal className="w-3 h-3 text-muted-foreground" />
                 <Input
                   type="text"
+                  testId={TID.inspector.numericInput('columnGap')}
                   value={columnGap}
                   onChange={(e) => {
                     onColumnGapChange(e.target.value);
@@ -885,6 +902,7 @@ export const LayoutSection = memo(function LayoutSection({
                 <IconSpacingHorizontal className="w-3 h-3 text-muted-foreground rotate-90" />
                 <Input
                   type="text"
+                  testId={TID.inspector.numericInput('rowGap')}
                   value={rowGap}
                   onChange={(e) => {
                     onRowGapChange(e.target.value);
@@ -913,6 +931,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'left')}
                       value={paddingLeft}
                       onChange={(e) => {
                         onPaddingChange('paddingLeft', e.target.value);
@@ -929,6 +948,7 @@ export const LayoutSection = memo(function LayoutSection({
                     <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'top')}
                       value={paddingTop}
                       onChange={(e) => {
                         onPaddingChange('paddingTop', e.target.value);
@@ -948,6 +968,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'right')}
                       value={paddingRight}
                       onChange={(e) => {
                         onPaddingChange('paddingRight', e.target.value);
@@ -967,6 +988,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'bottom')}
                       value={paddingBottom}
                       onChange={(e) => {
                         onPaddingChange('paddingBottom', e.target.value);
@@ -989,6 +1011,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'horizontal')}
                       value={paddingLeft || paddingRight}
                       onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -1005,6 +1028,7 @@ export const LayoutSection = memo(function LayoutSection({
                     />
                     <Input
                       type="text"
+                      testId={TID.inspector.spacingInput('padding', 'vertical')}
                       value={paddingTop || paddingBottom}
                       onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                       onKeyDown={(e) =>
@@ -1019,6 +1043,7 @@ export const LayoutSection = memo(function LayoutSection({
             </div>
             <button
               type="button"
+              data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
               className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
                 paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
@@ -1043,6 +1068,7 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingLeft className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'left')}
                     value={paddingLeft}
                     onChange={(e) => {
                       onPaddingChange('paddingLeft', e.target.value);
@@ -1059,6 +1085,7 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingTop className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'top')}
                     value={paddingTop}
                     onChange={(e) => {
                       onPaddingChange('paddingTop', e.target.value);
@@ -1075,6 +1102,7 @@ export const LayoutSection = memo(function LayoutSection({
                   <IconPaddingRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'right')}
                     value={paddingRight}
                     onChange={(e) => {
                       onPaddingChange('paddingRight', e.target.value);
@@ -1094,6 +1122,7 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'bottom')}
                     value={paddingBottom}
                     onChange={(e) => {
                       onPaddingChange('paddingBottom', e.target.value);
@@ -1116,6 +1145,7 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'horizontal')}
                     value={paddingLeft || paddingRight}
                     onChange={(e) => handleHorizontalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
@@ -1132,6 +1162,7 @@ export const LayoutSection = memo(function LayoutSection({
                   />
                   <Input
                     type="text"
+                    testId={TID.inspector.spacingInput('padding', 'vertical')}
                     value={paddingTop || paddingBottom}
                     onChange={(e) => handleVerticalPaddingChange(e.target.value)}
                     onKeyDown={(e) =>
@@ -1146,6 +1177,7 @@ export const LayoutSection = memo(function LayoutSection({
           </div>
           <button
             type="button"
+            data-testid={TID.inspector.spacingLink('padding')}
             onClick={() => setPaddingExpanded(!paddingExpanded)}
             className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
               paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
@@ -1160,7 +1192,12 @@ export const LayoutSection = memo(function LayoutSection({
       )}
 
       {/* Clip content */}
-      <button type="button" onClick={handleClipContentToggle} className="flex items-center gap-2 mb-3">
+      <button
+        type="button"
+        data-testid={TID.inspector.layoutOverflow}
+        onClick={handleClipContentToggle}
+        className="flex items-center gap-2 mb-3"
+      >
         <div
           className={cn(
             'w-4 h-4 rounded border border-border flex items-center justify-center',

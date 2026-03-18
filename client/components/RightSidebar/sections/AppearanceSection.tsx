@@ -102,6 +102,7 @@ export const AppearanceSection = memo(function AppearanceSection({
             <IconDragDrop2 className="w-3 h-3 text-muted-foreground" stroke={1.5} />
             <Input
               type="text"
+              testId={TID.inspector.opacityInput}
               value={opacity}
               onChange={handleOpacityChange}
               onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity', '100')}
@@ -113,6 +114,7 @@ export const AppearanceSection = memo(function AppearanceSection({
             <IconBorderCorners className="w-3 h-3 text-muted-foreground" stroke={1.5} />
             <Input
               type="text"
+              testId={TID.inspector.numericInput('borderRadius')}
               value={borderRadiusTopLeft || borderRadius}
               onChange={(e) => handleUnifiedBorderRadiusChange(e.target.value)}
               onKeyDown={(e) =>
@@ -142,6 +144,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <IconDragDrop2 className="w-3 h-3 text-muted-foreground" stroke={1.5} />
               <Input
                 type="text"
+                testId={TID.inspector.opacityInput}
                 value={opacity}
                 onChange={handleOpacityChange}
                 onKeyDown={(e) => onNumericKeyDown(e, opacity, onOpacityChange, 'opacity', '100')}
@@ -166,6 +169,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <span className="text-[10px] text-muted-foreground">TL</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('borderRadiusTopLeft')}
                 value={borderRadiusTopLeft}
                 onChange={(e) => handleCornerRadiusChange('topLeft', e.target.value)}
                 onKeyDown={(e) =>
@@ -184,6 +188,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <span className="text-[10px] text-muted-foreground">TR</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('borderRadiusTopRight')}
                 value={borderRadiusTopRight}
                 onChange={(e) => handleCornerRadiusChange('topRight', e.target.value)}
                 onKeyDown={(e) =>
@@ -202,6 +207,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <span className="text-[10px] text-muted-foreground">BL</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('borderRadiusBottomLeft')}
                 value={borderRadiusBottomLeft}
                 onChange={(e) => handleCornerRadiusChange('bottomLeft', e.target.value)}
                 onKeyDown={(e) =>
@@ -220,6 +226,7 @@ export const AppearanceSection = memo(function AppearanceSection({
               <span className="text-[10px] text-muted-foreground">BR</span>
               <Input
                 type="text"
+                testId={TID.inspector.numericInput('borderRadiusBottomRight')}
                 value={borderRadiusBottomRight}
                 onChange={(e) => handleCornerRadiusChange('bottomRight', e.target.value)}
                 onKeyDown={(e) =>

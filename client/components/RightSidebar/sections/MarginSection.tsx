@@ -134,6 +134,7 @@ export const MarginSection = memo(function MarginSection({
             )}
             <Input
               type="text"
+              testId={TID.inspector.spacingInput('margin', 'horizontal')}
               value={getSpacingDisplayValue(marginLeft, marginRight, marginLinked)}
               onChange={handleHorizontalChange}
               onKeyDown={handleHorizontalKeyDown}
@@ -149,6 +150,7 @@ export const MarginSection = memo(function MarginSection({
             )}
             <Input
               type="text"
+              testId={TID.inspector.spacingInput('margin', 'vertical')}
               value={getSpacingDisplayValue(marginTop, marginBottom, marginLinked)}
               onChange={handleVerticalChange}
               onKeyDown={handleVerticalKeyDown}
@@ -162,6 +164,7 @@ export const MarginSection = memo(function MarginSection({
                 <IconMarginRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
+                  testId={TID.inspector.spacingInput('margin', 'right')}
                   value={marginRight}
                   onChange={(e) => onMarginChange('marginRight', e.target.value)}
                   onKeyDown={(e) =>
@@ -175,6 +178,7 @@ export const MarginSection = memo(function MarginSection({
                 <IconMarginBottom className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
+                  testId={TID.inspector.spacingInput('margin', 'bottom')}
                   value={marginBottom}
                   onChange={(e) => onMarginChange('marginBottom', e.target.value)}
                   onKeyDown={(e) =>
