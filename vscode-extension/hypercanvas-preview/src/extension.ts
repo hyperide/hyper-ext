@@ -376,6 +376,29 @@ export function activate(context: vscode.ExtensionContext) {
     });
   }
 
+  // Move Inspector view container to secondary sidebar (right) on first activation.
+  // AI Chat (inside same container) will be collapsed by default.
+  const inspectorMovedKey = 'hypercanvas.inspectorMovedToSecondarySidebar';
+  if (!context.globalState.get<boolean>(inspectorMovedKey)) {
+    // Delay to let VSCode finish rendering views before moving
+    setTimeout(async () => {
+      try {
+        await vscode.commands.executeCommand('vscode.moveViews', {
+          viewIds: ['hypercanvas.inspectorView', 'hypercanvas.aiChatView'],
+          destinationId: 'workbench.view.extension.hypercanvas-inspector',
+        });
+        // Move the container to auxiliary bar (secondary sidebar)
+        await vscode.commands.executeCommand(
+          'workbench.action.moveActivityBarEntryToAuxiliaryBar',
+          'workbench.view.extension.hypercanvas-inspector',
+        );
+        context.globalState.update(inspectorMovedKey, true);
+      } catch {
+        // Silently fail — user can manually arrange
+      }
+    }, 2000);
+  }
+
   console.log('[HyperIDE] Extension activated successfully');
 }
 
