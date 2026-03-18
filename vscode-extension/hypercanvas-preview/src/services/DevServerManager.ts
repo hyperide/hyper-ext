@@ -163,8 +163,10 @@ export class DevServerManager {
         }
       }
 
-      // Find free port
-      this._port = await this._findFreePort(projectInfo.defaultPort);
+      // Find free port — prefer VS Code setting, fall back to project default
+      const configuredPort = vscode.workspace.getConfiguration('hypercanvas.preview').get<number>('defaultPort');
+      const startPort = configuredPort ?? projectInfo.defaultPort;
+      this._port = await this._findFreePort(startPort);
 
       // Start preview proxy for script injection (error detection)
       this._previewProxy = new PreviewProxy(this._port);
@@ -180,6 +182,15 @@ export class DevServerManager {
 
       // Build command based on package manager
       const command = this._buildCommand(packageManager, devScript);
+
+      // Pass --port via CLI for frameworks that support it.
+      // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
+      if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
+        command.args.push('--', '--port', String(this._port));
+      } else if (projectInfo.type === 'nextjs') {
+        command.args.push('--', '-p', String(this._port));
+      }
+      // CRA reads PORT env var — no CLI flag needed
 
       // Spawn process
       // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
