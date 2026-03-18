@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { memo, useState } from 'react';
 import { NotificationBell } from '@/components/notifications';
 import { ShareProjectModal } from '@/components/ShareProjectModal';
@@ -21,7 +22,7 @@ export const HeaderSection = memo(function HeaderSection({
   return (
     <>
       <div
-        data-testid="HeaderSection"
+        data-testid={TID.inspector.sectionHeader('header')}
         className="h-12 px-3 flex items-center justify-between border-b border-border sticky top-0 bg-background z-10"
       >
         <div className="flex items-center gap-3">

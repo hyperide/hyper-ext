@@ -91,7 +91,10 @@ export function ToolCallCard({ toolCall, onViewResult }: ToolCallCardProps) {
     : null;
 
   return (
-    <div className="border border-amber-500/20 bg-amber-500/5 rounded p-2 my-1 text-xs">
+    <div
+      data-testid={`hyper-aichat-tool-${toolCall.name}`}
+      className="border border-amber-500/20 bg-amber-500/5 rounded p-2 my-1 text-xs"
+    >
       {/* Tool name header — clickable to expand input */}
       <button
         type="button"

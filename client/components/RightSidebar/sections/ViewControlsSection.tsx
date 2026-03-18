@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconDeviceDesktop } from '@tabler/icons-react';
 import cn from 'clsx';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -83,7 +84,7 @@ export const ViewControlsSection = memo(function ViewControlsSection({
 
   return (
     <div
-      data-testid="ViewControlsSection"
+      data-testid={TID.inspector.sectionHeader('view-controls')}
       className="px-4 py-3 flex items-center justify-between border-b border-border"
     >
       <div className="relative" data-size-dropdown>

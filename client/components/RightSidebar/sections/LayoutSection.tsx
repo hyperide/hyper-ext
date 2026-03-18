@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import {
   IconAdjustmentsHorizontal,
   IconAspectRatio,
@@ -291,7 +292,10 @@ export const LayoutSection = memo(function LayoutSection({
   }, [clipContent, onClipContentChange, syncStyleChange]);
 
   return (
-    <div data-testid="LayoutSection" className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden">
+    <div
+      data-testid={TID.inspector.sectionHeader('layout')}
+      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+    >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">
           {selectedLayout === 'col' || selectedLayout === 'row' ? 'Auto layout' : 'Layout'}

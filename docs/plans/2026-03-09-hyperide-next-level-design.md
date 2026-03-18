@@ -136,17 +136,20 @@ direct editing (no AI needed there — cascade is explicit).
 ### 6. Board Mode + Component States
 
 **Auto-detect props -> variant grid:**
+
 - Scan component props via TypeScript AST
 - For enum/union props (`size: 'sm' | 'md' | 'lg'`) generate combinations
 - Each combination = separate card on board
 - Boolean props (`disabled`, `loading`) = toggle on card
 
 **Interactive pseudo-states:**
+
 - Toolbar above selected element: `hover` / `focus` / `active` / `disabled` buttons
 - Click -> force pseudo-state via CSS injection or CDP force state
 - Instant result, no board switch needed
 
 **AI smart states:**
+
 - AI analyzes component, suggests edge cases:
   - Long text (overflow)
   - Empty list / no data
@@ -157,6 +160,7 @@ direct editing (no AI needed there — cascade is explicit).
 - Appear on board as suggestions (gray cards -> click "add")
 
 **Board layout:**
+
 - Free canvas (Excalidraw-style, zoom/pan) — already exists
 - AI arranges cards nicely on generation (Masonry/Grid-like)
 - User can reposition freely after
@@ -164,6 +168,7 @@ direct editing (no AI needed there — cascade is explicit).
 ### 7. AI Integration
 
 **Chat -> Component (prompt-to-component):**
+
 - In AI Chat panel: describe component in natural language
 - AI generates using project's design system (shadcn, MUI, whatever is detected)
 - Component appears in preview, immediately editable
@@ -171,12 +176,14 @@ direct editing (no AI needed there — cascade is explicit).
 - Screenshot-to-component: paste screenshot -> Claude Vision API -> React component
 
 **Selection-based AI:**
+
 - Select element -> context menu or chat: "make wider", "add hover effect"
 - AI sees: selected element, styles, context (parent, siblings), full component
 - Result applied via same AST operations (undo works)
 - Mostly already implemented, enhance
 
 **Suggest mode:**
+
 - AI background analysis, proposes improvements:
   - "Text contrast `#777` on `#fff` = 4.48:1, fails WCAG AA" -> fix proposal
   - "Inconsistent spacing: `gap-3` next to `gap-4`" -> unify proposal
@@ -202,12 +209,14 @@ direct editing (no AI needed there — cascade is explicit).
 ## Phases
 
 ### Phase 1 — Visual Foundation
+
 - Multi-select + batch edit
 - Drag reorder (flex/grid children + swap any 2+)
 - Resize handles (only if w/h set)
 - FastPatchService (universal two-phase update)
 
 ### Phase 2 — All CSS Frameworks
+
 - TW4 adapter
 - Emotion adapter (covers MUI, Chakra)
 - styled-components adapter
@@ -218,12 +227,14 @@ direct editing (no AI needed there — cascade is explicit).
 - Tamagui adapter — already exists, enhance
 
 ### Phase 3 — Board Mode + States
+
 - Auto-detect props -> variant grid
 - Interactive pseudo-states (hover/focus/active)
 - AI smart states (edge cases)
 - AI card layout on canvas
 
 ### Phase 4 — AI Integration
+
 - Prompt-to-component in AI Chat
 - Screenshot-to-component (Claude Vision)
 - Figma MCP import
@@ -231,12 +242,14 @@ direct editing (no AI needed there — cascade is explicit).
 - Suggest mode (accessibility, consistency)
 
 ### Phase 5 — Bret Victor
+
 - Inline scrubbers in code
 - Color picker inline
 - Size/spacing scrubbers
 - Custom overlay webview
 
 ### Phase 6 — Beyond React
+
 - Svelte support
 - Vue support
 - Solid support
@@ -246,10 +259,12 @@ direct editing (no AI needed there — cascade is explicit).
 ## Competitive Research
 
 Full research reports available at:
+
 - `/tmp/hyperide.github.io/reports/ai-design-tools-research-2026.md`
 - Agent research output on visual editors (Utopia, Onlook, Piny, Plasmic, etc.)
 
 ### Key Market Stats
+
 - Tailwind CSS: 31M+ weekly downloads, dominates
 - MUI: 97K+ GitHub stars, 4.5M+ weekly downloads
 - Designer AI adoption: only 31% (vs 59% developers)

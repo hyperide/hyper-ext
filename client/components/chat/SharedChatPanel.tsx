@@ -8,6 +8,7 @@
  * - onStreamEvent (prop) — SaaS dispatches canvas events
  */
 
+import { TID } from '@shared/data-testid-map';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatAdapter, ChatSession, ChatStreamEvent, DisplayMessage } from '../../../shared/ai-chat-display';
 import { useAutoScroll, useChatHistory, useChatInput, useChatStream } from '../../hooks/chat';
@@ -233,7 +234,7 @@ export function SharedChatPanel({
   });
 
   return (
-    <div data-testid="SharedChatPanel" className="flex h-full">
+    <div data-testid={TID.aiChat.root} className="flex h-full">
       {sidebarNode}
       <div className="flex flex-col flex-1 min-w-0">
         <ChatHeader

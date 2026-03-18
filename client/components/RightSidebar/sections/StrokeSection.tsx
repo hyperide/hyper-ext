@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';
 import type { StrokeItem } from '../types';
@@ -42,7 +43,7 @@ export const StrokeSection = memo(function StrokeSection({
   if (strokes.length === 0) {
     return (
       <div
-        data-testid="StrokeSection"
+        data-testid={TID.inspector.sectionHeader('stroke')}
         className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
       >
         <div className="flex items-center justify-between">

@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
@@ -195,7 +196,7 @@ export default function LeftSidebar({
 
   return (
     <div
-      data-testid="LeftSidebar"
+      data-testid={TID.explorer.root}
       className={cn('h-full border-r border-border bg-background flex flex-col whitespace-nowrap relative z-20', {
         'select-none': isShiftPressed,
       })}

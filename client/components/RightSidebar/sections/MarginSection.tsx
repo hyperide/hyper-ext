@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconBorderSides } from '@tabler/icons-react';
 import { memo } from 'react';
 import {
@@ -118,7 +119,10 @@ export const MarginSection = memo(function MarginSection({
   };
 
   return (
-    <div data-testid="MarginSection" className="px-4 pb-3 max-w-sidebar-section overflow-hidden">
+    <div
+      data-testid={TID.inspector.sectionHeader('margin')}
+      className="px-4 pb-3 max-w-sidebar-section overflow-hidden"
+    >
       <span className="text-xs text-foreground mb-2 block">Margin</span>
       <div className="flex items-start gap-2 mb-2">
         <div className="grid grid-cols-2 gap-2 flex-1">
@@ -185,6 +189,7 @@ export const MarginSection = memo(function MarginSection({
         </div>
         <button
           type="button"
+          data-testid={TID.inspector.spacingLink('margin')}
           onClick={onMarginLinkedToggle}
           className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
             marginLinked ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'

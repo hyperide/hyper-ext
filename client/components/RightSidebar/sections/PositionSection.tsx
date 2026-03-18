@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { memo, useCallback } from 'react';
 import IconPositionBottom from '../../icons/IconPositionBottom';
 import IconPositionLeft from '../../icons/IconPositionLeft';
@@ -41,13 +42,17 @@ export const PositionSection = memo(function PositionSection({
   );
 
   return (
-    <div data-testid="PositionSection" className="px-4 py-3 max-w-sidebar-section overflow-hidden">
+    <div
+      data-testid={TID.inspector.sectionHeader('position')}
+      className="px-4 py-3 max-w-sidebar-section overflow-hidden"
+    >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">Position</span>
       </div>
       <div className="flex items-center mb-2 whitespace-nowrap">
         <button
           type="button"
+          data-testid={TID.inspector.positionInput('static')}
           onClick={() => onPositionChange('static')}
           className={`flex-[1.4] h-6 px-2 text-xs rounded-l flex items-center justify-center ${
             selectedPosition === 'static' ? 'bg-background border border-border font-medium' : 'bg-muted'
@@ -57,6 +62,7 @@ export const PositionSection = memo(function PositionSection({
         </button>
         <button
           type="button"
+          data-testid={TID.inspector.positionInput('rel')}
           onClick={() => onPositionChange('rel')}
           className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
             selectedPosition === 'rel' ? 'bg-background border border-border font-medium' : 'bg-muted'
@@ -66,6 +72,7 @@ export const PositionSection = memo(function PositionSection({
         </button>
         <button
           type="button"
+          data-testid={TID.inspector.positionInput('abs')}
           onClick={() => onPositionChange('abs')}
           className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
             selectedPosition === 'abs' ? 'bg-background border border-border font-medium' : 'bg-muted'
@@ -75,6 +82,7 @@ export const PositionSection = memo(function PositionSection({
         </button>
         <button
           type="button"
+          data-testid={TID.inspector.positionInput('fixed')}
           onClick={() => onPositionChange('fixed')}
           className={`flex-1 h-6 px-2 text-xs flex items-center justify-center ${
             projectUIKit === 'tamagui' ? 'rounded-r' : ''

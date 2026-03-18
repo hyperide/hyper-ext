@@ -16,6 +16,7 @@ import {
   useEngineMode,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
+import { TID } from '../shared/data-testid-map';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -78,6 +79,7 @@ function PreviewContent() {
       <div style={wrapperStyle}>
         <iframe
           ref={iframeCallbackRef}
+          data-testid={TID.preview.iframe}
           title="Component Preview"
           style={{
             ...iframeStyle,
@@ -113,7 +115,7 @@ function StartDevServerScreen({ onStart }: { onStart: () => void }) {
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
-      <button type="button" style={buttonStyle} onClick={onStart}>
+      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
     </div>
@@ -180,6 +182,7 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
           <button
             type="button"
             key={mode}
+            data-testid={TID.preview.toolbarMode(mode)}
             onClick={() => handleModeChange(mode)}
             disabled={isDisabled}
             className={cn(

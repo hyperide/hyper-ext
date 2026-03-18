@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import cn from 'clsx';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -54,7 +55,7 @@ export const StateSelectorSection = memo(function StateSelectorSection({
 
   return (
     <div
-      data-testid="StateSelectorSection"
+      data-testid={TID.inspector.sectionHeader('state-selector')}
       className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden"
     >
       <div className="relative flex items-center">

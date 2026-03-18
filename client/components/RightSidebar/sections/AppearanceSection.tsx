@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconBorderCorners, IconDragDrop2, IconEye } from '@tabler/icons-react';
 import cn from 'clsx';
 import { memo, useCallback, useState } from 'react';
@@ -87,7 +88,7 @@ export const AppearanceSection = memo(function AppearanceSection({
 
   return (
     <div
-      data-testid="AppearanceSection"
+      data-testid={TID.inspector.sectionHeader('appearance')}
       className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
