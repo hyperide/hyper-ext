@@ -550,7 +550,13 @@ export class AIBridge {
   }
 
   private async _getApiKey(): Promise<string | undefined> {
-    return this._context.secrets.get('hypercanvas.ai.apiKey');
+    // Primary: VS Code secrets (secure keychain storage)
+    const secretKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
+    if (secretKey) return secretKey;
+
+    // Fallback: settings (for E2E testing with mock AI server)
+    const settingsKey = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('apiKey');
+    return settingsKey || undefined;
   }
 
   /**
