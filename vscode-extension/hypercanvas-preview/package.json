@@ -24,7 +24,7 @@
   ],
   "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.99.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "Other",
@@ -47,7 +47,9 @@
           "id": "hypercanvas-explorer",
           "title": "HyperIDE",
           "icon": "media/preview.svg"
-        },
+        }
+      ],
+      "secondarySidebar": [
         {
           "id": "hypercanvas-inspector",
           "title": "HyperIDE",
