@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconPlus, IconTrash } from '@tabler/icons-react';
 import cn from 'clsx';
 import type { ReactNode } from 'react';
@@ -53,9 +54,10 @@ export function ChatHeader({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64 max-h-72 overflow-auto">
-            {chats.map((chat) => (
+            {chats.map((chat, index) => (
               <DropdownMenuItem
                 key={chat.id}
+                data-testid={TID.aiChat.chatHistoryItem(index)}
                 className={cn('flex items-center justify-between gap-2', chat.id === currentChatId && 'bg-accent')}
                 onSelect={() => {
                   if (!isStreaming) onSelectChat(chat.id);
@@ -75,7 +77,7 @@ export function ChatHeader({
               </DropdownMenuItem>
             ))}
             {chats.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onSelect={onNewChat} disabled={isStreaming}>
+            <DropdownMenuItem data-testid={TID.aiChat.newChatButton} onSelect={onNewChat} disabled={isStreaming}>
               <IconPlus size={12} className="mr-1.5" />
               <span className="text-xs">New Chat</span>
             </DropdownMenuItem>
