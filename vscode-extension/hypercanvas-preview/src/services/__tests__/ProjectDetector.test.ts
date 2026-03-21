@@ -61,7 +61,7 @@ describe('getDefaultPort (pure)', () => {
   it('vite → 5173', () => expect(getDefaultPort('vite')).toBe(5173));
   it('nextjs → 3000', () => expect(getDefaultPort('nextjs')).toBe(3000));
   it('cra → 3000', () => expect(getDefaultPort('cra')).toBe(3000));
-  it('remix → 3000', () => expect(getDefaultPort('remix')).toBe(3000));
+  it('remix → 5173', () => expect(getDefaultPort('remix')).toBe(5173));
   it('unknown → 3000', () => expect(getDefaultPort('unknown')).toBe(3000));
 });
 

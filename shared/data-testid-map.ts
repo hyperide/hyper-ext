@@ -4,6 +4,7 @@ export const TID = {
     iframe: 'hyper-preview-iframe',
     startServerButton: 'hyper-preview-start-server',
     toolbarMode: (mode: string) => `hyper-preview-mode-${mode}`,
+    toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',
     contextMenuItem: (action: string) => `hyper-preview-context-${action}`,
   },

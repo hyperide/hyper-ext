@@ -23,9 +23,17 @@ export class PreviewProxy {
   private _server: http.Server | null = null;
   private _proxyPort: number | null = null;
   private _targetPort: number;
+  private _isIsolatedMode = false;
+  private _projectRoot: string | undefined;
+  private _viteBase: string | undefined;
 
-  constructor(targetPort: number) {
+  get isIsolatedMode(): boolean {
+    return this._isIsolatedMode;
+  }
+
+  constructor(targetPort: number, projectRoot?: string) {
     this._targetPort = targetPort;
+    this._projectRoot = projectRoot;
   }
 
   get url(): string | null {
@@ -36,11 +44,30 @@ export class PreviewProxy {
     return this._proxyPort;
   }
 
+  /** Switch between App Shell and Isolated mode. Called by PreviewModeManager. */
+  setIsolatedMode(isolated: boolean): void {
+    this._isIsolatedMode = isolated;
+  }
+
+  /** Read vite.config.ts base path (cached on startup, empty string if not found) */
+  private async _readViteBase(): Promise<string> {
+    if (!this._projectRoot) return '';
+    try {
+      const configPath = path.join(this._projectRoot, 'vite.config.ts');
+      const content = await fs.promises.readFile(configPath, 'utf-8');
+      const match = content.match(/base\s*:\s*['"]([^'"]+)['"]/);
+      return match?.[1] ?? '';
+    } catch {
+      return '';
+    }
+  }
+
   /**
    * Start the proxy server on a random available port
    */
   async start(): Promise<void> {
     if (this._server) return;
+    this._viteBase = await this._readViteBase();
 
     this._server = http.createServer((req, res) => {
       this._handleHttp(req, res);
@@ -79,19 +106,10 @@ export class PreviewProxy {
 
   /**
    * Handle HTTP requests: proxy to target, inject script into HTML.
-   * Rewrites /test-preview to / so file-based routing frameworks (Next.js, Remix)
-   * serve their root page instead of returning 404.
+   * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
    */
-  private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
-    // Rewrite /test-preview path to / — file-based routing frameworks (Next.js, Remix)
-    // don't have a /test-preview route. SPA frameworks work with / too (same index.html).
-    let proxyPath = clientReq.url || '/';
-    if (proxyPath.startsWith('/test-preview')) {
-      proxyPath = `/${proxyPath.slice('/test-preview'.length)}`;
-      // Normalize double slashes: '/test-preview/' → '/' not '//'
-      if (proxyPath.startsWith('//')) proxyPath = proxyPath.slice(1);
-      if (proxyPath === '') proxyPath = '/';
-    }
+  private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
+    const proxyPath = clientReq.url || '/';
 
     const options: http.RequestOptions = {
       hostname: 'localhost',
@@ -107,6 +125,17 @@ export class PreviewProxy {
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
+      // Retry for /test-preview 404/503 — handles dev server FSWatch lag after route file creation
+      if (
+        (proxyRes.statusCode === 404 || proxyRes.statusCode === 503) &&
+        proxyPath.startsWith('/test-preview') &&
+        retryCount < 5
+      ) {
+        proxyRes.resume(); // drain response
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
+        return;
+      }
+
       const contentType = proxyRes.headers['content-type'] || '';
       const isHtml = contentType.includes('text/html');
 
@@ -125,6 +154,41 @@ export class PreviewProxy {
           } else {
             // No <head> found, prepend scripts
             html = injectedScripts + html;
+          }
+
+          // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
+          if (this._isIsolatedMode && proxyPath.startsWith('/test-preview')) {
+            const base = this._viteBase ?? '';
+            const scriptRegex = /<script\s+type="module"\s+src="([^"]+)"\s*>/g;
+            let userScript: string | null = null;
+            for (const match of html.matchAll(scriptRegex)) {
+              const src = match[1];
+              if (!src.startsWith('/@') && !src.startsWith('https://') && !src.startsWith(`${base}@`)) {
+                userScript = src;
+                break;
+              }
+            }
+            if (userScript) {
+              html = html.replace(`src="${userScript}"`, 'src="/src/__canvas_preview_standalone__.tsx"');
+              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → /src/__canvas_preview_standalone__.tsx`); // nosemgrep: unsafe-formatstring
+            } else {
+              console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
+            }
+          }
+
+          // Inject chrome-detection script for /test-preview requests (App Shell mode)
+          if (proxyPath.startsWith('/test-preview')) {
+            const chromeDetectScript = `<script>
+  (function() {
+    window.addEventListener('load', function() {
+      var hasChrome = document.querySelector('nav, header, aside') !== null;
+      if (hasChrome) {
+        window.parent.postMessage({ type: 'chrome-detected' }, '*');
+      }
+    }, { once: true });
+  })();
+</script>`;
+            html = html.replace('</head>', `${chromeDetectScript}</head>`);
           }
 
           // Update content-length

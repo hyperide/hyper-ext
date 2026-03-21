@@ -167,6 +167,36 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   return `${lines.join('\n')}\n`;
 }
 
+/**
+ * Generate __canvas_preview__.tsx as a standalone entry (Isolated mode).
+ * Includes createRoot and imports PreviewWrapper from .hyperide/preview.tsx.
+ *
+ * @hyperide-managed — generated file, do not edit
+ */
+export function generateStandaloneEntry(
+  entries: PreviewComponentEntry[],
+  wrapperImportPath: string,
+  options?: GeneratePreviewOptions,
+): string {
+  const baseContent = generatePreviewContent(entries, options);
+
+  const bootstrap = `
+// @hyperide-managed
+import { createRoot } from 'react-dom/client';
+import { PreviewWrapper } from '${wrapperImportPath}';
+
+const root = document.getElementById('root');
+if (root) {
+  createRoot(root).render(
+    <PreviewWrapper>
+      <CanvasPreview />
+    </PreviewWrapper>
+  );
+}
+`;
+  return baseContent + bootstrap;
+}
+
 function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
 

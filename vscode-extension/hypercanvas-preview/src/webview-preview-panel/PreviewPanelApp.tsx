@@ -5,7 +5,7 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
-import { IconBrush, IconLayoutGrid, IconPointer } from '@tabler/icons-react';
+import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
@@ -14,6 +14,7 @@ import {
   createSharedDispatch,
   useCanvasMode,
   useEngineMode,
+  useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
 import { TID } from '../shared/data-testid-map';
@@ -49,12 +50,11 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, devServerUrl, disconnected, previewUrl, showNoComponentHint, handleStartDevServer } =
-    usePreviewBridge({
-      iframeEl,
-      canvas,
-      onStateUpdate: updateState,
-    });
+  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
+    iframeEl,
+    canvas,
+    onStateUpdate: updateState,
+  });
 
   const handleIframeLoad = useCallback(() => {
     canvas.sendEvent({ type: 'previewLoaded' });
@@ -100,8 +100,6 @@ function PreviewContent() {
       </div>
 
       {showNoComponentHint && <NoComponentHint />}
-
-      <DevServerStatusBadge running={devServerRunning} url={devServerUrl} />
 
       <ModeToolbar canvas={canvas} />
 
@@ -152,26 +150,6 @@ function ReconnectingBanner() {
 }
 
 // ============================================================================
-// Dev Server Status Badge (floating top-right of preview)
-// ============================================================================
-
-function DevServerStatusBadge({ running, url }: { running: boolean; url: string | null }) {
-  const label = running ? 'Running' : 'Stopped';
-  return (
-    <div data-testid={TID.devServer.statusBadge} style={statusBadgeStyle}>
-      <span
-        style={{
-          ...statusDotStyle,
-          backgroundColor: running ? '#22c55e' : '#94a3b8',
-        }}
-      />
-      <span>{label}</span>
-      {running && url && <span style={statusUrlStyle}>{url.replace(/^https?:\/\//, '')}</span>}
-    </div>
-  );
-}
-
-// ============================================================================
 // Mode Toolbar (floating at bottom of preview, matching SaaS Toolbar)
 // ============================================================================
 
@@ -191,6 +169,8 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
   const engineMode = useEngineMode();
   const canvasMode = useCanvasMode();
   const dispatch = useMemo(() => createSharedDispatch(canvas), [canvas]);
+  const previewScope = useSharedEditorState((s) => s.previewScope ?? 'full-app');
+  const isIsolated = previewScope === 'component-only';
 
   const isBoardMode = canvasMode === 'multi';
   const activeMode: ToolbarMode = isBoardMode ? 'board' : (engineMode as ToolbarMode);
@@ -212,6 +192,13 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
     },
     [dispatch],
   );
+
+  const handleScopeToggle = useCallback(() => {
+    canvas.sendEvent({
+      type: 'preview:setScope',
+      scope: isIsolated ? 'full-app' : 'component-only',
+    });
+  }, [canvas, isIsolated]);
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-popover rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
@@ -236,6 +223,25 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
           </button>
         );
       })}
+      <div className="w-px h-6 bg-border mx-1" />
+      <button
+        type="button"
+        data-testid={TID.preview.toolbarScope}
+        title={
+          isIsolated
+            ? 'Isolated — component only (click for In app)'
+            : 'In app — component in full app context (click for Isolated)'
+        }
+        onClick={handleScopeToggle}
+        className={cn(
+          'flex items-center gap-1 h-8 px-2 rounded-md text-xs transition-colors',
+          isIsolated && 'bg-primary text-primary-foreground',
+          !isIsolated && 'hover:bg-accent text-muted-foreground hover:text-foreground',
+        )}
+      >
+        <IconLayoutSidebar className="w-4 h-4" stroke={1.5} />
+        {isIsolated ? 'Isolated' : 'In app'}
+      </button>
     </div>
   );
 }
@@ -319,34 +325,4 @@ const reconnectingBannerStyle: React.CSSProperties = {
   fontFamily: 'var(--vscode-font-family)',
   textAlign: 'center',
   zIndex: 1001,
-};
-
-const statusBadgeStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 8,
-  right: 8,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '4px 10px',
-  borderRadius: 12,
-  background: 'var(--vscode-badge-background, #333)',
-  color: 'var(--vscode-badge-foreground, #fff)',
-  fontSize: 11,
-  fontFamily: 'var(--vscode-font-family)',
-  zIndex: 1000,
-  pointerEvents: 'none',
-  opacity: 0.85,
-};
-
-const statusDotStyle: React.CSSProperties = {
-  width: 6,
-  height: 6,
-  borderRadius: '50%',
-  flexShrink: 0,
-};
-
-const statusUrlStyle: React.CSSProperties = {
-  opacity: 0.7,
-  marginLeft: 2,
 };

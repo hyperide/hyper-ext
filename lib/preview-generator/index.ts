@@ -2,6 +2,7 @@ export {
   deriveUniquePrefix,
   type GeneratePreviewOptions,
   generatePreviewContent,
+  generateStandaloneEntry,
   type PreviewComponentEntry,
   sampleExportToKey,
 } from './generator';
@@ -12,6 +13,12 @@ export {
   PreviewGenerationError,
   parseExistingPreview,
 } from './preview-file-manager';
+export {
+  type PreviewMode,
+  PreviewModeManager,
+  type PreviewModeManagerOptions,
+  type WatcherFactory,
+} from './preview-mode-manager';
 export {
   type EnsureSampleConfig,
   type EnsureSampleResult,

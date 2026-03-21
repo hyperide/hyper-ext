@@ -9,11 +9,6 @@ import type { RuntimeError } from '../../shared/runtime-error';
 // Canvas composition loaded from server only (no localStorage cache)
 import type { CanvasComposition, CanvasMode } from '../../shared/types/canvas';
 
-// Module-level cache for registered preview components
-// Clears automatically on page reload (browser refresh)
-// Prevents redundant /api/generate-preview calls for already-registered components
-const registeredComponentsCache = new Map<string, Set<string>>();
-
 interface IframeCanvasProps {
   componentPath: string;
   iframeLoadedCounter?: number;
@@ -265,56 +260,14 @@ export default function IframeCanvas({
     return () => window.removeEventListener('canvasCompositionChanged', handleCanvasChanged);
   }, [meta?.projectId, componentPath, onCanvasModeChange]);
 
-  // Auto-register component in __canvas_preview__.tsx before loading iframe
-  // Uses module-level cache to avoid redundant API calls for same component
+  // __canvas_preview__.tsx is pre-populated at init time with all project components
+  // (via PreviewFileManager init-time full scan). No registration API call needed.
   useEffect(() => {
     if (!meta?.projectId || !componentPath) {
       setPreviewReady(false);
       return;
     }
-
-    // Check cache first - skip HTTP request if already registered
-    const projectCache = registeredComponentsCache.get(meta.projectId);
-    if (projectCache?.has(componentPath)) {
-      console.log('[IframeCanvas] Component already registered (cached):', componentPath);
-      setPreviewReady(true);
-      return;
-    }
-
-    setLoading(true);
-    setPreviewReady(false);
-    setError(null);
-
-    // Call API to ensure component is registered in __canvas_preview__.tsx
-    authFetch('/api/generate-preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId: meta.projectId,
-        components: [componentPath],
-      }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to register component');
-        }
-        return response.json();
-      })
-      .then(() => {
-        console.log('[IframeCanvas] Component registered:', componentPath);
-        // Update cache after successful registration
-        if (!registeredComponentsCache.has(meta.projectId)) {
-          registeredComponentsCache.set(meta.projectId, new Set());
-        }
-        registeredComponentsCache.get(meta.projectId)?.add(componentPath);
-        setPreviewReady(true);
-      })
-      .catch((err) => {
-        console.error('[IframeCanvas] Failed to register component:', err);
-        setError(`Failed to register component: ${err.message}`);
-        setLoading(false);
-      });
+    setPreviewReady(true);
   }, [meta?.projectId, componentPath]);
 
   // Inject styles on iframe load + check for gateway errors
