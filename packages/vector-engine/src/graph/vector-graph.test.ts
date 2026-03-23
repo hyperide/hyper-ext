@@ -158,6 +158,18 @@ describe('VectorGraphModel', () => {
     });
   });
 
+  it('should allow parallel edges between same nodes on different ports', () => {
+    const a = graph.addNode({ type: 'generator', params: {} });
+    const b = graph.addNode({ type: 'consumer', params: {} });
+
+    const e1 = graph.addEdge(a, 'path', b, 'path');
+    const e2 = graph.addEdge(a, 'transform', b, 'transform');
+
+    expect(e1).toBeTruthy();
+    expect(e2).toBeTruthy();
+    expect(graph.edgeCount).toBe(2);
+  });
+
   describe('fromJSON', () => {
     it('should throw when loaded JSON contains a cycle', () => {
       // Build a valid graph and get its JSON, then manually inject a back-edge

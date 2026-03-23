@@ -59,7 +59,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
       if (msg.type === 'component:open') {
         const { name, path } = message as { name: string; path: string };
-        this._stateHub.applyUpdate({ currentComponent: { name, path } });
+        this._stateHub.applyUpdate('inspector', { currentComponent: { name, path } });
         return;
       }
 
@@ -68,7 +68,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      await this._panelRouter.routeMessage(message, webviewView.webview);
+      await this._panelRouter.routeMessage(RightPanelProvider.viewType, message, webviewView.webview);
     });
 
     webviewView.onDidDispose(() => {

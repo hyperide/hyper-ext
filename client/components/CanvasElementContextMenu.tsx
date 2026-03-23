@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -88,7 +87,6 @@ export function CanvasElementContextMenu({
   // ========================================================================
   // Setup iframe context menu handler (SaaS only — needs engine)
   // ========================================================================
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!engine) return;
 
@@ -711,11 +709,7 @@ export function CanvasElementContextMenu({
                   return (
                     <>
                       {matchesFilter('go to code') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handleGoToCode)}
-                          disabled={isDisabled}
-                          data-testid={TID.preview.contextMenuItem('go-to-code')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handleGoToCode)} disabled={isDisabled}>
                           Go to Code <span className="ml-auto text-xs text-muted-foreground">⌘⇧C</span>
                         </MenuItem>
                       )}
@@ -723,46 +717,27 @@ export function CanvasElementContextMenu({
                       {matchesFilter('go to code') && <MenuSeparator />}
 
                       {matchesFilter('copy') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handleCopy)}
-                          disabled={isDisabled}
-                          data-testid={TID.preview.contextMenuItem('copy')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handleCopy)} disabled={isDisabled}>
                           Copy <span className="ml-auto text-xs text-muted-foreground">⌘C</span>
                         </MenuItem>
                       )}
                       {!isReadonly && matchesFilter('paste') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handlePaste)}
-                          data-testid={TID.preview.contextMenuItem('paste')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handlePaste)}>
                           Paste <span className="ml-auto text-xs text-muted-foreground">⌘V</span>
                         </MenuItem>
                       )}
                       {!isReadonly && matchesFilter('duplicate') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handleDuplicate)}
-                          disabled={isDisabled}
-                          data-testid={TID.preview.contextMenuItem('duplicate')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handleDuplicate)} disabled={isDisabled}>
                           Duplicate <span className="ml-auto text-xs text-muted-foreground">⌘D</span>
                         </MenuItem>
                       )}
                       {!isReadonly && matchesFilter('cut') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handleCut)}
-                          disabled={isDisabled}
-                          data-testid={TID.preview.contextMenuItem('cut')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handleCut)} disabled={isDisabled}>
                           Cut <span className="ml-auto text-xs text-muted-foreground">⌘X</span>
                         </MenuItem>
                       )}
                       {!isReadonly && matchesFilter('delete') && (
-                        <MenuItem
-                          onClick={() => handleMenuItemClick(handleDelete)}
-                          disabled={isDisabled}
-                          data-testid={TID.preview.contextMenuItem('delete')}
-                        >
+                        <MenuItem onClick={() => handleMenuItemClick(handleDelete)} disabled={isDisabled}>
                           Delete <span className="ml-auto text-xs text-muted-foreground">Del</span>
                         </MenuItem>
                       )}
@@ -851,7 +826,6 @@ const Menu = React.forwardRef<HTMLDivElement, { children: React.ReactNode; style
         }}
         role="menu"
         data-role="context-menu"
-        data-testid={TID.preview.contextMenu}
         className="fixed z-[1100] min-w-[256px] rounded-md border border-border bg-popover p-1 shadow-md"
         style={adjustedStyle}
       >
@@ -870,18 +844,15 @@ function MenuItem({
   children,
   onClick,
   disabled = false,
-  'data-testid': testId,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  'data-testid'?: string;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
-      data-testid={testId}
       className={cn(
         'w-full px-2 py-1.5 text-sm text-left rounded flex items-center',
         disabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'hover:bg-muted text-foreground cursor-pointer',

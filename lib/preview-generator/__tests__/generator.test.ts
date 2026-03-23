@@ -3,7 +3,6 @@ import { parse } from '@babel/parser';
 import {
   deriveUniquePrefix,
   generatePreviewContent,
-  generateStandaloneEntry,
   type PreviewComponentEntry,
   sampleExportToKey,
 } from '../generator';
@@ -257,18 +256,6 @@ describe('generatePreviewContent', () => {
     expect(content).toContain("'default': ButtonSampleDefault,");
     expect(content).toContain("'primary': ButtonSamplePrimary,");
     expect(content).toContain("'disabled': ButtonSampleDisabled,");
-  });
-});
-
-describe('generateStandaloneEntry', () => {
-  it('generates standalone entry with createRoot and PreviewWrapper', () => {
-    const content = generateStandaloneEntry([makeEntry('src/Button.tsx', 'Button')], '../.hyperide/preview');
-    expect(content).toContain('createRoot');
-    expect(content).toContain('PreviewWrapper');
-    expect(content).toContain('@hyperide-managed');
-    expect(content).toContain('componentRegistry');
-    expect(content).toContain("document.getElementById('root')");
-    expect(content).toContain('<CanvasPreview />');
   });
 });
 

@@ -158,7 +158,6 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is an intentional trigger to force style re-read after external changes
   useEffect(() => {
     if (!elementId) {
       setData(EMPTY_DATA);

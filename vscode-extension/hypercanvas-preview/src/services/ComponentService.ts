@@ -98,16 +98,11 @@ export class ComponentService {
   /**
    * Scan workspace for grouped components using ComponentScanner.
    * Returns directory-based groups (atoms, composites, pages) with filename-based names.
-   *
-   * Strategy:
-   * 1. Check cached structure in store
-   * 2. Try AI analysis if configured
-   * 3. Fall back to heuristic detection (always works for standard React projects)
-   *
-   * AI is only needed for ambiguous/non-standard project layouts.
    */
   async scanComponentGroups(): Promise<ScanResult> {
     const scanner = new ComponentScanner(this._structureStore, async (root) => {
+      const tree = await getDirectoryTree(root);
+
       const config = vscode.workspace.getConfiguration('hypercanvas.ai');
       const apiKey = await this._getApiKey();
       const model = config.get<string>('model');
@@ -125,7 +120,6 @@ export class ComponentService {
 
         if (resolved) {
           try {
-            const tree = await getDirectoryTree(root);
             // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
             console.log(
               `[ComponentService] AI analysis: provider=${provider}, model=${model}, sdk=${resolved.provider}`,
@@ -140,20 +134,16 @@ export class ComponentService {
               (result.compositeComponentsPaths?.length ?? 0) +
               (result.pagesPaths?.length ?? 0);
             console.log(`[ComponentService] AI found ${n} component paths`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-            if (n > 0) return result;
-            console.warn('[ComponentService] AI returned empty paths, falling back to heuristic detection');
+            return result;
           } catch (error) {
-            console.error('[ComponentService] AI analysis failed, falling back to heuristic detection:', error);
+            console.error('[ComponentService] AI analysis failed:', error);
           }
         } else {
-          console.warn(`[ComponentService] Could not resolve provider "${provider}" config, using heuristic detection`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+          console.warn(`[ComponentService] Could not resolve provider "${provider}" config`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         }
-      } else {
-        console.log('[ComponentService] No AI config, using heuristic detection');
       }
 
-      // AI not available or failed — heuristic detection handles it
-      // (returning empty triggers detectProjectStructure in scanner.analyze)
+      // No AI config or AI failed — return empty structure, onboarding will handle it
       return {
         atomComponentsPaths: [],
         compositeComponentsPaths: [],
@@ -173,8 +163,14 @@ export class ComponentService {
       return { data };
     }
 
-    // Heuristic detection already ran inside scanner.analyze — if still empty,
-    // project genuinely has no detectable components
+    // Check if AI is configured
+    const hasApiKey = !!(await this._getApiKey());
+
+    if (!hasApiKey) {
+      return { data, needsSetup: true, setupReason: 'no-ai-config' };
+    }
+
+    // AI config present but scan empty — paths are wrong or project has no components
     return { data, needsSetup: true, setupReason: 'empty-scan' };
   }
 

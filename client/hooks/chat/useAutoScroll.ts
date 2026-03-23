@@ -14,7 +14,7 @@ export function useAutoScroll(dependencies: unknown[]) {
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [...dependencies]);
+  }, dependencies);
 
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return;

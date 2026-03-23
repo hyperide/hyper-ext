@@ -93,6 +93,159 @@ describe('GraphExecutor', () => {
     expect(result.scene.items).toHaveLength(1);
   });
 
+  it('should skip muted node when input/output types mismatch', () => {
+    // A node whose first input is 'path' but first output is 'style' — types don't match.
+    // When muted, it must NOT forward the path value to the style output port.
+    const typeChangerNode: NodeTypeDefinition = {
+      type: 'test-type-changer',
+      label: 'Type Changer',
+      category: 'utility',
+      inputs: [{ name: 'path', type: 'path' }],
+      outputs: [{ name: 'style', type: 'style' }],
+      params: [],
+      execute() {
+        return { style: { type: 'style', value: {} } };
+      },
+    };
+    registry.register(typeChangerNode);
+
+    // Terminal node whose ONLY path input comes via type-changer's 'style' output port.
+    // This tests whether the muted type-changer leaks a path value into the style slot:
+    // - Bug (no type check): type-changer puts path value in 'style' slot; this flows to
+    //   path-sink's 'path' input via the explicit wrong-typed edge → 1 scene item produced.
+    // - Fix (with type check): type-changer outputs nothing (type mismatch);
+    //   path-sink gets no path input → 0 scene items.
+    const pathSinkNode: NodeTypeDefinition = {
+      type: 'test-path-sink',
+      label: 'Path Sink',
+      category: 'utility',
+      inputs: [{ name: 'path', type: 'path' }],
+      outputs: [{ name: 'path', type: 'path' }],
+      params: [],
+      execute(inputs) {
+        return { path: inputs.path as NodeValue };
+      },
+    };
+    registry.register(pathSinkNode);
+
+    const n1 = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
+    const n2 = graph.addNode({ type: 'test-type-changer', params: {} });
+    const n3 = graph.addNode({ type: 'test-path-sink', params: {} });
+    graph.addEdge(n1, 'path', n2, 'path');
+    // Wrong-typed edge: 'style' → 'path' — only produces a scene item if n2 leaks path through style
+    graph.addEdge(n2, 'style', n3, 'path');
+    graph.setMuted(n2, true);
+
+    const result = executor.execute(graph);
+
+    // n2 is skipped
+    expect(result.nodeStatus[n2].state).toBe('skipped');
+    // n3 runs but has no valid path input (n2 produced nothing due to type mismatch)
+    expect(result.nodeStatus[n3].state).toBe('ok');
+    // No scene items: muted type-changer must not leak path value through style output port
+    expect(result.scene.items).toHaveLength(0);
+  });
+
+  it('should forward implicit ports (transform) through muted nodes', () => {
+    // A node with transform in both inputs and outputs (plus mismatched first ports
+    // to ensure we're testing implicit port forwarding, not first-port passthrough).
+    // When muted, transform must still be forwarded.
+    const transformPassNode: NodeTypeDefinition = {
+      type: 'test-transform-pass',
+      label: 'Transform Pass',
+      category: 'utility',
+      // First input is 'path', first output is 'style' — intentional type mismatch
+      // so we confirm the transform flows via IMPLICIT_PORTS, not first-port passthrough
+      inputs: [
+        { name: 'path', type: 'path' },
+        { name: 'transform', type: 'transform' },
+      ],
+      outputs: [
+        { name: 'style', type: 'style' },
+        { name: 'transform', type: 'transform' },
+      ],
+      params: [],
+      execute(inputs) {
+        const result: Record<string, NodeValue> = {
+          style: { type: 'style', value: {} },
+        };
+        if (inputs.transform) result.transform = inputs.transform as NodeValue;
+        return result;
+      },
+    };
+    registry.register(transformPassNode);
+
+    // Downstream node that reads transform and passes it through to its outputs
+    const transformConsumerNode: NodeTypeDefinition = {
+      type: 'test-transform-consumer',
+      label: 'Transform Consumer',
+      category: 'utility',
+      inputs: [
+        { name: 'path', type: 'path' },
+        { name: 'transform', type: 'transform' },
+      ],
+      outputs: [
+        { name: 'path', type: 'path' },
+        { name: 'transform', type: 'transform' },
+      ],
+      params: [],
+      execute(inputs) {
+        const result: Record<string, NodeValue> = { path: inputs.path as NodeValue };
+        if (inputs.transform) result.transform = inputs.transform as NodeValue;
+        return result;
+      },
+    };
+    registry.register(transformConsumerNode);
+
+    // transform-source produces a transform value
+    const transformSourceNode: NodeTypeDefinition = {
+      type: 'test-transform-source',
+      label: 'Transform Source',
+      category: 'transform',
+      inputs: [],
+      outputs: [{ name: 'transform', type: 'transform' }],
+      params: [],
+      execute() {
+        return {
+          transform: {
+            type: 'transform',
+            value: [2, 0, 0, 2, 0, 0] as [number, number, number, number, number, number],
+          },
+        };
+      },
+    };
+    registry.register(transformSourceNode);
+
+    // Graph: rect → transform-pass (muted); transform-source → transform-pass;
+    //        transform-pass → transform-consumer (via explicit style edge + rect path)
+    const nRect = graph.addNode({ type: 'test-rect', params: { width: 100, height: 50 } });
+    const nTransSrc = graph.addNode({ type: 'test-transform-source', params: {} });
+    const nPass = graph.addNode({ type: 'test-transform-pass', params: {} });
+    const nConsumer = graph.addNode({ type: 'test-transform-consumer', params: {} });
+
+    graph.addEdge(nRect, 'path', nPass, 'path');
+    graph.addEdge(nTransSrc, 'transform', nPass, 'transform');
+    graph.addEdge(nPass, 'transform', nConsumer, 'transform');
+    graph.addEdge(nRect, 'path', nConsumer, 'path');
+    graph.setMuted(nPass, true);
+
+    const result = executor.execute(graph);
+
+    // nPass is skipped
+    expect(result.nodeStatus[nPass].state).toBe('skipped');
+    // nConsumer must still execute
+    expect(result.nodeStatus[nConsumer].state).toBe('ok');
+    // The scene has 1 item from nConsumer — it received the path from nRect
+    expect(result.scene.items).toHaveLength(1);
+    // Verify transform was forwarded through the muted node by checking scene item transform
+    // The transform [2,0,0,2,0,0] from transform-source should reach the scene item
+    expect(result.scene.items[0]).toBeDefined();
+    const item = result.scene.items[0];
+    if (!('children' in item)) {
+      expect(item.transform).toEqual([2, 0, 0, 2, 0, 0]);
+    }
+  });
+
   it('should handle node execution errors gracefully', () => {
     const errorNode: NodeTypeDefinition = {
       type: 'test-error',

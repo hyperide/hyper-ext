@@ -5,7 +5,7 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
-import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
+import { IconBrush, IconLayoutGrid, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
@@ -14,10 +14,8 @@ import {
   createSharedDispatch,
   useCanvasMode,
   useEngineMode,
-  useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
-import { TID } from '../shared/data-testid-map';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -50,7 +48,7 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
+  const { devServerRunning, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
     iframeEl,
     canvas,
     onStateUpdate: updateState,
@@ -70,14 +68,9 @@ function PreviewContent() {
     [canvas],
   );
 
-  // Dev server not running — show start button (with reconnecting banner if was connected)
+  // Dev server not running — show start button
   if (!devServerRunning) {
-    return (
-      <>
-        {disconnected && <ReconnectingBanner />}
-        <StartDevServerScreen onStart={handleStartDevServer} />
-      </>
-    );
+    return <StartDevServerScreen onStart={handleStartDevServer} />;
   }
 
   return (
@@ -85,7 +78,6 @@ function PreviewContent() {
       <div style={wrapperStyle}>
         <iframe
           ref={iframeCallbackRef}
-          data-testid={TID.preview.iframe}
           title="Component Preview"
           style={{
             ...iframeStyle,
@@ -121,7 +113,7 @@ function StartDevServerScreen({ onStart }: { onStart: () => void }) {
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
-      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
+      <button type="button" style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
     </div>
@@ -133,18 +125,6 @@ function NoComponentHint() {
     <div style={{ ...centerScreenStyle, ...absoluteFillStyle }}>
       <h2 style={headingStyle}>No component selected</h2>
       <p style={subtextStyle}>Open a .tsx or .jsx file to preview it</p>
-    </div>
-  );
-}
-
-// ============================================================================
-// Reconnecting Banner (shown when dev server disconnects)
-// ============================================================================
-
-function ReconnectingBanner() {
-  return (
-    <div data-testid="hyper-preview-reconnecting" style={reconnectingBannerStyle}>
-      Dev server disconnected
     </div>
   );
 }
@@ -169,8 +149,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
   const engineMode = useEngineMode();
   const canvasMode = useCanvasMode();
   const dispatch = useMemo(() => createSharedDispatch(canvas), [canvas]);
-  const previewScope = useSharedEditorState((s) => s.previewScope ?? 'full-app');
-  const isIsolated = previewScope === 'component-only';
 
   const isBoardMode = canvasMode === 'multi';
   const activeMode: ToolbarMode = isBoardMode ? 'board' : (engineMode as ToolbarMode);
@@ -193,13 +171,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
     [dispatch],
   );
 
-  const handleScopeToggle = useCallback(() => {
-    canvas.sendEvent({
-      type: 'preview:setScope',
-      scope: isIsolated ? 'full-app' : 'component-only',
-    });
-  }, [canvas, isIsolated]);
-
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-popover rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
       {TOOLBAR_BUTTONS.map(({ mode, icon: Icon, boardOnly }) => {
@@ -209,7 +180,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
           <button
             type="button"
             key={mode}
-            data-testid={TID.preview.toolbarMode(mode)}
             onClick={() => handleModeChange(mode)}
             disabled={isDisabled}
             className={cn(
@@ -223,25 +193,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
           </button>
         );
       })}
-      <div className="w-px h-6 bg-border mx-1" />
-      <button
-        type="button"
-        data-testid={TID.preview.toolbarScope}
-        title={
-          isIsolated
-            ? 'Isolated — component only (click for In app)'
-            : 'In app — component in full app context (click for Isolated)'
-        }
-        onClick={handleScopeToggle}
-        className={cn(
-          'flex items-center gap-1 h-8 px-2 rounded-md text-xs transition-colors',
-          isIsolated && 'bg-primary text-primary-foreground',
-          !isIsolated && 'hover:bg-accent text-muted-foreground hover:text-foreground',
-        )}
-      >
-        <IconLayoutSidebar className="w-4 h-4" stroke={1.5} />
-        {isIsolated ? 'Isolated' : 'In app'}
-      </button>
     </div>
   );
 }
@@ -311,18 +262,4 @@ const buttonStyle: React.CSSProperties = {
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
-};
-
-const reconnectingBannerStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  padding: '8px 16px',
-  background: 'var(--vscode-editorWarning-foreground, #e5a100)',
-  color: '#fff',
-  fontSize: 12,
-  fontFamily: 'var(--vscode-font-family)',
-  textAlign: 'center',
-  zIndex: 1001,
 };

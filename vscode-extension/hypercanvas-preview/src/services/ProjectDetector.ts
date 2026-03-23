@@ -49,21 +49,18 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
     ...(packageJson.devDependencies as Record<string, string> | undefined),
   };
 
-  // Check dependencies — order matters: framework-specific deps first, then bundlers
+  // Check dependencies first
   if (deps.next) return 'nextjs';
+  if (deps.vite) return 'vite';
   if (deps['react-scripts']) return 'cra';
   if (deps['@remix-run/react']) return 'remix';
-  if (deps.vite) return 'vite';
-  if (deps.webpack || deps['webpack-dev-server'] || deps['webpack-cli']) return 'webpack';
 
   // Check for config files
+  if (await fileExists(path.join(projectPath, 'vite.config.ts'))) return 'vite';
+  if (await fileExists(path.join(projectPath, 'vite.config.js'))) return 'vite';
   if (await fileExists(path.join(projectPath, 'next.config.js'))) return 'nextjs';
   if (await fileExists(path.join(projectPath, 'next.config.mjs'))) return 'nextjs';
   if (await fileExists(path.join(projectPath, 'next.config.ts'))) return 'nextjs';
-  if (await fileExists(path.join(projectPath, 'vite.config.ts'))) return 'vite';
-  if (await fileExists(path.join(projectPath, 'vite.config.js'))) return 'vite';
-  if (await fileExists(path.join(projectPath, 'webpack.config.js'))) return 'webpack';
-  if (await fileExists(path.join(projectPath, 'webpack.config.ts'))) return 'webpack';
 
   return 'unknown';
 }
@@ -80,8 +77,6 @@ export function getDevCommand(type: ProjectType): string {
     case 'cra':
       return 'start';
     case 'remix':
-      return 'dev';
-    case 'webpack':
       return 'dev';
     default:
       return 'dev';
@@ -100,9 +95,6 @@ export function getDefaultPort(type: ProjectType): number {
     case 'cra':
       return 3000;
     case 'remix':
-      // Remix v2 uses Vite under the hood — default Vite port
-      return 5173;
-    case 'webpack':
       return 3000;
     default:
       return 3000;

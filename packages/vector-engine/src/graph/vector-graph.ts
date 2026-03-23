@@ -6,7 +6,7 @@
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Graph Model
  */
 
-import { DirectedGraph } from 'graphology';
+import { MultiDirectedGraph } from 'graphology';
 import { hasCycle, topologicalSort } from 'graphology-dag';
 import type { GraphEdge, GraphNode, Point, VectorGraph } from '../types';
 
@@ -30,7 +30,7 @@ interface EdgeAttrs {
 }
 
 export class VectorGraphModel {
-  private g: DirectedGraph<NodeAttrs, EdgeAttrs>;
+  private g: MultiDirectedGraph<NodeAttrs, EdgeAttrs>;
   private meta: GraphMeta;
   private mutedSet = new Set<string>();
   private viewport = { zoom: 1, panX: 0, panY: 0 };
@@ -38,7 +38,7 @@ export class VectorGraphModel {
   private edgeIdToKey = new Map<string, string>();
 
   private constructor(meta: GraphMeta) {
-    this.g = new DirectedGraph<NodeAttrs, EdgeAttrs>();
+    this.g = new MultiDirectedGraph<NodeAttrs, EdgeAttrs>();
     this.meta = meta;
   }
 

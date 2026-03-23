@@ -21,7 +21,6 @@ export function useOverlayMapCondHighlightComponents(
   storeUpdateCounter: number,
   viewport: ViewportState,
 ) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency
   useEffect(() => {
     if (!activeProject || activeProject.status !== 'running' || mode !== 'design') {
       // Clear overlays when not in design mode

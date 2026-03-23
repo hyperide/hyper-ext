@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconBinaryTree, IconBraces, IconChevronDown, IconFrame, IconSquareRotated } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import type { TreeNode } from '../../lib/types';
@@ -68,10 +67,14 @@ function TreeNodeItem({
     <>
       <div
         ref={elementRef}
-        data-testid={TID.explorer.treeItem(node.id)}
-        className={`h-6 px-2 flex items-center justify-between gap-1.5 rounded cursor-pointer ${isSelected ? 'tree-item-selected' : isHovered ? 'tree-item-hovered' : 'hover:bg-muted'}`}
+        className={`h-6 px-2 flex items-center justify-between gap-1.5 rounded hover:bg-muted cursor-pointer ${
+          isSelected
+            ? 'bg-primary/10 border border-primary/50'
+            : isHovered
+              ? 'bg-primary/5 border border-primary/30'
+              : ''
+        }`}
         role="treeitem"
-        aria-selected={isSelected}
         tabIndex={0}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onMouseEnter={() => onHoverElement(node.id)}
@@ -86,7 +89,6 @@ function TreeNodeItem({
           {hasChildren ? (
             <button
               type="button"
-              data-testid={TID.explorer.treeExpand(node.id)}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsCollapsed(!isCollapsed);

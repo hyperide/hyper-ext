@@ -345,7 +345,6 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
   const prevLogsLenRef = useRef(0);
 
   // Reset persistence state on project change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projectId is the trigger — resets refs when project changes
   useEffect(() => {
     persistedFetchedRef.current = false;
     persistedReadyRef.current = false;

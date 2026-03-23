@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconPlus, IconSearch } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useState } from 'react';
@@ -42,7 +41,7 @@ export function PagesSection({
     : groups;
 
   return (
-    <div data-testid={TID.explorer.componentGroup('pages')} className="h-full overflow-hidden flex flex-col">
+    <div data-testid="PagesSection" className="h-full overflow-hidden flex flex-col">
       <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
         <button type="button" onClick={onToggle} className="flex items-center gap-1 flex-1" disabled={!hasContent}>
           <IconChevronDown

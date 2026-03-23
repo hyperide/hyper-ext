@@ -20,7 +20,6 @@ interface UseBezelOverlaysProps {
  * Renders iPhone bezel images as overlays for instances with matching dimensions
  */
 export function useBezelOverlays({ overlayContainerRef, iframeLoadedCounter, instanceSizes }: UseBezelOverlaysProps) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
   useEffect(() => {
     const container = overlayContainerRef.current;
     if (!container) return;

@@ -1,24 +1,11 @@
 /**
- * @file Deterministic __canvas_preview__.tsx generation and preview file management.
- *
- * Accessed via: VS Code extension preview panel — component selected in explorer;
- *               SaaS canvas — component selected, triggers ensurePreviewFiles
- * Assumptions: FileIO abstraction ensures portability between Node.js and VS Code extension;
- *              _writeIfSafe never overwrites user files (P3-3 invariant)
- * Architecture: https://hyperide.github.io/reports/preview-routing
+ * Orchestrator for deterministic __canvas_preview__.tsx generation.
+ * Uses FileIO abstraction for Node.js / VS Code portability.
  */
 
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { parse } from '@babel/parser';
-import { builders as b } from 'ast-types';
-import * as recast from 'recast';
 import type { FileIO } from '../ast/file-io';
-import {
-  detectFramework,
-  generateBlankLayoutContent,
-  generateRouteFileContent,
-  getRouteFilePaths,
-} from './framework-routing';
 import { generatePreviewContent, type PreviewComponentEntry } from './generator';
 import { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
 
@@ -238,22 +225,6 @@ function stripExtension(name: string): string {
   return name.replace(/\.\w+$/, '');
 }
 
-/** Attribute shape of a recast JSX element (used in revertRouterPatch) */
-type RouteAttr = { name?: { name?: string }; value?: { value?: string } };
-
-/** Recast JSX element shape for <Route> nodes (used in revertRouterPatch) */
-type RouteEl = { openingElement: { name: { name?: string }; attributes: RouteAttr[] } };
-
-/** Recast parser using @babel/parser for TSX/TS support. Module-level constant shared across methods. */
-const RECAST_PARSER = {
-  parse: (source: string) =>
-    parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
-      tokens: true,
-    }),
-};
-
 export class PreviewFileManager {
   private projectRoot: string;
   private io: FileIO;
@@ -281,138 +252,61 @@ export class PreviewFileManager {
 
   /**
    * Ensure given component paths are registered in the preview file.
-   * - File missing (init): scan ALL project components and generate once with all imports.
-   * - File exists, fast path: AST check. All present → no write. Any missing → minimal AST insert.
+   * Reads existing file, merges new components, regenerates deterministically.
    * Returns the final file content.
    */
   async ensureComponent(componentPaths: string[]): Promise<string> {
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
 
-    // Check if preview file exists
-    let existingContent: string | null = null;
+    // Read existing preview file (if any)
+    let existingEntries: PreviewComponentEntry[] = [];
     try {
-      existingContent = await this.io.readFile(previewPath);
+      const existingContent = await this.io.readFile(previewPath);
+      existingEntries = parseExistingPreview(existingContent);
+
+      // Check if all requested components are already registered
+      const existingPaths = new Set(existingEntries.map((e) => e.componentPath));
+      const allPresent = componentPaths.every((p) => existingPaths.has(p));
+      if (allPresent) {
+        return existingContent;
+      }
     } catch {
-      // File doesn't exist — init path
+      // File doesn't exist yet — that's fine
     }
 
-    if (existingContent === null) {
-      // Init: scan all project components for a complete first write
-      return this._initPreviewFile(previewPath, previewDir, componentPaths);
-    }
+    // Build entries for new components
+    const existingPathSet = new Set(existingEntries.map((e) => e.componentPath));
+    const newEntries: PreviewComponentEntry[] = [];
 
-    // File exists: fast AST check
-    const missingPaths: string[] = [];
     for (const compPath of componentPaths) {
-      const importPath = await this.computeImportPath(compPath, previewDir);
-      const hasIt = await this._hasImport(previewPath, importPath);
-      if (!hasIt) missingPaths.push(compPath);
-    }
+      if (existingPathSet.has(compPath)) continue;
 
-    if (missingPaths.length === 0) {
-      // Fast path — no write needed
-      return existingContent;
-    }
-
-    // Full regen when new components are added — ensures componentRegistry and sampleRenderMap
-    // are updated alongside imports. Preserve existing components by parsing the registry via AST.
-    const existingEntries = parseExistingPreview(existingContent);
-    const existingPaths = existingEntries.map((e) => e.componentPath);
-    const allPaths = [...new Set([...existingPaths, ...componentPaths])];
-    return this._initPreviewFile(previewPath, previewDir, allPaths);
-  }
-
-  /** Init: scan all TSX/TS files and generate a complete preview file. */
-  private async _initPreviewFile(previewPath: string, previewDir: string, requestedPaths: string[]): Promise<string> {
-    // Build entries for explicitly requested paths first
-    const requestedEntries: PreviewComponentEntry[] = [];
-    for (const compPath of requestedPaths) {
       const entry = await this.buildEntry(compPath, previewDir);
-      if (entry) requestedEntries.push(entry);
+      if (entry) newEntries.push(entry);
     }
 
-    // If none of the requested paths yielded valid entries, fail fast (e.g. traversal guard)
-    if (requestedEntries.length === 0) {
+    // Merge existing + new
+    const allEntries = [...existingEntries, ...newEntries];
+
+    if (allEntries.length === 0) {
       throw new PreviewGenerationError('No valid components to include in preview');
     }
 
-    // Supplement with all other components discovered in project (init-time full scan)
-    const discoveredPaths = await this._scanAllComponents();
-    const requestedPathSet = new Set(requestedPaths);
-    const extraEntries: PreviewComponentEntry[] = [];
-    for (const compPath of discoveredPaths) {
-      if (requestedPathSet.has(compPath)) continue;
-      const entry = await this.buildEntry(compPath, previewDir);
-      if (entry) extraEntries.push(entry);
-    }
+    // Generate content
+    const content = generatePreviewContent(allEntries, {
+      isNextPagesRouter: this.isNextPagesRouter,
+    });
 
-    const allEntries = [...requestedEntries, ...extraEntries];
-
-    const content = generatePreviewContent(allEntries, { isNextPagesRouter: this.isNextPagesRouter });
-
+    // Validate TypeScript
     const valid = await isValidTypeScript(content);
     if (!valid) {
       throw new PreviewGenerationError('Generated preview code failed TypeScript validation');
     }
 
+    // Write file
     await this.io.writeFile(previewPath, content);
     return content;
-  }
-
-  /**
-   * Scan all TSX component files in the project via io.listFiles (if available).
-   * Falls back to empty array if listFiles is not supported.
-   */
-  private async _scanAllComponents(): Promise<string[]> {
-    if (!this.io.listFiles) return [];
-
-    const srcDir = join(this.projectRoot, 'src');
-    let allFiles: string[] = [];
-    try {
-      allFiles = await this.io.listFiles(srcDir, ['.tsx', '.ts']);
-    } catch {
-      return [];
-    }
-
-    // Exclude non-component files (__canvas_preview__, index, etc.)
-    return allFiles
-      .filter((f) => {
-        const name = basename(f);
-        return (
-          !name.startsWith('__') &&
-          !name.startsWith('index.') &&
-          (f.endsWith('.tsx') || f.endsWith('.ts')) &&
-          /^[A-Z]/.test(name) // PascalCase = component
-        );
-      })
-      .map((abs) => relative(this.projectRoot, abs));
-  }
-
-  /**
-   * Check if a file already imports from the given path.
-   * Normalizes relative paths to absolute for comparison.
-   * Public for testing.
-   */
-  async _hasImport(previewFilePath: string, importPath: string): Promise<boolean> {
-    const source = await this.io.readFile(previewFilePath);
-    const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
-    const previewDir = dirname(previewFilePath);
-    const normalizedTarget = this._normalizeImportPath(previewDir, importPath);
-
-    for (const node of ast.program.body) {
-      if (node.type !== 'ImportDeclaration') continue;
-      const normalized = this._normalizeImportPath(previewDir, node.source.value);
-      if (normalized === normalizedTarget) return true;
-    }
-    return false;
-  }
-
-  private _normalizeImportPath(fromDir: string, importPath: string): string {
-    if (importPath.startsWith('.')) {
-      return resolve(fromDir, importPath).replace(/\.(tsx?|jsx?)$/, '');
-    }
-    return importPath;
   }
 
   /**
@@ -540,350 +434,5 @@ export class PreviewFileManager {
     }
 
     return `${packageDir}/${cleanPath}`;
-  }
-
-  /**
-   * Ensure framework-specific route file(s) exist for App Shell mode.
-   * Idempotent — skips files that already contain @hyperide-managed.
-   * Does not overwrite user files (P3-3).
-   * Returns 'ok' | 'unsupported' | 'needs-patch'.
-   */
-  async ensurePreviewFiles(): Promise<'ok' | 'unsupported' | 'needs-patch'> {
-    const detection = await detectFramework(this.projectRoot, this.io);
-    const { framework } = detection;
-
-    if (framework === 'unknown') return 'unsupported';
-
-    if (framework === 'webpack' || framework === 'vite-spa-jsx-router') {
-      // No file-based routing convention — router is defined in JSX code.
-      // PreviewModeManager.onComponentSelected patches the entry/router file directly.
-      return 'needs-patch';
-    }
-
-    const previewPath = await this.getPreviewFilePath();
-    const paths = getRouteFilePaths(detection, this.projectRoot);
-
-    if (!paths.routeFile) return 'ok';
-
-    // Compute import path from route file to preview file
-    const routeDir = dirname(paths.routeFile);
-    let importPath = relative(routeDir, previewPath).replace(/\.\w+$/, '');
-    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
-
-    await this._writeIfSafe(paths.routeFile, generateRouteFileContent(framework, importPath));
-
-    if (paths.layoutFile) {
-      await this._writeIfSafe(paths.layoutFile, generateBlankLayoutContent());
-    }
-
-    await this.ensureGitExclude();
-
-    return 'ok';
-  }
-
-  /**
-   * Add HyperIDE-generated files to .git/info/exclude (local, not committed).
-   * Prevents __canvas_preview__.tsx and route files from appearing in `git status`.
-   * No-op if entries are already present or if .git directory doesn't exist.
-   */
-  async ensureGitExclude(): Promise<void> {
-    const excludePath = join(this.projectRoot, '.git/info/exclude');
-    const entries = [
-      '# HyperIDE — generated preview files',
-      'src/__canvas_preview__.tsx',
-      'src/__canvas_preview_standalone__.tsx',
-      '**/test-preview/',
-      '**/test-preview.tsx',
-    ];
-
-    let existing = '';
-    try {
-      existing = await this.io.readFile(excludePath);
-    } catch {
-      // .git/info/exclude may not exist yet — we'll create it
-    }
-
-    const toAdd = entries.filter((line) => !existing.includes(line));
-    if (toAdd.length === 0) return;
-
-    const separator = existing && !existing.endsWith('\n') ? '\n' : '';
-    try {
-      await this.io.writeFile(excludePath, `${existing}${separator}${toAdd.join('\n')}\n`);
-    } catch {
-      // Not a git repo, or .git is a file (worktrees) — silently skip
-    }
-  }
-
-  /**
-   * Generate __canvas_preview_standalone__.tsx for Isolated mode (Tier 1).
-   * Reads the existing __canvas_preview__.tsx and appends a createRoot bootstrap
-   * that wraps CanvasPreview in the user's <PreviewWrapper> from .hyperide/preview.tsx.
-   * No-op if __canvas_preview__.tsx does not exist yet.
-   */
-  async ensureStandaloneEntry(): Promise<void> {
-    const previewPath = await this.getPreviewFilePath();
-    const previewDir = dirname(previewPath);
-    const standaloneEntryPath = join(previewDir, '__canvas_preview_standalone__.tsx');
-
-    let baseContent: string;
-    try {
-      baseContent = await this.io.readFile(previewPath);
-    } catch {
-      return; // __canvas_preview__.tsx not generated yet
-    }
-
-    // Relative path from src/__canvas_preview_standalone__.tsx to .hyperide/preview
-    const wrapperImportPath = join(relative(previewDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
-
-    const bootstrap = [
-      '',
-      '// @hyperide-managed',
-      "import { createRoot } from 'react-dom/client';",
-      `import { PreviewWrapper } from '${wrapperImportPath}';`,
-      '',
-      "const root = document.getElementById('root');",
-      'if (root) {',
-      '  createRoot(root).render(',
-      '    <PreviewWrapper>',
-      '      <CanvasPreview />',
-      '    </PreviewWrapper>',
-      '  );',
-      '}',
-      '',
-    ].join('\n');
-
-    await this.io.mkdir?.(previewDir);
-    await this.io.writeFile(standaloneEntryPath, `${baseContent.trimEnd()}\n${bootstrap}`);
-  }
-
-  /**
-   * Remove all @hyperide-managed route files created by ensurePreviewFiles.
-   * Called during App Shell → Isolated mode switch.
-   * Does NOT remove __canvas_preview__.tsx — only route files.
-   */
-  async cleanupPreviewFiles(): Promise<void> {
-    const detection = await detectFramework(this.projectRoot, this.io);
-    const paths = getRouteFilePaths(detection, this.projectRoot);
-
-    for (const filePath of [paths.routeFile, paths.layoutFile].filter(Boolean) as string[]) {
-      try {
-        const content = await this.io.readFile(filePath);
-        if (content.includes('@hyperide-managed')) {
-          await this.io.deleteFile?.(filePath);
-        }
-      } catch {
-        // File doesn't exist — nothing to clean up
-      }
-    }
-  }
-
-  /**
-   * Write file only if it doesn't exist or already contains @hyperide-managed.
-   * Prevents overwriting user files.
-   */
-  private async _writeIfSafe(filePath: string, content: string): Promise<void> {
-    try {
-      const existing = await this.io.readFile(filePath);
-      if (!existing.includes('@hyperide-managed')) {
-        console.warn(`[PreviewFileManager] Skipping ${filePath} — exists without @hyperide-managed marker`);
-        return;
-      }
-      // Already managed — skip (idempotent)
-      return;
-    } catch {
-      // File doesn't exist — safe to write
-    }
-    await this.io.mkdir?.(dirname(filePath));
-    await this.io.writeFile(filePath, content);
-  }
-
-  /**
-   * Inject <Route path="/test-preview" element={<CanvasPreview />} /> into <Routes> JSX.
-   * Uses recast for AST editing (preserves formatting). Tags with @hyperide-managed.
-   * Only for Vite SPA JSX router (App Shell mode, no wrapper).
-   */
-  async patchRouterConfig(routerFilePath: string): Promise<void> {
-    const source = await this.io.readFile(routerFilePath);
-
-    // Idempotency check — already patched
-    if (source.includes('@hyperide-managed')) return;
-
-    const ast = recast.parse(source, { parser: RECAST_PARSER });
-
-    let patched = false;
-    recast.visit(ast, {
-      visitJSXElement(path) {
-        const el = path.node;
-        if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
-          const newRoute = b.jsxElement(
-            b.jsxOpeningElement(
-              b.jsxIdentifier('Route'),
-              [
-                b.jsxAttribute(b.jsxIdentifier('path'), b.stringLiteral('/test-preview')),
-                b.jsxAttribute(
-                  b.jsxIdentifier('element'),
-                  b.jsxExpressionContainer(
-                    b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreview'), [], true), null, []),
-                  ),
-                ),
-              ],
-              true,
-            ),
-            null,
-            [],
-          );
-          (newRoute as { comments?: unknown[] }).comments = [
-            { type: 'CommentLine', value: ' @hyperide-managed', leading: false, trailing: true },
-          ];
-          el.children.push(b.jsxText('\n        '), newRoute, b.jsxText('\n      '));
-          patched = true;
-          return false;
-        }
-        this.traverse(path);
-      },
-    });
-
-    if (!patched) {
-      console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
-      return;
-    }
-
-    // Add CanvasPreview import at top — path relative to router file directory
-    const previewPath = await this.getPreviewFilePath();
-    const routerDir = dirname(routerFilePath);
-    let importPath = relative(routerDir, previewPath).replace(/\.\w+$/, '');
-    if (!importPath.startsWith('.')) importPath = `./${importPath}`;
-
-    const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
-    const output = recast.print(ast).code;
-    await this.io.writeFile(routerFilePath, previewImport + output);
-  }
-
-  /**
-   * Remove the injected <Route> and CanvasPreview import using line filtering + AST.
-   * Identifies managed elements by the /test-preview path attribute and @hyperide-managed lines.
-   */
-  async revertRouterPatch(filePath: string): Promise<void> {
-    const source = await this.io.readFile(filePath);
-    if (!source.includes('@hyperide-managed')) return;
-
-    // Remove @hyperide-managed lines (import and inline comment lines)
-    const filteredSource = source
-      .split('\n')
-      .filter((line) => !line.includes('@hyperide-managed'))
-      .join('\n');
-
-    const ast = recast.parse(filteredSource, { parser: RECAST_PARSER });
-
-    // Remove /test-preview Route elements from <Routes> children
-    recast.visit(ast, {
-      visitJSXElement(path) {
-        const el = path.node;
-        if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
-          el.children = el.children.filter((child) => {
-            if (child.type !== 'JSXElement') return true;
-            // Remove Route elements with path="/test-preview"
-            const childEl = child as RouteEl;
-            if (childEl.openingElement.name.name !== 'Route') return true;
-            return !childEl.openingElement.attributes.some(
-              (attr) => attr.name?.name === 'path' && attr.value?.value === '/test-preview',
-            );
-          });
-          return false;
-        }
-        this.traverse(path);
-      },
-    });
-
-    await this.io.writeFile(filePath, recast.print(ast).code);
-  }
-
-  /**
-   * Patch webpack/CRA entry file to conditionally load __canvas_preview__ via AST.
-   * Finds the createRoot(...).render(...) ExpressionStatement and wraps it in:
-   *   if (__preview param) { import('./__canvas_preview__') }
-   *   else { <original createRoot call> }
-   * Tagged with a leading comment for AST-safe revert.
-   */
-  async patchEntryFile(entryFilePath: string): Promise<void> {
-    const source = await this.io.readFile(entryFilePath);
-    if (source.includes('@hyperide-managed')) return;
-
-    const ast = recast.parse(source, { parser: RECAST_PARSER });
-    let patched = false;
-
-    recast.visit(ast, {
-      visitExpressionStatement(path) {
-        const expr = path.node.expression;
-        const isCreateRoot =
-          expr.type === 'CallExpression' &&
-          expr.callee.type === 'MemberExpression' &&
-          expr.callee.property.type === 'Identifier' &&
-          expr.callee.property.name === 'render';
-
-        if (!isCreateRoot || patched) {
-          this.traverse(path);
-          return;
-        }
-
-        const ifStmt = b.ifStatement(
-          b.callExpression(
-            b.memberExpression(
-              b.newExpression(b.identifier('URLSearchParams'), [
-                b.memberExpression(b.identifier('location'), b.identifier('search')),
-              ]),
-              b.identifier('get'),
-            ),
-            [b.stringLiteral('__preview')],
-          ),
-          b.blockStatement([
-            b.expressionStatement(b.callExpression(b.import(), [b.stringLiteral('./__canvas_preview__')])),
-          ]),
-          b.blockStatement([path.node]),
-        );
-
-        (ifStmt as { comments?: unknown[] }).comments = [
-          { type: 'CommentLine', value: ' @hyperide-managed', leading: true, trailing: false },
-        ];
-
-        path.replace(ifStmt);
-        patched = true;
-        return false;
-      },
-    });
-
-    if (!patched) {
-      console.warn('[PreviewFileManager] Could not find createRoot().render() in entry file', entryFilePath);
-      return;
-    }
-
-    await this.io.writeFile(entryFilePath, recast.print(ast).code);
-  }
-
-  /**
-   * Revert entry file patch: find the @hyperide-managed IfStatement and replace it
-   * with the original else-branch content. AST-based — safe for any formatting.
-   */
-  async revertEntryFile(filePath: string): Promise<void> {
-    const source = await this.io.readFile(filePath);
-    if (!source.includes('@hyperide-managed')) return;
-
-    const ast = recast.parse(source, { parser: RECAST_PARSER });
-
-    recast.visit(ast, {
-      visitIfStatement(path) {
-        const node = path.node;
-        const isManaged = node.comments?.some((c: { value?: string }) => c.value?.includes('@hyperide-managed'));
-        if (!isManaged) {
-          this.traverse(path);
-          return;
-        }
-        const elseBody = node.alternate?.type === 'BlockStatement' ? node.alternate.body : [];
-        path.replace(...elseBody);
-        return false;
-      },
-    });
-
-    await this.io.writeFile(filePath, recast.print(ast).code);
   }
 }

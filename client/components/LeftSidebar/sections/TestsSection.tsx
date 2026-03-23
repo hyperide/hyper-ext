@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconPlayerPlayFilled, IconPlus, IconTestPipe } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useState } from 'react';
@@ -53,7 +52,7 @@ export function TestsSection({
   };
 
   return (
-    <div data-testid={TID.explorer.componentGroup('tests')} className="h-full overflow-hidden flex flex-col">
+    <div data-testid="TestsSection" className="h-full overflow-hidden flex flex-col">
       <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
         <button type="button" onClick={onToggle} className="flex items-center gap-1 flex-1" disabled={!hasContent}>
           <IconChevronDown
@@ -92,7 +91,6 @@ export function TestsSection({
             <button
               type="button"
               title="Run tests"
-              data-testid={TID.explorer.runTestsButton}
               className={cn('w-6 h-6 flex items-center justify-center rounded hover:bg-accent', {
                 'opacity-50': testGroups.length === 0,
               })}

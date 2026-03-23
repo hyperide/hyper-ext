@@ -199,7 +199,6 @@ export default function Projects() {
     }
   }, [currentWorkspace]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projects intentionally omitted — only used to check initial load, not as a trigger
   useEffect(() => {
     if (currentWorkspace) {
       // Only show loading spinner on initial load, not on soft-refresh
@@ -208,6 +207,7 @@ export default function Projects() {
       }
       loadProjects();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally not tracking projects
   }, [currentWorkspace, loadProjects]);
 
   // Reload projects when returning via browser back button (bfcache)
@@ -276,7 +276,6 @@ export default function Projects() {
   );
 
   // Subscribe to SSE for real-time status updates with polling fallback
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshAuth is stable zustand action, adding it would needlessly recreate EventSource
   useEffect(() => {
     if (!currentWorkspace || !accessToken || loading) return;
 

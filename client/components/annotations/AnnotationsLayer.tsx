@@ -226,7 +226,6 @@ export function AnnotationsLayer({
   );
 
   // Handle mouse down - start potential drag or drawing
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency; instances identity changes on every render, would cause infinite loop
   const handleMouseDown = useCallback(
     (e: MouseEvent) => {
       // Only handle left click
@@ -495,7 +494,9 @@ export function AnnotationsLayer({
     },
     [
       drawingState,
+      marqueeState,
       pendingClick,
+      dragState,
       screenToCanvas,
       viewport,
       annotations,
@@ -609,7 +610,9 @@ export function AnnotationsLayer({
     },
     [
       drawingState,
+      marqueeState,
       pendingClick,
+      dragState,
       screenToCanvas,
       instances,
       drawingStyle,
@@ -619,6 +622,7 @@ export function AnnotationsLayer({
       onToolComplete,
       selectedIds,
       onSelectionChange,
+      onInstancesSelect,
     ],
   );
 

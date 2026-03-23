@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconBorderSides } from '@tabler/icons-react';
 import { memo } from 'react';
 import {
@@ -119,10 +118,7 @@ export const MarginSection = memo(function MarginSection({
   };
 
   return (
-    <div
-      data-testid={TID.inspector.sectionHeader('margin')}
-      className="px-4 pb-3 max-w-sidebar-section overflow-hidden"
-    >
+    <div data-testid="MarginSection" className="px-4 pb-3 max-w-sidebar-section overflow-hidden">
       <span className="text-xs text-foreground mb-2 block">Margin</span>
       <div className="flex items-start gap-2 mb-2">
         <div className="grid grid-cols-2 gap-2 flex-1">
@@ -134,7 +130,6 @@ export const MarginSection = memo(function MarginSection({
             )}
             <Input
               type="text"
-              testId={TID.inspector.spacingInput('margin', 'horizontal')}
               value={getSpacingDisplayValue(marginLeft, marginRight, marginLinked)}
               onChange={handleHorizontalChange}
               onKeyDown={handleHorizontalKeyDown}
@@ -150,7 +145,6 @@ export const MarginSection = memo(function MarginSection({
             )}
             <Input
               type="text"
-              testId={TID.inspector.spacingInput('margin', 'vertical')}
               value={getSpacingDisplayValue(marginTop, marginBottom, marginLinked)}
               onChange={handleVerticalChange}
               onKeyDown={handleVerticalKeyDown}
@@ -164,7 +158,6 @@ export const MarginSection = memo(function MarginSection({
                 <IconMarginRight className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
-                  testId={TID.inspector.spacingInput('margin', 'right')}
                   value={marginRight}
                   onChange={(e) => onMarginChange('marginRight', e.target.value)}
                   onKeyDown={(e) =>
@@ -178,7 +171,6 @@ export const MarginSection = memo(function MarginSection({
                 <IconMarginBottom className="w-3 h-3 text-muted-foreground cursor-pointer" onMouseDown={focusInput} />
                 <Input
                   type="text"
-                  testId={TID.inspector.spacingInput('margin', 'bottom')}
                   value={marginBottom}
                   onChange={(e) => onMarginChange('marginBottom', e.target.value)}
                   onKeyDown={(e) =>
@@ -193,7 +185,6 @@ export const MarginSection = memo(function MarginSection({
         </div>
         <button
           type="button"
-          data-testid={TID.inspector.spacingLink('margin')}
           onClick={onMarginLinkedToggle}
           className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
             marginLinked ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'

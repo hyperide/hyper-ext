@@ -126,7 +126,6 @@ export function useNetworkAwareFetch<T>(
   }, [keepDataOnNetworkError]);
 
   // Fetch on mount and when deps change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: doFetch is stable (useCallback), deps spread is intentional for caller-controlled refetch triggers
   useEffect(() => {
     mountedRef.current = true;
 
@@ -137,6 +136,7 @@ export function useNetworkAwareFetch<T>(
     return () => {
       mountedRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip, ...deps]);
 
   // Auto-retry on reconnect

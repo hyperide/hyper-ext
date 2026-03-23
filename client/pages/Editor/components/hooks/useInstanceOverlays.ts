@@ -118,7 +118,6 @@ export function useInstanceOverlays({
     };
   }, [stableHandleDragMove, stableHandleDragEnd]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency
   useEffect(() => {
     // Render overlays in both board mode and design mode (with different styles)
     // In single mode, activeInstanceId is null - this is expected, skip silently

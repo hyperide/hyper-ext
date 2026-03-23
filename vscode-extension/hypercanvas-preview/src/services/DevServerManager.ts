@@ -163,13 +163,11 @@ export class DevServerManager {
         }
       }
 
-      // Find free port — prefer VS Code setting, fall back to project default
-      const configuredPort = vscode.workspace.getConfiguration('hypercanvas.preview').get<number>('defaultPort');
-      const startPort = configuredPort ?? projectInfo.defaultPort;
-      this._port = await this._findFreePort(startPort);
+      // Find free port
+      this._port = await this._findFreePort(projectInfo.defaultPort);
 
       // Start preview proxy for script injection (error detection)
-      this._previewProxy = new PreviewProxy(this._port, this._projectPath);
+      this._previewProxy = new PreviewProxy(this._port);
       await this._previewProxy.start();
       console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
@@ -182,17 +180,6 @@ export class DevServerManager {
 
       // Build command based on package manager
       const command = this._buildCommand(packageManager, devScript);
-
-      // Pass --port via CLI for frameworks that support it.
-      // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
-      if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
-        command.args.push('--', '--port', String(this._port));
-      } else if (projectInfo.type === 'nextjs') {
-        command.args.push('--', '-p', String(this._port));
-      } else if (projectInfo.type === 'webpack') {
-        command.args.push('--', '--port', String(this._port));
-      }
-      // CRA reads PORT env var — no CLI flag needed
 
       // Spawn process
       // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
@@ -215,8 +202,15 @@ export class DevServerManager {
         this._appendLog(text);
 
         // Detect when server is ready
-        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
-          this._updateStatus('running');
+        if (this._status === 'starting') {
+          if (
+            text.includes('ready') ||
+            text.includes('Local:') ||
+            text.includes('localhost:') ||
+            text.includes('Started')
+          ) {
+            this._updateStatus('running');
+          }
         }
       });
 
@@ -227,9 +221,11 @@ export class DevServerManager {
         this._outputChannel.append(text);
         this._appendLog(text);
 
-        // Some servers log to stderr (e.g. Next.js, webpack-dev-server)
-        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
-          this._updateStatus('running');
+        // Some servers log to stderr
+        if (this._status === 'starting') {
+          if (text.includes('ready') || text.includes('Local:') || text.includes('localhost:')) {
+            this._updateStatus('running');
+          }
         }
       });
 
@@ -324,13 +320,6 @@ export class DevServerManager {
   dispose(): void {
     void this.stop();
     this._outputChannel.dispose();
-  }
-
-  /**
-   * Switch between App Shell and Isolated mode. Delegated from PreviewModeManager.
-   */
-  setIsolatedMode(isolated: boolean): void {
-    this._previewProxy?.setIsolatedMode(isolated);
   }
 
   /**
@@ -448,24 +437,6 @@ export class DevServerManager {
 
       socket.connect(port, '127.0.0.1');
     });
-  }
-
-  /**
-   * Check if output text indicates the dev server is ready to accept connections.
-   * Covers Vite, Next.js, webpack-dev-server, Remix, CRA, and generic patterns.
-   */
-  private _isServerReadyMessage(text: string): boolean {
-    const lower = text.toLowerCase();
-    return (
-      lower.includes('ready') || // Vite "ready in", Next.js "Ready in"
-      text.includes('Local:') || // Vite "Local: http://..."
-      text.includes('localhost:') || // webpack-dev-server "Loopback: http://localhost:"
-      text.includes('Started') || // Generic
-      lower.includes('compiled successfully') || // webpack/CRA
-      lower.includes('compiled client') || // Next.js "Compiled client and server"
-      lower.includes('listening on') || // Generic servers
-      text.includes('Loopback:') // webpack-dev-server
-    );
   }
 
   /**

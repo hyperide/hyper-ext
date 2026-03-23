@@ -4,7 +4,6 @@
  * Layout: [source toggles] [time range] [search] [count]
  */
 
-import { TID } from '@shared/data-testid-map';
 import type { DiagnosticFilterState, DiagnosticSource, DiagnosticTimeRange } from '@shared/diagnostic-types';
 import { IconSearch, IconX } from '@tabler/icons-react';
 import cn from 'clsx';
@@ -129,7 +128,6 @@ export function DiagnosticFilterBar({ filter, onFilterChange, filteredCount, tot
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      data-testid={TID.logs.filterToggle(source)}
                       onClick={() => toggleSource(source)}
                       className={cn(
                         'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer select-none',
@@ -166,7 +164,6 @@ export function DiagnosticFilterBar({ filter, onFilterChange, filteredCount, tot
           <div className="relative flex-1 min-w-[100px]">
             <IconSearch size={12} className="absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              data-testid={TID.logs.searchInput}
               value={filter.searchQuery}
               onChange={handleSearchChange}
               placeholder="Search logs..."

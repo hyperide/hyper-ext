@@ -17,8 +17,8 @@ interface CondEditPopupProps {
 export function CondEditPopup({ boundary, portalContainer, onClose, onSave }: CondEditPopupProps) {
   const [expression, setExpression] = useState('');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: condId is an intentional trigger to reset expression when a different conditional is selected
   useEffect(() => {
+    // Load expression from boundary
     setExpression(boundary.expression);
   }, [boundary.condId, boundary.expression]);
 

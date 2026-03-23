@@ -83,7 +83,6 @@ import { IframeFailed } from './components/IframeFailed';
 import { LogsPanel } from './components/LogsPanel';
 import { NoComponentsOverlay } from './components/NoComponentsOverlay';
 import { PendingCommentInputOverlay } from './components/PendingCommentInputOverlay';
-import { PreviewSetupOverlay } from './components/PreviewSetupOverlay';
 import { ProjectStartOverlay } from './components/ProjectStartOverlay';
 import { SizeSelectionDialog } from './components/SizeSelectionDialog';
 
@@ -228,16 +227,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   const engine = useCanvasEngine();
   const store = useCanvasStore();
   const storeUpdateCounter = useStore(store, (state) => state._updateCounter);
-  const {
-    meta,
-    loadComponent,
-    parseError,
-    previewSetup,
-    setPreviewSetup,
-    needsPatchPrompt,
-    currentSampleName,
-    setCurrentSampleName,
-  } = useComponentMeta();
+  const { meta, loadComponent, parseError, currentSampleName, setCurrentSampleName } = useComponentMeta();
 
   // Reparse with new sampleName when active design instance changes
   useEffect(() => {
@@ -1135,12 +1125,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
                       {/* LogsPanel moved outside scroll container — see below */}
                     </>
-                  ) : previewSetup && previewSetup !== 'ok' ? (
-                    <PreviewSetupOverlay
-                      status={previewSetup}
-                      needsPatchPrompt={needsPatchPrompt}
-                      onDismiss={() => setPreviewSetup(null)}
-                    />
                   ) : parseError ? (
                     <div
                       data-uniq-id="d548dedd-3433-477e-80b4-f89cf0e5c4c8"

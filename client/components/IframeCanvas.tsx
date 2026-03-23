@@ -9,6 +9,11 @@ import type { RuntimeError } from '../../shared/runtime-error';
 // Canvas composition loaded from server only (no localStorage cache)
 import type { CanvasComposition, CanvasMode } from '../../shared/types/canvas';
 
+// Module-level cache for registered preview components
+// Clears automatically on page reload (browser refresh)
+// Prevents redundant /api/generate-preview calls for already-registered components
+const registeredComponentsCache = new Map<string, Set<string>>();
+
 interface IframeCanvasProps {
   componentPath: string;
   iframeLoadedCounter?: number;
@@ -260,14 +265,56 @@ export default function IframeCanvas({
     return () => window.removeEventListener('canvasCompositionChanged', handleCanvasChanged);
   }, [meta?.projectId, componentPath, onCanvasModeChange]);
 
-  // __canvas_preview__.tsx is pre-populated at init time with all project components
-  // (via PreviewFileManager init-time full scan). No registration API call needed.
+  // Auto-register component in __canvas_preview__.tsx before loading iframe
+  // Uses module-level cache to avoid redundant API calls for same component
   useEffect(() => {
     if (!meta?.projectId || !componentPath) {
       setPreviewReady(false);
       return;
     }
-    setPreviewReady(true);
+
+    // Check cache first - skip HTTP request if already registered
+    const projectCache = registeredComponentsCache.get(meta.projectId);
+    if (projectCache?.has(componentPath)) {
+      console.log('[IframeCanvas] Component already registered (cached):', componentPath);
+      setPreviewReady(true);
+      return;
+    }
+
+    setLoading(true);
+    setPreviewReady(false);
+    setError(null);
+
+    // Call API to ensure component is registered in __canvas_preview__.tsx
+    authFetch('/api/generate-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: meta.projectId,
+        components: [componentPath],
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to register component');
+        }
+        return response.json();
+      })
+      .then(() => {
+        console.log('[IframeCanvas] Component registered:', componentPath);
+        // Update cache after successful registration
+        if (!registeredComponentsCache.has(meta.projectId)) {
+          registeredComponentsCache.set(meta.projectId, new Set());
+        }
+        registeredComponentsCache.get(meta.projectId)?.add(componentPath);
+        setPreviewReady(true);
+      })
+      .catch((err) => {
+        console.error('[IframeCanvas] Failed to register component:', err);
+        setError(`Failed to register component: ${err.message}`);
+        setLoading(false);
+      });
   }, [meta?.projectId, componentPath]);
 
   // Inject styles on iframe load + check for gateway errors
@@ -409,7 +456,6 @@ export default function IframeCanvas({
   }, [previewReady, boardModeActive, editorMode, canvasMode]);
 
   // Apply instance sizes to DOM elements
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     if (!instanceSizes) return;
 
@@ -793,7 +839,6 @@ export default function IframeCanvas({
   }, [activeInstanceId, boardModeActive]);
 
   // Toggle design-mode class on iframe body based on editor mode
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentDocument) return;
@@ -806,12 +851,12 @@ export default function IframeCanvas({
     } else {
       body.classList.remove('design-mode');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- need to re-run after iframe reload
   }, [editorMode, iframeLoadedCounter]);
 
   // Poll iframe for runtime errors (Next.js, Vite, Bun error overlays)
   // Also listens for postMessage-based errors from iframe-console-capture.js
   // (catches module SyntaxErrors that don't produce framework overlays)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-check after iframe reload
   useEffect(() => {
     if (!onRuntimeError) return;
 
@@ -1081,7 +1126,6 @@ export default function IframeCanvas({
   }, [canvasMode, canvasComposition]);
 
   // Sync iframe body dimensions with iframe element size
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const body = iframeRef.current?.contentDocument?.body;
     if (!body) return;

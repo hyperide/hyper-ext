@@ -38,7 +38,6 @@ export function ImageBackgroundPicker({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load images when popover opens
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadImages is defined below, effect triggers on open/projectId only
   useEffect(() => {
     if (open && projectId) {
       loadImages();

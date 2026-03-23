@@ -28,7 +28,7 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
       elementIds: z.array(z.string()).describe('Array of data-uniq-id values to select'),
     },
     async ({ elementIds }) => {
-      services.stateHub.applyUpdate({ selectedIds: elementIds });
+      services.stateHub.applyUpdate('mcp-server', { selectedIds: elementIds });
       return { content: [{ type: 'text' as const, text: `Selected ${elementIds.length} element(s)` }] };
     },
   );
@@ -141,18 +141,7 @@ async function takeScreenshot(
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
 
   if (saveTo) {
-    try {
-      await writeFile(saveTo, Buffer.from(base64, 'base64'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return {
-        content: [{ type: 'text' as const, text: `Screenshot captured but failed to save to "${saveTo}": ${message}` }],
-        isError: true,
-      };
-    }
-    return {
-      content: [{ type: 'text' as const, text: saveTo }],
-    };
+    await writeFile(saveTo, Buffer.from(base64, 'base64'));
   }
 
   return {

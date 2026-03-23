@@ -62,7 +62,7 @@ export class PanelRouter {
    * Route a message from a panel to the appropriate handler.
    * Returns true if the message was handled.
    */
-  async routeMessage(message: unknown, webview: vscode.Webview): Promise<boolean> {
+  async routeMessage(panelId: string, message: unknown, webview: vscode.Webview): Promise<boolean> {
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;
@@ -70,7 +70,7 @@ export class PanelRouter {
     // State sync
     if (type === 'state:update') {
       const { patch } = message as { patch: Partial<SharedEditorState> };
-      this._stateHub.applyUpdate(patch);
+      this._stateHub.applyUpdate(panelId, patch);
       return true;
     }
 

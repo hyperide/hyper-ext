@@ -34,8 +34,8 @@ export function MapEditPopup({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: parentMapId is an intentional trigger to reset expression when a different map is selected
   useEffect(() => {
+    // Load expression from boundary
     setExpression(boundary.expression);
   }, [boundary.parentMapId, boundary.expression]);
 

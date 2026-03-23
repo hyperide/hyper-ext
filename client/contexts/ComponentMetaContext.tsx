@@ -11,8 +11,6 @@ interface ComponentMeta {
   relativeFilePath?: string;
 }
 
-export type PreviewSetupStatus = 'ok' | 'unsupported' | 'needs-patch';
-
 interface ComponentMetaContextType {
   meta: ComponentMeta | null;
   setMeta: (meta: ComponentMeta) => void;
@@ -20,9 +18,6 @@ interface ComponentMetaContextType {
   loadingComponent: string | null;
   parseError: string | null;
   setParseError: (error: string | null) => void;
-  previewSetup: PreviewSetupStatus | null;
-  setPreviewSetup: (status: PreviewSetupStatus | null) => void;
-  needsPatchPrompt: string | null;
   currentSampleName: string | null;
   setCurrentSampleName: (name: string | null) => void;
 }
@@ -33,8 +28,6 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
   const [meta, setMetaInternal] = useState<ComponentMeta | null>(null);
   const [loadingComponent, setLoadingComponent] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [previewSetup, setPreviewSetup] = useState<PreviewSetupStatus | null>(null);
-  const [needsPatchPrompt, setNeedsPatchPrompt] = useState<string | null>(null);
   const [currentSampleName, setCurrentSampleName] = useState<string | null>(null);
 
   const setMeta = useCallback((newMeta: ComponentMeta) => {
@@ -49,8 +42,6 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
     try {
       setLoadingComponent(componentPath);
       setParseError(null);
-      setPreviewSetup(null);
-      setNeedsPatchPrompt(null);
 
       const effectiveSampleName = sampleName ?? 'default';
       setCurrentSampleName(effectiveSampleName);
@@ -64,15 +55,6 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
       if (data.success) {
         // Don't setMeta here - let App.tsx do it after updating metadata
         // This ensures metadata is updated before LeftSidebar re-renders
-
-        const validStatuses: PreviewSetupStatus[] = ['ok', 'unsupported', 'needs-patch'];
-        if (data.previewSetup && data.previewSetup !== 'ok' && validStatuses.includes(data.previewSetup)) {
-          setPreviewSetup(data.previewSetup as PreviewSetupStatus);
-          setNeedsPatchPrompt(typeof data.needsPatchPrompt === 'string' ? data.needsPatchPrompt : null);
-        } else {
-          setPreviewSetup(null);
-          setNeedsPatchPrompt(null);
-        }
 
         // Emit event для перезагрузки canvas
         window.dispatchEvent(new CustomEvent('component-loaded', { detail: data }));
@@ -96,9 +78,6 @@ export function ComponentMetaProvider({ children }: { children: ReactNode }) {
         loadingComponent,
         parseError,
         setParseError,
-        previewSetup,
-        setPreviewSetup,
-        needsPatchPrompt,
         currentSampleName,
         setCurrentSampleName,
       }}

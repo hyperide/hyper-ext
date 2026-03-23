@@ -100,22 +100,22 @@ describe('PanelRouter', () => {
 
   it('returns false for messages without type', async () => {
     const wv = createMockWebview();
-    const handled = await router.routeMessage({}, wv as never);
+    const handled = await router.routeMessage('p1', {}, wv as never);
     expect(handled).toBe(false);
   });
 
   it('routes state:update to stateHub', async () => {
     const wv = createMockWebview();
-    const handled = await router.routeMessage({ type: 'state:update', patch: { hoveredId: 'x' } }, wv as never);
+    const handled = await router.routeMessage('p1', { type: 'state:update', patch: { hoveredId: 'x' } }, wv as never);
     expect(handled).toBe(true);
-    expect(stateHub.applyUpdate).toHaveBeenCalledWith({ hoveredId: 'x' });
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith('p1', { hoveredId: 'x' });
   });
 
   it('routes editor:* messages', async () => {
     const wv = createMockWebview();
     // editor:getActiveFile sends response back to webview
     const msg = { type: 'editor:getActiveFile', requestId: 'r1' };
-    const handled = await router.routeMessage(msg, wv as never);
+    const handled = await router.routeMessage('p1', msg, wv as never);
     expect(handled).toBe(true);
     // Response goes to webview.postMessage
     expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'editor:activeFileChanged' }));
@@ -130,7 +130,7 @@ describe('PanelRouter', () => {
       elementId: 'e',
       styles: {},
     };
-    const handled = await router.routeMessage(msg, wv as never);
+    const handled = await router.routeMessage('p1', msg, wv as never);
     expect(handled).toBe(true);
     // AstBridge sends response via webview.postMessage
     expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'ast:response', requestId: 'r1', success: true }));
@@ -141,7 +141,7 @@ describe('PanelRouter', () => {
     const cb = mock();
     router.setOnOpenAIChat(cb);
 
-    await router.routeMessage({ type: 'ai:openChat', prompt: 'fix button' }, wv as never);
+    await router.routeMessage('p1', { type: 'ai:openChat', prompt: 'fix button' }, wv as never);
     expect(cb).toHaveBeenCalledWith('fix button');
   });
 
@@ -150,7 +150,7 @@ describe('PanelRouter', () => {
     const cb = mock();
     router.setOnOpenAIChat(cb);
 
-    await router.routeMessage({ type: 'ai:openChat' }, wv as never);
+    await router.routeMessage('p1', { type: 'ai:openChat' }, wv as never);
     expect(cb).not.toHaveBeenCalled();
   });
 
@@ -158,6 +158,7 @@ describe('PanelRouter', () => {
     const vscode = await import('vscode');
     const wv = createMockWebview();
     await router.routeMessage(
+      'p1',
       { type: 'command:execute', command: 'workbench.action.files.save', args: [] },
       wv as never,
     );
@@ -166,7 +167,7 @@ describe('PanelRouter', () => {
 
   it('routes component:listGroups and sends response', async () => {
     const wv = createMockWebview();
-    await router.routeMessage({ type: 'component:listGroups', requestId: 'r1' }, wv as never);
+    await router.routeMessage('p1', { type: 'component:listGroups', requestId: 'r1' }, wv as never);
     expect(wv.messages[0]).toEqual(
       expect.objectContaining({ type: 'component:response', requestId: 'r1', success: true }),
     );
@@ -174,7 +175,7 @@ describe('PanelRouter', () => {
 
   it('routes file:read and returns file content', async () => {
     const wv = createMockWebview();
-    await router.routeMessage({ type: 'file:read', requestId: 'r2', filePath: 'src/App.tsx' }, wv as never);
+    await router.routeMessage('p1', { type: 'file:read', requestId: 'r2', filePath: 'src/App.tsx' }, wv as never);
     expect(wv.messages[0]).toEqual(
       expect.objectContaining({
         type: 'file:response',
@@ -188,6 +189,7 @@ describe('PanelRouter', () => {
   it('routes styles:readClassName and returns result', async () => {
     const wv = createMockWebview();
     await router.routeMessage(
+      'p1',
       { type: 'styles:readClassName', requestId: 'r3', elementId: 'e1', componentPath: 'c.tsx' },
       wv as never,
     );
@@ -198,7 +200,7 @@ describe('PanelRouter', () => {
 
   it('returns false for unknown message types', async () => {
     const wv = createMockWebview();
-    const handled = await router.routeMessage({ type: 'unknown:stuff' }, wv as never);
+    const handled = await router.routeMessage('p1', { type: 'unknown:stuff' }, wv as never);
     expect(handled).toBe(false);
   });
 

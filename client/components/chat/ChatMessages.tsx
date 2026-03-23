@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconLoader2 } from '@tabler/icons-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { DisplayMessage, DisplayToolCall } from '../../../shared/ai-chat-display';
@@ -46,10 +45,12 @@ export function ChatMessages({
           <EmptyState hasApiKey={hasApiKey} onConfigureProvider={onConfigureProvider} />
         )}
 
-        {messages.map((msg, index) => (
-          <div key={msg.id} data-testid={TID.aiChat.message(index)}>
-            <MessageBubble message={msg} onViewToolResult={(name, content) => onViewToolResult(name, content)} />
-          </div>
+        {messages.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            onViewToolResult={(name, content) => onViewToolResult(name, content)}
+          />
         ))}
 
         <StreamingContent

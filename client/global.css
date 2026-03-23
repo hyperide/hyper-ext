@@ -266,23 +266,4 @@
     /* biome-ignore lint/complexity/noImportantStyles: override inline-styles in <ScrollArea /> */
     display: block !important;
   }
-
-  /*
-   * Elements tree item selection — SaaS fallback (browser, no VS Code variables).
-   * In VS Code webview, these are overridden by styles.css with native theme colors.
-   */
-  .tree-item-selected {
-    background-color: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-  }
-  .tree-item-selected span {
-    color: hsl(var(--primary-foreground));
-  }
-  .tree-item-selected svg {
-    color: hsl(var(--primary-foreground));
-  }
-  .tree-item-hovered {
-    background-color: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
-  }
 }

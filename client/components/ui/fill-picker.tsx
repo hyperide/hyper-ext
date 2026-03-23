@@ -64,10 +64,6 @@ interface FillPickerProps {
   className?: string;
   /** Slot to render content between color picker and unlink button (e.g., opacity input) */
   beforeUnlinkSlot?: React.ReactNode;
-  /** data-testid on the root container */
-  testId?: string;
-  /** data-testid on the color hex input */
-  inputTestId?: string;
 }
 
 export function FillPicker({
@@ -84,8 +80,6 @@ export function FillPicker({
   inputPlaceholder,
   className,
   beforeUnlinkSlot,
-  testId,
-  inputTestId,
 }: FillPickerProps) {
   // Auto-select mode based on current values
   useEffect(() => {
@@ -96,11 +90,7 @@ export function FillPicker({
     }
   }, [imageValue, colorValue, publicDirExists, onModeChange]);
   return (
-    <div
-      data-uniq-id="de8f96dd-2620-46d3-8470-968f5e707b53"
-      className={cn('flex flex-col gap-2', className)}
-      {...(testId != null ? { 'data-testid': testId } : {})}
-    >
+    <div data-uniq-id="de8f96dd-2620-46d3-8470-968f5e707b53" className={cn('flex flex-col gap-2', className)}>
       {/* Tab switcher */}
       <div data-uniq-id="eea08778-07ef-4670-b8eb-8597c6b20048" className="flex gap-0.5">
         <button
@@ -143,7 +133,6 @@ export function FillPicker({
           onChange={onColorChange}
           inputPlaceholder={inputPlaceholder || 'none'}
           tokenSystem={tokenSystem}
-          inputTestId={inputTestId}
           className="flex-1"
           beforeUnlinkSlot={beforeUnlinkSlot}
         />

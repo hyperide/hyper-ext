@@ -61,23 +61,3 @@ select {
 input:focus {
   outline-color: var(--vscode-focusBorder);
 }
-
-/*
- * Elements tree item selection — use native VS Code list selection colors.
- * bg-primary/10 was barely visible in light themes; these variables guarantee
- * proper contrast in any VS Code color theme (light, dark, high-contrast).
- */
-.tree-item-selected {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-.tree-item-selected span {
-  color: var(--vscode-list-activeSelectionForeground);
-}
-.tree-item-selected svg {
-  color: var(--vscode-list-activeSelectionForeground);
-}
-.tree-item-hovered {
-  background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-list-hoverForeground, var(--vscode-foreground));
-}

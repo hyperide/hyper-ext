@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconComponents, IconSearch, IconTrash, IconX } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -118,7 +117,7 @@ export function ComponentNavigatorPanel({
 
   return (
     <div
-      data-testid={TID.insert.root}
+      data-testid="ComponentNavigatorPanel"
       ref={panelRef}
       className={cn(
         'bg-background z-20',
@@ -156,7 +155,6 @@ export function ComponentNavigatorPanel({
           <IconSearch className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
           <input
             type="text"
-            data-testid={TID.insert.searchInput}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search component"
@@ -168,7 +166,7 @@ export function ComponentNavigatorPanel({
       <div className={cn('flex flex-col gap-3 max-h-96 overflow-y-auto', isInline ? 'px-3 py-3' : 'p-4')}>
         {/* Categories */}
         {filteredEntries.map((category) => (
-          <div key={category.name} data-testid={TID.insert.categoryAccordion(category.name)}>
+          <div key={category.name}>
             <div className="flex items-center gap-1 mb-1.5">
               <IconChevronDown className="w-2 h-2 text-muted-foreground rotate-[-90deg]" stroke={1.5} />
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">{category.name}</span>
@@ -179,7 +177,6 @@ export function ComponentNavigatorPanel({
                   <button
                     type="button"
                     key={comp.type}
-                    data-testid={TID.insert.componentItem(comp.type)}
                     className={cn(
                       'w-full text-left text-xs px-2 py-1 rounded transition-colors truncate',
                       selectedComponentType === comp.type
@@ -198,7 +195,6 @@ export function ComponentNavigatorPanel({
                   <button
                     type="button"
                     key={comp.type}
-                    data-testid={TID.insert.componentItem(comp.type)}
                     className="flex flex-col gap-2 cursor-pointer text-left"
                     onClick={() => handleComponentClick(comp.type, comp.filePath)}
                   >

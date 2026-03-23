@@ -4,7 +4,6 @@
  */
 
 import * as fs from 'node:fs/promises';
-import { join } from 'node:path';
 import type { FileIO } from './file-io';
 
 export class NodeFileIO implements FileIO {
@@ -18,42 +17,5 @@ export class NodeFileIO implements FileIO {
 
   async access(absolutePath: string): Promise<void> {
     await fs.access(absolutePath);
-  }
-
-  async mkdir(dirPath: string): Promise<void> {
-    await fs.mkdir(dirPath, { recursive: true });
-  }
-
-  async listFiles(dirPath: string, extensions?: string[]): Promise<string[]> {
-    const results: string[] = [];
-    await this._collectFiles(dirPath, extensions, results);
-    return results;
-  }
-
-  private async _collectFiles(dir: string, extensions: string[] | undefined, results: string[]): Promise<void> {
-    let names: string[];
-    try {
-      names = await fs.readdir(dir);
-    } catch {
-      return;
-    }
-
-    for (const name of names) {
-      const fullPath = join(dir, name);
-      let stat: Awaited<ReturnType<typeof fs.stat>>;
-      try {
-        stat = await fs.stat(fullPath);
-      } catch {
-        continue;
-      }
-
-      if (stat.isDirectory()) {
-        await this._collectFiles(fullPath, extensions, results);
-      } else if (stat.isFile()) {
-        if (!extensions || extensions.some((ext) => name.endsWith(ext))) {
-          results.push(fullPath);
-        }
-      }
-    }
   }
 }

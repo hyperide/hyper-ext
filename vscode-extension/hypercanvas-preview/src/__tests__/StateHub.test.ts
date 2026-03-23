@@ -29,7 +29,7 @@ describe('StateHub', () => {
       hub.register('panel-a', wv as never);
       wv.messages.length = 0; // clear init message
 
-      hub.applyUpdate({ hoveredId: 'x' });
+      hub.applyUpdate('panel-a', { hoveredId: 'x' });
       expect(wv.messages).toHaveLength(1);
       expect((wv.messages[0] as { type: string }).type).toBe('state:update');
     });
@@ -43,7 +43,7 @@ describe('StateHub', () => {
       wv.messages.length = 0;
 
       hub.unregister('p1');
-      hub.applyUpdate({ hoveredId: 'y' });
+      hub.applyUpdate('other', { hoveredId: 'y' });
       expect(wv.messages).toHaveLength(0);
     });
   });
@@ -51,7 +51,7 @@ describe('StateHub', () => {
   describe('applyUpdate', () => {
     it('merges patch into state', () => {
       const hub = createHub();
-      hub.applyUpdate({ hoveredId: 'abc' });
+      hub.applyUpdate('src', { hoveredId: 'abc' });
       expect(hub.state.hoveredId).toBe('abc');
     });
 
@@ -64,7 +64,7 @@ describe('StateHub', () => {
       wv1.messages.length = 0;
       wv2.messages.length = 0;
 
-      hub.applyUpdate({ selectedIds: ['x'] });
+      hub.applyUpdate('p1', { selectedIds: ['x'] });
       expect(wv1.messages).toHaveLength(1);
       expect(wv2.messages).toHaveLength(1);
     });
@@ -75,7 +75,7 @@ describe('StateHub', () => {
       hub.register('sender', sender as never);
       sender.messages.length = 0;
 
-      hub.applyUpdate({ hoveredId: 'z' });
+      hub.applyUpdate('sender', { hoveredId: 'z' });
       expect(sender.messages).toHaveLength(1);
     });
 
@@ -84,16 +84,16 @@ describe('StateHub', () => {
       const patches: unknown[] = [];
       hub.onChange((_state, patch) => patches.push(patch));
 
-      hub.applyUpdate({ hoveredId: 'test' });
+      hub.applyUpdate('src', { hoveredId: 'test' });
       expect(patches).toHaveLength(1);
       expect(patches[0]).toEqual({ hoveredId: 'test' });
     });
 
     it('handles multiple sequential updates', () => {
       const hub = createHub();
-      hub.applyUpdate({ hoveredId: '1' });
-      hub.applyUpdate({ selectedIds: ['x'] });
-      hub.applyUpdate({ hoveredId: '2' });
+      hub.applyUpdate('a', { hoveredId: '1' });
+      hub.applyUpdate('a', { selectedIds: ['x'] });
+      hub.applyUpdate('a', { hoveredId: '2' });
 
       expect(hub.state.hoveredId).toBe('2');
       expect(hub.state.selectedIds).toEqual(['x']);
@@ -106,8 +106,8 @@ describe('StateHub', () => {
       let count = 0;
       hub.onChange(() => count++);
 
-      hub.applyUpdate({ hoveredId: '1' });
-      hub.applyUpdate({ hoveredId: '2' });
+      hub.applyUpdate('a', { hoveredId: '1' });
+      hub.applyUpdate('a', { hoveredId: '2' });
       expect(count).toBe(2);
     });
 
@@ -116,9 +116,9 @@ describe('StateHub', () => {
       let count = 0;
       const unsub = hub.onChange(() => count++);
 
-      hub.applyUpdate({ hoveredId: '1' });
+      hub.applyUpdate('a', { hoveredId: '1' });
       unsub();
-      hub.applyUpdate({ hoveredId: '2' });
+      hub.applyUpdate('a', { hoveredId: '2' });
       expect(count).toBe(1);
     });
 
@@ -129,7 +129,7 @@ describe('StateHub', () => {
       hub.onChange(() => a++);
       hub.onChange(() => b++);
 
-      hub.applyUpdate({ hoveredId: 'z' });
+      hub.applyUpdate('x', { hoveredId: 'z' });
       expect(a).toBe(1);
       expect(b).toBe(1);
     });
@@ -142,7 +142,7 @@ describe('StateHub', () => {
       hub.register('p1', wv as never);
       wv.messages.length = 0;
 
-      hub.applyUpdate({ hoveredId: 'changed' });
+      hub.applyUpdate('ext', { hoveredId: 'changed' });
       wv.messages.length = 0;
 
       hub.sendInit('p1');
@@ -169,7 +169,7 @@ describe('StateHub', () => {
       });
 
       hub.dispose();
-      hub.applyUpdate({ hoveredId: 'y' });
+      hub.applyUpdate('x', { hoveredId: 'y' });
       expect(wv.messages.length).toBe(1); // only the init message
       expect(called).toBe(false);
     });

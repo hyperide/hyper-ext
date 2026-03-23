@@ -24,12 +24,7 @@ export class MockPathOps implements PathOpsBackend {
     return path;
   }
 
-  strokeToPath(
-    path: PathValue,
-    _width: number,
-    _cap: 'butt' | 'round' | 'square',
-    _join: 'miter' | 'round' | 'bevel',
-  ): PathValue {
+  strokeToPath(path: PathValue, _width: number, _cap: string, _join: string): PathValue {
     return { ...path, closed: true };
   }
 

@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconCode, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -195,8 +194,6 @@ export default function RightSidebar({
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
-  // External refresh trigger (e.g. undo/redo from extension host)
-  const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
   const {
     parsedStyles,
     childrenType,
@@ -211,7 +208,7 @@ export default function RightSidebar({
     engine,
     styleAdapter,
     activeInstanceId,
-    refreshKey: styleRefreshKey + styleVersion,
+    refreshKey: styleRefreshKey,
   });
 
   // Apply state filter to parsedStyles
@@ -1046,9 +1043,7 @@ export default function RightSidebar({
         <>
           {/* Frame type */}
           <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
-            <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
-              {getFrameType()}
-            </span>
+            <span className="text-sm font-semibold text-foreground">{getFrameType()}</span>
           </div>
 
           {/* Text Content */}

@@ -75,10 +75,6 @@ export interface SharedEditorState {
   projectUIKit?: 'tailwind' | 'tamagui' | 'none';
   /** Element ID for which the component insertion UI is open */
   insertTargetId?: string | null;
-  /** Monotonic counter — increment to force inspector style re-read (e.g. after undo/redo) */
-  styleVersion?: number;
-  /** Preview render scope: full running app (App Shell) or standalone component (Isolated mode) */
-  previewScope?: 'full-app' | 'component-only';
 }
 
 // ============================================================================

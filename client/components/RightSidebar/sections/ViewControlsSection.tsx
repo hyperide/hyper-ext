@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconDeviceDesktop } from '@tabler/icons-react';
 import cn from 'clsx';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -84,13 +83,12 @@ export const ViewControlsSection = memo(function ViewControlsSection({
 
   return (
     <div
-      data-testid={TID.inspector.sectionHeader('view-controls')}
+      data-testid="ViewControlsSection"
       className="px-4 py-3 flex items-center justify-between border-b border-border"
     >
       <div className="relative" data-size-dropdown>
         <button
           type="button"
-          data-testid={TID.inspector.viewToggle('size')}
           onClick={() => setShowSizeDropdown(!showSizeDropdown)}
           className="flex items-center gap-2 hover:bg-muted rounded px-1 py-0.5 -mx-1 max-w-[120px]"
         >
@@ -139,7 +137,6 @@ export const ViewControlsSection = memo(function ViewControlsSection({
             <input
               ref={zoomInputRef}
               type="text"
-              data-testid={TID.inspector.viewToggle('zoom')}
               value={zoomInputValue}
               onChange={handleZoomInputChange}
               onBlur={handleZoomInputBlur}

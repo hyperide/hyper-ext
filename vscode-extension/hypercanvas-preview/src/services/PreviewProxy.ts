@@ -23,17 +23,9 @@ export class PreviewProxy {
   private _server: http.Server | null = null;
   private _proxyPort: number | null = null;
   private _targetPort: number;
-  private _isIsolatedMode = false;
-  private _projectRoot: string | undefined;
-  private _viteBase: string | undefined;
 
-  get isIsolatedMode(): boolean {
-    return this._isIsolatedMode;
-  }
-
-  constructor(targetPort: number, projectRoot?: string) {
+  constructor(targetPort: number) {
     this._targetPort = targetPort;
-    this._projectRoot = projectRoot;
   }
 
   get url(): string | null {
@@ -44,30 +36,11 @@ export class PreviewProxy {
     return this._proxyPort;
   }
 
-  /** Switch between App Shell and Isolated mode. Called by PreviewModeManager. */
-  setIsolatedMode(isolated: boolean): void {
-    this._isIsolatedMode = isolated;
-  }
-
-  /** Read vite.config.ts base path (cached on startup, empty string if not found) */
-  private async _readViteBase(): Promise<string> {
-    if (!this._projectRoot) return '';
-    try {
-      const configPath = path.join(this._projectRoot, 'vite.config.ts');
-      const content = await fs.promises.readFile(configPath, 'utf-8');
-      const match = content.match(/base\s*:\s*['"]([^'"]+)['"]/);
-      return match?.[1] ?? '';
-    } catch {
-      return '';
-    }
-  }
-
   /**
    * Start the proxy server on a random available port
    */
   async start(): Promise<void> {
     if (this._server) return;
-    this._viteBase = await this._readViteBase();
 
     this._server = http.createServer((req, res) => {
       this._handleHttp(req, res);
@@ -80,7 +53,7 @@ export class PreviewProxy {
 
     // Find random port and listen
     await new Promise<void>((resolve, reject) => {
-      this._server?.listen(0, 'localhost', () => {
+      this._server?.listen(0, '127.0.0.1', () => {
         const addr = this._server?.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
@@ -105,16 +78,13 @@ export class PreviewProxy {
   }
 
   /**
-   * Handle HTTP requests: proxy to target, inject script into HTML.
-   * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
+   * Handle HTTP requests: proxy to target, inject script into HTML
    */
-  private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
-    const proxyPath = clientReq.url || '/';
-
+  private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
     const options: http.RequestOptions = {
-      hostname: 'localhost',
+      hostname: '127.0.0.1',
       port: this._targetPort,
-      path: proxyPath,
+      path: clientReq.url,
       method: clientReq.method,
       headers: {
         ...clientReq.headers,
@@ -125,17 +95,6 @@ export class PreviewProxy {
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
-      // Retry for /test-preview 404/503 — handles dev server FSWatch lag after route file creation
-      if (
-        (proxyRes.statusCode === 404 || proxyRes.statusCode === 503) &&
-        proxyPath.startsWith('/test-preview') &&
-        retryCount < 5
-      ) {
-        proxyRes.resume(); // drain response
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
-        return;
-      }
-
       const contentType = proxyRes.headers['content-type'] || '';
       const isHtml = contentType.includes('text/html');
 
@@ -154,41 +113,6 @@ export class PreviewProxy {
           } else {
             // No <head> found, prepend scripts
             html = injectedScripts + html;
-          }
-
-          // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
-          if (this._isIsolatedMode && proxyPath.startsWith('/test-preview')) {
-            const base = this._viteBase ?? '';
-            const scriptRegex = /<script\s+type="module"\s+src="([^"]+)"\s*>/g;
-            let userScript: string | null = null;
-            for (const match of html.matchAll(scriptRegex)) {
-              const src = match[1];
-              if (!src.startsWith('/@') && !src.startsWith('https://') && !src.startsWith(`${base}@`)) {
-                userScript = src;
-                break;
-              }
-            }
-            if (userScript) {
-              html = html.replace(`src="${userScript}"`, 'src="/src/__canvas_preview_standalone__.tsx"');
-              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → /src/__canvas_preview_standalone__.tsx`); // nosemgrep: unsafe-formatstring
-            } else {
-              console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
-            }
-          }
-
-          // Inject chrome-detection script for /test-preview requests (App Shell mode)
-          if (proxyPath.startsWith('/test-preview')) {
-            const chromeDetectScript = `<script>
-  (function() {
-    window.addEventListener('load', function() {
-      var hasChrome = document.querySelector('nav, header, aside') !== null;
-      if (hasChrome) {
-        window.parent.postMessage({ type: 'chrome-detected' }, '*');
-      }
-    }, { once: true });
-  })();
-</script>`;
-            html = html.replace('</head>', `${chromeDetectScript}</head>`);
           }
 
           // Update content-length
@@ -220,7 +144,7 @@ export class PreviewProxy {
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
-    const targetSocket = net.connect(this._targetPort, 'localhost', () => {
+    const targetSocket = net.connect(this._targetPort, '127.0.0.1', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)

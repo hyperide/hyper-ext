@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { computeBounds } from './bounds';
 import { PathBuilder } from './builder';
+import { encodeCommands, PathCmd } from './commands';
 
 describe('computeBounds', () => {
   it('should compute bounds for a rectangle', () => {
@@ -90,5 +91,46 @@ describe('computeBounds', () => {
     // x range should at least cover endpoints
     expect(bounds.x).toBeLessThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeGreaterThanOrEqual(100);
+  });
+
+  it('should compute tight bounds for semicircular arc', () => {
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 0, sweep: 1, x: 100, y: 0 },
+    ]);
+    const bounds = computeBounds(cmds);
+    expect(bounds.x).toBeCloseTo(0, 1);
+    expect(bounds.y).toBeCloseTo(-50, 1);
+    expect(bounds.width).toBeCloseTo(100, 1);
+    expect(bounds.height).toBeCloseTo(50, 1);
+  });
+
+  it('arc after Close uses subpath start as start point', () => {
+    // M 0 0 L 10 0 Z A 50 50 0 0 1 100 0
+    // After Z, current point resets to subpath start (0,0), not (10,0).
+    // Arc from (0,0) to (100,0) with sweep=1 is a semicircle reaching y=-50.
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Line, x: 10, y: 0 },
+      { type: PathCmd.Close },
+      { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 0, sweep: 1, x: 100, y: 0 },
+    ]);
+    const bounds = computeBounds(cmds);
+    expect(bounds.y).toBeCloseTo(-50, 1);
+    expect(bounds.width).toBeCloseTo(100, 1);
+  });
+
+  it('should handle large-arc flag correctly', () => {
+    // start=(0,0), end=(60,0), r=50: two valid centers at (30,40) and (30,-40).
+    // largeArc=1, sweep=1: selects center (30,-40), sweeping ~286° CW.
+    // Arc passes through the topmost point of that circle at (30,-90).
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 1, sweep: 1, x: 60, y: 0 },
+    ]);
+    const bounds = computeBounds(cmds);
+    // The arc reaches the topmost point (30, -90) on the circle
+    expect(bounds.y).toBeCloseTo(-90, 0);
+    expect(bounds.width).toBeGreaterThanOrEqual(60);
   });
 });

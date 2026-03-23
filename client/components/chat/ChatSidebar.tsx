@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import cn from 'clsx';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,7 @@ export function ChatSidebar({
             size="sm"
             variant="outline"
             className="w-full"
-            testId={TID.aiChat.newChatButton}
+            testId="ChatSidebar-newChatButton"
           >
             <IconPlus className="w-4 h-4 mr-1" />
             New Chat
@@ -39,9 +38,9 @@ export function ChatSidebar({
             <div className="p-4 text-center text-xs text-muted-foreground">No chats yet</div>
           ) : (
             <div className="p-2 space-y-1">
-              {chats.map((chat, index) => {
+              {chats.map((chat) => {
                 const chatItem = (
-                  <div key={chat.id} data-testid={TID.aiChat.chatHistoryItem(index)} className="group relative">
+                  <div key={chat.id} className="group relative">
                     <button
                       type="button"
                       className={cn(

@@ -195,7 +195,6 @@ export type PlatformMessage =
   // Preview lifecycle (preview webview → extension host)
   | { type: 'previewLoaded' }
   | { type: 'previewError'; error: string }
-  | { type: 'preview:setScope'; scope: 'full-app' | 'component-only' }
 
   // Diagnostics (cross-webview sync in ext, local in SaaS)
   | { type: 'diagnostic:log'; entries: DiagnosticLogEntry[] }

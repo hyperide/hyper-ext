@@ -1,4 +1,3 @@
-import { TID } from '@shared/data-testid-map';
 import { useState } from 'react';
 import { GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
 
@@ -94,7 +93,6 @@ function ProviderBanner({ onConfigure }: { onConfigure?: () => void }) {
         <div className="px-3 pb-3">
           <button
             type="button"
-            data-testid={TID.aiChat.configureKeyButton}
             className="w-full rounded bg-primary text-primary-foreground py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors"
             onClick={onConfigure}
           >
