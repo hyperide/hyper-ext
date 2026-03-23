@@ -50,8 +50,8 @@ export function createStrokeToPathNode(backend: PathOpsBackend): NodeTypeDefinit
       const result = backend.strokeToPath(
         pathVal.value as PathValue,
         params.width as number,
-        params.cap as string,
-        params.join as string,
+        String(params.cap),
+        String(params.join),
       );
       return { path: { type: 'path', value: result } };
     },
