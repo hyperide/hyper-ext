@@ -10,18 +10,13 @@
 
 import { decodeCommands, PathCmd } from './commands';
 import { flattenPath } from './flatten';
+import { dist, normalize } from './math';
 
 // 5-point Gauss-Legendre quadrature nodes and weights on [-1, 1]
 const GL_NODES = [-0.906_179_845_938_664, -0.538_469_310_105_683, 0, 0.538_469_310_105_683, 0.906_179_845_938_664];
 const GL_WEIGHTS = [
   0.236_926_885_056_189, 0.478_628_670_499_366, 0.568_888_888_888_889, 0.478_628_670_499_366, 0.236_926_885_056_189,
 ];
-
-function dist(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  return Math.sqrt(dx * dx + dy * dy);
-}
 
 /**
  * Cubic bezier derivative magnitude at parameter t.
@@ -363,37 +358,27 @@ function cubicTAtLength(
   return (lo + hi) / 2;
 }
 
-/** Normalize a 2D vector; returns {x:1, y:0} if magnitude is zero. */
-function normalize(x: number, y: number): { x: number; y: number } {
-  const mag = Math.sqrt(x * x + y * y);
-  if (mag < 1e-10) return { x: 1, y: 0 };
-  return { x: x / mag, y: y / mag };
+interface PathSegment {
+  len: number;
+  startX: number;
+  startY: number;
+  cmd: ReturnType<typeof decodeCommands>[number];
+}
+
+interface CollectedSegments {
+  segments: PathSegment[];
+  lastX: number;
+  lastY: number;
 }
 
 /**
- * Compute point, unit tangent, and unit normal at a normalized offset along a path.
- *
- * offset is clamped to [0, 1]. For cubic beziers the exact curve tangent is
- * computed via B'(t); for lines/quads/arcs the polyline tangent is used.
+ * Collect per-segment lengths and start points from decoded path commands.
+ * Close commands are represented as synthetic Line segments to the subpath start.
+ * Returns segments and the last pen position (for degenerate path fallback).
  */
-export function pointAtOffset(commands: Float64Array, offset: number): PointAtOffsetResult {
-  const t = Math.max(0, Math.min(1, offset));
-
-  if (commands.length === 0) {
-    return { point: { x: 0, y: 0 }, tangent: { x: 1, y: 0 }, normal: { x: 0, y: 1 } };
-  }
-
+function collectPathSegments(commands: Float64Array): CollectedSegments {
   const decoded = decodeCommands(commands);
-
-  // Pass 1: collect per-segment lengths
-  interface Segment {
-    len: number;
-    startX: number;
-    startY: number;
-    cmd: (typeof decoded)[number];
-  }
-
-  const segments: Segment[] = [];
+  const segments: PathSegment[] = [];
   let lastX = 0;
   let lastY = 0;
   let subStartX = 0;
@@ -468,99 +453,115 @@ export function pointAtOffset(commands: Float64Array, offset: number): PointAtOf
     }
   }
 
+  return { segments, lastX, lastY };
+}
+
+/**
+ * Evaluate point and tangent at a given arc-length distance within one segment.
+ * Dispatches to the appropriate curve evaluation based on command type.
+ */
+function evaluateSegmentAt(seg: PathSegment, localDist: number): PointAtOffsetResult {
+  const { cmd, startX: sx, startY: sy, len } = seg;
+  const localT = len > 1e-10 ? Math.min(1, localDist / len) : 0;
+
+  if (cmd.type === PathCmd.Cubic) {
+    const ct = cubicTAtLength(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, localDist);
+    const point = cubicPoint(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, ct);
+    const d = cubicDeriv(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, ct);
+    const tangent = normalize(d.x, d.y);
+    return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
+  }
+
+  if (cmd.type === PathCmd.Quad) {
+    const qt = quadTAtLength(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, localDist);
+    const point = quadPoint(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, qt);
+    const d = quadDeriv(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, qt);
+    const tangent = normalize(d.x, d.y);
+    return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
+  }
+
+  if (cmd.type === PathCmd.Arc) {
+    // Flatten arc to polyline and walk to localDist within it
+    const arcCmds = new Float64Array([
+      PathCmd.Move,
+      sx,
+      sy,
+      PathCmd.Arc,
+      cmd.rx,
+      cmd.ry,
+      cmd.rotation,
+      cmd.largeArc,
+      cmd.sweep,
+      cmd.x,
+      cmd.y,
+    ]);
+    const pts = flattenPath(arcCmds, 0.001);
+    let arcAcc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const segLen = dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+      if (arcAcc + segLen >= localDist || i === pts.length - 1) {
+        const segT = segLen > 1e-10 ? Math.min(1, (localDist - arcAcc) / segLen) : 0;
+        const point = {
+          x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * segT,
+          y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * segT,
+        };
+        const tangent = normalize(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
+      }
+      arcAcc += segLen;
+    }
+  }
+
+  // Line and synthetic Close-as-line: direct linear interpolation
+  // cmd is never PathCmd.Close here — Close is stored as a synthetic Line in segments
+  const endX = (cmd as { x: number; y: number }).x;
+  const endY = (cmd as { x: number; y: number }).y;
+  const point = {
+    x: sx + (endX - sx) * localT,
+    y: sy + (endY - sy) * localT,
+  };
+  const tangent = normalize(endX - sx, endY - sy);
+  return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
+}
+
+/**
+ * Compute point, unit tangent, and unit normal at a normalized offset along a path.
+ *
+ * offset is clamped to [0, 1]. For cubic beziers the exact curve tangent is
+ * computed via B'(t); for lines/quads/arcs the polyline tangent is used.
+ */
+export function pointAtOffset(commands: Float64Array, offset: number): PointAtOffsetResult {
+  const t = Math.max(0, Math.min(1, offset));
+
+  if (commands.length === 0) {
+    return { point: { x: 0, y: 0 }, tangent: { x: 1, y: 0 }, normal: { x: 0, y: 1 } };
+  }
+
+  const { segments, lastX, lastY } = collectPathSegments(commands);
   const totalLength = segments.reduce((s, seg) => s + seg.len, 0);
 
   if (totalLength < 1e-10 || segments.length === 0) {
-    const pt = { x: lastX, y: lastY };
-    return { point: pt, tangent: { x: 1, y: 0 }, normal: { x: 0, y: 1 } };
+    return { point: { x: lastX, y: lastY }, tangent: { x: 1, y: 0 }, normal: { x: 0, y: 1 } };
   }
 
   const targetDist = t * totalLength;
 
-  // Pass 2: walk segments to find the one containing targetDist
+  // Walk segments to find the one containing targetDist
   let accumulated = 0;
   for (const seg of segments) {
     const segEnd = accumulated + seg.len;
 
     if (segEnd >= targetDist || seg === segments[segments.length - 1]) {
       const localDist = Math.max(0, targetDist - accumulated);
-      const localT = seg.len > 1e-10 ? Math.min(1, localDist / seg.len) : 0;
-
-      const { cmd, startX: sx, startY: sy } = seg;
-
-      if (cmd.type === PathCmd.Cubic) {
-        const ct = cubicTAtLength(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, localDist);
-        const point = cubicPoint(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, ct);
-        const d = cubicDeriv(sx, sy, cmd.cx1, cmd.cy1, cmd.cx2, cmd.cy2, cmd.x, cmd.y, ct);
-        const tangent = normalize(d.x, d.y);
-        return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
-      }
-
-      if (cmd.type === PathCmd.Quad) {
-        const qt = quadTAtLength(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, localDist);
-        const point = quadPoint(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, qt);
-        const d = quadDeriv(sx, sy, cmd.cx, cmd.cy, cmd.x, cmd.y, qt);
-        const tangent = normalize(d.x, d.y);
-        return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
-      }
-
-      if (cmd.type === PathCmd.Arc) {
-        // Flatten arc to polyline and walk to localDist within it
-        const arcCmds = new Float64Array([
-          PathCmd.Move,
-          sx,
-          sy,
-          PathCmd.Arc,
-          cmd.rx,
-          cmd.ry,
-          cmd.rotation,
-          cmd.largeArc,
-          cmd.sweep,
-          cmd.x,
-          cmd.y,
-        ]);
-        const pts = flattenPath(arcCmds, 0.001);
-        let arcAcc = 0;
-        for (let i = 1; i < pts.length; i++) {
-          const segLen = dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
-          if (arcAcc + segLen >= localDist || i === pts.length - 1) {
-            const segT = segLen > 1e-10 ? Math.min(1, (localDist - arcAcc) / segLen) : 0;
-            const point = {
-              x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * segT,
-              y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * segT,
-            };
-            const tangent = normalize(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-            return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
-          }
-          arcAcc += segLen;
-        }
-      }
-
-      // Line and synthetic Close-as-line: direct linear interpolation
-      // cmd is never PathCmd.Close here — Close is stored as a synthetic Line in segments
-      const endX = (cmd as { x: number; y: number }).x;
-      const endY = (cmd as { x: number; y: number }).y;
-      const point = {
-        x: sx + (endX - sx) * localT,
-        y: sy + (endY - sy) * localT,
-      };
-      const tangent = normalize(endX - sx, endY - sy);
-      return { point, tangent, normal: { x: -tangent.y, y: tangent.x } };
+      return evaluateSegmentAt(seg, localDist);
     }
 
     accumulated = segEnd;
   }
 
   // Unreachable: the loop above always returns on the last segment.
-  // Return end of last segment as a safe fallback.
-  const lastSeg = segments[segments.length - 1];
-  const fallbackCmd = lastSeg.cmd as { x: number; y: number };
-  const tangent = normalize(fallbackCmd.x - lastSeg.startX, fallbackCmd.y - lastSeg.startY);
-  return {
-    point: { x: fallbackCmd.x, y: fallbackCmd.y },
-    tangent,
-    normal: { x: -tangent.y, y: tangent.x },
-  };
+  // Return the last pen position as a safe fallback.
+  return { point: { x: lastX, y: lastY }, tangent: { x: 1, y: 0 }, normal: { x: 0, y: 1 } };
 }
 
 /**

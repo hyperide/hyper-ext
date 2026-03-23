@@ -14,14 +14,8 @@
 import { encodeCommands, PathCmd, type PathCommand } from '../../path/commands';
 import { flattenPath } from '../../path/flatten';
 import { pathLength } from '../../path/geometry';
+import { dist } from '../../path/math';
 import type { NodeTypeDefinition, NodeValue, PathValue } from '../../types';
-
-/** Euclidean distance between two points. */
-function dist(ax: number, ay: number, bx: number, by: number): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  return Math.sqrt(dx * dx + dy * dy);
-}
 
 export const trimPathNode: NodeTypeDefinition = {
   type: 'trimPath',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { PathBuilder } from '../../path/builder';
+import { decodeCommands, PathCmd } from '../../path/commands';
 import type { NodeValue, PathValue } from '../../types';
 import { variableStrokeNode } from './variable-stroke';
 
@@ -153,6 +154,39 @@ describe('variable stroke', () => {
       },
     );
     expect(getOutPath(result).commands.length).toBe(0);
+  });
+
+  it('should extend end cap outward (x > 100) for horizontal rightward line', () => {
+    // Horizontal line (0,0)→(100,0) with width=10 (halfWidth=5) and round cap.
+    // The end cap semicircle must bulge to the right (x > 100), not inward (x < 100).
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = variableStrokeNode.execute(
+      { path: { type: 'path', value: line } },
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 10 },
+          { offset: 1, width: 10 },
+        ]),
+        cap: 'round',
+      },
+    );
+    const outPath = getOutPath(result);
+    const cmds = decodeCommands(outPath.commands);
+
+    // Collect all x-coordinates from cubic control points and endpoints
+    const xs: number[] = [];
+    for (const cmd of cmds) {
+      if (cmd.type === PathCmd.Cubic) {
+        xs.push(cmd.cx1, cmd.cx2, cmd.x);
+      } else if (cmd.type === PathCmd.Line || cmd.type === PathCmd.Move) {
+        xs.push(cmd.x);
+      }
+    }
+
+    // At least one point must be to the right of x=100 (end cap extends outward)
+    expect(xs.some((x) => x > 100)).toBe(true);
+    // At least one point must be to the left of x=0 (start cap extends outward)
+    expect(xs.some((x) => x < 0)).toBe(true);
   });
 
   it('should produce a wider outline for wider profile', () => {

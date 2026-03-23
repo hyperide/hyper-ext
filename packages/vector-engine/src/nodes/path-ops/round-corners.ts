@@ -10,39 +10,9 @@
  */
 
 import { decodeCommands, encodeCommands, PathCmd, type PathCommand } from '../../path/commands';
+import { dist } from '../../path/math';
 import type { NodeTypeDefinition, NodeValue, PathValue } from '../../types';
-
-/**
- * Extracts vertices from a closed polyline path (Move + Line* + Close).
- * Returns null if the path contains curves or is not closed.
- */
-function extractPolylineVertices(cmds: PathCommand[]): Array<{ x: number; y: number }> | null {
-  if (cmds.length < 2) return null;
-
-  const last = cmds[cmds.length - 1];
-  if (last.type !== PathCmd.Close) return null;
-
-  const drawing = cmds.slice(0, -1);
-  const vertices: Array<{ x: number; y: number }> = [];
-
-  for (const cmd of drawing) {
-    if (cmd.type === PathCmd.Move || cmd.type === PathCmd.Line) {
-      vertices.push({ x: cmd.x, y: cmd.y });
-    } else {
-      // Contains curves — pass through
-      return null;
-    }
-  }
-
-  if (vertices.length < 3) return null;
-  return vertices;
-}
-
-function dist(ax: number, ay: number, bx: number, by: number): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  return Math.sqrt(dx * dx + dy * dy);
-}
+import { extractPolylineVertices } from './polyline-util';
 
 /**
  * Builds a rounded path from a list of polygon vertices and a radius.

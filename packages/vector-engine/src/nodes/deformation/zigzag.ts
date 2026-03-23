@@ -5,24 +5,9 @@
  * Architecture: https://hyperide.github.io/reports/HYP-308
  */
 
-import { fitCurve } from '../../curve/fit';
-import { PathBuilder } from '../../path/builder';
 import { flattenPath } from '../../path/flatten';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
-
-function deformResult(points: Point[], type: string, fitError: number): PathValue {
-  if (type === 'smooth' && points.length >= 2) {
-    return fitCurve(points, fitError);
-  }
-  const builder = new PathBuilder();
-  if (points.length > 0) {
-    builder.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      builder.lineTo(points[i].x, points[i].y);
-    }
-  }
-  return builder.build();
-}
+import { deformResult } from './deform-util';
 
 export const zigzagNode: NodeTypeDefinition = {
   type: 'zigzag',

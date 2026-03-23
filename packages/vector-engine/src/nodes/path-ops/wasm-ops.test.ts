@@ -46,6 +46,15 @@ describe('WASM path ops nodes', () => {
     const result = dashNode.execute({ path: { type: 'path', value: line } }, { dashArray: '[10, 5]', dashOffset: 0 });
     expect((result.path as NodeValue).type).toBe('path');
   });
+
+  it('should return input path unchanged on invalid dashArray JSON', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const inputVal = { type: 'path', value: line } as NodeValue;
+    const result = dashNode.execute({ path: inputVal }, { dashArray: 'not-json', dashOffset: 0 });
+    // Should not throw and should return the original input
+    expect((result.path as NodeValue).type).toBe('path');
+    expect(result.path).toBe(inputVal);
+  });
 });
 
 describe('MockPathOps — direct backend methods', () => {

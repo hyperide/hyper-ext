@@ -11,6 +11,34 @@
 import type { BoundingBox } from '../types';
 import { decodeCommands, PathCmd } from './commands';
 
+/** Evaluate a cubic Bézier at parameter t. */
+function cubicAt(t: number, p0: number, p1: number, p2: number, p3: number): number {
+  const mt = 1 - t;
+  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+}
+
+/** Evaluate a quadratic Bézier at parameter t. */
+function quadAt(t: number, p0: number, p1: number, p2: number): number {
+  const mt = 1 - t;
+  return mt * mt * p0 + 2 * mt * t * p1 + t * t * p2;
+}
+
+/**
+ * Solve at² + bt + c = 0 and return real roots.
+ * Degenerates to linear when |a| is negligible.
+ */
+function solveQuadratic(a: number, b: number, c: number): number[] {
+  if (Math.abs(a) < 1e-12) {
+    if (Math.abs(b) < 1e-12) return [];
+    return [-c / b];
+  }
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return [];
+  if (disc === 0) return [-b / (2 * a)];
+  const sq = Math.sqrt(disc);
+  return [(-b - sq) / (2 * a), (-b + sq) / (2 * a)];
+}
+
 /**
  * Compute tight bounding box for an SVG arc segment.
  *
@@ -188,19 +216,67 @@ export function computeBounds(commands: Float64Array): BoundingBox {
         lastX = cmd.x;
         lastY = cmd.y;
         break;
-      case PathCmd.Cubic:
-        track(cmd.cx1, cmd.cy1);
-        track(cmd.cx2, cmd.cy2);
+      case PathCmd.Cubic: {
+        // Tight bounds via derivative root solving.
+        // B'(t) is quadratic: coefficients derived from the four control points.
+        // Solve for x and y extrema separately; evaluate only roots in (0, 1).
         track(cmd.x, cmd.y);
+        const cx0 = lastX,
+          cy0 = lastY;
+        const cx1 = cmd.cx1,
+          cy1 = cmd.cy1;
+        const cx2 = cmd.cx2,
+          cy2 = cmd.cy2;
+        const cx3 = cmd.x,
+          cy3 = cmd.y;
+        for (const [p0, p1, p2, p3, isX] of [
+          [cx0, cx1, cx2, cx3, true],
+          [cy0, cy1, cy2, cy3, false],
+        ] as [number, number, number, number, boolean][]) {
+          const a = 3 * (-p0 + 3 * p1 - 3 * p2 + p3);
+          const b = 6 * (p0 - 2 * p1 + p2);
+          const c = 3 * (p1 - p0);
+          for (const t of solveQuadratic(a, b, c)) {
+            if (t > 0 && t < 1) {
+              const v = cubicAt(t, p0, p1, p2, p3);
+              if (isX) track(v, lastY);
+              else track(lastX, v);
+            }
+          }
+        }
         lastX = cmd.x;
         lastY = cmd.y;
         break;
-      case PathCmd.Quad:
-        track(cmd.cx, cmd.cy);
+      }
+      case PathCmd.Quad: {
+        // Tight bounds via derivative root solving.
+        // B'(t) is linear: extremum at t = (P0 - P1) / (P0 - 2*P1 + P2).
+        // Evaluate only if t is in (0, 1).
         track(cmd.x, cmd.y);
+        const qx0 = lastX,
+          qy0 = lastY;
+        const qx1 = cmd.cx,
+          qy1 = cmd.cy;
+        const qx2 = cmd.x,
+          qy2 = cmd.y;
+        for (const [p0, p1, p2, isX] of [
+          [qx0, qx1, qx2, true],
+          [qy0, qy1, qy2, false],
+        ] as [number, number, number, boolean][]) {
+          const denom = p0 - 2 * p1 + p2;
+          if (Math.abs(denom) > 1e-12) {
+            const t = (p0 - p1) / denom;
+            if (t > 0 && t < 1) {
+              const v = quadAt(t, p0, p1, p2);
+              if (isX) track(v, lastY);
+              else track(lastX, v);
+            }
+          }
+        }
         lastX = cmd.x;
         lastY = cmd.y;
         break;
+      }
       case PathCmd.Arc:
         trackArcBounds(lastX, lastY, cmd.rx, cmd.ry, cmd.rotation, cmd.largeArc, cmd.sweep, cmd.x, cmd.y, track);
         lastX = cmd.x;

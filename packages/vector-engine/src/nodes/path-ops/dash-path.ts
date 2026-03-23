@@ -29,7 +29,13 @@ export function createDashNode(backend: PathOpsBackend): NodeTypeDefinition {
       if (!pathVal) {
         return { path: { type: 'path', value: { commands: new Float64Array(0), closed: false } } };
       }
-      const dashArray = JSON.parse(params.dashArray as string) as number[];
+      let dashArray: number[];
+      try {
+        dashArray = JSON.parse(params.dashArray as string) as number[];
+      } catch {
+        // Invalid JSON — return input path unchanged
+        return { path: pathVal };
+      }
       const result = backend.dash(pathVal.value as PathValue, dashArray, params.dashOffset as number);
       return { path: { type: 'path', value: result } };
     },

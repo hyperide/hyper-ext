@@ -6,10 +6,9 @@
  * Architecture: https://hyperide.github.io/reports/HYP-308
  */
 
-import { fitCurve } from '../../curve/fit';
-import { PathBuilder } from '../../path/builder';
 import { flattenPath } from '../../path/flatten';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
+import { deformResult } from './deform-util';
 
 /**
  * Mulberry32 seeded PRNG — returns a function that yields floats in [0, 1).
@@ -22,23 +21,6 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-
-/**
- * Build a polyline or re-fit bezier from displaced points.
- */
-function deformResult(points: Point[], type: string, fitError: number): PathValue {
-  if (type === 'smooth' && points.length >= 2) {
-    return fitCurve(points, fitError);
-  }
-  const builder = new PathBuilder();
-  if (points.length > 0) {
-    builder.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      builder.lineTo(points[i].x, points[i].y);
-    }
-  }
-  return builder.build();
 }
 
 export const roughenNode: NodeTypeDefinition = {

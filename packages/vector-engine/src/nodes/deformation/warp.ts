@@ -6,9 +6,9 @@
  * Architecture: https://hyperide.github.io/reports/HYP-308
  */
 
-import { fitCurve } from '../../curve/fit';
 import { flattenPath } from '../../path/flatten';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
+import { deformResult } from './deform-util';
 
 type WarpType = 'arc' | 'wave' | 'flag' | 'bulge';
 
@@ -105,7 +105,7 @@ export const warpNode: NodeTypeDefinition = {
     return {
       path: {
         type: 'path',
-        value: fitCurve(displaced, 1),
+        value: deformResult(displaced, 'smooth', 1),
       },
     };
   },

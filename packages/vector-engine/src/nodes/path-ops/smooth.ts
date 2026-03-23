@@ -18,19 +18,8 @@
  */
 
 import { decodeCommands, encodeCommands, PathCmd, type PathCommand } from '../../path/commands';
+import { dist, normalize } from '../../path/math';
 import type { NodeTypeDefinition, NodeValue, PathValue } from '../../types';
-
-function dist(ax: number, ay: number, bx: number, by: number): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function normalize(dx: number, dy: number): { x: number; y: number } {
-  const mag = Math.sqrt(dx * dx + dy * dy);
-  if (mag < 1e-10) return { x: 0, y: 0 };
-  return { x: dx / mag, y: dy / mag };
-}
 
 /**
  * Extracts vertices from an open or closed pure-polyline path.

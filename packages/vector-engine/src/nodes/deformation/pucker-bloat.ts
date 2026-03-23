@@ -5,13 +5,9 @@
  * Architecture: https://hyperide.github.io/reports/HYP-308
  */
 
-import { fitCurve } from '../../curve/fit';
 import { flattenPath } from '../../path/flatten';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
-
-function deformResult(points: Point[], fitError: number): PathValue {
-  return fitCurve(points, fitError);
-}
+import { deformResult } from './deform-util';
 
 export const puckerBloatNode: NodeTypeDefinition = {
   type: 'puckerBloat',
@@ -58,7 +54,7 @@ export const puckerBloatNode: NodeTypeDefinition = {
     return {
       path: {
         type: 'path',
-        value: deformResult(displaced, Math.max(1, Math.abs(amount) * 0.1)),
+        value: deformResult(displaced, 'smooth', Math.max(1, Math.abs(amount) * 0.1)),
       },
     };
   },

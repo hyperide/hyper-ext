@@ -73,4 +73,32 @@ describe('alpha mask node', () => {
     expect(result.path).toBe(content);
     expect(result.clipPath).toBe(mask);
   });
+
+  it('should return empty path when content is missing', () => {
+    const mask: NodeValue = {
+      type: 'path',
+      value: new PathBuilder().moveTo(10, 10).lineTo(40, 40).build(),
+    };
+    const result = alphaMaskNode.execute({ mask }, {});
+    expect((result.path as NodeValue).type).toBe('path');
+    expect((result.path as NodeValue).value).toBeDefined();
+    expect(result.clipPath).toBe(mask);
+  });
+
+  it('should return empty path when mask is missing', () => {
+    const content: NodeValue = {
+      type: 'path',
+      value: new PathBuilder().moveTo(0, 0).lineTo(100, 0).build(),
+    };
+    const result = alphaMaskNode.execute({ content }, {});
+    expect((result.path as NodeValue).type).toBe('path');
+    expect((result.path as NodeValue).value).toBeDefined();
+    expect(result.clipPath).toBe(content);
+  });
+
+  it('should return empty path when both inputs are missing', () => {
+    const result = alphaMaskNode.execute({}, {});
+    expect((result.path as NodeValue).type).toBe('path');
+    expect(result.clipPath).toBeUndefined();
+  });
 });

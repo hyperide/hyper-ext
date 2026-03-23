@@ -9,12 +9,25 @@
 import { describe, expect, it } from 'bun:test';
 import { mapFigToGraph } from './import/fig-mapper';
 import { svgToGraph } from './import/svg-import';
-import { GraphExecutor, PathBuilder, sceneToSvg, VectorGraphModel } from './index';
+import {
+  computeBounds,
+  computeReconciliationDiff,
+  deserializeGraph,
+  GraphExecutor,
+  IDENTITY_TRANSFORM,
+  nearestPointOnPath,
+  PathBuilder,
+  SVGStringRenderer,
+  sceneToSvg,
+  serializeGraph,
+  VectorGraphModel,
+} from './index';
 import { splitIntersections } from './network/split';
 import type { VectorNetwork } from './network/types';
 import { createDefaultRegistry } from './nodes/register-all';
 import { flattenPath } from './path/flatten';
 import { pathLength } from './path/geometry';
+import type { SceneGraph } from './types';
 
 describe('advanced integration', () => {
   it('should export SVG then import back', () => {
@@ -115,5 +128,73 @@ describe('Plan 2b integration', () => {
       { width: 400, height: 300 },
     );
     expect(result.nodes.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('Plan 3 integration', () => {
+  it('should compute tight bounds for curve-heavy path', () => {
+    const curve = new PathBuilder().moveTo(0, 0).cubicTo(50, 200, 50, -200, 100, 0).build();
+    const bounds = computeBounds(curve.commands);
+    // Tight bounds should be much less than control-point hull
+    expect(bounds.height).toBeLessThan(200);
+  });
+
+  it('should hit test shapes in a scene', () => {
+    const renderer = new SVGStringRenderer();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const scene: SceneGraph = {
+      items: [
+        {
+          id: 'r1',
+          path: rect,
+          style: { fill: { type: 'solid', color: '#f00' } },
+          transform: IDENTITY_TRANSFORM,
+          visible: true,
+        },
+      ],
+      canvas: { width: 200, height: 200 },
+    };
+    expect(renderer.hitTest({ x: 50, y: 50 }, scene)?.itemId).toBe('r1');
+    expect(renderer.hitTest({ x: 150, y: 150 }, scene)).toBeNull();
+  });
+
+  it('should serialize and deserialize graph with history', () => {
+    const model = VectorGraphModel.create('test', 'RT', 100, 100);
+    model.addNode({ type: 'rectangle', params: { width: 50, height: 50 } });
+    const file = serializeGraph(model, { componentPath: 'test.tsx' });
+    const json = JSON.stringify(file);
+    const { model: loaded } = deserializeGraph(JSON.parse(json));
+    expect(loaded.nodeCount).toBe(1);
+  });
+
+  it('should compute reconciliation diff and apply', () => {
+    const state1 = {
+      canvas: { width: 100, height: 100 },
+      nodes: { n1: { id: 'n1', type: 'rectangle', params: { width: 50 }, position: { x: 0, y: 0 } } },
+      edges: [],
+      muted: [],
+    };
+    const state2 = {
+      ...state1,
+      nodes: { n1: { id: 'n1', type: 'rectangle', params: { width: 100 }, position: { x: 0, y: 0 } } },
+    };
+    const diff = computeReconciliationDiff(state1, state2);
+    expect(diff.modified.params.length).toBe(1);
+  });
+
+  it('should find nearest point on path', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = nearestPointOnPath({ x: 50, y: 30 }, line);
+    expect(result.distance).toBeCloseTo(30, 1);
+  });
+
+  it('should register all Plan 3 nodes', () => {
+    const registry = createDefaultRegistry();
+    expect(registry.get('addPoint')).toBeDefined();
+    expect(registry.get('removePoint')).toBeDefined();
+    expect(registry.get('convertPoint')).toBeDefined();
+    expect(registry.get('splitPath')).toBeDefined();
+    const all = registry.listAll();
+    expect(all.length).toBe(52);
   });
 });

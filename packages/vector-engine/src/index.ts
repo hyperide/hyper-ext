@@ -28,6 +28,8 @@ export { meshFromBounds } from './mesh/mesh-from-path';
 export { tessellateMesh } from './mesh/tessellate';
 // Mesh
 export type { MeshHandle, MeshVertex, TessellatedMesh } from './mesh/types';
+// Migration
+export { CURRENT_VERSION, migrateGraph, registerMigration } from './migration/migrate';
 // Vector networks
 export { networkToPaths, pathToNetwork } from './network/convert';
 // Network: splitIntersections (Plan 2b)
@@ -56,16 +58,21 @@ export { svgPathNode } from './nodes/generators/svg-path';
 // Mesh nodes (Plan 2b)
 export { gradientMeshNode } from './nodes/mesh/gradient-mesh';
 export { meshFromPathNode } from './nodes/mesh/mesh-from-path-node';
+// Path ops (Plan 3)
+export { addPointNode } from './nodes/path-ops/add-point';
 // Path operation nodes
 export { breakApartPaths, closeOpenNode, joinPathsNode, reversePathNode } from './nodes/path-ops/basic-ops';
 export { createBooleanNodes } from './nodes/path-ops/boolean';
 // Path op nodes (Plan 2)
 export { chamferNode } from './nodes/path-ops/chamfer';
+export { convertPointNode } from './nodes/path-ops/convert-point';
 export { createDashNode } from './nodes/path-ops/dash-path';
 export { enforceWindingNode } from './nodes/path-ops/enforce-winding';
 export { createOffsetNode } from './nodes/path-ops/offset';
+export { removePointNode } from './nodes/path-ops/remove-point';
 export { roundCornersNode } from './nodes/path-ops/round-corners';
 export { smoothNode } from './nodes/path-ops/smooth';
+export { splitPathNode } from './nodes/path-ops/split-path';
 export { createStrokeToPathNode } from './nodes/path-ops/stroke-to-path';
 export { subdivideNode } from './nodes/path-ops/subdivide';
 export { trimPathNode } from './nodes/path-ops/trim-path';
@@ -108,7 +115,22 @@ export {
 // Path utilities (Plan 2)
 export { flattenPath } from './path/flatten';
 export { type PointAtOffsetResult, pathArea, pathLength, pointAtOffset } from './path/geometry';
+// Hit testing
+export { pointInPath, pointOnStroke } from './path/hit-test';
 export { mergePaths } from './path/merge';
+export { type NearestResult, nearestPointOnPath } from './path/nearest';
+// Persistence
+export { AutoSave } from './persistence/auto-save';
+export { OperationLog } from './persistence/operation-log';
+export { deserializeGraph, serializeGraph } from './persistence/serialize';
+export { type ExecutionCache, SnapshotManager, type SnapshotStorage } from './persistence/snapshot';
+export type { GraphOperation, VectorGraphFile, VectorGraphMeta, VectorGraphState } from './persistence/types';
+export { applyReconciliation } from './reconcile/apply';
+// Reconciliation
+export { computeReconciliationDiff, type ReconciliationDiff } from './reconcile/diff';
+// Renderer
+export { SVGStringRenderer } from './render/svg-renderer';
+export type { HitResult, VectorRenderer } from './render/types';
 // Types
 export type {
   BlendMode,

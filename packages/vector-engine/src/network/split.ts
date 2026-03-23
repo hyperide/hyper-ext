@@ -42,8 +42,15 @@ export function splitIntersections(network: VectorNetwork): VectorNetwork {
   }));
 
   // Iterate until no more intersections are found (splitting may create new pairs)
+  const MAX_ITERATIONS = 10;
   let changed = true;
+  let iterations = 0;
   while (changed) {
+    if (iterations >= MAX_ITERATIONS) {
+      console.warn(`splitIntersections: exceeded ${MAX_ITERATIONS} iterations — aborting to prevent infinite loop`);
+      break;
+    }
+    iterations++;
     changed = false;
     const splits = findAllIntersections(vertices, segments);
     if (splits.length === 0) break;

@@ -216,4 +216,24 @@ export class HistoryManager {
   get entryCount(): number {
     return this.entries.length;
   }
+
+  /** Get all history entries (for persistence serialization) */
+  getEntries(): readonly HistoryEntry[] {
+    return this.entries;
+  }
+
+  /** Get current undo pointer position */
+  getPointer(): number {
+    return this.pointer;
+  }
+
+  /** Replay diffs forward onto a graph and record as a history entry (for deserialization) */
+  replayForward(graph: VectorGraphModel, diffs: GraphDiff[], description: string, timestamp: number): void {
+    const affected = new Set<string>();
+    for (const diff of diffs) {
+      this.applyForward(graph, diff, affected);
+    }
+    this.entries.push({ timestamp, description, diffs });
+    this.pointer = this.entries.length;
+  }
 }

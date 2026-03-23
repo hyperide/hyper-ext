@@ -67,24 +67,19 @@ export async function initShaper(): Promise<void> {
 export function shapeText(fontBlob: ArrayBuffer | null, text: string, fontSize: number): ShapedGlyph[] {
   if (!fontBlob || !text || !hbInstance) return [];
 
-  try {
-    const blob = hbInstance.createBlob(fontBlob);
-    const face = hbInstance.createFace(blob, 0);
-    const font = hbInstance.createFont(face);
-    // HarfBuzz uses 26.6 fixed-point — scale by 64
-    font.setScale(fontSize * 64, fontSize * 64);
+  const blob = hbInstance.createBlob(fontBlob);
+  const face = hbInstance.createFace(blob, 0);
+  const font = hbInstance.createFont(face);
+  // HarfBuzz uses 26.6 fixed-point — scale by 64
+  font.setScale(fontSize * 64, fontSize * 64);
 
-    const buffer = hbInstance.createBuffer();
+  const buffer = hbInstance.createBuffer();
+  try {
     buffer.addText(text);
     buffer.guessSegmentProperties();
 
     hbInstance.shape(font, buffer);
     const result = buffer.json();
-
-    buffer.destroy();
-    font.destroy();
-    face.destroy();
-    blob.destroy();
 
     return result.map((g) => ({
       glyphId: g.g,
@@ -96,6 +91,11 @@ export function shapeText(fontBlob: ArrayBuffer | null, text: string, fontSize: 
     }));
   } catch {
     return [];
+  } finally {
+    buffer.destroy();
+    font.destroy();
+    face.destroy();
+    blob.destroy();
   }
 }
 

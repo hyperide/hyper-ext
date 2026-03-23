@@ -62,10 +62,11 @@ function appendSemicircle(
   // Each quarter circle uses kappa = 0.5522847498.
   const kappa = 0.5522847498;
 
-  // tangent direction: perpendicular to normal
-  // normal = (nx, ny) → tangent = (-ny, nx) (or ny, -nx for reverse)
-  const tx = reverse ? ny : -ny;
-  const ty = reverse ? -nx : nx;
+  // tangent direction: perpendicular to normal, pointing outward (in path travel direction)
+  // End cap (reverse=false): tangent = (ny, -nx) → bulge in forward direction
+  // Start cap (reverse=true): tangent = (-ny, nx) → bulge in backward direction
+  const tx = reverse ? -ny : ny;
+  const ty = reverse ? nx : -nx;
 
   // Start point: center + normal * radius
   // End point: center - normal * radius

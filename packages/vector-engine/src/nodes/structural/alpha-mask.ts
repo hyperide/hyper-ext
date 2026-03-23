@@ -5,6 +5,7 @@
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Structural Nodes
  */
 
+import { PathBuilder } from '../../path/builder';
 import type { NodeTypeDefinition } from '../../types';
 
 export const alphaMaskNode: NodeTypeDefinition = {
@@ -21,6 +22,13 @@ export const alphaMaskNode: NodeTypeDefinition = {
   ],
   params: [],
   execute(inputs) {
+    if (!inputs.content || !inputs.mask) {
+      const builder = new PathBuilder();
+      return {
+        path: { type: 'path', value: builder.build() },
+        clipPath: inputs.mask ?? inputs.content,
+      };
+    }
     return {
       path: inputs.content,
       clipPath: inputs.mask,

@@ -5,9 +5,9 @@
  * Architecture: https://hyperide.github.io/reports/HYP-308
  */
 
-import { fitCurve } from '../../curve/fit';
 import { flattenPath } from '../../path/flatten';
 import type { NodeTypeDefinition, NodeValue, PathValue, Point } from '../../types';
+import { deformResult } from './deform-util';
 
 /** Rotate a point around a center by the given angle (radians). */
 function rotateAround(p: Point, center: Point, rad: number): Point {
@@ -69,7 +69,7 @@ export const twistNode: NodeTypeDefinition = {
     return {
       path: {
         type: 'path',
-        value: fitCurve(displaced, 1),
+        value: deformResult(displaced, 'smooth', 1),
       },
     };
   },

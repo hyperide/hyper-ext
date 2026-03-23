@@ -1,7 +1,7 @@
 /**
  * @file Auto-registration of all built-in node types
  *
- * Accessed via: Engine initialization — called once to populate the registry with all 48 built-in node types
+ * Accessed via: Engine initialization — called once to populate the registry with all 52 built-in node types
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Node Registry
  */
 
@@ -24,15 +24,19 @@ import { starNode } from './generators/star';
 import { svgPathNode } from './generators/svg-path';
 import { gradientMeshNode } from './mesh/gradient-mesh';
 import { meshFromPathNode } from './mesh/mesh-from-path-node';
+import { addPointNode } from './path-ops/add-point';
 import { closeOpenNode, joinPathsNode, reversePathNode } from './path-ops/basic-ops';
 import { createBooleanNodes } from './path-ops/boolean';
 import { chamferNode } from './path-ops/chamfer';
 import { clipNode } from './path-ops/clip';
+import { convertPointNode } from './path-ops/convert-point';
 import { createDashNode } from './path-ops/dash-path';
 import { enforceWindingNode } from './path-ops/enforce-winding';
 import { createOffsetNode } from './path-ops/offset';
+import { removePointNode } from './path-ops/remove-point';
 import { roundCornersNode } from './path-ops/round-corners';
 import { smoothNode } from './path-ops/smooth';
+import { splitPathNode } from './path-ops/split-path';
 import { createStrokeToPathNode } from './path-ops/stroke-to-path';
 import { subdivideNode } from './path-ops/subdivide';
 import { trimPathNode } from './path-ops/trim-path';
@@ -135,6 +139,12 @@ export function createDefaultRegistry(pathOps?: PathOpsBackend): NodeRegistry {
 
   // Envelope distort (Plan 2b)
   registry.register(envelopeDistortNode);
+
+  // Path ops (Plan 3)
+  registry.register(addPointNode);
+  registry.register(removePointNode);
+  registry.register(convertPointNode);
+  registry.register(splitPathNode);
 
   return registry;
 }
