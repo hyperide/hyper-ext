@@ -14,7 +14,8 @@
 
 import { execFile } from 'node:child_process';
 import { isAbsolute, join, relative } from 'node:path';
-import { ensureSample, PreviewFileManager } from '@lib/preview-generator';
+import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
+import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
 import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
@@ -33,6 +34,7 @@ import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { detectUIKit } from './services/ProjectDetector';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
+import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 
 // Global references
@@ -71,7 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Create preview panel instance
-  previewPanel = new PreviewPanel(context.extensionUri, workspaceRoot, stateHub, panelRouter);
+  previewPanel = new PreviewPanel(context.extensionUri, workspaceRoot, stateHub, panelRouter, context);
 
   // Register serializer for cross-restart persistence
   context.subscriptions.push(
@@ -190,6 +192,51 @@ export function activate(context: vscode.ExtensionContext) {
     io: vsCodeIO,
   });
 
+  // Mode manager: orchestrates App Shell ↔ Isolated transitions via FSWatch
+  const modeManager = new PreviewModeManager({
+    projectRoot: workspaceRoot,
+    io: vsCodeIO,
+    onModeChange: (isolated) => {
+      devServerManager?.setIsolatedMode(isolated);
+      previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
+      // Force iframe reload on every mode change.
+      // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
+      // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
+      // the iframe fetches fresh content from the proxy in its new mode.
+      previewPanel?.refresh();
+    },
+  });
+  modeManager.startWatching();
+  context.subscriptions.push({ dispose: () => modeManager.stopWatching() });
+
+  // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
+  previewPanel.setScopeChangeHandler(async (scope) => {
+    const wrapperPath = join(workspaceRoot, '.hyperide/preview.tsx');
+    if (scope === 'component-only') {
+      // Check if wrapper already exists (user may have written it manually)
+      const exists = await vsCodeIO
+        .access(wrapperPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!exists) {
+        const content = await generatePreviewWrapper(workspaceRoot, context);
+        if (content) {
+          await writePreviewWrapper(workspaceRoot, content);
+          // FSWatch picks up the file and calls modeManager.onWrapperCreated() → setIsolatedMode(true)
+        } else {
+          void vscode.window.showInformationMessage(
+            'HyperIDE: configure an AI key to auto-generate .hyperide/preview.tsx, or create it manually.',
+          );
+        }
+      }
+      // If file already exists, FSWatch already triggered isolated mode
+    } else {
+      // Switch back to App Shell: delete the wrapper
+      await vsCodeIO.deleteFile?.(wrapperPath);
+      // FSWatch picks up deletion → modeManager.onWrapperDeleted() → setIsolatedMode(false)
+    }
+  });
+
   // AI-powered sample generator (uses extension's API key config)
   const sampleGenerator = createExtensionSampleGenerator(context);
 
@@ -239,10 +286,40 @@ export function activate(context: vscode.ExtensionContext) {
           const relativePath = relative(workspaceRoot, absComponentPath);
           return previewManager.ensureComponent([relativePath]);
         })
-        .then(() => {
-          if (ac.signal.aborted) return;
-          // 3. Refresh iframe to pick up regenerated __canvas_preview__.tsx
-          previewPanel?.refresh();
+        .then(async () => {
+          if (ac.signal.aborted) return 'aborted' as const;
+          // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
+          const result = await modeManager.onComponentSelected();
+          if (result === 'unsupported') {
+            void vscode.window.showWarningMessage(
+              'HyperIDE: unsupported project type. ' +
+                'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
+            );
+            return 'unsupported' as const;
+          }
+          if (result === 'needs-patch') {
+            void vscode.window
+              .showWarningMessage(
+                'HyperIDE: JSX router detected but no /test-preview route found. ' +
+                  'Add the route manually or let AI do it.',
+                'Auto fix',
+                'Dismiss',
+              )
+              .then(async (choice) => {
+                if (choice === 'Auto fix') {
+                  const prompt = await buildNeedsPatchPrompt(workspaceRoot, vsCodeIO);
+                  aiChatProvider?.sendAIPrompt(prompt);
+                }
+              });
+            return 'needs-patch' as const;
+          }
+          return result;
+        })
+        .then((result) => {
+          if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
+          // 4. Update iframe component URL param — no hard reload needed
+          const relativePath = relative(workspaceRoot, absComponentPath);
+          previewPanel?.setComponentParam(relativePath);
         })
         .catch((err) => {
           if (ac.signal.aborted) return;
@@ -1210,3 +1287,12 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
     console.error('[HyperMCP] Failed to register Copilot MCP provider:', err);
   }
 }
+
+// ============================================================================
+// needs-patch: AI auto-fix prompt builder
+// ============================================================================
+
+/**
+ * Build an AI chat prompt for the "Auto fix" button shown when needs-patch is returned.
+ * Reads router candidate files and package.json to give AI full context.
+ */

@@ -55,14 +55,28 @@ export class PreviewPanel {
   private _stateHub: StateHub;
   private _panelRouter: PanelRouter;
 
+  private _onScopeChange?: (scope: 'full-app' | 'component-only') => Promise<void>;
+
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _workspaceRoot: string,
     stateHub: StateHub,
     panelRouter: PanelRouter,
+    private readonly _context: vscode.ExtensionContext,
   ) {
     this._stateHub = stateHub;
     this._panelRouter = panelRouter;
+  }
+
+  /** Register a callback invoked when the user toggles preview scope via the toolbar. */
+  setScopeChangeHandler(fn: (scope: 'full-app' | 'component-only') => Promise<void>): void {
+    this._onScopeChange = fn;
+  }
+
+  /** Push current scope state into the webview (called from extension when mode changes). */
+  setPreviewScope(scope: 'full-app' | 'component-only'): void {
+    // Persist to StateHub so newly created panels receive the correct scope on state:init
+    this._stateHub.applyUpdate({ previewScope: scope });
   }
 
   /**
@@ -207,6 +221,29 @@ export class PreviewPanel {
     // === Preview-specific lifecycle messages (not routed) ===
     if (msg.type === 'previewLoaded') {
       console.log('[HyperIDE] Preview iframe loaded');
+      return;
+    }
+    if (msg.type === 'chrome-detected') {
+      const shown = this._context.workspaceState.get<boolean>('chromeDetectedShown', false);
+      if (!shown) {
+        void this._context.workspaceState.update('chromeDetectedShown', true);
+        void vscode.window
+          .showInformationMessage(
+            'HyperCanvas: Preview includes app layout (nav/header/sidebar). Switch to Isolated mode to isolate components.',
+            'Generate wrapper',
+            'Dismiss',
+          )
+          .then((choice) => {
+            if (choice === 'Generate wrapper') {
+              void this._onScopeChange?.('component-only');
+            }
+          });
+      }
+      return;
+    }
+    if (msg.type === 'preview:setScope') {
+      const { scope } = msg as { scope: 'full-app' | 'component-only' };
+      void this._onScopeChange?.(scope);
       return;
     }
     if (msg.type === 'runtime:error') {
@@ -700,6 +737,19 @@ export class PreviewPanel {
    */
   public refresh(): void {
     this._panel?.webview.postMessage({ type: 'refresh' });
+  }
+
+  /**
+   * Update iframe component URL param without a hard reload.
+   * Triggers navigation to /test-preview?component=<componentPath>.
+   */
+  public setComponentParam(componentPath: string): void {
+    if (!this._panel) return;
+    this._currentComponent = componentPath;
+    this._panel.webview.postMessage({
+      type: 'setComponent',
+      component: componentPath,
+    });
   }
 
   /**

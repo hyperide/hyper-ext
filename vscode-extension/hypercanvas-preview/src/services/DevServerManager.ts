@@ -169,7 +169,7 @@ export class DevServerManager {
       this._port = await this._findFreePort(startPort);
 
       // Start preview proxy for script injection (error detection)
-      this._previewProxy = new PreviewProxy(this._port);
+      this._previewProxy = new PreviewProxy(this._port, this._projectPath);
       await this._previewProxy.start();
       console.log(`[HyperIDE] PreviewProxy started on port ${this._previewProxy.port}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
 
@@ -324,6 +324,13 @@ export class DevServerManager {
   dispose(): void {
     void this.stop();
     this._outputChannel.dispose();
+  }
+
+  /**
+   * Switch between App Shell and Isolated mode. Delegated from PreviewModeManager.
+   */
+  setIsolatedMode(isolated: boolean): void {
+    this._previewProxy?.setIsolatedMode(isolated);
   }
 
   /**

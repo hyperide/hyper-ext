@@ -61,4 +61,12 @@ export class VSCodeFileIO implements FileIO {
     const uri = vscode.Uri.file(absolutePath);
     await vscode.workspace.fs.stat(uri);
   }
+
+  async mkdir(dirPath: string): Promise<void> {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+  }
+
+  async deleteFile(absolutePath: string): Promise<void> {
+    await vscode.workspace.fs.delete(vscode.Uri.file(absolutePath), { useTrash: false });
+  }
 }

@@ -122,7 +122,6 @@ const App = () => (
 );
 
 // Mount the app
-// Preview mode uses separate entry point: CanvasPreviewEntry.tsx
 // biome-ignore lint/style/noNonNullAssertion: root element is guaranteed by index.html
 createRoot(document.getElementById('root')!).render(<App />);
 

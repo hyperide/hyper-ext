@@ -10,6 +10,7 @@ import {
 /** In-memory FileIO for testing without disk */
 class InMemoryFileIO implements FileIO {
   files = new Map<string, string>();
+  mkdirCalls: string[] = [];
 
   async readFile(path: string): Promise<string> {
     const content = this.files.get(path);
@@ -27,6 +28,23 @@ class InMemoryFileIO implements FileIO {
     if (!isDir && !this.files.has(path)) {
       throw new Error(`ENOENT: ${path}`);
     }
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    this.files.delete(path);
+  }
+
+  async listFiles(dirPath: string, extensions?: string[]): Promise<string[]> {
+    const prefix = dirPath.endsWith('/') ? dirPath : `${dirPath}/`;
+    return [...this.files.keys()].filter((k) => {
+      if (!k.startsWith(prefix)) return false;
+      if (!extensions) return true;
+      return extensions.some((ext) => k.endsWith(ext));
+    });
+  }
+
+  async mkdir(dirPath: string): Promise<void> {
+    this.mkdirCalls.push(dirPath);
   }
 }
 
@@ -577,5 +595,483 @@ describe('isValidTypeScript', () => {
 
   it('should return false for HTML document', () => {
     expect(isValidTypeScript('<!DOCTYPE html><html><body></body></html>')).toBe(false);
+  });
+});
+
+describe('PreviewFileManager.ensurePreviewFiles', () => {
+  it('generates route file for Next.js App Router', async () => {
+    const io = new InMemoryFileIO();
+    // Simulate Next.js App Router project
+    io.files.set('/project/app/layout.tsx', 'export default function RootLayout...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    // Pre-populate source component
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    // Pre-populate __canvas_preview__.tsx (as if ensureComponent ran first)
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const result = await manager.ensurePreviewFiles();
+    expect(result).toBe('ok');
+
+    const routeFile = io.files.get('/project/app/test-preview/page.tsx');
+    expect(routeFile).toBeDefined();
+    expect(routeFile).toContain('@hyperide-managed');
+    expect(routeFile).toContain('CanvasPreview');
+    expect(routeFile).toContain('useSearchParams');
+
+    const layoutFile = io.files.get('/project/app/test-preview/layout.tsx');
+    expect(layoutFile).toBeDefined();
+    expect(layoutFile).toContain('@hyperide-managed');
+  });
+
+  it('skips route file if it already exists with @hyperide-managed', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    const existingContent = '// @hyperide-managed\nexport default function TestPreviewPage() {}';
+    io.files.set('/project/app/test-preview/page.tsx', existingContent);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensurePreviewFiles();
+
+    // File should remain unchanged
+    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(existingContent);
+  });
+
+  it('does not overwrite user file without @hyperide-managed', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    const userContent = 'export default function UserPage() { return <div>My page</div>; }';
+    io.files.set('/project/app/test-preview/page.tsx', userContent);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensurePreviewFiles();
+
+    // User file must not be overwritten
+    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(userContent);
+  });
+
+  it('returns unsupported for unknown framework', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { react: '^18.0.0' } }));
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const result = await manager.ensurePreviewFiles();
+    expect(result).toBe('unsupported');
+  });
+
+  it('returns needs-patch for vite-spa-jsx-router', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { vite: '^5.0.0' } }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const result = await manager.ensurePreviewFiles();
+    expect(result).toBe('needs-patch');
+  });
+});
+
+describe('PreviewFileManager.ensureGitExclude', () => {
+  it('creates .git/info/exclude with all entries when file is missing', async () => {
+    const io = new InMemoryFileIO();
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureGitExclude();
+
+    const content = io.files.get('/project/.git/info/exclude');
+    expect(content).toContain('# HyperIDE — generated preview files');
+    expect(content).toContain('src/__canvas_preview__.tsx');
+    expect(content).toContain('src/__canvas_preview_standalone__.tsx');
+    expect(content).toContain('**/test-preview/');
+    expect(content).toContain('**/test-preview.tsx');
+  });
+
+  it('appends missing entries to existing exclude file', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/.git/info/exclude', '# existing\n*.log\n');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureGitExclude();
+
+    const content = io.files.get('/project/.git/info/exclude');
+    expect(content).toContain('# existing');
+    expect(content).toContain('*.log');
+    expect(content).toContain('src/__canvas_preview__.tsx');
+  });
+
+  it('is idempotent — does not duplicate entries', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/.git/info/exclude',
+      '# HyperIDE — generated preview files\nsrc/__canvas_preview__.tsx\nsrc/__canvas_preview_standalone__.tsx\n**/test-preview/\n**/test-preview.tsx\n',
+    );
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const before = io.files.get('/project/.git/info/exclude');
+    await manager.ensureGitExclude();
+    const after = io.files.get('/project/.git/info/exclude');
+    expect(after).toBe(before); // unchanged
+  });
+
+  it('adds newline separator when existing file does not end with newline', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/.git/info/exclude', '# existing');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureGitExclude();
+
+    const content = io.files.get('/project/.git/info/exclude') ?? '';
+    expect(content.startsWith('# existing\n')).toBe(true);
+  });
+
+  it('does not throw when .git/info/exclude is not writable (worktree or non-git dir)', async () => {
+    const io = new InMemoryFileIO();
+    // writeFile always throws (simulates .git being a file or no write access)
+    io.writeFile = async () => {
+      throw new Error('ENOTDIR');
+    };
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await expect(manager.ensureGitExclude()).resolves.toBeUndefined();
+  });
+});
+
+describe('PreviewFileManager.cleanupPreviewFiles', () => {
+  it('removes @hyperide-managed route files', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    io.files.set(
+      '/project/app/test-preview/page.tsx',
+      '// @hyperide-managed\nexport default function TestPreviewPage() {}',
+    );
+    io.files.set(
+      '/project/app/test-preview/layout.tsx',
+      '// @hyperide-managed\nexport default function PreviewLayout...',
+    );
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.cleanupPreviewFiles();
+
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(false);
+    expect(io.files.has('/project/app/test-preview/layout.tsx')).toBe(false);
+    // __canvas_preview__.tsx should NOT be removed — only route files
+    expect(io.files.has('/project/src/__canvas_preview__.tsx')).toBe(true);
+  });
+
+  it('does not remove user files without @hyperide-managed', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
+    io.files.set('/project/app/test-preview/page.tsx', 'export default function MyPage() {}');
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.cleanupPreviewFiles();
+
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(true);
+  });
+});
+
+describe('PreviewFileManager._hasImport', () => {
+  it('returns true for exact relative import', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "import Button from './components/Button';\nexport default function CanvasPreview() {}",
+    );
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
+  });
+
+  it('returns true when import has extension but search does not', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "import Button from './components/Button.tsx';\nexport default function CanvasPreview() {}",
+    );
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
+  });
+
+  it('returns false for missing import', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "import Button from './components/Button';\nexport default function CanvasPreview() {}",
+    );
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Card')).toBe(false);
+  });
+
+  it('handles absolute vs relative normalization (same resolved path)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "import Button from '../src/components/Button';\nexport default function CanvasPreview() {}",
+    );
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    // Different relative path, same resolved file
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
+  });
+});
+
+describe('ensureComponent — fast path', () => {
+  it('does not write file when import already present', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
+    );
+    let writeCount = 0;
+    const origWrite = io.writeFile.bind(io);
+    io.writeFile = async (p, c) => {
+      writeCount++;
+      return origWrite(p, c);
+    };
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']);
+
+    expect(writeCount).toBe(0); // fast path — no write
+  });
+
+  it('AST-inserts missing import without full regeneration', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    // File has Button but not Card
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Card.tsx']);
+
+    const content = io.files.get('/project/src/__canvas_preview__.tsx');
+    expect(content).toBeDefined();
+    expect(content).toContain('Button'); // existing import preserved
+    expect(content).toContain('Card'); // new import added
+  });
+
+  it('init: generates with ALL project components when file is missing', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']); // only Button requested
+
+    const content = io.files.get('/project/src/__canvas_preview__.tsx');
+    expect(content).toBeDefined();
+    expect(content).toContain('Button');
+    expect(content).toContain('Card'); // all components included on init
+  });
+});
+
+const ROUTER_SOURCE = `
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`;
+
+describe('PreviewFileManager.patchRouterConfig', () => {
+  it('injects /test-preview route into <Routes>', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+
+    const patched = io.files.get('/project/src/App.tsx');
+    expect(patched).toBeDefined();
+    expect(patched).toContain('test-preview');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('CanvasPreview');
+  });
+
+  it('revertRouterPatch removes @hyperide-managed lines and preserves original routes', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.revertRouterPatch('/project/src/App.tsx');
+
+    const reverted = io.files.get('/project/src/App.tsx');
+    expect(reverted).toBeDefined();
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('test-preview');
+    // Original home route must survive the revert
+    expect(reverted).toContain('path="/"');
+    expect(reverted).toContain('Home');
+  });
+
+  it('is idempotent — does not double-inject', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.patchRouterConfig('/project/src/App.tsx');
+
+    const patched = io.files.get('/project/src/App.tsx');
+    expect(patched).toBeDefined();
+    // Should only have one test-preview route
+    const count = (patched?.match(/test-preview/g) ?? []).length;
+    expect(count).toBe(1);
+  });
+});
+
+const ENTRY_SOURCE = `
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+`;
+
+describe('PreviewFileManager.patchEntryFile', () => {
+  it('wraps createRoot call in if/else block', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toBeDefined();
+    expect(patched).toContain('__preview');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview__');
+  });
+
+  it('revertEntryFile restores original bootstrap code', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.revertEntryFile('/project/src/index.tsx');
+    const reverted = io.files.get('/project/src/index.tsx');
+    expect(reverted).toBeDefined();
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('__preview');
+    expect(reverted).toContain('ReactDOM.createRoot');
+    expect(reverted).toContain("document.getElementById('root')");
+  });
+
+  it('is idempotent', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toBeDefined();
+    const count = (patched?.match(/__preview/g) ?? []).length;
+    expect(count).toBe(1);
+  });
+});
+
+describe('PreviewFileManager.ensureStandaloneEntry', () => {
+  it('generates __canvas_preview_standalone__.tsx from existing canvas_preview', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    const manager = createManager(io);
+    await manager.ensureComponent(['src/components/Button.tsx']);
+    await manager.ensureStandaloneEntry();
+
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toBeDefined();
+    expect(standalone).toContain('createRoot');
+    expect(standalone).toContain('PreviewWrapper');
+    expect(standalone).toContain('CanvasPreview');
+    expect(standalone).toContain('@hyperide-managed');
+    // Base preview content is preserved
+    expect(standalone).toContain('componentRegistry');
+    expect(standalone).toContain('sampleRenderMap');
+  });
+
+  it('wrapper import path is relative from src/ to .hyperide/', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    const manager = createManager(io);
+    await manager.ensureComponent(['src/components/Button.tsx']);
+    await manager.ensureStandaloneEntry();
+
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toContain('../.hyperide/preview');
+  });
+
+  it('is a no-op when __canvas_preview__.tsx does not exist', async () => {
+    const io = new InMemoryFileIO();
+    const manager = createManager(io);
+    await expect(manager.ensureStandaloneEntry()).resolves.toBeUndefined();
+    expect(io.files.has('/project/src/__canvas_preview_standalone__.tsx')).toBe(false);
+  });
+
+  it('updates standalone entry when called again after new component added', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    const manager = createManager(io);
+    await manager.ensureComponent(['src/components/Button.tsx']);
+    await manager.ensureStandaloneEntry();
+
+    // Add Card — regenerate preview + standalone
+    await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Card.tsx']);
+    await manager.ensureStandaloneEntry();
+
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toContain('Button');
+    expect(standalone).toContain('Card');
+  });
+});
+
+describe('PreviewFileManager._writeIfSafe mkdir', () => {
+  it('calls mkdir before writing nested route file', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensurePreviewFiles();
+
+    // mkdir should have been called for the nested route directory
+    expect(io.mkdirCalls).toContain('/project/app/test-preview');
   });
 });

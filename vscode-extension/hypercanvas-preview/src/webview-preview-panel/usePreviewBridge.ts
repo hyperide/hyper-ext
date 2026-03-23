@@ -100,6 +100,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         canvas.sendEvent({ type: 'previewLoaded' } as unknown as PlatformMessage);
         return;
       }
+
+      if (msg.type === 'chrome-detected') {
+        canvas.sendEvent({ type: 'chrome-detected' } as unknown as PlatformMessage);
+        return;
+      }
     }
 
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
@@ -174,6 +179,16 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'refresh':
           doRefresh();
           break;
+
+        case 'setComponent': {
+          const frame = iframeElRef.current;
+          if (frame) {
+            const url = new URL(frame.src);
+            url.searchParams.set('component', msg.component as string);
+            frame.src = url.toString();
+          }
+          break;
+        }
 
         case 'goToVisual':
           // Update overlay state (selection highlighting)
