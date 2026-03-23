@@ -5,8 +5,8 @@ describe('createDefaultRegistry', () => {
   it('should register all built-in node types', () => {
     const registry = createDefaultRegistry();
     const all = registry.listAll();
-    // 8 generators + 7 path ops + 4 style + 4 transform = 23
-    expect(all.length).toBeGreaterThanOrEqual(23);
+    // Plan 1: 24 nodes + Plan 2: 21 nodes = 45 total
+    expect(all.length).toBe(45);
   });
 
   it('should have generators category', () => {
