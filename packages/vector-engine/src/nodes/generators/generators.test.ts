@@ -10,6 +10,7 @@ import { polygonNode } from './polygon';
 import { rectangleNode } from './rectangle';
 import { spiralNode } from './spiral';
 import { starNode } from './star';
+import { svgPathNode } from './svg-path';
 
 describe('Rectangle generator — edge cases', () => {
   it('zero width should not crash and produces degenerate path', () => {
@@ -255,5 +256,20 @@ describe('Ellipse generator', () => {
     const cmds = decodeCommands(path.commands);
     // First point should be at (cx + rx, cy) = (150, 200)
     expect(cmds[0]).toMatchObject({ x: 150, y: 200 });
+  });
+});
+
+describe('svgPath generator', () => {
+  it('should parse d attribute into PathValue', () => {
+    const result = svgPathNode.execute({}, { d: 'M 0 0 L 100 0 L 100 100 Z' });
+    const path = (result.path as NodeValue).value as PathValue;
+    expect(path.commands.length).toBeGreaterThan(0);
+    expect(path.closed).toBe(true);
+  });
+
+  it('should handle empty d attribute', () => {
+    const result = svgPathNode.execute({}, { d: '' });
+    const path = (result.path as NodeValue).value as PathValue;
+    expect(path.commands.length).toBe(0);
   });
 });
