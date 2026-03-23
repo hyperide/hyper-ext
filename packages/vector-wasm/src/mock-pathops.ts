@@ -31,4 +31,12 @@ export class MockPathOps implements PathOpsBackend {
   dash(path: PathValue, _dashArray: number[], _dashOffset: number): PathValue {
     return path;
   }
+
+  offset(path: PathValue, _distance: number): PathValue {
+    return path;
+  }
+
+  removeSelfIntersections(path: PathValue): PathValue {
+    return path;
+  }
 }

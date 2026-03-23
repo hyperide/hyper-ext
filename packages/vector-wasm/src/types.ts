@@ -14,4 +14,6 @@ export interface PathOpsBackend {
   flatten(path: PathValue, maxError: number): PathValue;
   strokeToPath(path: PathValue, width: number, cap: string, join: string): PathValue;
   dash(path: PathValue, dashArray: number[], dashOffset: number): PathValue;
+  offset(path: PathValue, distance: number): PathValue;
+  removeSelfIntersections(path: PathValue): PathValue;
 }
