@@ -2,6 +2,56 @@ import { describe, expect, it } from 'bun:test';
 import { type FigNode, parseFigFile } from './fig-import';
 import { mapFigToGraph } from './fig-mapper';
 
+function buildTriangleBlob(): Uint8Array {
+  const buf = new ArrayBuffer(256);
+  const view = new DataView(buf);
+  let offset = 0;
+  // 3 vertices
+  view.setUint32(offset, 3, true);
+  offset += 4;
+  for (const [x, y] of [
+    [0, 0],
+    [100, 0],
+    [50, 86.6],
+  ]) {
+    view.setFloat32(offset, x, true);
+    offset += 4;
+    view.setFloat32(offset, y, true);
+    offset += 4;
+  }
+  // 3 segments
+  view.setUint32(offset, 3, true);
+  offset += 4;
+  for (const [s, e] of [
+    [0, 1],
+    [1, 2],
+    [2, 0],
+  ]) {
+    view.setUint32(offset, s, true);
+    offset += 4;
+    view.setUint32(offset, e, true);
+    offset += 4;
+    for (let i = 0; i < 4; i++) {
+      view.setFloat32(offset, 0, true);
+      offset += 4;
+    }
+  }
+  // 1 region
+  view.setUint32(offset, 1, true);
+  offset += 4;
+  view.setUint8(offset, 1);
+  offset += 1; // nonZero
+  view.setUint32(offset, 1, true);
+  offset += 4; // 1 loop
+  view.setUint32(offset, 3, true);
+  offset += 4; // 3 segments
+  for (const idx of [0, 1, 2]) {
+    view.setUint32(offset, idx, true);
+    offset += 4;
+  }
+  return new Uint8Array(buf, 0, offset);
+}
+
 describe('FIG import', () => {
   it('should export parseFigFile function', () => {
     expect(typeof parseFigFile).toBe('function');
@@ -326,5 +376,56 @@ describe('FIG node mapper', () => {
     expect(rect).toBeDefined();
     expect(rect?.params.width).toBe(100);
     expect(rect?.params.height).toBe(100);
+  });
+});
+
+describe('FIG mapper with vectorNetworkBlob', () => {
+  it('should decode VECTOR node with binary blob', () => {
+    const blob = buildTriangleBlob();
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'Triangle',
+        id: 'v1',
+        children: [],
+        properties: { vectorNetworkBlob: Array.from(blob) },
+      },
+    ];
+    const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
+    expect(pathNode).toBeDefined();
+    expect((pathNode?.params.d as string).length).toBeGreaterThan(0);
+    expect(pathNode?.params.d as string).toContain('M');
+  });
+
+  it('should fallback to fillGeometry when no blob', () => {
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'P',
+        id: 'v2',
+        children: [],
+        properties: { fillGeometry: 'M 0 0 L 100 0 Z' },
+      },
+    ];
+    const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
+    expect(pathNode).toBeDefined();
+    expect(pathNode?.params.d).toBe('M 0 0 L 100 0 Z');
+  });
+
+  it('should fallback when blob is empty/invalid', () => {
+    const figNodes: FigNode[] = [
+      {
+        type: 'VECTOR',
+        name: 'Empty',
+        id: 'v3',
+        children: [],
+        properties: { vectorNetworkBlob: [0, 1, 2], fillGeometry: 'M 0 0 L 50 0 Z' },
+      },
+    ];
+    const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
+    expect(pathNode?.params.d).toBe('M 0 0 L 50 0 Z');
   });
 });

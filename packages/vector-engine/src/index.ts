@@ -19,6 +19,8 @@ export { GraphExecutor } from './graph/executor';
 export { HistoryManager } from './graph/history';
 export { type BuildSceneInput, buildScene } from './graph/scene-builder';
 export { VectorGraphModel } from './graph/vector-graph';
+// FIG blob decode (deferred SDK)
+export { decodeVectorNetworkBlob } from './import/fig-blob-decode';
 // FIG import (Plan 2b)
 export { type FigNode, type FigParseResult, parseFigFile } from './import/fig-import';
 export { mapFigToGraph } from './import/fig-mapper';
@@ -121,8 +123,16 @@ export { mergePaths } from './path/merge';
 export { type NearestResult, nearestPointOnPath } from './path/nearest';
 // Persistence
 export { AutoSave } from './persistence/auto-save';
+// Kiwi codec (deferred SDK)
+export { decodeGraphFile, encodeGraphFile } from './persistence/kiwi-codec';
 export { OperationLog } from './persistence/operation-log';
-export { deserializeGraph, serializeGraph } from './persistence/serialize';
+// Binary serialize (deferred SDK)
+export {
+  deserializeGraph,
+  deserializeGraphBinary,
+  serializeGraph,
+  serializeGraphBinary,
+} from './persistence/serialize';
 export { type ExecutionCache, SnapshotManager, type SnapshotStorage } from './persistence/snapshot';
 export type { GraphOperation, VectorGraphFile, VectorGraphMeta, VectorGraphState } from './persistence/types';
 export { applyReconciliation } from './reconcile/apply';
@@ -131,6 +141,9 @@ export { computeReconciliationDiff, type ReconciliationDiff } from './reconcile/
 // Renderer
 export { SVGStringRenderer } from './render/svg-renderer';
 export type { HitResult, VectorRenderer } from './render/types';
+export { type ReverseSyncResult, reverseSync } from './sync/reverse-sync';
+// Reverse sync (deferred SDK)
+export { computeSemanticDiff, type SemanticDiff, type SemanticMatch } from './sync/semantic-diff';
 // Types
 export type {
   BlendMode,

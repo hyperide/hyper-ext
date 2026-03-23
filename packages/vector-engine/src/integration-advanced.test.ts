@@ -12,7 +12,10 @@ import { svgToGraph } from './import/svg-import';
 import {
   computeBounds,
   computeReconciliationDiff,
+  computeSemanticDiff,
+  decodeVectorNetworkBlob,
   deserializeGraph,
+  deserializeGraphBinary,
   GraphExecutor,
   IDENTITY_TRANSFORM,
   nearestPointOnPath,
@@ -20,6 +23,7 @@ import {
   SVGStringRenderer,
   sceneToSvg,
   serializeGraph,
+  serializeGraphBinary,
   VectorGraphModel,
 } from './index';
 import { splitIntersections } from './network/split';
@@ -196,5 +200,34 @@ describe('Plan 3 integration', () => {
     expect(registry.get('splitPath')).toBeDefined();
     const all = registry.listAll();
     expect(all.length).toBe(52);
+  });
+});
+
+describe('deferred SDK features', () => {
+  it('should roundtrip graph through binary codec', () => {
+    const model = VectorGraphModel.create('test', 'Kiwi', 100, 100);
+    model.addNode({ type: 'rectangle', params: { width: 50, height: 50, x: 0, y: 0 } });
+    const binary = serializeGraphBinary(model, { componentPath: 'test.tsx' });
+    expect(binary).toBeInstanceOf(Uint8Array);
+    const { model: loaded } = deserializeGraphBinary(binary);
+    expect(loaded.nodeCount).toBe(1);
+  });
+
+  it('should compute semantic diff between scenes', () => {
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const item = {
+      id: 'n1',
+      path: rect,
+      style: { fill: { type: 'solid' as const, color: '#ff0000' } },
+      transform: IDENTITY_TRANSFORM,
+      visible: true,
+    };
+    const diff = computeSemanticDiff([item], [item]);
+    expect(diff.matched.length).toBe(1);
+  });
+
+  it('should decode empty FIG blob gracefully', () => {
+    const r = decodeVectorNetworkBlob(new Uint8Array(0));
+    expect(r.vertices.length).toBe(0);
   });
 });

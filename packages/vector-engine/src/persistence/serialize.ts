@@ -1,5 +1,5 @@
 /**
- * @file Graph serialization — save/load VectorGraphFile as JSON
+ * @file Graph serialization — save/load VectorGraphFile as JSON and binary
  *
  * Accessed via: Auto-save, explicit save (Cmd+S), file open
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Undo/Redo Persistence
@@ -7,6 +7,7 @@
 
 import { HistoryManager } from '../graph/history';
 import { VectorGraphModel } from '../graph/vector-graph';
+import { decodeGraphFile, encodeGraphFile } from './kiwi-codec';
 import type { GraphOperation, VectorGraphFile, VectorGraphMeta, VectorGraphState } from './types';
 
 export function serializeGraph(
@@ -61,4 +62,22 @@ export function deserializeGraph(file: VectorGraphFile): {
     history.replayForward(model, op.diffs, op.description, op.timestamp);
   }
   return { model, meta: file.meta, history };
+}
+
+export function serializeGraphBinary(
+  model: VectorGraphModel,
+  meta: VectorGraphMeta,
+  history?: HistoryManager,
+): Uint8Array {
+  const file = serializeGraph(model, meta, history);
+  return encodeGraphFile(file);
+}
+
+export function deserializeGraphBinary(data: Uint8Array): {
+  model: VectorGraphModel;
+  meta: VectorGraphMeta;
+  history: HistoryManager;
+} {
+  const file = decodeGraphFile(data);
+  return deserializeGraph(file);
 }

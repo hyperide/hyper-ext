@@ -7,6 +7,9 @@
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §FIG Import
  */
 
+import { networkToPaths } from '../network/convert';
+import { commandsToSvgD } from '../path/commands';
+import { decodeVectorNetworkBlob } from './fig-blob-decode';
 import type { FigNode } from './fig-import';
 import type { ImportedEdge, ImportedNode, ImportResult } from './svg-import';
 
@@ -96,11 +99,25 @@ export function mapFigToGraph(figNodes: FigNode[], canvas: { width: number; heig
       }
       case 'VECTOR': {
         nodeId = nextId();
-        const fillGeometry = figNode.properties.fillGeometry as string;
+        let d = '';
+        const blobData = figNode.properties.vectorNetworkBlob;
+        if (Array.isArray(blobData)) {
+          const blob = new Uint8Array(blobData as number[]);
+          const network = decodeVectorNetworkBlob(blob);
+          if (network.vertices.length > 0) {
+            const paths = networkToPaths(network);
+            if (paths.length > 0) {
+              d = commandsToSvgD(paths[0].commands);
+            }
+          }
+        }
+        if (!d) {
+          d = (figNode.properties.fillGeometry as string) ?? '';
+        }
         nodes.push({
           id: nodeId,
           type: 'svgPath',
-          params: { d: fillGeometry ?? '' },
+          params: { d },
         });
         break;
       }
