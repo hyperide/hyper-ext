@@ -7,8 +7,11 @@
  */
 
 import { describe, expect, it } from 'bun:test';
+import { mapFigToGraph } from './import/fig-mapper';
 import { svgToGraph } from './import/svg-import';
 import { GraphExecutor, PathBuilder, sceneToSvg, VectorGraphModel } from './index';
+import { splitIntersections } from './network/split';
+import type { VectorNetwork } from './network/types';
 import { createDefaultRegistry } from './nodes/register-all';
 import { flattenPath } from './path/flatten';
 import { pathLength } from './path/geometry';
@@ -57,5 +60,60 @@ describe('advanced integration', () => {
     expect(all.length).toBeGreaterThanOrEqual(44);
     const types = all.map((n) => n.type);
     expect(new Set(types).size).toBe(types.length);
+  });
+});
+
+describe('Plan 2b integration', () => {
+  it('should create gradient mesh via node', () => {
+    const registry = createDefaultRegistry();
+    const graph = VectorGraphModel.create('test', 'Mesh', 200, 200);
+    const meshNode = graph.addNode({
+      type: 'gradientMesh',
+      params: { rows: 2, cols: 2, width: 100, height: 100, x: 0, y: 0, color: '#ff0000' },
+    });
+    const executor = new GraphExecutor(registry);
+    const result = executor.execute(graph);
+    expect(result.nodeStatus[meshNode].state).toBe('ok');
+  });
+
+  it('should split intersections then find regions', () => {
+    const network: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+        { x: 0, y: 100 },
+      ],
+      segments: [
+        { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 2, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+      ],
+      regions: [],
+    };
+    const split = splitIntersections(network);
+    expect(split.vertices.length).toBe(5);
+  });
+
+  it('should register all Plan 2b nodes', () => {
+    const registry = createDefaultRegistry();
+    expect(registry.get('gradientMesh')).toBeDefined();
+    expect(registry.get('meshFromPath')).toBeDefined();
+    expect(registry.get('envelopeDistort')).toBeDefined();
+  });
+
+  it('should map FIG nodes to graph', () => {
+    const result = mapFigToGraph(
+      [
+        {
+          type: 'RECTANGLE',
+          name: 'R',
+          id: '1',
+          children: [],
+          properties: { width: 100, height: 50 },
+        },
+      ],
+      { width: 400, height: 300 },
+    );
+    expect(result.nodes.length).toBeGreaterThanOrEqual(1);
   });
 });

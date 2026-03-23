@@ -5,6 +5,13 @@
  */
 
 export { fitCurve } from './curve/fit';
+// Curve intersection (Plan 2b)
+export {
+  type IntersectionHit,
+  intersectCubicCubic,
+  intersectLineCubic,
+  intersectLineLine,
+} from './curve/intersect-bezier';
 // SVG export
 export { sceneToSvg } from './export/svg';
 // Graph
@@ -12,6 +19,9 @@ export { GraphExecutor } from './graph/executor';
 export { HistoryManager } from './graph/history';
 export { type BuildSceneInput, buildScene } from './graph/scene-builder';
 export { VectorGraphModel } from './graph/vector-graph';
+// FIG import (Plan 2b)
+export { type FigNode, type FigParseResult, parseFigFile } from './import/fig-import';
+export { mapFigToGraph } from './import/fig-mapper';
 // Import
 export { type ImportedEdge, type ImportedNode, type ImportResult, svgToGraph } from './import/svg-import';
 export { meshFromBounds } from './mesh/mesh-from-path';
@@ -20,8 +30,12 @@ export { tessellateMesh } from './mesh/tessellate';
 export type { MeshHandle, MeshVertex, TessellatedMesh } from './mesh/types';
 // Vector networks
 export { networkToPaths, pathToNetwork } from './network/convert';
+// Network: splitIntersections (Plan 2b)
+export { splitIntersections } from './network/split';
 export { findRegions } from './network/topology';
 export type { VectorNetwork, VectorRegion, VectorSegment, VectorVertex } from './network/types';
+// Envelope distort (Plan 2b)
+export { envelopeDistortNode } from './nodes/deformation/envelope-distort';
 // Deformation nodes
 export { puckerBloatNode } from './nodes/deformation/pucker-bloat';
 export { roughenNode } from './nodes/deformation/roughen';
@@ -39,6 +53,9 @@ export { spiralNode } from './nodes/generators/spiral';
 export { starNode } from './nodes/generators/star';
 // Generator nodes (Plan 2)
 export { svgPathNode } from './nodes/generators/svg-path';
+// Mesh nodes (Plan 2b)
+export { gradientMeshNode } from './nodes/mesh/gradient-mesh';
+export { meshFromPathNode } from './nodes/mesh/mesh-from-path-node';
 // Path operation nodes
 export { breakApartPaths, closeOpenNode, joinPathsNode, reversePathNode } from './nodes/path-ops/basic-ops';
 export { createBooleanNodes } from './nodes/path-ops/boolean';
@@ -68,6 +85,8 @@ export { fillNode } from './nodes/style/fill';
 export { opacityNode } from './nodes/style/opacity';
 export { shadowNode } from './nodes/style/shadow';
 export { strokeNode } from './nodes/style/stroke';
+// Text shaping (Plan 2b)
+export { initShaper, resetShaper, type ShapedGlyph, shapeText } from './nodes/text/shaper';
 // Text
 export { textToPathNode } from './nodes/text/text-to-path';
 // Transform nodes

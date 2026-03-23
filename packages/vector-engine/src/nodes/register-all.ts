@@ -1,12 +1,13 @@
 /**
  * @file Auto-registration of all built-in node types
  *
- * Accessed via: Engine initialization — called once to populate the registry with all 45 built-in node types
+ * Accessed via: Engine initialization — called once to populate the registry with all 48 built-in node types
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Node Registry
  */
 
 import type { PathOpsBackend } from 'vector-wasm';
 import { MockPathOps } from 'vector-wasm';
+import { envelopeDistortNode } from './deformation/envelope-distort';
 import { puckerBloatNode } from './deformation/pucker-bloat';
 import { roughenNode } from './deformation/roughen';
 import { twistNode } from './deformation/twist';
@@ -21,6 +22,8 @@ import { rectangleNode } from './generators/rectangle';
 import { spiralNode } from './generators/spiral';
 import { starNode } from './generators/star';
 import { svgPathNode } from './generators/svg-path';
+import { gradientMeshNode } from './mesh/gradient-mesh';
+import { meshFromPathNode } from './mesh/mesh-from-path-node';
 import { closeOpenNode, joinPathsNode, reversePathNode } from './path-ops/basic-ops';
 import { createBooleanNodes } from './path-ops/boolean';
 import { chamferNode } from './path-ops/chamfer';
@@ -125,6 +128,13 @@ export function createDefaultRegistry(pathOps?: PathOpsBackend): NodeRegistry {
 
   // Text
   registry.register(textToPathNode);
+
+  // Mesh nodes (Plan 2b)
+  registry.register(gradientMeshNode);
+  registry.register(meshFromPathNode);
+
+  // Envelope distort (Plan 2b)
+  registry.register(envelopeDistortNode);
 
   return registry;
 }

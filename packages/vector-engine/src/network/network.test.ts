@@ -8,6 +8,7 @@ import { describe, expect, it } from 'bun:test';
 import { PathBuilder } from '../path/builder';
 import { commandsToSvgD } from '../path/commands';
 import { networkToPaths, pathToNetwork } from './convert';
+import { splitIntersections } from './split';
 import { findRegions } from './topology';
 import type { VectorNetwork } from './types';
 
@@ -310,5 +311,102 @@ describe('topology solver', () => {
   it('should handle empty network', () => {
     const regions = findRegions({ vertices: [], segments: [], regions: [] });
     expect(regions.length).toBe(0);
+  });
+});
+
+// -- Task 4-5: splitIntersections --
+
+describe('splitIntersections', () => {
+  it('should split two crossing line segments', () => {
+    const network: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 100, y: 0 },
+        { x: 0, y: 100 },
+      ],
+      segments: [
+        { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 2, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+      ],
+      regions: [],
+    };
+    const result = splitIntersections(network);
+    expect(result.vertices.length).toBe(5);
+    expect(result.segments.length).toBe(4);
+    const newV = result.vertices[4];
+    expect(newV.x).toBeCloseTo(50, 1);
+    expect(newV.y).toBeCloseTo(50, 1);
+  });
+
+  it('should not split non-intersecting segments', () => {
+    const network: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 0, y: 50 },
+        { x: 100, y: 50 },
+      ],
+      segments: [
+        { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 2, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+      ],
+      regions: [],
+    };
+    const result = splitIntersections(network);
+    expect(result.vertices.length).toBe(4);
+    expect(result.segments.length).toBe(2);
+  });
+
+  it('should skip segments sharing a vertex', () => {
+    const network: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 50, y: 100 },
+      ],
+      segments: [
+        { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 1, end: 2, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+      ],
+      regions: [],
+    };
+    const result = splitIntersections(network);
+    expect(result.vertices.length).toBe(3);
+    expect(result.segments.length).toBe(2);
+  });
+
+  it('should handle empty network', () => {
+    const result = splitIntersections({ vertices: [], segments: [], regions: [] });
+    expect(result.vertices.length).toBe(0);
+  });
+
+  it('should enable findRegions on X pattern after splitting', () => {
+    // Two crossing diagonals + 4 border edges = should get 4 regions after split
+    const network: VectorNetwork = {
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+      ],
+      segments: [
+        // Border
+        { start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 1, end: 2, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 2, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 3, end: 0, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        // Diagonals (cross at center)
+        { start: 0, end: 2, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+        { start: 1, end: 3, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } },
+      ],
+      regions: [],
+    };
+    const split = splitIntersections(network);
+    // Diagonals cross at (50,50) — new vertex, diagonals split into 4 segments
+    expect(split.vertices.length).toBe(5);
+    expect(split.segments.length).toBe(8); // 4 border + 4 half-diagonals
+    const regions = findRegions(split);
+    expect(regions.length).toBe(4);
   });
 });
