@@ -7,15 +7,18 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { runBatch } from '../src/batch';
+import { getHelp } from '../src/help';
+import { isRsvgAvailable, svgToPng } from '../src/png';
 
 const args = process.argv.slice(2);
 
 // Parse flags
 let execFile: string | undefined;
 let outputFile: string | undefined;
-let canvasWidth = 100;
-let canvasHeight = 100;
+let canvasWidth: number | undefined;
+let canvasHeight: number | undefined;
 let expression: string | undefined;
+let format: 'svg' | 'png' = 'svg';
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -27,6 +30,11 @@ for (let i = 0; i < args.length; i++) {
     outputFile = args[++i];
     continue;
   }
+  if (arg === '--format') {
+    const val = args[++i];
+    if (val === 'png') format = 'png';
+    continue;
+  }
   if (arg === '--canvas') {
     const parts = args[++i].split('x').map(Number);
     if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
@@ -36,7 +44,11 @@ for (let i = 0; i < args.length; i++) {
     continue;
   }
   if (arg === '-h' || arg === '--help') {
-    printHelp();
+    const topic = args[i + 1];
+    // Only consume next arg if it doesn't look like a flag
+    const helpTopic = topic && !topic.startsWith('-') ? topic : undefined;
+    if (helpTopic) i++;
+    console.log(getHelp(helpTopic));
     process.exit(0);
   }
   if (arg === '-v' || arg === '--version') {
@@ -49,28 +61,6 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-function printHelp(): void {
-  console.log(`vecli — Vector Engine CLI
-
-Usage:
-  vecli                              Interactive TUI mode
-  vecli 'expression'                 Evaluate inline expression
-  vecli -e script.js                 Execute script file
-  echo 'expr' | vecli               Pipe stdin
-
-Flags:
-  -e, --exec <file>     Execute script file
-  -o, --output <file>   Output file (default: stdout)
-  --canvas <WxH>        Canvas size (default: 100x100)
-  -h, --help            Show help
-  -v, --version         Show version
-
-Examples:
-  vecli 'rect(100,50).fill("#f00").svg()'
-  vecli -e icon.js -o icon.svg
-  vecli --canvas 24x24 -e icon.js`);
-}
-
 // Detect mode
 const isTTY = process.stdin.isTTY && process.stdout.isTTY;
 const hasBatchArgs = expression || execFile;
@@ -79,21 +69,39 @@ async function main(): Promise<void> {
   if (hasBatchArgs || !isTTY) {
     // Batch mode
     let code = expression ?? '';
+    let stdinData: string | undefined;
 
     if (execFile) {
       code = readFileSync(execFile, 'utf-8');
-    } else if (!code && !isTTY) {
-      // Read from stdin pipe
+    }
+
+    // Read stdin only if explicitly piped (not TTY) AND we need it
+    // Skip stdin read if we already have code from -e or inline expression
+    // to avoid hanging when stdin is a pipe with no data
+    if (!process.stdin.isTTY && !code) {
+      // No expression — stdin IS the code
       const chunks: Buffer[] = [];
       for await (const chunk of process.stdin) {
         chunks.push(chunk as Buffer);
       }
-      code = Buffer.concat(chunks).toString('utf-8');
+      code = Buffer.concat(chunks).toString('utf-8').trimEnd();
     }
 
     try {
-      const output = runBatch({ expression: code, canvasWidth, canvasHeight });
-      if (outputFile) {
+      const output = runBatch({ expression: code, canvasWidth, canvasHeight, stdinData });
+
+      if (format === 'png' && output) {
+        if (!isRsvgAvailable()) {
+          process.stderr.write('Error: rsvg-convert not found. Install with: brew install librsvg\n');
+          process.exit(1);
+        }
+        const pngBuf = svgToPng(output);
+        if (outputFile) {
+          writeFileSync(outputFile, pngBuf);
+        } else {
+          process.stdout.write(pngBuf);
+        }
+      } else if (outputFile) {
         writeFileSync(outputFile, output);
       } else if (output) {
         process.stdout.write(output);

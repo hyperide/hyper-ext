@@ -137,6 +137,7 @@ export function useNetworkAwarePolling<T>(
   }, []);
 
   // Initial fetch and deps-triggered fetch
+  // biome-ignore lint/correctness/useExhaustiveDependencies: doPoll is stable (useCallback), deps spread is intentional for caller-controlled refetch triggers
   useEffect(() => {
     mountedRef.current = true;
     setIsLoading(true);
@@ -148,7 +149,6 @@ export function useNetworkAwarePolling<T>(
     return () => {
       mountedRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
 
   // Polling interval

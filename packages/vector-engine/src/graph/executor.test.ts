@@ -265,3 +265,46 @@ describe('GraphExecutor', () => {
     expect(result.nodeStatus[n1].error).toContain('intentional failure');
   });
 });
+
+describe('style implicit port forwarding', () => {
+  it('should forward style from fill through opacity node', () => {
+    const registry = new NodeRegistry();
+    // Register real nodes for this test
+    const { fillNode } = require('../nodes/style/fill');
+    const { opacityNode } = require('../nodes/style/opacity');
+    registry.register({
+      type: 'test-gen',
+      label: 'Gen',
+      category: 'generator',
+      inputs: [],
+      outputs: [{ name: 'path', type: 'path' }],
+      params: [],
+      execute() {
+        const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).close().build();
+        return { path: { type: 'path', value: path } };
+      },
+    });
+    registry.register(fillNode);
+    registry.register(opacityNode);
+
+    const graph = VectorGraphModel.create('test', 'style-chain', 100, 100);
+    const gen = graph.addNode({ type: 'test-gen', params: {} });
+    const fill = graph.addNode({ type: 'fill', params: { fillType: 'solid', color: '#ff0000' } });
+    const opacity = graph.addNode({ type: 'opacity', params: { value: 0.5 } });
+    graph.addEdge(gen, 'path', fill, 'path');
+    graph.addEdge(fill, 'path', opacity, 'path');
+    // Note: NO explicit edge for style port — it should be forwarded implicitly
+
+    const executor = new GraphExecutor(registry);
+    const result = executor.execute(graph);
+
+    // Terminal output is opacity node — it should have BOTH fill and opacity
+    const item = result.scene.items[0];
+    expect('path' in item).toBe(true);
+    if ('path' in item) {
+      expect(item.style.fill).toBeDefined();
+      expect(item.style.fill?.type).toBe('solid');
+      expect(item.style.opacity).toBe(0.5);
+    }
+  });
+});

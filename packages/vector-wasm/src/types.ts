@@ -12,7 +12,12 @@ export interface PathOpsBackend {
   boolean(op: BooleanOp, a: PathValue, b: PathValue): PathValue;
   simplify(path: PathValue, tolerance: number): PathValue;
   flatten(path: PathValue, maxError: number): PathValue;
-  strokeToPath(path: PathValue, width: number, cap: string, join: string): PathValue;
+  strokeToPath(
+    path: PathValue,
+    width: number,
+    cap: 'butt' | 'round' | 'square',
+    join: 'miter' | 'round' | 'bevel',
+  ): PathValue;
   dash(path: PathValue, dashArray: number[], dashOffset: number): PathValue;
   offset(path: PathValue, distance: number): PathValue;
   removeSelfIntersections(path: PathValue): PathValue;

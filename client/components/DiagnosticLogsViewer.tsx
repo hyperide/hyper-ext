@@ -9,6 +9,7 @@
  * smart autoscroll with jump-to-bottom, search highlighting.
  */
 
+import { TID } from '@shared/data-testid-map';
 import type { DiagnosticLogEntry } from '@shared/diagnostic-types';
 import { IconAlertTriangle, IconArrowDown, IconChevronDown, IconTrash, IconWand } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -100,7 +101,7 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
   const hasErrors = logs.some((l) => l.isError) || runtimeError !== null;
 
   return (
-    <div data-testid="DiagnosticLogsViewer" className="flex flex-col" style={{ height }}>
+    <div data-testid={TID.logs.root} className="flex flex-col" style={{ height }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted/30 shrink-0">
         <div className="flex items-center gap-2 text-xs font-medium">
@@ -120,6 +121,7 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
             <Button
               variant="ghost"
               size="sm"
+              data-testid={TID.logs.autoFixButton}
               className="h-6 px-2 text-xs bg-destructive/15 text-destructive hover:bg-destructive/25 hover:text-destructive"
               onClick={handleAutoFix}
             >
@@ -127,11 +129,25 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
               Auto Fix
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleClear} title="Clear logs">
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid={TID.logs.clearButton}
+            className="h-6 w-6 p-0"
+            onClick={handleClear}
+            title="Clear logs"
+          >
             <IconTrash size={14} />
           </Button>
           {onDismiss && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onDismiss} title="Dismiss logs">
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid={TID.logs.dismissButton}
+              className="h-6 w-6 p-0"
+              onClick={onDismiss}
+              title="Dismiss logs"
+            >
               <IconChevronDown size={14} />
             </Button>
           )}

@@ -112,7 +112,12 @@ describe('ComponentScanner.getComponentsData', () => {
     fs.unlinkSync(path.join(projectRoot, 'src', 'styles.css'));
   });
 
-  it('should not save when analysis returns empty paths', async () => {
+  it('should not save when both analyzer and heuristics return empty paths', async () => {
+    // Create a truly empty project (no src/ or app/ dirs) where heuristics find nothing
+    const emptyRoot = path.join(TMP_DIR, 'empty-project');
+    fs.mkdirSync(emptyRoot, { recursive: true });
+    fs.writeFileSync(path.join(emptyRoot, 'package.json'), '{"name":"empty"}');
+
     const store = createMockStore(null);
 
     const scanner = new ComponentScanner(store, async () => ({
@@ -126,8 +131,41 @@ describe('ComponentScanner.getComponentsData', () => {
       containerComponentPath: null,
     }));
 
-    await scanner.getComponentsData(projectRoot);
+    await scanner.getComponentsData(emptyRoot);
     expect(store.saved).toBe(false);
+
+    // Cleanup
+    fs.rmSync(emptyRoot, { recursive: true, force: true });
+  });
+
+  it('should fall back to heuristic detection when analyzer returns empty', async () => {
+    // Add a direct composite file to src/components/ so heuristic finds composites
+    fs.writeFileSync(
+      path.join(projectRoot, 'src', 'components', 'Feed.tsx'),
+      'export function Feed() { return <div/>; }',
+    );
+
+    const store = createMockStore(null);
+
+    const scanner = new ComponentScanner(store, async () => ({
+      atomComponentsPaths: [],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+      textComponentPath: null,
+      linkComponentPath: null,
+      buttonComponentPath: null,
+      imageComponentPath: null,
+      containerComponentPath: null,
+    }));
+
+    const result = await scanner.getComponentsData(projectRoot);
+    // Heuristic finds src/components/ui/ as atoms and src/components/Feed.tsx as composite
+    expect(result.atomGroups.length).toBeGreaterThan(0);
+    expect(result.compositeGroups.length).toBeGreaterThan(0);
+    expect(store.saved).toBe(true);
+
+    // Cleanup
+    fs.unlinkSync(path.join(projectRoot, 'src', 'components', 'Feed.tsx'));
   });
 
   it('should save when analysis returns non-empty paths', async () => {
@@ -177,5 +215,169 @@ describe('ComponentScanner.getComponentsData', () => {
 
     // Cleanup
     fs.rmSync(path.join(projectRoot, 'src', 'features'), { recursive: true, force: true });
+  });
+
+  it('should resolve relative paths in buildGroups', async () => {
+    const store = createMockStore({
+      atomComponentsPaths: ['src/components/ui'],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(projectRoot);
+
+    expect(result.atomGroups).toHaveLength(1);
+    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
+    const names = result.atomGroups[0].components.map((c) => c.name);
+    expect(names).toContain('button.tsx');
+    expect(names).toContain('card.tsx');
+  });
+});
+
+describe('ComponentScanner.detectProjectStructure', () => {
+  const HEURISTIC_DIR = path.join(TMP_DIR, 'heuristic');
+
+  afterAll(() => {
+    fs.rmSync(HEURISTIC_DIR, { recursive: true, force: true });
+  });
+
+  function createProject(name: string, dirs: string[], files: Record<string, string> = {}): string {
+    const root = path.join(HEURISTIC_DIR, name);
+    for (const dir of dirs) {
+      fs.mkdirSync(path.join(root, dir), { recursive: true });
+    }
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = path.join(root, filePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
+    return root;
+  }
+
+  it('should detect src/components/ as composites', () => {
+    const root = createProject('react-basic', ['src/components'], {
+      'package.json': '{"dependencies":{"react":"18"}}',
+      'src/App.tsx': 'export function App() { return <div/>; }',
+      'src/main.tsx': 'import App from "./App"; render(<App/>);',
+      'src/components/Feed.tsx': 'export function Feed() { return <div/>; }',
+      'src/components/Sidebar.tsx': 'export function Sidebar() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'components'));
+    // Root-level App.tsx is not added — it's a composition entry point, not a reusable component
+    expect(structure.atomComponentsPaths).toHaveLength(0);
+  });
+
+  it('should detect src/components/ui/ as atoms (shadcn pattern)', () => {
+    const root = createProject('shadcn', ['src/components/ui'], {
+      'package.json': '{"dependencies":{"react":"18"}}',
+      'src/App.tsx': 'export function App() { return <div/>; }',
+      'src/components/IssueCard.tsx': 'export function IssueCard() { return <div/>; }',
+      'src/components/ui/button.tsx': 'export function Button() { return <button/>; }',
+      'src/components/ui/card.tsx': 'export function Card() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.atomComponentsPaths).toContain(path.join(root, 'src', 'components', 'ui'));
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'components'));
+  });
+
+  it('should detect Remix app/routes/ as pages and app/components/ as composites', () => {
+    const root = createProject('remix', ['app/components', 'app/routes'], {
+      'package.json': '{"dependencies":{"@remix-run/react":"2","react":"18"}}',
+      'app/root.tsx': 'export default function Root() { return <html/>; }',
+      'app/components/Sidebar.tsx': 'export function Sidebar() { return <div/>; }',
+      'app/routes/_index.tsx': 'export default function Index() { return <div/>; }',
+      'app/routes/about.tsx': 'export default function About() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.pagesPaths).toContain(path.join(root, 'app', 'routes'));
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'app', 'components'));
+  });
+
+  it('should detect Next.js App Router pages', () => {
+    const root = createProject('nextjs', ['app'], {
+      'package.json': '{"dependencies":{"next":"14","react":"18"}}',
+      'app/page.tsx': 'export default function Home() { return <div/>; }',
+      'app/layout.tsx': 'export default function Layout({ children }) { return <html>{children}</html>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.pagesPaths).toContain(path.join(root, 'app'));
+  });
+
+  it('should detect Expo/RN src/screens/ as pages', () => {
+    const root = createProject('expo', ['src/components', 'src/screens', 'src/navigation'], {
+      'package.json': '{"dependencies":{"expo":"49","react":"18","react-native":"0.72"}}',
+      'src/components/Card.tsx': 'export function Card() { return <View/>; }',
+      'src/screens/HomeScreen.tsx': 'export function HomeScreen() { return <View/>; }',
+      'src/navigation/AppNavigator.tsx': 'export function AppNavigator() {}',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.pagesPaths).toContain(path.join(root, 'src', 'screens'));
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'components'));
+    // navigation/ should be skipped (it's in NON_COMPONENT_DIRS)
+    expect(structure.compositeComponentsPaths).not.toContain(path.join(root, 'src', 'navigation'));
+  });
+
+  it('should skip data, types, hooks, and other non-component dirs', () => {
+    const root = createProject('with-extras', ['src/components', 'src/data', 'src/types', 'src/hooks'], {
+      'package.json': '{"dependencies":{"react":"18"}}',
+      'src/components/Feed.tsx': 'export function Feed() { return <div/>; }',
+      'src/data/mockData.ts': 'export const data = [];',
+      'src/types/index.ts': 'export type AppProps = {};',
+      'src/hooks/useAuth.ts': 'export function useAuth() {}',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // Only components/ should be detected, not data/types/hooks
+    const allPaths = [...structure.atomComponentsPaths, ...structure.compositeComponentsPaths, ...structure.pagesPaths];
+    expect(allPaths.some((p) => p.includes('/data'))).toBe(false);
+    expect(allPaths.some((p) => p.includes('/types'))).toBe(false);
+    expect(allPaths.some((p) => p.includes('/hooks'))).toBe(false);
+  });
+
+  it('should return empty for project without src/ or app/', () => {
+    const root = createProject('no-source', ['lib'], {
+      'package.json': '{"dependencies":{"react":"18"}}',
+      'lib/index.ts': 'export const x = 1;',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.atomComponentsPaths).toHaveLength(0);
+    expect(structure.compositeComponentsPaths).toHaveLength(0);
+    expect(structure.pagesPaths).toHaveLength(0);
+  });
+
+  it('should return empty for project with only entry files and no components dir', () => {
+    const root = createProject('entry-only', ['src'], {
+      'package.json': '{"dependencies":{"react":"18"}}',
+      'src/main.tsx': 'import { render } from "react-dom"; render(<App/>);',
+      'src/index.tsx': 'export { App } from "./App";',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // No components/ dir → nothing to detect
+    expect(structure.compositeComponentsPaths).toHaveLength(0);
   });
 });

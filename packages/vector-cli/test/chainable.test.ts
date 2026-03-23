@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { ChainableNode } from '../src/chainable';
 import { createContext } from '../src/context';
+import { isRsvgAvailable, svgToPng } from '../src/png';
 
 describe('ChainableNode', () => {
   it('should create a generator node', () => {
@@ -80,5 +81,32 @@ describe('ChainableNode', () => {
     const ctx = createContext();
     const svg = ChainableNode.generator(ctx, 'rectangle', { width: 50, height: 50 }).fill('#f00').svg();
     expect(svg).toContain('<svg');
+  });
+
+  describe('png', () => {
+    const rsvgInstalled = isRsvgAvailable();
+
+    it('should convert SVG to PNG buffer', () => {
+      if (!rsvgInstalled) {
+        console.log('Skipping: rsvg-convert not installed');
+        return;
+      }
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="red"/></svg>';
+      const buf = svgToPng(svg, 200);
+      expect(buf).toBeInstanceOf(Buffer);
+      expect(buf.length).toBeGreaterThan(0);
+      // PNG magic bytes
+      expect(buf[0]).toBe(0x89);
+      expect(buf[1]).toBe(0x50); // P
+      expect(buf[2]).toBe(0x4e); // N
+      expect(buf[3]).toBe(0x47); // G
+    });
+
+    it('should have png method on ChainableNode', () => {
+      const ctx = createContext();
+      const node = ChainableNode.generator(ctx, 'rectangle', { width: 50, height: 50 }).fill('#f00');
+      expect(typeof node.png).toBe('function');
+    });
   });
 });

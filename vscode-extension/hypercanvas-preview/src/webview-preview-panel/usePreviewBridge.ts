@@ -20,6 +20,9 @@ interface UsePreviewBridgeOptions {
 
 interface UsePreviewBridgeResult {
   devServerRunning: boolean;
+  devServerUrl: string | null;
+  /** True when server was running but disconnected (show reconnecting banner) */
+  disconnected: boolean;
   previewUrl: string | null;
   showNoComponentHint: boolean;
   handleStartDevServer: () => void;
@@ -28,8 +31,12 @@ interface UsePreviewBridgeResult {
 
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
   const [devServerRunning, setDevServerRunning] = useState(false);
+  const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
+  // Track whether we were previously connected (for reconnecting banner)
+  const wasConnectedRef = useRef(false);
+  const [disconnected, setDisconnected] = useState(false);
 
   // Keep onStateUpdate stable via ref to avoid re-subscribing
   const onStateUpdateRef = useRef(onStateUpdate);
@@ -144,7 +151,15 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
       switch (msg.type) {
         case 'devserver:statusChanged':
+          if (!msg.running && wasConnectedRef.current) {
+            setDisconnected(true);
+          }
+          if (msg.running) {
+            setDisconnected(false);
+            wasConnectedRef.current = true;
+          }
           setDevServerRunning(msg.running);
+          setDevServerUrl(msg.url ?? null);
           break;
 
         case 'updateUrl':
@@ -243,6 +258,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
   return {
     devServerRunning,
+    devServerUrl,
+    disconnected,
     previewUrl,
     showNoComponentHint,
     handleStartDevServer,

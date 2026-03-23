@@ -306,6 +306,13 @@ export class PreviewFileManager {
 
     // Write file
     await this.io.writeFile(previewPath, content);
+
+    // TODO: Patch index.html to route to __canvas_preview__ when ?component= is present.
+    // Currently ensureEntryBootstrap creates __canvas_entry__.tsx but can't reliably
+    // patch index.html through VSCodeFileIO (WorkspaceEdit issues with HTML files).
+    // This needs a different approach: either proxy-level entry swap or Vite plugin.
+    // await this.ensureEntryBootstrap();
+
     return content;
   }
 

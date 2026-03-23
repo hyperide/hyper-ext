@@ -202,5 +202,7 @@ export function sceneToSvg(scene: SceneGraph): string {
 
   const body = bodyParts.join('');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">${defsBlock}${body}</svg>`;
+  const vbX = canvas.x ?? 0;
+  const vbY = canvas.y ?? 0;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${vbY} ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">${defsBlock}${body}</svg>`;
 }

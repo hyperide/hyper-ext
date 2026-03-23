@@ -94,12 +94,11 @@ export function SourceControlSection({
   }, [fetchChangedFiles]);
 
   // Auto-generate commit message when section first appears (same pattern as PushPopover)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect, component unmounts when section closes
   useEffect(() => {
     if (flowState === 'idle') {
       generateCommitMessage();
     }
-    // Only run on mount - component unmounts when section closes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Focus textarea after generation completes

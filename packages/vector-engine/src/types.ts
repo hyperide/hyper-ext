@@ -224,7 +224,7 @@ export type SceneEntry = SceneItem | SceneGroup;
 
 export interface SceneGraph {
   items: SceneEntry[];
-  canvas: { width: number; height: number };
+  canvas: { x?: number; y?: number; width: number; height: number };
   background?: string;
 }
 

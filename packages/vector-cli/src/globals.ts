@@ -10,6 +10,7 @@ import { openFile, saveFile } from './commands/file';
 import type { EvalContext } from './context';
 import { formatEdgesTable, formatNodesTable } from './formatters/table';
 import { formatDAGTree } from './formatters/tree';
+import { createHelpers, createWordArtHelpers } from './helpers';
 import { PreviewManager } from './preview';
 
 // -- Generators --
@@ -112,6 +113,7 @@ function createCanvasOps(ctx: EvalContext) {
       if (w !== undefined && h !== undefined) {
         ctx.canvasWidth = w;
         ctx.canvasHeight = h;
+        ctx.canvasExplicit = true;
       }
       return { width: ctx.canvasWidth, height: ctx.canvasHeight };
     },
@@ -266,20 +268,85 @@ export interface GlobalBindings {
   open: ReturnType<typeof createFileOps>['open'];
   save: ReturnType<typeof createFileOps>['save'];
   preview: ReturnType<typeof createFileOps>['preview'];
+  // Helpers
+  rainbow: (index: number, total: number) => string;
+  palette: (count: number, saturation?: number, lightness?: number) => string[];
+  hsl: (h: number, s: number, l: number) => string;
+  lerp: (a: number, b: number, t: number) => number;
+  random: (min?: number, max?: number) => number;
+  setSeed: (s: number) => void;
+  deg: (degrees: number) => number;
+  pointOnCircle: (cx: number, cy: number, radius: number, angleDeg: number) => { x: number; y: number };
+  grid: (
+    cols: number,
+    rows: number,
+    spacing: number,
+    fn: (x: number, y: number, i: number) => ChainableNode,
+  ) => ChainableNode[];
+  radial: (
+    count: number,
+    radius: number,
+    fn: (angle: number, i: number, x: number, y: number) => ChainableNode,
+    cx?: number,
+    cy?: number,
+  ) => ChainableNode[];
+  repeat: (n: number, fn: (i: number, t: number) => ChainableNode) => ChainableNode[];
+  // Word art
+  arcText: (str: string, radius: number, startAngle?: number, spread?: number, fontSize?: number) => ChainableNode[];
+  wavyText: (str: string, amplitude?: number, frequency?: number, fontSize?: number) => ChainableNode[];
+  ribbon: (width: number, height: number, notch?: number) => ChainableNode;
+  badge: (width: number, height: number, notchSize?: number) => ChainableNode;
+  burst: (rays: number, outerR: number, innerR: number) => ChainableNode;
+  spiralPath: (turns: number, maxRadius: number, points?: number) => ChainableNode;
+  bubble: ((...args: unknown[]) => ChainableNode) &
+    ((width: number, height: number, tailX?: number, tailY?: number) => ChainableNode) &
+    ((text: string, width: number, height: number, tailX?: number, tailY?: number) => ChainableNode);
+  heart: (size?: number) => ChainableNode;
+  cowsay: (message: string, fontSize?: number) => ChainableNode;
+  label: (
+    str: string,
+    x: number,
+    y: number,
+    opts?: { size?: number; fill?: string; font?: string; anchor?: string },
+  ) => void;
+  // Stdin
+  input: string;
   // Passthrough
   Math: typeof Math;
   console: typeof console;
 }
 
 export function createGlobals(ctx: EvalContext): GlobalBindings {
+  const helpers = createHelpers(ctx) as Pick<
+    GlobalBindings,
+    | 'rainbow'
+    | 'palette'
+    | 'hsl'
+    | 'lerp'
+    | 'random'
+    | 'setSeed'
+    | 'deg'
+    | 'pointOnCircle'
+    | 'grid'
+    | 'radial'
+    | 'repeat'
+  >;
+  const generators = createGenerators(ctx);
+  const wordArt = createWordArtHelpers(ctx, generators.text) as Pick<
+    GlobalBindings,
+    'arcText' | 'wavyText' | 'ribbon' | 'badge' | 'burst' | 'spiralPath' | 'bubble' | 'heart' | 'cowsay' | 'label'
+  >;
   return {
-    ...createGenerators(ctx),
+    ...generators,
     ...createMultiNodeOps(ctx),
     ...createCanvasOps(ctx),
     ...createHistoryOps(ctx),
     ...createDagOps(ctx),
     ...createInspectionOps(ctx),
     ...createFileOps(ctx),
+    ...helpers,
+    ...wordArt,
+    input: ctx.stdinData ?? '',
     Math,
     console,
   };

@@ -248,6 +248,9 @@ export class PreviewPanel {
           await editor.document.save();
         }
       }
+      if (handled) {
+        this._bumpStyleVersion();
+      }
       return;
     }
     if (msg.type === 'canvas:redo') {
@@ -261,6 +264,9 @@ export class PreviewPanel {
           await editor.document.save();
         }
       }
+      if (handled) {
+        this._bumpStyleVersion();
+      }
       return;
     }
 
@@ -273,7 +279,7 @@ export class PreviewPanel {
       const result = await this._panelRouter.astBridge.deleteElements(componentPath, elementIds);
 
       if (result.success) {
-        this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+        this._stateHub.applyUpdate({
           selectedIds: [],
         });
       }
@@ -335,7 +341,7 @@ export class PreviewPanel {
     }
 
     // Delegate shared platform messages to PanelRouter
-    const handled = await this._panelRouter.routeMessage(PreviewPanel.PANEL_ID, msg, webview);
+    const handled = await this._panelRouter.routeMessage(msg, webview);
 
     if (!handled) {
       console.log('[HyperIDE] Unknown message type:', msg.type);
@@ -373,7 +379,7 @@ export class PreviewPanel {
 
     if (result.success && result.newId) {
       // Select the new element
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [result.newId],
       });
     }
@@ -388,7 +394,7 @@ export class PreviewPanel {
 
     if (result.success) {
       // Clear selection
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [],
       });
     }
@@ -403,7 +409,7 @@ export class PreviewPanel {
 
     if (result.success && result.wrapperId) {
       // Select the wrapper
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [result.wrapperId],
       });
     }
@@ -436,7 +442,7 @@ export class PreviewPanel {
     const result = await this._panelRouter.astBridge.pasteElement(componentPath, targetId, tsxCode);
 
     if (result.success && result.newId) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [result.newId],
       });
     }
@@ -454,7 +460,7 @@ export class PreviewPanel {
     const result = await this._panelRouter.astBridge.deleteElements(componentPath, elementIds);
 
     if (result.success) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [],
       });
     }
@@ -468,7 +474,7 @@ export class PreviewPanel {
     const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, elementId);
 
     if (parentId) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [parentId],
       });
     }
@@ -482,7 +488,7 @@ export class PreviewPanel {
     const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, elementId);
 
     if (childIds.length > 0) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: childIds,
       });
     }
@@ -578,7 +584,7 @@ export class PreviewPanel {
       if (component) {
         this._currentComponent = component;
         const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-        this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+        this._stateHub.applyUpdate({
           currentComponent: { name, path: component },
         });
       }
@@ -626,7 +632,7 @@ export class PreviewPanel {
 
       // Dispatch to StateHub so Inspector and other panels sync
       const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         currentComponent: { name, path: component },
       });
 
@@ -678,6 +684,18 @@ export class PreviewPanel {
   }
 
   /**
+   * Notify webview that the dev server has stopped.
+   */
+  public notifyDevServerStopped(): void {
+    this._devServerRunning = false;
+    this._panel?.webview.postMessage({
+      type: 'devserver:statusChanged',
+      running: false,
+      url: null,
+    });
+  }
+
+  /**
    * Refresh preview
    */
   public refresh(): void {
@@ -694,7 +712,7 @@ export class PreviewPanel {
 
     const result = await this._panelRouter.astBridge.deleteElements(componentPath, selectedIds);
     if (result.success) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [] });
+      this._stateHub.applyUpdate({ selectedIds: [] });
     }
   }
 
@@ -708,7 +726,7 @@ export class PreviewPanel {
 
     const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, selectedIds[0]);
     if (childIds.length > 0) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: childIds });
+      this._stateHub.applyUpdate({ selectedIds: childIds });
     }
   }
 
@@ -722,9 +740,9 @@ export class PreviewPanel {
 
     const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, selectedIds[0]);
     if (parentId) {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [parentId] });
+      this._stateHub.applyUpdate({ selectedIds: [parentId] });
     } else {
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [] });
+      this._stateHub.applyUpdate({ selectedIds: [] });
     }
   }
 
@@ -732,7 +750,7 @@ export class PreviewPanel {
    * Clear selection (called from VS Code keybinding command).
    */
   public clearSelection(): void {
-    this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, { selectedIds: [], insertTargetId: null });
+    this._stateHub.applyUpdate({ selectedIds: [], insertTargetId: null });
   }
 
   /**
@@ -752,6 +770,9 @@ export class PreviewPanel {
       if (editor?.document.isDirty) {
         await editor.document.save();
       }
+    }
+    if (handled) {
+      this._bumpStyleVersion();
     }
   }
 
@@ -773,6 +794,18 @@ export class PreviewPanel {
         await editor.document.save();
       }
     }
+    if (handled) {
+      this._bumpStyleVersion();
+    }
+  }
+
+  /**
+   * Increment styleVersion in shared state so the inspector re-reads styles.
+   * Called after undo/redo completes to sync the inspector with file changes.
+   */
+  private _bumpStyleVersion(): void {
+    const current = this._stateHub.state.styleVersion ?? 0;
+    this._stateHub.applyUpdate({ styleVersion: current + 1 });
   }
 
   /**
@@ -802,7 +835,7 @@ export class PreviewPanel {
         elementId,
       });
       // Update StateHub so inspector (right panel) and explorer (left panel) receive selection
-      this._stateHub.applyUpdate(PreviewPanel.PANEL_ID, {
+      this._stateHub.applyUpdate({
         selectedIds: [elementId],
       });
     }

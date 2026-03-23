@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { memo } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
 import { type FillMode, FillPicker } from '../../ui/fill-picker';
@@ -93,7 +94,7 @@ export const FillSection = memo(function FillSection({
 
   return (
     <div
-      data-testid="FillSection"
+      data-testid={TID.inspector.sectionHeader('fill')}
       data-uniq-id="2f95e299-d823-4ec1-ba66-9d71ab8c8074"
       className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >
@@ -105,6 +106,8 @@ export const FillSection = memo(function FillSection({
       <div data-uniq-id="15b6a55d-3b27-4f99-91b2-a894945e244b" className="flex items-center gap-2">
         <div data-uniq-id="f16a5fbc-a44e-4bf2-9f47-b3b761107f3c" className="flex items-end gap-px flex-1">
           <FillPicker
+            testId={TID.inspector.fillColorPicker}
+            inputTestId={TID.inspector.fillColorInput}
             data-uniq-id="d86f7556-47ca-4162-94e1-70539c34dfd0"
             colorValue={backgroundColor || ''}
             onColorChange={handleColorChange}
@@ -124,6 +127,7 @@ export const FillSection = memo(function FillSection({
                 <div className="h-6 w-14 px-2 bg-muted rounded flex items-center">
                   <Input
                     type="text"
+                    testId={TID.inspector.fillOpacity}
                     value={`${fillOpacity || '100'}%`}
                     placeholder="100%"
                     onChange={handleFillOpacityChange}
@@ -145,6 +149,7 @@ export const FillSection = memo(function FillSection({
           Text
         </span>
         <ColorCombobox
+          testId={TID.inspector.fillTextColor}
           data-uniq-id="d59ad045-1334-475e-b11c-440bc0539261"
           value={textColor || ''}
           onChange={(val) => {

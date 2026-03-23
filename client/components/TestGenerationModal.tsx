@@ -405,7 +405,10 @@ export function TestGenerationModal({
   }
 
   return (
-    <div data-testid="TestGenerationModal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div
+      data-testid="hyper-test-generation-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
       <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-border">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">

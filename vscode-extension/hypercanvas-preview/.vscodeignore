@@ -12,3 +12,4 @@ DEVELOPMENT.md
 package-lock.json
 tailwind.config.*
 postcss.config.*
+media/screenshot.png

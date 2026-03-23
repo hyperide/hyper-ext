@@ -6,16 +6,10 @@
  *   forming a linear chain. Terminal methods execute the graph and extract results.
  */
 
-import {
-  type BlendMode,
-  type BoundingBox,
-  computeBounds,
-  isSceneItem,
-  pathArea,
-  pathLength,
-  sceneToSvg,
-} from 'vector-engine';
-import type { EvalContext } from './context';
+import { writeFileSync } from 'node:fs';
+import { type BlendMode, type BoundingBox, computeBounds, isSceneItem, pathArea, pathLength } from 'vector-engine';
+import { type EvalContext, executeAndRender } from './context';
+import { svgToPng } from './png';
 
 export class ChainableNode {
   private constructor(
@@ -183,10 +177,9 @@ export class ChainableNode {
     return this.svg();
   }
 
-  /** Execute graph and return SVG string. */
+  /** Execute graph and return SVG string (with auto-fit canvas). */
   svg(): string {
-    const result = this.ctx.executor.execute(this.ctx.graph);
-    return sceneToSvg(result.scene);
+    return executeAndRender(this.ctx);
   }
 
   /** Execute graph and return bounding box of this node's output path. */
@@ -208,6 +201,17 @@ export class ChainableNode {
     const path = this.executePath();
     if (!path) return 0;
     return Math.abs(pathArea(path.commands));
+  }
+
+  /** Execute graph and write PNG via rsvg-convert. Writes to file or stdout. */
+  png(filename?: string, width = 400): void {
+    const svg = this.svg();
+    const buf = svgToPng(svg, width);
+    if (filename) {
+      writeFileSync(filename, buf);
+    } else {
+      process.stdout.write(buf);
+    }
   }
 
   /**

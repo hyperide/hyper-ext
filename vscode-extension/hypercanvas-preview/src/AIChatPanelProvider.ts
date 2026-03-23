@@ -185,8 +185,9 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private async _sendKeyStatus(webview: vscode.Webview): Promise<void> {
-    const key = await this._context.secrets.get('hypercanvas.ai.apiKey');
-    webview.postMessage({ type: 'ai:keyStatus', hasApiKey: !!key });
+    const secretKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
+    const settingsKey = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('apiKey');
+    webview.postMessage({ type: 'ai:keyStatus', hasApiKey: !!(secretKey || settingsKey) });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

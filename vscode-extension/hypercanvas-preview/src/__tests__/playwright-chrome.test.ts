@@ -1,7 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import * as realFs from 'node:fs';
 import { existsSync, readdirSync } from 'node:fs';
 
+// Capture real function references before mock.module mutates the namespace
+const _realExistsSync = existsSync;
+const _realReaddirSync = readdirSync;
+
 mock.module('node:fs', () => ({
+  ...realFs,
   existsSync: mock(() => false),
   readdirSync: mock(() => []),
 }));
@@ -23,6 +29,12 @@ describe('playwright-chrome', () => {
   afterEach(() => {
     delete process.env.PLAYWRIGHT_BROWSERS_PATH;
     delete process.env.XDG_CACHE_HOME;
+  });
+
+  afterAll(() => {
+    // Restore real implementations so subsequent test files are not affected
+    existsSyncMock.mockImplementation(_realExistsSync);
+    readdirSyncMock.mockImplementation(_realReaddirSync);
   });
 
   describe('path constants', () => {

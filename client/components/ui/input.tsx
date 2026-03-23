@@ -17,7 +17,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type,
       )}
       ref={ref}
       {...props}
-      data-testid={testId}
+      {...(testId != null ? { 'data-testid': testId } : {})}
     />
   );
 });

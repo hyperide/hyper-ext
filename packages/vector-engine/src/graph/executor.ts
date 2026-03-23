@@ -29,7 +29,7 @@ interface CacheEntry {
 const EMPTY_STYLE: StyleValue = {};
 
 /** Ports auto-forwarded from upstream nodes without requiring explicit edges */
-const IMPLICIT_PORTS = ['transform', 'clipPath'] as const;
+const IMPLICIT_PORTS = ['style', 'transform', 'clipPath'] as const;
 
 /**
  * Compute a cache fingerprint for a node value.

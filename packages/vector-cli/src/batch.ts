@@ -12,10 +12,14 @@ export interface BatchOptions {
   script?: string;
   canvasWidth?: number;
   canvasHeight?: number;
+  stdinData?: string;
 }
 
 export function runBatch(opts: BatchOptions): string {
   const ctx = createContext(opts.canvasWidth, opts.canvasHeight);
+  if (opts.stdinData !== undefined) {
+    ctx.stdinData = opts.stdinData;
+  }
   const code = opts.expression ?? opts.script ?? '';
   if (!code) return '';
 

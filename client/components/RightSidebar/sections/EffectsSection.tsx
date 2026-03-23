@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';
 import type { EffectItem } from '../types';
@@ -57,7 +58,7 @@ export const EffectsSection = memo(function EffectsSection({
 
   return (
     <div
-      data-testid="EffectsSection"
+      data-testid={TID.inspector.sectionHeader('effects')}
       className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
@@ -72,7 +73,12 @@ export const EffectsSection = memo(function EffectsSection({
         ) : (
           <span className="text-xs font-semibold text-foreground">Effects</span>
         )}
-        <button type="button" onClick={handleAddEffect} className="hover:bg-muted rounded p-0.5">
+        <button
+          type="button"
+          data-testid={TID.inspector.shadowAdd}
+          onClick={handleAddEffect}
+          className="hover:bg-muted rounded p-0.5"
+        >
           <IconPlus className="w-4 h-4" stroke={1.5} />
         </button>
       </div>

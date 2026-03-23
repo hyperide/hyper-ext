@@ -29,6 +29,61 @@ const NEXTJS_APP_ROUTER_FILES = new Set([
   'route',
 ]);
 
+/** Directories to always skip during heuristic scanning */
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.git',
+  '.next',
+  '.remix',
+  'dist',
+  'build',
+  '.hyperide',
+  'project-preview',
+  'public',
+  'assets',
+  '__tests__',
+  'test',
+  'tests',
+  'coverage',
+  '.turbo',
+  '.cache',
+]);
+
+/** Non-component directories that live alongside components */
+const NON_COMPONENT_DIRS = new Set([
+  'data',
+  'types',
+  'hooks',
+  'lib',
+  'utils',
+  'helpers',
+  'context',
+  'store',
+  'stores',
+  'styles',
+  'theme',
+  'config',
+  'constants',
+  'navigation',
+  'assets',
+  'fonts',
+  'icons',
+  'images',
+  'server',
+  'database',
+  'tamagui',
+  'emotion',
+  'zero',
+  'shims',
+  'platform',
+]);
+
+/** Atom directory names — typically contain small reusable primitives */
+const ATOM_DIR_NAMES = new Set(['ui', 'atoms', 'elements', 'primitives']);
+
+/** Page/route directory names */
+const PAGE_DIR_NAMES = new Set(['pages', 'routes', 'screens', 'views']);
+
 export class ComponentScanner {
   constructor(
     private store: ProjectStructureStore,
@@ -61,11 +116,227 @@ export class ComponentScanner {
     return this.buildComponentsData(paths, projectRoot);
   }
 
+  /**
+   * Heuristic-based project structure detection.
+   * Detects standard React project layouts without AI.
+   *
+   * Detected patterns:
+   * - src/components/ui/ → atoms (shadcn style)
+   * - src/components/ → composites (minus ui/ subdirs)
+   * - app/components/ → composites (Remix)
+   * - src/pages/, app/routes/, src/screens/ → pages
+   * - app/ with page.tsx → Next.js App Router pages
+   * - src/ with PascalCase .tsx at root → pages (Vite/React fallback)
+   */
+  detectProjectStructure(projectRoot: string): ProjectStructure {
+    const atoms: string[] = [];
+    const composites: string[] = [];
+    const pages: string[] = [];
+
+    // Detect framework from package.json
+    const framework = this.detectFramework(projectRoot);
+
+    // Determine source roots to scan
+    const sourceRoots: string[] = [];
+    for (const dir of ['src', 'app']) {
+      const fullPath = path.join(projectRoot, dir);
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+        sourceRoots.push(fullPath);
+      }
+    }
+
+    // If neither src/ nor app/ exist, nothing to scan
+    if (sourceRoots.length === 0) {
+      return this.emptyStructure();
+    }
+
+    for (const sourceRoot of sourceRoots) {
+      const dirName = path.basename(sourceRoot);
+
+      // Scan immediate children for known patterns
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(sourceRoot, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
+
+        const entryPath = path.join(sourceRoot, entry.name);
+        const entryName = entry.name.toLowerCase();
+
+        // Pages/routes/screens directories
+        if (PAGE_DIR_NAMES.has(entryName)) {
+          pages.push(entryPath);
+          continue;
+        }
+
+        // Components directory — check for atom subdirs
+        if (entryName === 'components') {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
+          continue;
+        }
+
+        // features/ → composites
+        if (entryName === 'features' || entryName === 'modules') {
+          composites.push(entryPath);
+          continue;
+        }
+
+        // interface/ → could contain atoms (tamagui-free-sample style)
+        if (entryName === 'interface') {
+          // Scan for atom-like subdirs
+          this.categorizeInterfaceDir(entryPath, atoms, composites);
+        }
+      }
+
+      // Next.js App Router: app/ itself is pages (if it has page.tsx files)
+      if (dirName === 'app' && framework === 'nextjs') {
+        // app/ with page.tsx → pages source
+        if (this.hasFileRecursive(sourceRoot, 'page.tsx') || this.hasFileRecursive(sourceRoot, 'page.jsx')) {
+          pages.push(sourceRoot);
+        }
+      }
+
+      // Remix: app/routes/ already handled above
+
+      // Fallback for simple React/Vite projects: if no pages/ directory was found,
+      // but src/ has .tsx/.jsx files at top level (e.g. App.tsx), treat src/ as pages source.
+      // This covers the common pattern where there's no explicit pages/ directory.
+      if (dirName === 'src' && framework === 'react' && pages.length === 0) {
+        const hasTsxAtRoot = entries.some(
+          (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
+        );
+        if (hasTsxAtRoot) {
+          pages.push(sourceRoot);
+        }
+      }
+    }
+
+    return {
+      atomComponentsPaths: atoms,
+      compositeComponentsPaths: composites,
+      pagesPaths: pages,
+      textComponentPath: null,
+      linkComponentPath: null,
+      buttonComponentPath: null,
+      imageComponentPath: null,
+      containerComponentPath: null,
+    };
+  }
+
   private async analyze(projectRoot: string): Promise<ProjectStructure> {
     if (this.analyzeStructure) {
-      return this.analyzeStructure(projectRoot);
+      const result = await this.analyzeStructure(projectRoot);
+      // If the analyzer returned actual paths, use them
+      const hasData =
+        (result.atomComponentsPaths?.length ?? 0) > 0 ||
+        (result.compositeComponentsPaths?.length ?? 0) > 0 ||
+        (result.pagesPaths?.length ?? 0) > 0;
+      if (hasData) {
+        return result;
+      }
     }
-    // No analyzer callback provided — return empty structure
+    // No analyzer, or analyzer returned empty — fall back to heuristic detection
+    return this.detectProjectStructure(projectRoot);
+  }
+
+  /** Detect framework from package.json dependencies */
+  private detectFramework(projectRoot: string): 'nextjs' | 'remix' | 'expo' | 'react' {
+    try {
+      const pkgPath = path.join(projectRoot, 'package.json');
+      if (!fs.existsSync(pkgPath)) return 'react';
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      if (deps.next) return 'nextjs';
+      if (deps['@remix-run/react'] || deps['@remix-run/node']) return 'remix';
+      if (deps.expo || deps['react-native']) return 'expo';
+      return 'react';
+    } catch {
+      return 'react';
+    }
+  }
+
+  /** Categorize a components/ directory into atoms and composites */
+  private categorizeComponentsDir(componentsPath: string, atoms: string[], composites: string[]): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(componentsPath, { withFileTypes: true });
+    } catch {
+      composites.push(componentsPath);
+      return;
+    }
+
+    let hasAtomSubdir = false;
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const entryName = entry.name.toLowerCase();
+      if (ATOM_DIR_NAMES.has(entryName)) {
+        atoms.push(path.join(componentsPath, entry.name));
+        hasAtomSubdir = true;
+      } else if (entryName === 'layout') {
+        // layout/ subdirectory → composites
+        composites.push(path.join(componentsPath, entry.name));
+      }
+    }
+
+    // The components/ dir itself is composites (will scan .tsx files at this level + non-atom subdirs)
+    composites.push(componentsPath);
+
+    // If atom subdir found, the composites scanner will still pick up the non-atom files
+    // which is correct — files directly in components/ are typically composites
+    if (!hasAtomSubdir) {
+      // No atom subdirs found — check if the dir has many small generic-named files
+      // that might indicate it's an atoms dir itself (rare but possible)
+      const tsxFiles = entries.filter((e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')));
+      // If it's a flat directory with many files, it's still composites by default
+      // (atoms need an explicit ui/ or atoms/ subdir)
+      void tsxFiles;
+    }
+  }
+
+  /** Categorize an interface/ directory (tamagui-free-sample pattern) */
+  private categorizeInterfaceDir(interfacePath: string, atoms: string[], composites: string[]): void {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(interfacePath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const entryName = entry.name.toLowerCase();
+      // Known atom-like subdirs
+      if (['buttons', 'forms', 'text', 'image', 'avatars', 'icons'].includes(entryName)) {
+        atoms.push(path.join(interfacePath, entry.name));
+      } else if (['layout', 'headers', 'dialogs', 'pages', 'app'].includes(entryName)) {
+        composites.push(path.join(interfacePath, entry.name));
+      }
+    }
+  }
+
+  /** Check if a directory contains a specific file recursively (max 2 levels) */
+  private hasFileRecursive(dirPath: string, fileName: string, depth = 0): boolean {
+    if (depth > 2) return false;
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name === fileName) return true;
+        if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
+          if (this.hasFileRecursive(path.join(dirPath, entry.name), fileName, depth + 1)) return true;
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+    return false;
+  }
+
+  private emptyStructure(): ProjectStructure {
     return {
       atomComponentsPaths: [],
       compositeComponentsPaths: [],
@@ -83,8 +354,14 @@ export class ComponentScanner {
    * @param dirPath - absolute path to scan
    * @param categoryRoot - absolute path of the category root (for computing display name)
    * @param projectRoot - absolute path of the project root (for computing relative path)
+   * @param skipDirs - set of directory names to skip (e.g., atom subdirs already categorized)
    */
-  private scanComponentDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
+  private scanComponentDirectory(
+    dirPath: string,
+    categoryRoot: string,
+    projectRoot: string,
+    skipDirs?: Set<string>,
+  ): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -94,6 +371,8 @@ export class ComponentScanner {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
+        // Skip subdirectories that are already categorized (e.g., ui/ as atoms)
+        if (skipDirs?.has(entry.name)) continue;
         components.push(...this.scanComponentDirectory(fullPath, categoryRoot, projectRoot));
       } else if (
         entry.isFile() &&
@@ -152,8 +431,16 @@ export class ComponentScanner {
 
   /** Build ComponentsData from absolute paths */
   private buildComponentsData(paths: ProjectStructurePaths, projectRoot: string): ComponentsData {
+    // Collect atom directory paths so composites scanner can skip them
+    const atomDirPaths = new Set(
+      (paths.atomComponentsPaths ?? []).map((p) => {
+        const resolved = path.isAbsolute(p) ? p : path.join(projectRoot, p);
+        return resolved;
+      }),
+    );
+
     const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
-    const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component');
+    const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component', atomDirPaths);
     const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page');
     return { atomGroups, compositeGroups, pageGroups };
   }
@@ -162,11 +449,23 @@ export class ComponentScanner {
     categoryPaths: string[] | null | undefined,
     projectRoot: string,
     kind: 'component' | 'page',
+    excludeDirs?: Set<string>,
   ): ComponentGroup[] {
     const groups: ComponentGroup[] = [];
     if (!categoryPaths) return groups;
 
-    for (const categoryPath of categoryPaths) {
+    // Build a set of directory basenames to skip (dirs already categorized elsewhere)
+    const skipDirNames = new Set<string>();
+    if (excludeDirs) {
+      for (const dirPath of excludeDirs) {
+        skipDirNames.add(path.basename(dirPath));
+      }
+    }
+
+    for (const rawPath of categoryPaths) {
+      // Resolve relative paths against projectRoot (AI analyzer returns absolute,
+      // but heuristic detector or cached JSON may store relative paths)
+      const categoryPath = path.isAbsolute(rawPath) ? rawPath : path.join(projectRoot, rawPath);
       if (!fs.existsSync(categoryPath)) continue;
 
       const stat = fs.statSync(categoryPath);
@@ -178,7 +477,7 @@ export class ComponentScanner {
           const components =
             kind === 'page'
               ? this.scanPagesDirectory(dir, dir, projectRoot)
-              : this.scanComponentDirectory(dir, dir, projectRoot);
+              : this.scanComponentDirectory(dir, dir, projectRoot, skipDirNames);
           if (components.length > 0) {
             groups.push({
               dirPath: path.relative(projectRoot, dir),
@@ -189,10 +488,28 @@ export class ComponentScanner {
         continue;
       }
 
+      // Check if this directory is a parent of an excluded dir — if so, skip the excluded children
+      const applicableSkips = new Set<string>();
+      if (excludeDirs) {
+        for (const excludeDir of excludeDirs) {
+          if (excludeDir.startsWith(categoryPath + path.sep)) {
+            // excludeDir is a child of categoryPath — skip its basename during recursive scan
+            const relative = path.relative(categoryPath, excludeDir);
+            const firstSegment = relative.split(path.sep)[0];
+            applicableSkips.add(firstSegment);
+          }
+        }
+      }
+
       const components =
         kind === 'page'
           ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
-          : this.scanComponentDirectory(categoryPath, categoryPath, projectRoot);
+          : this.scanComponentDirectory(
+              categoryPath,
+              categoryPath,
+              projectRoot,
+              applicableSkips.size > 0 ? applicableSkips : undefined,
+            );
 
       if (components.length > 0) {
         groups.push({

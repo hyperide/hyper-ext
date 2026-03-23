@@ -53,7 +53,7 @@ export class PreviewProxy {
 
     // Find random port and listen
     await new Promise<void>((resolve, reject) => {
-      this._server?.listen(0, '127.0.0.1', () => {
+      this._server?.listen(0, 'localhost', () => {
         const addr = this._server?.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
@@ -78,13 +78,25 @@ export class PreviewProxy {
   }
 
   /**
-   * Handle HTTP requests: proxy to target, inject script into HTML
+   * Handle HTTP requests: proxy to target, inject script into HTML.
+   * Rewrites /test-preview to / so file-based routing frameworks (Next.js, Remix)
+   * serve their root page instead of returning 404.
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
+    // Rewrite /test-preview path to / — file-based routing frameworks (Next.js, Remix)
+    // don't have a /test-preview route. SPA frameworks work with / too (same index.html).
+    let proxyPath = clientReq.url || '/';
+    if (proxyPath.startsWith('/test-preview')) {
+      proxyPath = `/${proxyPath.slice('/test-preview'.length)}`;
+      // Normalize double slashes: '/test-preview/' → '/' not '//'
+      if (proxyPath.startsWith('//')) proxyPath = proxyPath.slice(1);
+      if (proxyPath === '') proxyPath = '/';
+    }
+
     const options: http.RequestOptions = {
-      hostname: '127.0.0.1',
+      hostname: 'localhost',
       port: this._targetPort,
-      path: clientReq.url,
+      path: proxyPath,
       method: clientReq.method,
       headers: {
         ...clientReq.headers,
@@ -144,7 +156,7 @@ export class PreviewProxy {
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
-    const targetSocket = net.connect(this._targetPort, '127.0.0.1', () => {
+    const targetSocket = net.connect(this._targetPort, 'localhost', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
       const headers = Object.entries(req.headers)

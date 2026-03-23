@@ -7,7 +7,7 @@
 // Project Detection
 // ============================================
 
-export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'unknown';
+export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'webpack' | 'unknown';
 
 export interface ProjectInfo {
   type: ProjectType;

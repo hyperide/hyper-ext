@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { IconSend, IconSquare } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,7 +72,7 @@ export function ChatInput({
           data-1p-ignore
           data-lpignore="true"
           data-form-type="other"
-          testId="ChatInput-textarea"
+          testId={TID.aiChat.input}
         />
         {isStreaming && !pendingAskUser ? (
           <Button
@@ -79,7 +80,7 @@ export function ChatInput({
             size="sm"
             className="h-9 w-9 p-0 shrink-0"
             onClick={onStop}
-            testId="ChatInput-stopButton"
+            testId={TID.aiChat.abortButton}
           >
             <IconSquare size={14} />
           </Button>
@@ -96,7 +97,7 @@ export function ChatInput({
               onSend();
             }}
             disabled={!inputValue.trim()}
-            testId="ChatInput-sendButton"
+            testId={TID.aiChat.sendButton}
           >
             <IconSend size={14} />
           </Button>

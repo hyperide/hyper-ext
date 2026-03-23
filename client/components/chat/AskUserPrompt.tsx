@@ -1,3 +1,4 @@
+import { TID } from '@shared/data-testid-map';
 import { Button } from '@/components/ui/button';
 
 interface AskUserPromptProps {
@@ -14,7 +15,19 @@ export function AskUserPrompt({ question, options, onSubmit }: AskUserPromptProp
       {options && options.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
           {options.map((option) => (
-            <Button key={option} onClick={() => onSubmit(option)} size="sm" variant="outline">
+            <Button
+              key={option}
+              data-testid={
+                option.toLowerCase() === 'yes'
+                  ? TID.aiChat.askUserYes
+                  : option.toLowerCase() === 'no'
+                    ? TID.aiChat.askUserNo
+                    : undefined
+              }
+              onClick={() => onSubmit(option)}
+              size="sm"
+              variant="outline"
+            >
               {option}
             </Button>
           ))}

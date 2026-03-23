@@ -42,6 +42,7 @@ export function useOffscreenIndicators({
   viewport,
   iframeLoadedCounter,
 }: UseOffscreenIndicatorsProps) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!enabled) return;
 

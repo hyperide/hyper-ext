@@ -54,7 +54,7 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
         this._stateHub.sendInit(LeftPanelProvider.viewType);
         return;
       }
-      await this._panelRouter.routeMessage(LeftPanelProvider.viewType, message, webviewView.webview);
+      await this._panelRouter.routeMessage(message, webviewView.webview);
     });
 
     webviewView.onDidChangeVisibility(() => {

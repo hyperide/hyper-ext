@@ -14,6 +14,7 @@ import { PlatformProvider, usePlatformAst, usePlatformCanvas } from '@/lib/platf
 import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
 import type { ComponentGroup } from '../../../../lib/component-scanner/types';
 import type { SharedEditorState } from '../../../../lib/types';
+import { TID } from '../shared/data-testid-map';
 
 interface ComponentGroupsData {
   atomGroups: ComponentGroup[];
@@ -97,7 +98,7 @@ function RightPanelContent() {
   }, [canvas]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div data-testid={TID.inspector.root} className="flex flex-col h-full overflow-hidden">
       <div className={showInsertPanel ? 'flex-1 min-h-0 overflow-y-auto' : 'h-full overflow-y-auto'}>
         <RightSidebar
           projectUIKit={projectUIKit}
