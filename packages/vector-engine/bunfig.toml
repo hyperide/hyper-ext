@@ -1,0 +1,2 @@
+[test]
+coverageThreshold = { line = 80 }

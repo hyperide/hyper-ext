@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { NodeValue, TransformMatrix } from '../../types';
+import { composeTransforms } from './compose';
 import { rotateNode } from './rotate';
 import { scaleNode } from './scale';
 import { skewNode } from './skew';
@@ -125,6 +126,69 @@ describe('Skew node — edge cases', () => {
     // tan(89°) ≈ 57.29 — large but not Infinity
     expect(Number.isFinite(m[2])).toBe(true);
     expect(m[2]).toBeGreaterThan(50);
+  });
+});
+
+describe('composeTransforms', () => {
+  const identity: TransformMatrix = [1, 0, 0, 1, 0, 0];
+
+  it('should return local when no incoming transform', () => {
+    const local: TransformMatrix = [1, 0, 0, 1, 10, 20];
+    const result = composeTransforms(undefined, local);
+    expect(result).toEqual(local);
+  });
+
+  it('should return local when incoming has wrong type', () => {
+    const local: TransformMatrix = [1, 0, 0, 1, 10, 20];
+    const result = composeTransforms({ type: 'number', value: 42 }, local);
+    expect(result).toEqual(local);
+  });
+
+  it('should compose identity with translation — result equals translation', () => {
+    const translate: TransformMatrix = [1, 0, 0, 1, 30, 40];
+    // local * identity = local
+    const result = composeTransforms({ type: 'transform', value: identity }, translate);
+    expect(result[4]).toBeCloseTo(30, 10);
+    expect(result[5]).toBeCloseTo(40, 10);
+  });
+
+  it('should compose two translations — result is sum of translations', () => {
+    // local = translate(10, 20), incoming = translate(5, 7)
+    // result = local * incoming → tx = 10*1 + 0*7 + 10 = 15 ... wait use matrix math
+    // result[4] = local[0]*incoming[4] + local[2]*incoming[5] + local[4]
+    //           = 1*5 + 0*7 + 10 = 15
+    // result[5] = local[1]*incoming[4] + local[3]*incoming[5] + local[5]
+    //           = 0*5 + 1*7 + 20 = 27
+    const local: TransformMatrix = [1, 0, 0, 1, 10, 20];
+    const incoming: TransformMatrix = [1, 0, 0, 1, 5, 7];
+    const result = composeTransforms({ type: 'transform', value: incoming }, local);
+    expect(result[4]).toBeCloseTo(15, 10);
+    expect(result[5]).toBeCloseTo(27, 10);
+    // Linear components unchanged
+    expect(result[0]).toBeCloseTo(1, 10);
+    expect(result[3]).toBeCloseTo(1, 10);
+  });
+
+  it('should compose rotation with scale', () => {
+    // local = scale(2, 2), incoming = rotate(90°)
+    // rotate(90°): [cos90, sin90, -sin90, cos90, 0, 0] = [0, 1, -1, 0, 0, 0]
+    const scale2: TransformMatrix = [2, 0, 0, 2, 0, 0];
+    const rot90: TransformMatrix = [0, 1, -1, 0, 0, 0];
+    const result = composeTransforms({ type: 'transform', value: rot90 }, scale2);
+    // result = scale2 * rot90
+    // [a,b,c,d,e,f] where a = scale2[0]*rot90[0] + scale2[2]*rot90[1] = 2*0 + 0*1 = 0
+    // b = scale2[1]*rot90[0] + scale2[3]*rot90[1] = 0*0 + 2*1 = 2
+    // c = scale2[0]*rot90[2] + scale2[2]*rot90[3] = 2*-1 + 0*0 = -2
+    // d = scale2[1]*rot90[2] + scale2[3]*rot90[3] = 0*-1 + 2*0 = 0
+    expect(result[0]).toBeCloseTo(0, 10);
+    expect(result[1]).toBeCloseTo(2, 10);
+    expect(result[2]).toBeCloseTo(-2, 10);
+    expect(result[3]).toBeCloseTo(0, 10);
+  });
+
+  it('should compose identity with itself — result is identity', () => {
+    const result = composeTransforms({ type: 'transform', value: identity }, identity);
+    expect(result).toEqual(identity);
   });
 });
 

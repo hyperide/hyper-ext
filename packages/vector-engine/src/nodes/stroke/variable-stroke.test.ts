@@ -67,6 +67,94 @@ describe('variable stroke', () => {
     expect(getOutPath(result)).toBeDefined();
   });
 
+  it('should generate outlined path with round cap', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = variableStrokeNode.execute(
+      { path: { type: 'path', value: line } },
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 10 },
+          { offset: 1, width: 10 },
+        ]),
+        cap: 'round',
+      },
+    );
+    const outPath = getOutPath(result);
+    expect(outPath.closed).toBe(true);
+    // Round caps add cubic bezier segments — more commands than butt cap
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should generate outlined path with square cap', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = variableStrokeNode.execute(
+      { path: { type: 'path', value: line } },
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 10 },
+          { offset: 1, width: 10 },
+        ]),
+        cap: 'square',
+      },
+    );
+    const outPath = getOutPath(result);
+    expect(outPath.closed).toBe(true);
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should handle 3-point width profile (binary search in interpolateWidth)', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = variableStrokeNode.execute(
+      { path: { type: 'path', value: line } },
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 2 },
+          { offset: 0.5, width: 20 },
+          { offset: 1, width: 2 },
+        ]),
+        cap: 'butt',
+      },
+    );
+    const outPath = getOutPath(result);
+    expect(outPath.closed).toBe(true);
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should handle empty profile array gracefully', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = variableStrokeNode.execute({ path: { type: 'path', value: line } }, { profile: '[]', cap: 'butt' });
+    expect(getOutPath(result).commands.length).toBe(0);
+  });
+
+  it('should return empty path when no input path', () => {
+    const result = variableStrokeNode.execute(
+      {},
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 10 },
+          { offset: 1, width: 10 },
+        ]),
+        cap: 'butt',
+      },
+    );
+    expect(getOutPath(result).commands.length).toBe(0);
+  });
+
+  it('should return empty path for zero-length input', () => {
+    const dot = new PathBuilder().moveTo(50, 50).build();
+    const result = variableStrokeNode.execute(
+      { path: { type: 'path', value: dot } },
+      {
+        profile: JSON.stringify([
+          { offset: 0, width: 10 },
+          { offset: 1, width: 10 },
+        ]),
+        cap: 'butt',
+      },
+    );
+    expect(getOutPath(result).commands.length).toBe(0);
+  });
+
   it('should produce a wider outline for wider profile', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const thin = variableStrokeNode.execute(

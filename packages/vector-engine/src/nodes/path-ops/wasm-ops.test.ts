@@ -47,3 +47,29 @@ describe('WASM path ops nodes', () => {
     expect((result.path as NodeValue).type).toBe('path');
   });
 });
+
+describe('MockPathOps — direct backend methods', () => {
+  it('offset() should return path unchanged (mock passthrough)', () => {
+    const backend = new MockPathOps();
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const result = backend.offset(rect, 5);
+    expect(result.commands).toBe(rect.commands);
+    expect(result.closed).toBe(rect.closed);
+  });
+
+  it('removeSelfIntersections() should return path unchanged (mock passthrough)', () => {
+    const backend = new MockPathOps();
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = backend.removeSelfIntersections(line);
+    expect(result.commands).toBe(line.commands);
+    expect(result.closed).toBe(line.closed);
+  });
+
+  it('simplify() should return path unchanged (mock passthrough)', () => {
+    const backend = new MockPathOps();
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = backend.simplify(line, 0.5);
+    expect(result.commands).toBe(line.commands);
+    expect(result.closed).toBe(line.closed);
+  });
+});

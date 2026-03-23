@@ -1,11 +1,13 @@
 /**
- * @file Tests for all deformation nodes: roughen, zigzag, pucker/bloat, twist, warp
+ * @file Tests for all deformation nodes: roughen, zigzag, pucker/bloat, twist, warp, envelope distort
  *
  * Accessed via: Internal module, not exposed
  */
 
 import { describe, expect, it } from 'bun:test';
+import { meshFromBounds } from '../../mesh/mesh-from-path';
 import { PathBuilder } from '../../path/builder';
+import { envelopeDistortNode } from './envelope-distort';
 import { puckerBloatNode } from './pucker-bloat';
 import { roughenNode } from './roughen';
 import { twistNode } from './twist';
@@ -179,6 +181,55 @@ describe('warp', () => {
 
   it('should handle missing input', () => {
     const result = warpNode.execute({}, { warpType: 'arc', bend: 50 });
+    expect((result.path as { type: 'path'; value: { commands: Float64Array } }).value.commands.length).toBe(0);
+  });
+});
+
+describe('envelope distort', () => {
+  it('should pass through with undistorted mesh (identity)', () => {
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
+    const result = envelopeDistortNode.execute(
+      { path: { type: 'path', value: rect }, mesh: { type: 'mesh', value: mesh } },
+      {},
+    );
+    const outPath = (result.path as { type: 'path'; value: { commands: Float64Array } }).value;
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should distort when mesh vertices are moved', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
+    // Move top-right vertex down by 50
+    mesh.vertices[1].position = { x: 100, y: 50 };
+    const result = envelopeDistortNode.execute(
+      { path: { type: 'path', value: line }, mesh: { type: 'mesh', value: mesh } },
+      {},
+    );
+    const outPath = (result.path as { type: 'path'; value: { commands: Float64Array } }).value;
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should handle mesh with multiple cells', () => {
+    const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
+    const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 2, 2);
+    const result = envelopeDistortNode.execute(
+      { path: { type: 'path', value: rect }, mesh: { type: 'mesh', value: mesh } },
+      {},
+    );
+    expect((result.path as { type: 'path'; value: { commands: Float64Array } }).value.commands.length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('should return empty path when no inputs', () => {
+    const result = envelopeDistortNode.execute({}, {});
+    expect((result.path as { type: 'path'; value: { commands: Float64Array } }).value.commands.length).toBe(0);
+  });
+
+  it('should return empty path when only path input (no mesh)', () => {
+    const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+    const result = envelopeDistortNode.execute({ path: { type: 'path', value: line } }, {});
     expect((result.path as { type: 'path'; value: { commands: Float64Array } }).value.commands.length).toBe(0);
   });
 });

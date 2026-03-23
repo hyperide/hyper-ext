@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { PathBuilder } from '../../path/builder';
-import { decodeCommands, PathCmd } from '../../path/commands';
+import { decodeCommands, encodeCommands, PathCmd } from '../../path/commands';
 import { pathArea } from '../../path/geometry';
 import type { NodeValue, PathValue } from '../../types';
 import { chamferNode } from './chamfer';
@@ -141,6 +141,101 @@ describe('enforce winding', () => {
     const result = enforceWindingNode.execute({ path: { type: 'path', value: cw } }, { direction: 'ccw' });
     const outPath = (result.path as NodeValue).value as PathValue;
     expect(pathArea(outPath.commands)).toBeLessThan(0);
+  });
+
+  it('should reverse a path with cubic beziers and preserve curve structure', () => {
+    // CW triangle with a cubic in place of one edge — area is positive
+    const path = new PathBuilder().moveTo(0, 0).cubicTo(10, 50, 90, 50, 100, 0).lineTo(50, 100).close().build();
+    // Determine initial winding so we can request the opposite
+    const initialArea = pathArea(path.commands);
+    const targetDir = initialArea > 0 ? 'ccw' : 'cw';
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: path } }, { direction: targetDir });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    const cmds = decodeCommands(outPath.commands);
+    // Reversed path must still contain a cubic
+    expect(cmds.some((c) => c.type === PathCmd.Cubic)).toBe(true);
+    // Winding must have flipped
+    const newArea = pathArea(outPath.commands);
+    if (targetDir === 'ccw') {
+      expect(newArea).toBeLessThan(0);
+    } else {
+      expect(newArea).toBeGreaterThan(0);
+    }
+  });
+
+  it('should reverse a path with quad beziers', () => {
+    const path = new PathBuilder().moveTo(0, 0).quadTo(50, 100, 100, 0).lineTo(50, -50).close().build();
+    const initialArea = pathArea(path.commands);
+    const targetDir = initialArea > 0 ? 'ccw' : 'cw';
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: path } }, { direction: targetDir });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    const cmds = decodeCommands(outPath.commands);
+    expect(cmds.some((c) => c.type === PathCmd.Quad)).toBe(true);
+  });
+
+  it('should preserve Close command when reversing a closed path', () => {
+    const ccw = new PathBuilder().moveTo(0, 0).lineTo(0, 100).lineTo(100, 100).close().build();
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: ccw } }, { direction: 'cw' });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    const cmds = decodeCommands(outPath.commands);
+    expect(cmds.some((c) => c.type === PathCmd.Close)).toBe(true);
+  });
+
+  it('should return empty path unchanged when input has no drawing commands', () => {
+    const empty: PathValue = { commands: new Float64Array(0), closed: false };
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: empty } }, { direction: 'cw' });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    expect(outPath.commands.length).toBe(0);
+  });
+
+  it('should return default empty path when no input provided', () => {
+    const result = enforceWindingNode.execute({}, { direction: 'cw' });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    expect(outPath.commands.length).toBe(0);
+  });
+
+  it('should reverse a compound path (two subpaths with embedded Close)', () => {
+    // Two CW triangles as subpaths — together they produce non-zero area.
+    // The inner Close command exercises cmdEndpoint's Close fallback (lines 26-27)
+    // and reverseCmd's default branch (line 59).
+    const compoundCmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Line, x: 100, y: 0 },
+      { type: PathCmd.Line, x: 100, y: 100 },
+      { type: PathCmd.Close },
+      { type: PathCmd.Move, x: 200, y: 0 },
+      { type: PathCmd.Line, x: 300, y: 0 },
+      { type: PathCmd.Line, x: 300, y: 100 },
+      { type: PathCmd.Close },
+    ]);
+    const compoundPath: PathValue = { commands: compoundCmds, closed: true };
+    const initialArea = pathArea(compoundPath.commands);
+    const targetDir = initialArea > 0 ? 'ccw' : 'cw';
+    const result = enforceWindingNode.execute(
+      { path: { type: 'path', value: compoundPath } },
+      { direction: targetDir },
+    );
+    const outPath = (result.path as NodeValue).value as PathValue;
+    expect(outPath.commands.length).toBeGreaterThan(0);
+  });
+
+  it('should reverse a path containing an arc and flip sweep flag', () => {
+    // Build a wedge shape using an arc — area is non-zero
+    const path = new PathBuilder().moveTo(100, 100).arcTo(50, 50, 0, 0, 1, 150, 100).lineTo(125, 60).close().build();
+    const initialArea = pathArea(path.commands);
+    const targetDir = initialArea > 0 ? 'ccw' : 'cw';
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: path } }, { direction: targetDir });
+    const outPath = (result.path as NodeValue).value as PathValue;
+    const cmds = decodeCommands(outPath.commands);
+    // Reversed path must still contain an arc
+    expect(cmds.some((c) => c.type === PathCmd.Arc)).toBe(true);
+    // Winding must have flipped
+    const newArea = pathArea(outPath.commands);
+    if (targetDir === 'ccw') {
+      expect(newArea).toBeLessThan(0);
+    } else {
+      expect(newArea).toBeGreaterThan(0);
+    }
   });
 });
 

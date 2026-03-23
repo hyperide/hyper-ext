@@ -230,4 +230,131 @@ describe('pointAtOffset', () => {
     const ptOver = pointAtOffset(cmds, 1.5);
     expect(ptOver.point.x).toBeCloseTo(100, 5);
   });
+
+  it('should return default point for empty commands', () => {
+    const pt = pointAtOffset(new Float64Array(0), 0.5);
+    expect(pt.point.x).toBe(0);
+    expect(pt.point.y).toBe(0);
+    expect(pt.tangent.x).toBe(1);
+    expect(pt.tangent.y).toBe(0);
+  });
+
+  it('should handle close command — treats it as synthetic line to subpath start', () => {
+    // Square: M0,0 L100,0 L100,100 L0,100 Z — total length ≈ 400
+    // offset 0.875 → 350 units in → 50 units into the close segment → (50, 0) from (0,100) toward (0,0)
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Line, x: 100, y: 0 },
+      { type: PathCmd.Line, x: 100, y: 100 },
+      { type: PathCmd.Line, x: 0, y: 100 },
+      { type: PathCmd.Close },
+    ]);
+    // offset 0 → start at (0,0)
+    const ptStart = pointAtOffset(cmds, 0);
+    expect(ptStart.point.x).toBeCloseTo(0, 3);
+    expect(ptStart.point.y).toBeCloseTo(0, 3);
+    // offset 1 → end of close segment (back at start)
+    const ptEnd = pointAtOffset(cmds, 1);
+    expect(ptEnd.point.x).toBeCloseTo(0, 3);
+    expect(ptEnd.point.y).toBeCloseTo(0, 3);
+  });
+
+  it('should handle degenerate path (only Move — zero total length)', () => {
+    const cmds = encodeCommands([{ type: PathCmd.Move, x: 10, y: 20 }]);
+    const pt = pointAtOffset(cmds, 0.5);
+    // Zero-length fallback: returns last known point
+    expect(pt.point.x).toBe(10);
+    expect(pt.point.y).toBe(20);
+  });
+
+  it('should return valid tangent on quadratic bezier at offset 0 and 1', () => {
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Quad, cx: 50, cy: 100, x: 100, y: 0 },
+    ]);
+    const ptStart = pointAtOffset(cmds, 0);
+    const ptEnd = pointAtOffset(cmds, 1);
+    // Tangent should be a unit vector
+    const magStart = Math.sqrt(ptStart.tangent.x ** 2 + ptStart.tangent.y ** 2);
+    const magEnd = Math.sqrt(ptEnd.tangent.x ** 2 + ptEnd.tangent.y ** 2);
+    expect(magStart).toBeCloseTo(1, 5);
+    expect(magEnd).toBeCloseTo(1, 5);
+  });
+
+  it('should return valid tangent on arc at offset 0 and 1', () => {
+    // Quarter circle arc
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 50, y: 0 },
+      { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 0, sweep: 1, x: 0, y: 50 },
+    ]);
+    const ptMid = pointAtOffset(cmds, 0.5);
+    const mag = Math.sqrt(ptMid.tangent.x ** 2 + ptMid.tangent.y ** 2);
+    expect(mag).toBeCloseTo(1, 5);
+    // Normal is perpendicular to tangent
+    const dot = ptMid.tangent.x * ptMid.normal.x + ptMid.tangent.y * ptMid.normal.y;
+    expect(Math.abs(dot)).toBeLessThan(1e-9);
+  });
+});
+
+describe('pathArea — curved contours', () => {
+  it('should estimate area of a cubic bezier closed shape', () => {
+    // Rough circle via 4 cubic beziers (radius 50)
+    const k = 0.5522847498;
+    const r = 50;
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: r, y: 0 },
+      { type: PathCmd.Cubic, cx1: r, cy1: r * k, cx2: r * k, cy2: r, x: 0, y: r },
+      { type: PathCmd.Cubic, cx1: -r * k, cy1: r, cx2: -r, cy2: r * k, x: -r, y: 0 },
+      { type: PathCmd.Cubic, cx1: -r, cy1: -r * k, cx2: -r * k, cy2: -r, x: 0, y: -r },
+      { type: PathCmd.Cubic, cx1: r * k, cy1: -r, cx2: r, cy2: -r * k, x: r, y: 0 },
+      { type: PathCmd.Close },
+    ]);
+    const area = Math.abs(pathArea(cmds));
+    // π * 50² ≈ 7854; tolerance 5%
+    expect(area).toBeGreaterThan(7400);
+    expect(area).toBeLessThan(8300);
+  });
+
+  it('should estimate area of a quad bezier closed shape', () => {
+    // Triangle-ish shape using quad beziers
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 0, y: 0 },
+      { type: PathCmd.Quad, cx: 50, cy: 0, x: 100, y: 0 },
+      { type: PathCmd.Quad, cx: 100, cy: 50, x: 50, y: 100 },
+      { type: PathCmd.Quad, cx: 0, cy: 50, x: 0, y: 0 },
+      { type: PathCmd.Close },
+    ]);
+    const area = Math.abs(pathArea(cmds));
+    // Rough check: area should be positive and significant
+    expect(area).toBeGreaterThan(1000);
+    expect(area).toBeLessThan(15000);
+  });
+
+  it('should estimate area of arc-based closed shape', () => {
+    // Full circle built from two semicircular arcs, radius 50
+    const r = 50;
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: r, y: 0 },
+      { type: PathCmd.Arc, rx: r, ry: r, rotation: 0, largeArc: 0, sweep: 1, x: -r, y: 0 },
+      { type: PathCmd.Arc, rx: r, ry: r, rotation: 0, largeArc: 0, sweep: 1, x: r, y: 0 },
+      { type: PathCmd.Close },
+    ]);
+    const area = Math.abs(pathArea(cmds));
+    // π * 50² ≈ 7854; flattenPath tolerance introduces small error, allow 10%
+    expect(area).toBeGreaterThan(7000);
+    expect(area).toBeLessThan(8700);
+  });
+});
+
+describe('pathLength — arc branch', () => {
+  it('should approximate quarter-circle arc length', () => {
+    // Quarter circle of radius 50: expected length ≈ π/2 * 50 ≈ 78.54
+    const cmds = encodeCommands([
+      { type: PathCmd.Move, x: 50, y: 0 },
+      { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 0, sweep: 1, x: 0, y: 50 },
+    ]);
+    const len = pathLength(cmds);
+    expect(len).toBeGreaterThan(75);
+    expect(len).toBeLessThan(82);
+  });
 });
