@@ -348,6 +348,7 @@ export default function RightSidebar({
   const [backgroundColor, setBackgroundColor] = useState('');
   const [textColor, setTextColor] = useState('');
   const [fillOpacity, setFillOpacity] = useState('');
+  const [textOpacity, setTextOpacity] = useState('');
   const [opacity, setOpacity] = useState('');
   const [fillMode, setFillMode] = useState<FillMode>('color');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -679,6 +680,7 @@ export default function RightSidebar({
       setGridRows('');
       setBackgroundColor('');
       setTextColor('');
+      setTextOpacity('');
       setBorderRadius('');
       setOpacity('');
       setClipContent(false);
@@ -741,10 +743,12 @@ export default function RightSidebar({
     setBackgroundImage(ep.backgroundImage || null);
 
     if (ep.color) {
-      const { color } = parseHexWithAlpha(ep.color);
+      const { color, opacity: parsedTextOpacity } = parseHexWithAlpha(ep.color);
       setTextColor(color);
+      setTextOpacity(parsedTextOpacity ?? '100');
     } else {
       setTextColor('');
+      setTextOpacity('');
     }
 
     // Update border radius
@@ -1223,6 +1227,10 @@ export default function RightSidebar({
                 onTextColorChange={setTextColor}
                 onFillModeChange={setFillMode}
                 syncStyleChange={syncStyleChange}
+                engine={engine}
+                componentPath={componentPath}
+                textOpacity={textOpacity}
+                onTextOpacityChange={setTextOpacity}
               />
             )}
 

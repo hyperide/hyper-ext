@@ -1,6 +1,8 @@
 import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import type { PositionType } from './types';
 
+export { hexWithAlpha, parseHexWithAlpha } from '@shared/utils/color';
+
 /**
  * Convert hex color + opacity to rgba format
  */
@@ -11,41 +13,6 @@ export function hexToRgba(hex: string, opacity: string): string {
   const g = Number.parseInt(hex.slice(3, 5), 16);
   const b = Number.parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${num / 100})`;
-}
-
-/**
- * Convert hex color and opacity (0-100) to hex with alpha channel (#rrggbbaa)
- */
-export function hexWithAlpha(hex: string, opacity: string): string {
-  if (!hex || !hex.startsWith('#')) return hex;
-  const opacityNum = Number.parseFloat(opacity);
-  if (Number.isNaN(opacityNum)) return hex;
-  // Convert opacity 0-100 to alpha 0-255
-  const alpha = Math.round((opacityNum / 100) * 255);
-  const alphaHex = alpha.toString(16).padStart(2, '0');
-  // Ensure hex is 6 characters (without #)
-  const cleanHex = hex.slice(1).padEnd(6, '0').slice(0, 6);
-  return `#${cleanHex}${alphaHex}`;
-}
-
-/**
- * Parse hex color with alpha channel (#rrggbbaa) to color and opacity
- * Returns { color: '#rrggbb', opacity: '0-100' } or { color: original, opacity: undefined }
- */
-export function parseHexWithAlpha(hex: string): {
-  color: string;
-  opacity: string | undefined;
-} {
-  if (!hex || !hex.startsWith('#')) return { color: hex, opacity: undefined };
-  // Check if it's #rrggbbaa format (8 hex chars + #)
-  if (hex.length === 9) {
-    const color = hex.slice(0, 7); // #rrggbb
-    const alphaHex = hex.slice(7, 9); // aa
-    const alpha = Number.parseInt(alphaHex, 16); // 0-255
-    const opacity = Math.round((alpha / 255) * 100).toString(); // 0-100
-    return { color, opacity };
-  }
-  return { color: hex, opacity: undefined };
 }
 
 /**

@@ -4,6 +4,8 @@
  * @see https://www.radix-ui.com/colors
  */
 
+import { colorDistance } from '@shared/utils/color';
+
 /**
  * Tamagui color palette with hex values (Radix colors)
  * Scale: 1 = lightest, 12 = darkest for most colors
@@ -277,24 +279,6 @@ export function isValidTamaguiToken(token: string): boolean {
   if (colorData && shadeNum in colorData) return true;
 
   return false;
-}
-
-export function hexToRgb(h: string): { r: number; g: number; b: number } | null {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
-  return result
-    ? {
-        r: Number.parseInt(result[1], 16),
-        g: Number.parseInt(result[2], 16),
-        b: Number.parseInt(result[3], 16),
-      }
-    : null;
-}
-
-export function colorDistance(hex1: string, hex2: string): number {
-  const rgb1 = hexToRgb(hex1);
-  const rgb2 = hexToRgb(hex2);
-  if (!rgb1 || !rgb2) return Infinity;
-  return Math.sqrt((rgb1.r - rgb2.r) ** 2 + (rgb1.g - rgb2.g) ** 2 + (rgb1.b - rgb2.b) ** 2);
 }
 
 /**

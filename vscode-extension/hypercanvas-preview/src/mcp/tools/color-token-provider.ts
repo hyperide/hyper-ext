@@ -9,14 +9,13 @@
 import { parseTailwindClasses } from '@lib/tailwind/parser';
 import { isValidTamaguiStyleProp } from '@lib/tamagui/style-props';
 import {
-  colorDistance,
   findNearestTamaguiTokens,
   getAllTamaguiColors,
   getTamaguiColorHex,
-  hexToRgb,
   TAMAGUI_COLORS,
   TAMAGUI_SEMANTIC_TOKENS,
 } from '@lib/tamagui/values';
+import { colorDistance, hexToRgb } from '@shared/utils/color';
 import twColors from 'tailwindcss/colors';
 import type { AstService } from '../../services/AstService';
 
@@ -55,7 +54,7 @@ export interface StyleAdapter {
 export type { ResolveInput, ResolveResult };
 
 // ---------------------------------------------------------------------------
-// Shared helpers — hexToRgb and colorDistance are re-exported from @lib/tamagui/values
+// Shared helpers — hexToRgb and colorDistance from @shared/utils/color
 // ---------------------------------------------------------------------------
 
 export { colorDistance, hexToRgb };

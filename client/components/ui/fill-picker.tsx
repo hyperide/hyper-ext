@@ -1,7 +1,8 @@
 import { IconPalette, IconPhoto } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useEffect } from 'react';
-import { ColorCombobox, type TokenSystem } from './color-combobox';
+import { ColorCombobox } from './color-combobox';
+import type { TokenSystem } from './color-utils';
 import { ImageBackgroundPicker } from './image-background-picker';
 
 export type FillMode = 'color' | 'image';
@@ -68,6 +69,18 @@ interface FillPickerProps {
   testId?: string;
   /** data-testid on the color hex input */
   inputTestId?: string;
+  /** Canvas engine instance for extracting component colors */
+  engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
+  /** Path to the currently open component file */
+  componentPath?: string | null;
+  /** Current opacity value (0-100) */
+  opacity?: string;
+  /** Callback when opacity changes */
+  onOpacityChange?: (value: string) => void;
+  /** Paired color for contrast check (text↔bg of the selected element) */
+  contrastPairedHex?: string;
+  /** Role of this picker: 'text' = editing text color, 'bg' = editing background */
+  contrastRole?: 'text' | 'bg';
 }
 
 export function FillPicker({
@@ -86,6 +99,12 @@ export function FillPicker({
   beforeUnlinkSlot,
   testId,
   inputTestId,
+  engine,
+  componentPath,
+  opacity,
+  onOpacityChange,
+  contrastPairedHex,
+  contrastRole,
 }: FillPickerProps) {
   // Auto-select mode based on current values
   useEffect(() => {
@@ -146,6 +165,12 @@ export function FillPicker({
           inputTestId={inputTestId}
           className="flex-1"
           beforeUnlinkSlot={beforeUnlinkSlot}
+          engine={engine}
+          componentPath={componentPath}
+          opacity={opacity}
+          onOpacityChange={onOpacityChange}
+          contrastPairedHex={contrastPairedHex}
+          contrastRole={contrastRole}
         />
       ) : (
         <ImageBackgroundPicker

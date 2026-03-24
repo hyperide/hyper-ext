@@ -2,9 +2,8 @@ import { TID } from '@shared/data-testid-map';
 import { memo } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
 import { type FillMode, FillPicker } from '../../ui/fill-picker';
-import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
-import { hexWithAlpha } from '../utils';
+import { hexWithAlpha, parseHexWithAlpha } from '../utils';
 
 interface FillSectionProps {
   backgroundColor: string;
@@ -21,6 +20,10 @@ interface FillSectionProps {
   onTextColorChange: (value: string) => void;
   onFillModeChange: (mode: FillMode) => void;
   syncStyleChange: (key: string, value: string) => void;
+  engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
+  componentPath?: string | null;
+  textOpacity?: string;
+  onTextOpacityChange?: (value: string) => void;
 }
 
 export const FillSection = memo(function FillSection({
@@ -38,17 +41,26 @@ export const FillSection = memo(function FillSection({
   onTextColorChange,
   onFillModeChange,
   syncStyleChange,
+  engine,
+  componentPath,
+  textOpacity,
+  onTextOpacityChange,
 }: FillSectionProps) {
   const handleColorChange = (val: string) => {
-    onBackgroundColorChange(val);
     if (val?.startsWith('#')) {
-      const opacityValue = fillOpacity || '100';
-      const colorWithAlpha = opacityValue !== '100' ? hexWithAlpha(val, opacityValue) : val;
-      syncStyleChange('backgroundColor', colorWithAlpha);
-      if (!fillOpacity) {
+      // Split incoming value: opacity input sends #RRGGBBAA, color pick sends #RRGGBB
+      const { color: baseColor, opacity: incomingAlpha } = parseHexWithAlpha(val);
+      // Store only 6-digit hex to avoid breaking <input type="color"> and token matching
+      onBackgroundColorChange(baseColor);
+      // Use incoming alpha if present (from opacity input), otherwise apply current fillOpacity
+      const effectiveOpacity = incomingAlpha ?? fillOpacity ?? '100';
+      const syncValue = effectiveOpacity !== '100' ? hexWithAlpha(baseColor, effectiveOpacity) : baseColor;
+      syncStyleChange('backgroundColor', syncValue);
+      if (!fillOpacity && !incomingAlpha) {
         onFillOpacityChange('100');
       }
     } else {
+      onBackgroundColorChange(val);
       syncStyleChange('backgroundColor', val);
       if (projectUIKit === 'tamagui') {
         onFillOpacityChange('');
@@ -66,29 +78,6 @@ export const FillSection = memo(function FillSection({
     if (path && backgroundColor) {
       onBackgroundColorChange('');
       syncStyleChange('backgroundColor', '');
-    }
-  };
-
-  const handleFillOpacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace('%', '').trim(); // nosemgrep: incomplete-sanitization -- stripping '%' from CSS opacity input, not security sanitization
-    onFillOpacityChange(value);
-    if (backgroundColor?.startsWith('#')) {
-      const colorWithAlpha = hexWithAlpha(backgroundColor, value || '100');
-      syncStyleChange('backgroundColor', colorWithAlpha);
-    }
-  };
-
-  const handleFillOpacityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-    const increment = e.key === 'ArrowUp' ? 1 : -1;
-    const step = e.shiftKey || e.altKey ? 10 : 1;
-    const num = Number.parseFloat(fillOpacity || '100') || 0;
-    const newNum = Math.max(0, Math.min(100, num + increment * step));
-    onFillOpacityChange(`${newNum}`);
-    if (backgroundColor?.startsWith('#')) {
-      const colorWithAlpha = hexWithAlpha(backgroundColor, `${newNum}`);
-      syncStyleChange('backgroundColor', colorWithAlpha);
     }
   };
 
@@ -120,23 +109,12 @@ export const FillSection = memo(function FillSection({
             projectId={activeProjectId || ''}
             inputPlaceholder="transparent"
             className="flex-1"
-            beforeUnlinkSlot={
-              fillMode === 'color' &&
-              backgroundColor &&
-              (projectUIKit !== 'tamagui' || backgroundColor.startsWith('#')) ? (
-                <div className="h-6 w-14 px-2 bg-muted rounded flex items-center">
-                  <Input
-                    type="text"
-                    testId={TID.inspector.fillOpacity}
-                    value={`${fillOpacity || '100'}%`}
-                    placeholder="100%"
-                    onChange={handleFillOpacityChange}
-                    onKeyDown={handleFillOpacityKeyDown}
-                    className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 text-center"
-                  />
-                </div>
-              ) : undefined
-            }
+            engine={engine}
+            componentPath={componentPath}
+            opacity={fillOpacity}
+            onOpacityChange={onFillOpacityChange}
+            contrastPairedHex={textColor || undefined}
+            contrastRole="bg"
           />
         </div>
       </div>
@@ -153,12 +131,29 @@ export const FillSection = memo(function FillSection({
           data-uniq-id="d59ad045-1334-475e-b11c-440bc0539261"
           value={textColor || ''}
           onChange={(val) => {
-            onTextColorChange(val);
-            syncStyleChange('color', val);
+            if (val?.startsWith('#')) {
+              const { color: baseColor, opacity: incomingAlpha } = parseHexWithAlpha(val);
+              onTextColorChange(baseColor);
+              const effectiveOpacity = incomingAlpha ?? textOpacity ?? '100';
+              const syncValue = effectiveOpacity !== '100' ? hexWithAlpha(baseColor, effectiveOpacity) : baseColor;
+              syncStyleChange('color', syncValue);
+              if (!textOpacity && !incomingAlpha) {
+                onTextOpacityChange?.(effectiveOpacity);
+              }
+            } else {
+              onTextColorChange(val);
+              syncStyleChange('color', val);
+            }
           }}
           inputPlaceholder="000000"
           className="flex-1"
           tokenSystem={projectUIKit === 'tamagui' ? 'tamagui' : 'tailwind'}
+          engine={engine}
+          componentPath={componentPath}
+          opacity={textOpacity}
+          onOpacityChange={onTextOpacityChange}
+          contrastPairedHex={backgroundColor || undefined}
+          contrastRole="text"
         />
       </div>
     </div>
