@@ -818,6 +818,21 @@ export class PreviewPanel {
   }
 
   /**
+   * Programmatically select an element by its data-uniq-id.
+   * Used by E2E tests and extension commands to establish full canvas selection state.
+   */
+  public selectElement(elementId: string): void {
+    this._stateHub.applyUpdate({ selectedIds: [elementId] });
+  }
+
+  /**
+   * Programmatically select multiple elements by their data-uniq-ids.
+   */
+  public selectElements(elementIds: string[]): void {
+    this._stateHub.applyUpdate({ selectedIds: elementIds });
+  }
+
+  /**
    * Clear selection (called from VS Code keybinding command).
    */
   public clearSelection(): void {

@@ -61,7 +61,6 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
     console.log('[HyperIDE] No workspace folder open');
-    vscode.window.showWarningMessage('HyperIDE: Please open a folder to use the preview.');
     return;
   }
 
@@ -578,6 +577,12 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
     vscode.commands.registerCommand('hypercanvas.canvasEscape', () => previewPanel?.clearSelection()),
+    vscode.commands.registerCommand('hypercanvas.selectElement', (elementId: string) => {
+      previewPanel?.selectElement(elementId);
+    }),
+    vscode.commands.registerCommand('hypercanvas.selectElements', (elementIds: string[]) => {
+      previewPanel?.selectElements(elementIds);
+    }),
   );
 
   // Go to Visual - navigate from code to canvas

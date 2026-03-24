@@ -42,6 +42,25 @@ function getVSCodeApi(): VSCodeApi {
 }
 
 // ============================================================================
+// Test bridge — allows E2E tests to send messages to extension host
+// ============================================================================
+
+(window as unknown as Record<string, unknown>).__hyperTestBridge = {
+  selectElement(elementId: string) {
+    getVSCodeApi().postMessage({
+      type: 'state:update',
+      patch: { selectedIds: [elementId] },
+    });
+  },
+  selectElements(elementIds: string[]) {
+    getVSCodeApi().postMessage({
+      type: 'state:update',
+      patch: { selectedIds: elementIds },
+    });
+  },
+};
+
+// ============================================================================
 // Message handlers registry
 // ============================================================================
 
