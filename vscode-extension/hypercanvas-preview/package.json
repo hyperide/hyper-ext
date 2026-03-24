@@ -301,9 +301,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node esbuild.js --production && npm run build:css",
-    "build:css": "npx tailwindcss -i src/webview/styles.css -o out/webview.css --minify",
-    "watch": "node esbuild.js --watch & npx tailwindcss -i src/webview/styles.css -o out/webview.css --watch",
+    "build": "node esbuild.js --production && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
     "compile": "tsc -p ./",
     "package": "npm run build && npx @vscode/vsce package"
   },

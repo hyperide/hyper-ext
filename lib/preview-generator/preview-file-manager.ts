@@ -14,8 +14,10 @@ import { builders as b } from 'ast-types';
 import * as recast from 'recast';
 import type { FileIO } from '../ast/file-io';
 import {
+  type DetectionResult,
   detectFramework,
   generateBlankLayoutContent,
+  generateIsolatedLayoutContent,
   generateRouteFileContent,
   getRouteFilePaths,
 } from './framework-routing';
@@ -657,6 +659,37 @@ export class PreviewFileManager {
   }
 
   /**
+   * Generate route + isolated layout for Next.js Isolated mode (Tier 3).
+   * Same route file as App Shell, but layout.tsx imports PreviewWrapper from .hyperide/preview.tsx.
+   * Called by PreviewModeManager.onWrapperCreated() when framework is Next.js.
+   * @param detection - pass when caller already has the detection result to avoid a second detectFramework call
+   */
+  async ensureIsolatedNextJsLayout(detection?: DetectionResult): Promise<void> {
+    const detection_ = detection ?? (await detectFramework(this.projectRoot, this.io));
+    const previewPath = await this.getPreviewFilePath();
+    const paths = getRouteFilePaths(detection_, this.projectRoot);
+
+    if (!paths.routeFile) return;
+
+    const routeDir = dirname(paths.routeFile);
+    let previewImportPath = relative(routeDir, previewPath).replace(/\.\w+$/, '');
+    if (!previewImportPath.startsWith('.')) previewImportPath = `./${previewImportPath}`;
+
+    await this._writeIfSafe(paths.routeFile, generateRouteFileContent(detection_.framework, previewImportPath));
+
+    if (paths.layoutFile) {
+      // Compute path from layout dir to .hyperide/preview
+      const layoutDir = dirname(paths.layoutFile);
+      let wrapperImportPath = join(relative(layoutDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
+      if (!wrapperImportPath.startsWith('.')) wrapperImportPath = `./${wrapperImportPath}`;
+
+      await this._writeIfSafe(paths.layoutFile, generateIsolatedLayoutContent(wrapperImportPath));
+    }
+
+    await this.ensureGitExclude();
+  }
+
+  /**
    * Remove all @hyperide-managed route files created by ensurePreviewFiles.
    * Called during App Shell → Isolated mode switch.
    * Does NOT remove __canvas_preview__.tsx — only route files.
@@ -799,13 +832,18 @@ export class PreviewFileManager {
   }
 
   /**
-   * Patch webpack/CRA entry file to conditionally load __canvas_preview__ via AST.
+   * Patch webpack/CRA entry file to conditionally load the preview module via AST.
    * Finds the createRoot(...).render(...) ExpressionStatement and wraps it in:
-   *   if (__preview param) { import('./__canvas_preview__') }
+   *   if (__preview param) { import(importTarget) }
    *   else { <original createRoot call> }
    * Tagged with a leading comment for AST-safe revert.
+   *
+   * @param entryFilePath - absolute path to the entry file
+   * @param importTarget - module to import when in preview mode.
+   *   App Shell mode: './__canvas_preview__' (component registry, no createRoot)
+   *   Isolated mode: './__canvas_preview_standalone__' (has createRoot + PreviewWrapper)
    */
-  async patchEntryFile(entryFilePath: string): Promise<void> {
+  async patchEntryFile(entryFilePath: string, importTarget = './__canvas_preview__'): Promise<void> {
     const source = await this.io.readFile(entryFilePath);
     if (source.includes('@hyperide-managed')) return;
 
@@ -836,9 +874,7 @@ export class PreviewFileManager {
             ),
             [b.stringLiteral('__preview')],
           ),
-          b.blockStatement([
-            b.expressionStatement(b.callExpression(b.import(), [b.stringLiteral('./__canvas_preview__')])),
-          ]),
+          b.blockStatement([b.expressionStatement(b.callExpression(b.import(), [b.stringLiteral(importTarget)]))]),
           b.blockStatement([path.node]),
         );
 

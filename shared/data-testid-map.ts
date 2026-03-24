@@ -3,6 +3,8 @@ export const TID = {
   preview: {
     iframe: 'hyper-preview-iframe',
     startServerButton: 'hyper-preview-start-server',
+    unsupportedRoot: 'hyper-preview-unsupported',
+    unsupportedFixButton: 'hyper-preview-unsupported-fix',
     toolbarMode: (mode: string) => `hyper-preview-mode-${mode}`,
     toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',

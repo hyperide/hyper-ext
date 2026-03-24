@@ -7,12 +7,13 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ProjectInfo, ProjectType } from '../types';
+import type { ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
 
 /**
- * Read and parse package.json from project directory
+ * Read and parse package.json from project directory.
+ * Exported so callers on the activation path can read once and pass to multiple detectors.
  */
-async function readPackageJson(projectPath: string): Promise<Record<string, unknown> | null> {
+export async function readPackageJson(projectPath: string): Promise<Record<string, unknown> | null> {
   try {
     const packageJsonPath = path.join(projectPath, 'package.json');
     const content = await fs.readFile(packageJsonPath, 'utf-8');
@@ -147,18 +148,64 @@ export async function getProjectInfo(projectPath: string): Promise<ProjectInfo> 
 }
 
 /**
- * Detect UI kit used in project (tailwind, tamagui, or none)
+ * Detect if project is React Native / Tamagui (not renderable in browser without react-native-web)
+ *
+ * Returns null if project is browser-compatible, or an error object if unsupported.
+ * @param packageJson - pre-parsed package.json to avoid redundant reads on the activation path
  */
-export async function detectUIKit(projectPath: string): Promise<'tailwind' | 'tamagui' | 'none'> {
-  const packageJson = await readPackageJson(projectPath);
+export async function detectUnsupportedProject(
+  projectPath: string,
+  packageJson?: Record<string, unknown> | null,
+): Promise<UnsupportedProjectError | null> {
+  const pkg = packageJson ?? (await readPackageJson(projectPath));
 
-  if (!packageJson) {
+  if (!pkg) {
+    return null;
+  }
+
+  const deps = {
+    ...(pkg.dependencies as Record<string, string> | undefined),
+    ...(pkg.devDependencies as Record<string, string> | undefined),
+  };
+
+  const hasReactNative = Boolean(deps['react-native']);
+  // @tamagui/cli is a build-time codegen tool — not a runtime indicator of RN usage
+  const hasTamagui = Boolean(deps.tamagui || deps['@tamagui/core']);
+
+  if (hasReactNative || hasTamagui) {
+    const what = hasTamagui ? 'Tamagui (React Native)' : 'React Native';
+    const hasRNWeb = Boolean(deps['react-native-web']);
+    if (hasRNWeb) {
+      // react-native-web already installed — project may work, don't block
+      return null;
+    }
+    return {
+      type: 'react-native',
+      message: `${what} projects don't render in a browser without react-native-web. Click "Fix" to install it.`,
+      fixLabel: 'Fix: Add react-native-web',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Detect UI kit used in project (tailwind, tamagui, or none)
+ * @param packageJson - pre-parsed package.json to avoid redundant reads on the activation path
+ */
+export async function detectUIKit(
+  projectPath: string,
+  packageJson?: Record<string, unknown> | null,
+): Promise<'tailwind' | 'tamagui' | 'none'> {
+  const pkg = packageJson ?? (await readPackageJson(projectPath));
+
+  if (!pkg) {
     return 'none';
   }
 
   const deps = {
-    ...(packageJson.dependencies as Record<string, string> | undefined),
-    ...(packageJson.devDependencies as Record<string, string> | undefined),
+    ...(pkg.dependencies as Record<string, string> | undefined),
+    ...(pkg.devDependencies as Record<string, string> | undefined),
   };
 
   // Check for Tamagui

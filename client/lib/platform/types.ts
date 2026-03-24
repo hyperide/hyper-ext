@@ -206,7 +206,10 @@ export type PlatformMessage =
   | { type: 'diagnostic:requestState' }
   | { type: 'diagnostic:console'; level: ConsoleLevel; args: string[] }
   // Webview lifecycle (VS Code: webview signals it's ready to receive state)
-  | { type: 'webview:ready' };
+  | { type: 'webview:ready' }
+
+  // VS Code commands triggered from preview webview
+  | { type: 'command:fixUnsupportedProject' };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;

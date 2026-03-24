@@ -137,16 +137,17 @@ export class PreviewModeManager {
         return this._fileManager.ensurePreviewFiles();
       case 'vite-spa-jsx-router': {
         const routerFile = await this.detectRouterFile();
-        if (!routerFile) return 'needs-patch';
-        await this._fileManager.patchRouterConfig(routerFile);
-        return 'ok';
+        if (routerFile) {
+          await this._fileManager.patchRouterConfig(routerFile);
+          return 'ok';
+        }
+        // No JSX router found — patch entry file (same as webpack/parcel).
+        // Plain Vite SPA projects without React Router.
+        return this._patchEntryFile();
       }
       case 'webpack':
-      case 'parcel': {
-        const entryFile = await this._detectEntryFile();
-        if (entryFile) await this._fileManager.patchEntryFile(entryFile);
-        return 'ok';
-      }
+      case 'parcel':
+        return this._patchEntryFile();
       case 'unknown':
         return 'unsupported';
       default:
@@ -156,16 +157,43 @@ export class PreviewModeManager {
 
   /** Called by FSWatch when .hyperide/preview.tsx appears. */
   async onWrapperCreated(): Promise<void> {
-    await this._fileManager.cleanupPreviewFiles();
     await this._revertJsxPatchIfPresent();
     await this._revertEntryPatchIfPresent();
-    await this._fileManager.ensureStandaloneEntry();
+
+    const detection = await detectFramework(this._projectRoot, this._io);
+    const { framework } = detection;
+
+    if (framework === 'nextjs-app-router' || framework === 'nextjs-pages-router') {
+      // Tier 3: reuse file-based routing, but layout.tsx imports PreviewWrapper.
+      // Cleanup first — _writeIfSafe skips existing @hyperide-managed files, so the
+      // blank App Shell layout must be removed before the isolated layout can be written.
+      await this._fileManager.cleanupPreviewFiles();
+      await this._fileManager.ensureIsolatedNextJsLayout(detection);
+    } else if (framework === 'webpack') {
+      // Tier 2: patch entry to load standalone entry (which has createRoot + PreviewWrapper)
+      await this._fileManager.ensureStandaloneEntry();
+      const entryFile = await this._detectEntryFile();
+      if (entryFile) await this._fileManager.patchEntryFile(entryFile, './__canvas_preview_standalone__');
+    } else {
+      // Tier 1: proxy script swap (Vite, Parcel, Remix, file-based Vite SPA)
+      await this._fileManager.cleanupPreviewFiles();
+      await this._fileManager.ensureStandaloneEntry();
+    }
+
     this._mode = 'isolated';
     this._onModeChange?.(true);
   }
 
   /** Called by FSWatch when .hyperide/preview.tsx is deleted. */
   async onWrapperDeleted(): Promise<void> {
+    // Revert any entry/router patches from isolated mode before re-applying App Shell patches.
+    // Without this, _applyPatchIfNeeded() skips re-patching because @hyperide-managed is present.
+    await this._revertJsxPatchIfPresent();
+    await this._revertEntryPatchIfPresent();
+    // Cleanup isolated files first — necessary for Tier 3 (Next.js) where layout.tsx
+    // imported PreviewWrapper and must be replaced with a blank layout.
+    // _writeIfSafe is idempotent and won't overwrite existing files, so cleanup is required.
+    await this._fileManager.cleanupPreviewFiles();
     await this._fileManager.ensurePreviewFiles();
     await this._applyPatchIfNeeded();
     this._mode = 'app-shell';
@@ -216,6 +244,12 @@ export class PreviewModeManager {
       }
     }
     return null;
+  }
+
+  private async _patchEntryFile(): Promise<'ok'> {
+    const entryFile = await this._detectEntryFile();
+    if (entryFile) await this._fileManager.patchEntryFile(entryFile);
+    return 'ok';
   }
 
   /** Coalescing guard: re-runs after current execution if state changed mid-flight. */
@@ -270,10 +304,14 @@ export class PreviewModeManager {
     const detection = await detectFramework(this._projectRoot, this._io);
     if (detection.framework === 'vite-spa-jsx-router') {
       const routerFile = await this.detectRouterFile();
-      if (routerFile) await this._fileManager.patchRouterConfig(routerFile);
+      if (routerFile) {
+        await this._fileManager.patchRouterConfig(routerFile);
+        return;
+      }
+      // No JSX router — patch entry file (same as webpack/parcel)
+      await this._patchEntryFile();
     } else if (detection.framework === 'webpack' || detection.framework === 'parcel') {
-      const entryFile = await this._detectEntryFile();
-      if (entryFile) await this._fileManager.patchEntryFile(entryFile);
+      await this._patchEntryFile();
     }
   }
 }

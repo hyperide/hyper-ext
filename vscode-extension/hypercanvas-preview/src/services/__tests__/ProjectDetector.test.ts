@@ -32,6 +32,7 @@ const {
   detectUIKit,
   detectPackageManager,
   getPackageScripts,
+  detectUnsupportedProject,
 } = await import('../ProjectDetector');
 
 function setPackageJson(projectPath: string, content: Record<string, unknown>) {
@@ -225,6 +226,62 @@ describe('getProjectInfo', () => {
     setFileExists('/proj/tsconfig.json');
     const info = await getProjectInfo('/proj');
     expect(info.hasTypeScript).toBe(true);
+  });
+});
+
+describe('detectUnsupportedProject', () => {
+  it('returns null for plain React project', async () => {
+    setPackageJson('/proj', { dependencies: { react: '^18.0.0', 'react-dom': '^18.0.0' } });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns error for react-native without react-native-web', async () => {
+    setPackageJson('/proj', { dependencies: { 'react-native': '^0.73.0' } });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe('react-native');
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+  });
+
+  it('returns error for tamagui without react-native-web', async () => {
+    setPackageJson('/proj', { dependencies: { tamagui: '^1.0.0' } });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+  });
+
+  it('returns error for @tamagui/core without react-native-web', async () => {
+    setPackageJson('/proj', { dependencies: { '@tamagui/core': '^1.0.0' } });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+  });
+
+  it('returns null for @tamagui/cli only (build-time tool, not runtime indicator)', async () => {
+    setPackageJson('/proj', { devDependencies: { '@tamagui/cli': '^1.0.0' } });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns null when react-native-web is already installed', async () => {
+    setPackageJson('/proj', {
+      dependencies: { 'react-native': '^0.73.0', 'react-native-web': '^0.19.0' },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns null when tamagui + react-native-web both present', async () => {
+    setPackageJson('/proj', {
+      dependencies: { tamagui: '^1.0.0', 'react-native-web': '^0.19.0' },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns null when no package.json', async () => {
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('checks devDependencies too', async () => {
+    setPackageJson('/proj', { devDependencies: { 'react-native': '^0.73.0' } });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
   });
 });
 

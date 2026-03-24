@@ -32,7 +32,12 @@ import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
-import { detectUIKit } from './services/ProjectDetector';
+import {
+  detectPackageManager,
+  detectUIKit,
+  detectUnsupportedProject,
+  readPackageJson,
+} from './services/ProjectDetector';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { generatePreviewWrapper, writePreviewWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
@@ -100,13 +105,20 @@ export function activate(context: vscode.ExtensionContext) {
     aiChatProvider?.sendAIPrompt(prompt);
   });
 
-  // Detect UI kit from package.json and broadcast to all panels
-  detectUIKit(workspaceRoot)
-    .then((kit) => {
+  // Read package.json once and run all detectors against it
+  readPackageJson(workspaceRoot)
+    .then(async (pkg) => {
+      const kit = await detectUIKit(workspaceRoot, pkg);
       stateHub?.applyUpdate({ projectUIKit: kit });
+
+      const projectError = await detectUnsupportedProject(workspaceRoot, pkg);
+      if (projectError) {
+        console.log('[HyperIDE] Unsupported project detected:', projectError.type);
+        previewPanel?.notifyUnsupportedProject(projectError);
+      }
     })
     .catch((err) => {
-      console.warn('[HyperIDE] Failed to detect UI kit:', err);
+      console.warn('[HyperIDE] Failed to detect project info:', err);
     });
 
   // Flush .hyperide/ to disk on first component open (deferred write).
@@ -291,6 +303,7 @@ export function activate(context: vscode.ExtensionContext) {
           // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
           const result = await modeManager.onComponentSelected();
           if (result === 'unsupported') {
+            // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
             void vscode.window.showWarningMessage(
               'HyperIDE: unsupported project type. ' +
                 'Supported: Next.js, Remix, Vite (file-based and JSX router), Webpack/CRA, Parcel.',
@@ -644,6 +657,54 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.showDevServerOutput', () => {
       devServerManager?.showOutput();
+    }),
+  );
+
+  // Fix unsupported project — installs react-native-web for React Native / Tamagui projects
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
+      const pkgManager = await detectPackageManager(workspaceRoot);
+      const installCmd =
+        pkgManager === 'bun'
+          ? 'bun add'
+          : pkgManager === 'yarn'
+            ? 'yarn add'
+            : pkgManager === 'pnpm'
+              ? 'pnpm add'
+              : 'npm install';
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `HyperIDE: Installing react-native-web via ${pkgManager}...`,
+            cancellable: false,
+          },
+          async () => {
+            await new Promise<void>((resolve, reject) => {
+              const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+              // shell needed on Windows where npm/yarn/pnpm are .cmd wrappers
+              execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+          },
+        );
+        // Re-check to confirm the package was recorded in package.json
+        const stillUnsupported = await detectUnsupportedProject(workspaceRoot);
+        if (stillUnsupported) {
+          vscode.window.showWarningMessage(
+            'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
+          );
+        } else {
+          vscode.window.showInformationMessage('react-native-web installed. Restart the dev server to apply changes.');
+          previewPanel?.notifyUnsupportedProject(null);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`HyperIDE: Failed to install react-native-web: ${msg}`);
+      }
     }),
   );
 

@@ -174,8 +174,6 @@ export const convertPointNode: NodeTypeDefinition = {
         // Existing incoming handle (cp2)
         inHandleX = inCmdObj.cx2;
         inHandleY = inCmdObj.cy2;
-        inTanX = vx - inCmdObj.cx2;
-        inTanY = vy - inCmdObj.cy2;
       } else {
         // Line or first vertex — tangent is the chord direction
         const dx = vx - prevX;

@@ -17,7 +17,7 @@ import { handleEditorMessage, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError } from './types';
+import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -47,6 +47,9 @@ export class PreviewPanel {
 
   // Whether dev server is actually running
   private _devServerRunning = false;
+
+  // Unsupported project error (React Native / Tamagui), sent to webview on ready
+  private _projectError: UnsupportedProjectError | null = null;
 
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
@@ -211,6 +214,10 @@ export class PreviewPanel {
         running: this._devServerRunning,
         url: this._devServerRunning ? this._previewBaseUrl : null,
       });
+      // Send unsupported project error if already detected
+      if (this._projectError) {
+        webview.postMessage({ type: 'projectError', error: this._projectError });
+      }
       // If dev server is running, send current preview URL
       if (this._devServerRunning) {
         this._updatePreviewUrl();
@@ -242,7 +249,8 @@ export class PreviewPanel {
       return;
     }
     if (msg.type === 'preview:setScope') {
-      const { scope } = msg as { scope: 'full-app' | 'component-only' };
+      const scope = msg.scope;
+      if (scope !== 'full-app' && scope !== 'component-only') return;
       void this._onScopeChange?.(scope);
       return;
     }
@@ -264,6 +272,10 @@ export class PreviewPanel {
     }
     if (msg.type === 'command:startDevServer') {
       vscode.commands.executeCommand('hypercanvas.startDevServer');
+      return;
+    }
+    if (msg.type === 'command:fixUnsupportedProject') {
+      vscode.commands.executeCommand('hypercanvas.fixUnsupportedProject');
       return;
     }
     if (msg.type === 'previewError') {
@@ -730,6 +742,15 @@ export class PreviewPanel {
       running: false,
       url: null,
     });
+  }
+
+  /**
+   * Notify webview that the project type is unsupported (e.g. React Native / Tamagui).
+   * Pass null to clear the error (e.g. after fix installed react-native-web).
+   */
+  public notifyUnsupportedProject(error: UnsupportedProjectError | null): void {
+    this._projectError = error;
+    this._panel?.webview.postMessage({ type: 'projectError', error });
   }
 
   /**

@@ -175,3 +175,19 @@ export default function PreviewLayout({ children }: { children: ReactNode }) {
 }
 `;
 }
+
+/**
+ * Generate a Next.js layout.tsx for Isolated mode (Tier 3).
+ * Imports PreviewWrapper from .hyperide/preview.tsx and wraps children with it.
+ * @param wrapperImportPath - relative import path from the layout file to .hyperide/preview
+ */
+export function generateIsolatedLayoutContent(wrapperImportPath: string): string {
+  return `// @hyperide-managed
+import type { ReactNode } from 'react';
+import { PreviewWrapper } from '${wrapperImportPath}';
+
+export default function PreviewLayout({ children }: { children: ReactNode }) {
+  return <PreviewWrapper>{children}</PreviewWrapper>;
+}
+`;
+}

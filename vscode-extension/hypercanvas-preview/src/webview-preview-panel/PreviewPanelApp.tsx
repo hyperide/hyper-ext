@@ -18,6 +18,7 @@ import {
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
 import { TID } from '../shared/data-testid-map';
+import type { UnsupportedProjectError } from '../types';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -50,11 +51,12 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, handleStartDevServer } = usePreviewBridge({
-    iframeEl,
-    canvas,
-    onStateUpdate: updateState,
-  });
+  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, projectError, handleStartDevServer } =
+    usePreviewBridge({
+      iframeEl,
+      canvas,
+      onStateUpdate: updateState,
+    });
 
   const handleIframeLoad = useCallback(() => {
     canvas.sendEvent({ type: 'previewLoaded' });
@@ -69,6 +71,14 @@ function PreviewContent() {
     },
     [canvas],
   );
+
+  // Unsupported project type (React Native / Tamagui without react-native-web)
+  if (projectError) {
+    const handleFix = () => {
+      canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
+    };
+    return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
+  }
 
   // Dev server not running — show start button (with reconnecting banner if was connected)
   if (!devServerRunning) {
@@ -133,6 +143,20 @@ function NoComponentHint() {
     <div style={{ ...centerScreenStyle, ...absoluteFillStyle }}>
       <h2 style={headingStyle}>No component selected</h2>
       <p style={subtextStyle}>Open a .tsx or .jsx file to preview it</p>
+    </div>
+  );
+}
+
+function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectError; onFix: () => void }) {
+  const label = error.type === 'react-native' ? 'React Native / Tamagui' : error.type;
+  return (
+    <div data-testid={TID.preview.unsupportedRoot} style={centerScreenStyle}>
+      <div style={warningIconStyle}>⚠</div>
+      <h2 style={headingStyle}>Unsupported project type: {label}</h2>
+      <p style={{ ...subtextStyle, maxWidth: 420 }}>{error.message}</p>
+      <button type="button" data-testid={TID.preview.unsupportedFixButton} style={buttonStyle} onClick={onFix}>
+        {error.fixLabel}
+      </button>
     </div>
   );
 }
@@ -260,7 +284,7 @@ const iframeStyle: React.CSSProperties = {
   border: 'none',
   width: '100%',
   height: '100%',
-  background: '#fff',
+  background: 'var(--vscode-editor-background, #1e1e1e)',
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -325,4 +349,11 @@ const reconnectingBannerStyle: React.CSSProperties = {
   fontFamily: 'var(--vscode-font-family)',
   textAlign: 'center',
   zIndex: 1001,
+};
+
+const warningIconStyle: React.CSSProperties = {
+  fontSize: 36,
+  marginBottom: 12,
+  color: 'var(--vscode-editorWarning-foreground, #e5a100)',
+  lineHeight: 1,
 };

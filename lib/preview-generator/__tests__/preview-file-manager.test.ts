@@ -1075,3 +1075,87 @@ describe('PreviewFileManager._writeIfSafe mkdir', () => {
     expect(io.mkdirCalls).toContain('/project/app/test-preview');
   });
 });
+
+describe('PreviewFileManager.patchEntryFile — importTarget', () => {
+  it('uses default __canvas_preview__ import target (App Shell)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toContain('./__canvas_preview__');
+    expect(patched).not.toContain('__canvas_preview_standalone__');
+  });
+
+  it('uses __canvas_preview_standalone__ import target when specified (Isolated/Tier 2)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx', './__canvas_preview_standalone__');
+    const patched = io.files.get('/project/src/index.tsx');
+    expect(patched).toContain('./__canvas_preview_standalone__');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__preview');
+  });
+
+  it('revertEntryFile removes Tier 2 patch correctly', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx', './__canvas_preview_standalone__');
+    await manager.revertEntryFile('/project/src/index.tsx');
+    const reverted = io.files.get('/project/src/index.tsx');
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).toContain('ReactDOM.createRoot');
+  });
+});
+
+describe('PreviewFileManager.ensureIsolatedNextJsLayout (Tier 3)', () => {
+  it('generates layout.tsx with PreviewWrapper import for Next.js App Router', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureIsolatedNextJsLayout();
+
+    const layout = io.files.get('/project/app/test-preview/layout.tsx');
+    expect(layout).toBeDefined();
+    expect(layout).toContain('@hyperide-managed');
+    expect(layout).toContain('PreviewWrapper');
+    expect(layout).toContain('.hyperide/preview');
+    // Must NOT be a blank layout
+    expect(layout).not.toContain('<>{children}</>');
+  });
+
+  it('generates route file alongside the isolated layout', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureIsolatedNextJsLayout();
+
+    const page = io.files.get('/project/app/test-preview/page.tsx');
+    expect(page).toBeDefined();
+    expect(page).toContain('@hyperide-managed');
+    expect(page).toContain('TestPreviewPage');
+  });
+
+  it('wrapper import path goes from layout dir to projectRoot/.hyperide/preview', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14' } }));
+    io.files.set('/project/app/layout.tsx', '// root layout');
+    io.files.set('/project/src/__canvas_preview__.tsx', '// preview');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureIsolatedNextJsLayout();
+
+    const layout = io.files.get('/project/app/test-preview/layout.tsx');
+    // Layout is at app/test-preview/layout.tsx, .hyperide is at project root
+    // Relative path: ../../.hyperide/preview
+    expect(layout).toContain('../../.hyperide/preview');
+  });
+});

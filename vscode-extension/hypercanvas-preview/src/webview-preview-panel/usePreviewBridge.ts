@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
+import type { UnsupportedProjectError } from '../types';
 
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
@@ -25,6 +26,8 @@ interface UsePreviewBridgeResult {
   disconnected: boolean;
   previewUrl: string | null;
   showNoComponentHint: boolean;
+  /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
+  projectError: UnsupportedProjectError | null;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
 }
@@ -34,6 +37,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
+  const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -167,10 +171,29 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           setDevServerUrl(msg.url ?? null);
           break;
 
-        case 'updateUrl':
+        case 'updateUrl': {
+          const url = typeof msg.url === 'string' ? msg.url : undefined;
+          if (!url) break;
           setShowNoComponentHint(false);
-          setPreviewUrl(msg.url);
+          const frame = iframeElRef.current;
+          if (frame?.src) {
+            // Iframe already loaded — extract component param and send via postMessage
+            // to avoid iframe navigation flash
+            try {
+              const component = new URL(url).searchParams.get('component');
+              if (component) {
+                frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+                break;
+              }
+            } catch {
+              /* invalid URL — fall through to full navigation */
+            }
+            frame.src = url;
+          } else {
+            setPreviewUrl(url);
+          }
           break;
+        }
 
         case 'showNoComponentHint':
           setShowNoComponentHint(true);
@@ -182,10 +205,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
         case 'setComponent': {
           const frame = iframeElRef.current;
-          if (frame) {
-            const url = new URL(frame.src);
-            url.searchParams.set('component', msg.component as string);
-            frame.src = url.toString();
+          if (frame?.contentWindow) {
+            // Send via postMessage — no iframe reload
+            frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
           }
           break;
         }
@@ -249,6 +271,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             '*',
           );
           break;
+
+        case 'projectError':
+          // Extension detected an unsupported project type (e.g. React Native / Tamagui)
+          setProjectError((msg.error as UnsupportedProjectError) ?? null);
+          break;
       }
     }
 
@@ -277,6 +304,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     disconnected,
     previewUrl,
     showNoComponentHint,
+    projectError,
     handleStartDevServer,
     handleRefresh: doRefresh,
   };

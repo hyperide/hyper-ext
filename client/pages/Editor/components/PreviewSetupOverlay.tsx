@@ -6,6 +6,7 @@
  *               'needs-patch' (no router file found) or 'unsupported'.
  */
 
+import { FRAMEWORK_SUPPORT, type SupportLevel } from '@shared/framework-support';
 import { IconAlertTriangle, IconCircleCheck, IconCircleX, IconClock } from '@tabler/icons-react';
 import type { PreviewSetupStatus } from '@/contexts/ComponentMetaContext';
 import { useOpenAIChat } from '@/lib/platform/PlatformContext';
@@ -16,25 +17,6 @@ interface PreviewSetupOverlayProps {
   needsPatchPrompt?: string | null;
   onDismiss: () => void;
 }
-
-type SupportLevel = 'supported' | 'planned' | 'not-planned';
-
-const FRAMEWORK_SUPPORT: { name: string; level: SupportLevel }[] = [
-  { name: 'Next.js (App Router)', level: 'supported' },
-  { name: 'Next.js (Pages Router)', level: 'supported' },
-  { name: 'Remix', level: 'supported' },
-  { name: 'Vite SPA (file-based routing)', level: 'supported' },
-  { name: 'Vite SPA (JSX router)', level: 'supported' },
-  { name: 'CRA / Webpack', level: 'supported' },
-  { name: 'Parcel', level: 'supported' },
-  { name: 'Vue', level: 'planned' },
-  { name: 'Svelte / SvelteKit', level: 'planned' },
-  { name: 'Solid.js', level: 'planned' },
-  { name: 'HTML/CSS (no bundler)', level: 'planned' },
-  { name: 'jQuery', level: 'not-planned' },
-  { name: 'Vanilla JS', level: 'not-planned' },
-  { name: 'Angular', level: 'not-planned' },
-];
 
 function SupportBadge({ level }: { level: SupportLevel }) {
   if (level === 'supported') {

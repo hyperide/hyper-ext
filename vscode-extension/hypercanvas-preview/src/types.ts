@@ -17,6 +17,20 @@ export interface ProjectInfo {
 }
 
 // ============================================
+// Unsupported Project Detection
+// ============================================
+
+/** Describes an unsupported project type that can't render in browser without intervention. */
+export interface UnsupportedProjectError {
+  /** Discriminant for the unsupported project category */
+  type: 'react-native';
+  /** Human-readable explanation shown in the error screen */
+  message: string;
+  /** Button label for the fix action (e.g. "Fix: Add react-native-web") */
+  fixLabel: string;
+}
+
+// ============================================
 // Dev Server
 // ============================================
 
