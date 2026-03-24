@@ -10971,7 +10971,7 @@ __metadata:
     "@tamagui/next-theme": "npm:^1.144.1"
     "@types/node": "npm:^20.14.1"
     app: "npm:0.0.0"
-    next: "npm:>=16.1.5"
+    next: "npm:>=16.1.7"
     next-compose-plugins: "npm:^2.2.1"
     next-transpile-modules: "npm:^10.0.1"
     raf: "npm:^3.4.1"
