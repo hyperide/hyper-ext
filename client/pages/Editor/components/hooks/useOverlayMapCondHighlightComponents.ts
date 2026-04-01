@@ -1,3 +1,6 @@
+import { findDOMElementsBySource } from '@shared/canvas-interaction/fiber-element-query';
+import type { TracingResolver } from '@shared/canvas-interaction/types';
+import type { SourceLocation } from '@shared/element-tracing/types';
 import { type MutableRefObject, useEffect } from 'react';
 import type { ViewportState } from '@/../../shared/types/canvas';
 import type { CondBoundary } from '@/components/CondOverlay';
@@ -7,6 +10,14 @@ import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import { getPreviewIframe } from '@/lib/dom-utils';
 import type { ProjectData } from './useProjectControl';
+
+/** Options for fiber-based element lookup in map/cond overlays. */
+interface FiberOverlayOptions {
+  /** TracingResolver for fiber-based DOM element queries. Falls back to querySelectorAll when null. */
+  resolver?: TracingResolver | null;
+  /** Source location lookup: nodeRef/elementId → SourceLocation. Needed for fiber-based queries. */
+  sourceMap?: Map<string, SourceLocation> | null;
+}
 
 /** Direct DOM rendering of overlays with requestAnimationFrame */
 export function useOverlayMapCondHighlightComponents(
@@ -20,6 +31,7 @@ export function useOverlayMapCondHighlightComponents(
   iframeLoadedCounter: number,
   storeUpdateCounter: number,
   viewport: ViewportState,
+  fiberOptions?: FiberOverlayOptions,
 ) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency
   useEffect(() => {
@@ -84,6 +96,22 @@ export function useOverlayMapCondHighlightComponents(
         return 'root'; // No canvas instance found
       };
 
+      const resolver = fiberOptions?.resolver;
+      const sourceMap = fiberOptions?.sourceMap;
+
+      /**
+       * Find DOM elements for a given element ID via fiber-based lookup.
+       */
+      const findElementsById = (elementId: string): HTMLElement[] => {
+        if (resolver && sourceMap) {
+          const source = sourceMap.get(elementId);
+          if (source) {
+            return findDOMElementsBySource(resolver, source, null);
+          }
+        }
+        return [];
+      };
+
       // Find and render map boundaries (grouped by instance container)
       const findMapItems = (nodes: ASTNode[], depth: number = 0) => {
         for (const node of nodes) {
@@ -93,7 +121,7 @@ export function useOverlayMapCondHighlightComponents(
               continue;
             }
 
-            const mapElements = doc.querySelectorAll(`[data-uniq-id="${mapId}"]`);
+            const mapElements = findElementsById(mapId);
             if (mapElements.length > 0) {
               // Group elements by their instance container
               const instanceGroups = new Map<string, HTMLElement[]>();
@@ -197,10 +225,10 @@ export function useOverlayMapCondHighlightComponents(
       const findCondItems = (nodes: ASTNode[]) => {
         for (const node of nodes) {
           if (node.condItem && node.id) {
-            const condElements = doc.querySelectorAll(`[data-uniq-id="${node.id}"]`);
+            const condElements = findElementsById(node.id);
 
             condElements.forEach((el, index) => {
-              const rect = (el as HTMLElement).getBoundingClientRect();
+              const rect = el.getBoundingClientRect();
               const labelText =
                 node.condItem.branch === 'case' && node.condItem.index !== undefined
                   ? `case ${node.condItem.index}`
@@ -311,5 +339,7 @@ export function useOverlayMapCondHighlightComponents(
     setEditingMapBoundary,
     setEditingCondBoundary,
     viewport.zoom,
+    fiberOptions?.resolver,
+    fiberOptions?.sourceMap,
   ]);
 }

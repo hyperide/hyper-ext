@@ -264,10 +264,9 @@ export function activate(context: vscode.ExtensionContext) {
       // Auto-open Preview Panel if not already visible
       previewPanel?.createOrShow(vscode.ViewColumn.Beside);
 
-      // First inject data-uniq-id attributes into source, then parse structure
-      panelRouter?.astBridge.astService
-        .injectUniqueIds(componentPath)
-        .then(() => panelRouter?.componentService.parseStructure(componentPath))
+      // Parse component structure
+      panelRouter?.componentService
+        .parseStructure(componentPath)
         .then((structure) => {
           stateHub?.applyUpdate({ astStructure: structure });
         })
@@ -607,8 +606,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       const astService = new AstService(workspaceRoot, new VSCodeFileIO());
       const result = await astService.findElementAtPosition(filePath, line, column);
 
-      if (result) {
-        previewPanel?.sendGoToVisual(result.uuid);
+      if (result?.nodeRef) {
+        previewPanel?.sendGoToVisual(result.nodeRef);
       } else {
         vscode.window.showWarningMessage('No element found at cursor position');
       }

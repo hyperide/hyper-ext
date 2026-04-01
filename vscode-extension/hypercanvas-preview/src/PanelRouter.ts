@@ -8,6 +8,8 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
+import type { TracingClientMessage } from '@shared/element-tracing/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
@@ -30,6 +32,7 @@ export class PanelRouter {
   private _styleReadService: StyleReadService;
   private _workspaceRoot: string;
   private _onOpenAIChat?: (prompt: string) => void;
+  private _onElementTracingMessage?: (msg: TracingClientMessage) => void;
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
@@ -37,7 +40,11 @@ export class PanelRouter {
     this._componentService = new ComponentService(config.workspaceRoot, () =>
       Promise.resolve(config.context.secrets.get('hypercanvas.ai.apiKey')),
     );
-    this._styleReadService = new StyleReadService(config.workspaceRoot, new VSCodeFileIO());
+    this._styleReadService = new StyleReadService(
+      config.workspaceRoot,
+      new VSCodeFileIO(),
+      this._astBridge.astService.nodeMapService,
+    );
     this._workspaceRoot = config.workspaceRoot;
   }
 
@@ -66,6 +73,16 @@ export class PanelRouter {
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;
+
+    // Element tracing messages — forward to PostMessageTracingTransport
+    const TRACING_PREFIX = 'element-tracing:';
+    if (type.startsWith(TRACING_PREFIX)) {
+      if (this._onElementTracingMessage) {
+        const { payload } = message as { payload: TracingClientMessage };
+        this._onElementTracingMessage(payload);
+      }
+      return true;
+    }
 
     // State sync
     if (type === 'state:update') {
@@ -183,6 +200,24 @@ export class PanelRouter {
       return true;
     }
 
+    // Approach B: server-side (RSC) source map resolution.
+    // The iframe IIFE cannot fetch server chunk source maps (file:// paths, not browser-accessible).
+    // PanelRouter reads the .map file from the local filesystem and decodes VLQ.
+    if (type === 'hypercanvas:resolveServerSourceMap') {
+      const { filePath, line, col } = message as { filePath: string; line: number; col: number };
+      let result = null;
+      try {
+        const mapPath = filePath.endsWith('.map') ? filePath : `${filePath}.map`;
+        const content = await fs.readFile(mapPath, 'utf-8');
+        const sm = JSON.parse(content) as SourceMapV3;
+        result = resolveInSourceMap(sm, line, col);
+      } catch {
+        // File not found or parse error — result stays null
+      }
+      webview.postMessage({ type: 'serverSourceMapResult', filePath, line, col, result });
+      return true;
+    }
+
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
       const { requestId, elementId, componentPath } = message as {
@@ -191,7 +226,7 @@ export class PanelRouter {
         componentPath: string;
       };
       try {
-        const result = await this._styleReadService.readElementClassName(elementId, componentPath);
+        const result = await this._styleReadService.readElementClassName(elementId, componentPath, elementId);
         webview.postMessage({
           type: 'styles:response',
           requestId,
@@ -226,6 +261,14 @@ export class PanelRouter {
    */
   setOnOpenAIChat(callback: (prompt: string) => void): void {
     this._onOpenAIChat = callback;
+  }
+
+  /**
+   * Set callback for element-tracing messages from any panel.
+   * Extension host wires this to PostMessageTracingTransport.receiveFromWebview().
+   */
+  setOnElementTracingMessage(callback: (msg: TracingClientMessage) => void): void {
+    this._onElementTracingMessage = callback;
   }
 
   dispose(): void {

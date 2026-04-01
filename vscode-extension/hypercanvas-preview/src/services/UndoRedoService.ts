@@ -5,8 +5,9 @@
  * document, executes the VS Code undo/redo command, saves, and returns focus
  * to the preview panel.
  *
- * Works because VSCodeFileIO.writeFile() uses vscode.WorkspaceEdit,
- * which natively populates per-document undo history.
+ * Works because VSCodeFileIO.writeFile() applies a WorkspaceEdit to any
+ * already-open document after writing to disk, natively populating its undo history.
+ * Files that are not open in an editor tab at write time will not have undo history.
  */
 
 import path from 'node:path';

@@ -136,49 +136,6 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
 
           // Update current file path
           filePathRef.current = filePath;
-
-          // Inject data-uniq-id into JSX elements that don't have one.
-          // If IDs were added, re-parse to pick up the file's actual UUIDs.
-          try {
-            const injectResponse = await authFetch('/api/inject-unique-ids', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ filePath }),
-            });
-            const injectResult = await injectResponse.json();
-            if (!injectResult.success) {
-              console.error('[Canvas Engine] Failed to inject unique IDs:', injectResult.error);
-            } else {
-              console.log(
-                '[Canvas Engine] ✓ Injected unique IDs into source file, added:',
-                injectResult.addedCount || 0,
-              );
-
-              // If new IDs were added, re-parse to get updated structure
-              if (injectResult.addedCount && injectResult.addedCount > 0) {
-                // nosemgrep: unsafe-formatstring -- no template literal, but multiline log
-                console.log('[Canvas Engine] Re-parsing component to get updated IDs');
-                let reParseUrl = `/api/parse-component?path=${encodeURIComponent(filePath)}`;
-                if (data.sampleName) {
-                  reParseUrl += `&sampleName=${encodeURIComponent(data.sampleName)}`;
-                }
-                const reParseResponse = await authFetch(reParseUrl);
-                const reParseData = await reParseResponse.json();
-                if (reParseData.success && reParseData.structure) {
-                  // Update root metadata with new structure
-                  root.metadata.astStructure = reParseData.structure;
-                  root.metadata.sampleStructure = reParseData.sampleStructure ?? null;
-                  console.log('[Canvas Engine] ✓ Updated AST structure with new IDs');
-                  // Trigger store update so components react to astStructure change
-                  eng.events.emit('tree:change', {
-                    changedIds: [root.id],
-                  });
-                }
-              }
-            }
-          } catch (error) {
-            console.error('[Canvas Engine] Error injecting unique IDs:', error);
-          }
         }
 
         // Finalize batch mode - emit all deferred events at once

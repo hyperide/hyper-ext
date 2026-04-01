@@ -5,7 +5,7 @@
  * this operation works with AST elements in iframe components
  */
 
-import { getPreviewIframe } from '@/lib/dom-utils';
+import { getElementFromIframe } from '@/lib/dom-utils';
 import type { DocumentTree } from '../core/DocumentTree';
 import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
@@ -95,13 +95,7 @@ export class ASTUpdateOperation extends BaseOperation {
    * Get prop value from DOM
    */
   private getPropFromDOM(elementId: string, propName: string): string | null | undefined {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) {
-      return undefined;
-    }
-
-    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
-
+    const element = getElementFromIframe(elementId);
     if (!element) {
       return undefined;
     }
@@ -122,14 +116,7 @@ export class ASTUpdateOperation extends BaseOperation {
    * Apply prop change to DOM in iframe (instant feedback)
    */
   private applyPropToDOM(elementId: string, propName: string, propValue: unknown): void {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) {
-      console.warn('[ASTUpdateOperation] Iframe not found');
-      return;
-    }
-
-    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
-
+    const element = getElementFromIframe(elementId);
     if (!element) {
       console.warn('[ASTUpdateOperation] Element not found in iframe:', elementId);
       return;

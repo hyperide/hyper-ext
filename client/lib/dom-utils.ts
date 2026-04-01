@@ -2,6 +2,8 @@
  * DOM utilities for reading runtime classes and styles from iframe
  */
 
+import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
+
 /**
  * ID of the preview iframe element.
  * Used to distinguish preview iframe from other iframes (e.g., IDE iframe).
@@ -17,21 +19,11 @@ export function getPreviewIframe(): HTMLIFrameElement | null {
 }
 
 /**
- * Build CSS selector for element with optional instance scope
- * @param elementId - data-uniq-id of the element
- * @param instanceId - optional data-canvas-instance-id to scope the search
- * @returns CSS selector string
- */
-export function buildElementSelector(elementId: string, instanceId?: string | null): string {
-  if (instanceId) {
-    return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`;
-  }
-  return `[data-uniq-id="${elementId}"]`;
-}
-
-/**
- * Get DOM classes from element in iframe
- * @param elementId - data-uniq-id of the element
+ * Get DOM classes from element in iframe.
+ * Uses ElementTracer.findDOMElement() when available.
+ * TODO(HYP-268): Migrate callers to use ElementTracer directly and remove this function.
+ *
+ * @param elementId - Element identifier (nodeRef or legacy UUID)
  * @param instanceId - optional data-canvas-instance-id to scope the search
  * @returns Space-separated className string
  */
@@ -40,27 +32,22 @@ export function getDOMClassesFromIframe(elementId: string, instanceId?: string |
   const doc = iframe?.contentDocument;
   if (!doc) return '';
 
-  const selector = buildElementSelector(elementId, instanceId);
-  const element = doc.querySelector(selector) as HTMLElement;
+  const element = findElementInIframe(doc, elementId, instanceId);
   if (!element) return '';
 
-  // Get computed className (includes all applied classes)
   return element.className;
 }
 
 /**
- * Get computed styles from element in iframe
- * @param elementId - data-uniq-id of the element
- * @param instanceId - optional data-canvas-instance-id to scope the search
- * @returns CSSStyleDeclaration or null
+ * Get computed styles from element in iframe.
+ * TODO(HYP-268): Migrate callers to use ElementTracer directly and remove this function.
  */
 export function getComputedStylesFromIframe(elementId: string, instanceId?: string | null): CSSStyleDeclaration | null {
   const iframe = getPreviewIframe();
   const doc = iframe?.contentDocument;
   if (!doc) return null;
 
-  const selector = buildElementSelector(elementId, instanceId);
-  const element = doc.querySelector(selector) as HTMLElement;
+  const element = findElementInIframe(doc, elementId, instanceId);
   if (!element) return null;
 
   const iframeWindow = iframe.contentWindow;
@@ -70,18 +57,25 @@ export function getComputedStylesFromIframe(elementId: string, instanceId?: stri
 }
 
 /**
- * Get element from iframe by uniq-id
- * @param elementId - data-uniq-id of the element
- * @param instanceId - optional data-canvas-instance-id to scope the search
- * @returns HTMLElement or null
+ * Get element from iframe by nodeRef.
+ * TODO(HYP-268): Migrate callers to use ElementTracer directly and remove this function.
  */
 export function getElementFromIframe(elementId: string, instanceId?: string | null): HTMLElement | null {
   const iframe = getPreviewIframe();
   const doc = iframe?.contentDocument;
   if (!doc) return null;
 
-  const selector = buildElementSelector(elementId, instanceId);
-  return doc.querySelector(selector) as HTMLElement;
+  return findElementInIframe(doc, elementId, instanceId);
+}
+
+/**
+ * Find element in an iframe document by nodeRef via active ElementTracer.
+ * Uses FiberSourceIndex for O(1) lookup by source location.
+ */
+function findElementInIframe(_doc: Document, elementId: string, _instanceId?: string | null): HTMLElement | null {
+  const tracer = getActiveTracer();
+  if (!tracer) return null;
+  return tracer.findDOMElementByNodeRef(elementId);
 }
 
 /**

@@ -120,8 +120,6 @@ export interface InteractiveElement {
   };
   /** Existing data-testid if any */
   existingTestId?: string;
-  /** Existing data-uniq-id if any */
-  existingUniqId?: string;
 }
 
 /**

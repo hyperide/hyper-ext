@@ -92,6 +92,21 @@ export class StateHub {
     }
   }
 
+  /**
+   * Broadcast an element-tracing server message to all registered panels.
+   * Used by PostMessageTracingTransport to push NodeMapUpdate / ResolveElementResponse
+   * from the extension host to iframe webviews.
+   */
+  broadcastTracingMessage(innerType: string, payload: unknown): void {
+    const message = {
+      type: `element-tracing:${innerType}`,
+      payload,
+    };
+    for (const [, webview] of this._panels) {
+      webview.postMessage(message);
+    }
+  }
+
   dispose(): void {
     this._panels.clear();
     this._listeners.length = 0;

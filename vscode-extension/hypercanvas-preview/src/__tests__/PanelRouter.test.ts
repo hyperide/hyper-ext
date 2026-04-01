@@ -19,6 +19,9 @@ mock.module('../services/AstService', () => ({
     duplicateElement = mock(() => Promise.resolve({ success: true, newId: 'd' }));
     updateText = mock(() => Promise.resolve({ success: true }));
     wrapElement = mock(() => Promise.resolve({ success: true, wrapperId: 'w' }));
+    get nodeMapService() {
+      return { resolveNodeRef: () => null, resolveSourceLocation: () => null };
+    }
   },
 }));
 mock.module('../services/ComponentService', () => ({
@@ -36,14 +39,13 @@ mock.module('../services/ComponentService', () => ({
     parseStructure = mock(() => Promise.resolve(null));
   },
 }));
-mock.module('../services/StyleReadService', () => ({
-  StyleReadService: class {
-    readElementClassName = mock(() => Promise.resolve({ className: 'test' }));
-  },
-}));
-// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService/StyleReadService
-// are mocked above, so VSCodeFileIO methods are never called. Mocking it with `class {}`
-// would poison VSCodeFileIO.test.ts (mock.module is global).
+// StyleReadService is NOT mocked — it's a leaf class with its own test file (StyleReadService.test.ts).
+// Mocking it here would poison that test file (bun mock.module is global).
+// AstService mock above provides nodeMapService returning null so StyleReadService
+// returns empty results without file I/O.
+// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService resolves
+// before VSCodeFileIO.readFile is reached. Mocking it with `class {}` would poison
+// VSCodeFileIO.test.ts (mock.module is global).
 mock.module('node:fs/promises', () => ({
   readFile: mock(() => Promise.resolve('file content')),
   mkdir: mock(() => Promise.resolve(undefined)),
@@ -206,5 +208,59 @@ describe('PanelRouter', () => {
     const wv = createMockWebview();
     router.setAstResponseTarget(wv as never);
     // No crash — AstBridge.setWebview was called
+  });
+
+  describe('hypercanvas:resolveServerSourceMap (Approach B)', () => {
+    it('returns serverSourceMapResult with null when readFile returns invalid JSON', async () => {
+      // Default mock returns 'file content' which is not valid JSON → JSON.parse throws
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 50 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'serverSourceMapResult',
+          filePath: '/project/.next/server/hash.js',
+          line: 1,
+          col: 50,
+          result: null,
+        }),
+      );
+    });
+
+    it('returns serverSourceMapResult with resolved location when source map is valid', async () => {
+      // Minimal source map: genLine=1, genCol=0 → srcIdx=0, srcLine=4, srcCol=2
+      // VLQ encode: 0,0,4,2 → "AAIE" (A=VLQ(0), A=VLQ(0), I=VLQ(4), E=VLQ(2))
+      const sourceMap = JSON.stringify({ sources: ['src/Page.tsx'], mappings: 'AAIE' });
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockImplementationOnce(() => Promise.resolve(sourceMap));
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 1 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'serverSourceMapResult',
+          result: expect.objectContaining({ fileName: 'src/Page.tsx', line: 5, column: 2 }),
+        }),
+      );
+    });
+
+    it('returns serverSourceMapResult with null when file does not exist', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockImplementationOnce(() =>
+        Promise.reject(new Error('ENOENT: no such file')),
+      );
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/missing.js', line: 1, col: 1 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+    });
   });
 });

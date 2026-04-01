@@ -7,146 +7,11 @@ import { parseCode } from './parser';
 import {
   analyzeJSXChildren,
   findAllJSXElements,
-  findElementByUuid,
-  findElementWithUuidAtPosition,
+  findElementAtPosition,
   getChildrenLocation,
   getJSXTagName,
-  getUuidFromElement,
   traverseJSXElements,
 } from './traverser';
-
-describe('findElementByUuid', () => {
-  it('should find element by UUID', () => {
-    const code = `
-      const Component = () => (
-        <div data-uniq-id="test-uuid-123">
-          <span>Hello</span>
-        </div>
-      );
-    `;
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'test-uuid-123');
-
-    expect(result).not.toBeNull();
-    expect(result?.element.openingElement.name).toMatchObject({ name: 'div' });
-  });
-
-  it('should return null if UUID not found', () => {
-    const code = '<div>No UUID</div>';
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'non-existent');
-
-    expect(result).toBeNull();
-  });
-
-  it('should find nested element by UUID', () => {
-    const code = `
-      <div data-uniq-id="parent">
-        <div data-uniq-id="child">
-          <span data-uniq-id="grandchild">Deep</span>
-        </div>
-      </div>
-    `;
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'grandchild');
-
-    expect(result).not.toBeNull();
-    expect(result?.element.openingElement.name).toMatchObject({ name: 'span' });
-  });
-
-  it('should find element with UUID in JSXExpressionContainer string literal', () => {
-    const code = `
-      const Component = () => (
-        <div data-uniq-id={"test-uuid-expr"}>Hello</div>
-      );
-    `;
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'test-uuid-expr');
-
-    expect(result).not.toBeNull();
-    expect(result?.element.openingElement.name).toMatchObject({ name: 'div' });
-  });
-
-  it('should find element with UUID in static template literal', () => {
-    const code = `
-      const Component = () => (
-        <div data-uniq-id={\`test-uuid-template\`}>Hello</div>
-      );
-    `;
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'test-uuid-template');
-
-    expect(result).not.toBeNull();
-    expect(result?.element.openingElement.name).toMatchObject({ name: 'div' });
-  });
-
-  it('should NOT find element with UUID in dynamic template literal', () => {
-    const code = `
-      const Component = () => {
-        const id = 'dynamic';
-        return <div data-uniq-id={\`test-uuid-\${id}\`}>Hello</div>;
-      };
-    `;
-    const ast = parseCode(code);
-
-    // Dynamic template literals should not be matched
-    const result = findElementByUuid(ast, 'test-uuid-dynamic');
-
-    expect(result).toBeNull();
-  });
-});
-
-describe('getUuidFromElement', () => {
-  it('should extract UUID from element', () => {
-    const code = '<div data-uniq-id="test-123">Content</div>';
-    const ast = parseCode(code);
-
-    const result = findElementByUuid(ast, 'test-123');
-    expect(result).not.toBeNull();
-
-    if (!result) throw new Error('Element not found');
-    const uuid = getUuidFromElement(result.element);
-    expect(uuid).toBe('test-123');
-  });
-
-  it('should return null if element has no UUID', () => {
-    const code = '<div>No UUID</div>';
-    const ast = parseCode(code);
-
-    const elements = findAllJSXElements(ast);
-    expect(elements.length).toBeGreaterThan(0);
-
-    const uuid = getUuidFromElement(elements[0].element);
-    expect(uuid).toBeNull();
-  });
-
-  it('should extract UUID from JSXExpressionContainer string literal', () => {
-    const code = '<div data-uniq-id={"test-expr-uuid"}>Content</div>';
-    const ast = parseCode(code);
-
-    const elements = findAllJSXElements(ast);
-    expect(elements.length).toBeGreaterThan(0);
-
-    const uuid = getUuidFromElement(elements[0].element);
-    expect(uuid).toBe('test-expr-uuid');
-  });
-
-  it('should extract UUID from static template literal', () => {
-    const code = '<div data-uniq-id={`test-template-uuid`}>Content</div>';
-    const ast = parseCode(code);
-
-    const elements = findAllJSXElements(ast);
-    expect(elements.length).toBeGreaterThan(0);
-
-    const uuid = getUuidFromElement(elements[0].element);
-    expect(uuid).toBe('test-template-uuid');
-  });
-});
 
 describe('findAllJSXElements', () => {
   it('should find all JSX elements', () => {
@@ -413,6 +278,48 @@ describe('getChildrenLocation', () => {
   });
 });
 
+describe('findElementAtPosition', () => {
+  it('should find element at cursor position', () => {
+    // Line numbers are 1-based in Babel
+    const code = `const App = () => (
+  <div className="root">
+    <span className="child">Hello</span>
+  </div>
+);`;
+    const ast = parseCode(code);
+
+    // Position inside the span (line 3, somewhere inside)
+    const result = findElementAtPosition(ast, 3, 10);
+    expect(result).not.toBeNull();
+    expect(result?.element.openingElement.name).toMatchObject({ name: 'span' });
+  });
+
+  it('should return null when no element at position', () => {
+    const code = `const x = 42;
+const y = 'hello';`;
+    const ast = parseCode(code);
+
+    const result = findElementAtPosition(ast, 1, 5);
+    expect(result).toBeNull();
+  });
+
+  it('should pick the smallest (most specific) element', () => {
+    const code = `const App = () => (
+  <div>
+    <div>
+      <span>Text</span>
+    </div>
+  </div>
+);`;
+    const ast = parseCode(code);
+
+    // Position inside the deepest span
+    const result = findElementAtPosition(ast, 4, 15);
+    expect(result).not.toBeNull();
+    expect(result?.element.openingElement.name).toMatchObject({ name: 'span' });
+  });
+});
+
 describe('getJSXTagName', () => {
   it('should return name for simple identifier', () => {
     const el = getFirstElement('<div>text</div>');
@@ -432,78 +339,5 @@ describe('getJSXTagName', () => {
   it('should return deeply nested member expression', () => {
     const el = getFirstElement('<A.B.C>text</A.B.C>');
     expect(getJSXTagName(el)).toBe('A.B.C');
-  });
-});
-
-describe('findElementWithUuidAtPosition', () => {
-  it('should find element at cursor position', () => {
-    // Line numbers are 1-based in Babel
-    const code = `const App = () => (
-  <div data-uniq-id="root">
-    <span data-uniq-id="child">Hello</span>
-  </div>
-);`;
-    const ast = parseCode(code);
-
-    // Position inside the span (line 3, somewhere inside)
-    const result = findElementWithUuidAtPosition(ast, 3, 10);
-    expect(result).not.toBeNull();
-    expect(result?.uuid).toBe('child');
-    expect(result?.tagName).toBe('span');
-  });
-
-  it('should return null when no element at position', () => {
-    const code = `const x = 42;
-const y = 'hello';`;
-    const ast = parseCode(code);
-
-    const result = findElementWithUuidAtPosition(ast, 1, 5);
-    expect(result).toBeNull();
-  });
-
-  it('should return null when element at position has no uuid', () => {
-    const code = `const App = () => (
-  <div>
-    <span>Hello</span>
-  </div>
-);`;
-    const ast = parseCode(code);
-
-    const result = findElementWithUuidAtPosition(ast, 3, 5);
-    expect(result).toBeNull();
-  });
-
-  it('should pick the smallest (most specific) element', () => {
-    const code = `const App = () => (
-  <div data-uniq-id="outer">
-    <div data-uniq-id="inner">
-      <span data-uniq-id="deepest">Text</span>
-    </div>
-  </div>
-);`;
-    const ast = parseCode(code);
-
-    // Position inside the deepest span
-    const result = findElementWithUuidAtPosition(ast, 4, 15);
-    expect(result).not.toBeNull();
-    expect(result?.uuid).toBe('deepest');
-    expect(result?.tagName).toBe('span');
-  });
-
-  it('should handle JSXMemberExpression tag names (Dialog.Portal)', () => {
-    const code = `const App = () => (
-  <Dialog.Portal data-uniq-id="portal">
-    <span data-uniq-id="child">Content</span>
-  </Dialog.Portal>
-);`;
-    const ast = parseCode(code);
-
-    // Position on the Dialog.Portal line
-    const result = findElementWithUuidAtPosition(ast, 2, 5);
-    expect(result).not.toBeNull();
-    // The child is smaller, so if cursor is at column 5 of line 2, it should be portal
-    // Actually line 2 col 5 is inside Dialog.Portal opening tag
-    expect(result?.tagName).toBe('Dialog.Portal');
-    expect(result?.uuid).toBe('portal');
   });
 });

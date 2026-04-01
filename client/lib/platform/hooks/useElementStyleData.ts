@@ -15,7 +15,7 @@ import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
 import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import type { ParsedTailwindStyles } from '@/lib/canvas-engine/utils/tailwindParser';
 import { parseTailwindClasses } from '@/lib/canvas-engine/utils/tailwindParser';
-import { buildElementSelector, getPreviewIframe } from '@/lib/dom-utils';
+import { getElementFromIframe } from '@/lib/dom-utils';
 import type { CanvasAdapter, MessageOfType } from '../types';
 
 // ============================================================================
@@ -196,10 +196,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       }
 
       // Get DOM element from iframe for computed styles
-      const iframe = getPreviewIframe();
-      const doc = iframe?.contentDocument;
-      const selector = buildElementSelector(elementId, activeInstanceId);
-      const domElement = doc?.querySelector(selector) as HTMLElement | null;
+      const domElement = getElementFromIframe(elementId, activeInstanceId);
       const domTextContent = domElement?.textContent?.trim() || '';
 
       // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)
@@ -224,7 +221,21 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     // =================================================================
     // VS Code mode: async RPC via canvas
     // =================================================================
-    if (!canvas || !componentPath) {
+    if (!canvas) {
+      setData(EMPTY_DATA);
+      latestRequestRef.current = null;
+      return;
+    }
+
+    // Derive componentPath from syntheticRef when no component is open from Explorer.
+    // StyleReadService uses the embedded path in the syntheticRef (fileName:line:col) anyway.
+    let effectiveComponentPath = componentPath;
+    if (!effectiveComponentPath && elementId) {
+      const m = elementId.match(/^(.+):\d+:\d+$/);
+      if (m) effectiveComponentPath = m[1];
+    }
+
+    if (!effectiveComponentPath) {
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
       return;
@@ -270,7 +281,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       type: 'styles:readClassName',
       requestId,
       elementId,
-      componentPath,
+      componentPath: effectiveComponentPath,
     });
 
     const timer = setTimeout(() => {

@@ -818,7 +818,7 @@ export class PreviewPanel {
   }
 
   /**
-   * Programmatically select an element by its data-uniq-id.
+   * Programmatically select an element by its nodeRef.
    * Used by E2E tests and extension commands to establish full canvas selection state.
    */
   public selectElement(elementId: string): void {
@@ -826,7 +826,7 @@ export class PreviewPanel {
   }
 
   /**
-   * Programmatically select multiple elements by their data-uniq-ids.
+   * Programmatically select multiple elements by their nodeRefs.
    */
   public selectElements(elementIds: string[]): void {
     this._stateHub.applyUpdate({ selectedIds: elementIds });

@@ -954,22 +954,15 @@ export default function RightSidebar({
   return (
     <div
       data-testid="RightSidebar"
-      data-uniq-id="442cbdd6-8543-4489-b0c5-a6de4aa5b92f"
       ref={rootRef}
       className="h-full w-full border-l border-border bg-background overflow-y-auto overflow-x-hidden relative z-20"
     >
       {/* SaaS-only sections */}
       {!isVSCode && (
-        <HeaderSection
-          data-uniq-id="91a5165a-f357-45d0-aff9-9ac153b2a603"
-          onOpenSettings={onOpenSettings}
-          projectId={activeProjectId}
-          projectName={activeProjectName}
-        />
+        <HeaderSection onOpenSettings={onOpenSettings} projectId={activeProjectId} projectName={activeProjectName} />
       )}
       {!isVSCode && (
         <ViewControlsSection
-          data-uniq-id="7c70db2f-ae92-4b8c-afb0-ae1ba75c8f21"
           viewport={canvasMode === 'multi' ? viewport : undefined}
           onZoomChange={canvasMode === 'multi' ? onZoomChange : undefined}
           onFitToContent={canvasMode === 'multi' ? onFitToContent : undefined}
@@ -1029,13 +1022,9 @@ export default function RightSidebar({
         )}
 
       {selectedIds.length > 1 && (
-        <div data-uniq-id="36ec40bb-5b54-4829-88b2-2f8bde3d8aa1" className="px-4 py-8 text-center">
-          <p data-uniq-id="745d80f1-b662-4a2b-a181-87a3f6bb70a0" className="text-sm text-muted-foreground mb-2">
-            Multiple elements selected
-          </p>
-          <p data-uniq-id="09788d85-8ba2-47bb-869d-b8300a576eb4" className="text-xs text-muted-foreground">
-            Select a single element to edit its properties
-          </p>
+        <div className="px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground mb-2">Multiple elements selected</p>
+          <p className="text-xs text-muted-foreground">Select a single element to edit its properties</p>
         </div>
       )}
 

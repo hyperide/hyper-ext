@@ -112,6 +112,17 @@ describe('EditorBridge', () => {
       expect(uri.fsPath).toBe('/abs/path/File.tsx');
     });
 
+    it('restores leading slash for Turbopack-stripped absolute paths (HYP-268)', async () => {
+      // Turbopack source maps normalize 'file:///abs/path' → 'abs/path' (strips leading '/').
+      // resolveFilePath must detect this and restore the slash rather than prepending workspaceRoot.
+      // Workspace root is '/test-workspace', so first component is 'test-workspace'.
+      // A path 'test-workspace/app/page.tsx' should become '/test-workspace/app/page.tsx'.
+      await goToCode('test-workspace/app/page.tsx', 5, 3);
+      const call = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const uri = call[0] as { fsPath: string };
+      expect(uri.fsPath).toBe('/test-workspace/app/page.tsx');
+    });
+
     it('shows error message on failure', async () => {
       // Suppress console.error — goToCode logs the caught error, and bun test
       // runner treats Error objects in console.error as uncaught errors in full suite

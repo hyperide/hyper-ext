@@ -8,13 +8,13 @@ import { getStyleAdapter } from './color-token-provider';
 export function registerAstTools(server: McpServer, astService: AstService, stateHub: StateHub): void {
   server.tool(
     'hyper_insert_element',
-    'Insert a JSX element into a React component. Elements must have data-uniq-id attributes — run hyper_inject_element_ids first if needed. Omit filePath to use the currently active component.',
+    'Insert a JSX element into a React component. Omit filePath to use the currently active component.',
     {
       filePath: z
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      parentId: z.string().nullable().describe('data-uniq-id of parent element, null for root insertion'),
+      parentId: z.string().nullable().describe('nodeRef of parent element, null for root insertion'),
       componentType: z.string().describe('Tag name: div, span, Button, MyComponent, etc.'),
       props: z.record(z.string(), z.unknown()).default({}).describe('Props to set on the new element'),
       index: z.number().optional().describe('Insertion index among siblings (0-based)'),
@@ -39,13 +39,13 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
 
   server.tool(
     'hyper_delete_elements',
-    'Delete one or more JSX elements by their data-uniq-id. Child elements are deleted with the parent.',
+    'Delete one or more JSX elements by their nodeRef. Child elements are deleted with the parent.',
     {
       filePath: z
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      elementIds: z.array(z.string()).min(1).describe('Array of data-uniq-id values to delete'),
+      elementIds: z.array(z.string()).min(1).describe('Array of nodeRef values to delete'),
     },
     async ({ filePath, elementIds }) => {
       const resolved = resolveFilePath(stateHub, filePath);
@@ -71,7 +71,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      elementId: z.string().describe('data-uniq-id of the element'),
+      elementId: z.string().describe('nodeRef of the element'),
       styles: z
         .record(z.string(), z.string())
         .describe('Style properties to set, e.g. {"display": "flex", "flexDirection": "column"}'),
@@ -105,7 +105,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      elementId: z.string().describe('data-uniq-id of the element'),
+      elementId: z.string().describe('nodeRef of the element'),
       props: z.record(z.string(), z.unknown()).describe('Props to set or update'),
     },
     async ({ filePath, elementId, props }) => {
@@ -132,7 +132,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      elementId: z.string().describe('data-uniq-id of the element to duplicate'),
+      elementId: z.string().describe('nodeRef of the element to duplicate'),
     },
     async ({ filePath, elementId }) => {
       const resolved = resolveFilePath(stateHub, filePath);
@@ -158,7 +158,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
         .string()
         .optional()
         .describe('Relative path to component file (defaults to currently active component)'),
-      elementId: z.string().describe('data-uniq-id of the element to wrap'),
+      elementId: z.string().describe('nodeRef of the element to wrap'),
       wrapperType: z.string().default('div').describe('Tag name for the wrapper element'),
       wrapperProps: z.record(z.string(), z.unknown()).optional().describe('Props for the wrapper element'),
     },

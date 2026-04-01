@@ -6,11 +6,505 @@
  * Communicates with parent webview via postMessage.
  */
 
-import { attachClickHandler, getItemIndex } from '@shared/canvas-interaction/click-handler';
-import { getEmptyContainerRects } from '@shared/canvas-interaction/empty-container-placeholders';
+import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
+import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
+import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
+import {
+  type Fiber,
+  findNearestSourceLocation,
+  getFiberFromDOM,
+  getItemIndexFromFiber,
+} from '@shared/element-tracing/fiber-internals';
+import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
+import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
+
+// ============================================
+// Composition helpers (combine shared fiber primitives for IIFE-specific use)
+// ============================================
+
+/** Get source location from a DOM element via its React fiber (React 18 and 19). */
+function getSourceLocationFromDOM(el: HTMLElement): SourceLocation | null {
+  const fiber = getFiberFromDOM(el);
+  if (fiber === null) return null;
+  return findNearestSourceLocation(fiber);
+}
+
+/**
+ * Count preceding component instances rendered from the same JSX call site.
+ *
+ * Uses fiber tree sibling walk — supports React 18 (_debugSource) and React 19 (_debugStack).
+ * Counts at the component level, not DOM element level, so map-rendered items are correct.
+ */
+function getItemIndexFromDOM(element: HTMLElement): number {
+  const fiber = getFiberFromDOM(element);
+  if (fiber === null) return 0;
+  return getItemIndexFromFiber(fiber);
+}
+
+// ============================================
+// Inline TracingResolver for the extension's iframe
+// ============================================
+
+/**
+ * Lightweight TracingResolver for use in the extension's injected iframe.
+ * Uses shared fiber primitives from @shared/element-tracing/fiber-internals.
+ * Does not cache node maps — all resolution is fiber-only.
+ */
+const iframeResolver: TracingResolver = {
+  getSourceLocation(element: HTMLElement): SourceLocation | null {
+    return getSourceLocationFromDOM(element);
+  },
+
+  getItemIndex(element: HTMLElement): number {
+    return getItemIndexFromDOM(element);
+  },
+
+  resolveClickLocal(element: HTMLElement): LocalResolveResult | null {
+    // Every new click clears any previous pending retry — stale warming results
+    // must not overwrite a newer selection (codex P2).
+    pendingClickElement = null;
+
+    // Direct fiber resolution (React 18 _debugSource / React 19 _debugStack, Vite).
+    let source = getSourceLocationFromDOM(element);
+
+    if (source === null) {
+      // Approaches A + B: try source map caches when direct fiber resolution fails
+      // (Next.js Turbopack — compiled chunk URLs, not raw source paths).
+      const fiber = getFiberFromDOM(element);
+      if (fiber !== null) {
+        // Approach A: client-side chunks (/_next/static/chunks/*.js.map, browser-fetchable)
+        source = resolveViaClientSourceMap(fiber);
+        if (source === null) {
+          // If client source maps not yet warmed, register pending click and trigger warming.
+          // retryPendingClick() is called from warmClientChunk when a user-file location lands.
+          const hasPendingFrames = (() => {
+            let c: Fiber | null = fiber;
+            while (c !== null) {
+              if (c._debugStack) {
+                for (const frame of extractClientChunkFrames(c._debugStack)) {
+                  const key = `${frame.url}:${frame.line}:${frame.col}`;
+                  if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
+                }
+                break;
+              }
+              c = (c.return as Fiber | null | undefined) ?? null;
+            }
+            return false;
+          })();
+          if (hasPendingFrames) {
+            pendingClickElement = element;
+            pendingClickTimestamp = Date.now();
+            warmFiberChunkFrames(fiber);
+          }
+          // Approach B: server-side (RSC) chunks (file:///…/.next/server/…, host-resolved)
+          source = resolveViaServerSourceMap(fiber);
+        }
+      }
+    }
+
+    if (source === null) return null;
+
+    const itemIndex = getItemIndexFromDOM(element);
+    // Extension's inline resolver does not have a node map cache,
+    // so we generate a synthetic nodeRef from source location.
+    // The extension host's NodeMapService will resolve this to a real entry.
+    const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+
+    return {
+      nodeRef: syntheticRef,
+      entry: {
+        nodeRef: syntheticRef,
+        tag: '',
+        loc: source,
+        endLoc: source,
+        parentRef: null,
+        children: [],
+        isComponent: false,
+        fingerprint: '',
+      },
+      source,
+      itemIndex,
+    };
+  },
+
+  findDOMElement(): HTMLElement | null {
+    // Not used in click handler flow — only used for overlay rendering
+    return null;
+  },
+};
+
+// ============================================
+// Fiber-based source cache for reverse lookup (nodeRef → DOM elements)
+// ============================================
+
+/** Lazily-built index: sourceKey → DOM elements with that fiber _debugSource. */
+let sourceCache: Map<string, HTMLElement[]> | null = null;
+
+function invalidateSourceCache(): void {
+  sourceCache = null;
+}
+
+/**
+ * Build/return the source cache by walking all DOM elements and indexing by fiber source.
+ * Uses findNearestSourceLocation which handles React 18 (_debugSource on direct fiber)
+ * and React 19 (_debugStack on parent component fiber, not host fiber) by walking up
+ * the fiber tree as needed.
+ */
+function getSourceCache(): Map<string, HTMLElement[]> {
+  if (sourceCache) return sourceCache;
+  const cache = new Map<string, HTMLElement[]>();
+  if (!document.body) return cache;
+
+  const walker = document.createTreeWalker(document.body, 1 /* NodeFilter.SHOW_ELEMENT */);
+  let node: Node | null = walker.currentNode;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      const fiber = getFiberFromDOM(node);
+      if (fiber) {
+        const loc = findNearestSourceLocation(fiber);
+        if (loc) {
+          const key = `${loc.fileName}:${loc.line}:${loc.column}`;
+          const existing = cache.get(key);
+          if (existing) existing.push(node);
+          else cache.set(key, [node]);
+        }
+      }
+    }
+    node = walker.nextNode();
+  }
+  // Only cache non-empty results. If the DOM has no React fibers yet (script injected
+  // before React loads), don't store the empty map — let the next call try again.
+  if (cache.size > 0) {
+    sourceCache = cache;
+  }
+  return cache;
+}
+
+// Hook into React commit cycle to invalidate source cache and kick off source map pre-warming.
+// React dev mode installs __REACT_DEVTOOLS_GLOBAL_HOOK__ only when DevTools is present —
+// in the VS Code extension preview this hook is absent, so we add a load-event fallback.
+const devtoolsHook = (
+  window as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: { onCommitFiberRoot?: (...args: unknown[]) => void } }
+).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+if (devtoolsHook) {
+  const originalCommit = devtoolsHook.onCommitFiberRoot;
+  devtoolsHook.onCommitFiberRoot = (...args: unknown[]) => {
+    invalidateSourceCache();
+    // Approach A: pre-fetch client-side Next.js chunk source maps in background
+    void warmClientSourceMaps();
+    // Approach B: request server-side (RSC) chunk resolution from extension host
+    requestServerSourceMaps();
+    originalCommit?.(...args);
+  };
+} else {
+  // Fallback: trigger warming once after the page has loaded (no DevTools hook available).
+  // This covers the VS Code extension preview where __REACT_DEVTOOLS_GLOBAL_HOOK__ is absent.
+  window.addEventListener(
+    'load',
+    () => {
+      void warmClientSourceMaps();
+      requestServerSourceMaps();
+    },
+    { once: true },
+  );
+}
+
+// ============================================
+// Approach A: client-side Next.js source map pre-warming
+// Fetches /_next/static/chunks/*.js.map from the dev server and caches
+// resolved SourceLocations so the first click is instant.
+// ============================================
+
+/** Cache: "chunkUrl:line:col" → resolved SourceLocation (null = warmed but unresolvable). */
+const clientSourceMapCache = new Map<string, SourceLocation | null>();
+/**
+ * Keys that resolved to React-internal paths (e.g. node_modules).
+ * Lookup skips (continues to next frame) rather than stopping when it finds these.
+ */
+const clientInternalFrames = new Set<string>();
+/** In-flight fetch keys — prevents duplicate requests. */
+const pendingClientFetches = new Set<string>();
+
+/**
+ * Pending click to retry once source maps finish warming.
+ * Registered when resolveViaClientSourceMap returns null because cache entries are
+ * undefined (source map fetch still in flight). Cleared after successful retry or TTL.
+ */
+let pendingClickElement: HTMLElement | null = null;
+let pendingClickTimestamp = 0;
+const PENDING_CLICK_TTL_MS = 5000;
+
+/** Extract Next.js client chunk frames (HTTP URLs) from an Error.stack string. */
+function extractClientChunkFrames(err: Error): Array<{ url: string; line: number; col: number }> {
+  const frames: Array<{ url: string; line: number; col: number }> = [];
+  for (const ln of (err.stack ?? '').split('\n')) {
+    const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
+    if (!m) continue;
+    // Only HTTP/HTTPS Next.js static chunk URLs
+    if (!m[1].includes('_next/static/chunks/')) continue;
+    frames.push({ url: m[1], line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+  }
+  return frames;
+}
+
+/**
+ * Async: fetch source map for one client chunk URL, resolve and cache the given position.
+ * Marks overlays dirty when the result arrives so the overlay re-renders immediately.
+ * Also retries any pending click that was waiting for source maps to warm.
+ */
+async function warmClientChunk(url: string, line: number, col: number): Promise<void> {
+  const key = `${url}:${line}:${col}`;
+  if (clientSourceMapCache.has(key) || pendingClientFetches.has(key)) return;
+  pendingClientFetches.add(key);
+  try {
+    const mapUrl = url.endsWith('.map') ? url : `${url}.map`;
+    const res = await fetch(mapUrl);
+    if (!res.ok) {
+      clientSourceMapCache.set(key, null);
+      return;
+    }
+    const sm = (await res.json()) as SourceMapV3;
+    const loc = resolveInSourceMap(sm, line, col);
+    // Bundled chunks include React internals (e.g. jsxDEV) whose source maps point to
+    // node_modules. Mark those in clientInternalFrames so the lookup skips to the next
+    // frame (the user component call site) rather than stopping on them.
+    if (loc && /(?:^|\/)node_modules\//.test(loc.fileName)) {
+      clientInternalFrames.add(key);
+      clientSourceMapCache.set(key, null); // prevent re-fetching the same chunk map
+    } else {
+      clientSourceMapCache.set(key, loc);
+      if (loc) {
+        needsOverlayUpdate = true;
+        scheduleOverlayLoopIfNeeded();
+        retryPendingClick(); // retry any click waiting for this source map
+      }
+    }
+  } catch {
+    clientSourceMapCache.set(key, null);
+  } finally {
+    pendingClientFetches.delete(key);
+  }
+}
+
+/**
+ * Kick off warming for all client chunk frames in a fiber's _debugStack chain.
+ * Used to trigger warming on first click without waiting for the next load/commit.
+ */
+function warmFiberChunkFrames(fiber: Fiber): void {
+  let current: Fiber | null = fiber;
+  while (current !== null) {
+    if (current._debugStack) {
+      for (const frame of extractClientChunkFrames(current._debugStack)) {
+        void warmClientChunk(frame.url, frame.line, frame.col);
+      }
+      break;
+    }
+    current = (current.return as typeof current | undefined) ?? null;
+  }
+}
+
+/**
+ * Walk all DOM elements and kick off async source map fetches for every
+ * Next.js client chunk URL found in fiber `_debugStack` fields.
+ * Called from `onCommitFiberRoot` so maps are ready before the first user click.
+ *
+ * DOM element fibers are HostComponent (tag=5) — they never have `_debugStack`.
+ * We must walk up the return chain to reach the nearest FunctionComponent fiber.
+ * React 19 may set `return`/`_debugOwner` to `undefined` rather than `null` —
+ * use `?? null` throughout to normalise.
+ */
+function warmClientSourceMaps(): void {
+  if (!document.body) return;
+  const walker = document.createTreeWalker(document.body, 1 /* SHOW_ELEMENT */);
+  let node: Node | null = walker.currentNode;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      const domFiber = getFiberFromDOM(node);
+      if (domFiber) warmFiberChunkFrames(domFiber);
+    }
+    node = walker.nextNode();
+  }
+}
+
+/**
+ * Look up the source map cache for the first matching client chunk frame
+ * found walking up the fiber's return chain.
+ *
+ * Next.js/Turbopack bundles React internals (jsxDEV) into the same chunk as user code.
+ * The jsxDEV frame comes first in the stack; it maps to node_modules and is recorded in
+ * clientInternalFrames — the lookup skips it (continue) and tries the user component frame.
+ * A null in clientSourceMapCache (fetch failed or no mapping) stops the search for this
+ * fiber so we do not misattribute the element to an ancestor component.
+ */
+function resolveViaClientSourceMap(fiber: Fiber): SourceLocation | null {
+  let current: Fiber | null = fiber;
+  while (current !== null) {
+    if (current._debugStack) {
+      for (const frame of extractClientChunkFrames(current._debugStack)) {
+        const key = `${frame.url}:${frame.line}:${frame.col}`;
+        if (clientInternalFrames.has(key)) continue; // React-internal frame — skip to next
+        const cached = clientSourceMapCache.get(key);
+        if (cached) return cached; // resolved to user source file
+        if (cached === null) return null; // warmed but unresolvable — don't walk ancestors
+        // undefined: warm-up still in flight, try next frame
+      }
+    }
+    current = (current.return as Fiber | null | undefined) ?? null;
+  }
+  return null;
+}
+
+/**
+ * Retry the most recent pending click after source maps finish warming.
+ * Posts hypercanvas:elementClick to the parent webview if the resolution succeeds.
+ * Called from warmClientChunk whenever a new user-file location is cached.
+ */
+function retryPendingClick(): void {
+  if (!pendingClickElement) return;
+  if (Date.now() - pendingClickTimestamp > PENDING_CLICK_TTL_MS) {
+    pendingClickElement = null;
+    return;
+  }
+  const fiber = getFiberFromDOM(pendingClickElement);
+  if (!fiber) {
+    pendingClickElement = null;
+    return;
+  }
+  const source = resolveViaClientSourceMap(fiber);
+  if (!source) return; // still warming — keep pending
+  const element = pendingClickElement;
+  pendingClickElement = null;
+  const itemIndex = getItemIndexFromDOM(element);
+  const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage({ type: 'hypercanvas:elementClick', elementId: syntheticRef, itemIndex, source }, '*');
+}
+
+// ============================================
+// Approach B: extension-host proxy for server-side (RSC) source maps
+// Server chunk paths (file:/// or Server/file:///) are not browser-fetchable;
+// the extension host reads them from the local filesystem via postMessage RPC.
+// ============================================
+
+/** Cache: "filePath:line:col" → resolved SourceLocation (null = not resolvable). */
+const serverSourceMapCache = new Map<string, SourceLocation | null>();
+/** In-flight server-side resolve keys — prevents duplicate requests. */
+const pendingServerRequests = new Set<string>();
+
+/** Extract server-side chunk frames (file:// or Server/file://) from an Error.stack. */
+function extractServerChunkFrames(err: Error): Array<{ filePath: string; line: number; col: number }> {
+  const frames: Array<{ filePath: string; line: number; col: number }> = [];
+  for (const ln of (err.stack ?? '').split('\n')) {
+    const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
+    if (!m) continue;
+    const raw = m[1];
+    // Match: "Server/file:///..." or bare "file:///..."
+    const fileMatch = raw.match(/(?:^Server\/|^)(file:\/\/\/?.+)/);
+    if (!fileMatch) continue;
+    // Only Next.js server chunks
+    if (!raw.includes('.next/')) continue;
+    let filePath: string;
+    try {
+      filePath = new URL(fileMatch[1]).pathname;
+    } catch {
+      filePath = fileMatch[1].replace(/^file:\/\//, '');
+    }
+    frames.push({ filePath, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+  }
+  return frames;
+}
+
+/**
+ * Request server source map resolution from the extension host.
+ * The host reads the .map file from the local filesystem, decodes VLQ,
+ * and responds with `hypercanvas:serverSourceMapResult`.
+ */
+function requestServerSourceMap(filePath: string, line: number, col: number): void {
+  const key = `${filePath}:${line}:${col}`;
+  if (serverSourceMapCache.has(key) || pendingServerRequests.has(key)) return;
+  pendingServerRequests.add(key);
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage({ type: 'hypercanvas:resolveServerSourceMap', filePath, line, col }, '*');
+}
+
+/**
+ * Walk all DOM elements and request server source map resolution for RSC chunk frames.
+ * Called from `onCommitFiberRoot` alongside warmClientSourceMaps.
+ * Like warmClientSourceMaps, must walk up to FunctionComponent fibers.
+ */
+function requestServerSourceMaps(): void {
+  if (!document.body) return;
+  const walker = document.createTreeWalker(document.body, 1);
+  let node: Node | null = walker.currentNode;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      let current = getFiberFromDOM(node);
+      while (current !== null) {
+        if (current._debugStack) {
+          for (const frame of extractServerChunkFrames(current._debugStack)) {
+            requestServerSourceMap(frame.filePath, frame.line, frame.col);
+          }
+          break;
+        }
+        current = (current.return as typeof current | undefined) ?? null;
+      }
+    }
+    node = walker.nextNode();
+  }
+}
+
+/** Look up server source map cache for the first matching server chunk frame. */
+function resolveViaServerSourceMap(fiber: Fiber): SourceLocation | null {
+  let current: Fiber | null = fiber;
+  while (current !== null) {
+    if (current._debugStack) {
+      for (const frame of extractServerChunkFrames(current._debugStack)) {
+        const cached = serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`);
+        if (cached !== undefined) return cached;
+      }
+    }
+    current = (current.return as typeof current | undefined) ?? null;
+  }
+  return null;
+}
+
+/** Find DOM elements by nodeRef (format: "fileName:line:column"). */
+function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLElement[] {
+  const cache = getSourceCache();
+  const elements = cache.get(nodeRef);
+  if (!elements || elements.length === 0) {
+    return [];
+  }
+
+  // Filter disconnected elements
+  const live = elements.filter((el) => document.contains(el));
+
+  if (itemIndex !== null) {
+    return live[itemIndex] ? [live[itemIndex]] : [];
+  }
+  return live;
+}
+
+/** Overlay element resolver using the fiber-based source cache. */
+const iframeElementResolver: OverlayElementResolver = {
+  findElements: findElementsByRef,
+  findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }> {
+    const cache = getSourceCache();
+    const results: Array<{ elementId: string; element: HTMLElement }> = [];
+    for (const [key, elements] of cache) {
+      for (const el of elements) {
+        if (document.contains(el) && isContainerEmpty(el)) {
+          results.push({ elementId: key, element: el });
+        }
+      }
+    }
+    return results;
+  },
+};
 
 /**
  * Scroll an element into view, preferring smooth scrolling when supported.
@@ -28,15 +522,6 @@ function scrollIntoViewCenterSmooth(el: Element): void {
   }
 }
 
-/** Safely escape a value for use inside a CSS attribute selector. */
-function safeAttrSelectorValue(value: string): string {
-  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
-    return CSS.escape(value);
-  }
-  // Fallback: escape characters that commonly break attribute selectors
-  return value.replace(/["\\[\]]/g, '\\$&');
-}
-
 // === State (synced from parent webview via postMessage) ===
 const state = {
   selectedIds: [] as string[],
@@ -49,37 +534,44 @@ const state = {
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
 
-// === Shared click handler ===
+// === Shared click handler (fiber-based via iframeResolver) ===
 attachClickHandler(
   document,
   {
-    onElementClick: (id, _el, _e, itemIndex) => {
+    onElementClick: (nodeRef, _el, _e, itemIndex, source) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
           type: 'hypercanvas:elementClick',
-          elementId: id,
+          elementId: nodeRef,
           itemIndex,
+          source,
         },
         '*',
       );
     },
-    onElementHover: (id, _el, itemIndex) =>
+    onElementHover: (nodeRef, _el, itemIndex, source) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
           type: 'hypercanvas:elementHover',
-          elementId: id,
+          elementId: nodeRef,
           itemIndex,
+          source,
         },
         '*',
-      ),
-    onEmptyClick: () =>
+      );
+    },
+    onEmptyClick: () => {
+      // Suppress empty-click while source maps are warming for the last click target.
+      // retryPendingClick() will fire the real elementClick once maps resolve (codex P1).
+      if (pendingClickElement) return;
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*'),
+      window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
+    },
     getMode: () => state.engineMode as 'design' | 'interact',
   },
-  { getActiveInstanceId: () => activeInstanceId },
+  iframeResolver,
 );
 
 // === Shared keyboard handler ===
@@ -123,6 +615,9 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
       ),
   },
   isDesignMode: () => state.engineMode === 'design',
+  // Extension IIFE has no NodeMapService — keyboard navigation (Tab/Arrow/Escape)
+  // returns null for all lookups. Delete and mode-switch still work.
+  nodeMapLookup: { getEntry: () => null, findDOMElement: () => null },
 });
 // Forward unhandled modifier keystrokes to parent webview so VS Code's
 // built-in keyboard forwarding picks them up (Cmd+S, Cmd+P, etc.).
@@ -164,17 +659,35 @@ const contextMenuHandler = (e: MouseEvent) => {
   e.stopPropagation();
 
   const target = e.target as HTMLElement;
-  const element = target.closest('[data-uniq-id]') as HTMLElement | null;
-  const elementId = element?.dataset.uniqId ?? null;
 
-  const itemIndex = element && elementId ? getItemIndex(element, elementId, document, activeInstanceId) : null;
+  // Try fiber-based resolution first
+  const source = getSourceLocationFromDOM(target);
+  if (source) {
+    const itemIndex = getItemIndexFromDOM(target);
+    const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
 
+    // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:contextMenu',
+        elementId: syntheticRef,
+        itemIndex,
+        source,
+        x: e.clientX,
+        y: e.clientY,
+      },
+      '*',
+    );
+    return;
+  }
+
+  // No fiber source found — element is not traceable
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
       type: 'hypercanvas:contextMenu',
-      elementId,
-      itemIndex,
+      elementId: null,
+      itemIndex: null,
       x: e.clientX,
       y: e.clientY,
     },
@@ -210,13 +723,6 @@ function scheduleOverlayLoopIfNeeded(): void {
   }
 }
 
-function getIndexedElementOrNull(elements: NodeListOf<Element>, index: number | null | undefined): Element | null {
-  if (typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < elements.length) {
-    return elements[index];
-  }
-  return null;
-}
-
 function sendOverlayRects(): void {
   overlayRafScheduled = false;
 
@@ -225,76 +731,28 @@ function sendOverlayRects(): void {
     return;
   }
   needsOverlayUpdate = false;
-  const rects: Array<{
-    key: string;
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    type: string;
-  }> = [];
 
-  // Selection rects
-  for (let i = 0; i < state.selectedIds.length; i++) {
-    const id = state.selectedIds[i];
-    let selector = `[data-uniq-id="${safeAttrSelectorValue(id)}"]`;
-    if (activeInstanceId) {
-      selector = `[data-canvas-instance-id="${safeAttrSelectorValue(activeInstanceId)}"] ${selector}`;
-    }
-    const elements = document.querySelectorAll(selector);
-    const itemIdx = state.selectedItemIndices[id];
+  const result = computeOverlayRects(
+    {
+      selectedIds: state.selectedIds,
+      hoveredId: state.hoveredId,
+      hoveredItemIndex: state.hoveredItemIndex,
+      selectedItemIndices: state.selectedItemIndices,
+      engineMode: state.engineMode,
+    },
+    iframeElementResolver,
+  );
 
-    const primaryElement = getIndexedElementOrNull(elements, itemIdx);
+  const rects = result.overlayRects.map((r) => ({
+    key: r.key,
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height,
+    type: r.type,
+  }));
 
-    if (primaryElement) {
-      const rect = primaryElement.getBoundingClientRect();
-      rects.push({
-        key: `select-${id}-${itemIdx}`,
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        type: 'selection',
-      });
-    } else {
-      for (let j = 0; j < elements.length; j++) {
-        const rect = elements[j].getBoundingClientRect();
-        rects.push({
-          key: `select-${id}-${j}`,
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-          type: 'selection',
-        });
-      }
-    }
-  }
-
-  // Hover rect
-  if (state.hoveredId) {
-    let hSelector = `[data-uniq-id="${safeAttrSelectorValue(state.hoveredId)}"]`;
-    if (activeInstanceId) {
-      hSelector = `[data-canvas-instance-id="${safeAttrSelectorValue(activeInstanceId)}"] ${hSelector}`;
-    }
-    const hElements = document.querySelectorAll(hSelector);
-    const hEl =
-      getIndexedElementOrNull(hElements, state.hoveredItemIndex) || (hElements.length > 0 ? hElements[0] : null);
-    if (hEl) {
-      const hRect = hEl.getBoundingClientRect();
-      rects.push({
-        key: `hover-${state.hoveredId}`,
-        left: hRect.left,
-        top: hRect.top,
-        width: hRect.width,
-        height: hRect.height,
-        type: 'hover',
-      });
-    }
-  }
-
-  // Placeholder rects for empty containers (design mode only)
-  const placeholderRects = state.engineMode !== 'interact' ? getEmptyContainerRects(document) : [];
+  const { placeholderRects } = result;
 
   const payload = JSON.stringify({ rects, placeholderRects });
   if (payload !== prevRectsJSON) {
@@ -327,17 +785,24 @@ function scheduleThrottledOverlayUpdate(): void {
 const overlayMutationObserver =
   typeof MutationObserver !== 'undefined'
     ? new MutationObserver(() => {
+        invalidateSourceCache();
         scheduleThrottledOverlayUpdate();
       })
     : null;
 
-if (overlayMutationObserver && document.body) {
-  overlayMutationObserver.observe(document.body, {
-    attributes: true,
-    childList: true,
-    subtree: true,
-    characterData: true,
-  });
+function setupBodyObservers(): void {
+  if (!document.body) return;
+  if (overlayMutationObserver) {
+    overlayMutationObserver.observe(document.body, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
+  if (overlayResizeObserver) {
+    overlayResizeObserver.observe(document.body);
+  }
 }
 
 const overlayResizeObserver =
@@ -347,8 +812,12 @@ const overlayResizeObserver =
       })
     : null;
 
-if (overlayResizeObserver && document.body) {
-  overlayResizeObserver.observe(document.body);
+// Script is injected at the start of <head>, so document.body may not exist yet.
+// Set up observers immediately if body is ready, otherwise wait for DOMContentLoaded.
+if (document.body) {
+  setupBodyObservers();
+} else {
+  document.addEventListener('DOMContentLoaded', setupBodyObservers, { once: true });
 }
 
 // Also mark dirty on scroll and window resize
@@ -399,9 +868,7 @@ function updateDesignStyles(mode: string): void {
 
 // === Screenshot handler ===
 function handleScreenshotRequest(requestId: string, elementId: string | null): void {
-  const target = elementId
-    ? (document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(elementId)}"]`) as HTMLElement | null)
-    : document.body;
+  const target = elementId ? (findElementsByRef(elementId, 0)[0] ?? null) : document.body;
 
   if (!target) {
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -446,7 +913,7 @@ window.addEventListener('message', (event: MessageEvent) => {
   if (msg.type === 'hypercanvas:goToVisual') {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
-    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`);
+    const el = findElementsByRef(msg.elementId, 0)[0];
     if (el) scrollIntoViewCenterSmooth(el);
     needsOverlayUpdate = true;
     scheduleOverlayLoopIfNeeded();
@@ -455,7 +922,7 @@ window.addEventListener('message', (event: MessageEvent) => {
 
   // Content extraction requests from extension (Copy Text / Copy as HTML)
   if (msg.type === 'hypercanvas:getElementText') {
-    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`) as HTMLElement | null;
+    const el = findElementsByRef(msg.elementId, 0)[0] ?? null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
@@ -469,7 +936,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
   if (msg.type === 'hypercanvas:getElementHTML') {
-    const el = document.querySelector(`[data-uniq-id="${safeAttrSelectorValue(msg.elementId)}"]`) as HTMLElement | null;
+    const el = findElementsByRef(msg.elementId, 0)[0] ?? null;
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
@@ -486,6 +953,26 @@ window.addEventListener('message', (event: MessageEvent) => {
   // Screenshot request from MCP tool
   if (msg.type === 'hypercanvas:takeScreenshot') {
     handleScreenshotRequest(msg.requestId as string, msg.elementId as string | null);
+    return;
+  }
+
+  // Approach B: extension host resolved a server-side (RSC) source map
+  if (msg.type === 'hypercanvas:serverSourceMapResult') {
+    const { filePath, line, col, result } = msg as {
+      filePath: string;
+      line: number;
+      col: number;
+      result: SourceLocation | null;
+    };
+    const key = `${filePath}:${line}:${col}`;
+    serverSourceMapCache.set(key, result);
+    pendingServerRequests.delete(key);
+    if (result) {
+      // Newly resolved element — invalidate overlay cache so it redraws
+      invalidateSourceCache();
+      needsOverlayUpdate = true;
+      scheduleOverlayLoopIfNeeded();
+    }
     return;
   }
 });

@@ -84,6 +84,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             requestId: msg.requestId,
             dataUrl: msg.dataUrl,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:resolveServerSourceMap') {
+          // Approach B: iframe requests server-side source map resolution from extension host.
+          // Forward to extension host which reads the .map file from the local filesystem.
+          canvas.sendEvent(msg as unknown as PlatformMessage);
         }
         return;
       }
@@ -275,6 +279,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'projectError':
           // Extension detected an unsupported project type (e.g. React Native / Tamagui)
           setProjectError((msg.error as UnsupportedProjectError) ?? null);
+          break;
+
+        case 'serverSourceMapResult':
+          // Approach B: extension host resolved a server-side (RSC) source map — forward to iframe.
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          // Spread msg first so our namespaced type wins over msg.type ('serverSourceMapResult')
+          iframeEl?.contentWindow?.postMessage({ ...msg, type: 'hypercanvas:serverSourceMapResult' }, '*');
           break;
       }
     }

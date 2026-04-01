@@ -3,11 +3,11 @@
  * Sets up all keyboard shortcuts including iframe forwarding
  */
 
-import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import { createDesignKeydownHandler, type NodeMapLookup } from '@shared/canvas-interaction/keyboard-handler';
 import { useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import type { CanvasEngine } from '@/lib/canvas-engine';
-import { buildElementSelector, getPreviewIframe } from '@/lib/dom-utils';
+import { getPreviewIframe } from '@/lib/dom-utils';
 import { copyMultipleElementsAsTSX } from '@/utils/tsxClipboard';
 
 interface UseHotkeysSetupProps {
@@ -32,6 +32,8 @@ interface UseHotkeysSetupProps {
   isAddingComment: boolean;
   selectedCommentId: string | null;
   setSelectedCommentId: (id: string | null) => void;
+  /** Fiber-based NodeMap lookup for parent navigation. Falls back to DOM walk when null. */
+  nodeMapLookup?: NodeMapLookup | null;
 }
 
 /**
@@ -57,6 +59,7 @@ export function useHotkeysSetup({
   isAddingComment,
   selectedCommentId,
   setSelectedCommentId,
+  nodeMapLookup,
 }: UseHotkeysSetupProps): void {
   const duplicateDebounceRef = useRef<boolean>(false);
   const pasteDebounceRef = useRef<boolean>(false);
@@ -275,23 +278,13 @@ export function useHotkeysSetup({
 
       console.log('[Hotkey] Mod+X pressed, cutting:', selectedIds.join(', '));
 
-      const iframe = getPreviewIframe();
+      // Find parent for re-selection after cut via NodeMap
       let parentId: string | null = null;
-      if (iframe?.contentDocument) {
-        const selector = buildElementSelector(selectedIds[0], activeDesignInstanceId);
-        const currentElement = iframe.contentDocument.querySelector(selector);
-        if (currentElement) {
-          let parent = currentElement.parentElement;
-          while (parent && !parent.dataset.uniqId) {
-            parent = parent.parentElement;
-          }
-          if (parent) {
-            const foundParentId = parent.dataset.uniqId;
-            const rootId = engine.getRoot().id;
-            if (foundParentId && foundParentId !== rootId) {
-              parentId = foundParentId;
-            }
-          }
+      if (nodeMapLookup) {
+        const parentRef = nodeMapLookup.getEntry(selectedIds[0])?.parentRef;
+        const rootId = engine.getRoot().id;
+        if (parentRef && parentRef !== rootId) {
+          parentId = parentRef;
         }
       }
 
@@ -526,20 +519,13 @@ export function useHotkeysSetup({
           if (currentSelectedIds.length === 0) return;
 
           e.preventDefault();
+          // Find parent for re-selection after cut via NodeMap
           let parentId: string | null = null;
-          const selector = buildElementSelector(currentSelectedIds[0], activeDesignInstanceId);
-          const currentElement = iframeDoc.querySelector(selector);
-          if (currentElement) {
-            let parent = currentElement.parentElement;
-            while (parent && !parent.dataset.uniqId) {
-              parent = parent.parentElement;
-            }
-            if (parent) {
-              const foundParentId = parent.dataset.uniqId;
-              const rootId = engine.getRoot().id;
-              if (foundParentId && foundParentId !== rootId) {
-                parentId = foundParentId;
-              }
+          if (nodeMapLookup) {
+            const parentRef = nodeMapLookup.getEntry(currentSelectedIds[0])?.parentRef;
+            const rootId = engine.getRoot().id;
+            if (parentRef && parentRef !== rootId) {
+              parentId = parentRef;
             }
           }
 
@@ -632,10 +618,12 @@ export function useHotkeysSetup({
       cleanup?.();
       window.removeEventListener('component-loaded', handleComponentLoaded);
     };
-  }, [engine, activeDesignInstanceId, iframeLoadedCounter]);
+  }, [engine, activeDesignInstanceId, iframeLoadedCounter, nodeMapLookup]);
 
   // Handle keyboard shortcuts: Delete, Backspace, Shift+Enter, Enter, Escape, Tab
   useEffect(() => {
+    if (!nodeMapLookup) return;
+
     const sharedKeydown = createDesignKeydownHandler({
       getState: () => ({
         selectedIds,
@@ -652,6 +640,7 @@ export function useHotkeysSetup({
           }
         },
       },
+      nodeMapLookup,
     });
 
     const handleKeyDown = async (e: KeyboardEvent) => {

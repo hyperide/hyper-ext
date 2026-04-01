@@ -152,7 +152,7 @@ export interface AIAgentChatRequest {
   projectPath: string;
   chatId?: string;
   componentPath?: string; // Current component being developed (for browser tools)
-  selectedElementIds?: string[]; // Currently selected elements' data-uniq-id values
+  selectedElementIds?: string[]; // Currently selected elements' nodeRef values
   // conversationHistory is loaded from DB when chatId is provided
 }
 

@@ -525,15 +525,17 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
 });
 
 describe('PreviewFileManager — path traversal guard', () => {
-  it('should reject component paths with ".." segments', async () => {
+  it('skips traversal paths and uses project scan to find real components', async () => {
     const io = new InMemoryFileIO();
     io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     // This path tries to escape projectRoot
     io.files.set('/etc/passwd', 'root:x:0:0:root');
     const manager = createManager(io);
 
-    // Only the traversal path — should throw because no valid components remain
-    await expect(manager.ensureComponent(['../../../etc/passwd'])).rejects.toThrow(PreviewGenerationError);
+    // Traversal path is skipped; _scanAllComponents discovers Button.tsx instead
+    const content = await manager.ensureComponent(['../../../etc/passwd']);
+    expect(content).toContain('Button');
+    expect(content).not.toContain('passwd');
   });
 
   it('should skip traversal path but include valid components', async () => {
@@ -572,6 +574,179 @@ describe('PreviewFileManager — buildEntry error handling', () => {
     expect(content).toContain('Button');
     // Broken should still be registered (with filename-derived name)
     expect(content).toContain('Broken');
+  });
+});
+
+describe('PreviewFileManager — buildEntry non-PascalCase guard', () => {
+  it('skips entry files (main.tsx, index.tsx) that have no PascalCase export', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
+    );
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // ensureComponent with main.tsx should not throw, but should skip it and still register Button
+    const content = await manager.ensureComponent(['src/main.tsx', 'src/components/Button.tsx']);
+    // main.tsx has no PascalCase export → excluded from registry
+    expect(content).not.toContain('"src/main.tsx"');
+    // Button is valid → included
+    expect(content).toContain('Button');
+  });
+});
+
+describe('PreviewFileManager — ensureComponent stale entry detection', () => {
+  it('regenerates when existing file has non-PascalCase entries (e.g. from main.tsx)', async () => {
+    // Simulate a stale __canvas_preview__.tsx that includes src/main.tsx
+    const stalePreview = `import React from 'react';
+import { main } from './main';
+import Button from './components/Button';
+const componentRegistry = { 'src/main.tsx': main, 'src/components/Button.tsx': Button };
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+const callbackStubs = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // Triggering ensureComponent with Button (already in registry) should detect stale main entry
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+    // After regeneration, main.tsx must be gone
+    expect(content).not.toContain('"src/main.tsx"');
+    expect(content).not.toContain('{ main }');
+    // Button should still be there
+    expect(content).toContain('Button');
+  });
+
+  it('regenerates when existing file contains app/layout.tsx (Next.js reserved file)', async () => {
+    // Simulate a __canvas_preview__.tsx that was generated when user opened layout.tsx.
+    // layout.tsx exports RootLayout (PascalCase) so old stale detection missed it.
+    const stalePreview = `import React from 'react';
+import RootLayout from '../app/layout';
+import Button from './components/Button';
+const componentRegistry = { 'app/layout.tsx': RootLayout, 'src/components/Button.tsx': Button };
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+const callbackStubs = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/app/layout.tsx',
+      `import type { Metadata } from 'next';
+export const metadata: Metadata = { title: 'App' };
+export default function RootLayout({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // Triggering ensureComponent with Button (already in registry) should detect reserved layout entry
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+    // layout.tsx must be removed — it breaks Next.js Client Component chain
+    expect(content).not.toContain('"app/layout.tsx"');
+    expect(content).not.toContain('RootLayout');
+    // Button should still be there
+    expect(content).toContain('Button');
+  });
+
+  it('excludes layout.tsx when explicitly requested via ensureComponent', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/app/layout.tsx',
+      `export const metadata = {};
+export default function RootLayout({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
+    );
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // Requesting layout.tsx explicitly should not add it to the registry
+    const content = await manager.ensureComponent(['app/layout.tsx', 'src/components/Button.tsx']);
+    expect(content).not.toContain('"app/layout.tsx"');
+    expect(content).not.toContain('RootLayout');
+    expect(content).toContain('Button');
+  });
+});
+
+describe('PreviewFileManager — ensureComponent all-non-component paths', () => {
+  it('returns existing preview content when all requested paths are non-PascalCase (e.g. main.tsx only)', async () => {
+    const existingPreview = `import React from 'react';
+import Button from './components/Button';
+const componentRegistry = { 'src/components/Button.tsx': Button };
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+const callbackStubs = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', existingPreview);
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // Only main.tsx passed — no valid component entries — should no-op and return existing content
+    const content = await manager.ensureComponent(['src/main.tsx']);
+    expect(content).toContain('Button');
+    expect(content).not.toContain('"src/main.tsx"');
+  });
+
+  it('salvages real components via scan when stale preview only has non-component entries', async () => {
+    // Stale file with ONLY main.tsx — no valid PascalCase components
+    const staleOnlyNonComponent = `import React from 'react';
+import { main } from './main';
+const componentRegistry = { 'src/main.tsx': main };
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+const callbackStubs = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', staleOnlyNonComponent);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // ensureComponent(['src/main.tsx']): stale fast path calls _initPreviewFile(['src/main.tsx'])
+    // _initPreviewFile has no valid requested entries, but scan finds Button.tsx
+    const content = await manager.ensureComponent(['src/main.tsx']);
+    // Stale main.tsx entry must be gone
+    expect(content).not.toContain('"src/main.tsx"');
+    expect(content).not.toContain('{ main }');
+    // Button found via scan must be present
+    expect(content).toContain('Button');
+  });
+
+  it('throws PreviewGenerationError when all requested paths are non-component and no existing file', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/main.tsx',
+      `import { createRoot } from 'react-dom/client'\ncreateRoot(document.getElementById('root')!).render(<App />)\n`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    await expect(manager.ensureComponent(['src/main.tsx'])).rejects.toThrow(
+      'No valid components to include in preview',
+    );
   });
 });
 
@@ -973,9 +1148,19 @@ describe('PreviewFileManager.patchEntryFile', () => {
     await manager.patchEntryFile('/project/src/index.tsx');
     const patched = io.files.get('/project/src/index.tsx');
     expect(patched).toBeDefined();
-    expect(patched).toContain('__preview');
     expect(patched).toContain('@hyperide-managed');
     expect(patched).toContain('__canvas_preview__');
+    // Checks both ?component= and /test-preview path to avoid hijacking app URLs
+    expect(patched).toMatch(/get\(["']component["']\)/);
+    expect(patched).toContain('includes');
+    expect(patched).toContain('test-preview');
+    // App shell: must render CanvasPreview via .then() — not a plain side-effect import
+    expect(patched).toContain('.then(');
+    expect(patched).toContain('CanvasPreviewComp');
+    // Uses JSX (<CanvasPreviewComp />) — no React.createElement needed, works with auto JSX runtime
+    expect(patched).toContain('<CanvasPreviewComp');
+    // Defensive: .catch() fallback renders original app if __canvas_preview__ fails to load
+    expect(patched).toContain('.catch(');
   });
 
   it('revertEntryFile restores original bootstrap code', async () => {
@@ -988,7 +1173,7 @@ describe('PreviewFileManager.patchEntryFile', () => {
     const reverted = io.files.get('/project/src/index.tsx');
     expect(reverted).toBeDefined();
     expect(reverted).not.toContain('@hyperide-managed');
-    expect(reverted).not.toContain('__preview');
+    expect(reverted).not.toMatch(/get\(["']component["']\)/);
     expect(reverted).toContain('ReactDOM.createRoot');
     expect(reverted).toContain("document.getElementById('root')");
   });
@@ -1002,8 +1187,29 @@ describe('PreviewFileManager.patchEntryFile', () => {
     await manager.patchEntryFile('/project/src/index.tsx');
     const patched = io.files.get('/project/src/index.tsx');
     expect(patched).toBeDefined();
-    const count = (patched?.match(/__preview/g) ?? []).length;
+    const count = (patched?.match(/get\(["']component["']\)/g) ?? []).length;
     expect(count).toBe(1);
+  });
+
+  it('uses React.createElement for .ts entry files (no JSX allowed in plain TypeScript)', async () => {
+    const tsEntry = `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+ReactDOM.createRoot(document.getElementById('root')!).render(React.createElement(App, null));
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/index.ts', tsEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.ts');
+    const patched = io.files.get('/project/src/index.ts');
+    expect(patched).toBeDefined();
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('CanvasPreviewComp');
+    // Must NOT contain JSX syntax — TypeScript rejects JSX in .ts files
+    expect(patched).not.toContain('<CanvasPreviewComp');
+    // Must use React.createElement instead
+    expect(patched).toContain('React.createElement');
   });
 });
 
@@ -1097,7 +1303,7 @@ describe('PreviewFileManager.patchEntryFile — importTarget', () => {
     const patched = io.files.get('/project/src/index.tsx');
     expect(patched).toContain('./__canvas_preview_standalone__');
     expect(patched).toContain('@hyperide-managed');
-    expect(patched).toContain('__preview');
+    expect(patched).toMatch(/get\(["']component["']\)/);
   });
 
   it('revertEntryFile removes Tier 2 patch correctly', async () => {

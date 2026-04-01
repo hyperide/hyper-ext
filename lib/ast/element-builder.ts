@@ -7,22 +7,17 @@
 
 import * as t from '@babel/types';
 import { makeNotSelfClosing, valueToJSXAttribute } from './mutator';
-import { generateUuid } from './uuid';
 
 /**
  * Build a JSX element from a component description.
- * Separates `children` from other props, creates attributes,
- * and generates a UUID if not provided.
+ * Separates `children` from other props, creates attributes.
  */
-export function buildJSXElement(opts: { componentType: string; props: Record<string, unknown>; uuid?: string }): {
+export function buildJSXElement(opts: { componentType: string; props: Record<string, unknown> }): {
   element: t.JSXElement;
-  uuid: string;
 } {
-  const { componentType, props, uuid: providedUuid } = opts;
-  const uuid = providedUuid || generateUuid();
+  const { componentType, props } = opts;
 
-  // Start with data-uniq-id attribute
-  const attributes: t.JSXAttribute[] = [t.jsxAttribute(t.jsxIdentifier('data-uniq-id'), t.stringLiteral(uuid))];
+  const attributes: t.JSXAttribute[] = [];
 
   // Separate children from other props
   const { children, ...otherProps } = props as { children?: unknown };
@@ -50,7 +45,7 @@ export function buildJSXElement(opts: { componentType: string; props: Record<str
     isSelfClosing,
   );
 
-  return { element, uuid };
+  return { element };
 }
 
 /**

@@ -30,6 +30,7 @@ mock.module('@/lib/dom-utils', () => ({
       },
     };
   },
+  getElementFromIframe: () => mockIframeElement as unknown as HTMLElement | null,
   PREVIEW_IFRAME_ID: 'preview-iframe',
 }));
 
@@ -709,11 +710,11 @@ describe('AST Operations', () => {
     };
 
     it('should return error when iframe is not available', () => {
-      // applyPropToDOM throws when iframe is null
+      // applyPropToDOM throws when element can't be found (no iframe)
       const op = new ASTUpdatePropsOperation(api, params);
       const result = op.execute(tree);
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Iframe not found');
+      expect(result.error).toBe('Element "elem-1" not found in iframe');
     });
 
     it('should call updatePropsBatch on execute', async () => {

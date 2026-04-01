@@ -50,6 +50,9 @@ export function init(
         if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
           clickPatch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
         }
+        if (msg.source) {
+          clickPatch.source = msg.source;
+        }
         onStateChange(clickPatch);
         break;
       }

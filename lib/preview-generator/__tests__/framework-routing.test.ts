@@ -164,6 +164,10 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain('Suspense');
     expect(content).toContain('@hyperide-managed');
     expect(content).toContain('CanvasPreview');
+    // Must pass component/mode props to CanvasPreview so it doesn't use window.location.search
+    // (window is undefined during SSR in Next.js App Router)
+    expect(content).toContain("params.get('component')");
+    expect(content).toContain("params.get('mode')");
   });
 
   it('nextjs-pages-router route renders CanvasPreview directly', () => {

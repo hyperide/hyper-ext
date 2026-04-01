@@ -20,7 +20,7 @@ export interface StyleAdapter {
 
   /**
    * Write single style property
-   * @param elementId - Element's data-uniq-id
+   * @param elementId - Element identifier (nodeRef)
    * @param filePath - Path to the file containing the element
    * @param styleKey - Style property name
    * @param styleValue - Style property value
@@ -29,7 +29,7 @@ export interface StyleAdapter {
 
   /**
    * Write multiple style properties in batch
-   * @param elementId - Element's data-uniq-id
+   * @param elementId - Element identifier (nodeRef)
    * @param filePath - Path to the file containing the element
    * @param styles - Object with style properties
    * @param options - Optional parameters for dynamic className support and state modifiers
@@ -54,7 +54,7 @@ export interface StyleAdapter {
 
   /**
    * Change layout type (Tailwind changes className, Tamagui changes component type)
-   * @param elementId - Element's data-uniq-id
+   * @param elementId - Element identifier (nodeRef)
    * @param filePath - Path to the file containing the element
    * @param layoutType - Layout type: 'layout', 'col', 'row', 'grid'
    */

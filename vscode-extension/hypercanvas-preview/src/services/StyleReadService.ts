@@ -3,13 +3,16 @@
  *
  * Used by the Right Panel (Inspector) to get element style data
  * without needing iframe DOM access. Reads file -> parses AST ->
- * finds element by data-uniq-id -> extracts className, childrenType, etc.
+ * finds element by position (via NodeMapService) -> extracts className, childrenType, etc.
  */
 
 import type { FileIO } from '@lib/ast/file-io';
 import { getAttributeString } from '@lib/ast/mutator';
 import { parseCode } from '@lib/ast/parser';
-import { analyzeJSXChildren, findElementByUuid, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
+import { findElementByPosition } from '@lib/ast/position-finder';
+import { analyzeJSXChildren, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
+import type { NodeMapService } from '@lib/element-tracing/node-map-service';
+import type { NodeRef } from '@shared/element-tracing/types';
 
 export interface StyleReadResult {
   className: string;
@@ -22,10 +25,12 @@ export interface StyleReadResult {
 export class StyleReadService {
   private _workspaceRoot: string;
   private _fileIO: FileIO;
+  private _nodeMapService: NodeMapService;
 
-  constructor(workspaceRoot: string, fileIO: FileIO) {
+  constructor(workspaceRoot: string, fileIO: FileIO, nodeMapService: NodeMapService) {
     this._workspaceRoot = workspaceRoot;
     this._fileIO = fileIO;
+    this._nodeMapService = nodeMapService;
   }
 
   /**
@@ -39,24 +44,56 @@ export class StyleReadService {
   }
 
   /**
-   * Read className and metadata from an element in the AST
+   * Read className and metadata from an element in the AST.
+   * Uses nodeRef (preferred) to resolve element by position.
    */
-  async readElementClassName(elementId: string, componentPath: string): Promise<StyleReadResult> {
+  async readElementClassName(_elementId: string, componentPath: string, nodeRef?: NodeRef): Promise<StyleReadResult> {
     const absolutePath = this._resolvePath(componentPath);
+    const empty: StyleReadResult = {
+      className: '',
+      childrenType: undefined,
+      textContent: '',
+      tagType: 'unknown',
+    };
 
     try {
-      const content = await this._fileIO.readFile(absolutePath);
+      if (!nodeRef) return empty;
+
+      // Prefer lookup by real nodeRef (UUID from NodeMapService).
+      // Fall back to resolving a syntheticRef (format: "fileName:line:column") via source location —
+      // this is the format used by React 19 fiber-based refs where paths are relative Vite URLs.
+      let entry = this._nodeMapService.resolveNodeRef(nodeRef);
+
+      // Track parsed syntheticRef values for direct position lookup if NodeMapService is empty
+      let directLine: number | null = null;
+      let directColumn: number | null = null;
+      let directPath: string | null = null;
+
+      if (!entry) {
+        const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+        if (m) {
+          directLine = Number.parseInt(m[2], 10);
+          directColumn = Number.parseInt(m[3], 10);
+          directPath = this._resolvePath(m[1]);
+          entry = this._nodeMapService.resolveSourceLocation({
+            fileName: m[1],
+            line: directLine,
+            column: directColumn,
+          });
+        }
+      }
+
+      const searchLine = entry?.loc.line ?? directLine;
+      const searchColumn = entry?.loc.column ?? directColumn;
+      // NodeMapService empty and no syntheticRef — nothing to resolve
+      if (searchLine === null || searchColumn === null) return empty;
+
+      const filePath = directPath ?? absolutePath;
+      const content = await this._fileIO.readFile(filePath);
       const ast = parseCode(content);
 
-      const result = findElementByUuid(ast, elementId);
-      if (!result) {
-        return {
-          className: '',
-          childrenType: undefined,
-          textContent: '',
-          tagType: 'unknown',
-        };
-      }
+      const result = findElementByPosition(ast, searchLine, searchColumn);
+      if (!result) return empty;
 
       const element = result.element;
 
@@ -81,12 +118,7 @@ export class StyleReadService {
       };
     } catch (error) {
       console.error('[StyleReadService] Error reading element className:', error);
-      return {
-        className: '',
-        childrenType: undefined,
-        textContent: '',
-        tagType: 'unknown',
-      };
+      return empty;
     }
   }
 }

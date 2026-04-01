@@ -147,17 +147,31 @@ function getNonPreviewColumn(): vscode.ViewColumn {
 
 /**
  * Resolve file path to VS Code Uri
- * Handles absolute paths and paths relative to workspace root
+ * Handles absolute paths and paths relative to workspace root.
+ *
+ * Past bugs: HYP-268 — Turbopack source maps produce file:// URLs that are normalized
+ * to paths without a leading '/' (e.g. 'Users/ultra/.../page.tsx' instead of
+ * '/Users/ultra/.../page.tsx'). Detect these stripped absolute paths by checking if
+ * '/' + filePath starts with the workspace root — then it is an absolute path inside
+ * the workspace with the leading slash dropped.
  */
 function resolveFilePath(filePath: string): vscode.Uri {
-  // If path is absolute, use as-is
+  // Absolute path — use as-is
   if (filePath.startsWith('/')) {
     return vscode.Uri.file(filePath);
   }
 
-  // Relative path — resolve against workspace root
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot) {
+    // Turbopack normalizes 'file:///abs/path' → 'abs/path' (strips leading '/').
+    // Check if restoring the slash produces a path that lives inside the workspace.
+    // This is conservative: only fires when the full workspace path is a prefix of
+    // the stripped path, avoiding false positives for legitimate relative paths.
+    if (`/${filePath}`.startsWith(`${workspaceRoot}/`)) {
+      return vscode.Uri.file(`/${filePath}`);
+    }
+
+    // Relative path — resolve against workspace root
     return vscode.Uri.file(`${workspaceRoot}/${filePath}`);
   }
 

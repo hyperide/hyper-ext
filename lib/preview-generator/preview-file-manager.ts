@@ -10,7 +10,7 @@
 
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { parse } from '@babel/parser';
-import { builders as b } from 'ast-types';
+import { builders as b, type namedTypes } from 'ast-types';
 import * as recast from 'recast';
 import type { FileIO } from '../ast/file-io';
 import {
@@ -23,6 +23,28 @@ import {
 } from './framework-routing';
 import { generatePreviewContent, type PreviewComponentEntry } from './generator';
 import { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
+
+/**
+ * Next.js App Router special file names that must not be added to the preview registry.
+ * These files have framework-level semantics (metadata exports, error boundaries, etc.)
+ * that conflict with being imported as Client Components.
+ */
+const NEXTJS_APP_ROUTER_RESERVED = new Set([
+  'layout.tsx',
+  'layout.ts',
+  'layout.jsx',
+  'layout.js',
+  'error.tsx',
+  'error.jsx',
+  'loading.tsx',
+  'loading.jsx',
+  'not-found.tsx',
+  'not-found.jsx',
+  'template.tsx',
+  'template.jsx',
+  'default.tsx',
+  'default.jsx',
+]);
 
 export interface PreviewFileManagerConfig {
   projectRoot: string;
@@ -313,14 +335,27 @@ export class PreviewFileManager {
     }
 
     if (missingPaths.length === 0) {
-      // Fast path — no write needed
-      return existingContent;
+      // Fast path: all requested components already registered.
+      // Validate the existing file for stale entries: non-PascalCase names, Next.js App Router
+      // reserved files (layout.tsx exports metadata — breaks Client Component chain), or
+      // @hyperide-managed files (extension's own generated route files).
+      const existingEntries = parseExistingPreview(existingContent);
+      const isStale = (e: { componentName: string; componentPath: string }) =>
+        !/^[A-Z]/.test(e.componentName) || NEXTJS_APP_ROUTER_RESERVED.has(basename(e.componentPath));
+      if (!existingEntries.some(isStale)) return existingContent;
+
+      // Stale entries found — regenerate excluding reserved files
+      const cleanPaths = existingEntries.filter((e) => !isStale(e)).map((e) => e.componentPath);
+      return this._initPreviewFile(previewPath, previewDir, [...new Set([...cleanPaths, ...componentPaths])]);
     }
 
     // Full regen when new components are added — ensures componentRegistry and sampleRenderMap
-    // are updated alongside imports. Preserve existing components by parsing the registry via AST.
+    // are updated alongside imports. Preserve existing components by parsing the registry via AST,
+    // excluding reserved filenames that must not be in the Client Component bundle.
     const existingEntries = parseExistingPreview(existingContent);
-    const existingPaths = existingEntries.map((e) => e.componentPath);
+    const existingPaths = existingEntries
+      .filter((e) => !NEXTJS_APP_ROUTER_RESERVED.has(basename(e.componentPath)))
+      .map((e) => e.componentPath);
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths);
   }
@@ -334,12 +369,9 @@ export class PreviewFileManager {
       if (entry) requestedEntries.push(entry);
     }
 
-    // If none of the requested paths yielded valid entries, fail fast (e.g. traversal guard)
-    if (requestedEntries.length === 0) {
-      throw new PreviewGenerationError('No valid components to include in preview');
-    }
-
-    // Supplement with all other components discovered in project (init-time full scan)
+    // Supplement with all other components discovered in project (init-time full scan).
+    // Always runs so that stale-entry cleanup can salvage real components even when
+    // all explicitly requested paths are non-component files (e.g. only main.tsx passed).
     const discoveredPaths = await this._scanAllComponents();
     const requestedPathSet = new Set(requestedPaths);
     const extraEntries: PreviewComponentEntry[] = [];
@@ -350,6 +382,17 @@ export class PreviewFileManager {
     }
 
     const allEntries = [...requestedEntries, ...extraEntries];
+
+    // If no valid entries from any source (e.g. only non-component files requested and project
+    // scan also found nothing), fall back to existing content rather than regenerating.
+    // Only throw when no existing file exists — there is genuinely nothing to return.
+    if (allEntries.length === 0) {
+      try {
+        return await this.io.readFile(previewPath);
+      } catch {
+        throw new PreviewGenerationError('No valid components to include in preview');
+      }
+    }
 
     const content = generatePreviewContent(allEntries, { isNextPagesRouter: this.isNextPagesRouter });
 
@@ -456,6 +499,13 @@ export class PreviewFileManager {
       return null;
     }
 
+    // Exclude Next.js App Router special files — they export metadata / use special props
+    // that conflict with being imported as Client Components inside __canvas_preview__.tsx.
+    const fileName = basename(componentPath);
+    if (NEXTJS_APP_ROUTER_RESERVED.has(fileName)) {
+      return null;
+    }
+
     const absolutePath = join(this.projectRoot, componentPath);
 
     let sourceCode: string;
@@ -467,7 +517,11 @@ export class PreviewFileManager {
       return null;
     }
 
-    const fileName = basename(componentPath);
+    // Also skip extension-managed files (e.g. app/test-preview/page.tsx) to prevent
+    // self-referential imports that cause circular Client Component chains.
+    if (sourceCode.includes('@hyperide-managed')) {
+      return null;
+    }
     let componentName: string;
     let sampleExports: string[];
     let exportStyle: ExportStyle;
@@ -481,6 +535,11 @@ export class PreviewFileManager {
       componentName = fileName.replace(/\.[^.]+$/, '');
       sampleExports = [];
       exportStyle = 'named';
+    }
+
+    // Non-PascalCase name = not a React component (entry files, utils, etc.)
+    if (!/^[A-Z]/.test(componentName)) {
+      return null;
     }
 
     // Compute import path relative to preview file
@@ -834,7 +893,7 @@ export class PreviewFileManager {
   /**
    * Patch webpack/CRA entry file to conditionally load the preview module via AST.
    * Finds the createRoot(...).render(...) ExpressionStatement and wraps it in:
-   *   if (__preview param) { import(importTarget) }
+   *   if (?component param) { import(importTarget) }
    *   else { <original createRoot call> }
    * Tagged with a leading comment for AST-safe revert.
    *
@@ -864,7 +923,10 @@ export class PreviewFileManager {
           return;
         }
 
-        const ifStmt = b.ifStatement(
+        // Check both ?component= and /test-preview path to avoid hijacking app URLs
+        // that legitimately use ?component= as their own query param.
+        const condition = b.logicalExpression(
+          '&&',
           b.callExpression(
             b.memberExpression(
               b.newExpression(b.identifier('URLSearchParams'), [
@@ -872,11 +934,73 @@ export class PreviewFileManager {
               ]),
               b.identifier('get'),
             ),
-            [b.stringLiteral('__preview')],
+            [b.stringLiteral('component')],
           ),
-          b.blockStatement([b.expressionStatement(b.callExpression(b.import(), [b.stringLiteral(importTarget)]))]),
-          b.blockStatement([path.node]),
+          b.callExpression(
+            b.memberExpression(
+              b.memberExpression(b.identifier('location'), b.identifier('pathname')),
+              b.identifier('includes'),
+            ),
+            [b.stringLiteral('test-preview')],
+          ),
         );
+
+        // Standalone entries render themselves on import (module has top-level createRoot call).
+        // App shell __canvas_preview__ only exports a component — must render it explicitly.
+        const isStandalone = importTarget.includes('standalone');
+        let previewConsequent: ReturnType<typeof b.blockStatement>;
+        if (isStandalone) {
+          previewConsequent = b.blockStatement([
+            b.expressionStatement(b.callExpression(b.import(), [b.stringLiteral(importTarget)])),
+          ]);
+        } else {
+          // Clone the createRoot(el) call so we can reuse it inside the .then() callback.
+          // expr.type === 'CallExpression' && callee.type === 'MemberExpression' already checked
+          // in isCreateRoot guard above; cast to access .callee.object safely.
+          const callExpr = expr as namedTypes.CallExpression & { callee: namedTypes.MemberExpression };
+          const createRootExpr = JSON.parse(JSON.stringify(callExpr.callee.object));
+          // JSX is only valid in .tsx/.jsx files. For plain .ts/.js entry files, use
+          // React.createElement — these projects must have React in scope anyway.
+          const allowJsx = entryFilePath.endsWith('.tsx') || entryFilePath.endsWith('.jsx');
+          const renderArg = allowJsx
+            ? b.jsxElement(b.jsxOpeningElement(b.jsxIdentifier('CanvasPreviewComp'), [], true), null, [])
+            : b.callExpression(b.memberExpression(b.identifier('React'), b.identifier('createElement')), [
+                b.identifier('CanvasPreviewComp'),
+                b.nullLiteral(),
+              ]);
+          const thenCallback = b.arrowFunctionExpression(
+            [b.identifier('m')],
+            b.blockStatement([
+              b.variableDeclaration('var', [
+                b.variableDeclarator(
+                  b.identifier('CanvasPreviewComp'),
+                  b.memberExpression(b.identifier('m'), b.identifier('default')),
+                ),
+              ]),
+              b.ifStatement(
+                b.identifier('CanvasPreviewComp'),
+                b.expressionStatement(
+                  b.callExpression(b.memberExpression(createRootExpr, b.identifier('render')), [renderArg]),
+                ),
+              ),
+            ]),
+          );
+          // .catch() with empty handler suppresses the unhandled rejection warning in Vite
+          // when __canvas_preview__ temporarily fails to load (e.g. during regeneration).
+          const importThenCatch = b.callExpression(
+            b.memberExpression(
+              b.callExpression(
+                b.memberExpression(b.callExpression(b.import(), [b.stringLiteral(importTarget)]), b.identifier('then')),
+                [thenCallback],
+              ),
+              b.identifier('catch'),
+            ),
+            [b.arrowFunctionExpression([], b.blockStatement([]))],
+          );
+          previewConsequent = b.blockStatement([b.expressionStatement(importThenCatch)]);
+        }
+
+        const ifStmt = b.ifStatement(condition, previewConsequent, b.blockStatement([path.node]));
 
         (ifStmt as { comments?: unknown[] }).comments = [
           { type: 'CommentLine', value: ' @hyperide-managed', leading: true, trailing: false },

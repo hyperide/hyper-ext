@@ -57,10 +57,13 @@ export function CodeServerIDE({
   const handleSSEMessage = useCallback(
     (data: unknown) => {
       // Check for goToVisual event first
-      const message = data as { type?: string; element?: { uniqId: string; elementType: string; filePath: string } };
+      const message = data as {
+        type?: string;
+        element?: { nodeRef?: string; elementType: string; filePath: string; line: number; column: number };
+      };
       if (message.type === 'goToVisual' && message.element) {
         console.log('[IDE] Received goToVisual SSE event:', message.element);
-        onGoToVisual?.(message.element.uniqId, message.element.elementType, message.element.filePath);
+        onGoToVisual?.(message.element.nodeRef ?? '', message.element.elementType, message.element.filePath);
         return;
       }
 

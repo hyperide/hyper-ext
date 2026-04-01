@@ -1,7 +1,14 @@
 /**
  * VS Code implementation of FileIO.
- * Writes go through WorkspaceEdit so that Cmd+Z/Shift+Cmd+Z
- * undo/redo AST mutations natively in the editor.
+ *
+ * Writes go directly to disk via vscode.workspace.fs — reliable for both new and existing files.
+ * WorkspaceEdit + doc.save() was previously used to support Cmd+Z, but doc.save() silently
+ * returns false for background documents (not shown in any editor tab), causing patchEntryFile
+ * to write nothing to disk while appearing to succeed.
+ *
+ * After the direct disk write, open in-memory documents are updated via WorkspaceEdit so that
+ * sequential readFile() calls (which prefer open documents) see the fresh content immediately,
+ * without waiting for VS Code's file-system watcher to reload.
  */
 
 import type { FileIO } from '@lib/ast/file-io';
@@ -24,36 +31,20 @@ export class VSCodeFileIO implements FileIO {
   async writeFile(absolutePath: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(absolutePath);
 
-    // Check if the file exists — use different strategy for new vs existing files.
-    // WorkspaceEdit is preferred for existing files (enables Cmd+Z undo in editor).
-    // vscode.workspace.fs.writeFile is needed for new files (WorkspaceEdit can't create).
-    let fileExists = false;
-    try {
-      await vscode.workspace.fs.stat(uri);
-      fileExists = true;
-    } catch {
-      // File doesn't exist — will create via fs.writeFile
-    }
+    // Write directly to disk — works for both new and existing files and guarantees
+    // Vite HMR picks up the change. WorkspaceEdit + doc.save() was unreliable for
+    // background documents that are open but not visible in any editor tab.
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 
-    if (fileExists) {
-      const doc = await vscode.workspace.openTextDocument(uri);
+    // Sync the in-memory document if it is open, so the next readFile() call returns
+    // the new content immediately (before VS Code's file-system watcher fires).
+    const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
+    if (openDoc && openDoc.getText() !== content) {
       const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+      const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
       edit.replace(uri, fullRange, content);
-
-      const success = await vscode.workspace.applyEdit(edit);
-      if (!success) {
-        throw new Error(`WorkspaceEdit failed for ${absolutePath}`);
-      }
-
-      // Save to disk so Vite HMR picks up the change
-      const saved = await doc.save();
-      if (!saved) {
-        throw new Error(`Document save failed for ${absolutePath}`);
-      }
-    } else {
-      // Create new file directly on disk
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+      // Best-effort: disk is already written, so ignore applyEdit failures here.
+      await vscode.workspace.applyEdit(edit).catch(() => {});
     }
   }
 

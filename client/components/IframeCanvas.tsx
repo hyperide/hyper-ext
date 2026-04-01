@@ -1,9 +1,12 @@
-import { getItemIndex } from '@shared/canvas-interaction/click-handler';
 import { injectDesignStyles } from '@shared/canvas-interaction/style-injector';
+import type { SourceLocation } from '@shared/element-tracing/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
+import { useElementTracer } from '@/hooks/useElementTracer';
+import { useTracerSelectionSync } from '@/hooks/useTracerSelectionSync';
 import { useCanvasEngine } from '@/lib/canvas-engine';
+import { getActiveTracer as getActiveTracerInstance } from '@/lib/element-tracing/active-tracer';
 import { authFetch } from '@/utils/authFetch';
 import type { RuntimeError } from '../../shared/runtime-error';
 // Canvas composition loaded from server only (no localStorage cache)
@@ -17,8 +20,19 @@ interface IframeCanvasProps {
   instanceSizes?: Record<string, { width?: number; height?: number }>;
   editorMode?: 'design' | 'interact' | 'code';
   isAddingComment?: boolean;
-  onElementClick?: (element: HTMLElement | null, event?: MouseEvent, itemIndex?: number | null) => void;
-  onElementHover?: (element: HTMLElement | null, itemIndex?: number | null) => void;
+  onElementClick?: (
+    nodeRef: string | null,
+    element: HTMLElement,
+    event: MouseEvent,
+    itemIndex: number,
+    source: SourceLocation,
+  ) => void;
+  onElementHover?: (
+    nodeRef: string | null,
+    element: HTMLElement | null,
+    itemIndex: number | null,
+    source: SourceLocation | null,
+  ) => void;
   onLoadingChange?: (loading: boolean) => void;
   onCanvasModeChange?: (mode: CanvasMode) => void;
   onEmptyClick?: () => void;
@@ -65,6 +79,17 @@ export default function IframeCanvas({
   const [canvasComposition, setCanvasComposition] = useState<CanvasComposition | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fiber-based element tracing — keeps WS alive across mode switches, callers gate on design mode
+  const { tracer } = useElementTracer({
+    iframe: iframeRef.current,
+    projectId: meta?.projectId ?? '',
+    enabled: previewReady,
+    loadCounter: iframeLoadedCounter,
+  });
+
+  // Sync tracer async events (server-confirmed selections, refMapping remapping) with engine
+  const { setPendingSelection } = useTracerSelectionSync({ tracer, engine });
 
   // Show logs panel when error occurs
   useEffect(() => {
@@ -475,8 +500,9 @@ export default function IframeCanvas({
         e.stopPropagation();
 
         const target = e.target as HTMLElement;
-        const element = target.closest('[data-uniq-id]') as HTMLElement;
-        const elementId = element?.dataset.uniqId || null;
+        // Use fiber-based resolution for comment target; fall back to null
+        const fiberResult = tracer?.resolveClickLocal(target);
+        const elementId = fiberResult?.nodeRef ?? null;
 
         // Determine instanceId: from clicked element's instance, or activeInstanceId for empty space
         const instanceElement = target.closest('[data-canvas-instance-id]') as HTMLElement;
@@ -525,38 +551,38 @@ export default function IframeCanvas({
           e.stopPropagation();
         }
 
-        // Find closest element with data-uniq-id
-        const element = target.closest('[data-uniq-id]') as HTMLElement;
-
-        // Check if click was on empty space (no element with data-uniq-id)
-        if (!element) {
-          // Click on empty space - exit to board mode
-          if (onEmptyClick) {
-            onEmptyClick();
-          }
-          return;
-        }
-
         // In multi-instance mode: check if click is on different instance
         if (activeInstanceId) {
-          const instanceElement = element.closest('[data-canvas-instance-id]') as HTMLElement;
+          const instanceElement = target.closest('[data-canvas-instance-id]') as HTMLElement;
           const clickedInstanceId = instanceElement?.dataset.canvasInstanceId;
 
-          // Click on element in different instance - switch to that instance
           if (clickedInstanceId && clickedInstanceId !== activeInstanceId) {
-            if (onOtherInstanceClick) {
-              onOtherInstanceClick(clickedInstanceId);
-            }
+            onOtherInstanceClick?.(clickedInstanceId);
             return;
           }
         }
 
         // Normal element click handling (only in design mode)
         if (mode === 'design' && onElementClick) {
-          const uniqId = element.dataset.uniqId;
-          const itemIndex = uniqId ? getItemIndex(element, uniqId, doc, activeInstanceId) : null;
+          // Fiber-based resolution (primary path)
+          if (tracer) {
+            const result = tracer.resolveClickLocal(target);
+            if (result) {
+              onElementClick(result.nodeRef, target, e, result.itemIndex, result.source);
+              return;
+            }
+            // Fiber gave source but no cached nodeRef (server round-trip pending)
+            const source = tracer.getSourceLocation(target);
+            if (source) {
+              const itemIndex = tracer.getItemIndex(target);
+              setPendingSelection(source, itemIndex);
+              onElementClick(null, target, e, itemIndex, source);
+              return;
+            }
+          }
 
-          onElementClick(element, e, itemIndex);
+          // No element identified — empty space click
+          onEmptyClick?.();
         }
       }
       // If not in design or interact mode: let events pass through naturally
@@ -581,32 +607,34 @@ export default function IframeCanvas({
 
     const handleMouseOver = (e: MouseEvent) => {
       const mode = engine.getMode();
+      if (mode !== 'design') return;
 
-      // Only apply hover effects in design mode
-      if (mode === 'design') {
-        const target = e.target as HTMLElement;
-        const element = target.closest('[data-uniq-id]') as HTMLElement;
+      const target = e.target as HTMLElement;
 
-        if (element && onElementHover) {
-          const uniqId = element.dataset.uniqId;
-          const itemIndex = uniqId ? getItemIndex(element, uniqId, doc, activeInstanceId) : null;
-          onElementHover(element, itemIndex);
+      if (tracer && onElementHover) {
+        const result = tracer.resolveClickLocal(target);
+        if (result) {
+          onElementHover(result.nodeRef, target, result.itemIndex, result.source);
+          return;
         }
       }
+
+      // No fiber source — element is not traceable, skip hover
     };
 
     const handleMouseOut = (e: MouseEvent) => {
       const mode = engine.getMode();
+      if (mode !== 'design') return;
 
-      // Only apply hover effects in design mode
-      if (mode === 'design') {
-        const target = e.target as HTMLElement;
-        const element = target.closest('[data-uniq-id]') as HTMLElement;
+      const relatedTarget = e.relatedTarget as HTMLElement | null;
 
-        if (element && onElementHover) {
-          onElementHover(null, null);
-        }
+      // If pointer moved to another traceable element, don't clear hover
+      if (tracer && relatedTarget) {
+        const source = tracer.getSourceLocation(relatedTarget);
+        if (source) return;
       }
+
+      onElementHover?.(null, null, null, null);
     };
 
     // Forward keyboard events from iframe to parent window
@@ -771,6 +799,8 @@ export default function IframeCanvas({
     engine,
     iframeLoadedCounter,
     canvasMode,
+    tracer,
+    setPendingSelection,
   ]);
 
   // Update opacity of instances based on activeInstanceId
@@ -1164,7 +1194,7 @@ export default function IframeCanvas({
 export function getElementFromIframe(
   iframeRef: React.RefObject<HTMLIFrameElement>,
   elementId: string,
-  instanceId?: string | null,
+  _instanceId?: string | null,
 ): HTMLElement | null {
   const iframe = iframeRef.current;
   if (!iframe) return null;
@@ -1172,12 +1202,12 @@ export function getElementFromIframe(
   const doc = iframe.contentDocument;
   if (!doc) return null;
 
-  // Build selector with optional instance scope
-  const selector = instanceId
-    ? `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`
-    : `[data-uniq-id="${elementId}"]`;
-
-  return doc.querySelector(selector);
+  // Use active tracer for fiber-based DOM element lookup
+  const tracer = getActiveTracerInstance();
+  if (tracer) {
+    return tracer.findDOMElementByNodeRef(elementId);
+  }
+  return null;
 }
 
 /**

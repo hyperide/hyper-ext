@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { toast } from '@/hooks/use-toast';
 import { useCanvasEngineOptional } from '@/lib/canvas-engine';
-import { buildElementSelector, getPreviewIframe } from '@/lib/dom-utils';
+import { getElementFromIframe, getPreviewIframe } from '@/lib/dom-utils';
+import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
 import { usePlatformCanvas } from '@/lib/platform';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -313,12 +314,7 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: DOM-based parent lookup
-      const iframe = getPreviewIframe();
-      if (!iframe?.contentDocument) return;
-      const doc = iframe.contentDocument;
-
-      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
-      const currentElement = doc.querySelector(selector);
+      const currentElement = getElementFromIframe(selectedId, activeDesignInstanceId);
       if (!currentElement) return;
 
       let parent = currentElement.parentElement;
@@ -348,21 +344,12 @@ export function CanvasElementContextMenu({
     const selectedId = selectedIds[0];
 
     if (engine) {
-      // SaaS: DOM-based child lookup
-      const iframe = getPreviewIframe();
-      if (!iframe?.contentDocument) return;
-      const doc = iframe.contentDocument;
-
-      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
-      const currentElement = doc.querySelector(selector);
-      if (!currentElement) return;
-
-      const directChildren = Array.from(currentElement.querySelectorAll(':scope > [data-uniq-id]')) as HTMLElement[];
-      if (directChildren.length > 0) {
-        const childIds = directChildren.map((child) => child.dataset.uniqId).filter((id): id is string => !!id);
-        if (childIds.length > 0) {
-          engine.selectMultiple(childIds);
-        }
+      // Use NodeMap for child lookup — no DOM queries needed
+      const tracer = getActiveTracer();
+      const nodeMap = tracer?.getNodeMap(selectedId.split(':').slice(0, -1).join(':'));
+      const entry = nodeMap?.find((e) => e.nodeRef === selectedId);
+      if (entry && entry.children.length > 0) {
+        engine.selectMultiple(entry.children);
       }
     } else {
       canvas.sendEvent({
@@ -370,7 +357,7 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, engine, activeDesignInstanceId, canvas]);
+  }, [selectedIds, engine, canvas]);
 
   const handleCopyText = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -378,14 +365,9 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: direct iframe DOM access
-      const iframe = getPreviewIframe();
-      if (!iframe?.contentDocument) return;
-      const doc = iframe.contentDocument;
-
-      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
-      const element = doc.querySelector(selector);
+      const element = getElementFromIframe(selectedId, activeDesignInstanceId);
       if (element) {
-        const text = (element as HTMLElement).innerText || (element as HTMLElement).textContent || '';
+        const text = element.innerText || element.textContent || '';
         await navigator.clipboard.writeText(text);
       }
     } else {
@@ -401,14 +383,9 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: direct iframe DOM access
-      const iframe = getPreviewIframe();
-      if (!iframe?.contentDocument) return;
-      const doc = iframe.contentDocument;
-
       const htmlCodes: string[] = [];
       for (const selectedId of selectedIds) {
-        const selector = buildElementSelector(selectedId, activeDesignInstanceId);
-        const element = doc.querySelector(selector);
+        const element = getElementFromIframe(selectedId, activeDesignInstanceId);
         if (element) {
           htmlCodes.push(element.outerHTML);
         }

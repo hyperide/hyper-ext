@@ -90,7 +90,6 @@ export interface FunctionContext {
 export interface ParseContext {
   fileAST: t.File;
   componentBodyPath?: unknown;
-  seenIds?: Set<string>;
 }
 
 // ============================================
@@ -478,38 +477,8 @@ export function parseJSXElement(
 
   if (!name) return null;
 
-  // Read existing data-uniq-id or generate new one
-  let elementId: string;
-  const dataUniqIdAttr = opening.attributes.find(
-    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
-  );
-
-  if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr) && t.isStringLiteral(dataUniqIdAttr.value)) {
-    elementId = dataUniqIdAttr.value.value;
-  } else if (
-    dataUniqIdAttr &&
-    t.isJSXAttribute(dataUniqIdAttr) &&
-    t.isJSXExpressionContainer(dataUniqIdAttr.value) &&
-    t.isTemplateLiteral(dataUniqIdAttr.value.expression) &&
-    dataUniqIdAttr.value.expression.expressions.length === 0 &&
-    dataUniqIdAttr.value.expression.quasis.length === 1
-  ) {
-    elementId = dataUniqIdAttr.value.expression.quasis[0].value.raw;
-  } else {
-    elementId = generateId();
-  }
-
-  // Deduplicate: if this ID was already seen, regenerate
-  if (parseContext?.seenIds) {
-    if (parseContext.seenIds.has(elementId)) {
-      const originalId = elementId;
-      elementId = generateId();
-      console.warn(
-        `[ComponentParser] Duplicate data-uniq-id "${originalId}" on <${name}>, regenerated: ${elementId.substring(0, 8)}`,
-      ); // nosemgrep: unsafe-formatstring
-    }
-    parseContext.seenIds.add(elementId);
-  }
+  // Generate a unique ID for the component tree (internal, not persisted to DOM)
+  const elementId = generateId();
 
   // Parse props
   const props: Record<string, unknown> = {};
@@ -518,7 +487,7 @@ export function parseJSXElement(
       const propName = attr.name.name;
 
       // Skip technical props
-      if (propName === 'ref' || propName === 'key' || propName === 'data-uniq-id') {
+      if (propName === 'ref' || propName === 'key') {
         continue;
       }
 
@@ -718,7 +687,7 @@ export function parseJSXElement(
 
   // Lightweight check: detect if there are JSX elements among children
   // IMPORTANT: must NOT call findJSXInNode here — that would parse elements
-  // and register IDs in seenIds, causing false dedup on the actual processing pass
+  // in a detection pass, causing duplicate processing on the actual pass
   const hasJSXElements = element.children.some(
     (child) => t.isJSXElement(child) || (t.isJSXExpressionContainer(child) && containsJSX(child.expression)),
   );

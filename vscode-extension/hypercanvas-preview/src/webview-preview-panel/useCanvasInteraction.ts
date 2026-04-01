@@ -87,19 +87,24 @@ export function useCanvasInteraction(
       }
       // Reject messages from unexpected origins; if origin still unknown, skip validation
       // (the source check above already ensures messages come from the iframe)
-      if (expectedOrigin && event.origin !== expectedOrigin) return;
+      if (expectedOrigin && event.origin !== expectedOrigin) {
+        return;
+      }
 
       const msg = event.data;
       if (!msg || typeof msg.type !== 'string') return;
 
       switch (msg.type) {
         case 'hypercanvas:elementClick': {
-          const patch: Partial<SharedEditorState> = {
+          const patch: Partial<SharedEditorState> & { source?: unknown } = {
             selectedIds: [msg.elementId],
             insertTargetId: null,
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
             patch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
+          }
+          if (msg.source) {
+            patch.source = msg.source;
           }
           canvas.sendEvent({ type: 'state:update', patch });
           setContextMenu(null);
@@ -231,20 +236,14 @@ export function useCanvasInteraction(
   iframeElRef.current = iframeEl;
 
   // patch comes from internal React state (usePreviewBridge), not from external
-  // input — no allowlist/sanitization needed. targetOrigin is derived from the
-  // iframe's own src and acts as the postMessage security boundary.
+  // input — no allowlist/sanitization needed.
+  // Note: In VS Code webviews the iframe origin is opaque (vscode-webview://<session-id>)
+  // and changes every session, so targetOrigin cannot be used. Use '*' like all other
+  // postMessages in usePreviewBridge.ts.
   const updateState = useCallback((patch: Record<string, unknown>) => {
     const frame = iframeElRef.current;
-    const targetOrigin = iframeOriginRef.current;
-    // Truthy check intentionally guards both null and undefined for targetOrigin
-    if (frame?.contentWindow && targetOrigin) {
-      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, targetOrigin);
-    } else {
-      console.warn('[hypercanvas] Failed to post state update to iframe: missing contentWindow or origin', {
-        hasFrame: Boolean(frame),
-        hasContentWindow: Boolean(frame?.contentWindow),
-        targetOrigin,
-      });
+    if (frame?.contentWindow) {
+      frame.contentWindow.postMessage({ type: 'hypercanvas:stateUpdate', ...patch }, '*'); // nosemgrep: wildcard-postmessage-configuration
     }
   }, []);
 

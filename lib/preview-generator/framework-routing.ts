@@ -137,7 +137,8 @@ import { useSearchParams } from 'next/navigation';
 import CanvasPreview from '${previewImportPath}';
 
 function PreviewContent() {
-  return <CanvasPreview />;
+  const params = useSearchParams();
+  return <CanvasPreview component={params.get('component')} mode={params.get('mode') as 'single' | 'multi'} />;
 }
 
 export default function TestPreviewPage() {

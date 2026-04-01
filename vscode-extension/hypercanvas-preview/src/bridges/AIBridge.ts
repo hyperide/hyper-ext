@@ -782,9 +782,9 @@ Be concise. Focus on fixing the actual error.`;
     if (state.selectedIds.length > 0) {
       const selectedInfo = this._describeSelectedElements(state.selectedIds, state.astStructure);
       parts.push(
-        `Selected element${state.selectedIds.length > 1 ? 's' : ''} (by data-uniq-id):\n${selectedInfo}\n` +
+        `Selected element${state.selectedIds.length > 1 ? 's' : ''} (by nodeRef):\n${selectedInfo}\n` +
           'When the user refers to "this element", "selected element", or "it", they mean these element(s). ' +
-          'Use the data-uniq-id attribute to find corresponding JSX elements in the source code.',
+          'Use the nodeRef (format: "fileName:line:column") to find corresponding JSX elements in the source code.',
       );
     }
 
@@ -812,7 +812,7 @@ Be concise. Focus on fixing the actual error.`;
     for (const id of selectedIds) {
       const node = this._findAstNode(id, astStructure as AstTreeNode[]);
       if (node) {
-        descriptions.push(`- ${node.label} [${node.type}] (data-uniq-id="${id}")`);
+        descriptions.push(`- ${node.label} [${node.type}] (nodeRef="${id}")`);
       } else {
         descriptions.push(`- ${id}`);
       }

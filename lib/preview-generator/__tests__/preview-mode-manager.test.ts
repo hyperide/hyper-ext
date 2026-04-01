@@ -266,7 +266,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
     expect(entry).toBeDefined();
     expect(entry).toContain('@hyperide-managed');
     expect(entry).toContain('__canvas_preview_standalone__');
-    expect(entry).not.toContain("'__preview', './__canvas_preview__'");
+    expect(entry).not.toContain("'component', './__canvas_preview__'");
 
     // Standalone entry should be generated
     const standalone = written.get(`${root}/src/__canvas_preview_standalone__.tsx`);

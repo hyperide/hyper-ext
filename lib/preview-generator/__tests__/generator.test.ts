@@ -234,12 +234,18 @@ describe('generatePreviewContent', () => {
     expect(content).toContain('router.query.component');
   });
 
-  it('should use URLSearchParams in default mode', () => {
+  it('should use URLSearchParams in default mode (inside useEffect, not top-level)', () => {
     const entries: PreviewComponentEntry[] = [makeEntry('src/components/Button.tsx', 'Button')];
 
     const content = generatePreviewContent(entries);
-    expect(content).toContain('new URLSearchParams(window.location.search)');
+    // URLSearchParams must be inside useEffect to avoid SSR "window is not defined" in Next.js
+    const useEffectIndex = content.indexOf('useEffect');
+    const urlParamsIndex = content.indexOf('new URLSearchParams(window.location.search)');
+    expect(urlParamsIndex).toBeGreaterThan(-1);
+    expect(urlParamsIndex).toBeGreaterThan(useEffectIndex);
     expect(content).not.toContain('useRouter');
+    // Props interface present so Next.js App Router route can pass component/mode
+    expect(content).toContain('interface CanvasPreviewProps');
   });
 
   it('should generate sampleRenderersMap with all variants', () => {

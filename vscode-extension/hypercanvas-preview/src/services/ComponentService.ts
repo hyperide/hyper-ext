@@ -299,7 +299,7 @@ export class ComponentService {
       const returnJSX = this._findComponentReturnJSX(ast);
       if (!returnJSX) return [];
 
-      const parseContext: ParseContext = { fileAST: ast, seenIds: new Set() };
+      const parseContext: ParseContext = { fileAST: ast };
       const componentNodes = this._parseRootJSX(returnJSX, parseContext);
       return convertComponentNodesToTreeNodes(componentNodes);
     } catch (error) {
