@@ -2,10 +2,23 @@
  * Editor Bridge - handles editor operations from webview
  *
  * Receives platform messages from webview and translates them
- * to VS Code editor commands.
+ * to VS Code editor commands. When the preview panel is the only editor,
+ * files open in a left split via a registered callback that moves the
+ * preview to the right group first.
  */
 
 import * as vscode from 'vscode';
+
+/**
+ * Callback to move the preview panel to ViewColumn.Two.
+ * Registered by PreviewPanel on setup so EditorBridge can force a split
+ * when no code-only editor group exists.
+ */
+let movePreviewToRightFn: (() => void) | null = null;
+
+export function setMovePreviewToRight(fn: (() => void) | null): void {
+  movePreviewToRightFn = fn;
+}
 
 /**
  * Platform message types (subset relevant to editor operations)
@@ -128,6 +141,8 @@ export function setupActiveFileListener(webview: vscode.Webview): vscode.Disposa
 /**
  * Find a view column that does NOT contain the HyperCanvas preview webview.
  * When preview is in a split, this ensures files open on the opposite side.
+ * When preview is the only editor, moves it to the right and returns the left column
+ * so VS Code creates a split automatically.
  */
 function getNonPreviewColumn(): vscode.ViewColumn {
   const previewViewType = 'hypercanvas.previewPanel';
@@ -141,7 +156,11 @@ function getNonPreviewColumn(): vscode.ViewColumn {
     }
   }
 
-  // Fallback: use column One (code is typically on the left)
+  // Every group contains the preview (or preview is the only tab).
+  // Move preview to the right so the file opens in a left split.
+  if (movePreviewToRightFn) {
+    movePreviewToRightFn();
+  }
   return vscode.ViewColumn.One;
 }
 

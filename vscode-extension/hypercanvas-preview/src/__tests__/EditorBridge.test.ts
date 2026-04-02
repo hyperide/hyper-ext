@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
-import { goToCode, handleEditorMessage } from '../EditorBridge';
+import { goToCode, handleEditorMessage, setMovePreviewToRight } from '../EditorBridge';
 
 function createMockWebview() {
   const messages: unknown[] = [];
@@ -34,6 +34,7 @@ describe('EditorBridge', () => {
 
   beforeEach(() => {
     mockEditor = resetMocks();
+    setMovePreviewToRight(null);
   });
 
   describe('handleEditorMessage', () => {
@@ -137,6 +138,64 @@ describe('EditorBridge', () => {
       } finally {
         console.error = origError;
       }
+    });
+  });
+
+  describe('getNonPreviewColumn (via goToCode)', () => {
+    it('opens file in the group without preview', async () => {
+      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
+        all: [
+          { viewColumn: 1, tabs: [{ input: {} }] },
+          {
+            viewColumn: 2,
+            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
+          },
+        ],
+      };
+
+      await goToCode('/src/App.tsx', 1, 1);
+      const call = (vscode.window.showTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const options = call[1] as { viewColumn: number };
+      expect(options.viewColumn).toBe(1);
+    });
+
+    it('calls movePreviewToRight and returns column One when all groups have preview', async () => {
+      const moveCallback = mock();
+      setMovePreviewToRight(moveCallback);
+
+      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
+        all: [
+          {
+            viewColumn: 1,
+            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
+          },
+        ],
+      };
+
+      await goToCode('/src/App.tsx', 1, 1);
+
+      expect(moveCallback).toHaveBeenCalledTimes(1);
+      const call = (vscode.window.showTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const options = call[1] as { viewColumn: number };
+      expect(options.viewColumn).toBe(1);
+    });
+
+    it('does not call movePreviewToRight when a code-only group exists', async () => {
+      const moveCallback = mock();
+      setMovePreviewToRight(moveCallback);
+
+      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
+        all: [
+          { viewColumn: 1, tabs: [{ input: {} }] },
+          {
+            viewColumn: 2,
+            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
+          },
+        ],
+      };
+
+      await goToCode('/src/App.tsx', 1, 1);
+      expect(moveCallback).not.toHaveBeenCalled();
     });
   });
 });

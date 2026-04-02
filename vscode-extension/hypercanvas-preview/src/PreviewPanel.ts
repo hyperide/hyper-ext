@@ -13,7 +13,7 @@
 
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { handleEditorMessage, setupActiveFileListener } from './EditorBridge';
+import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
@@ -83,11 +83,13 @@ export class PreviewPanel {
   }
 
   /**
-   * Create a new panel or reveal existing one
+   * Create a new panel or reveal existing one.
+   * Always pins the panel so it cannot be accidentally closed.
    */
   public createOrShow(column?: vscode.ViewColumn): void {
     if (this._panel) {
       this._panel.reveal(column);
+      this._pinPanel();
       return;
     }
 
@@ -103,6 +105,36 @@ export class PreviewPanel {
     );
 
     this._setupPanel(panel);
+    this._pinPanel();
+  }
+
+  /**
+   * Pin the preview panel tab unless already pinned.
+   * Uses workbench.action.pinEditor which operates on the active editor,
+   * so the panel must be focused first. Skips if tab is already pinned
+   * to avoid an unnecessary focus steal.
+   */
+  private async _pinPanel(): Promise<void> {
+    if (!this._panel) return;
+    if (this._isAlreadyPinned()) return;
+    // reveal() makes the panel active; pinEditor pins the active editor
+    this._panel.reveal(undefined, false);
+    await vscode.commands.executeCommand('workbench.action.pinEditor');
+  }
+
+  private _isAlreadyPinned(): boolean {
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (
+          tab.input instanceof vscode.TabInputWebview &&
+          tab.input.viewType.includes(PreviewPanel.viewType) &&
+          tab.isPinned
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -115,6 +147,7 @@ export class PreviewPanel {
       this._panel.dispose();
     }
     this._setupPanel(panel);
+    this._pinPanel();
   }
 
   /**
@@ -122,6 +155,12 @@ export class PreviewPanel {
    */
   private _setupPanel(panel: vscode.WebviewPanel): void {
     this._panel = panel;
+
+    // Register callback so EditorBridge can move preview to the right
+    // when it needs to open a file in a left split.
+    setMovePreviewToRight(() => {
+      this._panel?.reveal(vscode.ViewColumn.Two, true);
+    });
 
     panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.png');
 
@@ -188,6 +227,7 @@ export class PreviewPanel {
       this._stateHub.unregister(PreviewPanel.PANEL_ID);
       this._syncService = undefined;
       this._panel = undefined;
+      setMovePreviewToRight(null);
     }, undefined);
 
     // Initialize component
