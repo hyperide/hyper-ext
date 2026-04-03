@@ -530,6 +530,9 @@ const state = {
   selectedItemIndices: {} as Record<string, number | null>,
   engineMode: 'design' as string,
 };
+// Expose for E2E test tooling (waitForFunction polling)
+(window as Record<string, unknown>).__hyperCanvasState = state;
+(window as Record<string, unknown>).__hyperCanvasStateGen = 0;
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -906,6 +909,9 @@ window.addEventListener('message', (event: MessageEvent) => {
     }
     needsOverlayUpdate = true;
     scheduleOverlayLoopIfNeeded();
+    // Bump generation counter for E2E test synchronization
+    (window as Record<string, unknown>).__hyperCanvasStateGen =
+      (((window as Record<string, unknown>).__hyperCanvasStateGen as number) ?? 0) + 1;
     return;
   }
 
