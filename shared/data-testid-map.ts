@@ -94,6 +94,7 @@ export const TID = {
     toolCall: (index: number) => `hyper-aichat-tool-${index}`,
     toolResult: (index: number) => `hyper-aichat-tool-result-${index}`,
     newChatButton: 'hyper-aichat-new-chat',
+    chatDropdownTrigger: 'hyper-aichat-dropdown-trigger',
     chatHistoryItem: (index: number) => `hyper-aichat-history-${index}`,
     configureKeyButton: 'hyper-aichat-configure-key',
     providerSelect: 'hyper-aichat-provider-select',

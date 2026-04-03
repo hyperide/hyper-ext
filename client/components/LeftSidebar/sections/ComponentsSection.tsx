@@ -54,6 +54,7 @@ export function ComponentsSection({
 
   const filteredAtoms = filterGroups(atomGroups);
   const filteredComposites = filterGroups(compositeGroups);
+  const hasSearchResults = filteredAtoms.length > 0 || filteredComposites.length > 0;
   return (
     <div data-testid={TID.explorer.componentGroup('components')} className="h-full overflow-hidden flex flex-col">
       <div className="h-6 px-2 flex items-center justify-between bg-muted border-t border-border w-full shrink-0">
@@ -128,6 +129,7 @@ export function ComponentsSection({
               <IconSearch className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
               <Input
                 type="text"
+                data-testid={TID.explorer.searchInput}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search components..."
@@ -136,27 +138,37 @@ export function ComponentsSection({
             </div>
           )}
           <div className="flex flex-col gap-1 px-2">
-            <div className="flex items-center gap-1">
-              <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
-              <span className="text-xs font-[510] text-[#7A7A7A]">Atom components</span>
-            </div>
-            <ComponentGroupList
-              groups={filteredAtoms}
-              activeComponentPath={activePath}
-              loadingComponentPath={loadingComponent}
-              onComponentClick={onComponentClick}
-            />
+            {searchQuery && !hasSearchResults ? (
+              <div data-testid="hyper-explorer-no-results" className="px-2 py-3 text-center">
+                <span className="text-xs text-muted-foreground">No components match "{searchQuery}"</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-1">
+                  <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
+                  <span className="text-xs font-[510] text-[#7A7A7A]">Atom components</span>
+                </div>
+                <ComponentGroupList
+                  groups={filteredAtoms}
+                  activeComponentPath={activePath}
+                  loadingComponentPath={loadingComponent}
+                  onComponentClick={onComponentClick}
+                  searchQuery={searchQuery}
+                />
 
-            <div className="flex items-center gap-1 mt-2">
-              <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
-              <span className="text-xs font-[510] text-[#7A7A7A]">Composite components</span>
-            </div>
-            <ComponentGroupList
-              groups={filteredComposites}
-              activeComponentPath={activePath}
-              loadingComponentPath={loadingComponent}
-              onComponentClick={onComponentClick}
-            />
+                <div className="flex items-center gap-1 mt-2">
+                  <IconChevronDown className="w-2 h-2 text-muted-foreground" stroke={1.5} />
+                  <span className="text-xs font-[510] text-[#7A7A7A]">Composite components</span>
+                </div>
+                <ComponentGroupList
+                  groups={filteredComposites}
+                  activeComponentPath={activePath}
+                  loadingComponentPath={loadingComponent}
+                  onComponentClick={onComponentClick}
+                  searchQuery={searchQuery}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
