@@ -769,34 +769,19 @@ const contextMenuHandler = (e: MouseEvent) => {
 
   const target = e.target as HTMLElement;
 
-  // Try fiber-based resolution first
-  const source = getSourceLocationFromDOM(target);
-  if (source) {
-    const itemIndex = getItemIndexFromDOM(target);
-    const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+  // Resolve element source — same chain as click handler (supports RSC/Turbopack)
+  const result = iframeResolver.resolveClickLocal(target);
+  const source = result?.source ?? null;
+  const elementId = result ? `${result.source.fileName}:${result.source.line}:${result.source.column}` : null;
+  const itemIndex = result?.itemIndex ?? null;
 
-    // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage(
-      {
-        type: 'hypercanvas:contextMenu',
-        elementId: syntheticRef,
-        itemIndex,
-        source,
-        x: e.clientX,
-        y: e.clientY,
-      },
-      '*',
-    );
-    return;
-  }
-
-  // No fiber source found — element is not traceable
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
       type: 'hypercanvas:contextMenu',
-      elementId: null,
-      itemIndex: null,
+      elementId,
+      itemIndex,
+      source,
       x: e.clientX,
       y: e.clientY,
     },
