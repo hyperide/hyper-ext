@@ -101,7 +101,17 @@ const iframeResolver: TracingResolver = {
             warmFiberChunkFrames(fiber);
           }
           // Approach B: server-side (RSC) chunks (file:///…/.next/server/…, host-resolved)
+          // Always trigger server source map warming — even if a client pending click is
+          // already registered (React 19.1 RSC stacks include both client and server frames).
+          warmServerChunkFrames(fiber);
           source = resolveViaServerSourceMap(fiber);
+          // Register pending click if server frames are still being resolved.
+          if (source === null && !pendingClickElement) {
+            if (hasUnresolvedServerFrames(fiber)) {
+              pendingClickElement = element;
+              pendingClickTimestamp = Date.now();
+            }
+          }
         }
       }
     }
@@ -361,7 +371,7 @@ function resolveViaClientSourceMap(fiber: Fiber): SourceLocation | null {
 /**
  * Retry the most recent pending click after source maps finish warming.
  * Posts hypercanvas:elementClick to the parent webview if the resolution succeeds.
- * Called from warmClientChunk whenever a new user-file location is cached.
+ * Called from warmClientChunk and serverSourceMapResult when new locations are cached.
  */
 function retryPendingClick(): void {
   if (!pendingClickElement) return;
@@ -374,7 +384,8 @@ function retryPendingClick(): void {
     pendingClickElement = null;
     return;
   }
-  const source = resolveViaClientSourceMap(fiber);
+  // Try client source maps first, then server source maps (RSC)
+  const source = resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber);
   if (!source) return; // still warming — keep pending
   const element = pendingClickElement;
   pendingClickElement = null;
@@ -395,23 +406,31 @@ const serverSourceMapCache = new Map<string, SourceLocation | null>();
 /** In-flight server-side resolve keys — prevents duplicate requests. */
 const pendingServerRequests = new Set<string>();
 
-/** Extract server-side chunk frames (file:// or Server/file://) from an Error.stack. */
+/**
+ * Extract server-side chunk frames from an Error.stack.
+ *
+ * Supported formats:
+ * - React 19.0: "Server/file:///path/.next/server/chunks/…"
+ * - React 19.1+: "about://React/Server/file:///path/.next/dev/server/chunks/…"
+ * - Plain: "file:///path/.next/…"
+ */
 function extractServerChunkFrames(err: Error): Array<{ filePath: string; line: number; col: number }> {
   const frames: Array<{ filePath: string; line: number; col: number }> = [];
   for (const ln of (err.stack ?? '').split('\n')) {
     const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
     if (!m) continue;
     const raw = m[1];
-    // Match: "Server/file:///..." or bare "file:///..."
-    const fileMatch = raw.match(/(?:^Server\/|^)(file:\/\/\/?.+)/);
-    if (!fileMatch) continue;
+    // Find file:/// anywhere in the URL (handles about://React/Server/file:/// prefix)
+    const fileIdx = raw.indexOf('file:///');
+    if (fileIdx === -1) continue;
+    const fileUrl = raw.slice(fileIdx);
     // Only Next.js server chunks
-    if (!raw.includes('.next/')) continue;
+    if (!fileUrl.includes('.next/')) continue;
     let filePath: string;
     try {
-      filePath = new URL(fileMatch[1]).pathname;
+      filePath = decodeURIComponent(new URL(fileUrl).pathname);
     } catch {
-      filePath = fileMatch[1].replace(/^file:\/\//, '');
+      filePath = decodeURIComponent(fileUrl.replace(/^file:\/\//, ''));
     }
     frames.push({ filePath, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
   }
@@ -455,6 +474,43 @@ function requestServerSourceMaps(): void {
     }
     node = walker.nextNode();
   }
+}
+
+/**
+ * Kick off server source map warming for a single fiber's _debugStack chain.
+ * Used on click to ensure RSC frames are requested even when client frames are also pending.
+ */
+function warmServerChunkFrames(fiber: Fiber): void {
+  let c: Fiber | null = fiber;
+  while (c !== null) {
+    if (c._debugStack) {
+      for (const frame of extractServerChunkFrames(c._debugStack)) {
+        requestServerSourceMap(frame.filePath, frame.line, frame.col);
+      }
+      break;
+    }
+    c = (c.return as typeof c | undefined) ?? null;
+  }
+}
+
+/**
+ * Check if a fiber has server chunk frames that are not yet resolved.
+ * Returns false if all frames are already cached (even as null), avoiding
+ * stuck pending clicks when no future serverSourceMapResult can arrive.
+ */
+function hasUnresolvedServerFrames(fiber: Fiber): boolean {
+  let c: Fiber | null = fiber;
+  while (c !== null) {
+    if (c._debugStack) {
+      for (const frame of extractServerChunkFrames(c._debugStack)) {
+        const key = `${frame.filePath}:${frame.line}:${frame.col}`;
+        if (!serverSourceMapCache.has(key)) return true;
+      }
+      break;
+    }
+    c = (c.return as typeof c | undefined) ?? null;
+  }
+  return false;
 }
 
 /** Look up server source map cache for the first matching server chunk frame. */
@@ -978,6 +1034,7 @@ window.addEventListener('message', (event: MessageEvent) => {
       invalidateSourceCache();
       needsOverlayUpdate = true;
       scheduleOverlayLoopIfNeeded();
+      retryPendingClick(); // retry any click waiting for server source maps (RSC)
     }
     return;
   }

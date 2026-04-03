@@ -215,6 +215,15 @@ describe('parseDebugStack', () => {
     expect(parseDebugStack(err)).toBeNull();
   });
 
+  // React 19.1+ wraps server component stacks with about://React/Server/ prefix
+  it('returns null for React 19.1 about://React/Server/ RSC stack frame', () => {
+    const err = {
+      stack: `Error: react-stack-top-frame\n    at fakeJSXCallSite (http://localhost:3000/_next/static/chunks/react-server.js:1981:16)\n    at Home (about://React/Server/file:///Users/dev/project/.next/dev/server/chunks/ssr/page.js:41:268)`,
+    } as Error;
+    // Both frames should be filtered: first as _next/static/chunks, second as .next/
+    expect(parseDebugStack(err)).toBeNull();
+  });
+
   it('returns null for <anonymous> frame (eval or unnamed script)', () => {
     const err = {
       stack: `Error\n    at App (<anonymous>:10:5)`,
