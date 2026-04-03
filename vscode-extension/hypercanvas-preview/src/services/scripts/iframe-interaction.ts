@@ -44,10 +44,18 @@ function getSourceLocationFromDOM(el: HTMLElement): SourceLocation | null {
  * Uses fiber tree sibling walk — supports React 18 (_debugSource) and React 19 (_debugStack).
  * Counts at the component level, not DOM element level, so map-rendered items are correct.
  */
+/**
+ * Resolve source location for a fiber via source map caches.
+ * Used as callback for getItemIndexFromFiber when parseDebugStack returns null (RSC/Turbopack).
+ */
+function resolveLocationViaSourceMaps(fiber: Fiber): SourceLocation | null {
+  return resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+}
+
 function getItemIndexFromDOM(element: HTMLElement): number {
   const fiber = getFiberFromDOM(element);
   if (fiber === null) return 0;
-  return getItemIndexFromFiber(fiber);
+  return getItemIndexFromFiber(fiber, resolveLocationViaSourceMaps);
 }
 
 // ============================================

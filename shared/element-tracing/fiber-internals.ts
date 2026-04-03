@@ -206,7 +206,7 @@ export function parseDebugStack(err: Error): SourceLocation | null {
  * React 19: walks up to the nearest component fiber with `_debugStack`, then compares
  * parsed source locations among component-level siblings.
  */
-export function getItemIndexFromFiber(fiber: Fiber): number {
+export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fiber) => SourceLocation | null): number {
   // React 18: _debugSource on the fiber directly
   if (fiber._debugSource != null) {
     const mySource = fiber._debugSource;
@@ -231,7 +231,9 @@ export function getItemIndexFromFiber(fiber: Fiber): number {
   }
   if (compFiber === null || !compFiber._debugStack) return 0;
 
-  const myLoc = parseDebugStack(compFiber._debugStack);
+  // parseDebugStack returns null for RSC/Turbopack (_debugStack has .next/ paths).
+  // Fall back to resolveLocation callback which uses source map caches.
+  const myLoc = parseDebugStack(compFiber._debugStack) ?? resolveLocation?.(compFiber) ?? null;
   if (myLoc === null) return 0;
 
   const compParent = compFiber.return;
@@ -242,7 +244,7 @@ export function getItemIndexFromFiber(fiber: Fiber): number {
   while (current !== null) {
     if (current === compFiber) return index;
     if (current._debugStack) {
-      const loc = parseDebugStack(current._debugStack);
+      const loc = parseDebugStack(current._debugStack) ?? resolveLocation?.(current) ?? null;
       if (loc && loc.fileName === myLoc.fileName && loc.line === myLoc.line && loc.column === myLoc.column) {
         index++;
       }
