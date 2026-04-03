@@ -198,7 +198,9 @@ export function DiagnosticLogsViewer({ height = '100%', onAutoFix, onClear, onDi
                 return (
                   <div
                     key={virtualRow.key}
+                    data-testid={TID.logs.entry(virtualRow.index)}
                     data-index={virtualRow.index}
+                    data-severity={entry.isError ? 'error' : entry.level === 'warn' ? 'warn' : (entry.level ?? 'info')}
                     ref={virtualizer.measureElement}
                     className="absolute left-0 right-0 px-2"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
