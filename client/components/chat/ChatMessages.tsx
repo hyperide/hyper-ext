@@ -52,11 +52,15 @@ export function ChatMessages({
           </div>
         ))}
 
-        <StreamingContent
-          currentAssistantMessage={currentAssistantMessage}
-          currentToolCalls={currentToolCalls}
-          isStreaming={isStreaming}
-        />
+        {(currentAssistantMessage || currentToolCalls.size > 0) && (
+          <div data-testid={TID.aiChat.message(messages.length)}>
+            <StreamingContent
+              currentAssistantMessage={currentAssistantMessage}
+              currentToolCalls={currentToolCalls}
+              isStreaming={isStreaming}
+            />
+          </div>
+        )}
       </div>
     </ScrollArea>
   );
