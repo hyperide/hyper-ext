@@ -141,11 +141,16 @@ export function resolveInSourceMap(sm: SourceMapV3, genLine: number, genCol: num
   const root = (sm.sourceRoot ?? '').replace(/\/$/, '');
   let filePath = root ? `${root}/${rawSource}` : rawSource;
 
-  // Normalise: strip file:// protocol, webpack:// scheme, absolute path prefix
+  // Normalise: strip protocol prefix, keeping absolute paths for file:// URIs
   try {
     const u = new URL(filePath);
-    // file:///abs/path → abs/path; http://host/path → path
-    filePath = u.pathname.replace(/^\//, '');
+    if (u.protocol === 'file:') {
+      // file:///abs/path → /abs/path (keep leading slash — it's an absolute path)
+      filePath = u.pathname;
+    } else {
+      // http://host/path → path (strip host + leading slash for workspace-relative)
+      filePath = u.pathname.replace(/^\//, '');
+    }
   } catch {
     // Not an absolute URL — strip scheme prefixes (webpack://) and leading slash
     filePath = filePath.replace(/^[a-z][a-z\d+\-.]*:\/\/[^/]*\//, '').replace(/^\.\.\//g, '');

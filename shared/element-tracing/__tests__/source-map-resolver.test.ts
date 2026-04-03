@@ -100,7 +100,7 @@ describe('resolveInSourceMap', () => {
     expect(r?.fileName).toBe('second.tsx');
   });
 
-  it('strips file:// protocol from source paths', () => {
+  it('keeps absolute path for file:// protocol source paths', () => {
     const seg = encodeSegment([0, 0, 0, 0]);
     const sm: SourceMapV3 = {
       sources: ['file:///Users/user/project/src/App.tsx'],
@@ -108,7 +108,7 @@ describe('resolveInSourceMap', () => {
     };
 
     const r = resolveInSourceMap(sm, 1, 1);
-    expect(r?.fileName).toBe('Users/user/project/src/App.tsx');
+    expect(r?.fileName).toBe('/Users/user/project/src/App.tsx');
   });
 
   it('strips webpack:// scheme from source paths', () => {
@@ -264,8 +264,8 @@ describe('resolveInSourceMap — indexed (sections) format', () => {
     const r = resolveInSourceMap(sm, 4, 1);
     expect(r).not.toBeNull();
     expect(r?.line).toBe(6); // srcLine 5 (0-based) → 6 (1-based)
-    // file:// paths → strip leading / → 'Users/user/project/app/page.tsx'
-    expect(r?.fileName).toBe('Users/user/project/app/page.tsx');
+    // file:// paths → keep absolute path (file:///abs/path → /abs/path)
+    expect(r?.fileName).toBe('/Users/user/project/app/page.tsx');
   });
 
   it('returns null for indexed map with empty sections array', () => {

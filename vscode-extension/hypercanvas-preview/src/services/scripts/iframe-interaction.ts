@@ -75,39 +75,44 @@ const iframeResolver: TracingResolver = {
       // Approaches A + B: try source map caches when direct fiber resolution fails
       // (Next.js Turbopack — compiled chunk URLs, not raw source paths).
       const fiber = getFiberFromDOM(element);
+
       if (fiber !== null) {
-        // Approach A: client-side chunks (/_next/static/chunks/*.js.map, browser-fetchable)
-        source = resolveViaClientSourceMap(fiber);
+        // 1. Own server source map — per-element precision for pure RSC pages
+        source = resolveOwnServerSourceMap(fiber);
+        // 2. Client source maps — handles test-preview route where page.tsx
+        //    renders as client component (Turbopack client chunks)
         if (source === null) {
-          // If client source maps not yet warmed, register pending click and trigger warming.
-          // retryPendingClick() is called from warmClientChunk when a user-file location lands.
-          const hasPendingFrames = (() => {
-            let c: Fiber | null = fiber;
-            while (c !== null) {
-              if (c._debugStack) {
-                for (const frame of extractClientChunkFrames(c._debugStack)) {
-                  const key = `${frame.url}:${frame.line}:${frame.col}`;
-                  if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
-                }
-                break;
-              }
-              c = (c.return as Fiber | null | undefined) ?? null;
-            }
-            return false;
-          })();
-          if (hasPendingFrames) {
-            pendingClickElement = element;
-            pendingClickTimestamp = Date.now();
-            warmFiberChunkFrames(fiber);
-          }
-          // Approach B: server-side (RSC) chunks (file:///…/.next/server/…, host-resolved)
-          // Always trigger server source map warming — even if a client pending click is
-          // already registered (React 19.1 RSC stacks include both client and server frames).
+          source = resolveViaClientSourceMap(fiber);
+        }
+        // 3. Chain-walking server source maps — last resort for RSC elements
+        //    without client frames (pure server-rendered root route)
+        if (source === null) {
           warmServerChunkFrames(fiber);
           source = resolveViaServerSourceMap(fiber);
-          // Register pending click if server frames are still being resolved.
-          if (source === null && !pendingClickElement) {
-            if (hasUnresolvedServerFrames(fiber)) {
+        }
+
+        if (source === null) {
+          // All approaches null — warm remaining maps and register pending click
+          warmFiberChunkFrames(fiber);
+          if (hasUnresolvedServerFrames(fiber)) {
+            pendingClickElement = element;
+            pendingClickTimestamp = Date.now();
+          } else {
+            const hasPendingClientFrames = (() => {
+              let c: Fiber | null = fiber;
+              while (c !== null) {
+                if (c._debugStack) {
+                  for (const frame of extractClientChunkFrames(c._debugStack)) {
+                    const key = `${frame.url}:${frame.line}:${frame.col}`;
+                    if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
+                  }
+                  break;
+                }
+                c = (c.return as Fiber | null | undefined) ?? null;
+              }
+              return false;
+            })();
+            if (hasPendingClientFrames) {
               pendingClickElement = element;
               pendingClickTimestamp = Date.now();
             }
@@ -175,7 +180,19 @@ function getSourceCache(): Map<string, HTMLElement[]> {
     if (node instanceof HTMLElement) {
       const fiber = getFiberFromDOM(node);
       if (fiber) {
-        const loc = findNearestSourceLocation(fiber);
+        // Direct fiber resolution (Vite, React 18 _debugSource, React 19 non-RSC)
+        let loc = findNearestSourceLocation(fiber);
+        // Fallback: server source map — check THIS fiber's _debugStack only (not
+        // return chain). Each RSC element has its own _debugStack with a unique
+        // compiled position. Walking up would collapse all children onto the
+        // first ancestor whose cache entry arrived.
+        if (loc === null) {
+          loc = resolveOwnServerSourceMap(fiber);
+        }
+        // Last resort: client source maps (walks return chain — coarser)
+        if (loc === null) {
+          loc = resolveViaClientSourceMap(fiber);
+        }
         if (loc) {
           const key = `${loc.fileName}:${loc.line}:${loc.column}`;
           const existing = cache.get(key);
@@ -195,33 +212,48 @@ function getSourceCache(): Map<string, HTMLElement[]> {
 }
 
 // Hook into React commit cycle to invalidate source cache and kick off source map pre-warming.
-// React dev mode installs __REACT_DEVTOOLS_GLOBAL_HOOK__ only when DevTools is present —
-// in the VS Code extension preview this hook is absent, so we add a load-event fallback.
-const devtoolsHook = (
-  window as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: { onCommitFiberRoot?: (...args: unknown[]) => void } }
-).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-if (devtoolsHook) {
-  const originalCommit = devtoolsHook.onCommitFiberRoot;
-  devtoolsHook.onCommitFiberRoot = (...args: unknown[]) => {
-    invalidateSourceCache();
-    // Approach A: pre-fetch client-side Next.js chunk source maps in background
-    void warmClientSourceMaps();
-    // Approach B: request server-side (RSC) chunk resolution from extension host
-    requestServerSourceMaps();
-    originalCommit?.(...args);
-  };
-} else {
-  // Fallback: trigger warming once after the page has loaded (no DevTools hook available).
-  // This covers the VS Code extension preview where __REACT_DEVTOOLS_GLOBAL_HOOK__ is absent.
-  window.addEventListener(
-    'load',
-    () => {
-      void warmClientSourceMaps();
-      requestServerSourceMaps();
+// The IIFE runs in <head> BEFORE React loads. We must ensure __REACT_DEVTOOLS_GLOBAL_HOOK__
+// exists so React calls onCommitFiberRoot during hydration — this is when fibers are created.
+// Without this, the load-event fallback fires before hydration and finds no fibers.
+type DevToolsHook = {
+  supportsFiber?: boolean;
+  renderers?: Map<number, unknown>;
+  inject?: (renderer: unknown) => number;
+  onScheduleFiberRoot?: (...args: unknown[]) => void;
+  onCommitFiberRoot?: (...args: unknown[]) => void;
+  onCommitFiberUnmount?: (...args: unknown[]) => void;
+  onPostCommitFiberRoot?: (...args: unknown[]) => void;
+  checkDCE?: (...args: unknown[]) => void;
+  isDisabled?: boolean;
+};
+const w = window as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: DevToolsHook };
+if (!w.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+  const renderers = new Map<number, unknown>();
+  w.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+    supportsFiber: true,
+    renderers,
+    inject(renderer: unknown) {
+      const id = renderers.size + 1;
+      renderers.set(id, renderer);
+      return id;
     },
-    { once: true },
-  );
+    onScheduleFiberRoot() {},
+    onCommitFiberRoot() {},
+    onCommitFiberUnmount() {},
+    onPostCommitFiberRoot() {},
+    checkDCE() {},
+    isDisabled: false,
+  };
 }
+// biome-ignore lint/style/noNonNullAssertion: guaranteed non-null — either existed or we just created it
+const devtoolsHook = w.__REACT_DEVTOOLS_GLOBAL_HOOK__!;
+const originalCommit = devtoolsHook.onCommitFiberRoot;
+devtoolsHook.onCommitFiberRoot = (...args: unknown[]) => {
+  invalidateSourceCache();
+  void warmClientSourceMaps();
+  requestServerSourceMaps();
+  originalCommit?.(...args);
+};
 
 // ============================================
 // Approach A: client-side Next.js source map pre-warming
@@ -491,6 +523,24 @@ function warmServerChunkFrames(fiber: Fiber): void {
     }
     c = (c.return as typeof c | undefined) ?? null;
   }
+}
+
+/**
+ * Resolve server source map for THIS fiber's own _debugStack only.
+ * Unlike resolveViaServerSourceMap (which walks the return chain), this gives
+ * per-element precision for source cache building — each RSC element has a
+ * unique compiled position in its _debugStack.
+ */
+function resolveOwnServerSourceMap(fiber: Fiber): SourceLocation | null {
+  // HostComponent fibers (tag=5) in React 19.1 RSC have _debugStack directly
+  if (fiber._debugStack) {
+    for (const frame of extractServerChunkFrames(fiber._debugStack)) {
+      const cached = serverSourceMapCache.get(`${frame.filePath}:${frame.line}:${frame.col}`);
+      if (cached) return cached;
+      if (cached === null) return null; // warmed but unresolvable
+    }
+  }
+  return null;
 }
 
 /**
