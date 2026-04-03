@@ -26,7 +26,12 @@ import html2canvas from 'html2canvas';
 // Composition helpers (combine shared fiber primitives for IIFE-specific use)
 // ============================================
 
-/** Get source location from a DOM element via its React fiber (React 18 and 19). */
+/**
+ * Direct fiber resolution — returns source only for Vite/Babel projects.
+ * Returns null for Next.js RSC/Turbopack (all _debugStack frames filtered as .next/ internal).
+ * DO NOT use directly for user-facing features — use iframeResolver.getSourceLocation()
+ * or the full resolution chain (own-server → client → chain-server) instead.
+ */
 function getSourceLocationFromDOM(el: HTMLElement): SourceLocation | null {
   const fiber = getFiberFromDOM(el);
   if (fiber === null) return null;
@@ -56,7 +61,16 @@ function getItemIndexFromDOM(element: HTMLElement): number {
  */
 const iframeResolver: TracingResolver = {
   getSourceLocation(element: HTMLElement): SourceLocation | null {
-    return getSourceLocationFromDOM(element);
+    // Full resolution chain: direct fiber → own-server source map → client source map
+    // Direct fiber handles Vite/React 18. Source maps handle Next.js RSC/Turbopack.
+    let loc = getSourceLocationFromDOM(element);
+    if (loc === null) {
+      const fiber = getFiberFromDOM(element);
+      if (fiber) {
+        loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+      }
+    }
+    return loc;
   },
 
   getItemIndex(element: HTMLElement): number {
