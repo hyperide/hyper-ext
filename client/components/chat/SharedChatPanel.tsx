@@ -110,6 +110,9 @@ export function SharedChatPanel({
         if (!chatId) return;
       }
 
+      // Mark streaming BEFORE sendMessage to prevent loadChat useEffect race
+      history.setIsStreaming(true);
+
       // Add user messages to display
       for (const text of content) {
         onMessagesAppend([
