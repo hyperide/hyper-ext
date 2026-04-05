@@ -31,7 +31,7 @@ body {
 body.vscode-dark,
 body.vscode-high-contrast,
 body.vscode-light {
-  --background: transparent;
+  --background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   --foreground: var(--vscode-foreground);
   --muted: var(--vscode-input-background);
   --muted-foreground: var(--vscode-descriptionForeground);
@@ -50,6 +50,44 @@ body.vscode-light {
   --popover-foreground: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
   --card: var(--vscode-editorWidget-background, var(--vscode-dropdown-background));
   --card-foreground: var(--vscode-foreground);
+}
+
+/* SYNC: client/global.css — toggle hierarchy tokens */
+:root,
+body.vscode-dark {
+  --toggle-container-bg: rgba(255, 255, 255, 0.06);
+  --toggle-active-bg: rgba(255, 255, 255, 0.12);
+  --toggle-active-shadow: none;
+}
+
+body.vscode-light {
+  --toggle-container-bg: rgba(0, 0, 0, 0.06);
+  --toggle-active-bg: #fff;
+  --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --toggle-container-bg: transparent;
+  --toggle-active-bg: transparent;
+  --toggle-active-shadow: none;
+}
+
+.toggle-container {
+  background: var(--toggle-container-bg);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.toggle-active {
+  background: var(--toggle-active-bg);
+  box-shadow: var(--toggle-active-shadow);
+  border-radius: 4px;
+}
+
+body.vscode-high-contrast .toggle-active,
+body.vscode-high-contrast-light .toggle-active {
+  border: 1px solid var(--vscode-contrastBorder);
 }
 
 input,

@@ -49,13 +49,13 @@ export const PositionSection = memo(function PositionSection({
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">Position</span>
       </div>
-      <div className="flex items-center mb-2 whitespace-nowrap">
+      <div className="toggle-container flex items-center mb-2 whitespace-nowrap">
         <button
           type="button"
           data-testid={TID.inspector.positionInput('static')}
           onClick={() => onPositionChange('static')}
           className={`flex-[1.4] h-6 px-2 text-xs rounded-l flex items-center justify-center ${
-            selectedPosition === 'static' ? 'bg-background border border-border font-medium' : 'bg-muted'
+            selectedPosition === 'static' ? 'toggle-active font-medium' : ''
           }`}
         >
           static
@@ -65,7 +65,7 @@ export const PositionSection = memo(function PositionSection({
           data-testid={TID.inspector.positionInput('rel')}
           onClick={() => onPositionChange('rel')}
           className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
-            selectedPosition === 'rel' ? 'bg-background border border-border font-medium' : 'bg-muted'
+            selectedPosition === 'rel' ? 'toggle-active font-medium' : ''
           }`}
         >
           rel
@@ -75,7 +75,7 @@ export const PositionSection = memo(function PositionSection({
           data-testid={TID.inspector.positionInput('abs')}
           onClick={() => onPositionChange('abs')}
           className={`flex-[0.8] h-6 px-2 text-xs flex items-center justify-center ${
-            selectedPosition === 'abs' ? 'bg-background border border-border font-medium' : 'bg-muted'
+            selectedPosition === 'abs' ? 'toggle-active font-medium' : ''
           }`}
         >
           abs
@@ -86,7 +86,7 @@ export const PositionSection = memo(function PositionSection({
           onClick={() => onPositionChange('fixed')}
           className={`flex-1 h-6 px-2 text-xs flex items-center justify-center ${
             projectUIKit === 'tamagui' ? 'rounded-r' : ''
-          } ${selectedPosition === 'fixed' ? 'bg-background border border-border font-medium' : 'bg-muted'}`}
+          } ${selectedPosition === 'fixed' ? 'toggle-active font-medium' : ''}`}
         >
           fixed
         </button>
@@ -96,7 +96,7 @@ export const PositionSection = memo(function PositionSection({
             data-testid={TID.inspector.positionInput('sticky')}
             onClick={() => onPositionChange('sticky')}
             className={`flex-1 h-6 px-2 text-xs rounded-r flex items-center justify-center ${
-              selectedPosition === 'sticky' ? 'bg-background border border-border font-medium' : 'bg-muted'
+              selectedPosition === 'sticky' ? 'toggle-active font-medium' : ''
             }`}
           >
             sticky

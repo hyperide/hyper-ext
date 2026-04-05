@@ -303,14 +303,14 @@ export const LayoutSection = memo(function LayoutSection({
       </div>
 
       {/* Layout type buttons */}
-      <div className="flex items-center mb-3">
+      <div className="toggle-container flex items-center mb-3">
         <button
           type="button"
           data-testid={TID.inspector.layoutDisplaySelect}
           onClick={() => onLayoutChange('layout')}
           className={cn(
             'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
-            selectedLayout === 'layout' ? 'border border-border bg-background' : 'bg-muted',
+            selectedLayout === 'layout' && 'toggle-active',
           )}
         >
           <IconLayout className="w-4 h-4" stroke={1.5} />
@@ -321,7 +321,7 @@ export const LayoutSection = memo(function LayoutSection({
           onClick={() => onLayoutChange('col')}
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
-            selectedLayout === 'col' ? 'border border-border bg-background' : 'bg-muted',
+            selectedLayout === 'col' && 'toggle-active',
           )}
         >
           <IconSortDescending2 className="w-5 h-5" stroke={1.5} />
@@ -333,7 +333,7 @@ export const LayoutSection = memo(function LayoutSection({
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
             projectUIKit === 'tamagui' ? 'rounded-r' : '',
-            selectedLayout === 'row' ? 'border border-border bg-background' : 'bg-muted',
+            selectedLayout === 'row' && 'toggle-active',
           )}
         >
           <IconFlexRow className="w-5 h-5" />
@@ -345,7 +345,7 @@ export const LayoutSection = memo(function LayoutSection({
             onClick={() => onLayoutChange('grid')}
             className={cn(
               'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
-              selectedLayout === 'grid' ? 'border border-border bg-background' : 'bg-muted',
+              selectedLayout === 'grid' && 'toggle-active',
             )}
           >
             <IconLayoutGrid className="w-5 h-5" stroke={1.5} />

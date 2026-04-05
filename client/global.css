@@ -61,6 +61,10 @@
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+    /* SYNC: vscode-extension/hypercanvas-preview/src/webview/styles.css — toggle hierarchy tokens */
+    --toggle-container: 210 40% 96.1%;
+    --toggle-active: 0 0% 100%;
+    --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 
   /* Dark theme via class */
@@ -100,6 +104,9 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --toggle-container: 217.2 32.6% 17.5%;
+    --toggle-active: 217.2 32.6% 23%;
+    --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   /* Dark theme via system preference (when no class is set) */
@@ -140,6 +147,9 @@
       --sidebar-accent-foreground: 240 4.8% 95.9%;
       --sidebar-border: 240 3.7% 15.9%;
       --sidebar-ring: 217.2 91.2% 59.8%;
+      --toggle-container: 217.2 32.6% 17.5%;
+      --toggle-active: 217.2 32.6% 23%;
+      --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
   }
 }
@@ -284,5 +294,18 @@
   .tree-item-hovered {
     background-color: hsl(var(--accent));
     color: hsl(var(--accent-foreground));
+  }
+
+  /* Toggle hierarchy — visual depth for toggle button groups */
+  .toggle-container {
+    background: hsl(var(--toggle-container));
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .toggle-active {
+    background: hsl(var(--toggle-active));
+    box-shadow: var(--toggle-active-shadow);
+    border-radius: 4px;
   }
 }

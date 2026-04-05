@@ -1,7 +1,50 @@
 /**
- * Global test setup for browser API mocks
- * This file is preloaded before all tests run
+ * @file Global test setup — preloaded before all tests via bunfig.toml
+ *
+ * Provides DOM environment (happy-dom) and browser API mocks so that both
+ * unit tests and component tests (@testing-library/react) work without
+ * per-file setup imports.
  */
+
+import { GlobalWindow } from 'happy-dom';
+
+// GlobalWindow re-uses native JS constructors (SyntaxError, Error, etc.) so happy-dom's
+// internal selector parser can call `new this.window.SyntaxError(...)` without failing.
+const win = new GlobalWindow({ url: 'http://localhost' });
+
+Object.assign(globalThis, {
+  window: win,
+  document: win.document,
+  navigator: win.navigator,
+  // DOM node types
+  HTMLElement: win.HTMLElement,
+  HTMLDivElement: win.HTMLDivElement,
+  HTMLInputElement: win.HTMLInputElement,
+  HTMLTextAreaElement: win.HTMLTextAreaElement,
+  SVGElement: win.SVGElement,
+  Element: win.Element,
+  Node: win.Node,
+  Text: win.Text,
+  DocumentFragment: win.DocumentFragment,
+  // Events
+  Event: win.Event,
+  CustomEvent: win.CustomEvent,
+  MouseEvent: win.MouseEvent,
+  KeyboardEvent: win.KeyboardEvent,
+  // Observers & utilities
+  MutationObserver: win.MutationObserver,
+  getComputedStyle: win.getComputedStyle.bind(win),
+  requestAnimationFrame: (cb: FrameRequestCallback) => setTimeout(cb, 0),
+  cancelAnimationFrame: (id: number) => clearTimeout(id),
+});
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
 
 // Mock localStorage
 const localStorageMock = (() => {
