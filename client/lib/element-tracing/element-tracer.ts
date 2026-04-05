@@ -65,11 +65,12 @@ export class ElementTracer implements TracingResolver {
 
     // Try direct source first (element's own _debugSource)
     const directResult = this._findInNodeMaps(source, itemIndex);
+    if (directResult) return directResult;
 
-    // Walk up fiber tree to find call site when clicked element is inside a
-    // reusable component. Prefer the first match from a DIFFERENT file than
-    // the direct source — this is the component usage site (e.g. <Button> in
-    // DatePicker.tsx instead of <button> in Button.tsx).
+    // Direct lookup failed — element is inside a reusable component whose internal
+    // source (e.g. Button.tsx:31:7) doesn't have a node map entry in the rendered
+    // component. Walk up fiber tree to find the CALL SITE (where <Button> is used
+    // in the parent component like DatePicker.tsx).
     const fiber = getFiberFromDOM(element);
     if (fiber) {
       let current = fiber.return;
@@ -84,9 +85,6 @@ export class ElementTracer implements TracingResolver {
         current = current.return;
       }
     }
-
-    // No cross-file match — use direct result
-    if (directResult) return directResult;
 
     const requestId = `req-${++this._requestCounter}`;
     this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
