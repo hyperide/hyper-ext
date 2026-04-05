@@ -10,10 +10,10 @@ import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
+import { resolveCallSiteSource } from '@shared/canvas-interaction/resolve-source';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
-  debugSourceToLocation,
   type Fiber,
   findNearestSourceLocation,
   getFiberFromDOM,
@@ -79,26 +79,10 @@ const iframeResolver: TracingResolver = {
         loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
       }
     }
-    // Walk up fiber to find call site ONLY for imported components
+    // Resolve to call site for imported component internals (shared logic)
     if (loc) {
-      const isFromRendered = renderedComponentPath
-        ? loc.fileName.endsWith(renderedComponentPath) || renderedComponentPath.endsWith(loc.fileName)
-        : true;
-      if (!isFromRendered) {
-        const fiber = getFiberFromDOM(element);
-        if (fiber) {
-          let current = fiber.return;
-          for (let i = 0; i < 30 && current; i++) {
-            if (current._debugSource) {
-              const callerLoc = debugSourceToLocation(current._debugSource);
-              if (callerLoc.fileName !== loc.fileName) {
-                return callerLoc;
-              }
-            }
-            current = (current.return as Fiber | null | undefined) ?? null;
-          }
-        }
-      }
+      const fiber = getFiberFromDOM(element);
+      return resolveCallSiteSource(loc, fiber, renderedComponentPath);
     }
     return loc;
   },
@@ -167,29 +151,9 @@ const iframeResolver: TracingResolver = {
 
     if (source === null) return null;
 
-    // Walk up fiber to find call site ONLY when source is from an imported
-    // component (different file than the rendered component). For elements
-    // from the rendered file itself, use direct source.
-    const isFromRenderedFile = renderedComponentPath
-      ? source.fileName.endsWith(renderedComponentPath) || renderedComponentPath.endsWith(source.fileName)
-      : true;
-
-    if (!isFromRenderedFile) {
-      const fiber = getFiberFromDOM(element);
-      if (fiber) {
-        let current = fiber.return;
-        for (let i = 0; i < 30 && current; i++) {
-          if (current._debugSource) {
-            const callerLoc = debugSourceToLocation(current._debugSource);
-            if (callerLoc.fileName !== source.fileName) {
-              source = callerLoc;
-              break;
-            }
-          }
-          current = (current.return as Fiber | null | undefined) ?? null;
-        }
-      }
-    }
+    // Resolve to call site for imported component internals (shared logic)
+    const fiber2 = getFiberFromDOM(element);
+    source = resolveCallSiteSource(source, fiber2, renderedComponentPath);
 
     const itemIndex = getItemIndexFromDOM(element);
     // Extension's inline resolver does not have a node map cache,

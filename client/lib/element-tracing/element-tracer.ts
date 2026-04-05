@@ -5,8 +5,9 @@
  * Assumptions: Adapter and transport are injected; adapter matches the current framework
  */
 
+import { resolveCallSiteSource } from '../../../shared/canvas-interaction/resolve-source';
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
-import { debugSourceToLocation, getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
+import { getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
 import type {
   ComponentTreeNode,
   FrameworkAdapter,
@@ -65,39 +66,21 @@ export class ElementTracer implements TracingResolver {
 
     const itemIndex = this._adapter.getItemIndex(element);
 
-    const directResult = this._findInNodeMaps(source, itemIndex);
-    const isFromRenderedFile = this._isRenderedComponentFile(source.fileName);
-    if (directResult && isFromRenderedFile) return directResult;
-
-    // Walk up fiber tree to find the CALL SITE when element is inside a reusable
-    // component (source from a different file than the rendered component).
+    // Resolve to call site for imported component internals (shared logic)
     const fiber = getFiberFromDOM(element);
-    if (fiber) {
-      let current = fiber.return;
-      for (let i = 0; i < 30 && current; i++) {
-        if (current._debugSource) {
-          const callerSource = debugSourceToLocation(current._debugSource);
-          if (callerSource.fileName !== source.fileName) {
-            const callerResult = this._findInNodeMaps(callerSource, itemIndex);
-            if (callerResult) return callerResult;
-          }
-        }
-        current = current.return;
-      }
-    }
+    const resolvedSource = resolveCallSiteSource(source, fiber, this.renderedFile);
+    const resolvedResult = this._findInNodeMaps(resolvedSource, itemIndex);
+    if (resolvedResult) return resolvedResult;
 
-    // Fallback to direct result even if from different file
-    if (directResult) return directResult;
+    // Fallback: try direct source if resolved source didn't match
+    if (resolvedSource !== source) {
+      const directResult = this._findInNodeMaps(source, itemIndex);
+      if (directResult) return directResult;
+    }
 
     const requestId = `req-${++this._requestCounter}`;
     this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
     return null;
-  }
-
-  /** Check if fileName matches the currently rendered component file. */
-  private _isRenderedComponentFile(fileName: string): boolean {
-    if (!this.renderedFile) return true; // Unknown — assume yes
-    return fileName.endsWith(this.renderedFile) || this.renderedFile.endsWith(fileName.replace(/^\/app\//, ''));
   }
 
   /** Look up a source location in cached node maps. */
