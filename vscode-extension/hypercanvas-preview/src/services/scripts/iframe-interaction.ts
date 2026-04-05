@@ -200,16 +200,12 @@ function getSourceCache(): Map<string, HTMLElement[]> {
       if (fiber) {
         // Direct fiber resolution (Vite, React 18 _debugSource, React 19 non-RSC)
         let loc = findNearestSourceLocation(fiber);
-        // Fallback: server source map — check THIS fiber's _debugStack only (not
-        // return chain). Each RSC element has its own _debugStack with a unique
-        // compiled position. Walking up would collapse all children onto the
-        // first ancestor whose cache entry arrived.
+        // React 19 + Vite: _debugStack gives compiled positions → resolve via source map
+        const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+        if (smLoc) loc = smLoc;
+        // Fallback if no source map available
         if (loc === null) {
-          loc = resolveOwnServerSourceMap(fiber);
-        }
-        // Last resort: client source maps (walks return chain — coarser)
-        if (loc === null) {
-          loc = resolveViaClientSourceMap(fiber);
+          loc = findNearestSourceLocation(fiber);
         }
         if (loc) {
           const key = `${loc.fileName}:${loc.line}:${loc.column}`;
