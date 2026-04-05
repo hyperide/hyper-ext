@@ -63,14 +63,17 @@ export class ElementTracer implements TracingResolver {
 
     const itemIndex = this._adapter.getItemIndex(element);
 
-    // Try direct source first (element's own _debugSource)
     const directResult = this._findInNodeMaps(source, itemIndex);
-    if (directResult) return directResult;
 
-    // Direct lookup failed — element is inside a reusable component whose internal
-    // source (e.g. Button.tsx:31:7) doesn't have a node map entry in the rendered
-    // component. Walk up fiber tree to find the CALL SITE (where <Button> is used
-    // in the parent component like DatePicker.tsx).
+    // Determine the "rendered component file" — the file with the most node map entries.
+    // Elements from THIS file use direct match. Elements from OTHER files (reusable
+    // components like Button.tsx) need walk-up to find the call site.
+    const isFromRenderedFile = this._isRenderedComponentFile(source.fileName);
+
+    if (directResult && isFromRenderedFile) return directResult;
+
+    // Walk up fiber tree to find the CALL SITE when element is inside a reusable
+    // component (source from a different file than the rendered component).
     const fiber = getFiberFromDOM(element);
     if (fiber) {
       let current = fiber.return;
@@ -86,9 +89,30 @@ export class ElementTracer implements TracingResolver {
       }
     }
 
+    // Fallback to direct result even if from different file
+    if (directResult) return directResult;
+
     const requestId = `req-${++this._requestCounter}`;
     this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
     return null;
+  }
+
+  /**
+   * Check if a fileName is the "rendered component" — the file shown in the editor.
+   * Determined by which file has the most node map entries (the main component file
+   * typically has 10-50+ entries, imported components have 1-5).
+   */
+  private _isRenderedComponentFile(fileName: string): boolean {
+    if (this._nodeMaps.size === 0) return true;
+    let maxCount = 0;
+    let maxFile = '';
+    for (const [file, entries] of this._nodeMaps) {
+      if (entries.length > maxCount) {
+        maxCount = entries.length;
+        maxFile = file;
+      }
+    }
+    return fileName === maxFile;
   }
 
   /** Look up a source location in cached node maps. */
