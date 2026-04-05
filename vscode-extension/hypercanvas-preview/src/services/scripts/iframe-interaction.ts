@@ -353,7 +353,18 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
       clientSourceMapCache.set(key, null);
       return;
     }
-    const loc = resolveInSourceMap(sm, line, col);
+    let loc = resolveInSourceMap(sm, line, col);
+    // Vite inline source maps have relative `sources: ["TweetComposer.tsx"]` without path.
+    // Reconstruct full path from the original URL: "/src/components/TweetComposer.tsx"
+    if (loc && !loc.fileName.includes('/')) {
+      try {
+        const parsed = new URL(url);
+        const dir = parsed.pathname.replace(/\/[^/]+$/, ''); // strip filename
+        loc = { ...loc, fileName: `${dir}/${loc.fileName}`.replace(/^\//, '') };
+      } catch {
+        // Not a valid URL — keep as-is
+      }
+    }
     // Bundled chunks include React internals (e.g. jsxDEV) whose source maps point to
     // node_modules. Mark those in clientInternalFrames so the lookup skips to the next
     // frame (the user component call site) rather than stopping on them.
