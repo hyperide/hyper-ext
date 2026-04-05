@@ -174,7 +174,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       let astNode: ReturnType<typeof findNodeById> = null;
       const root = engine.getRoot();
 
-      const rootAst = root.metadata?.astStructure;
+      // Prefer sampleStructure (what the iframe renders) over astStructure (component definition)
+      const rootAst = root.metadata?.sampleStructure ?? root.metadata?.astStructure;
       if (Array.isArray(rootAst)) {
         astNode = findNodeById(rootAst, elementId);
       }
@@ -182,7 +183,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       if (!astNode) {
         for (const childId of root.children || []) {
           const inst = engine.getInstance(childId);
-          const childAst = inst?.metadata?.astStructure;
+          const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
           if (Array.isArray(childAst)) {
             astNode = findNodeById(childAst, elementId);
             if (astNode) break;
