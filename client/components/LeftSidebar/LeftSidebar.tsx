@@ -1,12 +1,13 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
 // SaaS-only imports — conditionally used when engine is available
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { useAnimatedPanelCollapse } from '@/hooks/useAnimatedPanelCollapse';
 import { useSidebarPanelLayout } from '@/hooks/useSidebarPanelLayout';
 import { useCanvasEngineOptional } from '@/lib/canvas-engine';
+import { resolveNodeRefToUuid } from '@/lib/element-tracing/id-bridge';
 import { usePlatformContext } from '@/lib/platform';
 import { panelLayoutStorage } from '@/lib/storage';
 import { useGitStore } from '@/stores/gitStore';
@@ -111,6 +112,12 @@ export default function LeftSidebar({
   } = useElementSelection(elementsTree, onHoverElement);
 
   const handleFunctionNavigate = useFunctionNavigate(currentComponentPath);
+
+  // Canvas hover stores nodeRef; tree nodes use UUID. Resolve for matching.
+  const resolvedHoveredId = useMemo(
+    () => (hoveredId && engine ? resolveNodeRefToUuid(hoveredId, engine) : (hoveredId ?? null)),
+    [hoveredId, engine],
+  );
 
   // --- Local UI state ---
 
@@ -337,7 +344,7 @@ export default function LeftSidebar({
             hasContent={hasElementsContent}
             tree={elementsTree}
             selectedIds={selectedIds}
-            hoveredId={selectionHoveredId ?? hoveredId ?? null}
+            hoveredId={selectionHoveredId ?? resolvedHoveredId}
             onSelectElement={handleSelect}
             onHoverElement={handleHover}
             onOpenPanel={onOpenPanel}

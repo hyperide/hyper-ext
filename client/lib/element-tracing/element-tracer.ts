@@ -104,6 +104,15 @@ export class ElementTracer implements TracingResolver {
     return this._adapter.findDOMElement(source, itemIndex);
   }
 
+  /** Look up source location for a nodeRef from cached node maps. */
+  getSourceByNodeRef(nodeRef: string): SourceLocation | null {
+    for (const entries of this._nodeMaps.values()) {
+      const entry = entries.find((e) => e.nodeRef === nodeRef);
+      if (entry) return entry.loc;
+    }
+    return null;
+  }
+
   /** Resolve a nodeRef to a DOM element by looking up all cached node maps. */
   findDOMElementByNodeRef(nodeRef: string): HTMLElement | null {
     for (const entries of this._nodeMaps.values()) {

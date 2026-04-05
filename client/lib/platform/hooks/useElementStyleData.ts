@@ -16,6 +16,8 @@ import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import type { ParsedTailwindStyles } from '@/lib/canvas-engine/utils/tailwindParser';
 import { parseTailwindClasses } from '@/lib/canvas-engine/utils/tailwindParser';
 import { getElementFromIframe } from '@/lib/dom-utils';
+import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
+import { findAstNodeBySourceLoc } from '@/lib/element-tracing/id-bridge';
 import type { CanvasAdapter, MessageOfType } from '../types';
 
 // ============================================================================
@@ -187,6 +189,29 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
           if (Array.isArray(childAst)) {
             astNode = findNodeById(childAst, elementId);
             if (astNode) break;
+          }
+        }
+      }
+
+      // elementId might be a nodeRef (canvas click) — resolve via source location
+      if (!astNode) {
+        const tracer = getActiveTracer();
+        if (tracer) {
+          const source = tracer.getSourceByNodeRef(elementId);
+          if (source) {
+            if (Array.isArray(rootAst)) {
+              astNode = findAstNodeBySourceLoc(rootAst, source.line, source.column);
+            }
+            if (!astNode) {
+              for (const childId of root.children || []) {
+                const inst = engine.getInstance(childId);
+                const childAst = inst?.metadata?.sampleStructure ?? inst?.metadata?.astStructure;
+                if (Array.isArray(childAst)) {
+                  astNode = findAstNodeBySourceLoc(childAst, source.line, source.column);
+                  if (astNode) break;
+                }
+              }
+            }
           }
         }
       }

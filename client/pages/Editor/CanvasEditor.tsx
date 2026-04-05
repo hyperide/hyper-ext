@@ -50,6 +50,7 @@ import {
 } from '@/lib/canvas-engine';
 import { getPreviewIframe } from '@/lib/dom-utils';
 import { getActiveTracer, subscribeToTracer } from '@/lib/element-tracing/active-tracer';
+import { resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -877,8 +878,17 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     if (!tracer) return undefined;
 
     return {
-      findElements(nodeRef: string, itemIndex: number | null): HTMLElement[] {
-        return tracer.findDOMElements(nodeRef, itemIndex);
+      findElements(id: string, itemIndex: number | null): HTMLElement[] {
+        // Try as nodeRef first (canvas click stores nodeRef)
+        const elements = tracer.findDOMElements(id, itemIndex);
+        if (elements.length > 0) return elements;
+
+        // id might be a UUID (tree click) — resolve to nodeRef via source location
+        const nodeRef = resolveUuidToNodeRef(id, engine);
+        if (nodeRef !== id) {
+          return tracer.findDOMElements(nodeRef, itemIndex);
+        }
+        return [];
       },
       findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }> {
         const iframe = getPreviewIframe();

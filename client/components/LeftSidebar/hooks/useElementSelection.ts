@@ -6,6 +6,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useCanvasEngineOptional, useSelectedIdsOptional as useEngineSelectedIds } from '@/lib/canvas-engine';
+import { resolveIdsToUuids } from '@/lib/element-tracing/id-bridge';
 import { usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
@@ -33,7 +34,12 @@ export function useElementSelection(
   const sharedSelectedIds = useSharedSelectedIds();
   const sharedHoveredId = useSharedHoveredId();
 
-  const selectedIds = engine ? engineSelectedIds : sharedSelectedIds;
+  // Engine stores nodeRef (canvas clicks) or UUID (tree clicks).
+  // Tree nodes use UUID — resolve nodeRefs to UUIDs for matching.
+  const selectedIds = useMemo(
+    () => (engine ? resolveIdsToUuids(engineSelectedIds, engine) : sharedSelectedIds),
+    [engine, engineSelectedIds, sharedSelectedIds],
+  );
   const hoveredId = engine ? null : sharedHoveredId;
 
   const dispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
