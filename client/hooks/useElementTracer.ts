@@ -6,10 +6,12 @@
  * Assumptions: Iframe is same-origin (SaaS proxy); React dev mode with _debugSource present.
  */
 
+import { findNearestSourceLocation } from '@shared/element-tracing/fiber-internals';
 import { useEffect, useRef, useState } from 'react';
 import { setActiveTracer } from '@/lib/element-tracing/active-tracer';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import { hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
+import type { Fiber } from '@/lib/element-tracing/fiber-utils';
 import { ReactAdapter } from '@/lib/element-tracing/react-adapter';
 import { WSTracingTransport } from '@/lib/element-tracing/ws-tracing-transport';
 
@@ -29,6 +31,40 @@ interface UseElementTracerResult {
 /** Max attempts to detect React inside iframe after load (200ms intervals). */
 const MAX_DETECT_ATTEMPTS = 15;
 const DETECT_INTERVAL_MS = 200;
+
+/**
+ * Detect React with fiber source in an iframe document.
+ * Cross-realm safe: uses nodeType instead of instanceof HTMLElement.
+ * Works with React 18+ createRoot where #root has __reactContainer$
+ * but __reactFiber$ lives on its firstElementChild.
+ */
+function detectReactInIframe(doc: Document): boolean {
+  const selectors = ['#root', '#__next', '#app', '[data-reactroot]'];
+  for (const sel of selectors) {
+    const el = doc.querySelector(sel);
+    if (!el || el.nodeType !== 1) continue;
+
+    // Check this element and its first child (React 18+ createRoot pattern)
+    const candidates = [el];
+    if (el.firstElementChild && el.firstElementChild.nodeType === 1) {
+      candidates.push(el.firstElementChild);
+    }
+
+    for (const candidate of candidates) {
+      const keys = Object.keys(candidate);
+      for (const key of keys) {
+        if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+          const fiber = (candidate as unknown as Record<string, Fiber>)[key];
+          const loc = findNearestSourceLocation(fiber);
+          if (loc !== null && typeof loc.fileName === 'string' && typeof loc.line === 'number') {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
 
 export function useElementTracer({
   iframe,
@@ -51,10 +87,6 @@ export function useElementTracer({
       return;
     }
 
-    const doc = iframe.contentDocument;
-    const iframeWindow = iframe.contentWindow;
-    if (!doc || !iframeWindow) return;
-
     let disposed = false;
     let detectTimer: ReturnType<typeof setTimeout> | null = null;
     let unhookCommits: (() => void) | null = null;
@@ -63,18 +95,30 @@ export function useElementTracer({
      * Try to detect React and initialize the tracer.
      * React may not be hydrated yet when the iframe fires its load event,
      * so we retry with a short interval.
+     * Reads iframe.contentDocument fresh each attempt — the document object
+     * changes when the iframe navigates (e.g. about:blank → preview URL).
      */
     function tryInit(attempt: number): void {
       if (disposed) return;
 
-      const adapter = new ReactAdapter(doc);
-      if (!adapter.detect(doc)) {
+      const doc = iframe.contentDocument;
+      const iframeWindow = iframe.contentWindow;
+      if (!doc || !iframeWindow) {
         if (attempt < MAX_DETECT_ATTEMPTS) {
           detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
         }
         return;
       }
 
+      // Use cross-realm safe detection (nodeType, not instanceof HTMLElement)
+      if (!detectReactInIframe(doc)) {
+        if (attempt < MAX_DETECT_ATTEMPTS) {
+          detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
+        }
+        return;
+      }
+
+      const adapter = new ReactAdapter(doc);
       const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/element-tracing/${projectId}`;
       const transport = new WSTracingTransport(() => new WebSocket(wsUrl));
       const tracer = new ElementTracer(adapter, transport);

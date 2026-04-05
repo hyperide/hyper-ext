@@ -36,25 +36,17 @@ export class ReactAdapter implements FrameworkAdapter {
   }
 
   detect(doc: Document): boolean {
+    // findReactRoot returns the element WITH __reactFiber$ (not the container)
     const root = this.findReactRoot(doc);
     if (root === null) return false;
 
-    // React 18+ createRoot: #root has __reactContainer$ (HostRoot fiber),
-    // but __reactFiber$ lives on its first child. Check both.
-    const candidates: HTMLElement[] = [root];
-    if (root.firstElementChild instanceof HTMLElement) {
-      candidates.push(root.firstElementChild);
-    }
-
-    for (const el of candidates) {
-      const record = el as unknown as Record<string, unknown>;
-      for (const key of Object.keys(record)) {
-        if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
-          const fiber = record[key] as Fiber;
-          const loc = findNearestSourceLocation(fiber);
-          if (loc !== null && typeof loc.fileName === 'string' && typeof loc.line === 'number') {
-            return true;
-          }
+    const record = root as unknown as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+        const fiber = record[key] as Fiber;
+        const loc = findNearestSourceLocation(fiber);
+        if (loc !== null && typeof loc.fileName === 'string' && typeof loc.line === 'number') {
+          return true;
         }
       }
     }
@@ -122,19 +114,38 @@ export class ReactAdapter implements FrameworkAdapter {
   }
 
   private findReactRoot(doc: Document): HTMLElement | null {
+    // NOTE: doc may be from an iframe. `instanceof HTMLElement` fails cross-realm
+    // (iframe's HTMLElement !== parent window's HTMLElement). Use nodeType check instead.
     const candidates = ['#root', '#__next', '#app', '[data-reactroot]'];
     for (const selector of candidates) {
       const el = doc.querySelector(selector);
-      if (el instanceof HTMLElement) return el;
+      if (el && el.nodeType === 1) {
+        // React 18+ createRoot: container element has __reactContainer$ but NOT __reactFiber$.
+        // __reactFiber$ lives on its first child. Return the child if container lacks fiber.
+        const record = el as unknown as Record<string, unknown>;
+        const hasFiber = Object.keys(record).some(
+          (k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'),
+        );
+        if (hasFiber) return el as HTMLElement;
+        // Check first child (React 18+ createRoot pattern)
+        const firstChild = el.firstElementChild;
+        if (firstChild && firstChild.nodeType === 1) {
+          const childRecord = firstChild as unknown as Record<string, unknown>;
+          const childHasFiber = Object.keys(childRecord).some((k) => k.startsWith('__reactFiber$'));
+          if (childHasFiber) return firstChild as HTMLElement;
+        }
+        // Container found by selector but no fiber yet — return it anyway so detect() can retry
+        return el as HTMLElement;
+      }
     }
     // Check direct children of body
     if (doc.body !== null) {
       for (const child of Array.from(doc.body.children)) {
-        if (child instanceof HTMLElement) {
+        if (child.nodeType === 1) {
           const record = child as unknown as Record<string, unknown>;
           for (const key of Object.keys(record)) {
             if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
-              return child;
+              return child as HTMLElement;
             }
           }
         }
