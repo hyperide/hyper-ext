@@ -6,6 +6,7 @@
  */
 
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
+import { debugSourceToLocation, getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
 import type {
   ComponentTreeNode,
   FrameworkAdapter,
@@ -62,19 +63,45 @@ export class ElementTracer implements TracingResolver {
 
     const itemIndex = this._adapter.getItemIndex(element);
 
-    const nodes = this._nodeMaps.get(source.fileName);
-    if (nodes) {
-      const entry = nodes.find(
-        (n) => n.loc.fileName === source.fileName && n.loc.line === source.line && n.loc.column === source.column,
-      );
-      if (entry) {
-        return { nodeRef: entry.nodeRef, entry, source, itemIndex };
+    // Try direct source first (element's own _debugSource)
+    const directResult = this._findInNodeMaps(source, itemIndex);
+
+    // Walk up fiber tree to find call site when clicked element is inside a
+    // reusable component. Prefer the first match from a DIFFERENT file than
+    // the direct source — this is the component usage site (e.g. <Button> in
+    // DatePicker.tsx instead of <button> in Button.tsx).
+    const fiber = getFiberFromDOM(element);
+    if (fiber) {
+      let current = fiber.return;
+      for (let i = 0; i < 30 && current; i++) {
+        if (current._debugSource) {
+          const callerSource = debugSourceToLocation(current._debugSource);
+          if (callerSource.fileName !== source.fileName) {
+            const callerResult = this._findInNodeMaps(callerSource, itemIndex);
+            if (callerResult) return callerResult;
+          }
+        }
+        current = current.return;
       }
     }
+
+    // No cross-file match — use direct result
+    if (directResult) return directResult;
 
     const requestId = `req-${++this._requestCounter}`;
     this._transport.send({ type: 'resolve-element', requestId, source, itemIndex });
     return null;
+  }
+
+  /** Look up a source location in cached node maps. */
+  private _findInNodeMaps(source: SourceLocation, itemIndex: number): LocalResolveResult | null {
+    const nodes = this._nodeMaps.get(source.fileName);
+    if (!nodes) return null;
+    const entry = nodes.find(
+      (n) => n.loc.fileName === source.fileName && n.loc.line === source.line && n.loc.column === source.column,
+    );
+    if (!entry) return null;
+    return { nodeRef: entry.nodeRef, entry, source, itemIndex };
   }
 
   onSelectionResolved(handler: (response: ResolveElementResponse) => void): () => void {
