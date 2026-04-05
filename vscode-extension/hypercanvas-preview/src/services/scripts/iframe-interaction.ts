@@ -13,6 +13,7 @@ import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
+  debugSourceToLocation,
   type Fiber,
   findNearestSourceLocation,
   getFiberFromDOM,
@@ -76,6 +77,22 @@ const iframeResolver: TracingResolver = {
       const fiber = getFiberFromDOM(element);
       if (fiber) {
         loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+      }
+    }
+    // Walk up fiber to find call site when source is inside a reusable component
+    if (loc) {
+      const fiber = getFiberFromDOM(element);
+      if (fiber) {
+        let current = fiber.return;
+        for (let i = 0; i < 30 && current; i++) {
+          if (current._debugSource) {
+            const callerLoc = debugSourceToLocation(current._debugSource);
+            if (callerLoc.fileName !== loc.fileName) {
+              return callerLoc;
+            }
+          }
+          current = (current.return as Fiber | null | undefined) ?? null;
+        }
       }
     }
     return loc;
@@ -144,6 +161,24 @@ const iframeResolver: TracingResolver = {
     }
 
     if (source === null) return null;
+
+    // Walk up fiber to find call site when source is from a reusable component's
+    // internal element (e.g. <button> inside Button.tsx). Prefer the CALLER source
+    // from a different file (where <Button> is used in the parent component).
+    const fiber = getFiberFromDOM(element);
+    if (fiber && source) {
+      let current = fiber.return;
+      for (let i = 0; i < 30 && current; i++) {
+        if (current._debugSource) {
+          const callerLoc = debugSourceToLocation(current._debugSource);
+          if (callerLoc.fileName !== source.fileName) {
+            source = callerLoc;
+            break;
+          }
+        }
+        current = (current.return as Fiber | null | undefined) ?? null;
+      }
+    }
 
     const itemIndex = getItemIndexFromDOM(element);
     // Extension's inline resolver does not have a node map cache,
