@@ -39,14 +39,22 @@ export class ReactAdapter implements FrameworkAdapter {
     const root = this.findReactRoot(doc);
     if (root === null) return false;
 
-    const record = root as unknown as Record<string, unknown>;
-    for (const key of Object.keys(record)) {
-      if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
-        const fiber = record[key] as Fiber;
-        // findNearestSourceLocation handles both React 18 (_debugSource) and React 19 (_debugStack)
-        const loc = findNearestSourceLocation(fiber);
-        if (loc !== null && typeof loc.fileName === 'string' && typeof loc.line === 'number') {
-          return true;
+    // React 18+ createRoot: #root has __reactContainer$ (HostRoot fiber),
+    // but __reactFiber$ lives on its first child. Check both.
+    const candidates: HTMLElement[] = [root];
+    if (root.firstElementChild instanceof HTMLElement) {
+      candidates.push(root.firstElementChild);
+    }
+
+    for (const el of candidates) {
+      const record = el as unknown as Record<string, unknown>;
+      for (const key of Object.keys(record)) {
+        if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+          const fiber = record[key] as Fiber;
+          const loc = findNearestSourceLocation(fiber);
+          if (loc !== null && typeof loc.fileName === 'string' && typeof loc.line === 'number') {
+            return true;
+          }
         }
       }
     }
