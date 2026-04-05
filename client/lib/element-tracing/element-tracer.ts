@@ -33,6 +33,8 @@ export class ElementTracer implements TracingResolver {
   private readonly _selectionHandlers = new Set<(response: ResolveElementResponse) => void>();
   private readonly _nodeMapUpdateHandlers = new Set<(msg: NodeMapUpdate) => void>();
   private readonly _disposeTransport: () => void;
+  /** Currently rendered component file path (set by useElementTracer) */
+  renderedFile: string | null = null;
 
   constructor(adapter: FrameworkAdapter, transport: TracingTransport) {
     this._adapter = adapter;
@@ -64,12 +66,7 @@ export class ElementTracer implements TracingResolver {
     const itemIndex = this._adapter.getItemIndex(element);
 
     const directResult = this._findInNodeMaps(source, itemIndex);
-
-    // Determine the "rendered component file" — the file with the most node map entries.
-    // Elements from THIS file use direct match. Elements from OTHER files (reusable
-    // components like Button.tsx) need walk-up to find the call site.
     const isFromRenderedFile = this._isRenderedComponentFile(source.fileName);
-
     if (directResult && isFromRenderedFile) return directResult;
 
     // Walk up fiber tree to find the CALL SITE when element is inside a reusable
@@ -97,22 +94,10 @@ export class ElementTracer implements TracingResolver {
     return null;
   }
 
-  /**
-   * Check if a fileName is the "rendered component" — the file shown in the editor.
-   * Determined by which file has the most node map entries (the main component file
-   * typically has 10-50+ entries, imported components have 1-5).
-   */
+  /** Check if fileName matches the currently rendered component file. */
   private _isRenderedComponentFile(fileName: string): boolean {
-    if (this._nodeMaps.size === 0) return true;
-    let maxCount = 0;
-    let maxFile = '';
-    for (const [file, entries] of this._nodeMaps) {
-      if (entries.length > maxCount) {
-        maxCount = entries.length;
-        maxFile = file;
-      }
-    }
-    return fileName === maxFile;
+    if (!this.renderedFile) return true; // Unknown — assume yes
+    return fileName.endsWith(this.renderedFile) || this.renderedFile.endsWith(fileName.replace(/^\/app\//, ''));
   }
 
   /** Look up a source location in cached node maps. */

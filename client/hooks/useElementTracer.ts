@@ -22,6 +22,8 @@ interface UseElementTracerOptions {
   enabled: boolean;
   /** Incrementing counter that signals iframe content has reloaded (new document). */
   loadCounter?: number;
+  /** Currently rendered component path (e.g. "src/examples/DatePicker.tsx") */
+  componentPath?: string;
 }
 
 interface UseElementTracerResult {
@@ -72,6 +74,7 @@ export function useElementTracer({
   projectId,
   enabled,
   loadCounter,
+  componentPath,
 }: UseElementTracerOptions): UseElementTracerResult {
   const tracerRef = useRef<ElementTracer | null>(null);
   const [ready, setReady] = useState(false);
@@ -160,6 +163,7 @@ export function useElementTracer({
       // Hook into React commit cycle inside the iframe to invalidate FiberSourceIndex
       unhookCommits = hookIntoReactCommits(sourceIndex, iframeWindow as unknown as typeof globalThis);
 
+      tracer.renderedFile = componentPath ?? null;
       tracerRef.current = tracer;
       setActiveTracer(tracer);
       if (!disposed) {

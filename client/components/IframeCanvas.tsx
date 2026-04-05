@@ -86,6 +86,7 @@ export default function IframeCanvas({
     projectId: meta?.projectId ?? '',
     enabled: previewReady,
     loadCounter: iframeLoadedCounter,
+    componentPath,
   });
 
   // Sync tracer async events (server-confirmed selections, refMapping remapping) with engine
