@@ -194,6 +194,8 @@ export default function RightSidebar({
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const selectedItemIndex =
+    selectedId && engine ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null) : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
@@ -211,6 +213,7 @@ export default function RightSidebar({
     engine,
     styleAdapter,
     activeInstanceId,
+    itemIndex: selectedItemIndex,
     refreshKey: styleRefreshKey + styleVersion,
   });
 

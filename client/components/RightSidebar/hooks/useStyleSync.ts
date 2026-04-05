@@ -100,7 +100,7 @@ export function useStyleSync({
     const skipVerification = !!currentState || cssProperties.length === 0;
 
     // Capture before-snapshot (before engine call)
-    const beforeSnapshot = !skipVerification ? captureComputedStyles(selectedId, cssProperties, selectedId) : null;
+    const beforeSnapshot = !skipVerification ? captureComputedStyles(selectedId, cssProperties) : null;
 
     setIsStyleSyncing(true);
     onSyncStart?.();
@@ -138,7 +138,6 @@ export function useStyleSync({
             styles,
             cssProperties,
             beforeSnapshot,
-            instanceId: selectedId,
             backendPromise,
             onVerified: finishSync,
             onNotApplied: (ctx) => {

@@ -52,12 +52,8 @@ export function getUniqueCSSProperties(styleKeys: string[]): string[] {
  * Capture a snapshot of computed styles for the given element in the preview iframe.
  * Returns null if element is not found in the DOM.
  */
-export function captureComputedStyles(
-  elementId: string,
-  cssProperties: string[],
-  instanceId?: string | null,
-): Record<string, string> | null {
-  const computedStyle = getComputedStylesFromIframe(elementId, instanceId);
+export function captureComputedStyles(elementId: string, cssProperties: string[]): Record<string, string> | null {
+  const computedStyle = getComputedStylesFromIframe(elementId);
   if (!computedStyle) return null;
 
   // CSSStyleDeclaration is live; snapshot eagerly into plain object
@@ -95,7 +91,6 @@ interface StyleVerificationParams {
   styles: Record<string, string>;
   cssProperties: string[];
   beforeSnapshot: Record<string, string> | null;
-  instanceId?: string | null;
   backendPromise?: Promise<void>;
   onVerified: () => void;
   onNotApplied: (ctx: StyleNotAppliedContext) => void;
@@ -115,7 +110,6 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     styles,
     cssProperties,
     beforeSnapshot,
-    instanceId,
     backendPromise,
     onVerified,
     onNotApplied,
@@ -150,7 +144,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
 
   function verifyStyles(): void {
     if (cancelled) return;
-    const afterSnapshot = captureComputedStyles(elementId, cssProperties, instanceId);
+    const afterSnapshot = captureComputedStyles(elementId, cssProperties);
     if (!afterSnapshot) {
       // Element gone — HMR removed it. Clear syncing.
       finish();
@@ -180,7 +174,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       iframe.removeEventListener('load', handleLoad);
       addTimer(() => {
         if (cancelled) return;
-        const afterSnapshot = captureComputedStyles(elementId, cssProperties, instanceId);
+        const afterSnapshot = captureComputedStyles(elementId, cssProperties);
         if (!afterSnapshot) {
           finish();
           onVerified();

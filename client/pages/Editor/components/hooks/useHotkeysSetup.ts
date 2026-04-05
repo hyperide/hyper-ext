@@ -255,13 +255,13 @@ export function useHotkeysSetup({
       if (selectedIds.length === 0 || !filePath) return;
 
       console.log('[Hotkey] Mod+C pressed, copying as TSX:', selectedIds.join(', '));
-      await copyMultipleElementsAsTSX(selectedIds, filePath, activeDesignInstanceId);
+      await copyMultipleElementsAsTSX(selectedIds, filePath);
     },
     {
       enabled: !!engine && selectedIds.length > 0 && !!meta?.filePath,
       enableOnFormTags: false,
     },
-    [engine, selectedIds, meta, activeDesignInstanceId],
+    [engine, selectedIds, meta],
   );
 
   // Hotkey: Cut elements (Mod+X)
@@ -288,7 +288,7 @@ export function useHotkeysSetup({
         }
       }
 
-      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, filePath, activeDesignInstanceId);
+      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, filePath);
       if (copySuccess) {
         engine.deleteASTElements(selectedIds, filePath);
         if (parentId) {
@@ -304,7 +304,7 @@ export function useHotkeysSetup({
       enabled: !!engine && selectedIds.length > 0 && !!meta?.filePath,
       enableOnFormTags: false,
     },
-    [engine, selectedIds, meta, activeDesignInstanceId],
+    [engine, selectedIds, meta],
   );
 
   // Hotkey: Paste element (Mod+V)
@@ -505,7 +505,7 @@ export function useHotkeysSetup({
           const root = engine.getRoot();
           const filePath = root.metadata?.filePath;
           if (typeof filePath === 'string') {
-            copyMultipleElementsAsTSX(currentSelectedIds, filePath, activeDesignInstanceId);
+            copyMultipleElementsAsTSX(currentSelectedIds, filePath);
           }
           return;
         }
@@ -532,20 +532,18 @@ export function useHotkeysSetup({
           const root = engine.getRoot();
           const filePath = root.metadata?.filePath;
           if (typeof filePath === 'string') {
-            copyMultipleElementsAsTSX(currentSelectedIds, filePath, activeDesignInstanceId).then(
-              async (copySuccess) => {
-                if (copySuccess) {
-                  engine.deleteASTElements(currentSelectedIds, filePath);
-                  if (parentId) {
-                    setTimeout(() => {
-                      engine.select(parentId);
-                    }, 100);
-                  } else {
-                    engine.clearSelection();
-                  }
+            copyMultipleElementsAsTSX(currentSelectedIds, filePath).then(async (copySuccess) => {
+              if (copySuccess) {
+                engine.deleteASTElements(currentSelectedIds, filePath);
+                if (parentId) {
+                  setTimeout(() => {
+                    engine.select(parentId);
+                  }, 100);
+                } else {
+                  engine.clearSelection();
                 }
-              },
-            );
+              }
+            });
           }
           return;
         }

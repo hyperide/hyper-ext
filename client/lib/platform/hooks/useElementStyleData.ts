@@ -50,6 +50,8 @@ export interface UseElementStyleDataOptions {
   styleAdapter?: StyleAdapter | null;
   /** Active instance ID — for scoping DOM queries in multi-instance mode */
   activeInstanceId?: string | null;
+  /** Item index for .map()-rendered elements — selects specific item in DOM */
+  itemIndex?: number | null;
   /** Increment to force re-read of styles (VS Code mode) */
   refreshKey?: number;
 }
@@ -153,7 +155,7 @@ const RPC_TIMEOUT = 10_000;
  * VS Code mode: sends `styles:readClassName` RPC to extension host.
  */
 export function useElementStyleData(options: UseElementStyleDataOptions): ElementStyleData {
-  const { elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, refreshKey } = options;
+  const { elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey } = options;
 
   const [data, setData] = useState<ElementStyleData>(EMPTY_DATA);
 
@@ -221,8 +223,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         return;
       }
 
-      // Get DOM element from iframe for computed styles
-      const domElement = getElementFromIframe(elementId, activeInstanceId);
+      // Get DOM element from iframe for computed styles (itemIndex selects specific .map() item)
+      const domElement = getElementFromIframe(elementId, itemIndex);
       const domTextContent = domElement?.textContent?.trim() || '';
 
       // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)

@@ -52,11 +52,7 @@ export async function copyElementAsTSX(elementId: string, filePath: string): Pro
  * Copy multiple elements as TSX code to system clipboard
  * If multiple elements, wraps them in React Fragment <>...</>
  */
-export async function copyMultipleElementsAsTSX(
-  elementIds: string[],
-  filePath: string,
-  instanceId?: string | null,
-): Promise<boolean> {
+export async function copyMultipleElementsAsTSX(elementIds: string[], filePath: string): Promise<boolean> {
   try {
     if (elementIds.length === 0) {
       console.warn('[TSX Clipboard] No elements to copy');
@@ -73,8 +69,8 @@ export async function copyMultipleElementsAsTSX(
 
     if (getPreviewIframe()?.contentDocument) {
       sortedIds = elementIds.slice().sort((a, b) => {
-        const elA = getElementFromIframe(a, instanceId);
-        const elB = getElementFromIframe(b, instanceId);
+        const elA = getElementFromIframe(a);
+        const elB = getElementFromIframe(b);
         if (!elA || !elB) return 0;
 
         const position = elA.compareDocumentPosition(elB);

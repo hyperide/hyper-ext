@@ -211,14 +211,14 @@ export function CanvasElementContextMenu({
   const handleCopy = useCallback(async () => {
     if (selectedIds.length === 0) return;
     if (engine && meta?.filePath) {
-      await copyMultipleElementsAsTSX(selectedIds, meta.filePath, activeDesignInstanceId);
+      await copyMultipleElementsAsTSX(selectedIds, meta.filePath);
     } else {
       canvas.sendEvent({
         type: 'contextMenu:copy',
         elementIds: selectedIds,
       } as never);
     }
-  }, [selectedIds, meta, activeDesignInstanceId, engine, canvas]);
+  }, [selectedIds, meta, engine, canvas]);
 
   const handlePaste = useCallback(async () => {
     if (engine && meta?.filePath) {
@@ -284,7 +284,7 @@ export function CanvasElementContextMenu({
   const handleCut = useCallback(async () => {
     if (selectedIds.length === 0) return;
     if (engine && meta?.filePath) {
-      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, meta.filePath, activeDesignInstanceId);
+      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, meta.filePath);
       if (copySuccess) {
         engine.deleteASTElements(selectedIds, meta.filePath);
       }
@@ -294,7 +294,7 @@ export function CanvasElementContextMenu({
         elementIds: selectedIds,
       } as never);
     }
-  }, [selectedIds, meta, engine, activeDesignInstanceId, canvas]);
+  }, [selectedIds, meta, engine, canvas]);
 
   const handleDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -314,7 +314,7 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: DOM-based parent lookup
-      const currentElement = getElementFromIframe(selectedId, activeDesignInstanceId);
+      const currentElement = getElementFromIframe(selectedId);
       if (!currentElement) return;
 
       let parent = currentElement.parentElement;
@@ -337,7 +337,7 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, engine, activeDesignInstanceId, canvas]);
+  }, [selectedIds, engine, canvas]);
 
   const handleSelectChild = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -365,7 +365,7 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: direct iframe DOM access
-      const element = getElementFromIframe(selectedId, activeDesignInstanceId);
+      const element = getElementFromIframe(selectedId);
       if (element) {
         const text = element.innerText || element.textContent || '';
         await navigator.clipboard.writeText(text);
@@ -376,7 +376,7 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, activeDesignInstanceId, engine, canvas]);
+  }, [selectedIds, engine, canvas]);
 
   const handleCopyAsHTML = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -385,7 +385,7 @@ export function CanvasElementContextMenu({
       // SaaS: direct iframe DOM access
       const htmlCodes: string[] = [];
       for (const selectedId of selectedIds) {
-        const element = getElementFromIframe(selectedId, activeDesignInstanceId);
+        const element = getElementFromIframe(selectedId);
         if (element) {
           htmlCodes.push(element.outerHTML);
         }
@@ -400,7 +400,7 @@ export function CanvasElementContextMenu({
         elementId: selectedIds[0],
       } as never);
     }
-  }, [selectedIds, activeDesignInstanceId, engine, canvas]);
+  }, [selectedIds, engine, canvas]);
 
   const handleWrapInDiv = useCallback(async () => {
     if (selectedIds.length === 0) return;
