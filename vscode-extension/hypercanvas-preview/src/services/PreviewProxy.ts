@@ -17,7 +17,7 @@ import * as path from 'node:path';
 const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
 const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-error-detection.js'), 'utf-8');
 const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-console-capture.js'), 'utf-8');
-const INJECTED_SCRIPTS = `<script>${interactionScriptContent}</script><script>${errorDetectionScriptContent}</script><script>${consoleCaptureScriptContent}</script>`;
+const INJECTED_SCRIPTS = `<script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
 
 export class PreviewProxy {
   private _server: http.Server | null = null;
