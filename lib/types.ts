@@ -119,6 +119,11 @@ export interface TreeNode {
   name?: string;
   collapsed?: boolean;
   children?: TreeNode[];
+  /** Source location of this element in the component file */
+  loc?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
   /** Function location for navigation (only for type="function") */
   functionLoc?: {
     start: { line: number; column: number };

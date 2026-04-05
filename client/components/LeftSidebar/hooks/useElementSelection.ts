@@ -10,10 +10,22 @@ import { resolveIdsToUuids } from '@/lib/element-tracing/id-bridge';
 import { usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
+  useCurrentComponent,
   useHoveredId as useSharedHoveredId,
   useSelectedIds as useSharedSelectedIds,
 } from '@/lib/platform/shared-editor-state';
 import type { TreeNode } from '../../ElementsTree';
+
+function findTreeNode(nodes: TreeNode[], id: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if (node.children) {
+      const found = findTreeNode(node.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
 interface UseElementSelectionResult {
   selectedIds: string[];
@@ -34,15 +46,61 @@ export function useElementSelection(
   const sharedSelectedIds = useSharedSelectedIds();
   const sharedHoveredId = useSharedHoveredId();
 
+  // Build nodeRef→UUID lookup from tree node locations (extension mode).
+  // Canvas sends nodeRef ("fileName:line:col"), tree uses UUID.
+  const nodeRefToUuid = useMemo(() => {
+    if (engine) return null; // SaaS uses id-bridge instead
+    const map = new Map<string, string>();
+    function walk(nodes: TreeNode[]) {
+      for (const node of nodes) {
+        if (node.loc) {
+          // nodeRef in extension iframe uses "fileName:line:col" format
+          // Match by line:col suffix (fileName varies between contexts)
+          map.set(`${node.loc.start.line}:${node.loc.start.column}`, node.id);
+        }
+        if (node.children) walk(node.children);
+      }
+    }
+    walk(elementsTree);
+    return map;
+  }, [engine, elementsTree]);
+
   // Engine stores nodeRef (canvas clicks) or UUID (tree clicks).
   // Tree nodes use UUID — resolve nodeRefs to UUIDs for matching.
-  const selectedIds = useMemo(
-    () => (engine ? resolveIdsToUuids(engineSelectedIds, engine) : sharedSelectedIds),
-    [engine, engineSelectedIds, sharedSelectedIds],
-  );
-  const hoveredId = engine ? null : sharedHoveredId;
+  const selectedIds = useMemo(() => {
+    if (engine) return resolveIdsToUuids(engineSelectedIds, engine);
+    if (!nodeRefToUuid || sharedSelectedIds.length === 0) return sharedSelectedIds;
+    // Extension: map nodeRef → UUID for tree highlighting
+    return sharedSelectedIds.map((id) => {
+      // Try parsing as "fileName:line:col" nodeRef
+      const parts = id.split(':');
+      if (parts.length >= 3) {
+        const col = Number(parts[parts.length - 1]);
+        const line = Number(parts[parts.length - 2]);
+        if (!Number.isNaN(line) && !Number.isNaN(col)) {
+          return nodeRefToUuid.get(`${line}:${col}`) ?? id;
+        }
+      }
+      return id;
+    });
+  }, [engine, engineSelectedIds, sharedSelectedIds, nodeRefToUuid]);
+
+  const hoveredId = useMemo(() => {
+    if (engine) return null;
+    if (!sharedHoveredId || !nodeRefToUuid) return sharedHoveredId;
+    const parts = sharedHoveredId.split(':');
+    if (parts.length >= 3) {
+      const col = Number(parts[parts.length - 1]);
+      const line = Number(parts[parts.length - 2]);
+      if (!Number.isNaN(line) && !Number.isNaN(col)) {
+        return nodeRefToUuid.get(`${line}:${col}`) ?? sharedHoveredId;
+      }
+    }
+    return sharedHoveredId;
+  }, [engine, sharedHoveredId, nodeRefToUuid]);
 
   const dispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+  const currentComponent = useCurrentComponent();
 
   const handleSelect = useCallback(
     (elementId: string, event: React.MouseEvent | React.KeyboardEvent) => {
@@ -104,8 +162,17 @@ export function useElementSelection(
         // Normal click
         engine.select(elementId);
       } else {
-        // VS Code path: simple select via dispatch
-        dispatch?.({ selectedIds: [elementId] });
+        // VS Code path: dispatch to shared state.
+        // Canvas iframe expects nodeRef format ("fileName:line:col") for overlay rendering.
+        // Tree sends UUID — find matching nodeRef from tree node loc if available.
+        let dispatchId = elementId;
+        const node = findTreeNode(elementsTree, elementId);
+        if (node?.loc && currentComponent?.path) {
+          // Build a syntheticRef that the iframe can use for overlay rendering.
+          // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
+          dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
+        }
+        dispatch?.({ selectedIds: [dispatchId] });
       }
     },
     [engine, dispatch, elementsTree],
