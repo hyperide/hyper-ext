@@ -70,18 +70,18 @@ function getItemIndexFromDOM(element: HTMLElement): number {
  */
 const iframeResolver: TracingResolver = {
   getSourceLocation(element: HTMLElement): SourceLocation | null {
-    // Full resolution chain: direct fiber → own-server source map → client source map
-    // Direct fiber handles Vite/React 18. Source maps handle Next.js RSC/Turbopack.
+    const fiber = getFiberFromDOM(element);
     let loc = getSourceLocationFromDOM(element);
-    if (loc === null) {
-      const fiber = getFiberFromDOM(element);
-      if (fiber) {
-        loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
-      }
+
+    // React 19: _debugStack gives compiled positions. Try source map resolution
+    // to get correct source positions. Also handles Next.js RSC/Turbopack.
+    if (fiber) {
+      const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+      if (smLoc) loc = smLoc;
     }
+
     // Resolve to call site for imported component internals (shared logic)
     if (loc) {
-      const fiber = getFiberFromDOM(element);
       return resolveCallSiteSource(loc, fiber, renderedComponentPath);
     }
     return loc;
@@ -98,52 +98,38 @@ const iframeResolver: TracingResolver = {
 
     // Direct fiber resolution (React 18 _debugSource / React 19 _debugStack, Vite).
     let source = getSourceLocationFromDOM(element);
+    const fiber = getFiberFromDOM(element);
 
-    if (source === null) {
-      // Approaches A + B: try source map caches when direct fiber resolution fails
-      // (Next.js Turbopack — compiled chunk URLs, not raw source paths).
-      const fiber = getFiberFromDOM(element);
-
-      if (fiber !== null) {
-        // 1. Own server source map — per-element precision for pure RSC pages
-        source = resolveOwnServerSourceMap(fiber);
-        // 2. Client source maps — handles test-preview route where page.tsx
-        //    renders as client component (Turbopack client chunks)
-        if (source === null) {
-          source = resolveViaClientSourceMap(fiber);
-        }
-        // 3. Chain-walking server source maps — last resort for RSC elements
-        //    without client frames (pure server-rendered root route)
-        if (source === null) {
-          warmServerChunkFrames(fiber);
-          source = resolveViaServerSourceMap(fiber);
-        }
+    // React 19 + Vite: _debugStack gives COMPILED positions. Try source map to get source.
+    // Also handles Next.js RSC/Turbopack when direct resolution fails.
+    if (fiber !== null) {
+      const smSource = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+      if (smSource) {
+        source = smSource;
+      } else if (source === null) {
+        // No source at all — warm source maps for async retry
+        warmServerChunkFrames(fiber);
+        source = resolveViaServerSourceMap(fiber);
 
         if (source === null) {
-          // All approaches null — warm remaining maps and register pending click
           warmFiberChunkFrames(fiber);
-          if (hasUnresolvedServerFrames(fiber)) {
+          const hasPending = (() => {
+            let c: Fiber | null = fiber;
+            while (c !== null) {
+              if (c._debugStack) {
+                for (const frame of extractClientChunkFrames(c._debugStack)) {
+                  const key = `${frame.url}:${frame.line}:${frame.col}`;
+                  if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
+                }
+                break;
+              }
+              c = (c.return as Fiber | null | undefined) ?? null;
+            }
+            return hasUnresolvedServerFrames(fiber);
+          })();
+          if (hasPending) {
             pendingClickElement = element;
             pendingClickTimestamp = Date.now();
-          } else {
-            const hasPendingClientFrames = (() => {
-              let c: Fiber | null = fiber;
-              while (c !== null) {
-                if (c._debugStack) {
-                  for (const frame of extractClientChunkFrames(c._debugStack)) {
-                    const key = `${frame.url}:${frame.line}:${frame.col}`;
-                    if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
-                  }
-                  break;
-                }
-                c = (c.return as Fiber | null | undefined) ?? null;
-              }
-              return false;
-            })();
-            if (hasPendingClientFrames) {
-              pendingClickElement = element;
-              pendingClickTimestamp = Date.now();
-            }
           }
         }
       }
@@ -312,15 +298,23 @@ let pendingClickElement: HTMLElement | null = null;
 let pendingClickTimestamp = 0;
 const PENDING_CLICK_TTL_MS = 5000;
 
-/** Extract Next.js client chunk frames (HTTP URLs) from an Error.stack string. */
+/** Extract client chunk frames (HTTP URLs) from an Error.stack string.
+ *  Supports Next.js (_next/static/chunks/) AND Vite (/src/ source files). */
 function extractClientChunkFrames(err: Error): Array<{ url: string; line: number; col: number }> {
   const frames: Array<{ url: string; line: number; col: number }> = [];
   for (const ln of (err.stack ?? '').split('\n')) {
     const m = ln.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
     if (!m) continue;
-    // Only HTTP/HTTPS Next.js static chunk URLs
-    if (!m[1].includes('_next/static/chunks/')) continue;
-    frames.push({ url: m[1], line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+    const url = m[1];
+    // Next.js static chunk URLs
+    if (url.includes('_next/static/chunks/')) {
+      frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+      continue;
+    }
+    // Vite source files (React 19: _debugStack has compiled positions that need source map)
+    if (url.startsWith('http') && url.includes('/src/') && !url.includes('node_modules')) {
+      frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+    }
   }
   return frames;
 }
@@ -335,13 +329,30 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
   if (clientSourceMapCache.has(key) || pendingClientFetches.has(key)) return;
   pendingClientFetches.add(key);
   try {
+    let sm: SourceMapV3 | null = null;
+
+    // Try .map file first (Next.js, webpack)
     const mapUrl = url.endsWith('.map') ? url : `${url}.map`;
-    const res = await fetch(mapUrl);
-    if (!res.ok) {
+    const mapRes = await fetch(mapUrl);
+    if (mapRes.ok) {
+      sm = (await mapRes.json()) as SourceMapV3;
+    } else {
+      // Vite: source maps are INLINE in the module itself (data: URI)
+      const srcRes = await fetch(url);
+      if (srcRes.ok) {
+        const text = await srcRes.text();
+        const inlineMatch = text.match(/\/\/# sourceMappingURL=data:application\/json;base64,(.+)$/m);
+        if (inlineMatch) {
+          const decoded = atob(inlineMatch[1]);
+          sm = JSON.parse(decoded) as SourceMapV3;
+        }
+      }
+    }
+
+    if (!sm) {
       clientSourceMapCache.set(key, null);
       return;
     }
-    const sm = (await res.json()) as SourceMapV3;
     const loc = resolveInSourceMap(sm, line, col);
     // Bundled chunks include React internals (e.g. jsxDEV) whose source maps point to
     // node_modules. Mark those in clientInternalFrames so the lookup skips to the next
