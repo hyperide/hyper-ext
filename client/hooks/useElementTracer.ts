@@ -10,8 +10,9 @@ import { findNearestSourceLocation } from '@shared/element-tracing/fiber-interna
 import { useEffect, useRef, useState } from 'react';
 import { setActiveTracer } from '@/lib/element-tracing/active-tracer';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
-import { hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
+import { FiberSourceIndex, hookIntoReactCommits } from '@/lib/element-tracing/fiber-source-index';
 import type { Fiber } from '@/lib/element-tracing/fiber-utils';
+import { FiberTag, getFiberFromDOM } from '@/lib/element-tracing/fiber-utils';
 import { ReactAdapter } from '@/lib/element-tracing/react-adapter';
 import { WSTracingTransport } from '@/lib/element-tracing/ws-tracing-transport';
 
@@ -111,7 +112,11 @@ export function useElementTracer({
       }
 
       // Use cross-realm safe detection (nodeType, not instanceof HTMLElement)
-      if (!detectReactInIframe(doc)) {
+      const detected = detectReactInIframe(doc);
+      if (attempt === 0 || attempt === MAX_DETECT_ATTEMPTS || detected) {
+        console.log(`[Tracer] attempt=${attempt} detected=${detected} body=${doc.body?.children.length}`);
+      }
+      if (!detected) {
         if (attempt < MAX_DETECT_ATTEMPTS) {
           detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
         }
@@ -119,12 +124,41 @@ export function useElementTracer({
       }
 
       const adapter = new ReactAdapter(doc);
+
+      // Patch: ReactAdapter.getSourceIndex() internally uses findReactRoot which has
+      // `instanceof HTMLElement` (Bun-cached, fails cross-realm). Override sourceIndex
+      // with a cross-realm safe root fiber provider.
+      const crossRealmRootProvider = (): Fiber | null => {
+        const selectors = ['#root', '#__next', '#app', '[data-reactroot]'];
+        for (const sel of selectors) {
+          const el = doc.querySelector(sel);
+          if (!el || el.nodeType !== 1) continue;
+          // Check element and firstChild for fiber
+          for (const candidate of [el, el.firstElementChild]) {
+            if (!candidate || candidate.nodeType !== 1) continue;
+            const fiber = getFiberFromDOM(candidate as HTMLElement);
+            if (fiber) {
+              let current: Fiber | null = fiber;
+              while (current) {
+                if (current.tag === FiberTag.HostRoot) return current;
+                current = current.return;
+              }
+              return fiber;
+            }
+          }
+        }
+        return null;
+      };
+      const sourceIndex = new FiberSourceIndex(crossRealmRootProvider, doc);
+      // Replace adapter's sourceIndex with our cross-realm safe one
+      (adapter as unknown as { sourceIndex: FiberSourceIndex }).sourceIndex = sourceIndex;
+
       const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/element-tracing/${projectId}`;
       const transport = new WSTracingTransport(() => new WebSocket(wsUrl));
       const tracer = new ElementTracer(adapter, transport);
 
       // Hook into React commit cycle inside the iframe to invalidate FiberSourceIndex
-      unhookCommits = hookIntoReactCommits(adapter.getSourceIndex(), iframeWindow as unknown as typeof globalThis);
+      unhookCommits = hookIntoReactCommits(sourceIndex, iframeWindow as unknown as typeof globalThis);
 
       tracerRef.current = tracer;
       setActiveTracer(tracer);

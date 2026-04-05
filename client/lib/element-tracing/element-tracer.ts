@@ -62,23 +62,11 @@ export class ElementTracer implements TracingResolver {
 
     const itemIndex = this._adapter.getItemIndex(element);
 
-    // Direct lookup by exact fileName (same environment — host or container)
-    let nodes = this._nodeMaps.get(source.fileName);
-
-    // Fallback: container path (/app/src/...) vs host path (/host/.../src/...) mismatch.
-    // Docker mounts project at /app/, so strip prefix and match by suffix.
-    if (!nodes && source.fileName.startsWith('/app/')) {
-      const suffix = source.fileName.slice('/app/'.length); // e.g. "src/examples/DatePicker.tsx"
-      for (const [key, entries] of this._nodeMaps) {
-        if (key.endsWith(suffix)) {
-          nodes = entries;
-          break;
-        }
-      }
-    }
-
+    const nodes = this._nodeMaps.get(source.fileName);
     if (nodes) {
-      const entry = nodes.find((n) => n.loc.line === source.line && n.loc.column === source.column);
+      const entry = nodes.find(
+        (n) => n.loc.fileName === source.fileName && n.loc.line === source.line && n.loc.column === source.column,
+      );
       if (entry) {
         return { nodeRef: entry.nodeRef, entry, source, itemIndex };
       }
