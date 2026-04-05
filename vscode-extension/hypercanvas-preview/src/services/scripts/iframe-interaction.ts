@@ -79,19 +79,24 @@ const iframeResolver: TracingResolver = {
         loc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
       }
     }
-    // Walk up fiber to find call site when source is inside a reusable component
+    // Walk up fiber to find call site ONLY for imported components
     if (loc) {
-      const fiber = getFiberFromDOM(element);
-      if (fiber) {
-        let current = fiber.return;
-        for (let i = 0; i < 30 && current; i++) {
-          if (current._debugSource) {
-            const callerLoc = debugSourceToLocation(current._debugSource);
-            if (callerLoc.fileName !== loc.fileName) {
-              return callerLoc;
+      const isFromRendered = renderedComponentPath
+        ? loc.fileName.endsWith(renderedComponentPath) || renderedComponentPath.endsWith(loc.fileName)
+        : true;
+      if (!isFromRendered) {
+        const fiber = getFiberFromDOM(element);
+        if (fiber) {
+          let current = fiber.return;
+          for (let i = 0; i < 30 && current; i++) {
+            if (current._debugSource) {
+              const callerLoc = debugSourceToLocation(current._debugSource);
+              if (callerLoc.fileName !== loc.fileName) {
+                return callerLoc;
+              }
             }
+            current = (current.return as Fiber | null | undefined) ?? null;
           }
-          current = (current.return as Fiber | null | undefined) ?? null;
         }
       }
     }
@@ -162,21 +167,27 @@ const iframeResolver: TracingResolver = {
 
     if (source === null) return null;
 
-    // Walk up fiber to find call site when source is from a reusable component's
-    // internal element (e.g. <button> inside Button.tsx). Prefer the CALLER source
-    // from a different file (where <Button> is used in the parent component).
-    const fiber = getFiberFromDOM(element);
-    if (fiber && source) {
-      let current = fiber.return;
-      for (let i = 0; i < 30 && current; i++) {
-        if (current._debugSource) {
-          const callerLoc = debugSourceToLocation(current._debugSource);
-          if (callerLoc.fileName !== source.fileName) {
-            source = callerLoc;
-            break;
+    // Walk up fiber to find call site ONLY when source is from an imported
+    // component (different file than the rendered component). For elements
+    // from the rendered file itself, use direct source.
+    const isFromRenderedFile = renderedComponentPath
+      ? source.fileName.endsWith(renderedComponentPath) || renderedComponentPath.endsWith(source.fileName)
+      : true;
+
+    if (!isFromRenderedFile) {
+      const fiber = getFiberFromDOM(element);
+      if (fiber) {
+        let current = fiber.return;
+        for (let i = 0; i < 30 && current; i++) {
+          if (current._debugSource) {
+            const callerLoc = debugSourceToLocation(current._debugSource);
+            if (callerLoc.fileName !== source.fileName) {
+              source = callerLoc;
+              break;
+            }
           }
+          current = (current.return as Fiber | null | undefined) ?? null;
         }
-        current = (current.return as Fiber | null | undefined) ?? null;
       }
     }
 
@@ -684,6 +695,18 @@ function scrollIntoViewCenterSmooth(el: Element): void {
     }
   }
 }
+
+// === Rendered component path (from URL ?component= param) ===
+// Used to determine if a clicked element is from the rendered file or an imported component.
+// Same logic as ElementTracer.renderedFile in SaaS.
+const renderedComponentPath: string | null = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('component') ?? null;
+  } catch {
+    return null;
+  }
+})();
 
 // === State (synced from parent webview via postMessage) ===
 const state = {
