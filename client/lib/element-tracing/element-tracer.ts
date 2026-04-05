@@ -87,9 +87,25 @@ export class ElementTracer implements TracingResolver {
   private _findInNodeMaps(source: SourceLocation, itemIndex: number): LocalResolveResult | null {
     const nodes = this._nodeMaps.get(source.fileName);
     if (!nodes) return null;
-    const entry = nodes.find(
+
+    // Exact line + column match
+    let entry = nodes.find(
       (n) => n.loc.fileName === source.fileName && n.loc.line === source.line && n.loc.column === source.column,
     );
+
+    // Fuzzy: Vite Babel plugin _debugSource column can differ from Babel AST loc.start.column.
+    // Fall back to closest element on the same line.
+    if (!entry) {
+      const sameLine = nodes.filter((n) => n.loc.line === source.line);
+      if (sameLine.length === 1) {
+        entry = sameLine[0];
+      } else if (sameLine.length > 1) {
+        entry = sameLine.reduce((closest, n) =>
+          Math.abs(n.loc.column - source.column) < Math.abs(closest.loc.column - source.column) ? n : closest,
+        );
+      }
+    }
+
     if (!entry) return null;
     return { nodeRef: entry.nodeRef, entry, source, itemIndex };
   }
