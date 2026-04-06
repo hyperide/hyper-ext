@@ -126,10 +126,10 @@ export class AstService {
         if (locEntry) {
           return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
         }
-        // Direct position fallback — same approach as StyleReadService.
-        // AstService parses the CURRENT file before writing, so syntheticRef's
-        // line:column are valid for THIS AST (unlike stale source maps).
-        return findElementByPosition(ast, line, column);
+        // NOT falling back to direct findElementByPosition — source-mapped line:col
+        // from React fiber don't always match AST positions (Vite transforms shift them).
+        // Writing to wrong position corrupts the file. Style reads work because
+        // StyleReadService reads then discards; writes are destructive.
       }
     }
     return null;
