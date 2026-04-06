@@ -126,8 +126,10 @@ export class AstService {
         if (locEntry) {
           return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
         }
-        // Note: intentionally NOT falling back to direct position —
-        // source-mapped line:col may differ from AST line:col, writing to wrong position corrupts file
+        // Direct position fallback — same approach as StyleReadService.
+        // AstService parses the CURRENT file before writing, so syntheticRef's
+        // line:column are valid for THIS AST (unlike stale source maps).
+        return findElementByPosition(ast, line, column);
       }
     }
     return null;
