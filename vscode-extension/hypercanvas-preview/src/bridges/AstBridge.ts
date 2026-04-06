@@ -159,8 +159,17 @@ export class AstBridge {
    * Handle updateStyles message
    */
   private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
+    // elementId from the client is in nodeRef format ("fileName:line:col") — pass as nodeRef for element resolution
+    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
-      this._astService.updateStyles(message.filePath, message.elementId, message.styles, message.state),
+      this._astService.updateStyles(
+        message.filePath,
+        message.elementId,
+        message.styles,
+        message.state,
+        undefined,
+        nodeRef,
+      ),
     );
 
     return {
