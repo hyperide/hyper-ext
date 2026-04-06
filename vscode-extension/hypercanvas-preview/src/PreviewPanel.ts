@@ -897,9 +897,9 @@ export class PreviewPanel {
         await editor.document.save();
       }
     }
-    if (handled) {
-      this._bumpStyleVersion();
-    }
+    // Always bump styleVersion to refresh inspector — both canvas stack and native undo paths
+    // revert the file on disk, but inspector caches styles and needs explicit invalidation
+    this._bumpStyleVersion();
   }
 
   /**
@@ -920,9 +920,8 @@ export class PreviewPanel {
         await editor.document.save();
       }
     }
-    if (handled) {
-      this._bumpStyleVersion();
-    }
+    // Always bump styleVersion to refresh inspector after redo
+    this._bumpStyleVersion();
   }
 
   /**
