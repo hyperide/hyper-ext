@@ -106,9 +106,28 @@ export class AstService {
     _elementId: string | undefined,
   ): FindElementResult | null {
     if (nodeRef) {
+      // Try nodeRef lookup first (format: "filePath:index")
       const entry = this._nodeMapService.resolveNodeRef(nodeRef);
       if (entry) {
         return findElementByPosition(ast, entry.loc.line, entry.loc.column);
+      }
+
+      // Fallback: parse as source location "filePath:line:column" (from React fiber _debugSource)
+      const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+      if (m) {
+        const line = Number.parseInt(m[2], 10);
+        const column = Number.parseInt(m[3], 10);
+        // Try resolving via source map location
+        const locEntry = this._nodeMapService.resolveSourceLocation({
+          fileName: m[1],
+          line,
+          column,
+        });
+        if (locEntry) {
+          return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
+        }
+        // Direct position fallback — use the source location directly
+        return findElementByPosition(ast, line, column);
       }
     }
     return null;
