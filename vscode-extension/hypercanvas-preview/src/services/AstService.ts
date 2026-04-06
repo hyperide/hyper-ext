@@ -126,8 +126,8 @@ export class AstService {
         if (locEntry) {
           return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
         }
-        // Direct position fallback — use the source location directly
-        return findElementByPosition(ast, line, column);
+        // Note: intentionally NOT falling back to direct position —
+        // source-mapped line:col may differ from AST line:col, writing to wrong position corrupts file
       }
     }
     return null;
