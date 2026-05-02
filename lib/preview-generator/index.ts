@@ -4,6 +4,7 @@ export {
   generatePreviewContent,
   generateStandaloneEntry,
   type PreviewComponentEntry,
+  type ProviderWrapConfig,
   sampleExportToKey,
 } from './generator';
 export {

@@ -21,7 +21,7 @@ import {
   generateRouteFileContent,
   getRouteFilePaths,
 } from './framework-routing';
-import { generatePreviewContent, type PreviewComponentEntry } from './generator';
+import { generatePreviewContent, type PreviewComponentEntry, type ProviderWrapConfig } from './generator';
 import { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
 
 /**
@@ -50,6 +50,8 @@ export interface PreviewFileManagerConfig {
   projectRoot: string;
   io: FileIO;
   isNextPagesRouter?: boolean;
+  /** Wrap preview components with project-specific providers (theme, safe area, etc.) */
+  providerWrap?: ProviderWrapConfig;
 }
 
 export class PreviewGenerationError extends Error {
@@ -288,11 +290,13 @@ export class PreviewFileManager {
   private projectRoot: string;
   private io: FileIO;
   private isNextPagesRouter: boolean;
+  private providerWrap?: ProviderWrapConfig;
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
     this.io = config.io;
     this.isNextPagesRouter = config.isNextPagesRouter ?? false;
+    this.providerWrap = config.providerWrap;
   }
 
   /** Determine the preview file path based on project structure */
@@ -400,7 +404,10 @@ export class PreviewFileManager {
       }
     }
 
-    const content = generatePreviewContent(allEntries, { isNextPagesRouter: this.isNextPagesRouter });
+    const content = generatePreviewContent(allEntries, {
+      isNextPagesRouter: this.isNextPagesRouter,
+      providerWrap: this.providerWrap,
+    });
 
     const valid = await isValidTypeScript(content);
     if (!valid) {
@@ -495,6 +502,7 @@ export class PreviewFileManager {
 
     const content = generatePreviewContent(entries, {
       isNextPagesRouter: this.isNextPagesRouter,
+      providerWrap: this.providerWrap,
     });
 
     const valid = await isValidTypeScript(content);

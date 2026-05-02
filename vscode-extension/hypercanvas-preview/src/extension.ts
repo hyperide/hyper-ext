@@ -59,6 +59,77 @@ let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
 
+/**
+ * Detect project-specific providers needed by preview components.
+ * Analyzes App.web.tsx / App.tsx for SafeAreaProvider, TamaguiProvider, NavigationContainer.
+ * Returns provider wrap config for __canvas_preview__.tsx generation.
+ */
+async function detectPreviewProviders(
+  root: string,
+): Promise<import('@lib/preview-generator').ProviderWrapConfig | undefined> {
+  try {
+    // Check App.web.tsx first (RN web projects), then App.tsx
+    let appContent = '';
+    for (const name of ['App.web.tsx', 'App.tsx']) {
+      try {
+        appContent = await readFile(join(root, name), 'utf-8');
+        break;
+      } catch {
+        /* file doesn't exist — try next */
+      }
+    }
+    if (!appContent) return undefined;
+
+    const imports: string[] = [];
+    let wrapOpen = '';
+    let wrapClose = '';
+
+    // Detect TamaguiProvider + config
+    const tamaguiCfg = appContent.match(
+      /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
+    );
+    if (tamaguiCfg && appContent.includes('TamaguiProvider')) {
+      const cfgVar = tamaguiCfg[1] || tamaguiCfg[2];
+      const cfgPath = tamaguiCfg[3];
+      const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
+      const theme = themeMatch?.[1] || 'dark';
+      imports.push("import { TamaguiProvider } from 'tamagui';");
+      imports.push(tamaguiCfg[1] ? `import { ${cfgVar} } from '${cfgPath}';` : `import ${cfgVar} from '${cfgPath}';`);
+      wrapOpen += `<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`;
+      wrapClose = `</TamaguiProvider>${wrapClose}`;
+    }
+
+    // Detect SafeAreaProvider
+    if (appContent.includes('SafeAreaProvider')) {
+      imports.push("import { SafeAreaProvider } from 'react-native-safe-area-context';");
+      wrapOpen = `<SafeAreaProvider>${wrapOpen}`;
+      wrapClose = `${wrapClose}</SafeAreaProvider>`;
+    }
+
+    // Detect NavigationContainer
+    if (appContent.includes('NavigationContainer')) {
+      imports.push("import { NavigationContainer } from '@react-navigation/native';");
+      // Place inside SafeAreaProvider but outside TamaguiProvider
+      const safeIdx = wrapOpen.indexOf('<TamaguiProvider');
+      if (safeIdx >= 0) {
+        wrapOpen = `${wrapOpen.slice(0, safeIdx)}<NavigationContainer>${wrapOpen.slice(safeIdx)}`;
+        const tamaguiCloseIdx = wrapClose.indexOf('</TamaguiProvider>');
+        if (tamaguiCloseIdx >= 0) {
+          wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + '</TamaguiProvider>'.length)}</NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + '</TamaguiProvider>'.length)}`;
+        }
+      } else {
+        wrapOpen = `<NavigationContainer>${wrapOpen}`;
+        wrapClose = `${wrapClose}</NavigationContainer>`;
+      }
+    }
+
+    if (imports.length === 0) return undefined;
+    return { imports, wrapOpen, wrapClose };
+  } catch {
+    return undefined;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperIDE] Extension activating...');
 
@@ -216,9 +287,20 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Deterministic preview file manager (no AI, no network)
   const vsCodeIO = new VSCodeFileIO();
-  const previewManager = new PreviewFileManager({
+  const providerWrapPromise = detectPreviewProviders(workspaceRoot);
+  let previewManager = new PreviewFileManager({
     projectRoot: workspaceRoot,
     io: vsCodeIO,
+  });
+  // Async: upgrade preview manager with detected providers once ready
+  providerWrapPromise.then((providerWrap) => {
+    if (providerWrap) {
+      previewManager = new PreviewFileManager({
+        projectRoot: workspaceRoot,
+        io: vsCodeIO,
+        providerWrap,
+      });
+    }
   });
 
   // Mode manager: orchestrates App Shell ↔ Isolated transitions via FSWatch

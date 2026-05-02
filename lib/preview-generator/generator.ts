@@ -18,8 +18,19 @@ export interface PreviewComponentEntry {
   importPath: string;
 }
 
+export interface ProviderWrapConfig {
+  /** Import lines for providers, e.g. "import { SafeAreaProvider } from 'react-native-safe-area-context'" */
+  imports: string[];
+  /** Opening JSX tags, e.g. "<SafeAreaProvider><TamaguiProvider config={config}>" */
+  wrapOpen: string;
+  /** Closing JSX tags, e.g. "</TamaguiProvider></SafeAreaProvider>" */
+  wrapClose: string;
+}
+
 export interface GeneratePreviewOptions {
   isNextPagesRouter?: boolean;
+  /** Wrap rendered components with project-specific providers (theme, safe area, navigation) */
+  providerWrap?: ProviderWrapConfig;
 }
 
 /** Convert 'SampleDefault' → 'default', 'SamplePrimary' → 'primary' */
@@ -96,6 +107,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
     lines.push("import { useRouter } from 'next/router';");
   }
 
+  // Provider imports for project-specific wrapping (theme, safe area, navigation)
+  if (options?.providerWrap?.imports.length) {
+    for (const imp of options.providerWrap.imports) {
+      lines.push(imp);
+    }
+  }
+
   lines.push('');
   lines.push('type InstanceEntry = { x?: number; y?: number; props?: Record<string, unknown> };');
   lines.push('type PreviewComponent = React.ComponentType<Record<string, unknown>>;');
@@ -170,9 +188,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 
   // 8. CanvasPreview component
   if (options?.isNextPagesRouter) {
-    lines.push(...buildCanvasPreviewNextPages());
+    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap));
   } else {
-    lines.push(...buildCanvasPreviewURLParams());
+    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap));
   }
 
   return `${lines.join('\n')}\n`;
@@ -224,7 +242,7 @@ function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   return `import { ${allImports.join(', ')} } from '${entry.importPath}';`;
 }
 
-function buildCanvasPreviewURLParams(): string[] {
+function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig): string[] {
   return [
     'interface CanvasPreviewProps {',
     '  component?: string | null;',
@@ -267,13 +285,13 @@ function buildCanvasPreviewURLParams(): string[] {
     "    return () => window.removeEventListener('message', onMessage);",
     '  }, []);',
     '',
-    ...buildCanvasPreviewBody(),
+    ...buildCanvasPreviewBody(providerWrap),
     '}',
     '',
   ];
 }
 
-function buildCanvasPreviewNextPages(): string[] {
+function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig): string[] {
   return [
     'export default function CanvasPreview() {',
     '  const router = useRouter();',
@@ -302,7 +320,7 @@ function buildCanvasPreviewNextPages(): string[] {
     "    return () => window.removeEventListener('message', onMessage);",
     '  }, []);',
     '',
-    ...buildCanvasPreviewBody(),
+    ...buildCanvasPreviewBody(providerWrap),
     '}',
     '',
   ];
@@ -343,7 +361,9 @@ function buildErrorBoundary(): string[] {
   ];
 }
 
-function buildCanvasPreviewBody(): string[] {
+function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
+  const wo = providerWrap?.wrapOpen ?? '';
+  const wc = providerWrap?.wrapClose ?? '';
   return [
     '  if (!componentPath) {',
     "    return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>",
@@ -363,13 +383,13 @@ function buildCanvasPreviewBody(): string[] {
     '        <p>Component &quot;{componentPath}&quot; is not available</p>',
     '      </div>;',
     '    }',
-    '    return <ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div></ComponentErrorBoundary>;',
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
     '',
     '  return (',
-    '    <ComponentErrorBoundary componentPath={componentPath}>',
+    `    ${wo}<ComponentErrorBoundary componentPath={componentPath}>`,
     "    <div style={{ position: 'relative', width: 10000, height: 10000 }}>",
     '      {Object.entries(instances).map(([id, instance]: [string, InstanceEntry]) => {',
     '        const { x = 0, y = 0, props } = instance;',
@@ -405,7 +425,7 @@ function buildCanvasPreviewBody(): string[] {
     '        );',
     '      })}',
     '    </div>',
-    '    </ComponentErrorBoundary>',
+    `    </ComponentErrorBoundary>${wc}`,
     '  );',
   ];
 }
