@@ -30,6 +30,8 @@ interface PropsFormProps {
   onAllRequiredFilled?: (allFilled: boolean) => void;
   /** Increment to reset all field values to empty */
   resetKey?: number;
+  /** Initial values to populate the form (e.g. from cache) */
+  initialValues?: Record<string, unknown>;
 }
 
 /** Convert extension's SimplePropInfo to PropTypeInfo for rendering */
@@ -134,8 +136,9 @@ export function PropsForm({
   onChange,
   onAllRequiredFilled,
   resetKey,
+  initialValues,
 }: PropsFormProps) {
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [focusPath, setFocusPath] = useState<string | null>(null);
 
   // Reset values when resetKey changes (controlled reset from parent)

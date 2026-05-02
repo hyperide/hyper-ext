@@ -206,6 +206,9 @@ function ReconnectingBanner() {
 // Component Error Overlay (shown over iframe when ErrorBoundary catches)
 // ============================================================================
 
+/** Per-component prop values cache — persists across component switches, cleared on sample creation */
+const propsCache = new Map<string, Record<string, unknown>>();
+
 interface ComponentErrorOverlayProps {
   componentPath: string;
   error: string;
@@ -254,7 +257,8 @@ function ComponentErrorOverlay({
       ?.replace(/\.tsx?$/, '') ?? componentPath;
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
-  const propValuesRef = useRef<Record<string, unknown>>({});
+  const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
+  const propValuesRef = useRef<Record<string, unknown>>(cachedValues ?? {});
   const [allRequiredFilled, setAllRequiredFilled] = useState(false);
   const [sampleCreated, setSampleCreated] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -262,16 +266,20 @@ function ComponentErrorOverlay({
 
   const [hasAnyProps, setHasAnyProps] = useState(false);
 
-  const handlePropsChange = useCallback((values: Record<string, unknown>) => {
-    propValuesRef.current = values;
-    const hasFilled = Object.values(values).some((v) => {
-      if (v == null) return false;
-      if (typeof v === 'string') return v.trim() !== '';
-      if (Array.isArray(v)) return v.length > 0;
-      return true;
-    });
-    setHasAnyProps(hasFilled);
-  }, []);
+  const handlePropsChange = useCallback(
+    (values: Record<string, unknown>) => {
+      propValuesRef.current = values;
+      propsCache.set(componentPath, values);
+      const hasFilled = Object.values(values).some((v) => {
+        if (v == null) return false;
+        if (typeof v === 'string') return v.trim() !== '';
+        if (Array.isArray(v)) return v.length > 0;
+        return true;
+      });
+      setHasAnyProps(hasFilled);
+    },
+    [componentPath],
+  );
 
   const handleCreateSample = useCallback(() => {
     const filled = Object.entries(propValuesRef.current).filter(([, v]) => {
@@ -281,8 +289,9 @@ function ComponentErrorOverlay({
       return true;
     });
     onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
+    propsCache.delete(componentPath);
     setSampleCreated(true);
-  }, [onCreateSample, sampleName]);
+  }, [onCreateSample, sampleName, componentPath]);
 
   const sampleCountRef = useRef(1);
   const handleCreateNew = useCallback(() => {
@@ -311,6 +320,7 @@ function ComponentErrorOverlay({
               onChange={handlePropsChange}
               onAllRequiredFilled={setAllRequiredFilled}
               resetKey={formKey}
+              initialValues={cachedValues}
             />
             <p style={errorOverlayHintStyle}>
               Fill props here, edit them in the code editor, or combine both approaches.
