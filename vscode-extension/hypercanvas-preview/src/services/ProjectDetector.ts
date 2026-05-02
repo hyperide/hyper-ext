@@ -269,9 +269,30 @@ export async function detectCssSystem(
   // Tailwind (bare — most common, check last so design systems win)
   if (has('tailwindcss')) return 'tailwind';
 
-  // No recognizable CSS dependency found — return unknown rather than assuming
-  // CSS Modules (which are detected by file extension at build time, not by deps).
+  // CSS Modules have no package.json dependency — detect by scanning src/
+  // for *.module.css / *.module.scss / *.module.less files.
+  if (await hasCssModuleFiles(projectPath)) return 'cssmodules';
+
   return 'unknown';
+}
+
+/**
+ * Check if the project uses CSS Modules by looking for .module.css/.scss/.less
+ * files in common source directories.
+ */
+async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
+  const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+  for (const dir of SOURCE_DIRS) {
+    try {
+      const fullDir = path.join(projectPath, dir);
+      const entries = await fs.readdir(fullDir, { recursive: true });
+      const hasModule = entries.some((e) => typeof e === 'string' && /\.module\.(css|scss|less)$/.test(e));
+      if (hasModule) return true;
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+  return false;
 }
 
 /**
