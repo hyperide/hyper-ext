@@ -108,16 +108,17 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Forward to extension host which reads the .map file from the local filesystem.
           canvas.sendEvent(msg as unknown as PlatformMessage);
         } else if (msg.type === 'hypercanvas:componentError') {
-          // ErrorBoundary caught a render error — show overlay in webview layer
-          setComponentError({
-            componentPath: msg.componentPath,
-            error: msg.error,
+          // ErrorBoundary caught a render error — show overlay in webview layer.
+          // Deduplicate: skip if same componentPath already showing (HMR re-renders send duplicates).
+          setComponentError((prev) => {
+            if (prev && prev.componentPath === msg.componentPath) return prev;
+            // Request prop type schema only on first error for this component
+            canvas.sendEvent({
+              type: 'errorBoundary:getPropsSchema',
+              componentPath: msg.componentPath,
+            } as unknown as PlatformMessage);
+            return { componentPath: msg.componentPath, error: msg.error };
           });
-          // Request prop type schema from extension (async enrichment)
-          canvas.sendEvent({
-            type: 'errorBoundary:getPropsSchema',
-            componentPath: msg.componentPath,
-          } as unknown as PlatformMessage);
         }
         return;
       }
@@ -247,10 +248,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
           setShowNoComponentHint(false);
-          setComponentError(null); // Clear error when switching components
-          // Track current component from URL for re-send after HMR reload
+          // Only clear error when switching to a different component
           try {
             const comp = new URL(url).searchParams.get('component');
+            setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
             if (comp) currentComponentRef.current = comp;
           } catch {
             /* ignore */
@@ -286,7 +287,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'setComponent': {
           const comp = typeof msg.component === 'string' ? msg.component : null;
           if (comp) currentComponentRef.current = comp;
-          setComponentError(null); // Clear error when switching components
+          // Only clear error when switching to a DIFFERENT component
+          setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
           const frame = iframeElRef.current;
           if (frame?.contentWindow) {
             // Send via postMessage — no iframe reload
