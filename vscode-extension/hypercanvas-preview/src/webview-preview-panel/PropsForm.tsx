@@ -395,25 +395,35 @@ function pick<T>(arr: T[]): T {
 function generateObjectValues(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const { name, typeInfo } of fields) {
-    // Type-specific generators take priority over name-based ones
     if (typeInfo.type === 'boolean') {
-      result[name] = Math.random() > 0.5;
+      const gen = getNumberFieldGenerator(name);
+      result[name] = gen ? gen() > 0.5 : Math.random() > 0.5;
     } else if (typeInfo.type === 'number') {
-      const gen = getFieldGenerator(name);
-      result[name] = gen ? Number(gen()) : Math.floor(Math.random() * 1000);
+      const gen = getNumberFieldGenerator(name);
+      result[name] = gen ? gen() : Math.floor(Math.random() * 1000);
     } else if (typeInfo.type === 'object' && typeInfo.objectSchema) {
       const nestedFields = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
       result[name] = generateObjectValues(nestedFields);
-    } else {
-      const gen = getFieldGenerator(name);
-      result[name] = gen ? gen() : `sample-${name}`;
+    } else if (typeInfo.type === 'enum' && typeInfo.enumValues?.length) {
+      result[name] = typeInfo.enumValues[0];
+    } else if (typeInfo.type === 'array') {
+      result[name] = [];
+    } else if (typeInfo.type === 'function') {
+      result[name] = undefined;
+    } else if (typeInfo.type === 'reactNode') {
+      const gen = getStringFieldGenerator(name);
+      result[name] = gen ? gen() : 'Sample content';
+    } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
+      const gen = getStringFieldGenerator(name);
+      result[name] = gen ? gen() : undefined;
     }
+    // union, object without schema — skip (undefined)
   }
   return result;
 }
 
-/** Detect field purpose from name and return a generator, or null */
-function getFieldGenerator(name: string): (() => string) | null {
+/** Name-based generator for string fields */
+function getStringFieldGenerator(name: string): (() => string) | null {
   const n = name.toLowerCase();
   if (/^id$|id$/i.test(name)) return generateId;
   if (n === 'name' || n === 'fullname' || n === 'displayname' || n === 'username' || n === 'author')
@@ -426,14 +436,26 @@ function getFieldGenerator(name: string): (() => string) | null {
   if (n === 'url' || n === 'href' || n === 'link' || n === 'website') return () => pick(URLS);
   if (n === 'color' || n === 'bgcolor' || n === 'background') return () => pick(COLORS);
   if (/avatar|photo|image|pic|thumbnail|icon|logo|src/i.test(n)) return () => PLACEHOLDER_IMAGE;
-  if (/count|total|amount|quantity|num/i.test(n)) return () => String(Math.floor(Math.random() * 1000));
+  if (/count|total|amount|quantity|num|likes|views|followers|shares|comments|subscribers/i.test(n))
+    return () => String(Math.floor(Math.random() * 1000));
   if (/^(ts|timestamp|createdAt|updatedAt)$/i.test(n)) return () => String(Date.now());
   if (/price|cost/i.test(n)) return () => (Math.random() * 100).toFixed(2);
   if (/^(date|created|updated)$/i.test(n)) return () => new Date().toISOString().split('T')[0];
-  // timestamp — returns ISO string for string fields, unix ms will be handled by number generator
   if (/timestamp|^ts$/i.test(n)) return () => new Date().toISOString();
   if (/phone|tel/i.test(n)) return () => `+1 555-${Math.floor(1000 + Math.random() * 9000)}`;
-  if (/verified|active|enabled|visible|published/i.test(n)) return () => 'true';
+  return null;
+}
+
+/** Name-based generator for number fields */
+function getNumberFieldGenerator(name: string): (() => number) | null {
+  const n = name.toLowerCase();
+  if (/count|total|amount|quantity|num|likes|views|followers|shares|comments|subscribers/i.test(n))
+    return () => Math.floor(Math.random() * 1000);
+  if (/price|cost/i.test(n)) return () => Math.round(Math.random() * 10000) / 100;
+  if (/^(ts|timestamp|createdAt|updatedAt)$/i.test(n)) return () => Date.now();
+  if (/age|year|month|day|hour|minute|second/i.test(n)) return () => Math.floor(Math.random() * 100);
+  if (/width|height|size|radius|margin|padding|gap|offset/i.test(n)) return () => Math.floor(Math.random() * 200) + 10;
+  if (/percent|ratio|opacity|progress/i.test(n)) return () => Math.round(Math.random() * 100);
   return null;
 }
 
@@ -625,7 +647,7 @@ function PropField({
   }
 
   // String / Unknown — text input with smart generator, converts to textarea at 80+ chars
-  const generator = getFieldGenerator(name);
+  const generator = getStringFieldGenerator(name);
   const fieldId = `prop-${name}-${depth}`;
   const strValue = String(value ?? '');
   const isLong = strValue.length > 80;
