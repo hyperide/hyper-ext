@@ -12,6 +12,11 @@ import { detectClassNameType, modifyDynamicClassName } from '@lib/ast/dynamic-cl
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
 import { ensureImport } from '@lib/ast/import-manager';
+import {
+  applyInlineStyleUpdate,
+  getCssModuleImportLocalNames,
+  isCssModuleClassNameExpression,
+} from '@lib/ast/inline-style-mutator';
 import { getAttributeString, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import {
   duplicateElementInAST,
@@ -263,6 +268,15 @@ export class AstService {
       }
 
       const changedStyleKeys = Object.keys(styles);
+      const cssModuleLocals = getCssModuleImportLocalNames(ast);
+      if (!state && isCssModuleClassNameExpression(result.element, cssModuleLocals)) {
+        applyInlineStyleUpdate(result.element, styles);
+
+        await this._fileParser.writeAST(ast, absolutePath);
+        await this._updateNodeMap(absolutePath);
+        return { success: true };
+      }
+
       const classNameType = detectClassNameType(result.element);
 
       if (classNameType === 'string') {
