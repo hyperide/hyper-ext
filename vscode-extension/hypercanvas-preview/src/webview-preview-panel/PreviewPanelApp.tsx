@@ -59,6 +59,7 @@ function PreviewContent() {
     showNoComponentHint,
     projectError,
     componentError,
+    clearComponentError,
     handleStartDevServer,
   } = usePreviewBridge({
     iframeEl,
@@ -135,6 +136,7 @@ function PreviewContent() {
               type: 'errorBoundary:configureAIKey',
             } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
+          onClose={clearComponentError}
         />
       )}
 
@@ -215,6 +217,7 @@ interface ComponentErrorOverlayProps {
   propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
+  onClose: () => void;
 }
 
 /**
@@ -249,6 +252,7 @@ function ComponentErrorOverlay({
   propsSchema,
   onCreateSample,
   onConfigureAIKey,
+  onClose,
 }: ComponentErrorOverlayProps) {
   const componentName =
     componentPath
@@ -320,7 +324,14 @@ function ComponentErrorOverlay({
   return (
     <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
       <div style={errorOverlayCardStyle}>
-        <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
+          {sampleCreated && (
+            <button type="button" onClick={onClose} style={errorOverlayCloseButtonStyle} title="Close">
+              &times;
+            </button>
+          )}
+        </div>
         <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
 
         {hasProps && (
@@ -677,6 +688,18 @@ const errorOverlayLinkButtonStyle: CSSProperties = {
   padding: 0,
   fontSize: 13,
   textDecoration: 'underline',
+};
+
+const errorOverlayCloseButtonStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 20,
+  cursor: 'pointer',
+  padding: '0 4px',
+  lineHeight: 1,
+  borderRadius: 4,
+  marginTop: -4,
 };
 
 const errorOverlayAIHintStyle: CSSProperties = {
