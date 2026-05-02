@@ -78,6 +78,7 @@ export class AstService {
   }
 
   private _initPromise: Promise<void>;
+  private _initError: unknown = null;
 
   constructor(workspaceRoot: string, fileIO: FileIO) {
     this._workspaceRoot = workspaceRoot;
@@ -88,7 +89,12 @@ export class AstService {
     // the node map — the old fire-and-forget pattern caused HYP-268 where
     // inspector.setOpacity / deleteSelected would fail because the scan
     // hadn't finished yet.
-    this._initPromise = this._populateNodeMaps().catch(() => {});
+    this._initPromise = this._populateNodeMaps().catch((err) => {
+      console.error('[AstService] Initial NodeMapService population failed:', err);
+      // Store the error so ensureInitialized() callers know the node map
+      // is empty and why, rather than silently proceeding with an empty map.
+      this._initError = err;
+    });
   }
 
   /**
@@ -99,6 +105,11 @@ export class AstService {
    */
   async ensureInitialized(): Promise<void> {
     await this._initPromise;
+    if (this._initError) {
+      console.warn(
+        '[AstService] ensureInitialized: node map scan failed earlier, operations may return "Element not found"',
+      );
+    }
   }
 
   /** Scan workspace source files and populate NodeMapService (like server's populateNodeMaps). */

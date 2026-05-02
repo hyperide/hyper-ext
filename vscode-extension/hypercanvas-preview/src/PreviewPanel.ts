@@ -1082,6 +1082,34 @@ export class PreviewPanel {
   }
 
   /**
+   * Duplicate the first selected element (called from VS Code command).
+   */
+  public async duplicateSelected(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const result = await this._panelRouter.astBridge.duplicateElement(componentPath, selectedIds[0]);
+    if (result.success && result.newId) {
+      this._stateHub.applyUpdate({ selectedIds: [result.newId] });
+    }
+  }
+
+  /**
+   * Wrap the first selected element in a new div container (called from VS Code command).
+   */
+  public async wrapSelected(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const result = await this._panelRouter.astBridge.wrapElement(componentPath, selectedIds[0], 'div');
+    if (result.success && result.wrapperId) {
+      this._stateHub.applyUpdate({ selectedIds: [result.wrapperId] });
+    }
+  }
+
+  /**
    * Select children of selected element (called from VS Code keybinding command).
    */
   public selectChildren(): void {

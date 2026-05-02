@@ -165,6 +165,14 @@
         "title": "Hyper: Delete Selected Elements"
       },
       {
+        "command": "hypercanvas.canvasDuplicate",
+        "title": "Hyper: Duplicate Selected Element"
+      },
+      {
+        "command": "hypercanvas.canvasWrap",
+        "title": "Hyper: Wrap Selected Element"
+      },
+      {
         "command": "hypercanvas.canvasSelectChildren",
         "title": "Hyper: Select Children"
       },

@@ -625,6 +625,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     vscode.commands.registerCommand('hypercanvas.canvasUndo', () => previewPanel?.undo()),
     vscode.commands.registerCommand('hypercanvas.canvasRedo', () => previewPanel?.redo()),
     vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasDuplicate', () => previewPanel?.duplicateSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasWrap', () => previewPanel?.wrapSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectNextSibling', () => previewPanel?.selectNextSibling()),
