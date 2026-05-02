@@ -880,6 +880,8 @@ export class PreviewPanel {
     // Always bump styleVersion to refresh inspector — both canvas stack and native undo paths
     // revert the file on disk, but inspector caches styles and needs explicit invalidation
     this._bumpStyleVersion();
+    // Re-emit selection after HMR settles so the new fiber tree picks it up
+    this._reEmitSelectionAfterHmr();
   }
 
   /**
@@ -906,6 +908,8 @@ export class PreviewPanel {
     }
     // Always bump styleVersion to refresh inspector after redo
     this._bumpStyleVersion();
+    // Re-emit selection after HMR settles so the new fiber tree picks it up
+    this._reEmitSelectionAfterHmr();
   }
 
   /**
@@ -915,6 +919,35 @@ export class PreviewPanel {
   private _bumpStyleVersion(): void {
     const current = this._stateHub.state.styleVersion ?? 0;
     this._stateHub.applyUpdate({ styleVersion: current + 1 });
+  }
+
+  /**
+   * Re-emit current selectedIds after a delay so the preview webview can
+   * re-select the element once HMR has rebuilt the fiber tree.
+   *
+   * After undo/redo the file on disk changes, Vite HMR reloads the preview
+   * iframe, and the fiber tree is recreated with fresh DOM nodes.  The old
+   * selection (nodeRef format "src/App.tsx:13:8") is still valid because
+   * it's source-position-based, but the webview dropped it when HMR
+   * destroyed the previous React tree.  Re-emitting via applyUpdate
+   * broadcasts state:update with selectedIds to all panels so the preview
+   * can locate and highlight the element again.
+   */
+  private _reEmitSelectionAfterHmr(): void {
+    const selectedIds = this._stateHub.state.selectedIds;
+    if (!selectedIds?.length) return;
+
+    // 300ms delay: Vite HMR typically settles within 100-200ms, but we add
+    // headroom for slower machines and full-page reloads (native undo path).
+    setTimeout(() => {
+      // Re-read state — selection may have been cleared by user action
+      // during the delay window
+      const currentIds = this._stateHub.state.selectedIds;
+      if (!currentIds?.length) return;
+
+      console.log('[PreviewPanel] Re-emitting selection after HMR:', currentIds);
+      this._stateHub.applyUpdate({ selectedIds: currentIds });
+    }, 300);
   }
 
   /**
