@@ -203,6 +203,7 @@ export function ColorCombobox({
 
         <button
           type="button"
+          data-testid={inputTestId ? `${inputTestId}-link-toggle` : undefined}
           onClick={colorValue.handleUnlinkToggle}
           title={colorValue.isLinked ? `Unlink from ${tokenSystem} tokens` : `Link to nearest ${tokenSystem} token`}
           className={cn(
