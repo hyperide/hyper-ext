@@ -483,15 +483,17 @@ export class PreviewPanel {
     componentPath: string | undefined,
     propValues?: Record<string, unknown>,
     sampleName?: string,
-  ): Promise<void> {
-    if (!componentPath) return;
+    options?: { componentName?: string; revealInEditor?: boolean },
+  ): Promise<boolean> {
+    if (!componentPath) return false;
 
     const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
     const exportName = sampleName || 'SampleDefault';
+    const revealInEditor = options?.revealInEditor ?? true;
 
     // Extract component name from file path (e.g. 'src/components/Button.tsx' → 'Button')
     const fileName = path.basename(absPath, path.extname(absPath));
-    const componentName = fileName.charAt(0).toUpperCase() + fileName.slice(1);
+    const componentName = options?.componentName || fileName.charAt(0).toUpperCase() + fileName.slice(1);
 
     // Read the file to check if this sample name already exists
     let sourceCode: string;
@@ -501,7 +503,7 @@ export class PreviewPanel {
       sourceCode = Buffer.from(bytes).toString('utf-8');
     } catch {
       void vscode.window.showErrorMessage(`Could not read component file: ${componentPath}`);
-      return;
+      return false;
     }
 
     // Check if sample with this name already exists — update it in place
@@ -527,7 +529,11 @@ export class PreviewPanel {
         await vscode.workspace.fs.writeFile(fileUri, Buffer.from(sourceCode, 'utf-8'));
       } catch {
         void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
-        return;
+        return false;
+      }
+
+      if (!revealInEditor) {
+        return true;
       }
 
       const lineNumber = sourceCode.substring(0, sourceCode.indexOf(exportName)).split('\n').length;
@@ -538,7 +544,7 @@ export class PreviewPanel {
         preview: true,
         selection: new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0),
       });
-      return;
+      return true;
     }
 
     // Generate a minimal sample scaffold — include user-provided prop values if available
@@ -552,21 +558,23 @@ export class PreviewPanel {
       await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
     } catch {
       void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
-      return;
+      return false;
     }
 
-    // Open the file and position cursor at the scaffold
-    const lines = updatedCode.split('\n');
-    const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
-    const sampleIdx = lines.findIndex((line) => line.includes(exportName));
-    const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
-    await vscode.window.showTextDocument(doc, {
-      viewColumn: vscode.ViewColumn.One,
-      preserveFocus: false,
-      preview: true,
-      selection: new vscode.Range(targetLine, 0, targetLine, 0),
-    });
+    if (revealInEditor) {
+      // Open the file and position cursor at the scaffold
+      const lines = updatedCode.split('\n');
+      const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
+      const sampleIdx = lines.findIndex((line) => line.includes(exportName));
+      const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
+      await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preserveFocus: false,
+        preview: true,
+        selection: new vscode.Range(targetLine, 0, targetLine, 0),
+      });
+    }
 
     console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
 
@@ -574,6 +582,18 @@ export class PreviewPanel {
     if (this._panel) {
       this._watchSampleInFile(absPath, exportName, this._panel.webview);
     }
+    return true;
+  }
+
+  /**
+   * Ensure a deterministic SampleDefault scaffold exists for a component with no props.
+   * Used as a silent fallback when AI sample generation is unavailable.
+   */
+  public async ensureDefaultSampleForNoProps(componentPath: string, componentName: string): Promise<boolean> {
+    return this._handleCreateSampleFromError(componentPath, undefined, 'SampleDefault', {
+      componentName,
+      revealInEditor: false,
+    });
   }
 
   private _sampleWatcher?: vscode.Disposable;

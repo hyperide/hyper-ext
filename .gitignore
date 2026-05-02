@@ -32,6 +32,7 @@ __pycache__/
 /cloned-projects/
 /data/
 .playwright-mcp/
+.claire/
 .claude/worktrees
 .claude/state.json
 .claude/tmp/

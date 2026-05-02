@@ -32,6 +32,7 @@ import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
+import { shouldCreateNoPropsSample } from './services/no-props-sample';
 import {
   detectPackageManager,
   detectUIKit,
@@ -304,8 +305,12 @@ export function activate(context: vscode.ExtensionContext) {
         sampleName: 'SampleDefault',
         generate: sampleGenerator,
       })
-        .then(() => {
+        .then(async (sampleResult) => {
           if (ac.signal.aborted) return;
+          const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
+          if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
+            await previewPanel.ensureDefaultSampleForNoProps(componentPath, componentName);
+          }
           // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
           const relativePath = relative(workspaceRoot, absComponentPath);
           return previewManager.ensureComponent([relativePath]);
