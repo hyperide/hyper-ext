@@ -267,7 +267,7 @@ export class ComponentService {
     try {
       const content = await vscode.workspace.fs.readFile(uri);
       const sourceCode = new TextDecoder().decode(content);
-      return this._parseComponent(componentPath, sourceCode);
+      return await this._parseComponent(componentPath, sourceCode);
     } catch (error) {
       console.error(`[ComponentService] Error reading ${componentPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       return null;
@@ -342,7 +342,7 @@ export class ComponentService {
       // Get relative path
       const relativePath = path.relative(this._workspaceRoot, uri.fsPath);
 
-      return this._parseComponent(relativePath, sourceCode);
+      return await this._parseComponent(relativePath, sourceCode);
     } catch (error) {
       console.error(
         // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
@@ -356,9 +356,13 @@ export class ComponentService {
   /**
    * Parse component source code
    */
-  private _parseComponent(componentPath: string, sourceCode: string): ComponentInfo | null {
+  private async _parseComponent(componentPath: string, sourceCode: string): Promise<ComponentInfo | null> {
     try {
       const ast = parseCode(sourceCode);
+
+      // Pre-pass: collect local type declarations and import mappings for type resolution
+      const localTypes = this._collectLocalTypes(ast);
+      const importMap = this._collectImportMap(ast);
 
       let componentName: string | null = null;
       let hasDefaultExport = false;
@@ -471,7 +475,7 @@ export class ComponentService {
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation);
+                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
                 // Check if already exists
@@ -506,7 +510,7 @@ export class ComponentService {
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation);
+                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
                 // Check if already exists
@@ -528,6 +532,9 @@ export class ComponentService {
           }
         },
       });
+
+      // Post-traverse: resolve imported type references that weren't found locally
+      await this._resolveImportedTypeReferences(props, importMap, componentPath, localTypes);
 
       // Skip if no component found
       if (!componentName) {
@@ -690,15 +697,54 @@ export class ComponentService {
   }
 
   /**
-   * Extract nested object fields from a TSTypeLiteral node.
-   * Returns PropInfo[] for inline object types, undefined otherwise.
+   * Extract nested object fields from a TSTypeLiteral or resolved TSTypeReference.
+   * Returns PropInfo[] for object-like types, undefined otherwise.
+   * When localTypes map is provided, TSTypeReference nodes are resolved via local declarations.
    */
-  private _extractObjectFields(node: t.TSType, depth = 0): PropInfo[] | undefined {
+  private _extractObjectFields(
+    node: t.TSType,
+    depth = 0,
+    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
+  ): PropInfo[] | undefined {
     if (depth > 5) return undefined;
+
+    // Resolve named type references via local declarations
+    if (t.isTSTypeReference(node) && t.isIdentifier(node.typeName) && localTypes) {
+      const resolved = localTypes.get(node.typeName.name);
+      if (resolved) {
+        return this._extractFieldsFromTypeBody(resolved, depth, localTypes);
+      }
+      // Not found locally — will be resolved in the async post-traverse phase
+      return undefined;
+    }
+
     if (!t.isTSTypeLiteral(node)) return undefined;
 
+    return this._extractFieldsFromMembers(node.members, depth, localTypes);
+  }
+
+  /**
+   * Extract fields from a resolved type body (TSInterfaceBody or TSTypeLiteral).
+   */
+  private _extractFieldsFromTypeBody(
+    body: t.TSInterfaceBody | t.TSTypeLiteral,
+    depth: number,
+    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
+  ): PropInfo[] | undefined {
+    const members = t.isTSInterfaceBody(body) ? body.body : body.members;
+    return this._extractFieldsFromMembers(members, depth, localTypes);
+  }
+
+  /**
+   * Extract PropInfo[] from a list of TS type members.
+   */
+  private _extractFieldsFromMembers(
+    members: t.TSTypeElement[],
+    depth: number,
+    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
+  ): PropInfo[] | undefined {
     const fields: PropInfo[] = [];
-    for (const member of node.members) {
+    for (const member of members) {
       if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
         const typeAnnotation = member.typeAnnotation;
         let fieldType = 'unknown';
@@ -706,7 +752,7 @@ export class ComponentService {
 
         if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
           fieldType = this._getTypeString(typeAnnotation.typeAnnotation);
-          objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, depth + 1);
+          objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, depth + 1, localTypes);
         }
 
         fields.push({
@@ -719,6 +765,156 @@ export class ComponentService {
     }
 
     return fields.length > 0 ? fields : undefined;
+  }
+
+  /**
+   * Collect all local type/interface declarations from the AST.
+   * Returns a map from type name to its body (TSInterfaceBody or TSTypeLiteral).
+   */
+  private _collectLocalTypes(ast: t.File): Map<string, t.TSInterfaceBody | t.TSTypeLiteral> {
+    const types = new Map<string, t.TSInterfaceBody | t.TSTypeLiteral>();
+
+    traverse(ast, {
+      TSInterfaceDeclaration(nodePath: NodePath<t.TSInterfaceDeclaration>) {
+        types.set(nodePath.node.id.name, nodePath.node.body);
+      },
+      TSTypeAliasDeclaration(nodePath: NodePath<t.TSTypeAliasDeclaration>) {
+        if (t.isTSTypeLiteral(nodePath.node.typeAnnotation)) {
+          types.set(nodePath.node.id.name, nodePath.node.typeAnnotation);
+        }
+      },
+    });
+
+    return types;
+  }
+
+  /**
+   * Collect import mappings: local name → { source, importedName }.
+   * Handles `import { Foo } from './bar'` and `import { Foo as Bar } from './bar'`.
+   */
+  private _collectImportMap(ast: t.File): Map<string, { source: string; importedName: string }> {
+    const imports = new Map<string, { source: string; importedName: string }>();
+
+    traverse(ast, {
+      ImportDeclaration(nodePath: NodePath<t.ImportDeclaration>) {
+        const source = nodePath.node.source.value;
+        for (const specifier of nodePath.node.specifiers) {
+          if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported)) {
+            imports.set(specifier.local.name, {
+              source,
+              importedName: specifier.imported.name,
+            });
+          } else if (t.isImportDefaultSpecifier(specifier)) {
+            imports.set(specifier.local.name, {
+              source,
+              importedName: 'default',
+            });
+          }
+        }
+      },
+    });
+
+    return imports;
+  }
+
+  /**
+   * Post-traverse: resolve props whose type is a named reference not found locally.
+   * Follows imports to source files and extracts objectFields from the resolved type.
+   */
+  private async _resolveImportedTypeReferences(
+    props: PropInfo[],
+    importMap: Map<string, { source: string; importedName: string }>,
+    componentPath: string,
+    localTypes: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
+  ): Promise<void> {
+    for (const prop of props) {
+      // Skip if already has objectFields or type is a primitive/inline
+      if (prop.objectFields || !prop.type || prop.type === 'unknown') continue;
+
+      // Check if the type name is a named reference that was not resolved locally
+      const typeName = prop.type;
+      if (localTypes.has(typeName)) continue; // Already resolved in _extractObjectFields
+      if (!importMap.has(typeName)) continue; // Not an imported type
+
+      try {
+        const resolved = await this._resolveTypeFromImport(
+          typeName,
+          importMap.get(typeName)!,
+          componentPath,
+          localTypes,
+        );
+        if (resolved) {
+          prop.objectFields = resolved;
+        }
+      } catch (error) {
+        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+        console.warn(`[ComponentService] Failed to resolve imported type "${typeName}":`, error);
+      }
+    }
+  }
+
+  /**
+   * Read an imported file, parse it, and extract objectFields for a named type.
+   */
+  private async _resolveTypeFromImport(
+    _typeName: string,
+    importInfo: { source: string; importedName: string },
+    componentPath: string,
+    parentLocalTypes: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
+  ): Promise<PropInfo[] | undefined> {
+    // Resolve the import path relative to the component file
+    const componentDir = path.dirname(path.join(this._workspaceRoot, componentPath));
+    const extensions = ['.ts', '.tsx', '.d.ts', '.js', '.jsx'];
+
+    let resolvedPath: string | null = null;
+    const importSource = importInfo.source;
+
+    // Only handle relative imports (not node_modules)
+    if (!importSource.startsWith('.')) return undefined;
+
+    const basePath = path.resolve(componentDir, importSource);
+
+    // Try with extensions if no extension present
+    if (path.extname(basePath)) {
+      if (await fileExists(basePath)) {
+        resolvedPath = basePath;
+      }
+    } else {
+      for (const ext of extensions) {
+        const candidate = basePath + ext;
+        if (await fileExists(candidate)) {
+          resolvedPath = candidate;
+          break;
+        }
+      }
+      // Try index files
+      if (!resolvedPath) {
+        for (const ext of extensions) {
+          const candidate = path.join(basePath, `index${ext}`);
+          if (await fileExists(candidate)) {
+            resolvedPath = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!resolvedPath) return undefined;
+
+    const sourceCode = await fs.readFile(resolvedPath, 'utf-8');
+    const ast = parseCode(sourceCode);
+
+    // Collect types from the imported file
+    const importedTypes = this._collectLocalTypes(ast);
+
+    // Merge parent local types so nested references can still resolve
+    const mergedTypes = new Map([...parentLocalTypes, ...importedTypes]);
+
+    // Find the exported type by its original name
+    const typeBody = importedTypes.get(importInfo.importedName);
+    if (!typeBody) return undefined;
+
+    return this._extractFieldsFromTypeBody(typeBody, 0, mergedTypes);
   }
 }
 
