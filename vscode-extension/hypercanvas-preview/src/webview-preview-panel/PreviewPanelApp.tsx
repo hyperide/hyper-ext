@@ -254,6 +254,8 @@ function ComponentErrorOverlay({
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
   const propValuesRef = useRef<Record<string, unknown>>({});
+  const [allRequiredFilled, setAllRequiredFilled] = useState(false);
+  const [sampleCreated, setSampleCreated] = useState(false);
 
   const handlePropsChange = useCallback((values: Record<string, unknown>) => {
     propValuesRef.current = values;
@@ -267,7 +269,13 @@ function ComponentErrorOverlay({
       return true;
     });
     onCreateSample(filled.length > 0 ? Object.fromEntries(filled) : undefined);
+    setSampleCreated(true);
   }, [onCreateSample]);
+
+  const handleCreateNew = useCallback(() => {
+    setSampleCreated(false);
+    propValuesRef.current = {};
+  }, []);
 
   const hasProps = (propsSchema && propsSchema.length > 0) || extractedProps.length > 0;
 
@@ -278,11 +286,17 @@ function ComponentErrorOverlay({
         <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
 
         {hasProps && (
-          <PropsForm
-            propsSchema={propsSchema ?? null}
-            extractedPropNames={extractedProps}
-            onChange={handlePropsChange}
-          />
+          <>
+            <PropsForm
+              propsSchema={propsSchema ?? null}
+              extractedPropNames={extractedProps}
+              onChange={handlePropsChange}
+              onAllRequiredFilled={setAllRequiredFilled}
+            />
+            <p style={errorOverlayHintStyle}>
+              Fill props here, edit them in the code editor, or combine both approaches.
+            </p>
+          </>
         )}
 
         {!hasProps && (
@@ -291,25 +305,41 @@ function ComponentErrorOverlay({
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            data-testid={TID.preview.componentErrorCreateSample}
-            style={errorOverlaySecondaryButtonStyle}
-            onClick={handleCreateSample}
-          >
-            Create Sample
-          </button>
-          <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
-          <button
-            type="button"
-            data-testid={TID.preview.componentErrorConfigureAI}
-            style={errorOverlayPrimaryButtonStyle}
-            onClick={onConfigureAIKey}
-          >
-            Configure AI Key
-          </button>
-        </div>
+        {sampleCreated ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorCreateSample}
+              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
+              onClick={handleCreateSample}
+            >
+              Update Sample
+            </button>
+            <button type="button" onClick={handleCreateNew} style={errorOverlayLinkButtonStyle}>
+              Create New...
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorCreateSample}
+              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
+              onClick={handleCreateSample}
+            >
+              Create Sample
+            </button>
+            <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorConfigureAI}
+              style={allRequiredFilled ? errorOverlaySecondaryButtonStyle : errorOverlayPrimaryButtonStyle}
+              onClick={onConfigureAIKey}
+            >
+              Configure AI Key
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -542,6 +572,23 @@ const errorOverlayNoPropsHintStyle: CSSProperties = {
   fontSize: 12,
   margin: '0 0 16px',
   lineHeight: 1.6,
+};
+
+const errorOverlayHintStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 11,
+  margin: '0 0 12px',
+  lineHeight: 1.5,
+};
+
+const errorOverlayLinkButtonStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: 13,
+  textDecoration: 'underline',
 };
 
 const errorOverlayPrimaryButtonStyle: CSSProperties = {

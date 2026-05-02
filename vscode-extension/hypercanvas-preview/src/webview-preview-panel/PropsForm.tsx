@@ -7,7 +7,7 @@
  */
 
 import type { PropTypeInfo } from '@shared/types/props';
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Simplified prop info from extension's ComponentService (lib/types.ts PropInfo) */
 export interface SimplePropInfo {
@@ -26,6 +26,8 @@ interface PropsFormProps {
   extractedPropNames: string[];
   /** Called when any prop value changes. Key = prop name, value = typed value. */
   onChange: (values: Record<string, unknown>) => void;
+  /** Called when the "all required filled" status changes */
+  onAllRequiredFilled?: (allFilled: boolean) => void;
 }
 
 /** Convert extension's SimplePropInfo to PropTypeInfo for rendering */
@@ -124,8 +126,9 @@ function parseInlineObjectType(typeStr: string): Record<string, PropTypeInfo> | 
  * When propsSchema is available (from extension), renders type-appropriate inputs.
  * When only extractedPropNames is available (from error parsing), renders text inputs.
  */
-export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFormProps) {
+export function PropsForm({ propsSchema, extractedPropNames, onChange, onAllRequiredFilled }: PropsFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [focusPath, setFocusPath] = useState<string | null>(null);
 
   const handleChange = useCallback(
     (name: string, value: unknown) => {
@@ -155,6 +158,32 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
     onChange(generated);
   }, [fields, onChange]);
 
+  // Compute unfilled required fields recursively
+  const unfilledRequired = useMemo(() => {
+    const result: Array<{ path: string; label: string }> = [];
+    collectUnfilledRequired(fields, values, '', result);
+    return result;
+  }, [fields, values]);
+
+  const allRequiredFilled = unfilledRequired.length === 0;
+
+  // Notify parent about required status
+  const prevAllFilledRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (prevAllFilledRef.current !== allRequiredFilled) {
+      prevAllFilledRef.current = allRequiredFilled;
+      onAllRequiredFilled?.(allRequiredFilled);
+    }
+  }, [allRequiredFilled, onAllRequiredFilled]);
+
+  // Clear focusPath after it's been consumed
+  useEffect(() => {
+    if (focusPath) {
+      const timer = setTimeout(() => setFocusPath(null), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [focusPath]);
+
   if (fields.length === 0) return null;
 
   return (
@@ -166,10 +195,58 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
         </button>
       </div>
       {fields.map(({ name, typeInfo }) => (
-        <PropField key={name} name={name} typeInfo={typeInfo} value={values[name]} onChange={handleChange} />
+        <PropField
+          key={name}
+          name={name}
+          typeInfo={typeInfo}
+          value={values[name]}
+          onChange={handleChange}
+          focusPath={focusPath}
+          fieldPath={name}
+        />
       ))}
+      {unfilledRequired.length > 0 && (
+        <div style={calloutStyle}>
+          <span style={calloutTextStyle}>
+            {unfilledRequired.length} required field{unfilledRequired.length > 1 ? 's' : ''} missing:{' '}
+          </span>
+          {unfilledRequired.map((item, i) => (
+            <span key={item.path}>
+              {i > 0 && <span style={calloutTextStyle}>, </span>}
+              <button type="button" onClick={() => setFocusPath(item.path)} style={calloutLinkStyle}>
+                {item.label}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/** Recursively collect unfilled required fields with their dot-paths */
+function collectUnfilledRequired(
+  fields: Array<{ name: string; typeInfo: PropTypeInfo }>,
+  values: Record<string, unknown>,
+  prefix: string,
+  result: Array<{ path: string; label: string }>,
+): void {
+  for (const { name, typeInfo } of fields) {
+    const path = prefix ? `${prefix}.${name}` : name;
+    const v = values[name];
+
+    if (typeInfo.type === 'object' && typeInfo.objectSchema) {
+      // Recurse into object fields
+      const objVal = (typeof v === 'object' && v !== null ? v : {}) as Record<string, unknown>;
+      const nestedFields = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
+      collectUnfilledRequired(nestedFields, objVal, path, result);
+    } else if (typeInfo.required) {
+      const isEmpty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
+      if (isEmpty) {
+        result.push({ path, label: prefix ? `${prefix} > ${humanize(name)}` : humanize(name) });
+      }
+    }
+  }
 }
 
 /** Convert camelCase/PascalCase to human-readable: quoteTweet → quote tweet */
@@ -282,9 +359,19 @@ interface PropFieldProps {
   value: unknown;
   onChange: (name: string, value: unknown) => void;
   depth?: number;
+  focusPath?: string | null;
+  fieldPath?: string;
 }
 
-function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProps) {
+function PropField({ name, typeInfo, value, onChange, depth = 0, focusPath, fieldPath }: PropFieldProps) {
+  // Hooks must be called unconditionally before any early returns
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (focusPath && fieldPath && focusPath === fieldPath) {
+      inputRef.current?.focus();
+    }
+  }, [focusPath, fieldPath]);
+
   // Prevent infinite recursion
   if (depth > 5) {
     return (
@@ -420,7 +507,17 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
 
   // Object with schema — floating popover with nested fields
   if (typeInfo.type === 'object' && typeInfo.objectSchema) {
-    return <ObjectPropPopover name={name} typeInfo={typeInfo} value={value} onChange={onChange} depth={depth} />;
+    return (
+      <ObjectPropPopover
+        name={name}
+        typeInfo={typeInfo}
+        value={value}
+        onChange={onChange}
+        depth={depth}
+        focusPath={focusPath}
+        fieldPath={fieldPath}
+      />
+    );
   }
 
   // Object without schema — JSON textarea fallback
@@ -441,6 +538,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
           {humanize(name)}
         </label>
         <textarea
+          ref={inputRef as React.Ref<HTMLTextAreaElement>}
           id={fieldId}
           value={strValue}
           onChange={(e) => onChange(name, e.target.value)}
@@ -459,6 +557,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
       </label>
       <div style={{ position: 'relative', flex: 1 }}>
         <input
+          ref={inputRef as React.Ref<HTMLInputElement>}
           id={fieldId}
           type="text"
           value={strValue}
@@ -491,12 +590,16 @@ function ObjectPropPopover({
   value,
   onChange,
   depth,
+  focusPath,
+  fieldPath,
 }: {
   name: string;
   typeInfo: PropTypeInfo;
   value: unknown;
   onChange: (name: string, value: unknown) => void;
   depth: number;
+  focusPath?: string | null;
+  fieldPath?: string;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -504,6 +607,14 @@ function ObjectPropPopover({
   const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   // biome-ignore lint/style/noNonNullAssertion: caller guarantees objectSchema exists
   const schema = typeInfo.objectSchema!;
+
+  // Auto-open when focusPath targets a child of this object
+  const myPath = fieldPath || name;
+  useEffect(() => {
+    if (focusPath?.startsWith(`${myPath}.`)) {
+      setOpen(true);
+    }
+  }, [focusPath, myPath]);
 
   // Close on click outside
   useEffect(() => {
@@ -568,11 +679,9 @@ function ObjectPropPopover({
         <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
             <span style={popoverTitleStyle}>{humanize(name)}</span>
-            {depth === 0 && (
-              <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
-                &times;
-              </button>
-            )}
+            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+              &times;
+            </button>
           </div>
           <div style={popoverFieldsStyle}>
             {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
@@ -585,6 +694,8 @@ function ObjectPropPopover({
                   onChange(name, { ...objValue, [nestedName]: nestedValue });
                 }}
                 depth={depth + 1}
+                focusPath={focusPath}
+                fieldPath={`${myPath}.${fieldName}`}
               />
             ))}
           </div>
@@ -920,4 +1031,28 @@ const jsonErrorStyle: CSSProperties = {
   fontSize: 10,
   color: 'var(--vscode-errorForeground, #f44747)',
   fontStyle: 'italic',
+};
+
+const calloutStyle: CSSProperties = {
+  background: 'rgba(250, 204, 21, 0.12)',
+  border: '1px solid rgba(250, 204, 21, 0.3)',
+  borderRadius: 6,
+  padding: '8px 12px',
+  fontSize: 11,
+  lineHeight: 1.6,
+};
+
+const calloutTextStyle: CSSProperties = {
+  color: 'var(--vscode-editorWarning-foreground, #cca700)',
+};
+
+const calloutLinkStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: 11,
+  textDecoration: 'underline',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
 };
