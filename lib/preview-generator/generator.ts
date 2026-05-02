@@ -157,7 +157,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
-  // 7. CanvasPreview component
+  // 7. Error boundary to catch component render crashes (e.g. missing required props)
+  // Without this, a crash in one component kills the entire React tree and all subsequent
+  // component switches via postMessage silently fail (black canvas).
+  lines.push(...buildErrorBoundary());
+  lines.push('');
+
+  // 8. CanvasPreview component
   if (options?.isNextPagesRouter) {
     lines.push(...buildCanvasPreviewNextPages());
   } else {
@@ -297,6 +303,39 @@ function buildCanvasPreviewNextPages(): string[] {
   ];
 }
 
+function buildErrorBoundary(): string[] {
+  return [
+    'class ComponentErrorBoundary extends React.Component<',
+    '  { children: React.ReactNode; componentPath: string },',
+    '  { error: Error | null }',
+    '> {',
+    '  constructor(props: { children: React.ReactNode; componentPath: string }) {',
+    '    super(props);',
+    '    this.state = { error: null };',
+    '  }',
+    '  static getDerivedStateFromError(error: Error) {',
+    '    return { error };',
+    '  }',
+    '  componentDidUpdate(prevProps: { componentPath: string }) {',
+    '    // Reset error state when switching to a different component',
+    '    if (prevProps.componentPath !== this.props.componentPath && this.state.error) {',
+    '      this.setState({ error: null });',
+    '    }',
+    '  }',
+    '  render() {',
+    '    if (this.state.error) {',
+    "      return <div style={{ padding: 20, fontFamily: 'sans-serif', color: '#e53e3e' }}>",
+    '        <h2 style={{ margin: 0, fontSize: 16 }}>Render Error</h2>',
+    '        <p style={{ fontSize: 13, opacity: 0.8 }}>{this.props.componentPath}</p>',
+    "        <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', opacity: 0.7 }}>{this.state.error.message}</pre>",
+    '      </div>;',
+    '    }',
+    '    return this.props.children;',
+    '  }',
+    '}',
+  ];
+}
+
 function buildCanvasPreviewBody(): string[] {
   return [
     '  if (!componentPath) {',
@@ -317,12 +356,13 @@ function buildCanvasPreviewBody(): string[] {
     '        <p>Component &quot;{componentPath}&quot; is not available</p>',
     '      </div>;',
     '    }',
-    '    return <div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div>;',
+    '    return <ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div></ComponentErrorBoundary>;',
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
     '',
     '  return (',
+    '    <ComponentErrorBoundary componentPath={componentPath}>',
     "    <div style={{ position: 'relative', width: 10000, height: 10000 }}>",
     '      {Object.entries(instances).map(([id, instance]: [string, InstanceEntry]) => {',
     '        const { x = 0, y = 0, props } = instance;',
@@ -358,6 +398,7 @@ function buildCanvasPreviewBody(): string[] {
     '        );',
     '      })}',
     '    </div>',
+    '    </ComponentErrorBoundary>',
     '  );',
   ];
 }
