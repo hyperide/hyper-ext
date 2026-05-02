@@ -55,18 +55,16 @@ export default function Hero() {
             </Button>
           </div>
 
-          {/* Screenshot placeholder */}
+          {/* Product screenshot */}
           <div className="mt-16 sm:mt-20">
             <div className="relative mx-auto max-w-5xl">
               <div className="absolute -inset-4 rounded-2xl bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 blur-2xl" />
               <div className="relative aspect-video overflow-hidden rounded-xl border bg-muted shadow-2xl">
-                {/* Placeholder for screenshot */}
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  <div className="text-center">
-                    <div className="text-4xl">📸</div>
-                    <p className="mt-2 text-sm">hero-screenshot.png</p>
-                  </div>
-                </div>
+                <img
+                  src="/screenshots/hero.png"
+                  alt="HyperIDE selecting the Jump button in the bulka-the-dog React project with code, live canvas, and Inspector visible"
+                  className="h-full w-full object-cover object-top"
+                />
               </div>
             </div>
           </div>

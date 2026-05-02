@@ -44,11 +44,10 @@ export default function Features() {
           </p>
         </div>
 
-        {/* Features grid */}
+        {/* Features grid — icon-only for uniform card heights; visuals live in HowItWorks / Demo */}
         <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <Card key={feature.title} className="relative overflow-hidden">
-              <div className="absolute right-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-primary/5" />
               <CardHeader>
                 <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <feature.icon className="h-6 w-6 text-primary" />
