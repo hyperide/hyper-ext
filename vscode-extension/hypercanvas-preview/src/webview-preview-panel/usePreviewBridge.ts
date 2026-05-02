@@ -39,6 +39,8 @@ interface UsePreviewBridgeResult {
   showNoComponentHint: boolean;
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
+  /** Detected project capabilities — CSS system, readonly mode, etc. */
+  projectCapabilities: import('../types').ProjectCapabilities | null;
   /** Set when iframe ErrorBoundary catches a component render error */
   componentError: ComponentError | null;
   handleStartDevServer: () => void;
@@ -52,6 +54,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
+  const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
@@ -371,6 +374,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           setProjectError((msg.error as UnsupportedProjectError) ?? null);
           break;
 
+        case 'projectCapabilities':
+          // Extension detected CSS system and computed read/write capabilities
+          setProjectCapabilities(
+            (msg as { capabilities?: import('../types').ProjectCapabilities }).capabilities ?? null,
+          );
+          break;
+
         case 'errorBoundary:propsSchema':
           // Extension responded with prop type schema — enrich existing componentError
           setComponentError((prev) =>
@@ -430,6 +440,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     previewUrl,
     showNoComponentHint,
     projectError,
+    projectCapabilities,
     componentError,
     handleStartDevServer,
     handleRefresh: doRefresh,

@@ -222,6 +222,78 @@ export async function detectUIKit(
 }
 
 /**
+ * Detect the primary CSS system used in the project.
+ *
+ * Scans package.json dependencies in priority order — the first match wins.
+ * Returns the most specific match (e.g. 'shadcn' over 'tailwind' if both
+ * shadcn-ui AND tailwindcss are present).
+ */
+export async function detectCssSystem(
+  projectPath: string,
+  packageJson?: Record<string, unknown> | null,
+): Promise<import('../types').CssSystem> {
+  const pkg = packageJson ?? (await readPackageJson(projectPath));
+  if (!pkg) return 'unknown';
+
+  const deps = {
+    ...(pkg.dependencies as Record<string, string> | undefined),
+    ...(pkg.devDependencies as Record<string, string> | undefined),
+  };
+
+  const has = (name: string) => name in deps;
+
+  // Design systems built on Tailwind (check BEFORE bare tailwind)
+  if (has('@shadcn/ui') || has('class-variance-authority')) return 'shadcn';
+  if (has('daisyui')) return 'daisyui';
+  if (has('@nextui-org/react') || has('@nextui-org/theme')) return 'nextui';
+
+  // Tamagui
+  if (has('tamagui') || has('@tamagui/core')) return 'tamagui';
+
+  // CSS-in-JS / zero-runtime
+  if (has('@vanilla-extract/css')) return 'vanilla-extract';
+  if (has('@pandacss/dev') || has('pandacss')) return 'pandacss';
+  if (has('unocss') || has('@unocss/preset-uno')) return 'unocss';
+  if (has('@stylexjs/stylex') || has('stylex')) return 'stylex';
+  if (has('styled-components')) return 'styled-components';
+  if (has('@emotion/react') || has('@emotion/styled')) return 'emotion';
+
+  // Component libraries (check after CSS-in-JS since they often bring their own)
+  if (has('@mui/material') || has('@mui/system')) return 'mui';
+  if (has('antd') || has('@ant-design/icons')) return 'antd';
+  if (has('@chakra-ui/react')) return 'chakra';
+  if (has('@mantine/core')) return 'mantine';
+  if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
+
+  // Tailwind (bare — most common, check last so design systems win)
+  if (has('tailwindcss')) return 'tailwind';
+
+  // CSS Modules don't have a package dependency — detected by file extension
+  // at build time. Default for Vite/webpack projects.
+  return 'cssmodules';
+}
+
+/**
+ * Compute project capabilities based on detected CSS system and UI kit.
+ */
+export function computeCapabilities(
+  cssSystem: import('../types').CssSystem,
+  uiKit: 'tailwind' | 'tamagui' | 'none',
+  projectError: import('../types').UnsupportedProjectError | null,
+): import('../types').ProjectCapabilities {
+  const { WRITABLE_CSS_SYSTEMS } = require('../types') as typeof import('../types');
+  const canWriteStyles = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
+  const canRender = projectError === null; // no unsupported error = can render
+  return {
+    cssSystem,
+    uiKit,
+    canWriteStyles,
+    canRender,
+    readonly: canRender && !canWriteStyles,
+  };
+}
+
+/**
  * Get scripts from package.json
  */
 export async function getPackageScripts(projectPath: string): Promise<Record<string, string>> {

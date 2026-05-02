@@ -1033,6 +1033,14 @@ export class PreviewPanel {
   }
 
   /**
+   * Notify the webview about project capabilities (readonly mode, CSS system).
+   * Sent after CSS system detection completes during activation.
+   */
+  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
+  }
+
+  /**
    * Refresh preview
    */
   public refresh(): void {

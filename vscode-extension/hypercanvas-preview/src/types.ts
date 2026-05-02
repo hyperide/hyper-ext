@@ -31,6 +31,56 @@ export interface UnsupportedProjectError {
 }
 
 // ============================================
+// Project Capabilities (readonly mode)
+// ============================================
+
+/** Detected CSS system in the project */
+export type CssSystem =
+  | 'tailwind'
+  | 'cssmodules'
+  | 'styled-components'
+  | 'emotion'
+  | 'tamagui'
+  | 'vanilla-extract'
+  | 'pandacss'
+  | 'unocss'
+  | 'stylex'
+  | 'mui'
+  | 'antd'
+  | 'chakra'
+  | 'mantine'
+  | 'fluentui'
+  | 'nextui'
+  | 'daisyui'
+  | 'shadcn'
+  | 'unknown';
+
+/** CSS systems where the extension can read AND write styles via AST */
+export const WRITABLE_CSS_SYSTEMS: CssSystem[] = [
+  'tailwind',
+  'cssmodules',
+  'styled-components',
+  'emotion',
+  'tamagui',
+  'shadcn', // built on Tailwind
+  'daisyui', // built on Tailwind
+];
+
+/** What the extension can do with this project */
+export interface ProjectCapabilities {
+  /** Detected CSS framework */
+  cssSystem: CssSystem;
+  /** Detected UI kit ('tailwind' | 'tamagui' | 'none') — backward compat */
+  uiKit: 'tailwind' | 'tamagui' | 'none';
+  /** Whether the extension can write styles (AST mutations) */
+  canWriteStyles: boolean;
+  /** Whether the preview can render (Vite/webpack dev server works) */
+  canRender: boolean;
+  /** If true, show readonly badge instead of full editing UI */
+  readonly: boolean;
+}
+
+// ============================================
 // Dev Server
 // ============================================
 

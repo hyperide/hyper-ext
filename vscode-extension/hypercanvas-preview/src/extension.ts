@@ -34,6 +34,8 @@ import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { shouldCreateNoPropsSample } from './services/no-props-sample';
 import {
+  computeCapabilities,
+  detectCssSystem,
   detectPackageManager,
   detectUIKit,
   detectUnsupportedProject,
@@ -111,7 +113,16 @@ export function activate(context: vscode.ExtensionContext) {
       const kit = await detectUIKit(workspaceRoot, pkg);
       stateHub?.applyUpdate({ projectUIKit: kit });
 
+      const cssSystem = await detectCssSystem(workspaceRoot, pkg);
       const projectError = await detectUnsupportedProject(workspaceRoot, pkg);
+
+      const capabilities = computeCapabilities(cssSystem, kit, projectError);
+      console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
+
+      // Send capabilities to preview panel (readonly badge, style write guard)
+      previewPanel?.notifyCapabilities(capabilities);
+
+      // Legacy: still send projectError for unsupported-project screen
       if (projectError) {
         console.log('[HyperIDE] Unsupported project detected:', projectError.type);
         previewPanel?.notifyUnsupportedProject(projectError);

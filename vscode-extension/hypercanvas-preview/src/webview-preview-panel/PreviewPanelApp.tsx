@@ -58,6 +58,7 @@ function PreviewContent() {
     previewUrl,
     showNoComponentHint,
     projectError,
+    projectCapabilities,
     componentError,
     clearComponentError,
     handleStartDevServer,
@@ -66,6 +67,11 @@ function PreviewContent() {
     canvas,
     onStateUpdate: updateState,
   });
+
+  // Readonly mode: when CSS system is unsupported for editing but preview renders.
+  // User must click "Continue in Readonly" to dismiss the stub and see the preview.
+  const [readonlyDismissed, setReadonlyDismissed] = useState(false);
+  const isReadonly = projectCapabilities?.readonly === true;
 
   const handleIframeLoad = useCallback(() => {
     canvas.sendEvent({ type: 'previewLoaded' });
@@ -82,11 +88,24 @@ function PreviewContent() {
   );
 
   // Unsupported project type (React Native / Tamagui without react-native-web)
+  // These projects CAN'T render at all — full blocking screen.
   if (projectError) {
     const handleFix = () => {
       canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
     };
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
+  }
+
+  // Readonly mode: CSS system not supported for editing, but preview renders.
+  // Show stub with framework info + "Continue in Readonly" button.
+  // After user clicks, stub hides and preview + readonly badge show.
+  if (isReadonly && !readonlyDismissed) {
+    return (
+      <ReadonlyStubScreen
+        cssSystem={projectCapabilities.cssSystem}
+        onContinueReadonly={() => setReadonlyDismissed(true)}
+      />
+    );
   }
 
   // Dev server not running — show start button (with reconnecting banner if was connected)
@@ -101,6 +120,7 @@ function PreviewContent() {
 
   return (
     <>
+      {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       <div style={wrapperStyle}>
         <iframe
           ref={iframeCallbackRef}
@@ -178,6 +198,96 @@ function NoComponentHint() {
     </div>
   );
 }
+
+// ============================================================================
+// Readonly Stub — shown for CSS systems that can render but not edit
+// ============================================================================
+
+const SUPPORTED_CSS_TABLE: Array<{ name: string; supported: boolean }> = [
+  { name: 'Tailwind CSS', supported: true },
+  { name: 'CSS Modules', supported: true },
+  { name: 'styled-components', supported: true },
+  { name: 'Emotion', supported: true },
+  { name: 'Tamagui', supported: true },
+  { name: 'shadcn/ui', supported: true },
+  { name: 'DaisyUI', supported: true },
+  { name: 'MUI (Material UI)', supported: false },
+  { name: 'Ant Design', supported: false },
+  { name: 'Chakra UI', supported: false },
+  { name: 'Mantine', supported: false },
+  { name: 'Fluent UI', supported: false },
+  { name: 'NextUI', supported: false },
+  { name: 'Vanilla Extract', supported: false },
+  { name: 'Panda CSS', supported: false },
+  { name: 'UnoCSS', supported: false },
+  { name: 'StyleX', supported: false },
+];
+
+function ReadonlyStubScreen({ cssSystem, onContinueReadonly }: { cssSystem: string; onContinueReadonly: () => void }) {
+  return (
+    <div data-testid="hyper-preview-readonly-stub" style={centerScreenStyle}>
+      <div style={warningIconStyle}>🔒</div>
+      <h2 style={headingStyle}>Readonly mode — {cssSystem}</h2>
+      <p style={{ ...subtextStyle, maxWidth: 480 }}>
+        Visual editing is not available for <strong>{cssSystem}</strong> projects. You can still preview your components
+        and inspect computed styles in readonly mode.
+      </p>
+
+      <table style={{ margin: '16px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '4px 12px', borderBottom: '1px solid #555' }}>CSS Framework</th>
+            <th style={{ textAlign: 'center', padding: '4px 12px', borderBottom: '1px solid #555' }}>Editing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SUPPORTED_CSS_TABLE.map((row) => (
+            <tr key={row.name} style={{ opacity: row.supported ? 1 : 0.6 }}>
+              <td style={{ padding: '3px 12px' }}>{row.name}</td>
+              <td style={{ textAlign: 'center', padding: '3px 12px' }}>{row.supported ? '✅' : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <button
+        type="button"
+        data-testid="hyper-preview-continue-readonly"
+        style={buttonStyle}
+        onClick={onContinueReadonly}
+      >
+        Continue in Readonly
+      </button>
+    </div>
+  );
+}
+
+function ReadonlyBadge({ cssSystem }: { cssSystem: string }) {
+  return (
+    <div
+      data-testid="hyper-preview-readonly-badge"
+      style={{
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        zIndex: 1000,
+        background: 'rgba(255, 170, 0, 0.9)',
+        color: '#000',
+        padding: '4px 10px',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        pointerEvents: 'none',
+      }}
+    >
+      READONLY — {cssSystem}
+    </div>
+  );
+}
+
+// ============================================================================
+// Unsupported Project Screen (React Native without react-native-web)
+// ============================================================================
 
 function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectError; onFix: () => void }) {
   const label = error.type === 'react-native' ? 'React Native / Tamagui' : error.type;
