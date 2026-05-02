@@ -768,6 +768,95 @@ attachClickHandler(
   iframeResolver,
 );
 
+// === DOM-based NodeMapLookup for keyboard navigation ===
+// Builds parent/children/sibling relationships from DOM tree + fiber source resolution.
+// Unlike NodeMapService (which uses AST), this uses live DOM — works without extension host.
+function getSourceKey(el: HTMLElement): string | null {
+  const fiber = getFiberFromDOM(el);
+  if (!fiber) return null;
+  let loc = findNearestSourceLocation(fiber);
+  const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+  if (smLoc) loc = smLoc;
+  if (!loc) return null;
+  if (renderedComponentPath) {
+    loc = resolveCallSiteSource(loc, fiber, renderedComponentPath);
+  }
+  return `${loc.fileName}:${loc.line}:${loc.column}`;
+}
+
+/** Find the nearest ancestor DOM element that has a traceable fiber source. */
+function findTraceableParent(el: HTMLElement): { element: HTMLElement; ref: string } | null {
+  let current = el.parentElement;
+  while (current && current !== document.body) {
+    const ref = getSourceKey(current);
+    if (ref) return { element: current, ref };
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/** Find direct child DOM elements that have traceable fiber sources. */
+function findTraceableChildren(el: HTMLElement): string[] {
+  const refs: string[] = [];
+  // BFS — stop descending once we find a traceable child (they are the "direct" children
+  // in the component tree sense, not arbitrary descendants).
+  const queue: HTMLElement[] = [];
+  for (let i = 0; i < el.children.length; i++) {
+    const child = el.children[i];
+    if (child instanceof HTMLElement) queue.push(child);
+  }
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    const ref = getSourceKey(node);
+    if (ref) {
+      refs.push(ref);
+      // Don't descend further — this is a "direct" traceable child
+    } else {
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child instanceof HTMLElement) queue.push(child);
+      }
+    }
+  }
+  return refs;
+}
+
+const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').NodeMapLookup = {
+  getEntry(nodeRef: string) {
+    const cache = getSourceCache();
+    const elements = cache.get(nodeRef);
+    if (!elements || elements.length === 0) return null;
+    const el = elements.find((e) => document.contains(e));
+    if (!el) return null;
+
+    const parent = findTraceableParent(el);
+    const children = findTraceableChildren(el);
+    const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+    const line = m ? Number.parseInt(m[2], 10) : 0;
+    const column = m ? Number.parseInt(m[3], 10) : 0;
+    const fileName = m ? m[1] : nodeRef;
+
+    return {
+      nodeRef,
+      tag: el.tagName.toLowerCase(),
+      loc: { fileName, line, column },
+      endLoc: { fileName, line, column },
+      parentRef: parent?.ref ?? null,
+      children,
+      isComponent: false,
+      fingerprint: '',
+    };
+  },
+  findDOMElement(source, itemIndex) {
+    const key = `${source.fileName}:${source.line}:${source.column}`;
+    const cache = getSourceCache();
+    const elements = cache.get(key);
+    if (!elements) return null;
+    const live = elements.filter((e) => document.contains(e));
+    return live[itemIndex] ?? live[0] ?? null;
+  },
+};
+
 // === Shared keyboard handler ===
 const { handler: keydownHandler } = createDesignKeydownHandler({
   getState: () => ({
@@ -809,9 +898,8 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
       ),
   },
   isDesignMode: () => state.engineMode === 'design',
-  // Extension IIFE has no NodeMapService — keyboard navigation (Tab/Arrow/Escape)
-  // returns null for all lookups. Delete and mode-switch still work.
-  nodeMapLookup: { getEntry: () => null, findDOMElement: () => null },
+  // DOM-based lookup — builds parent/children from live DOM + fiber source resolution.
+  nodeMapLookup: domNodeMapLookup,
 });
 // Forward unhandled modifier keystrokes to parent webview so VS Code's
 // built-in keyboard forwarding picks them up (Cmd+S, Cmd+P, etc.).
