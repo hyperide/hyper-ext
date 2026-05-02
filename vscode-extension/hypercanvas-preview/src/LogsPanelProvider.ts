@@ -12,7 +12,6 @@ import type { DiagnosticHub } from './DiagnosticHub';
 export class LogsPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.logsView';
 
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: stored for future use (e.g. programmatic postMessage)
   private _view: vscode.WebviewView | undefined;
   private _diagnosticHub: DiagnosticHub | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
@@ -36,6 +35,16 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
    */
   setDiagnosticHub(hub: DiagnosticHub): void {
     this._diagnosticHub = hub;
+  }
+
+  /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Primarily for E2E tests between specs — log filter state, search query,
+   * and scroll position persist across tests otherwise.
+   */
+  public reset(): void {
+    if (!this._view) return;
+    this._view.webview.html = this._getHtmlForWebview(this._view.webview);
   }
 
   public resolveWebviewView(

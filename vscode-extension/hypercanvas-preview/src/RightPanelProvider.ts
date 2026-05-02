@@ -17,6 +17,8 @@ import type { ScanResult } from './services/ComponentService';
 export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
 
+  private _view?: vscode.WebviewView;
+
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _stateHub: StateHub,
@@ -25,11 +27,24 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     private readonly _getComponentGroups?: () => Promise<ScanResult>,
   ) {}
 
+  /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Primarily for E2E tests between specs — otherwise inspector section
+   * expand/collapse state, focused inputs, and any other local useState
+   * persist across tests because the sidebar webview has
+   * retainContextWhenHidden semantics.
+   */
+  public reset(): void {
+    if (!this._view) return;
+    this._view.webview.html = this._getHtml(this._view.webview);
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
+    this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],

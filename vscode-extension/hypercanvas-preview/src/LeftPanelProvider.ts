@@ -26,6 +26,17 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
     return this._view?.visible ?? false;
   }
 
+  /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Primarily for E2E tests between specs — otherwise the tree expand/collapse
+   * state, selection, scroll position etc. persist across tests because the
+   * sidebar webview has retainContextWhenHidden semantics.
+   */
+  public reset(): void {
+    if (!this._view) return;
+    this._view.webview.html = this._getHtml(this._view.webview);
+  }
+
   onVisibilityChange(cb: (visible: boolean) => void): void {
     this._onVisibilityChange = cb;
   }

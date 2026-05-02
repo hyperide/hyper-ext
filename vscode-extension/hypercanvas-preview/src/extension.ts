@@ -587,13 +587,19 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
-  // Close preview panel (disposes the webview, clearing all iframe state).
-  // Primarily used by E2E tests between specs to prevent iframe module-level
-  // state (click handler cache, pendingClickElement, renderedComponentPath,
-  // source map caches) from leaking into subsequent tests.
+  // Close preview panel (disposes the webview, clearing all iframe state)
+  // AND reset every sidebar webview's HTML so React state (tree expand,
+  // selection, inspector input values, filter/search state, chat input)
+  // doesn't leak between tests. Sidebar views have retainContextWhenHidden
+  // semantics, so closing editors alone doesn't reset their React state.
+  // Primarily used by E2E tests between specs.
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.closePreview', () => {
       previewPanel?.dispose();
+      leftPanelProvider?.reset();
+      rightPanelProvider?.reset();
+      logsProvider?.reset();
+      aiChatProvider?.reset();
     }),
   );
 
