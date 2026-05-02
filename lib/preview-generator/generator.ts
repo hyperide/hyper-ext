@@ -98,6 +98,11 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 
   lines.push('');
   lines.push('type InstanceEntry = { x?: number; y?: number; props?: Record<string, unknown> };');
+  lines.push('type PreviewComponent = React.ComponentType<Record<string, unknown>>;');
+  lines.push('');
+  lines.push('function toPreviewComponent<P>(component: React.ComponentType<P>): PreviewComponent {');
+  lines.push('  return component as unknown as PreviewComponent;');
+  lines.push('}');
   lines.push('');
 
   // 2. Component imports
@@ -109,10 +114,10 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('');
 
   // 3. componentRegistry
-  lines.push('const componentRegistry: Record<string, React.ComponentType<Record<string, unknown>>> = {');
+  lines.push('const componentRegistry: Record<string, PreviewComponent> = {');
   for (const entry of entries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    lines.push(`  '${entry.componentPath}': ${alias},`);
+    lines.push(`  '${entry.componentPath}': toPreviewComponent(${alias}),`);
   }
   lines.push('};');
   lines.push('');

@@ -310,6 +310,28 @@ const sampleRenderersMap: Record<string, Record<string, React.FC>> = {
     expect(entries[0].sampleExports).toContain('SampleDefault');
   });
 
+  it('parses componentRegistry entries wrapped in toPreviewComponent()', () => {
+    const manualPreview = `import React from 'react';
+import Tweet from './components/Tweet';
+
+type PreviewComponent = React.ComponentType<Record<string, unknown>>;
+
+function toPreviewComponent<P>(component: React.ComponentType<P>): PreviewComponent {
+  return component as unknown as PreviewComponent;
+}
+
+const componentRegistry: Record<string, PreviewComponent> = {
+  'src/components/Tweet.tsx': toPreviewComponent(Tweet),
+};
+`;
+    const entries = parseExistingPreview(manualPreview);
+
+    expect(entries.length).toBe(1);
+    expect(entries[0].componentPath).toBe('src/components/Tweet.tsx');
+    expect(entries[0].componentName).toBe('Tweet');
+    expect(entries[0].importPath).toBe('./components/Tweet');
+  });
+
   it('should parse server-generated preview with SampleDefaultMap and no componentRegistry', () => {
     const serverPreview = `import React from 'react';
 import { SampleDefault as WeatherDashboardSampleRender } from './examples/WeatherDashboard';

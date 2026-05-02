@@ -264,6 +264,32 @@ describe('generatePreviewContent', () => {
     expect(content).toContain("'primary': ButtonSamplePrimary,");
     expect(content).toContain("'disabled': ButtonSampleDisabled,");
   });
+
+  it('wraps required-prop components before putting them into the preview registry', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'src/components/Tweet.tsx',
+        componentName: 'Tweet',
+        exportStyle: 'default-named',
+        sampleExports: [],
+        importPath: './components/Tweet',
+      },
+      {
+        componentPath: 'src/components/UserSuggestion.tsx',
+        componentName: 'UserSuggestion',
+        exportStyle: 'default-named',
+        sampleExports: [],
+        importPath: './components/UserSuggestion',
+      },
+    ];
+
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain('type PreviewComponent = React.ComponentType<Record<string, unknown>>;');
+    expect(content).toContain('function toPreviewComponent<P>(');
+    expect(content).toContain("'src/components/Tweet.tsx': toPreviewComponent(Tweet),");
+    expect(content).toContain("'src/components/UserSuggestion.tsx': toPreviewComponent(UserSuggestion),");
+  });
 });
 
 describe('generateStandaloneEntry', () => {

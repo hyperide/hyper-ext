@@ -255,7 +255,13 @@ function getStringValue(node: Node | null | undefined): string | null {
 }
 
 function getIdentName(node: Node | null | undefined): string | null {
-  return node?.type === 'Identifier' ? node.name : null;
+  if (!node) return null;
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'CallExpression') {
+    const firstArg = node.arguments[0];
+    return firstArg?.type === 'Identifier' ? firstArg.name : null;
+  }
+  return null;
 }
 
 function stripExtension(name: string): string {
