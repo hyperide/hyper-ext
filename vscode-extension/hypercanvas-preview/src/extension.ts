@@ -849,7 +849,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 '    },',
                 '  },',
                 '  optimizeDeps: {',
-                "    include: ['react-native-web'],",
+                "    include: ['react-native-web', 'warn-once'],",
                 "    exclude: ['react-native-safe-area-context', 'react-native-screens'],",
                 '  },',
                 '})',
