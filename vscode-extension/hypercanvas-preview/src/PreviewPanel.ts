@@ -1084,15 +1084,20 @@ export class PreviewPanel {
   public async selectNextSibling(): Promise<void> {
     const selectedIds = this._stateHub.state.selectedIds;
     const componentPath = this._currentComponent;
-    if (!componentPath || !selectedIds?.length) return;
+    if (!componentPath || !selectedIds?.length) {
+      console.log('[HyperIDE] selectNextSibling: no selection or component', { componentPath, selectedIds });
+      return;
+    }
 
     const nodeRef = selectedIds[0];
+    console.log('[HyperIDE] selectNextSibling: nodeRef =', nodeRef);
     const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
       componentPath,
       nodeRef,
       'next',
       nodeRef,
     );
+    console.log('[HyperIDE] selectNextSibling: siblingId =', siblingId);
     if (siblingId) {
       this._stateHub.applyUpdate({ selectedIds: [siblingId] });
     }
