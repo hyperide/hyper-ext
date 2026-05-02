@@ -46,6 +46,26 @@ const NEXTJS_APP_ROUTER_RESERVED = new Set([
   'default.jsx',
 ]);
 
+/**
+ * Remix reserved file names that must not be added to the preview registry.
+ * - `root.tsx` renders the full HTML document and uses Remix-specific hooks
+ *   (useLoaderData, useNavigate, useLocation) that crash without Remix router context.
+ * - `entry.client.tsx` / `entry.server.tsx` are hydration/SSR entry points, not components.
+ */
+const REMIX_RESERVED = new Set([
+  'root.tsx',
+  'root.jsx',
+  'entry.client.tsx',
+  'entry.client.jsx',
+  'entry.server.tsx',
+  'entry.server.jsx',
+]);
+
+/** Check if a filename is a framework-reserved file that must not appear in the preview. */
+function isFrameworkReserved(fileName: string): boolean {
+  return NEXTJS_APP_ROUTER_RESERVED.has(fileName) || REMIX_RESERVED.has(fileName);
+}
+
 export interface PreviewFileManagerConfig {
   projectRoot: string;
   io: FileIO;
@@ -373,7 +393,7 @@ export class PreviewFileManager {
       // @hyperide-managed files (extension's own generated route files).
       const existingEntries = parseExistingPreview(existingContent);
       const isStale = (e: { componentName: string; componentPath: string }) =>
-        !/^[A-Z]/.test(e.componentName) || NEXTJS_APP_ROUTER_RESERVED.has(basename(e.componentPath));
+        !/^[A-Z]/.test(e.componentName) || isFrameworkReserved(basename(e.componentPath));
       if (!existingEntries.some(isStale) && !needsProviderUpdate) return existingContent;
 
       // Stale entries found — regenerate excluding reserved files
@@ -386,7 +406,7 @@ export class PreviewFileManager {
     // excluding reserved filenames that must not be in the Client Component bundle.
     const existingEntries = parseExistingPreview(existingContent);
     const existingPaths = existingEntries
-      .filter((e) => !NEXTJS_APP_ROUTER_RESERVED.has(basename(e.componentPath)))
+      .filter((e) => !isFrameworkReserved(basename(e.componentPath)))
       .map((e) => e.componentPath);
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths);
@@ -545,10 +565,10 @@ export class PreviewFileManager {
       return null;
     }
 
-    // Exclude Next.js App Router special files — they export metadata / use special props
-    // that conflict with being imported as Client Components inside __canvas_preview__.tsx.
+    // Exclude framework-reserved files (Next.js App Router specials, Remix root/entry) —
+    // they export metadata / use framework hooks that crash without router context.
     const fileName = basename(componentPath);
-    if (NEXTJS_APP_ROUTER_RESERVED.has(fileName)) {
+    if (isFrameworkReserved(fileName)) {
       return null;
     }
 
@@ -1019,7 +1039,13 @@ export class PreviewFileManager {
           // expr.type === 'CallExpression' && callee.type === 'MemberExpression' already checked
           // in isCreateRoot guard above; cast to access .callee.object safely.
           const callExpr = expr as namedTypes.CallExpression & { callee: namedTypes.MemberExpression };
-          const createRootExpr = JSON.parse(JSON.stringify(callExpr.callee.object));
+          const createRootExpr = JSON.parse(
+            JSON.stringify(callExpr.callee.object, (key, value) => {
+              // Strip position metadata that creates circular references (loc -> tokens -> loc)
+              if (key === 'tokens' || key === 'comments') return undefined;
+              return value;
+            }),
+          );
           // JSX is only valid in .tsx/.jsx files. For plain .ts/.js entry files, use
           // React.createElement — these projects must have React in scope anyway.
           const allowJsx = entryFilePath.endsWith('.tsx') || entryFilePath.endsWith('.jsx');
