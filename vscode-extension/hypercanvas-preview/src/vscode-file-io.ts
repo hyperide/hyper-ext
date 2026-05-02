@@ -1,14 +1,21 @@
 /**
  * VS Code implementation of FileIO.
  *
- * Writes go directly to disk via vscode.workspace.fs — reliable for both new and existing files.
- * WorkspaceEdit + doc.save() was previously used to support Cmd+Z, but doc.save() silently
- * returns false for background documents (not shown in any editor tab), causing patchEntryFile
- * to write nothing to disk while appearing to succeed.
+ * Two-phase write strategy:
+ * 1. Apply WorkspaceEdit to an open TextDocument (creates native VS Code undo entry).
+ * 2. Save the document to disk (triggers Vite HMR).
  *
- * After the direct disk write, open in-memory documents are updated via WorkspaceEdit so that
- * sequential readFile() calls (which prefer open documents) see the fresh content immediately,
- * without waiting for VS Code's file-system watcher to reload.
+ * If the document is not yet open, we open it with openTextDocument first.
+ * The previous approach (disk-first via workspace.fs.writeFile, then best-effort
+ * WorkspaceEdit sync) had a race: the file-system watcher could reload the document
+ * between the disk write and the WorkspaceEdit check, causing the WorkspaceEdit to
+ * be skipped (content already matches) and leaving no undo entry. That broke undo
+ * for some style writes and made redo impossible.
+ *
+ * doc.save() was historically unreliable for "background" documents not visible in
+ * any editor tab, but openTextDocument ensures the document is in VS Code's model,
+ * and applyEdit + save on a model-resident document works reliably.
+ * Fallback: if save fails, we write directly to disk.
  */
 
 import type { FileIO } from '@lib/ast/file-io';
@@ -31,20 +38,37 @@ export class VSCodeFileIO implements FileIO {
   async writeFile(absolutePath: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(absolutePath);
 
-    // Write directly to disk — works for both new and existing files and guarantees
-    // Vite HMR picks up the change. WorkspaceEdit + doc.save() was unreliable for
-    // background documents that are open but not visible in any editor tab.
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+    // Ensure document is open in VS Code's text model so WorkspaceEdit creates
+    // a proper undo entry. openTextDocument does not show it in a visible tab —
+    // it only loads it into memory.
+    let doc: vscode.TextDocument;
+    try {
+      doc = await vscode.workspace.openTextDocument(uri);
+    } catch {
+      // File doesn't exist yet (new file) — write directly to disk.
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+      return;
+    }
 
-    // Sync the in-memory document if it is open, so the next readFile() call returns
-    // the new content immediately (before VS Code's file-system watcher fires).
-    const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
-    if (openDoc && openDoc.getText() !== content) {
-      const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
-      edit.replace(uri, fullRange, content);
-      // Best-effort: disk is already written, so ignore applyEdit failures here.
-      await vscode.workspace.applyEdit(edit).catch(() => {});
+    // If content is already identical, nothing to do.
+    if (doc.getText() === content) return;
+
+    // Apply WorkspaceEdit — this creates a native VS Code undo entry.
+    const edit = new vscode.WorkspaceEdit();
+    const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+    edit.replace(uri, fullRange, content);
+    const applied = await vscode.workspace.applyEdit(edit);
+
+    if (applied && doc.isDirty) {
+      // Save the document to disk so Vite HMR picks up the change.
+      const saved = await doc.save();
+      if (!saved) {
+        // Fallback: save failed (background document edge case) — write directly.
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+      }
+    } else if (!applied) {
+      // WorkspaceEdit failed — fall back to direct disk write.
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
     }
   }
 
