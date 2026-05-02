@@ -45,37 +45,19 @@ export class VSCodeFileIO implements FileIO {
   async writeFile(absolutePath: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(absolutePath);
 
-    // Ensure document is open in VS Code's text model so WorkspaceEdit creates
-    // a proper undo entry. openTextDocument does not show it in a visible tab —
-    // it only loads it into memory.
-    let doc: vscode.TextDocument;
-    try {
-      doc = await vscode.workspace.openTextDocument(uri);
-    } catch {
-      // File doesn't exist yet (new file) — write directly to disk.
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-      return;
-    }
+    // Write directly to disk — reliable for Vite HMR and avoids VS Code
+    // "file is newer" conflict dialogs that WorkspaceEdit + save can trigger.
+    // Undo/redo uses content-based snapshots in UndoRedoService, not VS Code native undo.
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 
-    // If content is already identical, nothing to do.
-    if (doc.getText() === content) return;
-
-    // Apply WorkspaceEdit — this creates a native VS Code undo entry.
-    const edit = new vscode.WorkspaceEdit();
-    const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-    edit.replace(uri, fullRange, content);
-    const applied = await vscode.workspace.applyEdit(edit);
-
-    if (applied && doc.isDirty) {
-      // Save the document to disk so Vite HMR picks up the change.
-      const saved = await doc.save();
-      if (!saved) {
-        // Fallback: save failed (background document edge case) — write directly.
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-      }
-    } else if (!applied) {
-      // WorkspaceEdit failed — fall back to direct disk write.
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+    // Sync the in-memory document if it is open, so the next readFile() call returns
+    // the new content immediately (before VS Code's file-system watcher fires).
+    const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
+    if (openDoc && openDoc.getText() !== content) {
+      const edit = new vscode.WorkspaceEdit();
+      const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
+      edit.replace(uri, fullRange, content);
+      await vscode.workspace.applyEdit(edit).catch(() => {});
     }
   }
 
