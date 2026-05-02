@@ -35,6 +35,13 @@ export class VSCodeFileIO implements FileIO {
     return new TextDecoder().decode(content);
   }
 
+  /** Read directly from disk, bypassing the textDocuments cache. Used by undo tracking. */
+  async readFileFromDisk(absolutePath: string): Promise<string> {
+    const uri = vscode.Uri.file(absolutePath);
+    const content = await vscode.workspace.fs.readFile(uri);
+    return new TextDecoder().decode(content);
+  }
+
   async writeFile(absolutePath: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(absolutePath);
 

@@ -126,9 +126,17 @@ export class AstBridge {
     if (result.success) {
       let contentAfter: string;
       try {
-        contentAfter = await this._fileIO.readFile(absolutePath);
+        // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
+        contentAfter =
+          this._fileIO instanceof VSCodeFileIO
+            ? await this._fileIO.readFileFromDisk(absolutePath)
+            : await this._fileIO.readFile(absolutePath);
       } catch {
-        contentAfter = contentBefore;
+        try {
+          contentAfter = await this._fileIO.readFile(absolutePath);
+        } catch {
+          contentAfter = contentBefore;
+        }
       }
       if (contentBefore !== contentAfter) {
         this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
