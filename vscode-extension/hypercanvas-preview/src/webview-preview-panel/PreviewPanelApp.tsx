@@ -7,7 +7,7 @@
 
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
-import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
