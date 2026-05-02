@@ -316,6 +316,25 @@ function extractClientChunkFrames(err: Error): Array<{ url: string; line: number
 }
 
 /**
+ * Build a .map URL by appending .map to the pathname, preserving query params.
+ * Naive `url + ".map"` breaks when Vite adds ?t=<timestamp> for HMR:
+ *   /src/App.tsx?t=123  →  /src/App.tsx?t=123.map  (WRONG — Vite misroutes)
+ * Correct: /src/App.tsx?t=123  →  /src/App.tsx.map?t=123
+ */
+function buildMapUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.pathname += '.map';
+    return parsed.href;
+  } catch {
+    // Not a full URL (relative path) — split on ? manually
+    const qIdx = url.indexOf('?');
+    if (qIdx === -1) return `${url}.map`;
+    return `${url.substring(0, qIdx)}.map${url.substring(qIdx)}`;
+  }
+}
+
+/**
  * Async: fetch source map for one client chunk URL, resolve and cache the given position.
  * Marks overlays dirty when the result arrives so the overlay re-renders immediately.
  * Also retries any pending click that was waiting for source maps to warm.
@@ -327,8 +346,12 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
   try {
     let sm: SourceMapV3 | null = null;
 
-    // Try .map file first (Next.js, webpack)
-    const mapUrl = url.endsWith('.map') ? url : `${url}.map`;
+    // Try .map file first (Next.js, webpack).
+    // Must append .map to the pathname, NOT after query params.
+    // Vite adds ?t=<timestamp> for HMR — naively appending .map after the query
+    // creates e.g. /src/App.tsx?t=123.map which Vite misroutes through the OXC
+    // transform plugin instead of the source map middleware, causing PARSE_ERROR.
+    const mapUrl = url.endsWith('.map') ? url : buildMapUrl(url);
     const mapRes = await fetch(mapUrl);
     if (mapRes.ok) {
       sm = (await mapRes.json()) as SourceMapV3;
