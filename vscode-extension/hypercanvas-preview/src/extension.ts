@@ -592,14 +592,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // selection, inspector input values, filter/search state, chat input)
   // doesn't leak between tests. Sidebar views have retainContextWhenHidden
   // semantics, so closing editors alone doesn't reset their React state.
-  // Primarily used by E2E tests between specs.
+  // The command awaits each reset() until its webview signals webview:ready,
+  // so the next test runs against a fully mounted sidebar rather than racing
+  // an in-progress reload. Primarily used by E2E tests between specs.
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.closePreview', () => {
+    vscode.commands.registerCommand('hypercanvas.closePreview', async () => {
       previewPanel?.dispose();
-      leftPanelProvider?.reset();
-      rightPanelProvider?.reset();
-      logsProvider?.reset();
-      aiChatProvider?.reset();
+      await Promise.all([
+        leftPanelProvider?.reset() ?? Promise.resolve(),
+        rightPanelProvider?.reset() ?? Promise.resolve(),
+        logsProvider?.reset() ?? Promise.resolve(),
+        aiChatProvider?.reset() ?? Promise.resolve(),
+      ]);
     }),
   );
 

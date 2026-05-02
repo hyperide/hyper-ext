@@ -29,14 +29,26 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   /**
    * Force the webview to reload its HTML, clearing all local React state.
-   * Primarily for E2E tests between specs — otherwise inspector section
-   * expand/collapse state, focused inputs, and any other local useState
-   * persist across tests because the sidebar webview has
-   * retainContextWhenHidden semantics.
+   * Returns a promise that resolves when the new React app has mounted and
+   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
    */
-  public reset(): void {
+  public async reset(): Promise<void> {
     if (!this._view) return;
-    this._view.webview.html = this._getHtml(this._view.webview);
+    const webview = this._view.webview;
+    const ready = new Promise<void>((resolve) => {
+      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
+        if (msg?.type === 'webview:ready') {
+          sub.dispose();
+          resolve();
+        }
+      });
+      setTimeout(() => {
+        sub.dispose();
+        resolve();
+      }, 1_500);
+    });
+    webview.html = this._getHtml(webview);
+    await ready;
   }
 
   public resolveWebviewView(

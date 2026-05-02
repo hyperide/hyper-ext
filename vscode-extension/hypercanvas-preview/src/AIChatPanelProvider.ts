@@ -35,12 +35,26 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
 
   /**
    * Force the webview to reload its HTML, clearing all local React state.
-   * Primarily for E2E tests between specs — chat input values, scroll
-   * position, and tool-use UI state persist across tests otherwise.
+   * Returns a promise that resolves when the new React app has mounted and
+   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
    */
-  public reset(): void {
+  public async reset(): Promise<void> {
     if (!this._view) return;
-    this._view.webview.html = this._getHtmlForWebview(this._view.webview);
+    const webview = this._view.webview;
+    const ready = new Promise<void>((resolve) => {
+      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
+        if (msg?.type === 'webview:ready') {
+          sub.dispose();
+          resolve();
+        }
+      });
+      setTimeout(() => {
+        sub.dispose();
+        resolve();
+      }, 1_500);
+    });
+    webview.html = this._getHtmlForWebview(webview);
+    await ready;
   }
 
   /**
