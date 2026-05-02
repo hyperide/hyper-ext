@@ -826,7 +826,17 @@ function findTraceableChildren(el: HTMLElement): string[] {
 const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').NodeMapLookup = {
   getEntry(nodeRef: string) {
     const cache = getSourceCache();
-    const elements = cache.get(nodeRef);
+    let elements = cache.get(nodeRef);
+    // Fuzzy match by file:line when exact key fails (fiber vs AST column mismatch)
+    if ((!elements || elements.length === 0) && nodeRef.includes(':')) {
+      const prefix = nodeRef.replace(/:\d+$/, ':'); // "file:line:"
+      for (const [key, vals] of cache) {
+        if (key.startsWith(prefix) && vals.some((e) => document.contains(e))) {
+          elements = vals;
+          break;
+        }
+      }
+    }
     if (!elements || elements.length === 0) return null;
     const el = elements.find((e) => document.contains(e));
     if (!el) return null;
