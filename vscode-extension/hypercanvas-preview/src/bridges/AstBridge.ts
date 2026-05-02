@@ -19,13 +19,15 @@ import { VSCodeFileIO } from '../vscode-file-io';
 
 export class AstBridge {
   private _astService: AstService;
+  private _fileIO: VSCodeFileIO;
   private _undoRedoService: UndoRedoService;
   private _workspaceRoot: string;
   private _webview: vscode.Webview | null = null;
 
   constructor(workspaceRoot: string) {
     this._workspaceRoot = workspaceRoot;
-    this._astService = new AstService(workspaceRoot, new VSCodeFileIO());
+    this._fileIO = new VSCodeFileIO();
+    this._astService = new AstService(workspaceRoot, this._fileIO);
     this._undoRedoService = new UndoRedoService(workspaceRoot);
   }
 
@@ -111,9 +113,25 @@ export class AstBridge {
     filePath: string,
     operation: () => Promise<T>,
   ): Promise<T> {
+    const absolutePath = this._resolvePath(filePath);
+    let contentBefore: string;
+    try {
+      contentBefore = await this._fileIO.readFile(absolutePath);
+    } catch {
+      // File doesn't exist yet — no undo tracking possible
+      return operation();
+    }
     const result = await operation();
     if (result.success) {
-      this._undoRedoService.recordEdit(this._resolvePath(filePath));
+      let contentAfter: string;
+      try {
+        contentAfter = await this._fileIO.readFile(absolutePath);
+      } catch {
+        contentAfter = contentBefore;
+      }
+      if (contentBefore !== contentAfter) {
+        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+      }
     }
     return result;
   }
@@ -121,13 +139,25 @@ export class AstBridge {
   // === Public mutation methods (with undo tracking, for PreviewPanel direct calls) ===
 
   async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
+    const absolutePath = this._resolvePath(filePath);
+    let contentBefore: string;
+    try {
+      contentBefore = await this._fileIO.readFile(absolutePath);
+    } catch {
+      return this._astService.deleteElements(filePath, elementIds);
+    }
     const result = await this._astService.deleteElements(filePath, elementIds);
     if (result.success) {
-      // deleteElements writes once per element — record matching undo entries
-      const count = (result.data as { deletedCount?: number })?.deletedCount ?? 1;
-      const resolved = this._resolvePath(filePath);
-      for (let i = 0; i < count; i++) {
-        this._undoRedoService.recordEdit(resolved);
+      let contentAfter: string;
+      try {
+        contentAfter = await this._fileIO.readFile(absolutePath);
+      } catch {
+        contentAfter = contentBefore;
+      }
+      if (contentBefore !== contentAfter) {
+        // Single undo entry for the entire delete operation (regardless of element count).
+        // Content snapshots capture the full before/after — no need for per-element entries.
+        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
       }
     }
     return result;
@@ -246,13 +276,25 @@ export class AstBridge {
   private async _handleDeleteElements(
     message: Extract<AstMessage, { type: 'ast:deleteElements' }>,
   ): Promise<AstResponse> {
+    const absolutePath = this._resolvePath(message.filePath);
+    let contentBefore: string | undefined;
+    try {
+      contentBefore = await this._fileIO.readFile(absolutePath);
+    } catch {
+      // ignore — no undo tracking for missing files
+    }
+
     const result = await this._astService.deleteElements(message.filePath, message.elementIds);
-    if (result.success) {
-      // deleteElements writes once per element — record matching undo entries
-      const count = (result.data as { deletedCount?: number })?.deletedCount ?? 1;
-      const resolved = this._resolvePath(message.filePath);
-      for (let i = 0; i < count; i++) {
-        this._undoRedoService.recordEdit(resolved);
+
+    if (result.success && contentBefore !== undefined) {
+      let contentAfter: string;
+      try {
+        contentAfter = await this._fileIO.readFile(absolutePath);
+      } catch {
+        contentAfter = contentBefore;
+      }
+      if (contentBefore !== contentAfter) {
+        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
       }
     }
 

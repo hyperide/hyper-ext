@@ -28,8 +28,8 @@ mock.module('../services/AstService', () => ({
 // Real UndoRedoService is used — do NOT mock it (mock.module is global in bun,
 // would poison UndoRedoService.test.ts). vscode is already mocked via test/mock-vscode.ts preload.
 // VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService is mocked above,
-// so VSCodeFileIO methods are never called. Mocking it with `class {}` would poison
-// VSCodeFileIO.test.ts (mock.module is global).
+// so VSCodeFileIO methods are never called by AstService. But _withUndoTracking now calls
+// readFile directly — we control this via workspace.textDocuments mock.
 
 import * as vscode from 'vscode';
 
@@ -44,6 +44,38 @@ function createMockWebview() {
     }),
     messages,
   };
+}
+
+/**
+ * Simulate file content changes for undo tracking.
+ * The first readFile call (before operation) returns `before`,
+ * the second call (after operation) returns `after`.
+ */
+function setupFileSnapshots(before: string, after: string): void {
+  let callCount = 0;
+  // VSCodeFileIO.readFile checks textDocuments first, then falls back to workspace.fs.readFile.
+  // We use textDocuments to control the return value.
+  const mockDoc = {
+    uri: { fsPath: '/workspace/f.tsx' } as vscode.Uri,
+    getText: () => {
+      callCount++;
+      return callCount <= 1 ? before : after;
+    },
+  };
+  (vscode.workspace.textDocuments as unknown[]).push(mockDoc);
+}
+
+/** Setup file snapshots matching any file path */
+function setupFileSnapshotsForPath(filePath: string, before: string, after: string): void {
+  let callCount = 0;
+  const mockDoc = {
+    uri: { fsPath: filePath } as vscode.Uri,
+    getText: () => {
+      callCount++;
+      return callCount <= 1 ? before : after;
+    },
+  };
+  (vscode.workspace.textDocuments as unknown[]).push(mockDoc);
 }
 
 describe('AstBridge', () => {
@@ -230,9 +262,11 @@ describe('AstBridge', () => {
   // === Undo tracking tests (uses real UndoRedoService with mocked vscode) ===
 
   describe('undo tracking via handleMessage', () => {
-    it('enables undo after successful ast:updateStyles', async () => {
+    it('enables undo after successful ast:updateStyles with content change', async () => {
+      // Setup: file content changes from 'before' to 'after' during the operation
+      setupFileSnapshotsForPath('/workspace/f.tsx', 'before-content', 'after-content');
+
       const wv = createMockWebview();
-      // filePath must resolve inside /workspace for recordEdit to accept it
       await bridge.handleMessage(
         {
           type: 'ast:updateStyles',
@@ -251,6 +285,8 @@ describe('AstBridge', () => {
 
     it('does not enable undo on failed operation', async () => {
       mockAstService.updateProps.mockImplementation(() => Promise.resolve({ success: false, error: 'fail' }));
+      setupFileSnapshotsForPath('/workspace/f.tsx', 'content', 'content');
+
       const wv = createMockWebview();
       await bridge.handleMessage(
         {
@@ -270,6 +306,7 @@ describe('AstBridge', () => {
 
   describe('public mutation methods', () => {
     it('deleteElements delegates to astService and enables undo', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       const result = await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       expect(mockAstService.deleteElements).toHaveBeenCalledWith('/workspace/comp.tsx', ['e1']);
       expect(result.success).toBe(true);
@@ -277,28 +314,29 @@ describe('AstBridge', () => {
       expect(await bridge.undo(panel)).toBe(true);
     });
 
-    it('deleteElements with multiple elements records N undo entries', async () => {
+    it('deleteElements with multiple elements records single undo entry', async () => {
       mockAstService.deleteElements.mockImplementation(() =>
         Promise.resolve({ success: true, data: { deletedCount: 3 } }),
       );
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1', 'e2', 'e3']);
       const panel = { reveal: mock(() => {}) } as never;
-      // Should be able to undo 3 times (one per deleted element / write)
+      // Content-based: single undo entry captures the entire before/after diff
       expect(await bridge.undo(panel)).toBe(true);
-      expect(await bridge.undo(panel)).toBe(true);
-      expect(await bridge.undo(panel)).toBe(true);
-      // 4th undo should fail — stack exhausted
+      // Second undo should fail — only one snapshot entry
       expect(await bridge.undo(panel)).toBe(false);
     });
 
     it('deleteElements does not enable undo on failure', async () => {
       mockAstService.deleteElements.mockImplementation(() => Promise.resolve({ success: false }));
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'before');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       expect(await bridge.undo(panel)).toBe(false);
     });
 
     it('duplicateElement delegates and enables undo', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       const result = await bridge.duplicateElement('/workspace/comp.tsx', 'e1');
       expect(mockAstService.duplicateElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1');
       expect(result.success).toBe(true);
@@ -307,6 +345,7 @@ describe('AstBridge', () => {
     });
 
     it('wrapElement delegates and enables undo', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       const result = await bridge.wrapElement('/workspace/comp.tsx', 'e1', 'div');
       expect(mockAstService.wrapElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'e1', 'div');
       expect(result.success).toBe(true);
@@ -315,6 +354,7 @@ describe('AstBridge', () => {
     });
 
     it('pasteElement delegates and enables undo', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       const result = await bridge.pasteElement('/workspace/comp.tsx', 'target-1', '<div />');
       expect(mockAstService.pasteElement).toHaveBeenCalledWith('/workspace/comp.tsx', 'target-1', '<div />');
       expect(result.success).toBe(true);
@@ -324,22 +364,39 @@ describe('AstBridge', () => {
   });
 
   describe('undo/redo delegation', () => {
-    it('undo executes vscode undo command', async () => {
+    it('undo writes contentBefore via WorkspaceEdit', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       const result = await bridge.undo(panel);
       expect(result).toBe(true);
-      expect(vscode.commands.executeCommand).toHaveBeenCalledWith('undo');
+      // Should have used workspace.applyEdit (via UndoRedoService._writeContent)
+      // instead of commands.executeCommand('undo')
+      expect(vscode.workspace.applyEdit).toHaveBeenCalled();
     });
 
-    it('redo executes vscode redo command after undo', async () => {
+    it('redo writes contentAfter after undo', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       await bridge.undo(panel);
-      (vscode.commands.executeCommand as ReturnType<typeof mock>).mockClear();
+      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockClear();
       const result = await bridge.redo(panel);
       expect(result).toBe(true);
-      expect(vscode.commands.executeCommand).toHaveBeenCalledWith('redo');
+      expect(vscode.workspace.applyEdit).toHaveBeenCalled();
+    });
+
+    it('redo works after undo (content-based, not native VS Code redo)', async () => {
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'v1', 'v2');
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+      const panel = { reveal: mock(() => {}) } as never;
+
+      // Undo should work
+      expect(await bridge.undo(panel)).toBe(true);
+      // Redo should work — this is the key fix!
+      expect(await bridge.redo(panel)).toBe(true);
+      // Undo again should work (entry moved back to undo stack)
+      expect(await bridge.undo(panel)).toBe(true);
     });
   });
 });
