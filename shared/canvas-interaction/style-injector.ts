@@ -42,6 +42,22 @@ body.design-mode, body.design-mode * {
   cursor: default !important;
 }
 
+/* Prevent native focus outlines and focus behavior in design mode.
+   All navigation is handled by HyperCanvas selection, not browser focus. */
+body.design-mode *:focus,
+body.design-mode *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+body.design-mode a,
+body.design-mode button,
+body.design-mode input,
+body.design-mode select,
+body.design-mode textarea,
+body.design-mode [tabindex] {
+  -webkit-user-modify: read-only !important;
+}
+
 /* Ensure disabled form elements are clickable in design mode.
    Browsers may skip pointer events on disabled elements; override to
    guarantee they can be selected on the canvas. */

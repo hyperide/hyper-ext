@@ -101,6 +101,10 @@ export function attachClickHandler(
     if (mode === 'design') {
       e.preventDefault();
       e.stopPropagation();
+      // Blur any natively focused element — design mode uses HyperCanvas selection, not browser focus
+      if (document.activeElement && document.activeElement !== document.body) {
+        (document.activeElement as HTMLElement).blur?.();
+      }
     }
 
     if (mode !== 'design') return;

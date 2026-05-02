@@ -441,8 +441,14 @@ export class PreviewPanel {
     // When the user clicks an element (or empty area) on the canvas, the webview
     // sends state:update with selectedIds.  Focus the preview panel so keyboard
     // events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
-    // NOTE: Do NOT call panel.reveal() here on selectedIds changes —
-    // reveal() steals focus from the iframe, breaking hover/click overlays.
+    // Activate the canvas tab (make it the "active" editor group tab) without stealing
+    // keyboard focus from the iframe. preserveFocus=true keeps iframe mouse events working.
+    if (msg.type === 'state:update') {
+      const patch = (msg as { patch?: Record<string, unknown> }).patch;
+      if (patch && 'selectedIds' in patch) {
+        this._panel?.reveal(undefined, true); // true = preserveFocus
+      }
+    }
 
     // Delegate shared platform messages to PanelRouter
     const handled = await this._panelRouter.routeMessage(msg, webview);
@@ -488,6 +494,9 @@ export class PreviewPanel {
       const lineNumber = sourceCode.substring(0, sampleIndex).split('\n').length;
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
       await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preserveFocus: false,
+        preview: true,
         selection: new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0),
       });
       return;
@@ -526,6 +535,9 @@ export class PreviewPanel {
     const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
     await vscode.window.showTextDocument(doc, {
+      viewColumn: vscode.ViewColumn.One,
+      preserveFocus: false,
+      preview: true,
       selection: new vscode.Range(targetLine, 0, targetLine, 0),
     });
 

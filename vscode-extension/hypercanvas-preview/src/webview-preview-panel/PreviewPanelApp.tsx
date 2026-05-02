@@ -290,7 +290,7 @@ function ComponentErrorOverlay({ componentPath, error, onCreateSample, onConfigu
             style={errorOverlayPrimaryButtonStyle}
             onClick={handleCreateSample}
           >
-            Create Sample File
+            Create Sample
           </button>
           <button
             type="button"
