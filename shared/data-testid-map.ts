@@ -9,6 +9,9 @@ export const TID = {
     toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',
     contextMenuItem: (action: string) => `hyper-preview-context-${action}`,
+    componentErrorOverlay: 'hyper-preview-component-error',
+    componentErrorCreateSample: 'hyper-preview-component-error-create-sample',
+    componentErrorConfigureAI: 'hyper-preview-component-error-configure-ai',
   },
 
   // Inspector (Right Sidebar)

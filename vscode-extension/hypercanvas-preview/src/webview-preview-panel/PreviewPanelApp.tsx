@@ -7,7 +7,7 @@
 
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
-import { useCallback, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useMemo, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
@@ -51,12 +51,20 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, projectError, handleStartDevServer } =
-    usePreviewBridge({
-      iframeEl,
-      canvas,
-      onStateUpdate: updateState,
-    });
+  const {
+    devServerRunning,
+    disconnected,
+    previewUrl,
+    showNoComponentHint,
+    projectError,
+    componentError,
+    handleStartDevServer,
+    clearComponentError,
+  } = usePreviewBridge({
+    iframeEl,
+    canvas,
+    onStateUpdate: updateState,
+  });
 
   const handleIframeLoad = useCallback(() => {
     canvas.sendEvent({ type: 'previewLoaded' });
@@ -108,6 +116,25 @@ function PreviewContent() {
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
       </div>
+
+      {componentError && (
+        <ComponentErrorOverlay
+          componentPath={componentError.componentPath}
+          error={componentError.error}
+          onCreateSample={() => {
+            canvas.sendEvent({
+              type: 'errorBoundary:createSample',
+              componentPath: componentError.componentPath,
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
+          }}
+          onConfigureAIKey={() => {
+            canvas.sendEvent({
+              type: 'errorBoundary:configureAIKey',
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
+          }}
+          onDismiss={clearComponentError}
+        />
+      )}
 
       {showNoComponentHint && <NoComponentHint />}
 
@@ -169,6 +196,71 @@ function ReconnectingBanner() {
   return (
     <div data-testid="hyper-preview-reconnecting" style={reconnectingBannerStyle}>
       Dev server disconnected
+    </div>
+  );
+}
+
+// ============================================================================
+// Component Error Overlay (shown over iframe when ErrorBoundary catches)
+// ============================================================================
+
+interface ComponentErrorOverlayProps {
+  componentPath: string;
+  error: string;
+  onCreateSample: () => void;
+  onConfigureAIKey: () => void;
+  onDismiss: () => void;
+}
+
+function ComponentErrorOverlay({
+  componentPath,
+  error,
+  onCreateSample,
+  onConfigureAIKey,
+  onDismiss,
+}: ComponentErrorOverlayProps) {
+  const componentName =
+    componentPath
+      .split('/')
+      .pop()
+      ?.replace(/\.tsx?$/, '') ?? componentPath;
+  return (
+    <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
+      <div style={errorOverlayCardStyle}>
+        <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
+        <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
+
+        <div style={errorOverlayHintBoxStyle}>
+          <div style={errorOverlayHintLabelStyle}>Error details</div>
+          <p style={errorOverlayHintTextStyle}>{error}</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            data-testid={TID.preview.componentErrorCreateSample}
+            style={errorOverlayPrimaryButtonStyle}
+            onClick={onCreateSample}
+          >
+            Create Sample File
+          </button>
+          <button
+            type="button"
+            data-testid={TID.preview.componentErrorConfigureAI}
+            style={errorOverlaySecondaryButtonStyle}
+            onClick={onConfigureAIKey}
+          >
+            Configure AI Key
+          </button>
+          <button type="button" style={errorOverlayDismissButtonStyle} onClick={onDismiss}>
+            Dismiss
+          </button>
+        </div>
+
+        <p style={errorOverlayFooterStyle}>
+          Create a sample file to provide props manually, or configure an AI key to generate them automatically.
+        </p>
+      </div>
     </div>
   );
 }
@@ -356,4 +448,103 @@ const warningIconStyle: React.CSSProperties = {
   marginBottom: 12,
   color: 'var(--vscode-editorWarning-foreground, #e5a100)',
   lineHeight: 1,
+};
+
+// ============================================================================
+// Component Error Overlay styles
+// ============================================================================
+
+const errorOverlayBackdropStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 100,
+  background: 'rgba(0, 0, 0, 0.85)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontFamily: 'var(--vscode-font-family, system-ui, -apple-system, sans-serif)',
+};
+
+const errorOverlayCardStyle: CSSProperties = {
+  padding: 32,
+  maxWidth: 520,
+  width: '90%',
+  background: 'var(--vscode-editor-background, #1e1e1e)',
+  borderRadius: 12,
+  border: '1px solid var(--vscode-widget-border, #333)',
+};
+
+const errorOverlayTitleStyle: CSSProperties = {
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  margin: '0 0 4px',
+  fontSize: 15,
+  fontWeight: 600,
+};
+
+const errorOverlaySubtitleStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  margin: '0 0 20px',
+};
+
+const errorOverlayHintBoxStyle: CSSProperties = {
+  background: 'var(--vscode-input-background, #252525)',
+  borderRadius: 8,
+  padding: 16,
+  marginBottom: 16,
+  border: '1px solid var(--vscode-widget-border, #333)',
+};
+
+const errorOverlayHintLabelStyle: CSSProperties = {
+  color: 'var(--vscode-editor-foreground, #a0aec0)',
+  fontSize: 12,
+  marginBottom: 8,
+  fontWeight: 500,
+};
+
+const errorOverlayHintTextStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  margin: 0,
+  lineHeight: 1.6,
+  wordBreak: 'break-word',
+};
+
+const errorOverlayPrimaryButtonStyle: CSSProperties = {
+  padding: '8px 16px',
+  background: 'var(--vscode-button-background, #3182ce)',
+  color: 'var(--vscode-button-foreground, white)',
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const errorOverlaySecondaryButtonStyle: CSSProperties = {
+  padding: '8px 16px',
+  background: 'transparent',
+  color: 'var(--vscode-textLink-foreground, #a78bfa)',
+  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const errorOverlayDismissButtonStyle: CSSProperties = {
+  padding: '8px 16px',
+  background: 'transparent',
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  border: '1px solid var(--vscode-widget-border, #555)',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 13,
+};
+
+const errorOverlayFooterStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #4a5568)',
+  fontSize: 11,
+  margin: '12px 0 0',
+  lineHeight: 1.5,
 };

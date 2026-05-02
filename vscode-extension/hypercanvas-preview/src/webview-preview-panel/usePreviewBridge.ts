@@ -19,6 +19,12 @@ interface UsePreviewBridgeOptions {
   onStateUpdate: (patch: Record<string, unknown>) => void;
 }
 
+/** Error info from iframe ErrorBoundary — rendered in webview overlay, not inside iframe */
+export interface ComponentError {
+  componentPath: string;
+  error: string;
+}
+
 interface UsePreviewBridgeResult {
   devServerRunning: boolean;
   devServerUrl: string | null;
@@ -28,8 +34,11 @@ interface UsePreviewBridgeResult {
   showNoComponentHint: boolean;
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
+  /** Set when iframe ErrorBoundary catches a component render error */
+  componentError: ComponentError | null;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
+  clearComponentError: () => void;
 }
 
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
@@ -38,6 +47,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
+  const [componentError, setComponentError] = useState<ComponentError | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -94,17 +104,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Approach B: iframe requests server-side source map resolution from extension host.
           // Forward to extension host which reads the .map file from the local filesystem.
           canvas.sendEvent(msg as unknown as PlatformMessage);
-        } else if (msg.type === 'hypercanvas:createSample') {
-          // ErrorBoundary button: create sample scaffold file and open in editor
-          canvas.sendEvent({
-            type: 'errorBoundary:createSample',
+        } else if (msg.type === 'hypercanvas:componentError') {
+          // ErrorBoundary caught a render error — show overlay in webview layer
+          setComponentError({
             componentPath: msg.componentPath,
-          } as unknown as PlatformMessage);
-        } else if (msg.type === 'hypercanvas:configureAIKey') {
-          // ErrorBoundary button: open AI key configuration wizard
-          canvas.sendEvent({
-            type: 'errorBoundary:configureAIKey',
-          } as unknown as PlatformMessage);
+            error: msg.error,
+          });
         }
         return;
       }
@@ -234,6 +239,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
           setShowNoComponentHint(false);
+          setComponentError(null); // Clear error when switching components
           // Track current component from URL for re-send after HMR reload
           try {
             const comp = new URL(url).searchParams.get('component');
@@ -272,6 +278,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'setComponent': {
           const comp = typeof msg.component === 'string' ? msg.component : null;
           if (comp) currentComponentRef.current = comp;
+          setComponentError(null); // Clear error when switching components
           const frame = iframeElRef.current;
           if (frame?.contentWindow) {
             // Send via postMessage — no iframe reload
@@ -373,6 +380,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     canvas.sendEvent({ type: 'command:startDevServer' } as unknown as PlatformMessage);
   }, [canvas]);
 
+  const clearComponentError = useCallback(() => setComponentError(null), []);
+
   return {
     devServerRunning,
     devServerUrl,
@@ -380,7 +389,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     previewUrl,
     showNoComponentHint,
     projectError,
+    componentError,
     handleStartDevServer,
     handleRefresh: doRefresh,
+    clearComponentError,
   };
 }
