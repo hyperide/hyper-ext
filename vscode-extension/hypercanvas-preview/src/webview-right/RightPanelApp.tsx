@@ -36,7 +36,7 @@ function RightPanelContent() {
   useSharedEditorStateSync(canvas);
 
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
-  const componentPath = useSharedEditorState((s) => s.componentPath);
+  const componentPath = useSharedEditorState((s) => s.currentComponent?.path);
   const insertTargetId = useSharedEditorState((s) => s.insertTargetId);
 
   const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);

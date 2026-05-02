@@ -12,6 +12,8 @@ import type { DiagnosticHub } from './DiagnosticHub';
 export class LogsPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.logsView';
 
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: stored for future use (e.g. programmatic postMessage)
+  private _view: vscode.WebviewView | undefined;
   private _diagnosticHub: DiagnosticHub | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
 

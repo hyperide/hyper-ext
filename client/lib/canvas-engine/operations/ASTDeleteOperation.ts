@@ -61,14 +61,15 @@ export class ASTDeleteOperation extends BaseOperation {
     }
 
     console.log('[ASTDeleteOperation] Undoing delete, restoring element with original ID');
+    const deletedId = this.deletedElement.id;
 
     // Restore element via insert API - preserves original ID
     this.syncRestore()
       .then((restoredId) => {
         // Verify that ID matches original
-        if (restoredId !== this.deletedElement.id) {
+        if (restoredId !== deletedId) {
           console.warn('[ASTDeleteOperation] Restored ID differs from original:', {
-            original: this.deletedElement.id,
+            original: deletedId,
             restored: restoredId,
           });
         }
@@ -115,7 +116,7 @@ export class ASTDeleteOperation extends BaseOperation {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
         if (node.id === targetId) {
-          return { element: node, parent: parent || null, index: i };
+          return { element: node, parent, index: i };
         }
         if (node.children) {
           const found = findElementWithParent(node.children, targetId, node, i);
@@ -132,7 +133,7 @@ export class ASTDeleteOperation extends BaseOperation {
       if (result) {
         // Deep copy to avoid mutation issues
         this.deletedElement = JSON.parse(JSON.stringify(result.element));
-        this.parentId = result.parent?.id || null;
+        this.parentId = result.parent?.id;
         this.elementIndex = result.index;
         console.log(
           '[ASTDeleteOperation] Stored element:',
@@ -154,7 +155,7 @@ export class ASTDeleteOperation extends BaseOperation {
         if (result) {
           // Deep copy to avoid mutation issues
           this.deletedElement = JSON.parse(JSON.stringify(result.element));
-          this.parentId = result.parent?.id || null;
+          this.parentId = result.parent?.id;
           this.elementIndex = result.index;
           console.log(
             '[ASTDeleteOperation] Stored element:',

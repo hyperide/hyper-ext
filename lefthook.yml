@@ -7,9 +7,7 @@ pre-commit:
       stage_fixed: true
     typecheck:
       glob: "*.{ts,tsx}"
-      # TODO: extension tsc has 15 pre-existing errors — fix them to enable strict typecheck
-      # run: npx tsc --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json
-      run: npx tsc --noEmit
+      run: npx tsc --noEmit && npx tsc --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json
     react-hooks-import:
       glob: "*.{tsx,ts}"
-      run: node scripts/check-react-hooks-import.js {staged_files}
+      run: node scripts/check-react-hooks-import.cjs {staged_files}

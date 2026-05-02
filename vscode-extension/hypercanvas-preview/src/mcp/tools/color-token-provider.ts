@@ -248,8 +248,12 @@ function normalizeStylesInput(raw: Record<string, string>): Record<string, strin
 
     const valueTwMatch = value.match(TW_VALUE_PREFIX_RE);
     if (valueTwMatch) {
-      const cssKey = TW_PREFIX_TO_CSS[valueTwMatch[1]] ?? key;
-      result[cssKey] = valueTwMatch[2];
+      const cssKey = TW_PREFIX_TO_CSS[valueTwMatch[1]];
+      if (cssKey && Array.isArray(cssKey)) {
+        for (const k of cssKey) result[k] = valueTwMatch[2];
+      } else {
+        result[(cssKey as string) ?? key] = valueTwMatch[2];
+      }
       continue;
     }
 

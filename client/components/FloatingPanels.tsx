@@ -741,11 +741,15 @@ export function InsertInstancePanel({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {fieldDef.options.map((option) => (
-                          <SelectItem key={option} value={option} className="text-xs">
-                            {option}
-                          </SelectItem>
-                        ))}
+                        {fieldDef.options.map((option) => {
+                          const val = typeof option === 'string' ? option : option.value;
+                          const label = typeof option === 'string' ? option : option.label;
+                          return (
+                            <SelectItem key={val} value={val} className="text-xs">
+                              {label}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   ) : isBoolean ? (

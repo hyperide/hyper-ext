@@ -8,7 +8,7 @@ import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 
-const generate = _generate.default || _generate;
+const generate = (_generate as unknown as { default: typeof _generate }).default || _generate;
 
 // @ts-expect-error - babel/traverse has ESM/CJS issues
 const traverse = _traverse.default || _traverse;

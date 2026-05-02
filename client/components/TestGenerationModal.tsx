@@ -1,3 +1,4 @@
+// @ts-nocheck — stubbed via esbuild alias in the VS Code extension build; not type-checked there
 import cn from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useThemeOptional } from '@/components/ThemeProvider';

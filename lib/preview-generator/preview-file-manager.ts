@@ -848,6 +848,7 @@ export class PreviewFileManager {
           (newRoute as { comments?: unknown[] }).comments = [
             { type: 'CommentLine', value: ' @hyperide-managed', leading: false, trailing: true },
           ];
+          if (!el.children) el.children = [];
           el.children.push(b.jsxText('\n        '), newRoute, b.jsxText('\n      '));
           patched = true;
           return false;
@@ -893,7 +894,7 @@ export class PreviewFileManager {
       visitJSXElement(path) {
         const el = path.node;
         if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
-          el.children = el.children.filter((child) => {
+          el.children = (el.children ?? []).filter((child) => {
             if (child.type !== 'JSXElement') return true;
             // Remove Route elements with path="/test-preview"
             const childEl = child as RouteEl;

@@ -344,7 +344,7 @@ export class AstService {
       }
 
       // Resolve parent element if parentId/parentNodeRef provided
-      const parentResult = parentNodeRef ? this._resolveElement(ast, parentNodeRef, parentId) : null;
+      const parentResult = parentNodeRef ? this._resolveElement(ast, parentNodeRef, parentId ?? undefined) : null;
 
       const { inserted, actualIndex } = insertElementIntoAST(ast, {
         parent: parentResult,

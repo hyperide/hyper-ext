@@ -127,10 +127,7 @@ export class AstBridge {
       let contentAfter: string;
       try {
         // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
-        contentAfter =
-          this._fileIO instanceof VSCodeFileIO
-            ? await this._fileIO.readFileFromDisk(absolutePath)
-            : await this._fileIO.readFile(absolutePath);
+        contentAfter = await this._fileIO.readFileFromDisk(absolutePath);
       } catch {
         try {
           contentAfter = await this._fileIO.readFile(absolutePath);

@@ -141,6 +141,8 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     }, POST_HMR_DELAY_MS);
     return finish;
   }
+  // Capture narrowed non-null value for closures below (tsc can't narrow closure-captured vars)
+  const validBeforeSnapshot = beforeSnapshot;
 
   function verifyStyles(): void {
     if (cancelled) return;
@@ -151,7 +153,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       onVerified();
       return;
     }
-    const unchanged = detectUnchangedProperties(beforeSnapshot, afterSnapshot);
+    const unchanged = detectUnchangedProperties(validBeforeSnapshot, afterSnapshot);
     if (unchanged.length === 0) {
       finish();
       onVerified();
@@ -180,7 +182,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
           onVerified();
           return;
         }
-        const unchanged = detectUnchangedProperties(beforeSnapshot, afterSnapshot);
+        const unchanged = detectUnchangedProperties(validBeforeSnapshot, afterSnapshot);
         finish();
         if (unchanged.length === 0) {
           onVerified();

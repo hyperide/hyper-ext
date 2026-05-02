@@ -20,8 +20,7 @@ import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, PropsInterfaceI
 import { toKebabCase } from '../utils/naming';
 import { findInteractiveElements } from './interactive-detector';
 
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse: typeof _traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /**
  * Extract component name from file path
@@ -478,7 +477,7 @@ export async function analyzeComponent(filePath: string): Promise<ComponentAnaly
   return {
     filePath: absolutePath,
     componentName,
-    propsInterface,
+    propsInterface: propsInterface ?? undefined,
     cvaVariants,
     interactiveElements,
     hasSampleRender,

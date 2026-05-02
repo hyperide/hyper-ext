@@ -24,6 +24,8 @@ interface UsePreviewBridgeOptions {
 export interface ComponentError {
   componentPath: string;
   error: string;
+  /** Monotonic counter — increments on each error event, even for same component */
+  errorSeq: number;
   /** Prop schema from extension's ComponentService (populated asynchronously) */
   propsSchema?: SimplePropInfo[] | null;
 }
@@ -109,15 +111,22 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           canvas.sendEvent(msg as unknown as PlatformMessage);
         } else if (msg.type === 'hypercanvas:componentError') {
           // ErrorBoundary caught a render error — show overlay in webview layer.
-          // Deduplicate: skip if same componentPath already showing (HMR re-renders send duplicates).
+          // Always update (bump errorSeq) so overlay can detect re-fires and reset state.
           setComponentError((prev) => {
-            if (prev && prev.componentPath === msg.componentPath) return prev;
-            // Request prop type schema only on first error for this component
-            canvas.sendEvent({
-              type: 'errorBoundary:getPropsSchema',
+            const sameComponent = prev && prev.componentPath === msg.componentPath;
+            if (!sameComponent) {
+              canvas.sendEvent({
+                type: 'errorBoundary:getPropsSchema',
+                componentPath: msg.componentPath,
+              } as unknown as PlatformMessage);
+            }
+            return {
               componentPath: msg.componentPath,
-            } as unknown as PlatformMessage);
-            return { componentPath: msg.componentPath, error: msg.error };
+              error: msg.error,
+              errorSeq: (prev?.errorSeq ?? 0) + 1,
+              // Keep existing schema if same component
+              propsSchema: sameComponent ? prev.propsSchema : undefined,
+            };
           });
         }
         return;

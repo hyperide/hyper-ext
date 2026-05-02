@@ -338,7 +338,7 @@ class LocalToolExecutor implements ToolExecutor {
     return { success: true, output: results.join('\n\n') };
   }
 
-  private _filterByLevel(logs: Array<{ isError: boolean; level?: string }>, levelFilter: string): typeof logs {
+  private _filterByLevel<T extends { isError: boolean; level?: string }>(logs: T[], levelFilter: string): T[] {
     if (levelFilter === 'all') return logs;
     if (levelFilter === 'error') return logs.filter((l) => l.isError || l.level === 'error');
     if (levelFilter === 'warn') return logs.filter((l) => l.isError || l.level === 'error' || l.level === 'warn');
@@ -391,7 +391,7 @@ class LocalToolExecutor implements ToolExecutor {
     if (!ALLOWED_COMMANDS.has(firstWord)) {
       return {
         success: false,
-        error: `Command '${firstWord}' is not allowed. Allowed: ${[...LocalToolExecutor.ALLOWED_BASH_COMMANDS].slice(0, 10).join(', ')}...`,
+        error: `Command '${firstWord}' is not allowed. Allowed: ${[...ALLOWED_COMMANDS].slice(0, 10).join(', ')}...`,
       };
     }
 

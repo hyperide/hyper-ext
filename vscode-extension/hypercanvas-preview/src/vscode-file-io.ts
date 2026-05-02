@@ -57,7 +57,7 @@ export class VSCodeFileIO implements FileIO {
       const edit = new vscode.WorkspaceEdit();
       const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
       edit.replace(uri, fullRange, content);
-      await vscode.workspace.applyEdit(edit).catch(() => {});
+      await Promise.resolve(vscode.workspace.applyEdit(edit)).catch(() => {});
     }
   }
 

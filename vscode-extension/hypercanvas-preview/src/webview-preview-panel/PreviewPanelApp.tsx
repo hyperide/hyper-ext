@@ -121,6 +121,7 @@ function PreviewContent() {
       {componentError && (
         <ComponentErrorOverlay
           componentPath={componentError.componentPath}
+          errorSeq={componentError.errorSeq}
           error={componentError.error}
           propsSchema={componentError.propsSchema}
           onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
@@ -213,6 +214,7 @@ const propsCache = new Map<string, Record<string, unknown>>();
 
 interface ComponentErrorOverlayProps {
   componentPath: string;
+  errorSeq?: number;
   error: string;
   propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;

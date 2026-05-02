@@ -251,7 +251,7 @@ export default function LeftSidebar({
         className="flex-1"
         defaultLayout={defaultLayout}
         onLayoutChange={onLayoutChange}
-        groupRef={groupRef}
+        groupRef={groupRef as unknown as React.Ref<import('react-resizable-panels').GroupImperativeHandle>}
       >
         {/* Source Control — SaaS only */}
         <Panel

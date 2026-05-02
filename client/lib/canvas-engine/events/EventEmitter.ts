@@ -45,7 +45,7 @@ export class EventEmitter {
   off<K extends CanvasEventName>(event: K, listener: EventListener<CanvasEngineEvents[K]>): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
-      eventListeners.delete(listener);
+      eventListeners.delete(listener as EventListener<CanvasEngineEvents[CanvasEventName]>);
       if (eventListeners.size === 0) {
         this.listeners.delete(event);
       }

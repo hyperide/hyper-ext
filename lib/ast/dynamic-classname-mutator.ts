@@ -9,7 +9,7 @@ import { getConflictingPrefixes } from '../tailwind/generator.js';
 import type { ClassNameLocation } from '../types.js';
 import { getAttribute, setAttribute } from './mutator.js';
 
-const generate = _generate.default || _generate;
+const generate = (_generate as unknown as { default: typeof _generate }).default || _generate;
 
 /**
  * Detect type of className attribute
