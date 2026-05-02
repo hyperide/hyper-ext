@@ -446,7 +446,11 @@ export class DevServerManager {
         resolve(false);
       });
 
-      socket.connect(port, '127.0.0.1');
+      // Use 'localhost' instead of '127.0.0.1' — modern systems resolve
+      // localhost to IPv6 ::1, and Vite/Next.js bind to localhost by default.
+      // Hardcoding 127.0.0.1 caused "Server failed to start" on any dev
+      // server that binds to IPv6.
+      socket.connect(port, 'localhost');
     });
   }
 
