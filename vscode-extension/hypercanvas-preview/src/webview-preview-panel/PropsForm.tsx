@@ -7,7 +7,7 @@
  */
 
 import type { PropTypeInfo } from '@shared/types/props';
-import { type CSSProperties, useCallback, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
 /** Simplified prop info from extension's ComponentService (lib/types.ts PropInfo) */
 export interface SimplePropInfo {
@@ -307,9 +307,9 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
     );
   }
 
-  // Object with schema — expandable nested fields
+  // Object with schema — floating popover with nested fields
   if (typeInfo.type === 'object' && typeInfo.objectSchema) {
-    return <ObjectPropField name={name} typeInfo={typeInfo} value={value} onChange={onChange} depth={depth} />;
+    return <ObjectPropPopover name={name} typeInfo={typeInfo} value={value} onChange={onChange} depth={depth} />;
   }
 
   // Object without schema — JSON textarea fallback
@@ -339,10 +339,10 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
 }
 
 // ============================================================================
-// ObjectPropField — collapsible nested object fields (recursive)
+// ObjectPropPopover — floating popover with nested object fields (recursive)
 // ============================================================================
 
-function ObjectPropField({
+function ObjectPropPopover({
   name,
   typeInfo,
   value,
@@ -355,35 +355,121 @@ function ObjectPropField({
   onChange: (name: string, value: unknown) => void;
   depth: number;
 }) {
-  const [expanded, setExpanded] = useState(depth === 0);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
   const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   // biome-ignore lint/style/noNonNullAssertion: caller guarantees objectSchema exists
   const schema = typeInfo.objectSchema!;
 
+  // Position the popover next to the trigger button
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+
+    const updatePosition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Place popover to the right of the trigger; if it would overflow, place to the left
+      const popoverWidth = 300;
+      const viewportWidth = window.innerWidth;
+      const spaceRight = viewportWidth - rect.right;
+      const left = spaceRight >= popoverWidth + 8 ? rect.right + 8 : rect.left - popoverWidth - 8;
+      // Vertically align with the trigger top, clamped to viewport
+      const viewportHeight = window.innerHeight;
+      const top = Math.min(rect.top, viewportHeight - 320);
+      setPosition({ top: Math.max(4, top), left: Math.max(4, left) });
+    };
+
+    updatePosition();
+  }, [open]);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open]);
+
+  const fieldCount = Object.keys(schema).length;
+
   return (
-    <div style={fieldColumnStyle}>
-      <button type="button" onClick={() => setExpanded((v) => !v)} style={objectToggleStyle}>
-        <span style={objectArrowStyle}>{expanded ? '\u25BC' : '\u25B6'}</span>
-        <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-          <span style={typeBadgeStyle}>object</span>
+    <div style={fieldRowStyle}>
+      <span style={fieldNameStyle}>
+        {name}
+        {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
+      </span>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          ...popoverTriggerStyle,
+          ...(open ? popoverTriggerActiveStyle : {}),
+        }}
+      >
+        <span style={typeBadgeStyle}>object</span>
+        <span style={popoverTriggerCountStyle}>
+          {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
         </span>
+        <span style={popoverTriggerArrowStyle}>{open ? '\u25BC' : '\u25B6'}</span>
       </button>
-      {expanded && (
-        <div style={objectNestedContainerStyle}>
-          {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
-            <PropField
-              key={fieldName}
-              name={fieldName}
-              typeInfo={fieldTypeInfo}
-              value={objValue[fieldName]}
-              onChange={(nestedName, nestedValue) => {
-                onChange(name, { ...objValue, [nestedName]: nestedValue });
-              }}
-              depth={depth + 1}
-            />
-          ))}
+      {open && position && (
+        <div
+          ref={popoverRef}
+          style={{
+            ...popoverContainerStyle,
+            top: position.top,
+            left: position.left,
+          }}
+        >
+          <div style={popoverHeaderStyle}>
+            <span style={popoverTitleStyle}>{name}</span>
+            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+              &times;
+            </button>
+          </div>
+          <div style={popoverFieldsStyle}>
+            {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
+              <PropField
+                key={fieldName}
+                name={fieldName}
+                typeInfo={fieldTypeInfo}
+                value={objValue[fieldName]}
+                onChange={(nestedName, nestedValue) => {
+                  onChange(name, { ...objValue, [nestedName]: nestedValue });
+                }}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -596,33 +682,86 @@ const arrayAddButtonStyle: CSSProperties = {
   textAlign: 'left' as const,
 };
 
-const objectToggleStyle: CSSProperties = {
-  display: 'flex',
+const popoverTriggerStyle: CSSProperties = {
+  display: 'inline-flex',
   alignItems: 'center',
   gap: 6,
-  background: 'transparent',
-  border: 'none',
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  border: '1px solid var(--vscode-input-border, #444)',
+  borderRadius: 4,
   cursor: 'pointer',
-  padding: 0,
-  textAlign: 'left' as const,
-  width: '100%',
+  padding: '3px 8px',
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  fontSize: 12,
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  flex: 1,
 };
 
-const objectArrowStyle: CSSProperties = {
-  fontSize: 10,
+const popoverTriggerActiveStyle: CSSProperties = {
+  borderColor: 'var(--vscode-focusBorder, #007fd4)',
+  background: 'var(--vscode-list-activeSelectionBackground, #094771)',
+};
+
+const popoverTriggerCountStyle: CSSProperties = {
+  fontSize: 11,
   color: 'var(--vscode-descriptionForeground, #718096)',
-  width: 12,
-  flexShrink: 0,
+  flex: 1,
+};
+
+const popoverTriggerArrowStyle: CSSProperties = {
+  fontSize: 9,
+  color: 'var(--vscode-descriptionForeground, #718096)',
   userSelect: 'none',
 };
 
-const objectNestedContainerStyle: CSSProperties = {
+const popoverContainerStyle: CSSProperties = {
+  position: 'fixed',
+  background: 'var(--vscode-editorWidget-background, #252526)',
+  border: '1px solid var(--vscode-editorWidget-border, #454545)',
+  borderRadius: 6,
+  padding: 0,
+  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+  zIndex: 10000,
+  minWidth: 280,
+  maxWidth: 380,
+  maxHeight: 400,
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const popoverHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '8px 12px',
+  borderBottom: '1px solid var(--vscode-widget-border, #333)',
+};
+
+const popoverTitleStyle: CSSProperties = {
+  fontWeight: 600,
+  fontSize: 12,
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+};
+
+const popoverCloseButtonStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 16,
+  cursor: 'pointer',
+  padding: '0 4px',
+  lineHeight: 1,
+  borderRadius: 3,
+};
+
+const popoverFieldsStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 8,
-  paddingLeft: 14,
-  borderLeft: '2px solid var(--vscode-widget-border, #333)',
-  marginTop: 2,
+  padding: 12,
+  overflowY: 'auto',
+  maxHeight: 340,
 };
 
 const jsonTextareaStyle: CSSProperties = {
