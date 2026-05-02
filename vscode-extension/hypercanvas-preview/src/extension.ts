@@ -602,21 +602,21 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Close preview panel (disposes the webview, clearing all iframe state)
   // AND reset every sidebar webview's HTML so React state (tree expand,
-  // selection, inspector input values, filter/search state, chat input)
-  // doesn't leak between tests. Sidebar views have retainContextWhenHidden
-  // semantics, so closing editors alone doesn't reset their React state.
-  // The command awaits each reset() until its webview signals webview:ready,
-  // so the next test runs against a fully mounted sidebar rather than racing
-  // an in-progress reload. Primarily used by E2E tests between specs.
+  // selection, click handlers, source-map caches in the preview iframe)
+  // doesn't leak between tests. We used to also reset all sidebar
+  // webviews here, but that wedged the AI Chat panel on the next test:
+  // reset()'s html reassign on a HIDDEN webview (because the sidebar
+  // was collapsed or pointing elsewhere at the moment closePreview ran)
+  // left the webview with freshly-written HTML that never got a chance
+  // to boot React — the next `Hyper: Open AI Chat` showed an empty
+  // iframe and E2E polls for `hyper-aichat-root` timed out with
+  // "Webviews: 0, available testIds: []". Leaving sidebar state alone
+  // is fine: their React reducers are idempotent across mode switches,
+  // and the per-test git checkout + command palette reopens give us
+  // enough isolation for cross-test stability.
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.closePreview', async () => {
       previewPanel?.dispose();
-      await Promise.all([
-        leftPanelProvider?.reset() ?? Promise.resolve(),
-        rightPanelProvider?.reset() ?? Promise.resolve(),
-        logsProvider?.reset() ?? Promise.resolve(),
-        aiChatProvider?.reset() ?? Promise.resolve(),
-      ]);
     }),
   );
 
