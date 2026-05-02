@@ -334,19 +334,21 @@ function ComponentErrorOverlay({
           </p>
         )}
 
-        <div style={sampleNameRowStyle}>
-          <label htmlFor="sample-name" style={sampleNameLabelStyle}>
-            Name
-          </label>
-          <input
-            id="sample-name"
-            type="text"
-            value={sampleName}
-            onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-            placeholder="SampleDefault"
-            style={sampleNameInputStyle}
-          />
-        </div>
+        {sampleCountRef.current > 1 && (
+          <div style={sampleNameRowStyle}>
+            <label htmlFor="sample-name" style={sampleNameLabelStyle}>
+              Name
+            </label>
+            <input
+              id="sample-name"
+              type="text"
+              value={sampleName}
+              onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              placeholder="SampleDefault"
+              style={sampleNameInputStyle}
+            />
+          </div>
+        )}
 
         {sampleCreated ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
