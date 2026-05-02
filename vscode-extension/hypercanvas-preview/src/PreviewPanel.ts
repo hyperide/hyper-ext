@@ -1081,15 +1081,46 @@ export class PreviewPanel {
   /**
    * Select next sibling of selected element (called from VS Code keybinding command).
    */
-  public selectNextSibling(): void {
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
+  public async selectNextSibling(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const nodeRef = selectedIds[0];
+    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
+      componentPath,
+      nodeRef,
+      'next',
+      nodeRef,
+    );
+    if (siblingId) {
+      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
+    } else {
+      // Fallback: forward to iframe DOM-based handler
+      this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
+    }
   }
 
   /**
    * Select previous sibling of selected element (called from VS Code keybinding command).
    */
-  public selectPrevSibling(): void {
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
+  public async selectPrevSibling(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const nodeRef = selectedIds[0];
+    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
+      componentPath,
+      nodeRef,
+      'prev',
+      nodeRef,
+    );
+    if (siblingId) {
+      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
+    } else {
+      this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
+    }
   }
 
   /**
