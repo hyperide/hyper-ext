@@ -1,8 +1,18 @@
-import { IconExternalLink } from '@tabler/icons-react';
+import { IconBrandGithub, IconBrandVisualStudio, IconCloud, IconCode } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuthStore } from '@/stores/authStore';
 import { screenshotSrc } from '../screenshotSrc';
 
+const VSCODE_MARKETPLACE_URL = 'https://marketplace.visualstudio.com/itemdetails?itemName=hyperide.hypercanvas-preview';
+const OPEN_VSX_URL = 'https://open-vsx.org/extension/hyperide/hypercanvas-preview';
+const ADMIN_EMAIL = 'invntrm@gmail.com';
+
 export default function Hero() {
+  const userEmail = useAuthStore((s) => s.user?.email);
+  const isAdmin = userEmail === ADMIN_EMAIL;
+
   return (
     <section className="relative overflow-hidden py-20 sm:py-32">
       {/* Background gradient */}
@@ -36,28 +46,54 @@ export default function Hero() {
           </p>
 
           {/* CTA Buttons */}
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button size="lg" className="w-full gap-2 sm:w-auto" asChild>
-              <a
-                href="https://marketplace.visualstudio.com/itemdetails?itemName=hyperide.hypercanvas-preview"
-                target="_blank"
-                rel="noopener noreferrer"
+          <TooltipProvider>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+              <Button
+                size="lg"
+                variant="default"
+                className="gap-2"
+                style={{ backgroundColor: 'rgb(24, 24, 27)', color: 'rgb(250, 250, 250)' }}
+                asChild
               >
-                <IconExternalLink className="h-5 w-5" />
-                Install from VS Marketplace
-              </a>
-            </Button>
-            <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto" asChild>
-              <a
-                href="https://open-vsx.org/extension/hyperide/hypercanvas-preview"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <IconExternalLink className="h-5 w-5" />
-                Open VSX Registry
-              </a>
-            </Button>
-          </div>
+                <a href={VSCODE_MARKETPLACE_URL} target="_blank" rel="noopener noreferrer">
+                  <IconBrandVisualStudio className="h-5 w-5" />
+                  VS Code
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" className="gap-2" asChild>
+                <a href={OPEN_VSX_URL} target="_blank" rel="noopener noreferrer">
+                  <IconCode className="h-5 w-5" />
+                  Cursor · Windsurf
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" className="gap-2" asChild>
+                <a href="https://github.com/hyperide/hyper-ext" target="_blank" rel="noopener noreferrer">
+                  <IconBrandGithub className="h-5 w-5" />
+                  GitHub
+                </a>
+              </Button>
+              {isAdmin ? (
+                <Button size="lg" variant="outline" className="gap-2" asChild>
+                  <Link to="/projects">
+                    <IconCloud className="h-5 w-5" />
+                    Open SaaS
+                  </Link>
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-block">
+                      <Button size="lg" variant="outline" className="gap-2 pointer-events-none" disabled>
+                        <IconCloud className="h-5 w-5" />
+                        Open SaaS (soon)
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Coming soon</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </TooltipProvider>
 
           {/* Product screenshot */}
           <div className="mt-16 sm:mt-20">
