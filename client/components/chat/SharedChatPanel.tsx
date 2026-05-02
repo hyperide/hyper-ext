@@ -93,6 +93,14 @@ export function SharedChatPanel({
     onStreamEvent,
   });
 
+  // Detect auth errors in message history — hide input when key is invalid/expired
+  const hasAuthError = history.messages.some(
+    (m) =>
+      m.role === 'assistant' &&
+      m.content.startsWith('Error: ') &&
+      /401|403|authentication|Unauthorized|invalid_api_key/.test(m.content),
+  );
+
   // Keep history hook aware of streaming state
   useEffect(() => {
     history.setIsStreaming(stream.isStreaming);
@@ -266,11 +274,11 @@ export function SharedChatPanel({
           scrollAreaRef={scrollAreaRef}
           onScroll={handleScroll}
           onViewToolResult={(name, content) => setToolResultModal({ isOpen: true, toolName: name, content })}
-          hasApiKey={hasApiKey}
+          hasApiKey={hasAuthError ? false : hasApiKey}
           onConfigureProvider={onConfigureProvider}
         />
 
-        {hasApiKey !== false && (
+        {hasApiKey !== false && !hasAuthError && (
           <ChatInput
             inputValue={input.inputValue}
             onInputChange={input.setInputValue}
