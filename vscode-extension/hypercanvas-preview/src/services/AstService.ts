@@ -579,8 +579,10 @@ export class AstService {
     try {
       if (nodeRef) {
         const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        console.log('[getSiblingElementId] nodeRef:', nodeRef, 'entry:', entry ? `parentRef=${entry.parentRef}` : 'NULL', 'tracked:', this._nodeMapService.getTrackedFiles());
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
+          console.log('[getSiblingElementId] parent:', parent ? `children=${JSON.stringify(parent.children)}` : 'NULL');
           if (parent) {
             const siblings = parent.children;
             // Find current index by exact match first, then by resolved location
