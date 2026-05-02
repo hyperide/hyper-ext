@@ -385,6 +385,13 @@ function ComponentErrorOverlay({
             </button>
           </div>
         )}
+
+        <p style={errorOverlayAIHintStyle}>
+          <button type="button" onClick={onConfigureAIKey} style={errorOverlayAIHintLinkStyle}>
+            Configure an AI provider
+          </button>{' '}
+          to auto-generate sample files with realistic data.
+        </p>
       </div>
     </div>
   );
@@ -658,6 +665,23 @@ const errorOverlayLinkButtonStyle: CSSProperties = {
   cursor: 'pointer',
   padding: 0,
   fontSize: 13,
+  textDecoration: 'underline',
+};
+
+const errorOverlayAIHintStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 11,
+  margin: '12px 0 0',
+  lineHeight: 1.5,
+};
+
+const errorOverlayAIHintLinkStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: 11,
   textDecoration: 'underline',
 };
 
