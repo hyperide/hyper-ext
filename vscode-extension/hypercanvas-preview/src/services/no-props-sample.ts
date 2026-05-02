@@ -6,10 +6,17 @@
  */
 
 import type { EnsureSampleResult } from '@lib/preview-generator';
+import * as vscode from 'vscode';
 
 export function shouldCreateNoPropsSample(
   ensureResult: EnsureSampleResult,
   props: readonly unknown[] | null | undefined,
 ): boolean {
+  // Respect the user-facing setting so E2E harnesses can disable the
+  // source-file mutation — git checkout between specs would drop the
+  // export and trigger Vite "Could not Fast Refresh" + failed reload.
+  const enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('autoSampleGeneration', true);
+  if (!enabled) return false;
+
   return !ensureResult.exists && Array.isArray(props) && props.length === 0;
 }

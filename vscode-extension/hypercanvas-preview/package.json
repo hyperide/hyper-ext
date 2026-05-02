@@ -317,6 +317,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically sync cursor position in code with element highlight in preview and vice versa"
+        },
+        "hypercanvas.preview.autoSampleGeneration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-generate a SampleDefault export in component files (for preview wrapping). Disable for E2E test harnesses that reset source files between runs — the export drop would trigger Vite 'export removed' errors and full reloads."
         }
       }
     }

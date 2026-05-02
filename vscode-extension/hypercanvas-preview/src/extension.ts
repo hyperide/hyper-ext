@@ -297,14 +297,27 @@ export function activate(context: vscode.ExtensionContext) {
       // Normalize: currentComponent.path may be relative or absolute
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
 
-      // 1. Ensure component has SampleDefault (AI-based, silent skip if no API key)
-      ensureSample({
-        io: vsCodeIO,
-        absolutePath: absComponentPath,
-        componentName,
-        sampleName: 'SampleDefault',
-        generate: sampleGenerator,
-      })
+      // Skip source-file mutation entirely when the harness disables it.
+      // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
+      // ensureSample / ensureDefaultSampleForNoProps don't write SampleDefault
+      // into the test project's component files — otherwise `git checkout -- .`
+      // between specs drops the export, Vite reports "export removed", forces
+      // a full reload, and __canvas_preview__.tsx fails to reload mid-transition.
+      const autoSampleEnabled = vscode.workspace
+        .getConfiguration('hypercanvas.preview')
+        .get<boolean>('autoSampleGeneration', true);
+
+      const ensureSamplePromise = autoSampleEnabled
+        ? ensureSample({
+            io: vsCodeIO,
+            absolutePath: absComponentPath,
+            componentName,
+            sampleName: 'SampleDefault',
+            generate: sampleGenerator,
+          })
+        : Promise.resolve({ generated: false, exists: false });
+
+      ensureSamplePromise
         .then(async (sampleResult) => {
           if (ac.signal.aborted) return;
           const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
