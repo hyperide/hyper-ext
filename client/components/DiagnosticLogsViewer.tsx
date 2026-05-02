@@ -13,6 +13,7 @@ import { TID } from '@shared/data-testid-map';
 import type { DiagnosticLogEntry } from '@shared/diagnostic-types';
 import { IconAlertTriangle, IconArrowDown, IconChevronDown, IconTrash, IconWand } from '@tabler/icons-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { AnsiUp } from 'ansi_up';
 import cn from 'clsx';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { DiagnosticFilterBar } from '@/components/DiagnosticFilterBar';
@@ -269,6 +270,8 @@ function isSystemDivider(entry: DiagnosticLogEntry): boolean {
   return entry.source === 'system' && entry.line.startsWith('---');
 }
 
+const ansiConverter = new AnsiUp();
+
 const LogLine = memo(function LogLine({
   entry,
   searchQuery,
@@ -314,7 +317,12 @@ const LogLine = memo(function LogLine({
           </span>
           {sourceTag}
           {levelPrefix}
-          {searchQuery ? highlightSearch(entry.line, searchQuery) : entry.line}
+          {searchQuery ? (
+            highlightSearch(entry.line, searchQuery)
+          ) : (
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: ansi_up escapes HTML entities, output is safe
+            <span dangerouslySetInnerHTML={{ __html: ansiConverter.ansi_to_html(entry.line) }} />
+          )}
         </span>
       </div>
     </>
