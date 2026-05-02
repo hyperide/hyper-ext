@@ -54,6 +54,16 @@ describe('generateTailwindClasses', () => {
     expect(result).toContain('h-[90vh]');
   });
 
+  it('should treat unitless spacing input as pixels for arbitrary values', () => {
+    const result = generateTailwindClasses({
+      paddingLeft: '16',
+      paddingRight: '16',
+    });
+
+    expect(result).toContain('px-[16px]');
+    expect(result).not.toContain('px-[16]');
+  });
+
   it('should generate margin classes', () => {
     const result = generateTailwindClasses({
       marginTop: '1rem',

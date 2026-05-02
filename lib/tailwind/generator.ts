@@ -147,8 +147,14 @@ const RADIUS_MAP: Record<string, string> = {
 function toSpacingToken(value: string | undefined): string | null {
   if (!value) return null;
 
-  const trimmed = value.trim();
+  let trimmed = value.trim();
   if (!trimmed || trimmed === '0') return '0';
+
+  // Inspector inputs often emit bare numbers for CSS lengths. Tailwind arbitrary
+  // length utilities need an explicit unit: p-[16px], not invalid p-[16].
+  if (/^-?\d*\.?\d+$/.test(trimmed)) {
+    trimmed = `${trimmed}px`;
+  }
 
   // Check if it's in the spacing map
   if (SPACING_MAP[trimmed]) {
