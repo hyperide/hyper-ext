@@ -2,6 +2,7 @@ import { TID } from '@shared/data-testid-map';
 import { IconLoader2 } from '@tabler/icons-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { DisplayMessage, DisplayToolCall } from '../../../shared/ai-chat-display';
+import { AuthErrorBanner } from './AuthErrorBanner';
 import { EmptyState } from './EmptyState';
 import { MessageBubble } from './MessageBubble';
 import { StreamingContent } from './StreamingContent';
@@ -48,7 +49,11 @@ export function ChatMessages({
 
         {messages.map((msg, index) => (
           <div key={msg.id} data-testid={TID.aiChat.message(index)}>
-            <MessageBubble message={msg} onViewToolResult={(name, content) => onViewToolResult(name, content)} />
+            {isAuthError(msg) ? (
+              <AuthErrorBanner onConfigure={onConfigureProvider} />
+            ) : (
+              <MessageBubble message={msg} onViewToolResult={(name, content) => onViewToolResult(name, content)} />
+            )}
           </div>
         ))}
 
@@ -63,5 +68,21 @@ export function ChatMessages({
         )}
       </div>
     </ScrollArea>
+  );
+}
+
+/** Detect authentication/API key errors from error message content */
+function isAuthError(msg: DisplayMessage): boolean {
+  if (msg.role !== 'assistant') return false;
+  const text = msg.content;
+  if (!text.startsWith('Error: ')) return false;
+  return (
+    text.includes('API key not configured') ||
+    text.includes('api key') ||
+    text.includes('API error 401') ||
+    text.includes('API error 403') ||
+    text.includes('authentication_error') ||
+    text.includes('invalid_api_key') ||
+    text.includes('Unauthorized')
   );
 }
