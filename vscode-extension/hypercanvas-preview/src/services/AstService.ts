@@ -590,8 +590,15 @@ export class AstService {
       if (nodeRef) {
         // Normalize relative nodeRef to absolute (fiber sends relative, NodeMapService stores absolute)
         const normalizedRef = this._normalizeNodeRef(nodeRef);
-        require('node:fs').appendFileSync('/tmp/hyperide-debug2.log', `sibling: raw=${nodeRef} norm=${normalizedRef} found=${!!this._nodeMapService.resolveNodeRef(normalizedRef)}\n`);
-        const entry = this._nodeMapService.resolveNodeRef(normalizedRef);
+        // Use resolveSourceLocation for fuzzy column matching (fiber vs AST column may differ)
+        const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
+        const entry = m
+          ? this._nodeMapService.resolveSourceLocation({
+              fileName: m[1],
+              line: Number.parseInt(m[2], 10),
+              column: Number.parseInt(m[3], 10),
+            })
+          : this._nodeMapService.resolveNodeRef(normalizedRef);
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
           if (parent) {
