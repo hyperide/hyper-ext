@@ -545,11 +545,13 @@ export class PreviewFileManager {
       sampleExports = scanSampleExports(sourceCode);
       exportStyle = detectExportStyle(sourceCode, componentName);
     } catch {
-      // Source has syntax errors (e.g. mid-edit) — fall back to filename-based entry
-      console.warn(`[PreviewFileManager] Could not parse component: ${componentPath}`);
-      componentName = fileName.replace(/\.[^.]+$/, '');
-      sampleExports = [];
-      exportStyle = 'named';
+      // Source has syntax errors (e.g. mid-edit). Don't generate a bogus entry —
+      // any guess at exportStyle will produce broken imports and break the dev
+      // server build, cascading failures across every component that imports it.
+      // Skip the component until the user saves valid code; the file watcher
+      // will re-trigger regeneration when the source parses cleanly.
+      console.warn(`[PreviewFileManager] Could not parse component: ${componentPath} — skipping`);
+      return null;
     }
 
     // Non-PascalCase name = not a React component (entry files, utils, etc.)
