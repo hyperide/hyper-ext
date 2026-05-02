@@ -291,12 +291,29 @@ export class PreviewFileManager {
   private io: FileIO;
   private isNextPagesRouter: boolean;
   private providerWrap?: ProviderWrapConfig;
+  private _providerWrapPromise: Promise<void> | null = null;
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
     this.io = config.io;
     this.isNextPagesRouter = config.isNextPagesRouter ?? false;
     this.providerWrap = config.providerWrap;
+  }
+
+  /**
+   * Register an async provider detection promise.
+   * `ensureComponent` and `rebuild` will await it before generating content,
+   * ensuring providers are available even if detection hasn't finished yet.
+   */
+  setProviderWrapAsync(promise: Promise<ProviderWrapConfig | null | undefined>): void {
+    this._providerWrapPromise = promise.then((wrap) => {
+      if (wrap) this.providerWrap = wrap;
+    });
+  }
+
+  /** Block until provider detection completes (no-op if none pending). */
+  private async _awaitProviders(): Promise<void> {
+    if (this._providerWrapPromise) await this._providerWrapPromise;
   }
 
   /** Determine the preview file path based on project structure */
@@ -320,6 +337,7 @@ export class PreviewFileManager {
    * Returns the final file content.
    */
   async ensureComponent(componentPaths: string[]): Promise<string> {
+    await this._awaitProviders();
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
 
@@ -487,6 +505,7 @@ export class PreviewFileManager {
    * Reads all component sources, builds entries, generates.
    */
   async rebuild(componentPaths: string[]): Promise<string> {
+    await this._awaitProviders();
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
 

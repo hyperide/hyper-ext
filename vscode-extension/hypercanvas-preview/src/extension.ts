@@ -14,7 +14,7 @@
 
 import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
@@ -90,7 +90,12 @@ async function detectPreviewProviders(
     );
     if (tamaguiCfg && appContent.includes('TamaguiProvider')) {
       const cfgVar = tamaguiCfg[1] || tamaguiCfg[2];
-      const cfgPath = tamaguiCfg[3];
+      // Config path from App.tsx is relative to root — rebase to src/ where __canvas_preview__.tsx lives
+      const cfgPathRaw = tamaguiCfg[3];
+      const absConfigPath = resolve(root, cfgPathRaw);
+      const previewDir = join(root, 'src');
+      let cfgPath = relative(previewDir, absConfigPath);
+      if (!cfgPath.startsWith('.')) cfgPath = `./${cfgPath}`;
       const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
       const theme = themeMatch?.[1] || 'dark';
       imports.push("import { TamaguiProvider } from 'tamagui';");
@@ -288,20 +293,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Deterministic preview file manager (no AI, no network)
   const vsCodeIO = new VSCodeFileIO();
   const providerWrapPromise = detectPreviewProviders(workspaceRoot);
-  let previewManager = new PreviewFileManager({
+  const previewManager = new PreviewFileManager({
     projectRoot: workspaceRoot,
     io: vsCodeIO,
   });
-  // Async: upgrade preview manager with detected providers once ready
-  providerWrapPromise.then((providerWrap) => {
-    if (providerWrap) {
-      previewManager = new PreviewFileManager({
-        projectRoot: workspaceRoot,
-        io: vsCodeIO,
-        providerWrap,
-      });
-    }
-  });
+  // Provider detection runs async; ensureComponent/rebuild will await it before generating
+  previewManager.setProviderWrapAsync(providerWrapPromise);
 
   // Mode manager: orchestrates App Shell ↔ Isolated transitions via FSWatch
   const modeManager = new PreviewModeManager({
