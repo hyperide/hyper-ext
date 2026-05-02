@@ -46,6 +46,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const onStateUpdateRef = useRef(onStateUpdate);
   onStateUpdateRef.current = onStateUpdate;
 
+  // Track current component for re-sending after HMR full reload.
+  // When Vite triggers a full page reload inside the iframe, the React state
+  // in CanvasPreview is lost. history.replaceState keeps the URL in sync,
+  // but as a safety net we also re-send setComponent after each iframe load.
+  const currentComponentRef = useRef<string | null>(null);
+
   // === iframe -> extension message forwarding ===
   // Origin validation: event.source check ensures only messages from our iframe are processed.
   // In VS Code webviews, origin strings are opaque (vscode-webview://<session-id>) so
@@ -126,14 +132,52 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const iframeElRef = useRef(iframeEl);
   iframeElRef.current = iframeEl;
 
+  // === Re-send current component after iframe (re)load ===
+  // When Vite HMR triggers a full page reload inside the iframe, the postMessage-based
+  // setComponent is lost (the old page is gone). After the new page loads, CanvasPreview
+  // reads componentPath from URL params. The history.replaceState fix in generator.ts
+  // keeps the URL in sync, but as a safety net we also re-send the component postMessage
+  // after each load event — guaranteeing that both the React state AND the
+  // iframe-interaction.ts renderedComponentPath are up to date.
+  useEffect(() => {
+    if (!iframeEl) return;
+    let initialLoad = true; // skip the very first load (initial navigation)
+    function handleLoad() {
+      if (initialLoad) {
+        initialLoad = false;
+        return;
+      }
+      const comp = currentComponentRef.current;
+      if (comp && iframeEl?.contentWindow) {
+        // Small delay: wait for iframe scripts to initialize their message listeners
+        setTimeout(() => {
+          iframeEl?.contentWindow?.postMessage(
+            { type: 'hypercanvas:setComponent', component: comp },
+            '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+          );
+        }, 100);
+      }
+    }
+    iframeEl.addEventListener('load', handleLoad);
+    return () => iframeEl.removeEventListener('load', handleLoad);
+  }, [iframeEl]);
+
   // === Refresh logic ===
   const doRefresh = useCallback(() => {
     const frame = iframeElRef.current;
     if (!frame) return;
-    const currentSrc = frame.src;
+    // Prefer contentWindow.location.href — it reflects the current component
+    // after history.replaceState updates from setComponent (frame.src still
+    // holds the original first-load URL and is never updated to avoid reloads).
+    let url: string;
+    try {
+      url = frame.contentWindow?.location.href || frame.src;
+    } catch {
+      url = frame.src; // cross-origin fallback
+    }
     frame.src = '';
     setTimeout(() => {
-      frame.src = currentSrc;
+      frame.src = url;
     }, 50);
   }, []);
 
@@ -179,6 +223,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
           setShowNoComponentHint(false);
+          // Track current component from URL for re-send after HMR reload
+          try {
+            const comp = new URL(url).searchParams.get('component');
+            if (comp) currentComponentRef.current = comp;
+          } catch {
+            /* ignore */
+          }
           const frame = iframeElRef.current;
           if (frame?.src) {
             // Iframe already loaded — extract component param and send via postMessage
@@ -208,6 +259,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           break;
 
         case 'setComponent': {
+          const comp = typeof msg.component === 'string' ? msg.component : null;
+          if (comp) currentComponentRef.current = comp;
           const frame = iframeElRef.current;
           if (frame?.contentWindow) {
             // Send via postMessage — no iframe reload

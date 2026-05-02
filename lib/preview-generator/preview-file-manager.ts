@@ -401,6 +401,15 @@ export class PreviewFileManager {
       throw new PreviewGenerationError('Generated preview code failed TypeScript validation');
     }
 
+    // Skip write if content is identical — avoids unnecessary Vite HMR that can
+    // cause full-reload or React Fast Refresh remount, resetting iframe state.
+    try {
+      const existing = await this.io.readFile(previewPath);
+      if (existing === content) return content;
+    } catch {
+      // File doesn't exist yet — proceed with write
+    }
+
     await this.io.writeFile(previewPath, content);
     return content;
   }
@@ -713,8 +722,20 @@ export class PreviewFileManager {
       '',
     ].join('\n');
 
+    const newContent = `${baseContent.trimEnd()}\n${bootstrap}`;
+
+    // Skip write if content is identical — prevents unnecessary HMR full-reload
+    // (this file has side effects: createRoot().render(), so Vite always does a
+    // full page reload when it changes, killing iframe state).
+    try {
+      const existing = await this.io.readFile(standaloneEntryPath);
+      if (existing === newContent) return;
+    } catch {
+      // File doesn't exist yet — proceed with write
+    }
+
     await this.io.mkdir?.(previewDir);
-    await this.io.writeFile(standaloneEntryPath, `${baseContent.trimEnd()}\n${bootstrap}`);
+    await this.io.writeFile(standaloneEntryPath, newContent);
   }
 
   /**
