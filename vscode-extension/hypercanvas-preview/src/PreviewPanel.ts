@@ -1076,10 +1076,40 @@ export class PreviewPanel {
   }
 
   /**
+   * Wait for selectedIds to become non-empty.
+   * Tree click sends state:update asynchronously via postMessage, so
+   * selectedIds may still be empty when a command fires immediately after.
+   * Returns current selectedIds if already populated, otherwise listens
+   * for the next StateHub change (up to 500ms).
+   */
+  private _waitForSelectedIds(): Promise<string[]> {
+    const current = this._stateHub.state.selectedIds;
+    if (current?.length) return Promise.resolve(current);
+
+    return new Promise<string[]>((resolve) => {
+      let settled = false;
+      const unsub = this._stateHub.onChange((state) => {
+        if (!settled && state.selectedIds?.length) {
+          settled = true;
+          unsub();
+          resolve(state.selectedIds);
+        }
+      });
+      setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          unsub();
+          resolve(this._stateHub.state.selectedIds);
+        }
+      }, 500);
+    });
+  }
+
+  /**
    * Delete selected elements (called from VS Code keybinding command).
    */
   public async deleteSelected(): Promise<void> {
-    const selectedIds = this._stateHub.state.selectedIds;
+    const selectedIds = await this._waitForSelectedIds();
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
@@ -1093,7 +1123,7 @@ export class PreviewPanel {
    * Duplicate the first selected element (called from VS Code command).
    */
   public async duplicateSelected(): Promise<void> {
-    const selectedIds = this._stateHub.state.selectedIds;
+    const selectedIds = await this._waitForSelectedIds();
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
@@ -1107,7 +1137,7 @@ export class PreviewPanel {
    * Wrap the first selected element in a new div container (called from VS Code command).
    */
   public async wrapSelected(): Promise<void> {
-    const selectedIds = this._stateHub.state.selectedIds;
+    const selectedIds = await this._waitForSelectedIds();
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
