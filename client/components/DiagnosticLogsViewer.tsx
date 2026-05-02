@@ -15,14 +15,14 @@ import { IconAlertTriangle, IconArrowDown, IconChevronDown, IconTrash, IconWand 
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AnsiUp } from 'ansi_up';
 import cn from 'clsx';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiagnosticFilterBar } from '@/components/DiagnosticFilterBar';
 import { useThemeOptional } from '@/components/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDiagnosticFilter } from '@/hooks/useDiagnosticFilter';
 import { useDiagnosticStore } from '@/stores/diagnosticStore';
-import { highlightSearch } from '@/utils/highlight';
+import { highlightSearchInHtml } from '@/utils/highlight';
 
 interface DiagnosticLogsViewerProps {
   /** Height of the component. Default: "100%" */
@@ -270,7 +270,21 @@ function isSystemDivider(entry: DiagnosticLogEntry): boolean {
   return entry.source === 'system' && entry.line.startsWith('---');
 }
 
-const ansiConverter = new AnsiUp();
+/**
+ * Convert a single log line from ANSI escape sequences to HTML.
+ *
+ * A fresh AnsiUp instance is created on every call: AnsiUp keeps an internal
+ * `_buffer` between `ansi_to_html` invocations to handle escape sequences
+ * split across chunks. With the virtualized list, lines are processed out of
+ * order (and independently), so a shared converter would leak color state
+ * from one row into another. `escape_html` is enabled by default, so the
+ * resulting HTML only contains AnsiUp's own <span> wrappers around
+ * entity-escaped text — safe to inject.
+ */
+function ansiToHtml(line: string): string {
+  const converter = new AnsiUp();
+  return converter.ansi_to_html(line);
+}
 
 const LogLine = memo(function LogLine({
   entry,
@@ -286,6 +300,15 @@ const LogLine = memo(function LogLine({
   const levelPrefix = entry.source === 'console' && entry.level ? `[${entry.level}] ` : '';
   const sourceTag = entry.source !== 'server' ? `[${entry.source}] ` : '';
   const style = getSourceStyle(entry.source, isDark);
+
+  // Always run every line through AnsiUp so escape sequences become colored
+  // spans — even while the user is searching. When a query is active, the
+  // search highlighter walks the resulting HTML's text nodes and wraps
+  // matches in <mark>, keeping AnsiUp's tags intact.
+  const lineHtml = useMemo(() => {
+    const html = ansiToHtml(entry.line);
+    return searchQuery ? highlightSearchInHtml(html, searchQuery) : html;
+  }, [entry.line, searchQuery]);
 
   if (isSystemDivider(entry)) {
     return (
@@ -317,12 +340,8 @@ const LogLine = memo(function LogLine({
           </span>
           {sourceTag}
           {levelPrefix}
-          {searchQuery ? (
-            highlightSearch(entry.line, searchQuery)
-          ) : (
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: ansi_up escapes HTML entities, output is safe
-            <span dangerouslySetInnerHTML={{ __html: ansiConverter.ansi_to_html(entry.line) }} />
-          )}
+          {/* biome-ignore lint/security/noDangerouslySetInnerHtml: ansi_up escapes HTML entities; highlightSearchInHtml only wraps text nodes. */}
+          <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
         </span>
       </div>
     </>
