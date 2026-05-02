@@ -180,10 +180,29 @@ export async function detectUnsupportedProject(
       // react-native-web already installed — project may work, don't block
       return null;
     }
+
+    // Determine fix label based on project type:
+    // - Next.js projects: only install react-native-web (next.config patched at fix-time)
+    // - Tamagui One projects: only install react-native-web (already has Vite via one())
+    // - Default: install react-native-web + full Vite config
+    const hasNext = Boolean(deps.next);
+    let isTamaguiOne = false;
+    if (!hasNext) {
+      try {
+        const viteRaw = await fs.readFile(path.join(projectPath, 'vite.config.ts'), 'utf-8');
+        isTamaguiOne =
+          /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
+      } catch {
+        // No vite.config.ts — not a One project
+      }
+    }
+
+    const fixLabel = hasNext || isTamaguiOne ? 'Fix: Add react-native-web' : 'Fix: Add react-native-web + Vite config';
+
     return {
       type: 'react-native',
       message: `${what} projects need react-native-web and a Vite config to render in a browser. Click "Fix" to set it up automatically.`,
-      fixLabel: 'Fix: Add react-native-web + Vite config',
+      fixLabel,
     };
   }
 
