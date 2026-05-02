@@ -270,20 +270,21 @@ export function SharedChatPanel({
           onConfigureProvider={onConfigureProvider}
         />
 
-        <ChatInput
-          inputValue={input.inputValue}
-          onInputChange={input.setInputValue}
-          onKeyDown={input.handleKeyDown}
-          onSend={() => input.handleSendMessage()}
-          onStop={handleStop}
-          isStreaming={stream.isStreaming}
-          pendingAskUser={stream.pendingAskUser}
-          onRespondToAskUser={stream.respondToAskUser}
-          messageQueue={input.messageQueue}
-          onCancelQueued={input.cancelQueued}
-          placeholder={input.placeholder}
-          disabled={hasApiKey === false}
-        />
+        {hasApiKey !== false && (
+          <ChatInput
+            inputValue={input.inputValue}
+            onInputChange={input.setInputValue}
+            onKeyDown={input.handleKeyDown}
+            onSend={() => input.handleSendMessage()}
+            onStop={handleStop}
+            isStreaming={stream.isStreaming}
+            pendingAskUser={stream.pendingAskUser}
+            onRespondToAskUser={stream.respondToAskUser}
+            messageQueue={input.messageQueue}
+            onCancelQueued={input.cancelQueued}
+            placeholder={input.placeholder}
+          />
+        )}
 
         {renderToolResult ? renderToolResult(toolResultProps) : <ToolResultModal {...toolResultProps} />}
       </div>
