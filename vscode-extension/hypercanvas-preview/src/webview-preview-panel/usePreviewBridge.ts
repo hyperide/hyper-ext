@@ -382,6 +382,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // After reveal(false) steals focus from iframe, refocus it so keyboard events work
           iframeEl?.focus();
           break;
+
+        case 'canvas:keyboard':
+          // Forward keyboard command from VS Code keybinding into iframe
+          iframeEl?.contentWindow?.postMessage(
+            { type: 'hypercanvas:syntheticKeydown', key: msg.key, shiftKey: msg.shiftKey },
+            '*',
+          );
+          break;
       }
     }
 

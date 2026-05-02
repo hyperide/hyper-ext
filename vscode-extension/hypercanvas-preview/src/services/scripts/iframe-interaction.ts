@@ -1175,6 +1175,18 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
 
+  // Synthetic keyboard event from VS Code keybinding (Tab/Shift+Tab forwarded via extension host)
+  if (msg.type === 'hypercanvas:syntheticKeydown') {
+    const syntheticEvent = new KeyboardEvent('keydown', {
+      key: msg.key,
+      shiftKey: !!msg.shiftKey,
+      bubbles: true,
+      cancelable: true,
+    });
+    keydownHandler(syntheticEvent);
+    return;
+  }
+
   if (msg.type === 'hypercanvas:stateUpdate') {
     if (msg.selectedIds !== undefined) state.selectedIds = msg.selectedIds;
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;

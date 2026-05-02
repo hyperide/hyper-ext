@@ -1081,46 +1081,15 @@ export class PreviewPanel {
   /**
    * Select next sibling of selected element (called from VS Code keybinding command).
    */
-  public async selectNextSibling(): Promise<void> {
-    const selectedIds = this._stateHub.state.selectedIds;
-    const componentPath = this._currentComponent;
-    if (!componentPath || !selectedIds?.length) {
-      console.log('[HyperIDE] selectNextSibling: no selection or component', { componentPath, selectedIds });
-      return;
-    }
-
-    const nodeRef = selectedIds[0];
-    console.log('[HyperIDE] selectNextSibling: nodeRef =', nodeRef);
-    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
-      componentPath,
-      nodeRef,
-      'next',
-      nodeRef,
-    );
-    console.log('[HyperIDE] selectNextSibling: siblingId =', siblingId);
-    if (siblingId) {
-      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
-    }
+  public selectNextSibling(): void {
+    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
   }
 
   /**
    * Select previous sibling of selected element (called from VS Code keybinding command).
    */
-  public async selectPrevSibling(): Promise<void> {
-    const selectedIds = this._stateHub.state.selectedIds;
-    const componentPath = this._currentComponent;
-    if (!componentPath || !selectedIds?.length) return;
-
-    const nodeRef = selectedIds[0];
-    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
-      componentPath,
-      nodeRef,
-      'prev',
-      nodeRef,
-    );
-    if (siblingId) {
-      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
-    }
+  public selectPrevSibling(): void {
+    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
   }
 
   /**
