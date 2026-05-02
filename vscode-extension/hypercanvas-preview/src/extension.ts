@@ -786,17 +786,23 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               });
             });
 
-            // Step 3: Create vite.config.ts if it doesn't exist
-            progress.report({ message: 'Creating Vite config...' });
+            // Step 3: Create or patch vite.config.ts
+            // If the file exists but doesn't have tamaguiPlugin / react-native-web
+            // alias, overwrite it — a bare vite.config without these won't work
+            // for Tamagui web builds.
+            progress.report({ message: 'Configuring Vite for Tamagui...' });
             const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
-            let viteConfigExists = false;
+            let existingViteConfig = '';
             try {
-              await readFile(viteConfigPath);
-              viteConfigExists = true;
+              existingViteConfig = await readFile(viteConfigPath, 'utf-8');
             } catch {
-              // File doesn't exist — will create it
+              // File doesn't exist
             }
-            if (!viteConfigExists) {
+            const needsViteConfig =
+              !existingViteConfig ||
+              !existingViteConfig.includes('tamaguiPlugin') ||
+              !existingViteConfig.includes('react-native-web');
+            if (needsViteConfig) {
               const viteConfigContent = [
                 "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
                 "import react from '@vitejs/plugin-react'",
