@@ -704,7 +704,8 @@ function scrollIntoViewCenterSmooth(el: Element): void {
 // === Rendered component path (from URL ?component= param) ===
 // Used to determine if a clicked element is from the rendered file or an imported component.
 // Same logic as ElementTracer.renderedFile in SaaS.
-const renderedComponentPath: string | null = (() => {
+// Mutable: updated on component switch via hypercanvas:setComponent postMessage.
+let renderedComponentPath: string | null = (() => {
   try {
     const params = new URLSearchParams(window.location.search);
     return params.get('component') ?? null;
@@ -1162,6 +1163,17 @@ function handleScreenshotRequest(requestId: string, elementId: string | null): v
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data;
   if (!msg || !msg.type) return;
+
+  // Component switch: update renderedComponentPath so resolveCallSiteSource uses
+  // the correct file path after explorer-driven component switches.
+  if (msg.type === 'hypercanvas:setComponent') {
+    if (typeof msg.component === 'string') {
+      renderedComponentPath = msg.component;
+      // Invalidate fiber source cache — DOM elements now belong to a different component tree.
+      invalidateSourceCache();
+    }
+    return;
+  }
 
   if (msg.type === 'hypercanvas:stateUpdate') {
     if (msg.selectedIds !== undefined) state.selectedIds = msg.selectedIds;

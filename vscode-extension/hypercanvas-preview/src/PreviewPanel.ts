@@ -200,14 +200,18 @@ export class PreviewPanel {
     // Listen for active editor changes (for platform layer)
     this._disposables.push(setupActiveFileListener(panel.webview));
 
-    // Listen for component changes from other panels (e.g. Left Panel component list)
+    // Listen for component changes from other panels (e.g. Left Panel component list).
+    // Only track _currentComponent here — do NOT call _updatePreviewUrl().
+    // The iframe navigation must wait for ensureComponent/ensureSample to finish
+    // (extension.ts chain calls setComponentParam() when ready). Navigating eagerly
+    // caused black canvas: the iframe tried to render a component not yet registered
+    // in __canvas_preview__.tsx because HMR hadn't picked up the file change.
     const unsubState = this._stateHub.onChange((_state, patch) => {
       if (patch.currentComponent !== undefined) {
         const component = patch.currentComponent;
         if (component && this._currentComponent !== component.path) {
           this._currentComponent = component.path;
           console.log('[HyperIDE] Component changed via state:', component.path);
-          this._updatePreviewUrl();
         }
       }
     });
