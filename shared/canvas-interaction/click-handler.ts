@@ -47,6 +47,18 @@ function isInteractiveElement(target: HTMLElement): boolean {
   );
 }
 
+/** Check if target is a disabled form element (browsers suppress click events on these). */
+function isDisabledFormElement(target: HTMLElement): boolean {
+  return (
+    (target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'FIELDSET') &&
+    (target as HTMLButtonElement).disabled === true
+  );
+}
+
 /**
  * Attach click, hover, and focus handlers to an iframe document.
  * Returns a dispose function to remove all listeners.
@@ -121,6 +133,36 @@ export function attachClickHandler(
     }
   };
 
+  /**
+   * Fallback for disabled form elements: browsers suppress `click` events on
+   * `<button disabled>`, `<input disabled>`, etc. even with `pointer-events: auto`.
+   * `pointerup` still fires, so we use it to resolve the element in design mode.
+   */
+  const handlePointerUp = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    if (getMode() !== 'design') return;
+    const target = resolveOpaqueTarget(e.target as HTMLElement);
+    if (!isDisabledFormElement(target)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const result = resolver.resolveClickLocal(target);
+    if (result) {
+      onElementClick(result.nodeRef, target, e as unknown as MouseEvent, result.itemIndex, result.source);
+      return;
+    }
+
+    const source = resolver.getSourceLocation(target);
+    if (source) {
+      const itemIndex = resolver.getItemIndex(target);
+      onElementClick(null, target, e as unknown as MouseEvent, itemIndex, source);
+      return;
+    }
+
+    onEmptyClick?.(e as unknown as MouseEvent);
+  };
+
   const handleMouseOver = (e: MouseEvent) => {
     if (getMode() !== 'design') return;
     const target = resolveOpaqueTarget(e.target as HTMLElement);
@@ -144,6 +186,7 @@ export function attachClickHandler(
 
   iframeDoc.addEventListener('pointerdown', handlePointerDown, { capture: true });
   iframeDoc.addEventListener('click', handleClick, { capture: true });
+  iframeDoc.addEventListener('pointerup', handlePointerUp, { capture: true });
   iframeDoc.addEventListener('mousedown', handleMouseDown, { capture: true });
   iframeDoc.addEventListener('mouseover', handleMouseOver, { capture: true });
   iframeDoc.addEventListener('mouseout', handleMouseOut, { capture: true });
@@ -151,6 +194,7 @@ export function attachClickHandler(
   return () => {
     iframeDoc.removeEventListener('pointerdown', handlePointerDown, { capture: true });
     iframeDoc.removeEventListener('click', handleClick, { capture: true });
+    iframeDoc.removeEventListener('pointerup', handlePointerUp, { capture: true });
     iframeDoc.removeEventListener('mousedown', handleMouseDown, { capture: true });
     iframeDoc.removeEventListener('mouseover', handleMouseOver, { capture: true });
     iframeDoc.removeEventListener('mouseout', handleMouseOut, { capture: true });
