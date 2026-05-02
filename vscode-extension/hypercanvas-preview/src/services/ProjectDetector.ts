@@ -8,6 +8,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
+import { WRITABLE_CSS_SYSTEMS } from '../types';
 
 /**
  * Read and parse package.json from project directory.
@@ -268,9 +269,9 @@ export async function detectCssSystem(
   // Tailwind (bare — most common, check last so design systems win)
   if (has('tailwindcss')) return 'tailwind';
 
-  // CSS Modules don't have a package dependency — detected by file extension
-  // at build time. Default for Vite/webpack projects.
-  return 'cssmodules';
+  // No recognizable CSS dependency found — return unknown rather than assuming
+  // CSS Modules (which are detected by file extension at build time, not by deps).
+  return 'unknown';
 }
 
 /**
@@ -281,7 +282,6 @@ export function computeCapabilities(
   uiKit: 'tailwind' | 'tamagui' | 'none',
   projectError: import('../types').UnsupportedProjectError | null,
 ): import('../types').ProjectCapabilities {
-  const { WRITABLE_CSS_SYSTEMS } = require('../types') as typeof import('../types');
   const canWriteStyles = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const canRender = projectError === null; // no unsupported error = can render
   return {
