@@ -291,28 +291,25 @@ function ComponentErrorOverlay({
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
             data-testid={TID.preview.componentErrorCreateSample}
-            style={errorOverlayPrimaryButtonStyle}
+            style={errorOverlaySecondaryButtonStyle}
             onClick={handleCreateSample}
           >
             Create Sample
           </button>
+          <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
           <button
             type="button"
             data-testid={TID.preview.componentErrorConfigureAI}
-            style={errorOverlaySecondaryButtonStyle}
+            style={errorOverlayPrimaryButtonStyle}
             onClick={onConfigureAIKey}
           >
             Configure AI Key
           </button>
         </div>
-
-        <p style={errorOverlayFooterStyle}>
-          Create a sample file to provide props manually, or configure an AI key to generate them automatically.
-        </p>
       </div>
     </div>
   );
@@ -567,11 +564,4 @@ const errorOverlaySecondaryButtonStyle: CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 500,
-};
-
-const errorOverlayFooterStyle: CSSProperties = {
-  color: 'var(--vscode-descriptionForeground, #4a5568)',
-  fontSize: 11,
-  margin: '12px 0 0',
-  lineHeight: 1.5,
 };

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HYP-357 References</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    color: #ccc;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+  h2 { font-size: 15px; color: #fff; margin: 32px 0 12px; }
+  h2:first-of-type { margin-top: 16px; }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: #1a1a1a;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .card-header.ref { background: #1b3a1b; color: #6fcf6f; }
+  .card-header.current { background: #3a1b1b; color: #cf6f6f; }
+  .card-header.target { background: #1b2a3a; color: #6fa8cf; }
+
+  .card img {
+    width: 100%;
+    display: block;
+  }
+
+  .annotation {
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    border-top: 1px solid #2a2a2a;
+  }
+  .annotation ul { padding-left: 16px; }
+  .annotation li { margin-bottom: 4px; }
+  .highlight { color: #ffb74d; font-weight: 500; }
+  .good { color: #81c784; }
+  .bad { color: #e57373; }
+
+  /* Target mockup */
+  .inspector-mock {
+    background: #252526;
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    color: #ccc;
+    padding: 0;
+  }
+  .inspector-mock.light {
+    background: #f3f3f3;
+    color: #333;
+  }
+
+  .im-section { padding: 10px 14px; }
+  .im-sep { height: 1px; background: rgba(128,128,128,0.15); margin: 0 14px; }
+  .im-sep.light { background: rgba(0,0,0,0.08); }
+  .im-title { font-size: 11px; font-weight: 600; color: #e0e0e0; margin-bottom: 8px; }
+  .im-title.light { color: #333; }
+
+  .im-toggle-group {
+    display: flex; gap: 0; background: #2d2d30; border-radius: 6px; padding: 2px; margin-bottom: 8px;
+  }
+  .im-toggle-group.light { background: #e4e4e4; }
+  .im-toggle {
+    font-size: 10px; padding: 3px 7px; color: #888; border-radius: 4px; cursor: default;
+  }
+  .im-toggle.light { color: #666; }
+  .im-toggle.active { background: #3c3c3f; color: #fff; }
+  .im-toggle.active.light { background: #fff; color: #333; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+  .im-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .im-field { display: flex; align-items: center; gap: 4px; }
+  .im-label { font-size: 10px; color: #666; min-width: 14px; }
+  .im-label.light { color: #999; }
+  .im-input {
+    flex: 1; height: 24px; padding: 0 8px; display: flex; align-items: center;
+    background: #2d2d30; border-radius: 4px; font-size: 11px; color: #ccc;
+  }
+  .im-input.light {
+    background: #fff; color: #333; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+  }
+
+  .im-layout-icons {
+    display: flex; gap: 2px; background: #2d2d30; border-radius: 6px; padding: 2px; margin-bottom: 8px;
+  }
+  .im-layout-icons.light { background: #e4e4e4; }
+  .im-icon {
+    width: 28px; height: 24px; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; color: #666; font-size: 13px; cursor: default;
+  }
+  .im-icon.active { background: #3c3c3f; color: #fff; }
+  .im-icon.active.light { background: #fff; color: #333; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+  .im-fill-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .im-swatch {
+    width: 22px; height: 22px; border-radius: 4px;
+    background: linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%),
+                linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%);
+    background-size: 8px 8px; background-position: 0 0, 4px 4px;
+  }
+  .im-swatch.light {
+    background: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%),
+                linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%);
+    background-size: 8px 8px; background-position: 0 0, 4px 4px;
+  }
+  .im-section-header {
+    display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
+  }
+  .im-plus { color: #666; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>HYP-357: Inspector Visual Hierarchy</h1>
+<p class="subtitle">Figma-референсы + текущее состояние + target mockups (dark & light)</p>
+
+<!-- Row 1: References -->
+<h2>Референсы из тикета</h2>
+<div class="grid-3">
+  <div class="card">
+    <div class="card-header ref">Figma Reference #1</div>
+    <img src="figma-dark.png" alt="Figma dark 1">
+    <div class="annotation">
+      <ul>
+        <li><span class="good">Инпуты</span> — чёткий bg (#383838), контраст с панелью</li>
+        <li><span class="good">Toggle active</span> — явная пилюля с более светлым bg</li>
+        <li><span class="good">Секции</span> — разделены spacing + subtle separator</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header ref">Figma Reference #2</div>
+    <img src="figma-dark-2.png" alt="Figma dark 2">
+    <div class="annotation">
+      <ul>
+        <li>Тот же стиль, другая прокрутка</li>
+        <li><span class="highlight">Alignment grid</span> — иконки с bg на активном</li>
+        <li>Position toggles — 6 кнопок, одинаковый паттерн</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header current">Текущее состояние</div>
+    <img src="current-state.png" alt="Current state">
+    <div class="annotation">
+      <ul>
+        <li><span class="bad">Инпуты</span> — без bg, сливаются</li>
+        <li><span class="bad">Toggle active</span> — едва видно</li>
+        <li><span class="bad">Всё монохромное</span> — нет уровней глубины</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Row 2: Target mockups -->
+<h2>Target: Dark Theme</h2>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header target">Dark — Position + Margin</div>
+    <div class="inspector-mock">
+      <div class="im-section">
+        <div class="im-title">Position</div>
+        <div class="im-toggle-group">
+          <div class="im-toggle active">static</div>
+          <div class="im-toggle">rel</div>
+          <div class="im-toggle">abs</div>
+          <div class="im-toggle">fixed</div>
+          <div class="im-toggle">sticky</div>
+        </div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label">X</span>
+            <div class="im-input">0px</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label">Y</span>
+            <div class="im-input">0px</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep"></div>
+      <div class="im-section">
+        <div class="im-title">Margin</div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label">↔</span>
+            <div class="im-input">0px</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label">↕</span>
+            <div class="im-input">0px</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header target">Dark — Auto Layout + Appearance</div>
+    <div class="inspector-mock">
+      <div class="im-section">
+        <div class="im-title">Auto layout</div>
+        <div class="im-layout-icons">
+          <div class="im-icon">↓</div>
+          <div class="im-icon">→</div>
+          <div class="im-icon active">⇌</div>
+          <div class="im-icon">⊞</div>
+        </div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label">W</span>
+            <div class="im-input">auto</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label">H</span>
+            <div class="im-input">auto</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep"></div>
+      <div class="im-section">
+        <div class="im-title">Appearance</div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label">◇</span>
+            <div class="im-input">100%</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label">⬡</span>
+            <div class="im-input">0px</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep"></div>
+      <div class="im-section-header">
+        <span class="im-title" style="margin:0;">Stroke</span>
+        <span class="im-plus">+</span>
+      </div>
+      <div class="im-sep"></div>
+      <div class="im-section-header">
+        <span class="im-title" style="margin:0;">Effects</span>
+        <span class="im-plus">+</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Target: Light Theme</h2>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header target">Light — Position + Margin</div>
+    <div class="inspector-mock light">
+      <div class="im-section">
+        <div class="im-title light">Position</div>
+        <div class="im-toggle-group light">
+          <div class="im-toggle light active light">static</div>
+          <div class="im-toggle light">rel</div>
+          <div class="im-toggle light">abs</div>
+          <div class="im-toggle light">fixed</div>
+          <div class="im-toggle light">sticky</div>
+        </div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label light">X</span>
+            <div class="im-input light">0px</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label light">Y</span>
+            <div class="im-input light">0px</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep light"></div>
+      <div class="im-section">
+        <div class="im-title light">Margin</div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label light">X</span>
+            <div class="im-input light">0px</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label light">Y</span>
+            <div class="im-input light">0px</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header target">Light — Auto Layout + Appearance</div>
+    <div class="inspector-mock light">
+      <div class="im-section">
+        <div class="im-title light">Auto layout</div>
+        <div class="im-layout-icons light">
+          <div class="im-icon">↓</div>
+          <div class="im-icon">→</div>
+          <div class="im-icon active light">⇌</div>
+          <div class="im-icon">⊞</div>
+        </div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label light">W</span>
+            <div class="im-input light">auto</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label light">H</span>
+            <div class="im-input light">auto</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep light"></div>
+      <div class="im-section">
+        <div class="im-title light">Appearance</div>
+        <div class="im-row">
+          <div class="im-field">
+            <span class="im-label light">◇</span>
+            <div class="im-input light">100%</div>
+          </div>
+          <div class="im-field">
+            <span class="im-label light">⬡</span>
+            <div class="im-input light">0px</div>
+          </div>
+        </div>
+      </div>
+      <div class="im-sep light"></div>
+      <div class="im-section-header">
+        <span class="im-title light" style="margin:0;">Stroke</span>
+        <span class="im-plus">+</span>
+      </div>
+      <div class="im-sep light"></div>
+      <div class="im-section-header">
+        <span class="im-title light" style="margin:0;">Effects</span>
+        <span class="im-plus">+</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key changes summary -->
+<h2>Что меняем (summary)</h2>
+<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-top:12px;">
+  <div class="card" style="padding:16px;">
+    <h3 style="font-size:13px; color:#fff; margin-bottom:8px;">1. Input bg</h3>
+    <p style="font-size:12px; line-height:1.5;">
+      <span class="bad">Сейчас:</span> transparent<br>
+      <span class="good">Target:</span> <code>--vscode-input-background</code> (#3c3c3f dark / #fff light)
+    </p>
+  </div>
+  <div class="card" style="padding:16px;">
+    <h3 style="font-size:13px; color:#fff; margin-bottom:8px;">2. Toggle active state</h3>
+    <p style="font-size:12px; line-height:1.5;">
+      <span class="bad">Сейчас:</span> rgba(255,255,255,0.08)<br>
+      <span class="good">Target:</span> pill с <code>--vscode-input-background</code>, container с более тёмным bg
+    </p>
+  </div>
+  <div class="card" style="padding:16px;">
+    <h3 style="font-size:13px; color:#fff; margin-bottom:8px;">3. Не трогаем</h3>
+    <p style="font-size:12px; line-height:1.5;">
+      Color swatches, Fill dropdown, Stroke/Effects collapse — всё уже работает
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

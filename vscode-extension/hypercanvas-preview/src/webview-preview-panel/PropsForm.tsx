@@ -149,11 +149,34 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
     return true;
   });
 
+  const handleGenerateAll = useCallback(() => {
+    const generated: Record<string, unknown> = {};
+    for (const { name, typeInfo } of fields) {
+      const gen = getFieldGenerator(name);
+      if (gen) {
+        generated[name] = gen();
+      } else if (typeInfo.type === 'number') {
+        generated[name] = Math.floor(Math.random() * 1000);
+      } else if (typeInfo.type === 'boolean') {
+        generated[name] = Math.random() > 0.5;
+      } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
+        generated[name] = `sample-${name}`;
+      }
+    }
+    setValues(generated);
+    onChange(generated);
+  }, [fields, onChange]);
+
   if (fields.length === 0) return null;
 
   return (
     <div style={formContainerStyle}>
-      <div style={formLabelStyle}>Props {propsSchema ? '' : '(from error)'}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={formLabelStyle}>Props</div>
+        <button type="button" onClick={handleGenerateAll} style={generateAllButtonStyle}>
+          Generate values
+        </button>
+      </div>
       {fields.map(({ name, typeInfo }) => (
         <PropField key={name} name={name} typeInfo={typeInfo} value={values[name]} onChange={handleChange} />
       ))}
@@ -198,9 +221,11 @@ const USERNAMES = [
 const EMAILS = ['john@example.com', 'jane@test.com', 'alex@mail.com', 'maria@demo.com', 'david@sample.com'];
 const TITLES = ['Hello World', 'Getting Started', 'My First Post', 'Breaking News', 'Update v2.0', 'Quick Note'];
 const DESCRIPTIONS = [
-  'A short description goes here.',
-  'Lorem ipsum dolor sit amet.',
-  'This is a sample text for testing.',
+  'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
+  'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+  'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.',
+  'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum.',
+  'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia.',
 ];
 const URLS = ['https://example.com', 'https://test.com/page', 'https://demo.app/resource'];
 const COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
@@ -228,8 +253,11 @@ function getFieldGenerator(name: string): (() => string) | null {
   if (n === 'color' || n === 'bgcolor' || n === 'background') return () => pick(COLORS);
   if (/avatar|photo|image|pic|thumbnail|icon|logo|src/i.test(n)) return () => PLACEHOLDER_IMAGE;
   if (/count|total|amount|quantity|num/i.test(n)) return () => String(Math.floor(Math.random() * 1000));
+  if (/^(ts|timestamp|createdAt|updatedAt)$/i.test(n)) return () => String(Date.now());
   if (/price|cost/i.test(n)) return () => (Math.random() * 100).toFixed(2);
-  if (/date|created|updated|timestamp/i.test(n)) return () => new Date().toISOString().split('T')[0];
+  if (/^(date|created|updated)$/i.test(n)) return () => new Date().toISOString().split('T')[0];
+  // timestamp — returns ISO string for string fields, unix ms will be handled by number generator
+  if (/timestamp|^ts$/i.test(n)) return () => new Date().toISOString();
   if (/phone|tel/i.test(n)) return () => `+1 555-${Math.floor(1000 + Math.random() * 9000)}`;
   if (/verified|active|enabled|visible|published/i.test(n)) return () => 'true';
   return null;
@@ -501,7 +529,13 @@ function ObjectPropPopover({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  const fieldCount = Object.keys(schema).length;
+  const entries = Object.entries(schema);
+  const fieldCount = entries.length;
+  const requiredCount = entries.filter(([, ti]) => ti.required).length;
+  const filledCount = entries.filter(([fn]) => {
+    const v = objValue[fn];
+    return v != null && v !== '' && !(Array.isArray(v) && v.length === 0);
+  }).length;
 
   return (
     <div style={fieldRowStyle}>
@@ -516,7 +550,7 @@ function ObjectPropPopover({
         }}
       >
         <span style={popoverTriggerCountStyle}>
-          {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
+          {filledCount}/{requiredCount > 0 ? requiredCount : fieldCount} {requiredCount > 0 ? 'required' : 'fields'}
         </span>
         <span style={popoverTriggerArrowStyle}>{open ? '\u25BC' : '\u25B6'}</span>
       </button>
@@ -625,6 +659,17 @@ const formLabelStyle: CSSProperties = {
   color: 'var(--vscode-editor-foreground, #a0aec0)',
   fontSize: 12,
   fontWeight: 500,
+};
+
+const generateAllButtonStyle: CSSProperties = {
+  padding: '3px 10px',
+  fontSize: 11,
+  fontWeight: 500,
+  background: 'transparent',
+  color: 'var(--vscode-textLink-foreground, #a78bfa)',
+  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
+  borderRadius: 4,
+  cursor: 'pointer',
 };
 
 const fieldRowStyle: CSSProperties = {
