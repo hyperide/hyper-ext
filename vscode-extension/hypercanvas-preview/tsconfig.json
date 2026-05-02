@@ -21,7 +21,11 @@
   "exclude": [
     "node_modules",
     "../../lib/**/*.test.ts",
+    "../../lib/**/__tests__/**",
     "../../lib/testing/**/*",
+    "../../shared/**/*.test.ts",
+    "../../shared/**/__tests__/**",
+    "../../shared/scripts/**",
     "src/**/*.test.ts",
     "src/**/__tests__/**"
   ]
