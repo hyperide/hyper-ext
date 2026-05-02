@@ -528,7 +528,7 @@ export class PreviewPanel {
             // Typed value serialization for JSX
             if (typeof value === 'boolean') return `    ${key}={${value}}`;
             if (typeof value === 'number') return `    ${key}={${value}}`;
-            if (Array.isArray(value)) return `    ${key}={${JSON.stringify(value)}}`;
+            if (typeof value === 'object') return `    ${key}={${JSON.stringify(value)}}`;
             return `    ${key}={${JSON.stringify(String(value))}}`;
           })
         : [`    // TODO: Add required props here`];

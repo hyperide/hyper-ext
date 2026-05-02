@@ -205,20 +205,49 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange, onAllRequ
           fieldPath={name}
         />
       ))}
-      {unfilledRequired.length > 0 && (
-        <div style={calloutStyle}>
-          <span style={calloutTextStyle}>
-            {unfilledRequired.length} required field{unfilledRequired.length > 1 ? 's' : ''} missing:{' '}
-          </span>
-          {unfilledRequired.map((item, i) => (
-            <span key={item.path}>
-              {i > 0 && <span style={calloutTextStyle}>, </span>}
-              <button type="button" onClick={() => setFocusPath(item.path)} style={calloutLinkStyle}>
-                {item.label}
-              </button>
-            </span>
-          ))}
-        </div>
+      {unfilledRequired.length > 0 && <MissingFieldsCallout items={unfilledRequired} onFocus={setFocusPath} />}
+    </div>
+  );
+}
+
+/**
+ * MissingFieldsCallout — shows 2-4 field links + "N more" with N+2 rule:
+ * if remaining <= 2, show all (no "1 more" or "2 more"), only "N more" when N >= 3
+ */
+function MissingFieldsCallout({
+  items,
+  onFocus,
+}: {
+  items: Array<{ path: string; label: string }>;
+  onFocus: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const maxVisible = 4;
+  const remaining = items.length - maxVisible;
+  // N+2 rule: if remaining is 1 or 2, just show them all
+  const showAll = expanded || remaining <= 2;
+  const visible = showAll ? items : items.slice(0, maxVisible);
+
+  return (
+    <div style={calloutStyle}>
+      <span style={calloutTextStyle}>
+        {items.length} required field{items.length > 1 ? 's' : ''} missing:{' '}
+      </span>
+      {visible.map((item, i) => (
+        <span key={item.path}>
+          {i > 0 && <span style={calloutTextStyle}>, </span>}
+          <button type="button" onClick={() => onFocus(item.path)} style={calloutLinkStyle}>
+            {item.label}
+          </button>
+        </span>
+      ))}
+      {!showAll && remaining > 2 && (
+        <span>
+          <span style={calloutTextStyle}>, </span>
+          <button type="button" onClick={() => setExpanded(true)} style={calloutLinkStyle}>
+            {remaining} more...
+          </button>
+        </span>
       )}
     </div>
   );

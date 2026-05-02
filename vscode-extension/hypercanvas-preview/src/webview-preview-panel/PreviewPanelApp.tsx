@@ -256,9 +256,19 @@ function ComponentErrorOverlay({
   const propValuesRef = useRef<Record<string, unknown>>({});
   const [allRequiredFilled, setAllRequiredFilled] = useState(false);
   const [sampleCreated, setSampleCreated] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+
+  const [hasAnyProps, setHasAnyProps] = useState(false);
 
   const handlePropsChange = useCallback((values: Record<string, unknown>) => {
     propValuesRef.current = values;
+    const hasFilled = Object.values(values).some((v) => {
+      if (v == null) return false;
+      if (typeof v === 'string') return v.trim() !== '';
+      if (Array.isArray(v)) return v.length > 0;
+      return true;
+    });
+    setHasAnyProps(hasFilled);
   }, []);
 
   const handleCreateSample = useCallback(() => {
@@ -274,7 +284,10 @@ function ComponentErrorOverlay({
 
   const handleCreateNew = useCallback(() => {
     setSampleCreated(false);
+    setAllRequiredFilled(false);
+    setHasAnyProps(false);
     propValuesRef.current = {};
+    setFormKey((k) => k + 1);
   }, []);
 
   const hasProps = (propsSchema && propsSchema.length > 0) || extractedProps.length > 0;
@@ -288,6 +301,7 @@ function ComponentErrorOverlay({
         {hasProps && (
           <>
             <PropsForm
+              key={formKey}
               propsSchema={propsSchema ?? null}
               extractedPropNames={extractedProps}
               onChange={handlePropsChange}
@@ -313,7 +327,7 @@ function ComponentErrorOverlay({
               style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
               onClick={handleCreateSample}
             >
-              Update Sample
+              {hasAnyProps ? 'Update Sample' : 'Update Empty Sample'}
             </button>
             <button type="button" onClick={handleCreateNew} style={errorOverlayLinkButtonStyle}>
               Create New...
@@ -327,7 +341,7 @@ function ComponentErrorOverlay({
               style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
               onClick={handleCreateSample}
             >
-              Create Sample
+              {hasAnyProps ? 'Create Sample' : 'Create Empty Sample'}
             </button>
             <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
             <button
