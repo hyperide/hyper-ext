@@ -318,19 +318,19 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
   return (
     <div style={fieldRowStyle}>
       <span style={fieldNameStyle}>{humanize(name)}</span>
-      <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+      <div style={{ position: 'relative', flex: 1 }}>
         <input
           type="text"
           value={String(value ?? '')}
           onChange={(e) => onChange(name, e.target.value)}
           placeholder={typeInfo.required ? '' : 'optional'}
-          style={{ ...inputStyle, flex: 1 }}
+          style={{ ...inputStyle, width: '100%', paddingRight: isIdField ? 40 : undefined }}
         />
         {isIdField && (
           <button
             type="button"
             onClick={() => onChange(name, generateId())}
-            style={genButtonStyle}
+            style={genButtonInlineStyle}
             title="Generate random ID"
           >
             gen
@@ -412,7 +412,6 @@ function ObjectPropPopover({
           ...(open ? popoverTriggerActiveStyle : {}),
         }}
       >
-        <span style={typeBadgeStyle}>object</span>
         <span style={popoverTriggerCountStyle}>
           {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
         </span>
@@ -422,9 +421,11 @@ function ObjectPropPopover({
         <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
             <span style={popoverTitleStyle}>{humanize(name)}</span>
-            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
-              &times;
-            </button>
+            {depth === 0 && (
+              <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+                &times;
+              </button>
+            )}
           </div>
           <div style={popoverFieldsStyle}>
             {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
@@ -547,16 +548,20 @@ const fieldNameStyle: CSSProperties = {
   gap: 4,
 };
 
-const genButtonStyle: CSSProperties = {
-  padding: '2px 8px',
-  fontSize: 11,
+const genButtonInlineStyle: CSSProperties = {
+  position: 'absolute',
+  right: 4,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  padding: '1px 6px',
+  fontSize: 10,
   fontWeight: 500,
   background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
   color: 'var(--vscode-button-secondaryForeground, #ccc)',
   border: 'none',
-  borderRadius: 4,
+  borderRadius: 3,
   cursor: 'pointer',
-  whiteSpace: 'nowrap',
+  opacity: 0.7,
 };
 
 const typeBadgeStyle: CSSProperties = {
