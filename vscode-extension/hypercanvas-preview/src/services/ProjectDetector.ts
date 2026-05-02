@@ -299,17 +299,31 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
   return false;
 }
 
-/** JS frameworks where the extension's AST pipeline works (React JSX/TSX) */
-const SUPPORTED_JS_FRAMEWORKS: import('../types').ProjectType[] = ['vite', 'cra', 'remix', 'webpack'];
-// Note: 'nextjs' is partially supported (preview works, AST writes may not
-// persist due to SSR re-renders). 'unknown' is unsupported.
+/**
+ * Bundlers where the extension's full editing pipeline works:
+ * - Dev server management (start/stop/port detection)
+ * - HMR round-trip (AST write → file save → HMR → preview update)
+ * - File watching (vite.config or webpack.config presence)
+ */
+const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack'];
 
 /**
- * Compute project capabilities based on detected CSS system, JS framework, and UI kit.
+ * Bundlers where preview renders but AST writes may not persist
+ * (SSR re-renders, server components, different file conventions).
+ * Show readonly badge but allow preview interaction.
+ */
+const READONLY_BUNDLERS: import('../types').ProjectType[] = ['nextjs', 'remix'];
+
+// 'unknown' and 'bun' → unsupported (no dev server management)
+
+/**
+ * Compute project capabilities based on three axes:
+ * 1. CSS system (can we read/write styles?)
+ * 2. Bundler (can we manage dev server + HMR round-trip?)
+ * 3. Project error (can it render at all?)
  *
- * Style writing requires BOTH:
- * - CSS system in WRITABLE_CSS_SYSTEMS (tailwind, cssmodules, styled, emotion, etc.)
- * - JS framework that the AST pipeline supports (Vite, CRA, Remix, webpack)
+ * Full editing = CSS writable + bundler supports full editing
+ * Readonly = preview renders but either CSS or bundler is limited
  */
 export function computeCapabilities(
   cssSystem: import('../types').CssSystem,
@@ -318,8 +332,9 @@ export function computeCapabilities(
   projectType?: import('../types').ProjectType,
 ): import('../types').ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
-  const jsSupported = projectType ? SUPPORTED_JS_FRAMEWORKS.includes(projectType) : true;
-  const canWriteStyles = cssWritable && jsSupported;
+  const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
+  const bundlerReadonly = projectType ? READONLY_BUNDLERS.includes(projectType) : false;
+  const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;
   return {
     cssSystem,
