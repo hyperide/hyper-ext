@@ -467,9 +467,11 @@ export class ComponentService {
                 const propName = member.key.name;
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
+                let objectFields: PropInfo[] | undefined;
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
+                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation);
                 }
 
                 // Check if already exists
@@ -477,11 +479,13 @@ export class ComponentService {
                 if (existing) {
                   existing.type = propType;
                   existing.required = !member.optional;
+                  existing.objectFields = objectFields;
                 } else {
                   props.push({
                     name: propName,
                     type: propType,
                     required: !member.optional,
+                    objectFields,
                   });
                 }
               }
@@ -498,9 +502,11 @@ export class ComponentService {
                 const propName = member.key.name;
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
+                let objectFields: PropInfo[] | undefined;
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
+                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation);
                 }
 
                 // Check if already exists
@@ -508,11 +514,13 @@ export class ComponentService {
                 if (existing) {
                   existing.type = propType;
                   existing.required = !member.optional;
+                  existing.objectFields = objectFields;
                 } else {
                   props.push({
                     name: propName,
                     type: propType,
                     required: !member.optional,
+                    objectFields,
                   });
                 }
               }
@@ -662,8 +670,55 @@ export class ComponentService {
     if (t.isTSFunctionType(node)) {
       return 'Function';
     }
+    if (t.isTSTypeLiteral(node)) {
+      // Produce readable inline object type: { user: string; count: number }
+      const parts: string[] = [];
+      for (const member of node.members) {
+        if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+          const opt = member.optional ? '?' : '';
+          const memberType =
+            member.typeAnnotation && t.isTSTypeAnnotation(member.typeAnnotation)
+              ? this._getTypeString(member.typeAnnotation.typeAnnotation)
+              : 'unknown';
+          parts.push(`${member.key.name}${opt}: ${memberType}`);
+        }
+      }
+      return parts.length > 0 ? `{ ${parts.join('; ')} }` : 'object';
+    }
 
     return 'unknown';
+  }
+
+  /**
+   * Extract nested object fields from a TSTypeLiteral node.
+   * Returns PropInfo[] for inline object types, undefined otherwise.
+   */
+  private _extractObjectFields(node: t.TSType, depth = 0): PropInfo[] | undefined {
+    if (depth > 5) return undefined;
+    if (!t.isTSTypeLiteral(node)) return undefined;
+
+    const fields: PropInfo[] = [];
+    for (const member of node.members) {
+      if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+        const typeAnnotation = member.typeAnnotation;
+        let fieldType = 'unknown';
+        let objectFields: PropInfo[] | undefined;
+
+        if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
+          fieldType = this._getTypeString(typeAnnotation.typeAnnotation);
+          objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, depth + 1);
+        }
+
+        fields.push({
+          name: member.key.name,
+          type: fieldType,
+          required: !member.optional,
+          objectFields,
+        });
+      }
+    }
+
+    return fields.length > 0 ? fields : undefined;
   }
 }
 

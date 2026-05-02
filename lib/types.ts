@@ -100,6 +100,8 @@ export interface PropInfo {
   type: string;
   required: boolean;
   defaultValue?: string;
+  /** Nested object field schema (for inline object types like { user: string; count: number }) */
+  objectFields?: PropInfo[];
 }
 
 export interface ComponentTree {

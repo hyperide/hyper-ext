@@ -2,7 +2,7 @@
  * Type-aware props form for the ComponentErrorOverlay.
  *
  * Standalone version using inline styles (VSCode CSS variables).
- * Supports: string, number, boolean, enum, array, object (shallow), unknown.
+ * Supports: string, number, boolean, enum, array, object (recursive with schema or JSON fallback), unknown.
  * Does NOT depend on shadcn/Tailwind — consistent with overlay's inline style approach.
  */
 
@@ -15,6 +15,8 @@ export interface SimplePropInfo {
   type: string;
   required: boolean;
   defaultValue?: string;
+  /** Nested object field schema (for inline object types like { user: string; count: number }) */
+  objectFields?: SimplePropInfo[];
 }
 
 interface PropsFormProps {
@@ -55,9 +57,65 @@ function toPropTypeInfo(prop: SimplePropInfo): PropTypeInfo {
     }
   }
 
-  if (typeStr.startsWith('{') || typeStr === 'object') return { type: 'object', required: prop.required };
+  if (typeStr.startsWith('{') || typeStr === 'object') {
+    const objectSchema = prop.objectFields
+      ? objectFieldsToSchema(prop.objectFields)
+      : parseInlineObjectType(prop.type.trim());
+    return { type: 'object', required: prop.required, objectSchema: objectSchema || undefined };
+  }
+
+  // Named type reference (e.g. "Tweet", "UserInfo") — likely an object, check for objectFields
+  if (prop.objectFields && prop.objectFields.length > 0) {
+    return {
+      type: 'object',
+      required: prop.required,
+      objectSchema: objectFieldsToSchema(prop.objectFields),
+    };
+  }
 
   return { type: 'unknown', required: prop.required };
+}
+
+/** Convert SimplePropInfo[] (flat list) to Record<string, PropTypeInfo> (nested schema) */
+function objectFieldsToSchema(fields: SimplePropInfo[]): Record<string, PropTypeInfo> {
+  const schema: Record<string, PropTypeInfo> = {};
+  for (const field of fields) {
+    schema[field.name] = toPropTypeInfo(field);
+  }
+  return schema;
+}
+
+/**
+ * Attempt to parse an inline TS object type string like "{ user: string; count: number; active: boolean }"
+ * into a PropTypeInfo objectSchema. Returns null if parsing fails.
+ */
+function parseInlineObjectType(typeStr: string): Record<string, PropTypeInfo> | null {
+  if (!typeStr.startsWith('{') || !typeStr.endsWith('}')) return null;
+
+  const inner = typeStr.slice(1, -1).trim();
+  if (!inner) return null;
+
+  // Split on semicolons (TS object type syntax)
+  const parts = inner
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const schema: Record<string, PropTypeInfo> = {};
+  for (const part of parts) {
+    // Match "name: type" or "name?: type"
+    const match = part.match(/^(\w+)(\?)?\s*:\s*(.+)$/);
+    if (!match) continue;
+    const [, fieldName, optional, fieldType] = match;
+    schema[fieldName] = toPropTypeInfo({
+      name: fieldName,
+      type: fieldType.trim(),
+      required: !optional,
+    });
+  }
+
+  return Object.keys(schema).length > 0 ? schema : null;
 }
 
 /**
@@ -106,9 +164,19 @@ interface PropFieldProps {
   typeInfo: PropTypeInfo;
   value: unknown;
   onChange: (name: string, value: unknown) => void;
+  depth?: number;
 }
 
-function PropField({ name, typeInfo, value, onChange }: PropFieldProps) {
+function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProps) {
+  // Prevent infinite recursion
+  if (depth > 5) {
+    return (
+      <div style={fieldRowStyle}>
+        <span style={nonEditableStyle}>Max nesting depth reached</span>
+      </div>
+    );
+  }
+
   // Non-editable types
   if (typeInfo.type === 'function' || typeInfo.type === 'reactNode') {
     return (
@@ -233,6 +301,16 @@ function PropField({ name, typeInfo, value, onChange }: PropFieldProps) {
     );
   }
 
+  // Object with schema — expandable nested fields
+  if (typeInfo.type === 'object' && typeInfo.objectSchema) {
+    return <ObjectPropField name={name} typeInfo={typeInfo} value={value} onChange={onChange} depth={depth} />;
+  }
+
+  // Object without schema — JSON textarea fallback
+  if (typeInfo.type === 'object') {
+    return <ObjectJsonFallback name={name} typeInfo={typeInfo} value={value} onChange={onChange} />;
+  }
+
   // String / Unknown — text input
   return (
     <div style={fieldRowStyle}>
@@ -250,6 +328,120 @@ function PropField({ name, typeInfo, value, onChange }: PropFieldProps) {
         placeholder={`Enter ${name}`}
         style={inputStyle}
       />
+    </div>
+  );
+}
+
+// ============================================================================
+// ObjectPropField — collapsible nested object fields (recursive)
+// ============================================================================
+
+function ObjectPropField({
+  name,
+  typeInfo,
+  value,
+  onChange,
+  depth,
+}: {
+  name: string;
+  typeInfo: PropTypeInfo;
+  value: unknown;
+  onChange: (name: string, value: unknown) => void;
+  depth: number;
+}) {
+  const [expanded, setExpanded] = useState(depth === 0);
+  const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+  // biome-ignore lint/style/noNonNullAssertion: caller guarantees objectSchema exists
+  const schema = typeInfo.objectSchema!;
+
+  return (
+    <div style={fieldColumnStyle}>
+      <button type="button" onClick={() => setExpanded((v) => !v)} style={objectToggleStyle}>
+        <span style={objectArrowStyle}>{expanded ? '\u25BC' : '\u25B6'}</span>
+        <span style={fieldNameStyle}>
+          {name}
+          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
+          <span style={typeBadgeStyle}>object</span>
+        </span>
+      </button>
+      {expanded && (
+        <div style={objectNestedContainerStyle}>
+          {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
+            <PropField
+              key={fieldName}
+              name={fieldName}
+              typeInfo={fieldTypeInfo}
+              value={objValue[fieldName]}
+              onChange={(nestedName, nestedValue) => {
+                onChange(name, { ...objValue, [nestedName]: nestedValue });
+              }}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// ObjectJsonFallback — JSON textarea for objects without schema
+// ============================================================================
+
+function ObjectJsonFallback({
+  name,
+  typeInfo,
+  value,
+  onChange,
+}: {
+  name: string;
+  typeInfo: PropTypeInfo;
+  value: unknown;
+  onChange: (name: string, value: unknown) => void;
+}) {
+  const [jsonText, setJsonText] = useState(() => {
+    if (typeof value === 'object' && value !== null) {
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return '';
+      }
+    }
+    return typeof value === 'string' ? value : '';
+  });
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const handleJsonChange = (text: string) => {
+    setJsonText(text);
+    if (!text.trim()) {
+      setParseError(null);
+      onChange(name, undefined);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      setParseError(null);
+      onChange(name, parsed);
+    } catch {
+      setParseError('Invalid JSON');
+    }
+  };
+
+  return (
+    <div style={fieldColumnStyle}>
+      <span style={fieldNameStyle}>
+        {name}
+        {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
+        <span style={typeBadgeStyle}>object (JSON)</span>
+      </span>
+      <textarea
+        value={jsonText}
+        onChange={(e) => handleJsonChange(e.target.value)}
+        placeholder={'{\n  "key": "value"\n}'}
+        style={jsonTextareaStyle}
+        rows={4}
+      />
+      {parseError && <span style={jsonErrorStyle}>{parseError}</span>}
     </div>
   );
 }
@@ -396,4 +588,52 @@ const arrayAddButtonStyle: CSSProperties = {
   padding: '3px 8px',
   borderRadius: 4,
   textAlign: 'left' as const,
+};
+
+const objectToggleStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 0,
+  textAlign: 'left' as const,
+  width: '100%',
+};
+
+const objectArrowStyle: CSSProperties = {
+  fontSize: 10,
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  width: 12,
+  flexShrink: 0,
+  userSelect: 'none',
+};
+
+const objectNestedContainerStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  paddingLeft: 14,
+  borderLeft: '2px solid var(--vscode-widget-border, #333)',
+  marginTop: 2,
+};
+
+const jsonTextareaStyle: CSSProperties = {
+  padding: '6px 8px',
+  fontSize: 12,
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  color: 'var(--vscode-input-foreground, #e2e8f0)',
+  border: '1px solid var(--vscode-input-border, #444)',
+  borderRadius: 4,
+  outline: 'none',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  resize: 'vertical' as const,
+  minHeight: 60,
+};
+
+const jsonErrorStyle: CSSProperties = {
+  fontSize: 10,
+  color: 'var(--vscode-errorForeground, #f44747)',
+  fontStyle: 'italic',
 };
