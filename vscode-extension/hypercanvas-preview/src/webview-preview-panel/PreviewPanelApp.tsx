@@ -305,8 +305,13 @@ function ComponentErrorOverlay({
     });
     onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
     propsCache.delete(componentPath);
-    setSampleCreated(true);
-  }, [onCreateSample, sampleName, componentPath]);
+    // Auto-close overlay for SampleDefault — preview will re-render with the sample
+    if (sampleName === 'SampleDefault') {
+      onClose();
+    } else {
+      setSampleCreated(true);
+    }
+  }, [onCreateSample, sampleName, componentPath, onClose]);
 
   const sampleCountRef = useRef(1);
   const handleCreateNew = useCallback(() => {
