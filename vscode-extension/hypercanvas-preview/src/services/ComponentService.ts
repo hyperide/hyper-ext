@@ -838,12 +838,7 @@ export class ComponentService {
       if (!importInfo) continue; // Not an imported type
 
       try {
-        const resolved = await this._resolveTypeFromImport(
-          typeName,
-          importInfo,
-          componentPath,
-          localTypes,
-        );
+        const resolved = await this._resolveTypeFromImport(typeName, importInfo, componentPath, localTypes);
         if (resolved) {
           prop.objectFields = resolved;
         }
