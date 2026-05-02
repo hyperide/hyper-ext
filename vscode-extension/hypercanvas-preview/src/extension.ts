@@ -37,6 +37,7 @@ import {
   computeCapabilities,
   detectCssSystem,
   detectPackageManager,
+  detectProjectType,
   detectUIKit,
   detectUnsupportedProject,
   readPackageJson,
@@ -114,9 +115,10 @@ export function activate(context: vscode.ExtensionContext) {
       stateHub?.applyUpdate({ projectUIKit: kit });
 
       const cssSystem = await detectCssSystem(workspaceRoot, pkg);
+      const projectType = await detectProjectType(workspaceRoot);
       const projectError = await detectUnsupportedProject(workspaceRoot, pkg);
 
-      const capabilities = computeCapabilities(cssSystem, kit, projectError);
+      const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType);
       console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
 
       // Send capabilities to preview panel (readonly badge, style write guard)

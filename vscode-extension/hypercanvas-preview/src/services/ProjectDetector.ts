@@ -269,6 +269,10 @@ export async function detectCssSystem(
   // Tailwind (bare — most common, check last so design systems win)
   if (has('tailwindcss')) return 'tailwind';
 
+  // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
+  // plain CSS (className-based, no special AST handling needed).
+  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as import('../types').CssSystem;
+
   // CSS Modules have no package.json dependency — detect by scanning src/
   // for *.module.css / *.module.scss / *.module.less files.
   if (await hasCssModuleFiles(projectPath)) return 'cssmodules';
@@ -295,16 +299,28 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
   return false;
 }
 
+/** JS frameworks where the extension's AST pipeline works (React JSX/TSX) */
+const SUPPORTED_JS_FRAMEWORKS: import('../types').ProjectType[] = ['vite', 'cra', 'remix', 'webpack'];
+// Note: 'nextjs' is partially supported (preview works, AST writes may not
+// persist due to SSR re-renders). 'unknown' is unsupported.
+
 /**
- * Compute project capabilities based on detected CSS system and UI kit.
+ * Compute project capabilities based on detected CSS system, JS framework, and UI kit.
+ *
+ * Style writing requires BOTH:
+ * - CSS system in WRITABLE_CSS_SYSTEMS (tailwind, cssmodules, styled, emotion, etc.)
+ * - JS framework that the AST pipeline supports (Vite, CRA, Remix, webpack)
  */
 export function computeCapabilities(
   cssSystem: import('../types').CssSystem,
   uiKit: 'tailwind' | 'tamagui' | 'none',
   projectError: import('../types').UnsupportedProjectError | null,
+  projectType?: import('../types').ProjectType,
 ): import('../types').ProjectCapabilities {
-  const canWriteStyles = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
-  const canRender = projectError === null; // no unsupported error = can render
+  const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
+  const jsSupported = projectType ? SUPPORTED_JS_FRAMEWORKS.includes(projectType) : true;
+  const canWriteStyles = cssWritable && jsSupported;
+  const canRender = projectError === null;
   return {
     cssSystem,
     uiKit,

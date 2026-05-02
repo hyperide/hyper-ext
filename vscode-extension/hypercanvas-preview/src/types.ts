@@ -53,6 +53,7 @@ export type CssSystem =
   | 'nextui'
   | 'daisyui'
   | 'shadcn'
+  | 'sass'
   | 'unknown';
 
 /** CSS systems where the extension can read AND write styles via AST */
@@ -64,6 +65,7 @@ export const WRITABLE_CSS_SYSTEMS: CssSystem[] = [
   'tamagui',
   'shadcn', // built on Tailwind
   'daisyui', // built on Tailwind
+  'sass', // className-based, same as plain CSS
 ];
 
 /** What the extension can do with this project */
