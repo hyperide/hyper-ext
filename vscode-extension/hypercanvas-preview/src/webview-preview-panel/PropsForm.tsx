@@ -169,6 +169,21 @@ export function PropsForm({
     }
   }, [values, onChange]);
 
+  // Re-generate when propsSchema arrives after mount (async schema fetch)
+  const prevSchemaLenRef = useRef(propsSchema?.length ?? 0);
+  useEffect(() => {
+    const newLen = propsSchema?.length ?? 0;
+    if (newLen > prevSchemaLenRef.current) {
+      prevSchemaLenRef.current = newLen;
+      const hasRequired = fields.some((f) => f.typeInfo.required);
+      if (hasRequired) {
+        const generated = generateObjectValues(fields);
+        setValues(generated);
+        onChange(generated);
+      }
+    }
+  }, [propsSchema, fields, onChange]);
+
   // Reset values when resetKey changes (controlled reset from parent)
   const prevResetKeyRef = useRef(resetKey);
   useEffect(() => {
