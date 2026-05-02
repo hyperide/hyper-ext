@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 MD060 -->
+
 # Shared Error Overlays — Design Spec
 
 ## Problem
@@ -27,6 +29,8 @@ styling approaches (Tailwind vs inline + VS Code CSS vars), inconsistent behavio
 - Consistent dark/light theme support across both platforms
 - Error recovery: overlays appear on error, disappear on fix
 - Platform-specific actions via optional callbacks (Create Sample, Auto Fix, Configure AI)
+- Accessible overlays: `role="alert"` / `aria-live="polite"` for error states, keyboard
+  navigation (Esc to close, Tab through buttons), focus management when overlay appears
 
 ## Non-Goals
 
@@ -34,6 +38,31 @@ styling approaches (Tailwind vs inline + VS Code CSS vars), inconsistent behavio
   these are SaaS infrastructure-specific
 - Changing LogsPanel internal architecture — only moving it to shared with abstracted deps
 - Redesigning the overlay visual language — keep current design, just unify
+
+## Overlay Precedence
+
+When multiple overlay conditions are true simultaneously, show the highest-priority overlay.
+Both platforms must follow this order:
+
+| Priority | Overlay | Rationale |
+|----------|---------|-----------|
+| 1 | `ConnectionErrorOverlay` | If iframe doesn't load, nothing else matters |
+| 2 | `PreviewSetupOverlay` | Framework unsupported / needs patching — must fix first |
+| 3 | `RuntimeErrorOverlay` | Build-level error from bundler — component can't render |
+| 4 | `ParseErrorOverlay` | File-level error — component can't be parsed |
+| 5 | `ComponentErrorOverlay` | Render-level error — component parsed but throws |
+| 6 | `LoadingOverlay` | Waiting for iframe / component to mount |
+| 7 | `NoComponentOverlay` | No component selected — lowest priority informational state |
+
+Extension-only precedence (inserted above the shared table):
+
+| Priority | Overlay | Rationale |
+|----------|---------|-----------|
+| 0a | `PreviewSetupOverlay` (unsupported) | Must show fix CTA even when dev server is off |
+| 0b | `StartDevServerScreen` | No server = no iframe, but only if project is supported |
+
+If the project is unsupported (React Native / Tamagui), showing "Start Dev Server" is
+misleading — the server won't help. `UnsupportedProjectScreen` must win.
 
 ## Architecture
 
@@ -70,6 +99,20 @@ spread onto a root wrapper, or as a `<style>` string injected into webview HTML.
 In VS Code extension: `--vscode-*` vars are set by VS Code → those win.
 In SaaS: `--vscode-*` vars are undefined → CSS fallback uses `hsl(var(--*))` Tailwind tokens.
 
+**Fallback robustness:** the `hsl(var(--background))` fallback requires `--background` to be
+defined as raw HSL components (e.g. `220 14% 96%` without the `hsl()` wrapper). This is how
+Tailwind CSS v3 semantic tokens work, so it's correct for SaaS. In extension webviews, the
+`--vscode-*` vars are always injected by VS Code, so the fallback never fires. If a future
+context renders these overlays without either set of variables, `theme.ts` must provide
+hardcoded defaults as a last resort (e.g. `var(--vscode-editor-background, hsl(220 14% 96%))`).
+
+**Visual verification plan:** after implementation, test both platforms × both themes:
+
+1. SaaS light + dark — open `local.hyperi.de`, toggle theme, screenshot all overlay states
+2. Extension light + dark — open test project in VS Code, switch color theme
+   (`Cmd+K Cmd+T` → light/dark), trigger each overlay, take screenshots
+3. Compare overlay appearance — colors, contrast, readability must be consistent
+
 #### Component list
 
 ##### 1. `OverlayShell`
@@ -88,6 +131,13 @@ interface OverlayShellProps {
 
 Renders: `position: absolute; inset: 0` container with flex centering.
 
+**Variant usage:**
+
+- `solid` — for states that replace the canvas entirely: `NoComponentOverlay`, `LoadingOverlay`,
+  `PreviewSetupOverlay`, `ConnectionErrorOverlay`
+- `backdrop` — for states that overlay on top of existing content: `ComponentErrorOverlay`,
+  `ParseErrorOverlay`, `RuntimeErrorOverlay`
+
 ##### 2. `ComponentErrorOverlay`
 
 Shown when ErrorBoundary catches a render error. **Extracted from `PreviewPanelApp.tsx`.**
@@ -96,7 +146,7 @@ Shown when ErrorBoundary catches a render error. **Extracted from `PreviewPanelA
 interface ComponentErrorOverlayProps {
   componentName: string;
   error: string;
-  propsSchema?: SimplePropInfo[] | null;
+  propsSchema?: PropInfo[] | null;
   // Extension-only
   onCreateSample?: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAI?: () => void;
@@ -107,14 +157,26 @@ interface ComponentErrorOverlayProps {
 }
 ```
 
+**Action callbacks are fire-and-forget (`void`)** because the underlying integrations
+(`CanvasAdapter.sendEvent()`, `useOpenAIChat()`) have no request/response protocol — they
+post a message and don't know when the work completes. Introducing `Promise<void>` would
+require a bidirectional message contract (request ID → response) which is out of scope.
+If response tracking is added later, callbacks can be upgraded to `Promise<void>` with
+internal spinner/error state in the overlay.
+
 Behavior:
-- Shows component name, error message
+
+- Shows component name, error message (scrollable container with `max-height: 200px`,
+  monospace font, "Copy to clipboard" button for full text)
+- Error text is rendered as `textContent` (React default) — no XSS risk, but long stack
+  traces must not push action buttons off-screen
 - If `propsSchema` or extracted props available → shows `PropsForm`
 - If `onCreateSample` provided → shows "Create Sample" / "Create Empty Sample" buttons
 - If `onConfigureAI` provided → shows "Configure AI Key" button
 - If `onAutoFix` provided → shows "Auto Fix" button
-- If `onClose` provided → shows close button (X)
+- If `onClose` provided → shows close button (X), also dismissable via Escape key
 - Listens for `errorOverlay:sampleDeleted` postMessage to reset sample state
+- `role="alert"` on the error message container for screen reader announcement
 
 Includes `extractPropsFromError()` utility (already exists, move to shared).
 
@@ -200,48 +262,99 @@ Shows: framework badge, error type, message, file:line, codeframe (if available)
 #### Shared utilities
 
 - `extractPropsFromError(errorMsg: string): string[]` — move from `PreviewPanelApp.tsx`
-- `propsCache` — `Map<string, Record<string, unknown>>` for cross-overlay prop value persistence
+- `propsCache` — `Map<componentPath, Record<propName, value>>` for cross-overlay prop value
+  persistence. Scoped to webview lifetime (in-memory, not persisted to storage). Entries
+  are keyed by `componentPath`. Cache survives overlay open/close cycles and error recovery
+  within the same session. Cleared on full webview reload.
 
 #### `PropsForm` → shared
 
-`PropsForm` already uses inline styles and `SimplePropInfo` from `@shared/types/props`.
-Move from `vscode-extension/.../PropsForm.tsx` to `shared/components/overlays/PropsForm.tsx`.
-No API changes needed — it's already platform-agnostic.
+`PropsForm` uses inline styles with `var(--vscode-*)` fallbacks — already platform-agnostic.
+
+**Type consolidation required:** the extension defines a local `SimplePropInfo` interface
+(`PropsForm.tsx:13-20`) with fields `name`, `type` (string), `required`, `defaultValue`,
+`objectFields`. This is the same wire shape as `PropInfo` in `lib/types.ts` (used by
+`ComponentService.getComponentDefinitions()`). `shared/types/props.ts → PropTypeInfo` is a
+different, richer type used by the inspector/prop editor.
+
+**Approach:** reuse `PropInfo` from `lib/types.ts` as the canonical type for overlay forms.
+Remove the local `SimplePropInfo` duplicate and the `toPropTypeInfo()` converter from
+PropsForm. PropsForm accepts `PropInfo[]` directly — same wire format, no conversion needed.
+`PropTypeInfo` stays in `shared/types/props.ts` for the inspector's richer prop editing UI.
+
+Move from `vscode-extension/.../PropsForm.tsx` to `shared/components/props-form/PropsForm.tsx`.
+PropsForm is a form widget used by overlays, not an overlay itself — placing it under
+`overlays/` would force non-overlay consumers to import from a misleading path.
 
 ### Error Recovery Flow
 
-#### Problem
+#### Current limitation
 
 `ComponentErrorBoundary` (generated in `__canvas_preview__.tsx`) posts `hypercanvas:componentError`
-on render failure but has no mechanism to signal recovery.
+on render failure but has no mechanism to signal recovery. After the user fixes the file and HMR
+reloads the module, the error overlay stays because:
 
-#### Solution
+1. `getDerivedStateFromError` sets `error` in ErrorBoundary state
+2. While `error` is set, `render()` returns error UI — **children never mount**
+3. HMR replaces the module but doesn't reset ErrorBoundary state
+4. `componentDidUpdate` only resets on `componentPath` change — HMR doesn't change path
 
-Add `componentDidUpdate` logic to ErrorBoundary:
+This also blocks recovery for the "deleted sample → blank canvas" scenario (Problem #4):
+`__canvas_preview__` regenerates without the sample, but ErrorBoundary still holds stale error
+state from the previous render failure.
 
-```tsx
-// In generator.ts buildErrorBoundary():
-componentDidUpdate(prevProps: { componentPath: string }) {
-  // Reset error state when switching to a different component
-  if (prevProps.componentPath !== this.props.componentPath && this.state.error) {
-    this.setState({ error: null });
-  }
-  // If we HAD an error and now children rendered successfully,
-  // the error was cleared by React re-render (HMR). Notify parent.
-  // (getDerivedStateFromError sets error; successful render resets it via key change)
-}
+#### Solution — HMR version counter + success beacon
 
-// Actually: ErrorBoundary can't detect "children rendered OK" in componentDidUpdate
-// because if error is set, children don't render.
-// Better approach: use a wrapper that detects successful mount.
-```
+Two mechanisms work together:
 
-**Revised approach — success beacon:**
+**1. Retry signal forces ErrorBoundary to clear error and re-render children.**
 
-Add a tiny component inside the ErrorBoundary children that fires on mount:
+The `import.meta.hot.accept()` self-accept approach does NOT work here: when the user
+edits the component module (not `__canvas_preview__.tsx` itself), Vite's Fast Refresh
+updates the dependency but doesn't fire the self-accept callback. Additionally, Next.js,
+webpack, and parcel use different HMR APIs — `import.meta.hot` is not portable.
+
+**Framework-neutral approach — listen for any re-render attempt:**
+
+The generated `__canvas_preview__.tsx` wraps the error boundary with a `key` derived from
+a retry counter. The retry counter increments on:
+
+- `postMessage` from host: `hypercanvas:retryRender` (sent after HMR / file change)
+- `componentPath` change (component switch)
 
 ```tsx
 // Generated inside __canvas_preview__.tsx
+// Host sends retryRender after detecting HMR update or file save
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'hypercanvas:retryRender') {
+    setRetryCount((c) => c + 1);
+  }
+});
+
+// Usage — key change forces ErrorBoundary remount, clearing error state:
+<ComponentErrorBoundary key={`${componentPath}-${retryCount}`} componentPath={componentPath}>
+  <RenderSuccessBeacon componentPath={componentPath} />
+  <div style={{ padding: 20 }}>
+    {SampleDefault ? <SampleDefault /> : <Component />}
+  </div>
+</ComponentErrorBoundary>
+```
+
+The **host** (extension's `usePreviewBridge` or SaaS `IframeCanvas`) sends
+`hypercanvas:retryRender` to the iframe whenever it detects a relevant file change
+(via `hypercanvas:hmr` message from Vite, or `__canvas_preview__` regeneration).
+This is already framework-neutral — the host knows about HMR through existing
+`hypercanvas:hmr` / file-watcher messages regardless of bundler.
+
+Using `key` for remount is cleaner than `componentDidUpdate` — React unmounts the old
+ErrorBoundary (clearing error state) and mounts a fresh one. No `componentDidUpdate`
+modification needed.
+
+**2. RenderSuccessBeacon confirms recovery to the parent frame.**
+
+A tiny component inside ErrorBoundary children that fires on mount:
+
+```tsx
 function RenderSuccessBeacon({ componentPath }: { componentPath: string }) {
   React.useEffect(() => {
     window.parent.postMessage({
@@ -251,21 +364,23 @@ function RenderSuccessBeacon({ componentPath }: { componentPath: string }) {
   }, [componentPath]);
   return null;
 }
-
-// Usage in generated preview:
-<ComponentErrorBoundary componentPath={componentPath}>
-  <RenderSuccessBeacon componentPath={componentPath} />
-  <div style={{ padding: 20 }}>
-    {SampleDefault ? <SampleDefault /> : <Component />}
-  </div>
-</ComponentErrorBoundary>
 ```
 
-When HMR reloads the component and it renders without error:
-1. ErrorBoundary doesn't catch → children render
-2. `RenderSuccessBeacon` mounts → posts `hypercanvas:componentOk`
-3. `usePreviewBridge` receives message → clears `componentError` state
-4. Overlay disappears
+**Recovery sequence:**
+
+1. Component errors → ErrorBoundary catches → posts `hypercanvas:componentError` → overlay shown
+2. User fixes the file → HMR fires → host detects update → sends `hypercanvas:retryRender`
+   to iframe
+3. `retryCount` increments → `key` changes → React unmounts old ErrorBoundary, mounts fresh one
+4. Fresh ErrorBoundary has no error → children render (including `RenderSuccessBeacon`)
+5. If render succeeds: beacon posts `hypercanvas:componentOk` → overlay dismissed
+6. If render fails again: new ErrorBoundary catches → overlay stays, host can retry on next HMR
+
+This handles all recovery scenarios:
+
+- **HMR fix:** host sends retryRender → key change → remount → beacon fires → overlay gone
+- **Component switch:** `componentPath` changes key → remount → beacon fires
+- **Deleted sample:** `__canvas_preview__` regeneration → host sends retryRender → remount
 
 #### Extension webview handling (`usePreviewBridge.ts`)
 
@@ -279,48 +394,89 @@ if (msg.type === 'hypercanvas:componentOk') {
 }
 ```
 
+**Note on `errorSeq`:** `usePreviewBridge.ts` currently increments an `errorSeq` counter on each
+`componentError` message to force remount of the error overlay UI when the same component
+errors with different details. The `componentOk` handler does not need to interact with
+`errorSeq` — setting `componentError` to `null` is sufficient. `errorSeq` resets implicitly
+when a new error sets a fresh state object.
+
 ### Migration Plan
 
 #### Phase 1: Create shared overlays
 
-1. Create `shared/components/overlays/` directory
-2. Create `theme.ts` with CSS custom property definitions
-3. Create `OverlayShell.tsx`
-4. Move `PropsForm` from extension to shared (update import paths)
-5. Move `extractPropsFromError` to shared utility
-6. Create each overlay component (ComponentError, NoComponent, ConnectionError,
-   ParseError, PreviewSetup, Loading, RuntimeError)
-7. Add tests for each component
+1. Create `shared/components/overlays/` and `shared/components/props-form/` directories
+2. Create `theme.ts` with CSS custom property definitions + tests
+3. Create `OverlayShell.tsx` (TDD: write test → implement → verify green)
+4. Move `PropsForm` to `shared/components/props-form/` (update import paths),
+   replace local `SimplePropInfo` with `PropInfo` from `lib/types.ts`
+5. Move `extractPropsFromError` to `shared/components/overlays/extract-props-from-error.ts`
+6. For each overlay component (ComponentError, NoComponent, ConnectionError,
+   ParseError, PreviewSetup, Loading, RuntimeError):
+   - Write failing test that validates rendering + props behavior
+   - Run test — confirm it fails for the right reason
+   - Implement component
+   - Run test — confirm green
+   - Refactor while tests stay green
 
 #### Phase 2: Wire up extension
 
 1. Replace inline `ComponentErrorOverlay` in `PreviewPanelApp.tsx` with shared import
 2. Replace `NoComponentHint` with shared `NoComponentOverlay`
 3. Replace `UnsupportedProjectScreen` with shared `PreviewSetupOverlay`
-4. Replace `StartDevServerScreen` — keep extension-only (dev server is ext concept)
-5. Replace `ReconnectingBanner` with shared `ConnectionErrorOverlay`
+4. Replace `ReconnectingBanner` with shared `ConnectionErrorOverlay`
+
+**Not migrated (extension-only):**
+
+- `StartDevServerScreen` — dev server lifecycle is extension-only concept, no SaaS equivalent
 
 #### Phase 3: Wire up SaaS
 
 1. Replace `NoComponentsOverlay` with shared `NoComponentOverlay`
-2. Replace `ConfigErrorOverlay` — keep SaaS-only (uses `useOpenAIChat` deeply)
-3. Replace inline iframe error (lines 1176-1190) with shared `ConnectionErrorOverlay`
-4. Replace inline parse error (lines 1200-1210) with shared `ParseErrorOverlay`
-5. Replace inline loading (lines 1212-1217) with shared `LoadingOverlay`
-6. Replace `PreviewSetupOverlay` with shared version
-7. Evaluate LogsPanel migration (may stay SaaS-only depending on complexity)
+2. Replace inline iframe error (condition: `iframeError.message` set) with shared `ConnectionErrorOverlay`
+3. Replace inline parse error (condition: `parseError` set) with shared `ParseErrorOverlay`
+4. Replace inline loading (condition: `!iframeReady`) with shared `LoadingOverlay`
+5. Replace `PreviewSetupOverlay` with shared version
+6. Evaluate LogsPanel migration (may stay SaaS-only depending on complexity)
+
+**Not migrated (SaaS-only):**
+
+- `ConfigErrorOverlay` — deeply coupled to `useOpenAIChat` and project settings flow
+- `IframeFailed` — Docker API calls, SaaS infrastructure-specific
+- `ProjectStartOverlay` — pod polling, SaaS infrastructure-specific
 
 #### Phase 4: Error recovery
 
-1. Add `RenderSuccessBeacon` to `generator.ts` ErrorBoundary output
-2. Add `hypercanvas:componentOk` handler to `usePreviewBridge.ts`
-3. Add `hypercanvas:componentOk` handler to SaaS `IframeCanvas` (if component errors
+1. Add `hypercanvas:retryRender` listener + `retryCount` state to generated `__canvas_preview__.tsx`
+2. Update ErrorBoundary `key` to include `retryCount` (remount on retry)
+3. Add `RenderSuccessBeacon` component to `generator.ts` output
+4. Add `hypercanvas:retryRender` sender to `usePreviewBridge.ts` (on HMR / file change)
+5. Add `hypercanvas:componentOk` handler to `usePreviewBridge.ts`
+6. Add `hypercanvas:componentOk` handler to SaaS `IframeCanvas` (if component errors
    are surfaced there in future)
-4. Test recovery: break component → see overlay → fix component → overlay auto-dismisses
+7. Test recovery scenarios:
+   - Break component → overlay → fix file → HMR → overlay auto-dismisses
+   - Delete sample → overlay → remove required props → overlay auto-dismisses
+   - Switch component while error shown → overlay clears for new component
+
+### Import Constraints
+
+Shared overlay components must only import from:
+
+- `react` / `react-dom`
+- `shared/` (types, utils, other shared modules)
+- Relative imports within `shared/components/`
+
+**Never import from `client/` or `vscode-extension/`** — these are platform-specific.
+Platform behavior is injected via callback props, not direct imports. Violating this
+constraint breaks the opposite platform's build.
+
+Enforcement: add a test in `shared/components/overlays/__tests__/` that scans all overlay
+source files for forbidden import paths (`client/`, `vscode-extension/`, `@/`).
 
 ### Files Changed
 
 **New files:**
+
 - `shared/components/overlays/theme.ts`
 - `shared/components/overlays/OverlayShell.tsx`
 - `shared/components/overlays/ComponentErrorOverlay.tsx`
@@ -333,18 +489,26 @@ if (msg.type === 'hypercanvas:componentOk') {
 - `shared/components/overlays/index.ts`
 - `shared/components/overlays/extract-props-from-error.ts`
 - `shared/components/overlays/__tests__/` (tests for each)
+- `shared/components/props-form/PropsForm.tsx`
+- `shared/components/props-form/index.ts`
 
 **Moved files:**
-- `vscode-extension/.../PropsForm.tsx` → `shared/components/overlays/PropsForm.tsx`
+
+- `vscode-extension/.../PropsForm.tsx` → `shared/components/props-form/PropsForm.tsx`
 
 **Modified files:**
+
+- `vscode-extension/.../usePreviewBridge.ts` — add `retryRender` sender + `componentOk` handler
 - `vscode-extension/.../PreviewPanelApp.tsx` — replace inline overlays with shared imports
 - `client/pages/Editor/CanvasEditor.tsx` — replace inline overlays with shared imports
 - `client/pages/Editor/components/NoComponentsOverlay.tsx` — delete (replaced)
 - `client/pages/Editor/components/PreviewSetupOverlay.tsx` — delete (replaced)
-- `lib/preview-generator/generator.ts` — add `RenderSuccessBeacon` to generated code
-- `vscode-extension/.../usePreviewBridge.ts` — add `componentOk` handler
-- Extension esbuild config — may need alias update for `@shared/` in webview builds
+- `lib/preview-generator/generator.ts` — add `retryRender` listener, `retryCount`, `RenderSuccessBeacon`
+
+**No esbuild changes needed:** `@shared/` alias is already configured in
+`vscode-extension/hypercanvas-preview/esbuild.js:32-56` for all webview build contexts
+including `webviewPreviewPanelCtx`. No new stubs required unless an overlay accidentally
+imports from `client/` (which the import constraint test prevents).
 
 ### Open Questions
 
