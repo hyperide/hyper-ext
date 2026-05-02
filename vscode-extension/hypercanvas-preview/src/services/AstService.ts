@@ -67,6 +67,16 @@ export class AstService {
   private _fileIO: FileIO;
   private _initialized = false;
 
+  /** Convert relative nodeRef (src/foo.tsx:10:5) to absolute (/workspace/src/foo.tsx:10:5) */
+  private _normalizeNodeRef(nodeRef: string): string {
+    const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+    if (!m) return nodeRef;
+    const [, filePath, line, col] = m;
+    if (filePath.startsWith('/')) return nodeRef;
+    const path = require('node:path');
+    return `${path.join(this._workspaceRoot, filePath)}:${line}:${col}`;
+  }
+
   constructor(workspaceRoot: string, fileIO: FileIO) {
     this._workspaceRoot = workspaceRoot;
     this._fileIO = fileIO;
@@ -578,20 +588,18 @@ export class AstService {
   ): Promise<string | null> {
     try {
       if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
-        const fs = require('fs');
-        fs.appendFileSync('/tmp/hyperide-debug.log', `[getSiblingElementId] nodeRef: ${nodeRef} entry: ${entry ? `parentRef=${entry.parentRef}` : 'NULL'} tracked: ${JSON.stringify(this._nodeMapService.getTrackedFiles())}\n`);
+        // Normalize relative nodeRef to absolute (fiber sends relative, NodeMapService stores absolute)
+        const normalizedRef = this._normalizeNodeRef(nodeRef);
+        const entry = this._nodeMapService.resolveNodeRef(normalizedRef);
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
-          fs.appendFileSync('/tmp/hyperide-debug.log', `[getSiblingElementId] parent: ${parent ? `children=${JSON.stringify(parent.children)}` : 'NULL'}\n`);
           if (parent) {
             const siblings = parent.children;
             // Find current index by exact match first, then by resolved location
-            let currentIndex = siblings.indexOf(nodeRef);
+            let currentIndex = siblings.indexOf(normalizedRef);
             if (currentIndex === -1) {
-              // nodeRef format from fiber may differ slightly from AST nodeRef —
-              // match by resolving each sibling and comparing file:line
-              const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+              // Fallback: match by file:line ignoring column
+              const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
               if (m) {
                 const [, file, line] = m;
                 currentIndex = siblings.findIndex((s) => {
