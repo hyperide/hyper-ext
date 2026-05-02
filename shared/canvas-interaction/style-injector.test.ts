@@ -40,6 +40,13 @@ describe('buildDesignStylesCSS', () => {
     expect(css).toContain('overflow: hidden !important');
   });
 
+  it('ensures disabled form elements remain clickable in design mode', () => {
+    const css = buildDesignStylesCSS({ mode: 'design' });
+    expect(css).toContain('button:disabled');
+    expect(css).toContain('input:disabled');
+    expect(css).toContain('pointer-events: auto !important');
+  });
+
   it('returns a non-empty string', () => {
     const css = buildDesignStylesCSS({ mode: 'design' });
     expect(css.length).toBeGreaterThan(0);

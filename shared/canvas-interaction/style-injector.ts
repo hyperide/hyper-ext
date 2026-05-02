@@ -40,6 +40,17 @@ html, body {
   parts.push(`
 body.design-mode, body.design-mode * {
   cursor: default !important;
+}
+
+/* Ensure disabled form elements are clickable in design mode.
+   Browsers may skip pointer events on disabled elements; override to
+   guarantee they can be selected on the canvas. */
+body.design-mode button:disabled,
+body.design-mode input:disabled,
+body.design-mode select:disabled,
+body.design-mode textarea:disabled,
+body.design-mode fieldset:disabled {
+  pointer-events: auto !important;
 }`);
 
   // Board mode: only instances are clickable
