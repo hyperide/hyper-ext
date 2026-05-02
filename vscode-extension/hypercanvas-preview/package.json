@@ -169,6 +169,14 @@
         "title": "Hyper: Select Parent"
       },
       {
+        "command": "hypercanvas.canvasSelectNextSibling",
+        "title": "Hyper: Select Next Sibling"
+      },
+      {
+        "command": "hypercanvas.canvasSelectPrevSibling",
+        "title": "Hyper: Select Previous Sibling"
+      },
+      {
         "command": "hypercanvas.canvasEscape",
         "title": "Hyper: Clear Selection"
       }
@@ -212,6 +220,16 @@
       {
         "command": "hypercanvas.canvasSelectParent",
         "key": "shift+enter",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+      },
+      {
+        "command": "hypercanvas.canvasSelectNextSibling",
+        "key": "tab",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+      },
+      {
+        "command": "hypercanvas.canvasSelectPrevSibling",
+        "key": "shift+tab",
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       },
       {

@@ -589,6 +589,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectNextSibling', () => previewPanel?.selectNextSibling()),
+    vscode.commands.registerCommand('hypercanvas.canvasSelectPrevSibling', () => previewPanel?.selectPrevSibling()),
     vscode.commands.registerCommand('hypercanvas.canvasEscape', () => previewPanel?.clearSelection()),
     vscode.commands.registerCommand('hypercanvas.selectElement', (elementId: string) => {
       previewPanel?.selectElement(elementId);

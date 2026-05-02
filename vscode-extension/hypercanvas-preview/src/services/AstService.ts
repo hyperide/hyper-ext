@@ -569,6 +569,40 @@ export class AstService {
     }
   }
 
+  /** Find next or previous sibling element nodeRef (for Tab/Shift+Tab navigation). */
+  async getSiblingElementId(
+    _filePath: string,
+    _elementId: string,
+    direction: 'next' | 'prev',
+    nodeRef?: NodeRef,
+  ): Promise<string | null> {
+    try {
+      if (nodeRef) {
+        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        if (entry?.parentRef) {
+          const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
+          if (parent) {
+            const siblings = parent.children;
+            const currentIndex = siblings.indexOf(nodeRef);
+            if (currentIndex !== -1) {
+              let targetIndex: number;
+              if (direction === 'prev') {
+                targetIndex = currentIndex === 0 ? siblings.length - 1 : currentIndex - 1;
+              } else {
+                targetIndex = currentIndex === siblings.length - 1 ? 0 : currentIndex + 1;
+              }
+              return siblings[targetIndex] ?? null;
+            }
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('[AstService.getSiblingElementId] Error:', error);
+      return null;
+    }
+  }
+
   /**
    * Insert element from TSX code string (for Paste operation).
    * Parses the TSX code and inserts after target element.

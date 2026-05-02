@@ -655,7 +655,11 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, elementId);
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(
+      componentPath,
+      elementId,
+      elementId,
+    );
 
     if (parentId) {
       this._stateHub.applyUpdate({
@@ -669,7 +673,11 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, elementId);
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(
+      componentPath,
+      elementId,
+      elementId,
+    );
 
     if (childIds.length > 0) {
       this._stateHub.applyUpdate({
@@ -930,7 +938,8 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
-    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, selectedIds[0]);
+    const nodeRef = selectedIds[0];
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, nodeRef, nodeRef);
     if (childIds.length > 0) {
       this._stateHub.applyUpdate({ selectedIds: childIds });
     }
@@ -944,11 +953,52 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
-    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, selectedIds[0]);
+    const nodeRef = selectedIds[0];
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, nodeRef, nodeRef);
     if (parentId) {
       this._stateHub.applyUpdate({ selectedIds: [parentId] });
     } else {
       this._stateHub.applyUpdate({ selectedIds: [] });
+    }
+  }
+
+  /**
+   * Select next sibling of selected element (called from VS Code keybinding command).
+   */
+  public async selectNextSibling(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const nodeRef = selectedIds[0];
+    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
+      componentPath,
+      nodeRef,
+      'next',
+      nodeRef,
+    );
+    if (siblingId) {
+      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
+    }
+  }
+
+  /**
+   * Select previous sibling of selected element (called from VS Code keybinding command).
+   */
+  public async selectPrevSibling(): Promise<void> {
+    const selectedIds = this._stateHub.state.selectedIds;
+    const componentPath = this._currentComponent;
+    if (!componentPath || !selectedIds?.length) return;
+
+    const nodeRef = selectedIds[0];
+    const siblingId = await this._panelRouter.astBridge.astService.getSiblingElementId(
+      componentPath,
+      nodeRef,
+      'prev',
+      nodeRef,
+    );
+    if (siblingId) {
+      this._stateHub.applyUpdate({ selectedIds: [siblingId] });
     }
   }
 
