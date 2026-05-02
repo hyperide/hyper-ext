@@ -1649,19 +1649,22 @@ ThemeContextResolver
   v
 StyleReadManager
   calls active framework adapter readers
-  collects raw values and source ownership
+  each reader converts raw source values to canonical inspector form
+  collects source ownership and builds source tabs
   computes InspectorSurfaceDecision
   |
   v
 InspectorValueCodec
-  converts raw values to inspector values
+  normalizes adapter reader output to canonical inspector form
+  (validation only — adapter readers already converted)
   |
   v
 Inspector UI
   |
   v
 InspectorValueCodec
-  converts inspector value to target candidate values
+  normalizes user input to canonical inspector form
+  (no target conversion — adapters do that)
   |
   v
 TokenLinkResolver, when inspector value is in linked-token mode
@@ -2416,38 +2419,114 @@ that can preserve it or emit a diagnostic before falling back to a literal value
 
 ### `CssRuntimeNormalizer`
 
-Browser-backed validator/normalizer for CSS targets.
+Browser-backed validator/normalizer for CSS targets. This is a **shared
+library**, not a standalone module in the write pipeline. CSS-target adapter
+writers call it after converting canonical inspector values to CSS values,
+before emitting the write plan.
 
-```typescript
+```text
+Placement in the write flow:
+
+  InspectorValueCodec.normalize()     ← shared, validates user input
+    |
+    v
+  canonical inspector value "50"
+    |
+    v
+  adapter writer converts to CSS       ← per-adapter
+    e.g. InlineStyleWriter: "50" → "0.5"
+    e.g. CssFileWriter:     "50" → "0.5"
+    |
+    v
+  CssRuntimeNormalizer.normalize()     ← shared CSS-target library
+    validates "0.5" is accepted by CSS.supports("opacity", "0.5")
+    appends "px" to bare numbers for length properties
+    |
+    v
+  StyleWritePlan.target.declarations    ← validated CSS value
+```
+
+Non-CSS adapters (TailwindWriter, TamaguiWriter) do NOT call
+CssRuntimeNormalizer. They have their own validation logic.
+
+```text
 interface CssRuntimeNormalizer {
   normalize(input: {
     cssProperty: string;
     value: string;
   }): CssNormalizationResult;
 }
+
+type CssNormalizationResult =
+  | { kind: 'value'; value: string }
+  | { kind: 'remove' }
+  | { kind: 'invalid'; reason: string };
 ```
 
 Expected browser implementation:
 
-```typescript
-function normalizeCssValue(cssProperty: string, value: string) {
+```text
+function normalizeCssValue(cssProperty, value) {
   if (value === '') return { kind: 'remove' };
 
   if (CSS.supports(cssProperty, value)) {
     return { kind: 'value', value };
   }
 
-  if (/^-?\d+(\.\d+)?$/.test(value) && CSS.supports(cssProperty, `${value}px`)) {
-    return { kind: 'value', value: `${value}px` };
+  if (/^-?\d+(\.\d+)?$/.test(value) && CSS.supports(cssProperty, value + 'px')) {
+    return { kind: 'value', value: value + 'px' };
   }
 
-  return { kind: 'invalid', reason: `${cssProperty}: ${value}` };
+  return { kind: 'invalid', reason: cssProperty + ': ' + value };
 }
 ```
 
 `CSSStyleValue.parse()` can enrich diagnostics and type metadata. `CSS.supports`
 should be the primary validity check because it is simple and matches CSS parser
 acceptance.
+
+Examples:
+
+```text
+padding-left "16"   → CSS.supports false → try "16px" → true → { kind: 'value', value: '16px' }
+opacity "0.5"       → CSS.supports true → { kind: 'value', value: '0.5' }
+opacity "50"        → CSS.supports true (CSS clamps, not rejects) → { kind: 'value', value: '50' }
+                       NOTE: this is the wrong CSS value; the adapter writer should have
+                       already converted inspector "50" → CSS "0.5" before calling normalizer.
+                       If it arrives as "50" the normalizer cannot catch the semantic error.
+width "auto"        → CSS.supports true → { kind: 'value', value: 'auto' }
+width "foo"         → CSS.supports false → try "foopx" → false → { kind: 'invalid' }
+background "#4285f4"→ CSS.supports true → { kind: 'value', value: '#4285f4' }
+```
+
+Which adapters call CssRuntimeNormalizer:
+
+```text
+InlineStyleWriter:          yes — all CSS properties
+CssModulesWriter:           yes — all CSS properties
+PlainCssWriter:             yes — all CSS properties
+EmotionObjectWriter:        yes — CSS property names, CSS shorthand expansion
+StyledComponentsWriter:     yes — CSS template literal declarations
+VanillaExtractWriter:       yes — TypeScript object values, validated as CSS
+TailwindWriter:             NO  — uses Tailwind token validation instead
+TamaguiWriter:              NO  — uses Tamagui prop type validation instead
+ChakraWriter:               NO  — uses Chakra prop type validation
+MUISystemWriter:            depends — sx prop with CSS values: yes; theme tokens: no
+MantineWriter:              depends — styles objects with CSS values: yes; props: no
+```
+
+Node.js fallback:
+
+```text
+In browser (Playwright test, VS Code webview, SaaS preview):
+  Use native CSS.supports and CSSStyleValue.parse.
+
+In Node.js unit tests:
+  Use a small static fallback that validates known property/value patterns.
+  This fallback is intentionally incomplete — it covers enough for unit tests
+  but should not be used as a production substitute for browser CSS APIs.
+  The primary check must always be browser-backed.
+```
 
 ### `TargetValueValidator`
 
@@ -3290,6 +3369,210 @@ For CSS Modules labels, keep the user-facing label as the CSS class name
 `Computed` is the default tab. It is an aggregate view, not a source by itself.
 Writes from Computed must be routed to a concrete source tab by the planner and
 source router.
+
+### `StyleReadManager`
+
+Shared module. Must produce the same read result on VS Code and SaaS for the
+same element/project state. Platform differences are injected as infrastructure
+(file IO, runtime bridge).
+
+```text
+interface StyleReadManager {
+  // Main entry point. Returns everything the inspector sidebar needs.
+  read(ctx: StyleReadContext): Promise<StyleReadResult>;
+}
+
+interface StyleReadContext {
+  projectCapabilities: ProjectStyleCapabilities;
+  elementFacts: ElementStyleFacts;
+  runtimeThemeContext: RuntimeThemeContext;
+  // Computed style snapshot from the preview iframe or VS Code webview.
+  computedStyle: Record<string, string>;
+  // Optional: pre-resolved fiber trace for the selected element.
+  fiberTrace?: FiberTraceResult;
+}
+
+interface StyleReadResult {
+  // All source tabs for the selected element, including the default Computed tab.
+  sourceTabs: StyleSourceTab[];
+  // Per-property values, grouped by source tab.
+  properties: PropertySource[];
+  // Inspector surface decision: standard inspector + props editor mode.
+  surfaceDecision: InspectorSurfaceDecision;
+  // Active conditions (theme/viewport/media/container) detected for this element.
+  activeConditions: StyleCondition;
+  // Available condition axes (all breakpoints, all theme variants, all states).
+  availableConditionAxes: AvailableConditionAxes;
+  // Diagnostics (unresolvable sources, generated-class-only tabs, etc.)
+  diagnostics: Array<{ level: 'info' | 'warning'; message: string }>;
+}
+```
+
+### Read flow step-by-step
+
+```text
+1. Receive StyleReadContext
+   projectCapabilities + elementFacts are already trusted from platform detector.
+
+2. Identify active framework adapters
+   Filter FrameworkStyleAdapter registry by:
+     adapter.id is in projectCapabilities.projectCssSystems, AND
+     adapter has a reader facet (adapter.reader is defined).
+   Also identify active ComponentPropMappers for the element.
+
+3. Call each adapter reader facet
+   Each FrameworkStyleReader receives:
+     elementFacts, computedStyle, fiberTrace, runtimeThemeContext.
+   Each reader returns:
+     raw source values in the adapter's native form
+     + source ownership claims (StyleSourceOwner per property per source)
+     + source class identities (SourceClassIdentity for each class/selector)
+     + adapter-specific conditions (theme branches, pseudo-state targets).
+   The adapter reader converts its raw values to canonical inspector form
+   (e.g. CSS opacity 0.5 → inspector "50") before returning.
+   This is the reader's job, not InspectorValueCodec's.
+
+4. Build source tabs
+   One StyleSourceTab per distinct (cssSystem, sourceForm, selector/class/prop)
+   combination found by the adapter readers.
+   Plus the default Computed tab.
+   Tab labels follow the source-class-identity priority (see SourceClassIdentity).
+
+5. Compute InspectorSurfaceDecision
+   Based on:
+     element is intrinsic DOM vs. component
+     component accepts className / style / css / sx
+     component has a registered prop mapper
+     component has a props schema.
+   Decision matrix is already defined (see inspector surface decision rules).
+
+6. Resolve property values for Computed tab
+   For each CSS property, the winning value is:
+     getComputedStyle() declaration from the runtime preview.
+   The winning value is then normalized by InspectorValueCodec.normalize()
+   into canonical inspector form.
+   Each property also carries its PropertySource list showing which source
+   tabs contributed values for that property (for conflict display).
+
+7. Annotate theme conditions
+   ThemeContextResolver annotates source owners with:
+     active theme (from runtimeThemeContext → resolved light/dark)
+     available theme variants (from project theme capabilities)
+     theme value owners (CSS variable definitions, theme config values).
+
+8. Annotate responsive/state conditions
+   Available breakpoints from project capabilities (Tailwind screens, MUI
+   breakpoints, CSS @media rules).
+   Available pseudo-states from detected source tab conditions.
+   Available container queries from detected source tab conditions.
+
+9. Return StyleReadResult
+```
+
+### `FrameworkStyleReader` interface
+
+Each framework adapter may have a reader facet. It reads raw values from source
+and converts them to canonical inspector form.
+
+```text
+interface FrameworkStyleReader {
+  // Read style values for the selected element from this adapter's sources.
+  // Returns source ownership claims and canonical inspector values.
+  read(input: {
+    elementFacts: ElementStyleFacts;
+    computedStyle: Record<string, string>;
+    fiberTrace?: FiberTraceResult;
+    runtimeThemeContext: RuntimeThemeContext;
+  }): Promise<FrameworkReadResult>;
+}
+
+interface FrameworkReadResult {
+  // Source ownership claims: this adapter claims ownership of these properties
+  // via these source forms, files, selectors, etc.
+  sourceOwners: StyleSourceOwner[];
+  // Per-property values in canonical inspector form (already converted by the
+  // reader from native form). Key: CSS property name; value: inspector string.
+  values: Record<string, string>;
+  // Source class identities for tab label resolution.
+  classIdentities: SourceClassIdentity[];
+  // Conditions detected (theme branches, pseudo-states, media queries).
+  conditions: StyleCondition[];
+}
+```
+
+### Per-adapter reader responsibilities
+
+```text
+TailwindV3Reader / TailwindV4Reader:
+  parse className expression from element AST
+  resolve Tailwind utility → CSS property mapping (via Tailwind engine)
+  convert Tailwind values to inspector canonical form
+    e.g. opacity-50 → inspector "50", p-4 → inspector "16"
+  claim source ownership: sourceForm 'elementClass', cssSystem 'tailwind-v3'/'v4'
+  detect responsive/state/dark variants as conditions
+
+CssModulesReader:
+  detect CSS Module import from element AST
+  resolve import → .module.css/scss/etc file
+  parse module file to find class rules and their properties
+  convert CSS values to inspector canonical form
+    e.g. opacity: 0.5 → inspector "50"
+  claim source ownership: sourceForm 'cssStyleRule', cssSystem 'css-modules'
+  recover source class identity: runtime hash → source .card
+
+PlainCssReader:
+  find plain CSS rules matching the element's classes/selectors
+  parse and read properties
+  convert to inspector canonical form
+  claim source ownership: sourceForm 'cssStyleRule', cssSystem 'plain-css'
+
+EmotionReader / StyledComponentsReader:
+  detect css/styled usage from element AST or fiber trace
+  read object-expression or template-literal source values
+  convert to inspector canonical form
+  claim source ownership: scriptReactStyleRule or scriptNativeStyleRule
+
+VanillaExtractReader:
+  detect .css.ts imports
+  resolve generated class → source export name
+  read style() object argument properties
+  convert to inspector canonical form
+
+InlineStyleReader:
+  read JSX style={{}} attribute values
+  convert to inspector canonical form
+  claim source ownership: scriptReactStyleRule, cssSystem 'inline-style'
+  lowest specificity among source tabs (CSS cascade rules apply)
+
+TamaguiReader / ChakraReader / MUIReader / MantineReader:
+  read adapter-known props from element AST
+  convert prop values to inspector canonical form
+    e.g. Tamagui opacity={0.5} → inspector "50"
+  claim source ownership: adapterKnownElementProp
+```
+
+### Conflict resolution for Computed tab
+
+When multiple source tabs define the same property, the Computed tab must show
+the winning value:
+
+```text
+Rule:
+  The winning value is always from getComputedStyle() — the browser already
+  resolved CSS cascade, specificity, and inheritance.
+
+  PropertySource.active = true for the winning source, false for overridden.
+
+  The inspector does NOT recompute CSS specificity. It reads the browser's
+  answer and then maps it back to source owners via source tabs.
+
+Display:
+  Computed tab shows the winning value.
+  Overridden sources show their values with strikethrough in the source tab
+  detail view (same pattern as browser DevTools).
+  Conflict diagnostic appears when multiple source tabs have the same property
+  with different values.
+```
 
 ## Style Source Tabs
 
