@@ -806,6 +806,7 @@ function findTraceableChildren(el: HTMLElement): string[] {
     if (child instanceof HTMLElement) queue.push(child);
   }
   while (queue.length > 0) {
+    // biome-ignore lint/style/noNonNullAssertion: length check guarantees shift() is non-null
     const node = queue.shift()!;
     const ref = getSourceKey(node);
     if (ref) {
