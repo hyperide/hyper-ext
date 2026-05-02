@@ -875,6 +875,35 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             } catch {
               // Non-critical — user can set the script manually
             }
+
+            // Step 6: Create App.web.tsx if App.tsx has React Native-only imports
+            // The .web.tsx convention is standard for RN — @tamagui/vite-plugin adds
+            // .web.tsx to resolve.extensions, so Vite picks App.web.tsx over App.tsx
+            progress.report({ message: 'Checking for RN-only imports in App.tsx...' });
+            try {
+              const appPath = join(workspaceRoot, 'App.tsx');
+              const appContent = await readFile(appPath, 'utf-8');
+              const hasRNImports =
+                /expo-status-bar|react-native-safe-area-context|react-native-screens|@react-navigation/.test(
+                  appContent,
+                );
+              if (hasRNImports) {
+                let webContent = appContent;
+                // Remove expo-status-bar import and <StatusBar /> usage
+                webContent = webContent.replace(/import\s.*?['"]expo-status-bar['"].*?\n/g, '');
+                webContent = webContent.replace(/<StatusBar[^/]*\/>/g, '');
+                // Remove react-native-safe-area-context import and SafeAreaProvider wrapper
+                webContent = webContent.replace(/import\s.*?['"]react-native-safe-area-context['"].*?\n/g, '');
+                webContent = webContent.replace(/<SafeAreaProvider[^>]*>/g, '<>');
+                webContent = webContent.replace(/<\/SafeAreaProvider>/g, '</>');
+                // Clean up empty lines left behind
+                webContent = webContent.replace(/\n{3,}/g, '\n\n');
+                const webAppPath = join(workspaceRoot, 'App.web.tsx');
+                await writeFile(webAppPath, webContent, 'utf-8');
+              }
+            } catch {
+              // App.tsx doesn't exist or can't be read — skip
+            }
           },
         );
         // Re-check to confirm the package was recorded in package.json
