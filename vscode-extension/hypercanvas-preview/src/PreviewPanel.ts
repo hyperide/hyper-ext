@@ -441,14 +441,8 @@ export class PreviewPanel {
     // When the user clicks an element (or empty area) on the canvas, the webview
     // sends state:update with selectedIds.  Focus the preview panel so keyboard
     // events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
-    // Skip hover-only patches (hoveredId without selectedIds) to avoid stealing
-    // focus on every mouse move.
-    if (msg.type === 'state:update') {
-      const patch = (msg as { patch?: Record<string, unknown> }).patch;
-      if (patch && 'selectedIds' in patch) {
-        this._panel?.reveal(undefined, false);
-      }
-    }
+    // NOTE: Do NOT call panel.reveal() here on selectedIds changes —
+    // reveal() steals focus from the iframe, breaking hover/click overlays.
 
     // Delegate shared platform messages to PanelRouter
     const handled = await this._panelRouter.routeMessage(msg, webview);
