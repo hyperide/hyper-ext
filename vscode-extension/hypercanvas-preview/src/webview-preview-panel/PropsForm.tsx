@@ -138,10 +138,16 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
     [onChange],
   );
 
-  // Build field list: prefer schema, fall back to extracted names
-  const fields: Array<{ name: string; typeInfo: PropTypeInfo }> = propsSchema
+  // Build field list: prefer schema, fall back to extracted names. Deduplicate by name.
+  const rawFields: Array<{ name: string; typeInfo: PropTypeInfo }> = propsSchema
     ? propsSchema.map((p) => ({ name: p.name, typeInfo: toPropTypeInfo(p) }))
     : extractedPropNames.map((name) => ({ name, typeInfo: { type: 'unknown' as const, required: true } }));
+  const seen = new Set<string>();
+  const fields = rawFields.filter((f) => {
+    if (seen.has(f.name)) return false;
+    seen.add(f.name);
+    return true;
+  });
 
   if (fields.length === 0) return null;
 
