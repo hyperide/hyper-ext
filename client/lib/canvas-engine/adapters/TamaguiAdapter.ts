@@ -171,6 +171,27 @@ export class TamaguiAdapter implements StyleAdapter {
     });
   }
 
+  /**
+   * Convert CSS styles to React Native props for AST writing.
+   */
+  convertToProps(styles: Partial<ParsedStyles>): Record<string, unknown> {
+    const rnProps: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(styles)) {
+      if (value === undefined) continue;
+      if (key === 'borderStyle') continue;
+      if (key === 'margin' && typeof value === 'object' && value !== null) {
+        const m = value as Record<string, string>;
+        if ('top' in m) rnProps.marginTop = this.cssToRNValue('marginTop', m.top);
+        if ('right' in m) rnProps.marginRight = this.cssToRNValue('marginRight', m.right);
+        if ('bottom' in m) rnProps.marginBottom = this.cssToRNValue('marginBottom', m.bottom);
+        if ('left' in m) rnProps.marginLeft = this.cssToRNValue('marginLeft', m.left);
+      } else if (typeof value === 'string') {
+        rnProps[this.cssToRNKey(key)] = this.cssToRNValue(key, value);
+      }
+    }
+    return rnProps;
+  }
+
   // Helper methods
 
   private parsePosition(value: unknown): ParsedStyles['position'] {

@@ -854,6 +854,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         // Can't read package.json — fall through to Vite path
       }
 
+      // Detect Tamagui One projects (use `one()` Vite plugin / `one dev`)
+      let isTamaguiOne = false;
+      if (!isNextJs) {
+        try {
+          const viteRaw = await readFile(join(workspaceRoot, 'vite.config.ts'), 'utf-8');
+          isTamaguiOne =
+            /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
+        } catch {
+          // No vite.config.ts — not a One project
+        }
+      }
+
       try {
         if (isNextJs) {
           // ── Next.js + Tamagui path ──
@@ -947,6 +959,25 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               }
             },
           );
+        } else if (isTamaguiOne) {
+          // ── Tamagui One path — already has Vite via one(), just needs react-native-web ──
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `HyperIDE: Installing react-native-web for Tamagui One via ${pkgManager}...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({ message: 'Installing react-native-web...' });
+              await new Promise<void>((resolve, reject) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+            },
+          );
         } else {
           // ── Vite + Tamagui path (existing logic) ──
           await vscode.window.withProgress(
@@ -988,10 +1019,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               } catch {
                 // File doesn't exist
               }
+              // Never overwrite a Tamagui One vite config (uses one() plugin)
+              const isOneConfig =
+                /\bone\s*\(/.test(existingViteConfig) ||
+                existingViteConfig.includes("from 'one/vite'") ||
+                existingViteConfig.includes('from "one/vite"');
               const needsViteConfig =
-                !existingViteConfig ||
-                !existingViteConfig.includes('tamaguiPlugin') ||
-                !existingViteConfig.includes('react-native-web');
+                !isOneConfig &&
+                (!existingViteConfig ||
+                  !existingViteConfig.includes('tamaguiPlugin') ||
+                  !existingViteConfig.includes('react-native-web'));
               if (needsViteConfig) {
                 // Create stub files for deep react-native imports that rolldown can't resolve
                 const stubsDir = join(workspaceRoot, 'src', 'stubs');
@@ -1085,7 +1122,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 const scripts = (pkg.scripts ?? {}) as Record<string, string>;
                 const currentDev = scripts.dev ?? '';
                 // Replace expo-based or missing dev script with vite
-                if (!currentDev || currentDev.includes('expo') || currentDev.includes('one ')) {
+                // Never replace `one dev` — Tamagui One projects use their own Vite wrapper
+                if ((!currentDev || currentDev.includes('expo')) && !currentDev.includes('one ')) {
                   scripts.dev = 'vite';
                   pkg.scripts = scripts;
                   await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
@@ -1219,7 +1257,9 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         } else {
           const successMsg = isNextJs
             ? 'react-native-web + Next.js configured. Run "dev" to start the Next.js dev server.'
-            : 'react-native-web + Vite configured. Run "dev" to start the Vite dev server.';
+            : isTamaguiOne
+              ? 'react-native-web installed. Restart `one dev` to apply.'
+              : 'react-native-web + Vite configured. Run "dev" to start the Vite dev server.';
           vscode.window.showInformationMessage(successMsg);
           previewPanel?.notifyUnsupportedProject(null);
         }

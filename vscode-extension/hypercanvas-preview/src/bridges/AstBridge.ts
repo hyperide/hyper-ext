@@ -225,8 +225,9 @@ export class AstBridge {
    * Handle updateProps message
    */
   private async _handleUpdateProps(message: Extract<AstMessage, { type: 'ast:updateProps' }>): Promise<AstResponse> {
+    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
-      this._astService.updateProps(message.filePath, message.elementId, message.props),
+      this._astService.updateProps(message.filePath, message.elementId, message.props, nodeRef),
     );
 
     return {

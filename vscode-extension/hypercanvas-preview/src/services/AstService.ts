@@ -130,6 +130,22 @@ export class AstService {
       }
     }
 
+    // Also scan root-level .tsx/.jsx files (e.g. tamagui projects with App.tsx at root).
+    // listFiles is recursive, so filter to only files directly in the workspace root.
+    try {
+      const rootFiles = await this._fileIO.listFiles(this._workspaceRoot, ['.tsx', '.jsx']);
+      const rootPrefix = this._workspaceRoot.endsWith('/') ? this._workspaceRoot : `${this._workspaceRoot}/`;
+      for (const f of rootFiles) {
+        // Only root-level: no additional '/' after workspace root prefix
+        const relative = f.slice(rootPrefix.length);
+        if (!relative.includes('/') && !allFiles.includes(f)) {
+          allFiles.push(f);
+        }
+      }
+    } catch {
+      // Workspace root scan failed — non-critical
+    }
+
     for (const filePath of allFiles) {
       try {
         const sourceCode = await this._fileIO.readFile(filePath);
@@ -179,6 +195,7 @@ export class AstService {
     ast: t.File,
     nodeRef: NodeRef | undefined,
     _elementId: string | undefined,
+    filePath?: string,
   ): FindElementResult | null {
     if (nodeRef) {
       // Try nodeRef lookup first (format: "filePath:index")
@@ -207,9 +224,9 @@ export class AstService {
         // especially for React 18 _debugSource which gives original positions directly.
         // Only use when the nodeRef fileName matches the file being edited (same file = safe).
         const fileName = m[1];
-        const trackedFiles = this._nodeMapService.getTrackedFiles();
-        const matchingFile = trackedFiles.find((f) => f.endsWith(`/${fileName}`) || f === fileName);
-        if (matchingFile) {
+        const fileMatches =
+          filePath && (filePath.endsWith(`/${fileName}`) || filePath.endsWith(fileName) || fileName === filePath);
+        if (fileMatches) {
           const result = findElementByPosition(ast, line, column);
           if (result) {
             console.log(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
@@ -240,7 +257,7 @@ export class AstService {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
@@ -294,7 +311,7 @@ export class AstService {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
@@ -322,7 +339,7 @@ export class AstService {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
@@ -375,7 +392,9 @@ export class AstService {
       }
 
       // Resolve parent element if parentId/parentNodeRef provided
-      const parentResult = parentNodeRef ? this._resolveElement(ast, parentNodeRef, parentId ?? undefined) : null;
+      const parentResult = parentNodeRef
+        ? this._resolveElement(ast, parentNodeRef, parentId ?? undefined, absolutePath)
+        : null;
 
       const { inserted, actualIndex } = insertElementIntoAST(ast, {
         parent: parentResult,
@@ -413,7 +432,9 @@ export class AstService {
       for (const id of identifiers) {
         const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-        const result = useNodeRef ? this._resolveElement(ast, id, undefined) : this._resolveElement(ast, undefined, id);
+        const result = useNodeRef
+          ? this._resolveElement(ast, id, undefined, absolutePath)
+          : this._resolveElement(ast, undefined, id, absolutePath);
 
         if (!result) {
           // nosemgrep: unsafe-formatstring -- safe: only first 8 chars of id are logged
@@ -453,7 +474,7 @@ export class AstService {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found in ${filePath}` };
       }
@@ -486,7 +507,7 @@ export class AstService {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found in ${filePath}` };
       }
@@ -571,7 +592,7 @@ export class AstService {
       const sourceCode = await this._fileParser.readFileContent(absolutePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId);
+      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
       if (!result) return null;
 
       return extractElementSource(sourceCode, result.element);
@@ -693,7 +714,7 @@ export class AstService {
 
       // Insert after target element via nodeRef
       if (targetNodeRef) {
-        const result = this._resolveElement(ast, targetNodeRef, undefined);
+        const result = this._resolveElement(ast, targetNodeRef, undefined, absolutePath);
         if (result) {
           const parent = result.path.parent;
           if (t.isJSXElement(parent)) {
