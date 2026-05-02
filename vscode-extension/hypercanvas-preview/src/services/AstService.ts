@@ -164,10 +164,21 @@ export class AstService {
         if (locEntry) {
           return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
         }
-        // NOT falling back to direct findElementByPosition — source-mapped line:col
-        // from React fiber don't always match AST positions (Vite transforms shift them).
-        // Writing to wrong position corrupts the file. Style reads work because
-        // StyleReadService reads then discards; writes are destructive.
+
+        // Fallback: if source map resolution failed, try direct AST position lookup.
+        // Vite source maps may return positions that match original source (not transformed),
+        // especially for React 18 _debugSource which gives original positions directly.
+        // Only use when the nodeRef fileName matches the file being edited (same file = safe).
+        const fileName = m[1];
+        const trackedFiles = this._nodeMapService.getTrackedFiles();
+        const matchingFile = trackedFiles.find((f) => f.endsWith(`/${fileName}`) || f === fileName);
+        if (matchingFile) {
+          const result = findElementByPosition(ast, line, column);
+          if (result) {
+            console.log(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
+            return result;
+          }
+        }
       }
     }
     return null;
