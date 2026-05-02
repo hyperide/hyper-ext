@@ -12,6 +12,7 @@
  */
 
 import * as crypto from 'node:crypto';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
@@ -326,6 +327,17 @@ export class PreviewPanel {
       vscode.commands.executeCommand('hypercanvas.fixUnsupportedProject');
       return;
     }
+
+    // === ErrorBoundary actions (from iframe error UI) ===
+    if (msg.type === 'errorBoundary:createSample') {
+      await this._handleCreateSampleFromError(msg.componentPath as string | undefined);
+      return;
+    }
+    if (msg.type === 'errorBoundary:configureAIKey') {
+      vscode.commands.executeCommand('hypercanvas.configureAIKey');
+      return;
+    }
+
     if (msg.type === 'previewError') {
       console.error('[HyperIDE] Preview error:', (msg as { error?: string }).error);
       return;
@@ -429,6 +441,75 @@ export class PreviewPanel {
     if (!handled) {
       console.log('[HyperIDE] Unknown message type:', msg.type);
     }
+  }
+
+  // === ErrorBoundary handlers ===
+
+  /**
+   * Handle "Create Sample File" button from the ErrorBoundary UI.
+   * Creates a minimal SampleDefault scaffold in the component file and opens it in editor.
+   */
+  private async _handleCreateSampleFromError(componentPath: string | undefined): Promise<void> {
+    if (!componentPath) return;
+
+    const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
+
+    // Extract component name from file path (e.g. 'src/components/Button.tsx' → 'Button')
+    const fileName = path.basename(absPath, path.extname(absPath));
+    const componentName = fileName.charAt(0).toUpperCase() + fileName.slice(1);
+
+    // Read the file to check if SampleDefault already exists
+    let sourceCode: string;
+    try {
+      const fileUri = vscode.Uri.file(absPath);
+      const bytes = await vscode.workspace.fs.readFile(fileUri);
+      sourceCode = Buffer.from(bytes).toString('utf-8');
+    } catch {
+      void vscode.window.showErrorMessage(`Could not read component file: ${componentPath}`);
+      return;
+    }
+
+    // Check if SampleDefault already exists
+    if (/export\s+(?:const|function)\s+SampleDefault\b/.test(sourceCode)) {
+      // Sample already exists — just open the file and jump to it
+      const sampleIndex = sourceCode.indexOf('SampleDefault');
+      const lineNumber = sourceCode.substring(0, sampleIndex).split('\n').length;
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
+      await vscode.window.showTextDocument(doc, {
+        selection: new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0),
+      });
+      return;
+    }
+
+    // Generate a minimal sample scaffold
+    const scaffold = [
+      '',
+      `// Sample component — add required props below`,
+      `export const SampleDefault = () => (`,
+      `  <${componentName}`,
+      `    // TODO: Add required props here`,
+      `  />`,
+      ');',
+    ].join('\n');
+
+    // Append to file
+    const updatedCode = `${sourceCode}\n${scaffold}\n`;
+    try {
+      const fileUri = vscode.Uri.file(absPath);
+      await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
+    } catch {
+      void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
+      return;
+    }
+
+    // Open the file and position cursor at the TODO comment
+    const todoLine = updatedCode.split('\n').findIndex((line) => line.includes('// TODO: Add required props'));
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
+    await vscode.window.showTextDocument(doc, {
+      selection: new vscode.Range(Math.max(todoLine, 0), 0, Math.max(todoLine, 0), 0),
+    });
+
+    console.log(`[HyperIDE] Created SampleDefault scaffold in ${componentPath}`);
   }
 
   // === Context menu handlers ===

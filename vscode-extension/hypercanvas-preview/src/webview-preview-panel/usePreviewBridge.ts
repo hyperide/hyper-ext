@@ -94,6 +94,17 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Approach B: iframe requests server-side source map resolution from extension host.
           // Forward to extension host which reads the .map file from the local filesystem.
           canvas.sendEvent(msg as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:createSample') {
+          // ErrorBoundary button: create sample scaffold file and open in editor
+          canvas.sendEvent({
+            type: 'errorBoundary:createSample',
+            componentPath: msg.componentPath,
+          } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:configureAIKey') {
+          // ErrorBoundary button: open AI key configuration wizard
+          canvas.sendEvent({
+            type: 'errorBoundary:configureAIKey',
+          } as unknown as PlatformMessage);
         }
         return;
       }
