@@ -3,6 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
+import { resolveCallSiteSource } from '../../../shared/canvas-interaction/resolve-source';
 import { FiberSourceIndex, hookIntoReactCommits } from './fiber-source-index';
 import type { DebugSource, Fiber } from './fiber-utils';
 
@@ -109,6 +110,90 @@ function buildListTree() {
   listFiber.return = hostRoot;
 
   return { hostRoot, liEl1, liEl2, liEl3 };
+}
+
+/**
+ * Build a tree where an imported child component resolves to a call site in the rendered file:
+ *
+ *   HostRoot
+ *     └─ TrendingSidebar (source: TrendingSidebar.tsx:20)
+ *          ├─ UserSuggestion instance 1 (source: TrendingSidebar.tsx:59)
+ *          │    └─ div (source: UserSuggestion.tsx:7)
+ *          │         └─ span (source: UserSuggestion.tsx:10)
+ *          └─ UserSuggestion instance 2 (source: TrendingSidebar.tsx:59)
+ *               └─ div (source: UserSuggestion.tsx:7)
+ *                    └─ span (source: UserSuggestion.tsx:10)
+ */
+function buildCallSiteTree() {
+  const divEl1 = mockElement();
+  const spanEl1 = mockElement();
+  const divEl2 = mockElement();
+  const spanEl2 = mockElement();
+
+  const callSiteSource: DebugSource = {
+    fileName: '/app/src/components/TrendingSidebar.tsx',
+    lineNumber: 59,
+    columnNumber: 13,
+  };
+
+  const span2 = mockFiber({
+    tag: 5,
+    type: 'span',
+    stateNode: spanEl2,
+    _debugSource: { fileName: '/app/src/components/UserSuggestion.tsx', lineNumber: 10, columnNumber: 7 },
+  });
+  const div2 = mockFiber({
+    tag: 5,
+    type: 'div',
+    stateNode: divEl2,
+    _debugSource: { fileName: '/app/src/components/UserSuggestion.tsx', lineNumber: 7, columnNumber: 5 },
+    child: span2,
+  });
+  span2.return = div2;
+  const userSuggestion2 = mockFiber({
+    tag: 0,
+    type: function UserSuggestion() {},
+    _debugSource: callSiteSource,
+    child: div2,
+  });
+  div2.return = userSuggestion2;
+
+  const span1 = mockFiber({
+    tag: 5,
+    type: 'span',
+    stateNode: spanEl1,
+    _debugSource: { fileName: '/app/src/components/UserSuggestion.tsx', lineNumber: 10, columnNumber: 7 },
+  });
+  const div1 = mockFiber({
+    tag: 5,
+    type: 'div',
+    stateNode: divEl1,
+    _debugSource: { fileName: '/app/src/components/UserSuggestion.tsx', lineNumber: 7, columnNumber: 5 },
+    child: span1,
+  });
+  span1.return = div1;
+  const userSuggestion1 = mockFiber({
+    tag: 0,
+    type: function UserSuggestion() {},
+    _debugSource: callSiteSource,
+    child: div1,
+    sibling: userSuggestion2,
+  });
+  div1.return = userSuggestion1;
+
+  const trendingSidebar = mockFiber({
+    tag: 0,
+    type: function TrendingSidebar() {},
+    _debugSource: { fileName: '/app/src/components/TrendingSidebar.tsx', lineNumber: 20, columnNumber: 3 },
+    child: userSuggestion1,
+  });
+  userSuggestion1.return = trendingSidebar;
+  userSuggestion2.return = trendingSidebar;
+
+  const hostRoot = mockFiber({ tag: 3, child: trendingSidebar });
+  trendingSidebar.return = hostRoot;
+
+  return { hostRoot, divEl1, divEl2 };
 }
 
 describe('FiberSourceIndex', () => {
@@ -331,6 +416,18 @@ describe('FiberSourceIndex', () => {
 
       const loc = { fileName: '/app/src/Button.tsx', line: 7, column: 2 };
       expect(index.findDOMElement(loc, 0)).toBe(el);
+    });
+
+    it('should collapse imported child internals to one host element per call site instance', () => {
+      const { hostRoot, divEl1, divEl2 } = buildCallSiteTree();
+      index = new FiberSourceIndex(() => hostRoot, mockDoc, {
+        mapSource: (source, fiber) => resolveCallSiteSource(source, fiber, 'src/components/TrendingSidebar.tsx'),
+      });
+
+      const callSite = { fileName: '/app/src/components/TrendingSidebar.tsx', line: 59, column: 12 };
+
+      expect(index.findDOMElement(callSite, 0)).toBe(divEl1);
+      expect(index.findDOMElement(callSite, 1)).toBe(divEl2);
     });
   });
 });

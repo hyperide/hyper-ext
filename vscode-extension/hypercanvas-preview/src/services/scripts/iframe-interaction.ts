@@ -15,10 +15,12 @@ import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector'
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
   type Fiber,
+  FiberTag,
   findNearestSourceLocation,
   getFiberFromDOM,
   getItemIndexFromFiber,
 } from '@shared/element-tracing/fiber-internals';
+import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
@@ -174,55 +176,85 @@ const iframeResolver: TracingResolver = {
 // Fiber-based source cache for reverse lookup (nodeRef → DOM elements)
 // ============================================
 
-/** Lazily-built index: sourceKey → DOM elements with that fiber _debugSource. */
-let sourceCache: Map<string, HTMLElement[]> | null = null;
+let sourceIndex: FiberSourceIndex | null = null;
 
 function invalidateSourceCache(): void {
-  sourceCache = null;
+  sourceIndex?.invalidate();
 }
 
-/**
- * Build/return the source cache by walking all DOM elements and indexing by fiber source.
- * Uses findNearestSourceLocation which handles React 18 (_debugSource on direct fiber)
- * and React 19 (_debugStack on parent component fiber, not host fiber) by walking up
- * the fiber tree as needed.
- */
-function getSourceCache(): Map<string, HTMLElement[]> {
-  if (sourceCache) return sourceCache;
-  const cache = new Map<string, HTMLElement[]>();
-  if (!document.body) return cache;
+function findReactRootElement(): HTMLElement | null {
+  const selectors = ['#root', '#__next', '#app', '[data-reactroot]'];
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (!el || el.nodeType !== 1) continue;
 
-  const walker = document.createTreeWalker(document.body, 1 /* NodeFilter.SHOW_ELEMENT */);
-  let node: Node | null = walker.currentNode;
-  while (node) {
-    if (node instanceof HTMLElement) {
-      const fiber = getFiberFromDOM(node);
-      if (fiber) {
-        // Direct fiber resolution (Vite, React 18 _debugSource, React 19 non-RSC)
-        let loc = findNearestSourceLocation(fiber);
-        // React 19 + Vite: _debugStack gives compiled positions → resolve via source map
-        const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
-        if (smLoc) loc = smLoc;
-        // Fallback if no source map available
-        if (loc === null) {
-          loc = findNearestSourceLocation(fiber);
-        }
-        if (loc) {
-          const key = `${loc.fileName}:${loc.line}:${loc.column}`;
-          const existing = cache.get(key);
-          if (existing) existing.push(node);
-          else cache.set(key, [node]);
-        }
-      }
+    const candidates = [el, el.firstElementChild];
+    for (const candidate of candidates) {
+      if (!candidate || candidate.nodeType !== 1) continue;
+      if (getFiberFromDOM(candidate as HTMLElement)) return candidate as HTMLElement;
     }
-    node = walker.nextNode();
+
+    return el as HTMLElement;
   }
-  // Only cache non-empty results. If the DOM has no React fibers yet (script injected
-  // before React loads), don't store the empty map — let the next call try again.
-  if (cache.size > 0) {
-    sourceCache = cache;
+
+  if (document.body) {
+    const walker = document.createTreeWalker(document.body, 1 /* NodeFilter.SHOW_ELEMENT */);
+    let node: Node | null = walker.currentNode;
+    while (node) {
+      if (node instanceof HTMLElement && getFiberFromDOM(node)) {
+        return node;
+      }
+      node = walker.nextNode();
+    }
   }
-  return cache;
+
+  return null;
+}
+
+function findHostRootFiber(): Fiber | null {
+  const rootElement = findReactRootElement();
+  if (!rootElement) return null;
+
+  let fiber = getFiberFromDOM(rootElement);
+  if (!fiber && rootElement.firstElementChild instanceof HTMLElement) {
+    fiber = getFiberFromDOM(rootElement.firstElementChild);
+  }
+  if (!fiber) return null;
+
+  let current: Fiber | null = fiber;
+  while (current !== null) {
+    if (current.tag === FiberTag.HostRoot) {
+      return current;
+    }
+    current = current.return;
+  }
+
+  return fiber;
+}
+
+function resolveSourceIndexFiberSource(fiber: Fiber): SourceLocation | null {
+  return resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber) ?? getOwnFiberSourceLocation(fiber);
+}
+
+function getSourceIndex(): FiberSourceIndex {
+  if (sourceIndex) return sourceIndex;
+
+  sourceIndex = new FiberSourceIndex(findHostRootFiber, document, {
+    resolveFiberSource: resolveSourceIndexFiberSource,
+    mapSource: (source, fiber) => resolveCallSiteSource(source, fiber, renderedComponentPath),
+  });
+
+  return sourceIndex;
+}
+
+function parseSourceRef(nodeRef: string): SourceLocation | null {
+  const match = nodeRef.match(/^(.*):(\d+):(\d+)$/);
+  if (!match) return null;
+  return {
+    fileName: match[1],
+    line: Number.parseInt(match[2], 10),
+    column: Number.parseInt(match[3], 10),
+  };
 }
 
 // Hook into React commit cycle to invalidate source cache and kick off source map pre-warming.
@@ -653,14 +685,13 @@ function resolveViaServerSourceMap(fiber: Fiber): SourceLocation | null {
 
 /** Find DOM elements by nodeRef (format: "fileName:line:column"). */
 function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLElement[] {
-  const cache = getSourceCache();
-  const elements = cache.get(nodeRef);
-  if (!elements || elements.length === 0) {
-    return [];
-  }
+  const source = parseSourceRef(nodeRef);
+  if (source === null) return [];
 
-  // Filter disconnected elements
-  const live = elements.filter((el) => document.contains(el));
+  let live = getSourceIndex().findDOMElements(source);
+  if (live.length === 0) {
+    live = getSourceIndex().findClosestLineDOMElements(source);
+  }
 
   if (itemIndex !== null) {
     return live[itemIndex] ? [live[itemIndex]] : [];
@@ -672,12 +703,11 @@ function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLEleme
 const iframeElementResolver: OverlayElementResolver = {
   findElements: findElementsByRef,
   findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }> {
-    const cache = getSourceCache();
     const results: Array<{ elementId: string; element: HTMLElement }> = [];
-    for (const [key, elements] of cache) {
-      for (const el of elements) {
+    for (const entry of getSourceIndex().getLiveEntries()) {
+      for (const el of entry.elements) {
         if (document.contains(el) && isContainerEmpty(el)) {
-          results.push({ elementId: key, element: el });
+          results.push({ elementId: entry.key, element: el });
         }
       }
     }
@@ -825,34 +855,24 @@ function findTraceableChildren(el: HTMLElement): string[] {
 
 const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').NodeMapLookup = {
   getEntry(nodeRef: string) {
-    const cache = getSourceCache();
-    let elements = cache.get(nodeRef);
-    // Fuzzy match by file:line when exact key fails (fiber vs AST column mismatch)
-    if ((!elements || elements.length === 0) && nodeRef.includes(':')) {
-      const prefix = nodeRef.replace(/:\d+$/, ':'); // "file:line:"
-      for (const [key, vals] of cache) {
-        if (key.startsWith(prefix) && vals.some((e) => document.contains(e))) {
-          elements = vals;
-          break;
-        }
-      }
+    const source = parseSourceRef(nodeRef);
+    if (source === null) return null;
+
+    let elements = getSourceIndex().findDOMElements(source);
+    if (elements.length === 0) {
+      elements = getSourceIndex().findClosestLineDOMElements(source);
     }
-    if (!elements || elements.length === 0) return null;
-    const el = elements.find((e) => document.contains(e));
+    const el = elements[0];
     if (!el) return null;
 
     const parent = findTraceableParent(el);
     const children = findTraceableChildren(el);
-    const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
-    const line = m ? Number.parseInt(m[2], 10) : 0;
-    const column = m ? Number.parseInt(m[3], 10) : 0;
-    const fileName = m ? m[1] : nodeRef;
 
     return {
       nodeRef,
       tag: el.tagName.toLowerCase(),
-      loc: { fileName, line, column },
-      endLoc: { fileName, line, column },
+      loc: source,
+      endLoc: source,
       parentRef: parent?.ref ?? null,
       children,
       isComponent: false,
@@ -860,12 +880,11 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     };
   },
   findDOMElement(source, itemIndex) {
-    const key = `${source.fileName}:${source.line}:${source.column}`;
-    const cache = getSourceCache();
-    const elements = cache.get(key);
-    if (!elements) return null;
-    const live = elements.filter((e) => document.contains(e));
-    return live[itemIndex] ?? live[0] ?? null;
+    const exact = getSourceIndex().findDOMElement(source, itemIndex);
+    if (exact) return exact;
+
+    const closest = getSourceIndex().findClosestLineDOMElements(source);
+    return closest[itemIndex] ?? closest[0] ?? null;
   },
 };
 
