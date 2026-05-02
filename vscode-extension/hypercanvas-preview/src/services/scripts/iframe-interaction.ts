@@ -1175,7 +1175,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
 
-  // Synthetic keyboard event from VS Code keybinding (Tab/Shift+Tab forwarded via extension host)
+  // Keyboard command from VS Code keybinding — bypass isDesignMode check
+  // (command already has when clause, no need to double-check mode)
   if (msg.type === 'hypercanvas:syntheticKeydown') {
     const syntheticEvent = new KeyboardEvent('keydown', {
       key: msg.key,
@@ -1183,7 +1184,13 @@ window.addEventListener('message', (event: MessageEvent) => {
       bubbles: true,
       cancelable: true,
     });
+    // Call handler directly — it checks isDesignMode internally,
+    // but VS Code keybinding already has the when clause.
+    // Force design mode flag temporarily for the synthetic event.
+    const prevMode = state.engineMode;
+    state.engineMode = 'design';
     keydownHandler(syntheticEvent);
+    state.engineMode = prevMode;
     return;
   }
 
