@@ -330,7 +330,10 @@ export class PreviewPanel {
 
     // === ErrorBoundary actions (from iframe error UI) ===
     if (msg.type === 'errorBoundary:createSample') {
-      await this._handleCreateSampleFromError(msg.componentPath as string | undefined);
+      await this._handleCreateSampleFromError(
+        msg.componentPath as string | undefined,
+        msg.propValues as Record<string, string> | undefined,
+      );
       return;
     }
     if (msg.type === 'errorBoundary:configureAIKey') {
@@ -449,7 +452,10 @@ export class PreviewPanel {
    * Handle "Create Sample File" button from the ErrorBoundary UI.
    * Creates a minimal SampleDefault scaffold in the component file and opens it in editor.
    */
-  private async _handleCreateSampleFromError(componentPath: string | undefined): Promise<void> {
+  private async _handleCreateSampleFromError(
+    componentPath: string | undefined,
+    propValues?: Record<string, string>,
+  ): Promise<void> {
     if (!componentPath) return;
 
     const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
@@ -481,13 +487,18 @@ export class PreviewPanel {
       return;
     }
 
-    // Generate a minimal sample scaffold
+    // Generate a minimal sample scaffold — include user-provided prop values if available
+    const propEntries = propValues ? Object.entries(propValues).filter(([, v]) => v.trim() !== '') : [];
+    const propLines =
+      propEntries.length > 0
+        ? propEntries.map(([key, value]) => `    ${key}={${JSON.stringify(value)}}`)
+        : [`    // TODO: Add required props here`];
     const scaffold = [
       '',
       `// Sample component — add required props below`,
       `export const SampleDefault = () => (`,
       `  <${componentName}`,
-      `    // TODO: Add required props here`,
+      ...propLines,
       `  />`,
       ');',
     ].join('\n');
@@ -502,11 +513,14 @@ export class PreviewPanel {
       return;
     }
 
-    // Open the file and position cursor at the TODO comment
-    const todoLine = updatedCode.split('\n').findIndex((line) => line.includes('// TODO: Add required props'));
+    // Open the file and position cursor at the scaffold
+    const lines = updatedCode.split('\n');
+    const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
+    const sampleIdx = lines.findIndex((line) => line.includes('SampleDefault'));
+    const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
     await vscode.window.showTextDocument(doc, {
-      selection: new vscode.Range(Math.max(todoLine, 0), 0, Math.max(todoLine, 0), 0),
+      selection: new vscode.Range(targetLine, 0, targetLine, 0),
     });
 
     console.log(`[HyperIDE] Created SampleDefault scaffold in ${componentPath}`);

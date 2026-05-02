@@ -7,7 +7,7 @@
 
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
-import { type CSSProperties, useCallback, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
@@ -59,7 +59,6 @@ function PreviewContent() {
     projectError,
     componentError,
     handleStartDevServer,
-    clearComponentError,
   } = usePreviewBridge({
     iframeEl,
     canvas,
@@ -121,10 +120,11 @@ function PreviewContent() {
         <ComponentErrorOverlay
           componentPath={componentError.componentPath}
           error={componentError.error}
-          onCreateSample={() => {
+          onCreateSample={(propValues?: Record<string, string>) => {
             canvas.sendEvent({
               type: 'errorBoundary:createSample',
               componentPath: componentError.componentPath,
+              propValues,
             } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
           onConfigureAIKey={() => {
@@ -132,7 +132,6 @@ function PreviewContent() {
               type: 'errorBoundary:configureAIKey',
             } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
-          onDismiss={clearComponentError}
         />
       )}
 
@@ -207,40 +206,89 @@ function ReconnectingBanner() {
 interface ComponentErrorOverlayProps {
   componentPath: string;
   error: string;
-  onCreateSample: () => void;
+  onCreateSample: (propValues?: Record<string, string>) => void;
   onConfigureAIKey: () => void;
-  onDismiss: () => void;
 }
 
-function ComponentErrorOverlay({
-  componentPath,
-  error,
-  onCreateSample,
-  onConfigureAIKey,
-  onDismiss,
-}: ComponentErrorOverlayProps) {
+/**
+ * Extract prop names from common React error messages.
+ * - "Cannot read properties of undefined (reading 'likes')" → ['likes']
+ * - "Cannot read properties of null (reading 'name')" → ['name']
+ * - "tweet is not defined" → ['tweet']
+ * - "props.title is not a function" → ['title']
+ * - Multiple "reading 'x'" in one message → all extracted
+ */
+function extractPropsFromError(errorMsg: string): string[] {
+  // "Cannot read properties of undefined/null (reading 'propName')"
+  const readingMatches = [...errorMsg.matchAll(/reading '(\w+)'/g)];
+  if (readingMatches.length > 0) {
+    return [...new Set(readingMatches.map((m) => m[1]))];
+  }
+
+  // "someVar is not defined" / "someVar is undefined"
+  const undefinedMatch = errorMsg.match(/(\w+) is (?:not defined|undefined)/);
+  if (undefinedMatch) return [undefinedMatch[1]];
+
+  // "props.X is not a function" / "Cannot read X of undefined"
+  const propsDotMatch = errorMsg.match(/props\.(\w+)/);
+  if (propsDotMatch) return [propsDotMatch[1]];
+
+  return [];
+}
+
+function ComponentErrorOverlay({ componentPath, error, onCreateSample, onConfigureAIKey }: ComponentErrorOverlayProps) {
   const componentName =
     componentPath
       .split('/')
       .pop()
       ?.replace(/\.tsx?$/, '') ?? componentPath;
+
+  const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
+  const propValuesRef = useRef<Record<string, string>>({});
+
+  const handlePropChange = useCallback((propName: string, value: string) => {
+    propValuesRef.current = { ...propValuesRef.current, [propName]: value };
+  }, []);
+
+  const handleCreateSample = useCallback(() => {
+    const filled = Object.entries(propValuesRef.current).filter(([, v]) => v.trim() !== '');
+    onCreateSample(filled.length > 0 ? Object.fromEntries(filled) : undefined);
+  }, [onCreateSample]);
+
   return (
     <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
       <div style={errorOverlayCardStyle}>
         <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
         <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
 
-        <div style={errorOverlayHintBoxStyle}>
-          <div style={errorOverlayHintLabelStyle}>Error details</div>
-          <p style={errorOverlayHintTextStyle}>{error}</p>
-        </div>
+        {extractedProps.length > 0 && (
+          <div style={errorOverlayPropsFormStyle}>
+            <div style={errorOverlayPropsLabelStyle}>Props</div>
+            {extractedProps.map((propName) => (
+              <label key={propName} style={errorOverlayPropRowStyle}>
+                <span style={errorOverlayPropNameStyle}>{propName}</span>
+                <input
+                  style={errorOverlayPropInputStyle}
+                  placeholder={`Enter ${propName}`}
+                  onChange={(e) => handlePropChange(propName, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        )}
+
+        {extractedProps.length === 0 && (
+          <p style={errorOverlayNoPropsHintStyle}>
+            Could not detect required prop names from the error. The sample file will include a TODO placeholder.
+          </p>
+        )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             type="button"
             data-testid={TID.preview.componentErrorCreateSample}
             style={errorOverlayPrimaryButtonStyle}
-            onClick={onCreateSample}
+            onClick={handleCreateSample}
           >
             Create Sample File
           </button>
@@ -251,9 +299,6 @@ function ComponentErrorOverlay({
             onClick={onConfigureAIKey}
           >
             Configure AI Key
-          </button>
-          <button type="button" style={errorOverlayDismissButtonStyle} onClick={onDismiss}>
-            Dismiss
           </button>
         </div>
 
@@ -487,27 +532,53 @@ const errorOverlaySubtitleStyle: CSSProperties = {
   margin: '0 0 20px',
 };
 
-const errorOverlayHintBoxStyle: CSSProperties = {
+const errorOverlayPropsFormStyle: CSSProperties = {
   background: 'var(--vscode-input-background, #252525)',
   borderRadius: 8,
   padding: 16,
   marginBottom: 16,
   border: '1px solid var(--vscode-widget-border, #333)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
 };
 
-const errorOverlayHintLabelStyle: CSSProperties = {
+const errorOverlayPropsLabelStyle: CSSProperties = {
   color: 'var(--vscode-editor-foreground, #a0aec0)',
   fontSize: 12,
-  marginBottom: 8,
   fontWeight: 500,
 };
 
-const errorOverlayHintTextStyle: CSSProperties = {
+const errorOverlayPropRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const errorOverlayPropNameStyle: CSSProperties = {
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  fontSize: 12,
+  minWidth: 100,
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+};
+
+const errorOverlayPropInputStyle: CSSProperties = {
+  flex: 1,
+  padding: '4px 8px',
+  fontSize: 12,
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  color: 'var(--vscode-input-foreground, #e2e8f0)',
+  border: '1px solid var(--vscode-input-border, #444)',
+  borderRadius: 4,
+  outline: 'none',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+};
+
+const errorOverlayNoPropsHintStyle: CSSProperties = {
   color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 12,
-  margin: 0,
+  margin: '0 0 16px',
   lineHeight: 1.6,
-  wordBreak: 'break-word',
 };
 
 const errorOverlayPrimaryButtonStyle: CSSProperties = {
@@ -530,16 +601,6 @@ const errorOverlaySecondaryButtonStyle: CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 500,
-};
-
-const errorOverlayDismissButtonStyle: CSSProperties = {
-  padding: '8px 16px',
-  background: 'transparent',
-  color: 'var(--vscode-descriptionForeground, #718096)',
-  border: '1px solid var(--vscode-widget-border, #555)',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 13,
 };
 
 const errorOverlayFooterStyle: CSSProperties = {
