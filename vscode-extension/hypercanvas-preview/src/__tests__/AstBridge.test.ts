@@ -50,22 +50,9 @@ function createMockWebview() {
  * Simulate file content changes for undo tracking.
  * The first readFile call (before operation) returns `before`,
  * the second call (after operation) returns `after`.
+ * VSCodeFileIO.readFile checks textDocuments first, then falls back to workspace.fs.readFile.
+ * We use textDocuments to control the return value.
  */
-function setupFileSnapshots(before: string, after: string): void {
-  let callCount = 0;
-  // VSCodeFileIO.readFile checks textDocuments first, then falls back to workspace.fs.readFile.
-  // We use textDocuments to control the return value.
-  const mockDoc = {
-    uri: { fsPath: '/workspace/f.tsx' } as vscode.Uri,
-    getText: () => {
-      callCount++;
-      return callCount <= 1 ? before : after;
-    },
-  };
-  (vscode.workspace.textDocuments as unknown[]).push(mockDoc);
-}
-
-/** Setup file snapshots matching any file path */
 function setupFileSnapshotsForPath(filePath: string, before: string, after: string): void {
   let callCount = 0;
   const mockDoc = {
