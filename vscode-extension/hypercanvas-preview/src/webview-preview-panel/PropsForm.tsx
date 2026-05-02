@@ -559,7 +559,8 @@ function ObjectPropPopover({
         }}
       >
         <span style={popoverTriggerCountStyle}>
-          {filledCount}/{requiredCount > 0 ? requiredCount : fieldCount} {requiredCount > 0 ? 'required' : 'fields'}
+          {filledCount}/{requiredCount > 0 && filledCount <= requiredCount ? requiredCount : fieldCount}{' '}
+          {requiredCount > 0 && filledCount <= requiredCount ? 'required' : 'fields'}
         </span>
         <span style={popoverTriggerArrowStyle}>{open ? '\u25BC' : '\u25B6'}</span>
       </button>
