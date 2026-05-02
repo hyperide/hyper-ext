@@ -171,6 +171,70 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
+const NAMES = [
+  'John Doe',
+  'Jane Smith',
+  'Alex Johnson',
+  'Maria Garcia',
+  'David Chen',
+  'Sarah Kim',
+  'James Wilson',
+  'Emma Brown',
+  'Michael Lee',
+  'Olivia Taylor',
+];
+const USERNAMES = [
+  '@johndoe',
+  '@janesmith',
+  '@alexj',
+  '@mgarcia',
+  '@dchen',
+  '@sarahk',
+  '@jwilson',
+  '@emmab',
+  '@mlee',
+  '@otaylor',
+];
+const EMAILS = ['john@example.com', 'jane@test.com', 'alex@mail.com', 'maria@demo.com', 'david@sample.com'];
+const TITLES = ['Hello World', 'Getting Started', 'My First Post', 'Breaking News', 'Update v2.0', 'Quick Note'];
+const DESCRIPTIONS = [
+  'A short description goes here.',
+  'Lorem ipsum dolor sit amet.',
+  'This is a sample text for testing.',
+];
+const URLS = ['https://example.com', 'https://test.com/page', 'https://demo.app/resource'];
+const COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+
+/** 1x1 pixel placeholder PNG as data URL */
+const PLACEHOLDER_IMAGE =
+  'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect width=%22100%22 height=%22100%22 fill=%22%23666%22/%3E%3Ctext x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23fff%22 font-size=%2214%22%3Eplaceholder%3C/text%3E%3C/svg%3E';
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Detect field purpose from name and return a generator, or null */
+function getFieldGenerator(name: string): (() => string) | null {
+  const n = name.toLowerCase();
+  if (/^id$|id$/i.test(name)) return generateId;
+  if (n === 'name' || n === 'fullname' || n === 'displayname' || n === 'username' || n === 'author')
+    return () => pick(NAMES);
+  if (n === 'handle' || n === 'screenname' || n === 'nickname') return () => pick(USERNAMES);
+  if (n === 'email' || n === 'mail') return () => pick(EMAILS);
+  if (n === 'title' || n === 'subject' || n === 'heading') return () => pick(TITLES);
+  if (n === 'description' || n === 'bio' || n === 'summary' || n === 'text' || n === 'content' || n === 'body')
+    return () => pick(DESCRIPTIONS);
+  if (n === 'url' || n === 'href' || n === 'link' || n === 'website') return () => pick(URLS);
+  if (n === 'color' || n === 'bgcolor' || n === 'background') return () => pick(COLORS);
+  if (/avatar|photo|image|pic|thumbnail|icon|logo|src/i.test(n)) return () => PLACEHOLDER_IMAGE;
+  if (/count|total|amount|quantity|num/i.test(n)) return () => String(Math.floor(Math.random() * 1000));
+  if (/price|cost/i.test(n)) return () => (Math.random() * 100).toFixed(2);
+  if (/date|created|updated|timestamp/i.test(n)) return () => new Date().toISOString().split('T')[0];
+  if (/phone|tel/i.test(n)) return () => `+1 555-${Math.floor(1000 + Math.random() * 9000)}`;
+  if (/verified|active|enabled|visible|published/i.test(n)) return () => 'true';
+  return null;
+}
+
 // ============================================================================
 // PropField — renders a single typed field
 // ============================================================================
@@ -238,21 +302,35 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
     );
   }
 
-  // Number — number input
+  // Number — number input with rand button
   if (typeInfo.type === 'number') {
+    const numId = `prop-${name}-${depth}-num`;
     return (
       <div style={fieldRowStyle}>
-        <span style={fieldNameStyle}>{humanize(name)}</span>
-        <input
-          type="number"
-          value={value != null ? String(value) : ''}
-          onChange={(e) => {
-            const num = Number.parseFloat(e.target.value);
-            onChange(name, Number.isNaN(num) ? undefined : num);
-          }}
-          placeholder={typeInfo.required ? '' : 'optional'}
-          style={inputStyle}
-        />
+        <label htmlFor={numId} style={fieldNameStyle}>
+          {humanize(name)}
+        </label>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            id={numId}
+            type="number"
+            value={value != null ? String(value) : ''}
+            onChange={(e) => {
+              const num = Number.parseFloat(e.target.value);
+              onChange(name, Number.isNaN(num) ? undefined : num);
+            }}
+            placeholder={typeInfo.required ? '' : 'optional'}
+            style={{ ...inputStyle, width: '100%', paddingRight: 40 }}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(name, Math.floor(Math.random() * 1000))}
+            style={genButtonInlineStyle}
+            title="Random number 0-1000"
+          >
+            rand
+          </button>
+        </div>
       </div>
     );
   }
@@ -313,25 +391,50 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
     return <ObjectJsonFallback name={name} value={value} onChange={onChange} />;
   }
 
-  // String / Unknown — text input (with "gen" button for id-like fields)
-  const isIdField = /^id$/i.test(name) || name.endsWith('Id') || name.endsWith('ID');
-  return (
-    <div style={fieldRowStyle}>
-      <span style={fieldNameStyle}>{humanize(name)}</span>
-      <div style={{ position: 'relative', flex: 1 }}>
-        <input
-          type="text"
-          value={String(value ?? '')}
+  // String / Unknown — text input with smart generator, converts to textarea at 80+ chars
+  const generator = getFieldGenerator(name);
+  const fieldId = `prop-${name}-${depth}`;
+  const strValue = String(value ?? '');
+  const isLong = strValue.length > 80;
+
+  if (isLong) {
+    return (
+      <div style={{ ...fieldColumnStyle, gap: 4 }}>
+        <label htmlFor={fieldId} style={fieldNameStyle}>
+          {humanize(name)}
+        </label>
+        <textarea
+          id={fieldId}
+          value={strValue}
           onChange={(e) => onChange(name, e.target.value)}
           placeholder={typeInfo.required ? '' : 'optional'}
-          style={{ ...inputStyle, width: '100%', paddingRight: isIdField ? 40 : undefined }}
+          rows={3}
+          style={{ ...inputStyle, width: '100%', resize: 'vertical', minHeight: 60 }}
         />
-        {isIdField && (
+      </div>
+    );
+  }
+
+  return (
+    <div style={fieldRowStyle}>
+      <label htmlFor={fieldId} style={fieldNameStyle}>
+        {humanize(name)}
+      </label>
+      <div style={{ position: 'relative', flex: 1 }}>
+        <input
+          id={fieldId}
+          type="text"
+          value={strValue}
+          onChange={(e) => onChange(name, e.target.value)}
+          placeholder={typeInfo.required ? '' : 'optional'}
+          style={{ ...inputStyle, width: '100%', paddingRight: generator ? 40 : undefined }}
+        />
+        {generator && (
           <button
             type="button"
-            onClick={() => onChange(name, generateId())}
+            onClick={() => onChange(name, generator())}
             style={genButtonInlineStyle}
-            title="Generate random ID"
+            title={`Generate ${humanize(name)}`}
           >
             gen
           </button>
@@ -421,11 +524,9 @@ function ObjectPropPopover({
         <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
             <span style={popoverTitleStyle}>{humanize(name)}</span>
-            {depth === 0 && (
-              <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
-                &times;
-              </button>
-            )}
+            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+              &times;
+            </button>
           </div>
           <div style={popoverFieldsStyle}>
             {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
