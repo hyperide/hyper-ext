@@ -64,10 +64,48 @@ export class AstService {
   private _workspaceRoot: string;
   private _fileParser: ReturnType<typeof createFileParser>;
   private _nodeMapService = new NodeMapService();
+  private _fileIO: FileIO;
+  private _initialized = false;
 
   constructor(workspaceRoot: string, fileIO: FileIO) {
     this._workspaceRoot = workspaceRoot;
+    this._fileIO = fileIO;
     this._fileParser = createFileParser(fileIO);
+    // Eagerly populate NodeMapService so style writes work on first interaction
+    this._populateNodeMaps().catch(() => {});
+  }
+
+  /** Scan workspace source files and populate NodeMapService (like server's populateNodeMaps). */
+  private async _populateNodeMaps(): Promise<void> {
+    if (this._initialized) return;
+    if (!this._fileIO.listFiles) return; // FileIO doesn't support directory listing
+
+    const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+    const allFiles: string[] = [];
+
+    for (const dir of SOURCE_DIRS) {
+      const fullDir = `${this._workspaceRoot}/${dir}`;
+      try {
+        const files = await this._fileIO.listFiles(fullDir, ['.tsx', '.jsx']);
+        allFiles.push(...files);
+      } catch {
+        // Directory doesn't exist
+      }
+    }
+
+    for (const filePath of allFiles) {
+      try {
+        const sourceCode = await this._fileIO.readFile(filePath);
+        this._nodeMapService.parseAndBuild(sourceCode, filePath);
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    this._initialized = true;
+    if (allFiles.length > 0) {
+      console.log(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
+    }
   }
 
   /** Expose the NodeMapService for external callers (e.g. SyncPositionService). */

@@ -60,4 +60,30 @@ export class VSCodeFileIO implements FileIO {
   async deleteFile(absolutePath: string): Promise<void> {
     await vscode.workspace.fs.delete(vscode.Uri.file(absolutePath), { useTrash: false });
   }
+
+  async listFiles(dirPath: string, extensions?: string[]): Promise<string[]> {
+    const results: string[] = [];
+    const exts = extensions ?? ['.tsx', '.jsx'];
+
+    const walk = async (dir: vscode.Uri): Promise<void> => {
+      let entries: [string, vscode.FileType][];
+      try {
+        entries = await vscode.workspace.fs.readDirectory(dir);
+      } catch {
+        return;
+      }
+      for (const [name, type] of entries) {
+        const childUri = vscode.Uri.joinPath(dir, name);
+        if (type === vscode.FileType.Directory) {
+          if (name === 'node_modules' || name === '.next' || name === 'dist' || name === '.git') continue;
+          await walk(childUri);
+        } else if (type === vscode.FileType.File && exts.some((ext) => name.endsWith(ext))) {
+          results.push(childUri.fsPath);
+        }
+      }
+    };
+
+    await walk(vscode.Uri.file(dirPath));
+    return results;
+  }
 }
