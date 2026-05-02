@@ -583,7 +583,20 @@ export class AstService {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
           if (parent) {
             const siblings = parent.children;
-            const currentIndex = siblings.indexOf(nodeRef);
+            // Find current index by exact match first, then by resolved location
+            let currentIndex = siblings.indexOf(nodeRef);
+            if (currentIndex === -1) {
+              // nodeRef format from fiber may differ slightly from AST nodeRef —
+              // match by resolving each sibling and comparing file:line
+              const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+              if (m) {
+                const [, file, line] = m;
+                currentIndex = siblings.findIndex((s) => {
+                  const sm = s.match(/^(.+):(\d+):(\d+)$/);
+                  return sm && sm[1] === file && sm[2] === line;
+                });
+              }
+            }
             if (currentIndex !== -1) {
               let targetIndex: number;
               if (direction === 'prev') {
