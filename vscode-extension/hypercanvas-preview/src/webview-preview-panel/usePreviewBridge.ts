@@ -377,6 +377,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Spread msg first so our namespaced type wins over msg.type ('serverSourceMapResult')
           iframeEl?.contentWindow?.postMessage({ ...msg, type: 'hypercanvas:serverSourceMapResult' }, '*');
           break;
+
+        case 'canvas:refocusIframe':
+          // After reveal(false) steals focus from iframe, refocus it so keyboard events work
+          iframeEl?.focus();
+          break;
       }
     }
 

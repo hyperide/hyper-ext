@@ -451,14 +451,16 @@ export class PreviewPanel {
     }
 
     // When the user clicks an element (or empty area) on the canvas, the webview
-    // sends state:update with selectedIds.  Focus the preview panel so keyboard
-    // events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
-    // Activate the canvas tab (make it the "active" editor group tab) without stealing
-    // keyboard focus from the iframe. preserveFocus=true keeps iframe mouse events working.
+    // sends state:update with selectedIds.  Make the canvas tab visually active
+    // so keyboard events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
+    // reveal(false) activates the tab but steals focus from the iframe, so we
+    // immediately post a message to refocus the iframe afterwards.
     if (msg.type === 'state:update') {
       const patch = (msg as { patch?: Record<string, unknown> }).patch;
       if (patch && 'selectedIds' in patch) {
-        this._panel?.reveal(undefined, true); // true = preserveFocus
+        this._panel?.reveal(undefined, false);
+        // Refocus the iframe after reveal stole focus
+        webview.postMessage({ type: 'canvas:refocusIframe' });
       }
     }
 
