@@ -13,7 +13,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
@@ -93,7 +93,14 @@ async function detectPreviewProviders(
       // Config path from App.tsx is relative to root — rebase to src/ where __canvas_preview__.tsx lives
       const cfgPathRaw = tamaguiCfg[3];
       const absConfigPath = resolve(root, cfgPathRaw);
-      const previewDir = join(root, 'src');
+      // Detect where __canvas_preview__.tsx will live: apps/next/ for monorepos, src/ otherwise
+      let previewDir = join(root, 'src');
+      try {
+        await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
+        previewDir = join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
+      } catch {
+        /* not a monorepo — keep src/ */
+      }
       let cfgPath = relative(previewDir, absConfigPath);
       if (!cfgPath.startsWith('.')) cfgPath = `./${cfgPath}`;
       const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
