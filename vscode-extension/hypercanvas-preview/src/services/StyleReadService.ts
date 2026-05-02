@@ -86,14 +86,23 @@ export class StyleReadService {
       const searchLine = entry?.loc.line ?? directLine;
       const searchColumn = entry?.loc.column ?? directColumn;
       // NodeMapService empty and no syntheticRef — nothing to resolve
-      if (searchLine === null || searchColumn === null) return empty;
+      if (searchLine === null || searchColumn === null) {
+        console.warn('[HyperCanvas] Selection lost after HMR — element not found for nodeRef:', nodeRef);
+        return empty;
+      }
 
       const filePath = directPath ?? absolutePath;
       const content = await this._fileIO.readFile(filePath);
       const ast = parseCode(content);
 
       const result = findElementByPosition(ast, searchLine, searchColumn);
-      if (!result) return empty;
+      if (!result) {
+        console.warn(
+          `[HyperCanvas] Selection lost after HMR — AST element not found at ${searchLine}:${searchColumn} for nodeRef:`,
+          nodeRef,
+        );
+        return empty;
+      }
 
       const element = result.element;
 

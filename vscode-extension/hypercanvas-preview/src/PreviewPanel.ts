@@ -58,6 +58,10 @@ export class PreviewPanel {
   private _stateHub: StateHub;
   private _panelRouter: PanelRouter;
 
+  // Debounce timer for _reEmitSelectionAfterHmr — prevents multiple rapid
+  // style writes from queuing redundant re-emissions
+  private _reEmitTimer: ReturnType<typeof setTimeout> | null = null;
+
   private _onScopeChange?: (scope: 'full-app' | 'component-only') => Promise<void>;
 
   constructor(
@@ -402,6 +406,16 @@ export class PreviewPanel {
     }
     if (msg.type === 'screenshotResult') {
       this._handleScreenshotResult(msg);
+      return;
+    }
+
+    // AST mutations (ast:updateStyles, ast:updateProps, ast:insertElement, etc.)
+    // trigger HMR — re-emit selection so the preview re-highlights the element
+    // after the fiber tree is rebuilt.
+    if (msg.type?.startsWith('ast:')) {
+      await this._panelRouter.routeMessage(msg, webview);
+      this._bumpStyleVersion();
+      this._reEmitSelectionAfterHmr();
       return;
     }
 
@@ -914,7 +928,8 @@ export class PreviewPanel {
 
   /**
    * Increment styleVersion in shared state so the inspector re-reads styles.
-   * Called after undo/redo completes to sync the inspector with file changes.
+   * Called after any file-modifying operation (style writes, undo/redo) to
+   * sync the inspector with file changes.
    */
   private _bumpStyleVersion(): void {
     const current = this._stateHub.state.styleVersion ?? 0;
@@ -937,9 +952,14 @@ export class PreviewPanel {
     const selectedIds = this._stateHub.state.selectedIds;
     if (!selectedIds?.length) return;
 
+    // Debounce: clear previous timer if multiple style writes happen rapidly
+    // (e.g. drag-resizing or multi-property updates). Only the last one fires.
+    if (this._reEmitTimer) clearTimeout(this._reEmitTimer);
+
     // 300ms delay: Vite HMR typically settles within 100-200ms, but we add
     // headroom for slower machines and full-page reloads (native undo path).
-    setTimeout(() => {
+    this._reEmitTimer = setTimeout(() => {
+      this._reEmitTimer = null;
       // Re-read state — selection may have been cleared by user action
       // during the delay window
       const currentIds = this._stateHub.state.selectedIds;
