@@ -387,14 +387,18 @@ export class PreviewFileManager {
       // Check if provider wrapping is outdated — regenerate if providers were added/changed
       // since the file was last written (e.g. detectPreviewProviders resolved after initial gen).
       const needsProviderUpdate =
-        this.providerWrap?.imports.length && !this.providerWrap.imports.every((imp) => existingContent!.includes(imp));
+        this.providerWrap?.imports.length && !this.providerWrap.imports.every((imp) => existingContent.includes(imp));
+      // Regenerate once when an older generated preview predates fallback props.
+      // Otherwise fast path keeps stale __canvas_preview__.tsx forever because
+      // all requested imports already exist.
+      const needsGeneratorUpdate = !existingContent.includes('previewFallbackProps');
       // Validate the existing file for stale entries: non-PascalCase names, Next.js App Router
       // reserved files (layout.tsx exports metadata — breaks Client Component chain), or
       // @hyperide-managed files (extension's own generated route files).
       const existingEntries = parseExistingPreview(existingContent);
       const isStale = (e: { componentName: string; componentPath: string }) =>
         !/^[A-Z]/.test(e.componentName) || isFrameworkReserved(basename(e.componentPath));
-      if (!existingEntries.some(isStale) && !needsProviderUpdate) return existingContent;
+      if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate) return existingContent;
 
       // Stale entries found — regenerate excluding reserved files
       const cleanPaths = existingEntries.filter((e) => !isStale(e)).map((e) => e.componentPath);

@@ -177,16 +177,51 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push("  onSubmit: (e: React.SyntheticEvent) => { e?.preventDefault?.(); console.log('[Preview] onSubmit'); },");
   lines.push("  onBlur: () => console.log('[Preview] onBlur'),");
   lines.push("  onFocus: () => console.log('[Preview] onFocus'),");
+  lines.push("  onNavChange: (value: unknown) => console.log('[Preview] onNavChange', value),");
   lines.push('};');
   lines.push('');
 
-  // 7. Error boundary to catch component render crashes (e.g. missing required props)
+  // 7. Fallback props for components without SampleDefault.
+  // Extra props are harmless for React components that do not read them, and
+  // they keep prop-required leaf components renderable in the preview.
+  lines.push('const previewFallbackProps: Record<string, unknown> = {');
+  lines.push('  ...callbackStubs,');
+  lines.push('  activeNav: "dashboard",');
+  lines.push('  activeSection: "dashboard",');
+  lines.push('  count: 1,');
+  lines.push('  data: [],');
+  lines.push('  headings: [],');
+  lines.push('  index: 1,');
+  lines.push('  items: [],');
+  lines.push('  label: "Preview",');
+  lines.push('  rows: [],');
+  lines.push('  title: "Preview",');
+  lines.push('  value: "Preview",');
+  lines.push('  block: { id: "preview-block", type: "paragraph", content: "Preview block", checked: false },');
+  lines.push('  page: {');
+  lines.push('    id: "preview-page",');
+  lines.push('    title: "Preview Page",');
+  lines.push('    icon: "Preview",');
+  lines.push('    coverGradient: "linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)",');
+  lines.push('    parentId: null,');
+  lines.push('    isFavorite: false,');
+  lines.push('    lastEdited: "Preview",');
+  lines.push('    blocks: [{ id: "preview-block", type: "paragraph", content: "Preview block" }],');
+  lines.push('  },');
+  lines.push('  metric: { label: "Preview", value: "1,024", change: "+12%", trend: "up" },');
+  lines.push(
+    '  row: { id: "preview-row", name: "Preview row", status: "Done", priority: "Medium", date: "2026-01-01" },',
+  );
+  lines.push('};');
+  lines.push('');
+
+  // 8. Error boundary to catch component render crashes (e.g. missing required props)
   // Without this, a crash in one component kills the entire React tree and all subsequent
   // component switches via postMessage silently fail (black canvas).
   lines.push(...buildErrorBoundary());
   lines.push('');
 
-  // 8. CanvasPreview component
+  // 9. CanvasPreview component
   if (options?.isNextPagesRouter) {
     lines.push(...buildCanvasPreviewNextPages(options?.providerWrap));
   } else {
@@ -383,7 +418,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '        <p>Component &quot;{componentPath}&quot; is not available</p>',
     '      </div>;',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component />}</div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} />}</div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
@@ -395,7 +430,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '        const { x = 0, y = 0, props } = instance;',
     '',
     '        if (props && Object.keys(props).length > 0 && Component) {',
-    '          const mergedProps = { ...callbackStubs, ...props };',
+    '          const mergedProps = { ...previewFallbackProps, ...props };',
     '          return (',
     '            <div key={id} data-canvas-instance-id={id}',
     "                 style={{ position: 'absolute', left: x, top: y }}>",
@@ -410,7 +445,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '            return (',
     '              <div key={id} data-canvas-instance-id={id}',
     "                   style={{ position: 'absolute', left: x, top: y }}>",
-    '                <Component {...callbackStubs} />',
+    '                <Component {...previewFallbackProps} />',
     '              </div>',
     '            );',
     '          }',

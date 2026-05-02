@@ -591,11 +591,10 @@ describe('PreviewFileManager — buildEntry error handling', () => {
     );
     const manager = createManager(io);
 
-    // Should not throw — Broken component should be included with fallback name
+    // Should not throw — Broken component is skipped until it parses again.
     const content = await manager.ensureComponent(['src/components/Broken.tsx', 'src/components/Button.tsx']);
     expect(content).toContain('Button');
-    // Broken should still be registered (with filename-derived name)
-    expect(content).toContain('Broken');
+    expect(content).not.toContain('Broken');
   });
 });
 
@@ -1032,7 +1031,7 @@ describe('ensureComponent — fast path', () => {
     io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
       '/project/src/__canvas_preview__.tsx',
-      "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
+      "// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = {};\nexport default function CanvasPreview() {}",
     );
     let writeCount = 0;
     const origWrite = io.writeFile.bind(io);
