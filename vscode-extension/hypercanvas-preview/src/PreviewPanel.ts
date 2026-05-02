@@ -569,6 +569,48 @@ export class PreviewPanel {
     });
 
     console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
+
+    // Watch file for sample deletion — notify webview to reset sampleCreated state
+    if (this._panel) {
+      this._watchSampleInFile(absPath, exportName, this._panel.webview);
+    }
+  }
+
+  private _sampleWatcher?: vscode.Disposable;
+
+  private _watchSampleInFile(absPath: string, exportName: string, webview: vscode.Webview): void {
+    // Dispose previous watcher
+    this._sampleWatcher?.dispose();
+
+    const fileUri = vscode.Uri.file(absPath);
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(fileUri, ''));
+
+    const checkSample = async () => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(fileUri);
+        const content = Buffer.from(bytes).toString('utf-8');
+        const exists = content.includes(`export const ${exportName}`);
+        if (!exists) {
+          webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+          this._sampleWatcher?.dispose();
+          this._sampleWatcher = undefined;
+        }
+      } catch {
+        // File deleted entirely
+        webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+        this._sampleWatcher?.dispose();
+        this._sampleWatcher = undefined;
+      }
+    };
+
+    watcher.onDidChange(checkSample);
+    watcher.onDidDelete(() => {
+      webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
+      this._sampleWatcher?.dispose();
+      this._sampleWatcher = undefined;
+    });
+
+    this._sampleWatcher = watcher;
   }
 
   private _buildPropEntries(propValues?: Record<string, unknown>): Array<[string, unknown]> {

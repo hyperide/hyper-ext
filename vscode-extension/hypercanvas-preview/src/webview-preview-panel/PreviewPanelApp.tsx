@@ -266,6 +266,17 @@ function ComponentErrorOverlay({
 
   const [hasAnyProps, setHasAnyProps] = useState(false);
 
+  // Listen for sample deletion from file watcher
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'errorOverlay:sampleDeleted') {
+        setSampleCreated(false);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   const handlePropsChange = useCallback(
     (values: Record<string, unknown>) => {
       propValuesRef.current = values;
@@ -358,7 +369,7 @@ function ComponentErrorOverlay({
               style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
               onClick={handleCreateSample}
             >
-              {hasAnyProps ? 'Update Sample' : 'Update Empty Sample'}
+              Update Sample
             </button>
             <button type="button" onClick={handleCreateNew} style={errorOverlayLinkButtonStyle}>
               Create New...
