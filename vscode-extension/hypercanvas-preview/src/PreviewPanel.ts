@@ -1040,6 +1040,21 @@ export class PreviewPanel {
   }
 
   /**
+   * Dispose the preview panel. This closes the webview tab and fires
+   * `onDidDispose`, which tears down all child services (dev server, state
+   * hub registration, source map warmers) and clears `_panel` so the next
+   * `createOrShow` builds a fresh webview with a clean iframe state.
+   *
+   * Primarily exposed for E2E tests that need to guarantee a fresh preview
+   * iframe between specs — the iframe accumulates module-level state (click
+   * handler listeners, source map caches, pendingClickElement) that leaks
+   * across tests and causes intermittent click-resolution failures.
+   */
+  public dispose(): void {
+    this._panel?.dispose();
+  }
+
+  /**
    * Update iframe component URL param without a hard reload.
    * Triggers navigation to /test-preview?component=<componentPath>.
    */

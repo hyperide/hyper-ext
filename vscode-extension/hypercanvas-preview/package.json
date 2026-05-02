@@ -105,6 +105,10 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "hypercanvas.closePreview",
+        "title": "Hyper: Close Preview"
+      },
+      {
         "command": "hypercanvas.goToVisual",
         "title": "Hyper: Go to Visual"
       },

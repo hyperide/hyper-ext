@@ -587,6 +587,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
+  // Close preview panel (disposes the webview, clearing all iframe state).
+  // Primarily used by E2E tests between specs to prevent iframe module-level
+  // state (click handler cache, pendingClickElement, renderedComponentPath,
+  // source map caches) from leaking into subsequent tests.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.closePreview', () => {
+      previewPanel?.dispose();
+    }),
+  );
+
   // Canvas keybinding commands (VS Code intercepts keys before they reach the webview iframe)
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.canvasUndo', () => previewPanel?.undo()),
