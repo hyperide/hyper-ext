@@ -283,6 +283,47 @@ describe('detectUnsupportedProject', () => {
     const result = await detectUnsupportedProject('/proj');
     expect(result).not.toBeNull();
   });
+
+  // ── Next.js + Tamagui combinations ──
+  // The fix command has two paths: Vite (default) and Next.js (when `next` is in deps).
+  // Detection doesn't differentiate — it always returns 'react-native' type.
+  // The Next.js path distinction happens at fix-time in extension.ts.
+
+  it('returns error for Next.js + tamagui without react-native-web', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', tamagui: '^1.0.0', react: '^18.0.0' },
+    });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe('react-native');
+  });
+
+  it('returns error for Next.js + react-native without react-native-web', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', 'react-native': '^0.73.0' },
+    });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe('react-native');
+  });
+
+  it('returns null for Next.js + tamagui when react-native-web is present', async () => {
+    setPackageJson('/proj', {
+      dependencies: {
+        next: '^14.0.0',
+        tamagui: '^1.0.0',
+        'react-native-web': '^0.19.0',
+      },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns null for Next.js without tamagui or react-native (plain Next.js)', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', react: '^18.0.0' },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
 });
 
 describe('getPackageScripts', () => {
