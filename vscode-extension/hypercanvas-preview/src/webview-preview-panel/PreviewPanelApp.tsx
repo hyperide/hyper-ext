@@ -19,6 +19,7 @@ import {
 } from '@/lib/platform/shared-editor-state';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import { PropsForm } from './PropsForm';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -120,7 +121,8 @@ function PreviewContent() {
         <ComponentErrorOverlay
           componentPath={componentError.componentPath}
           error={componentError.error}
-          onCreateSample={(propValues?: Record<string, string>) => {
+          propsSchema={componentError.propsSchema}
+          onCreateSample={(propValues?: Record<string, unknown>) => {
             canvas.sendEvent({
               type: 'errorBoundary:createSample',
               componentPath: componentError.componentPath,
@@ -206,7 +208,8 @@ function ReconnectingBanner() {
 interface ComponentErrorOverlayProps {
   componentPath: string;
   error: string;
-  onCreateSample: (propValues?: Record<string, string>) => void;
+  propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
+  onCreateSample: (propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
 }
 
@@ -236,7 +239,13 @@ function extractPropsFromError(errorMsg: string): string[] {
   return [];
 }
 
-function ComponentErrorOverlay({ componentPath, error, onCreateSample, onConfigureAIKey }: ComponentErrorOverlayProps) {
+function ComponentErrorOverlay({
+  componentPath,
+  error,
+  propsSchema,
+  onCreateSample,
+  onConfigureAIKey,
+}: ComponentErrorOverlayProps) {
   const componentName =
     componentPath
       .split('/')
@@ -244,16 +253,23 @@ function ComponentErrorOverlay({ componentPath, error, onCreateSample, onConfigu
       ?.replace(/\.tsx?$/, '') ?? componentPath;
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
-  const propValuesRef = useRef<Record<string, string>>({});
+  const propValuesRef = useRef<Record<string, unknown>>({});
 
-  const handlePropChange = useCallback((propName: string, value: string) => {
-    propValuesRef.current = { ...propValuesRef.current, [propName]: value };
+  const handlePropsChange = useCallback((values: Record<string, unknown>) => {
+    propValuesRef.current = values;
   }, []);
 
   const handleCreateSample = useCallback(() => {
-    const filled = Object.entries(propValuesRef.current).filter(([, v]) => v.trim() !== '');
+    const filled = Object.entries(propValuesRef.current).filter(([, v]) => {
+      if (v == null) return false;
+      if (typeof v === 'string') return v.trim() !== '';
+      if (Array.isArray(v)) return v.length > 0;
+      return true;
+    });
     onCreateSample(filled.length > 0 ? Object.fromEntries(filled) : undefined);
   }, [onCreateSample]);
+
+  const hasProps = (propsSchema && propsSchema.length > 0) || extractedProps.length > 0;
 
   return (
     <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
@@ -261,23 +277,15 @@ function ComponentErrorOverlay({ componentPath, error, onCreateSample, onConfigu
         <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
         <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
 
-        {extractedProps.length > 0 && (
-          <div style={errorOverlayPropsFormStyle}>
-            <div style={errorOverlayPropsLabelStyle}>Props</div>
-            {extractedProps.map((propName) => (
-              <label key={propName} style={errorOverlayPropRowStyle}>
-                <span style={errorOverlayPropNameStyle}>{propName}</span>
-                <input
-                  style={errorOverlayPropInputStyle}
-                  placeholder={`Enter ${propName}`}
-                  onChange={(e) => handlePropChange(propName, e.target.value)}
-                />
-              </label>
-            ))}
-          </div>
+        {hasProps && (
+          <PropsForm
+            propsSchema={propsSchema ?? null}
+            extractedPropNames={extractedProps}
+            onChange={handlePropsChange}
+          />
         )}
 
-        {extractedProps.length === 0 && (
+        {!hasProps && (
           <p style={errorOverlayNoPropsHintStyle}>
             Could not detect required prop names from the error. The sample file will include a TODO placeholder.
           </p>
@@ -530,48 +538,6 @@ const errorOverlaySubtitleStyle: CSSProperties = {
   color: 'var(--vscode-descriptionForeground, #718096)',
   fontSize: 12,
   margin: '0 0 20px',
-};
-
-const errorOverlayPropsFormStyle: CSSProperties = {
-  background: 'var(--vscode-input-background, #252525)',
-  borderRadius: 8,
-  padding: 16,
-  marginBottom: 16,
-  border: '1px solid var(--vscode-widget-border, #333)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-};
-
-const errorOverlayPropsLabelStyle: CSSProperties = {
-  color: 'var(--vscode-editor-foreground, #a0aec0)',
-  fontSize: 12,
-  fontWeight: 500,
-};
-
-const errorOverlayPropRowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-};
-
-const errorOverlayPropNameStyle: CSSProperties = {
-  color: 'var(--vscode-editor-foreground, #e2e8f0)',
-  fontSize: 12,
-  minWidth: 100,
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
-};
-
-const errorOverlayPropInputStyle: CSSProperties = {
-  flex: 1,
-  padding: '4px 8px',
-  fontSize: 12,
-  background: 'var(--vscode-input-background, #1e1e1e)',
-  color: 'var(--vscode-input-foreground, #e2e8f0)',
-  border: '1px solid var(--vscode-input-border, #444)',
-  borderRadius: 4,
-  outline: 'none',
-  fontFamily: 'var(--vscode-editor-font-family, monospace)',
 };
 
 const errorOverlayNoPropsHintStyle: CSSProperties = {

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
+import type { SimplePropInfo } from './PropsForm';
 
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
@@ -23,6 +24,8 @@ interface UsePreviewBridgeOptions {
 export interface ComponentError {
   componentPath: string;
   error: string;
+  /** Prop schema from extension's ComponentService (populated asynchronously) */
+  propsSchema?: SimplePropInfo[] | null;
 }
 
 interface UsePreviewBridgeResult {
@@ -110,6 +113,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             componentPath: msg.componentPath,
             error: msg.error,
           });
+          // Request prop type schema from extension (async enrichment)
+          canvas.sendEvent({
+            type: 'errorBoundary:getPropsSchema',
+            componentPath: msg.componentPath,
+          } as unknown as PlatformMessage);
         }
         return;
       }
@@ -350,6 +358,15 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'projectError':
           // Extension detected an unsupported project type (e.g. React Native / Tamagui)
           setProjectError((msg.error as UnsupportedProjectError) ?? null);
+          break;
+
+        case 'errorBoundary:propsSchema':
+          // Extension responded with prop type schema — enrich existing componentError
+          setComponentError((prev) =>
+            prev && prev.componentPath === msg.componentPath
+              ? { ...prev, propsSchema: msg.propsSchema as SimplePropInfo[] }
+              : prev,
+          );
           break;
 
         case 'serverSourceMapResult':

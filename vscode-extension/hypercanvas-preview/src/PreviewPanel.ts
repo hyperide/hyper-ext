@@ -332,12 +332,24 @@ export class PreviewPanel {
     if (msg.type === 'errorBoundary:createSample') {
       await this._handleCreateSampleFromError(
         msg.componentPath as string | undefined,
-        msg.propValues as Record<string, string> | undefined,
+        msg.propValues as Record<string, unknown> | undefined,
       );
       return;
     }
     if (msg.type === 'errorBoundary:configureAIKey') {
       vscode.commands.executeCommand('hypercanvas.configureAIKey');
+      return;
+    }
+    if (msg.type === 'errorBoundary:getPropsSchema') {
+      const componentPath = msg.componentPath as string | undefined;
+      if (componentPath) {
+        const props = await this._panelRouter.componentService.getComponentDefinitions(componentPath);
+        webview.postMessage({
+          type: 'errorBoundary:propsSchema',
+          componentPath,
+          propsSchema: props,
+        });
+      }
       return;
     }
 
@@ -466,7 +478,7 @@ export class PreviewPanel {
    */
   private async _handleCreateSampleFromError(
     componentPath: string | undefined,
-    propValues?: Record<string, string>,
+    propValues?: Record<string, unknown>,
   ): Promise<void> {
     if (!componentPath) return;
 
@@ -503,10 +515,22 @@ export class PreviewPanel {
     }
 
     // Generate a minimal sample scaffold — include user-provided prop values if available
-    const propEntries = propValues ? Object.entries(propValues).filter(([, v]) => v.trim() !== '') : [];
+    const propEntries = propValues
+      ? Object.entries(propValues).filter(([, v]) => {
+          if (v == null) return false;
+          if (typeof v === 'string') return v.trim() !== '';
+          return true;
+        })
+      : [];
     const propLines =
       propEntries.length > 0
-        ? propEntries.map(([key, value]) => `    ${key}={${JSON.stringify(value)}}`)
+        ? propEntries.map(([key, value]) => {
+            // Typed value serialization for JSX
+            if (typeof value === 'boolean') return `    ${key}={${value}}`;
+            if (typeof value === 'number') return `    ${key}={${value}}`;
+            if (Array.isArray(value)) return `    ${key}={${JSON.stringify(value)}}`;
+            return `    ${key}={${JSON.stringify(String(value))}}`;
+          })
         : [`    // TODO: Add required props here`];
     const scaffold = [
       '',
