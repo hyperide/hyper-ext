@@ -26,10 +26,19 @@ export const OPAQUE_ELEMENT_CONTAINERS = new Set<string>(['SVG']);
  * Walks up parentElement until an opaque container tag is found or the tree ends.
  * Stops at the first (innermost) matching ancestor.
  */
+/** Interactive parent tags that should be preferred over opaque containers like SVG */
+const INTERACTIVE_PARENT_TAGS = new Set<string>(['BUTTON', 'A', 'LABEL']);
+
 export function resolveOpaqueTarget(el: HTMLElement): HTMLElement {
   let current: HTMLElement | null = el;
   while (current != null) {
     if (OPAQUE_ELEMENT_CONTAINERS.has(current.tagName.toUpperCase())) {
+      // If the opaque container's parent is an interactive element (button, a, label),
+      // prefer the parent — e.g. SVG icon inside a button should select the button.
+      const parent = current.parentElement;
+      if (parent && INTERACTIVE_PARENT_TAGS.has(parent.tagName.toUpperCase())) {
+        return parent;
+      }
       return current;
     }
     current = current.parentElement;
