@@ -96,18 +96,6 @@ function PreviewContent() {
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
 
-  // Readonly mode: CSS system not supported for editing, but preview renders.
-  // Show stub with framework info + "Continue in Readonly" button.
-  // After user clicks, stub hides and preview + readonly badge show.
-  if (isReadonly && !readonlyDismissed) {
-    return (
-      <ReadonlyStubScreen
-        cssSystem={projectCapabilities.cssSystem}
-        onContinueReadonly={() => setReadonlyDismissed(true)}
-      />
-    );
-  }
-
   // Dev server not running — show start button (with reconnecting banner if was connected)
   if (!devServerRunning) {
     return (
@@ -170,6 +158,19 @@ function PreviewContent() {
         externalTarget={contextMenu ? { type: 'design-element', x: contextMenu.x, y: contextMenu.y } : null}
         onExternalClose={clearContextMenu}
       />
+
+      {/* Readonly mode overlay: shown OVER the preview, not instead of it.
+          The preview renders normally underneath. The stub shows the framework
+          compatibility table. The "Continue in Readonly" button only appears
+          when the preview has loaded successfully with no errors — so the user
+          sees proof that the preview works before choosing readonly mode. */}
+      {isReadonly && !readonlyDismissed && (
+        <ReadonlyStubScreen
+          cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
+          renderSucceeded={devServerRunning && !componentError && !showNoComponentHint}
+          onContinueReadonly={() => setReadonlyDismissed(true)}
+        />
+      )}
     </>
   );
 }
@@ -223,14 +224,33 @@ const SUPPORTED_CSS_TABLE: Array<{ name: string; supported: boolean }> = [
   { name: 'StyleX', supported: false },
 ];
 
-function ReadonlyStubScreen({ cssSystem, onContinueReadonly }: { cssSystem: string; onContinueReadonly: () => void }) {
+function ReadonlyStubScreen({
+  cssSystem,
+  renderSucceeded,
+  onContinueReadonly,
+}: {
+  cssSystem: string;
+  renderSucceeded: boolean;
+  onContinueReadonly: () => void;
+}) {
   return (
-    <div data-testid="hyper-preview-readonly-stub" style={centerScreenStyle}>
+    <div
+      data-testid="hyper-preview-readonly-stub"
+      style={{
+        ...centerScreenStyle,
+        position: 'absolute',
+        inset: 0,
+        zIndex: 900,
+        background: 'rgba(30, 30, 30, 0.95)',
+      }}
+    >
       <div style={warningIconStyle}>🔒</div>
       <h2 style={headingStyle}>Readonly mode — {cssSystem}</h2>
       <p style={{ ...subtextStyle, maxWidth: 480 }}>
-        Visual editing is not available for <strong>{cssSystem}</strong> projects. You can still preview your components
-        and inspect computed styles in readonly mode.
+        Visual editing is not available for <strong>{cssSystem}</strong> projects.
+        {renderSucceeded
+          ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
+          : ' Waiting for preview to render...'}
       </p>
 
       <table style={{ margin: '16px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
@@ -250,14 +270,16 @@ function ReadonlyStubScreen({ cssSystem, onContinueReadonly }: { cssSystem: stri
         </tbody>
       </table>
 
-      <button
-        type="button"
-        data-testid="hyper-preview-continue-readonly"
-        style={buttonStyle}
-        onClick={onContinueReadonly}
-      >
-        Continue in Readonly
-      </button>
+      {renderSucceeded && (
+        <button
+          type="button"
+          data-testid="hyper-preview-continue-readonly"
+          style={buttonStyle}
+          onClick={onContinueReadonly}
+        >
+          Continue in Readonly
+        </button>
+      )}
     </div>
   );
 }
