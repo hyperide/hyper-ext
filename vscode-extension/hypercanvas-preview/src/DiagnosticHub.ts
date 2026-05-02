@@ -130,6 +130,17 @@ export class DiagnosticHub {
    */
   setRuntimeError(error: RuntimeError | null): void {
     this._runtimeError = error;
+    if (error) {
+      this._appendLogs([
+        {
+          line: `Runtime Error (${error.framework}): ${error.type}: ${error.message}`,
+          timestamp: Date.now(),
+          source: 'console',
+          isError: true,
+          level: 'error',
+        },
+      ]);
+    }
     this._broadcast({ type: 'diagnostic:runtimeError', error });
   }
 
