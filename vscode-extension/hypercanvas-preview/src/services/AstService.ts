@@ -590,6 +590,7 @@ export class AstService {
       if (nodeRef) {
         // Normalize relative nodeRef to absolute (fiber sends relative, NodeMapService stores absolute)
         const normalizedRef = this._normalizeNodeRef(nodeRef);
+        require('node:fs').appendFileSync('/tmp/hyperide-debug2.log', `sibling: raw=${nodeRef} norm=${normalizedRef} found=${!!this._nodeMapService.resolveNodeRef(normalizedRef)}\n`);
         const entry = this._nodeMapService.resolveNodeRef(normalizedRef);
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
