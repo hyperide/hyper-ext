@@ -1,4 +1,5 @@
 import { IconGitBranch, IconPointer, IconSparkles } from '@tabler/icons-react';
+import { screenshotSrc } from '../screenshotSrc';
 
 const steps = [
   {
@@ -7,7 +8,7 @@ const steps = [
     description:
       'Open the running React screen in Hyper Canvas. HyperIDE maps the rendered UI into an element tree, so structure, canvas, and code stay connected.',
     color: 'from-blue-500 to-cyan-500',
-    image: '/screenshots/panel-tree.png',
+    image: screenshotSrc('/screenshots/panel-tree.png'),
     imageAlt: 'HyperIDE Hyper Canvas next to the Inspector element tree for the bulka-the-dog project',
   },
   {
@@ -16,7 +17,7 @@ const steps = [
     description:
       'Select the Jump button on the canvas and adjust spacing, variants, and Tailwind styles in the Inspector while the JSX stays in sync.',
     color: 'from-purple-500 to-pink-500',
-    image: '/screenshots/panel-inspector.png',
+    image: screenshotSrc('/screenshots/panel-inspector.png'),
     imageAlt: 'HyperIDE canvas showing the selected Jump button with Inspector style controls',
   },
   {
@@ -25,7 +26,7 @@ const steps = [
     description:
       'Right-click the selected element to jump to code, copy, duplicate, wrap, delete, or hand the exact element context to AI.',
     color: 'from-orange-500 to-yellow-500',
-    image: '/screenshots/panel-canvas-preview.png',
+    image: screenshotSrc('/screenshots/panel-canvas-preview.png'),
     imageAlt: 'HyperIDE context menu opened on the selected Jump button with Go to Code and edit actions',
   },
 ];

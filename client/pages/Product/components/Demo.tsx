@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { screenshotSrc } from '../screenshotSrc';
 
 const capabilities = [
   'Live React canvas',
@@ -24,7 +25,7 @@ export default function Demo() {
               <div className="grid gap-3 sm:gap-4">
                 <figure className="overflow-hidden rounded-lg border bg-background shadow-lg">
                   <img
-                    src="/screenshots/demo-inspector-a.png"
+                    src={screenshotSrc('/screenshots/demo-inspector-a.png')}
                     alt="HyperIDE selecting the Jump button in the bulka-the-dog project with code, canvas, and Inspector visible"
                     className="aspect-video w-full object-cover object-top"
                     loading="eager"
@@ -35,7 +36,7 @@ export default function Demo() {
                 </figure>
                 <figure className="overflow-hidden rounded-lg border bg-background shadow-lg">
                   <img
-                    src="/screenshots/demo-inspector-b.png"
+                    src={screenshotSrc('/screenshots/demo-inspector-b.png')}
                     alt="HyperIDE context menu opened on the selected Jump button with Go to Code visible"
                     className="aspect-video w-full object-cover object-top"
                     loading="eager"

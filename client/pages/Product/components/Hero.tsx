@@ -2,6 +2,7 @@ import { IconBrandGithub, IconPlayerPlay } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/authStore';
+import { screenshotSrc } from '../screenshotSrc';
 
 export default function Hero() {
   // Use actual auth state instead of just localStorage flag
@@ -61,7 +62,7 @@ export default function Hero() {
               <div className="absolute -inset-4 rounded-2xl bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 blur-2xl" />
               <div className="relative aspect-video overflow-hidden rounded-xl border bg-muted shadow-2xl">
                 <img
-                  src="/screenshots/hero.png"
+                  src={screenshotSrc('/screenshots/hero.png')}
                   alt="HyperIDE selecting the Jump button in the bulka-the-dog React project with code, live canvas, and Inspector visible"
                   className="h-full w-full object-cover object-top"
                 />
