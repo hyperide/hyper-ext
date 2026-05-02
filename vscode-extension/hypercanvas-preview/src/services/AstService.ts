@@ -77,12 +77,28 @@ export class AstService {
     return `${path.join(this._workspaceRoot, filePath)}:${line}:${col}`;
   }
 
+  private _initPromise: Promise<void>;
+
   constructor(workspaceRoot: string, fileIO: FileIO) {
     this._workspaceRoot = workspaceRoot;
     this._fileIO = fileIO;
     this._fileParser = createFileParser(fileIO);
-    // Eagerly populate NodeMapService so style writes work on first interaction
-    this._populateNodeMaps().catch(() => {});
+    // Eagerly populate NodeMapService so style writes work on first interaction.
+    // Store the promise so callers can await it before operations that need
+    // the node map — the old fire-and-forget pattern caused HYP-268 where
+    // inspector.setOpacity / deleteSelected would fail because the scan
+    // hadn't finished yet.
+    this._initPromise = this._populateNodeMaps().catch(() => {});
+  }
+
+  /**
+   * Wait for the initial NodeMapService population to finish.
+   * Callers that need the node map should `await ensureInitialized()`
+   * before using resolveElement/updateStyles/deleteElements/etc.
+   * The promise resolves immediately after the first call finishes.
+   */
+  async ensureInitialized(): Promise<void> {
+    await this._initPromise;
   }
 
   /** Scan workspace source files and populate NodeMapService (like server's populateNodeMaps). */
@@ -208,6 +224,7 @@ export class AstService {
     locations?: ClassNameLocation[],
     nodeRef?: NodeRef,
   ): Promise<UpdateStylesResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -261,6 +278,7 @@ export class AstService {
     props: Record<string, unknown>,
     nodeRef?: NodeRef,
   ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -288,6 +306,7 @@ export class AstService {
    * Uses shared updateElementChildren utility for proper JSX children replacement.
    */
   async updateText(filePath: string, elementId: string, text: string, nodeRef?: NodeRef): Promise<AstOperationResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -324,6 +343,7 @@ export class AstService {
     componentFilePath?: string,
     parentNodeRef?: NodeRef,
   ): Promise<InsertElementResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -370,6 +390,7 @@ export class AstService {
 
   /** Delete elements by IDs or nodeRefs. Re-reads AST between deletions (children may disappear). */
   async deleteElements(filePath: string, elementIds: string[], nodeRefs?: NodeRef[]): Promise<AstOperationResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       let deletedCount = 0;
@@ -416,6 +437,7 @@ export class AstService {
 
   /** Duplicate element and insert clone after the original. */
   async duplicateElement(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<DuplicateElementResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
@@ -448,6 +470,7 @@ export class AstService {
     wrapperProps?: Record<string, unknown>,
     nodeRef?: NodeRef,
   ): Promise<WrapElementResult> {
+    await this.ensureInitialized();
     try {
       const absolutePath = this._resolvePath(filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
