@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { render } from '@testing-library/react';
+import { TID } from '@shared/data-testid-map';
+import { fireEvent, render } from '@testing-library/react';
 import { LayoutSection } from '../LayoutSection';
 
 const defaultProps = {
@@ -67,5 +68,21 @@ describe('LayoutSection toggle classes', () => {
     const rowButton = container.querySelector('[data-testid="hyper-inspector-view-row"]');
     expect(rowButton?.classList.contains('border-border')).toBe(false);
     expect(rowButton?.classList.contains('bg-background')).toBe(false);
+  });
+
+  it('batches horizontal padding side writes', () => {
+    const calls: Array<[string, string, { debounceOnly?: boolean } | undefined]> = [];
+    const { getAllByTestId } = render(
+      <LayoutSection {...defaultProps} syncStyleChange={(key, value, options) => calls.push([key, value, options])} />,
+    );
+
+    fireEvent.change(getAllByTestId(TID.inspector.spacingInput('padding', 'horizontal'))[0], {
+      target: { value: '16' },
+    });
+
+    expect(calls).toEqual([
+      ['paddingLeft', '16', { debounceOnly: true }],
+      ['paddingRight', '16', { debounceOnly: true }],
+    ]);
   });
 });

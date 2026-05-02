@@ -269,8 +269,8 @@ export const LayoutSection = memo(function LayoutSection({
     (value: string) => {
       onPaddingChange('paddingLeft', value);
       onPaddingChange('paddingRight', value);
-      syncStyleChange('paddingLeft', value);
-      syncStyleChange('paddingRight', value);
+      syncStyleChange('paddingLeft', value, DB);
+      syncStyleChange('paddingRight', value, DB);
     },
     [onPaddingChange, syncStyleChange],
   );
@@ -279,8 +279,8 @@ export const LayoutSection = memo(function LayoutSection({
     (value: string) => {
       onPaddingChange('paddingTop', value);
       onPaddingChange('paddingBottom', value);
-      syncStyleChange('paddingTop', value);
-      syncStyleChange('paddingBottom', value);
+      syncStyleChange('paddingTop', value, DB);
+      syncStyleChange('paddingBottom', value, DB);
     },
     [onPaddingChange, syncStyleChange],
   );

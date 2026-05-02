@@ -172,6 +172,8 @@ export default function RightSidebar({
 
   const { openFile, showComments, setShowComments, isReadonly: editorStoreReadonly } = useEditorStore();
   const isReadonly = isVSCode ? readonlyProp : editorStoreReadonly;
+  const inspectorUIKit = projectUIKit === 'none' && isVSCode ? 'tailwind' : projectUIKit;
+  const canInspectStyles = inspectorUIKit !== 'none';
 
   // Elements tree for Inspector (VS Code only, when Explorer is hidden)
   const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;
@@ -1116,7 +1118,7 @@ export default function RightSidebar({
             )}
           >
             {/* Position Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <PositionSection
                 selectedPosition={selectedPosition}
                 posValues={{
@@ -1125,7 +1127,7 @@ export default function RightSidebar({
                   bottom: posBottom,
                   left: posLeft,
                 }}
-                projectUIKit={projectUIKit}
+                projectUIKit={inspectorUIKit}
                 onPositionChange={handlePositionChange}
                 onPositionValueChange={handlePositionValueChange}
                 onPositionKeyDown={handleNumericKeyDown}
@@ -1135,7 +1137,7 @@ export default function RightSidebar({
             {projectUIKit === 'none' && !isVSCode && <SetupTailwindButton onSetupClick={handleSetupTailwind} />}
 
             {/* Margin Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <MarginSection
                 marginTop={marginTop}
                 marginRight={marginRight}
@@ -1149,7 +1151,7 @@ export default function RightSidebar({
             )}
 
             {/* Layout Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <LayoutSection
                 selectedLayout={selectedLayout}
                 width={width}
@@ -1168,7 +1170,7 @@ export default function RightSidebar({
                 paddingBottom={paddingBottom}
                 paddingLeft={paddingLeft}
                 clipContent={clipContent}
-                projectUIKit={projectUIKit}
+                projectUIKit={inspectorUIKit}
                 isStyleSyncing={isStyleSyncing}
                 onLayoutChange={handleLayoutChange}
                 onWidthChange={handleWidthChange}
@@ -1192,7 +1194,7 @@ export default function RightSidebar({
             )}
 
             {/* Appearance Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <AppearanceSection
                 opacity={opacity}
                 borderRadius={borderRadius}
@@ -1204,14 +1206,14 @@ export default function RightSidebar({
             )}
 
             {/* Fill Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <FillSection
                 backgroundColor={backgroundColor}
                 fillOpacity={fillOpacity}
                 backgroundImage={backgroundImage}
                 textColor={textColor}
                 fillMode={fillMode}
-                projectUIKit={projectUIKit}
+                projectUIKit={inspectorUIKit}
                 publicDirExists={publicDirExists}
                 activeProjectId={activeProjectId}
                 onBackgroundColorChange={setBackgroundColor}
@@ -1228,7 +1230,7 @@ export default function RightSidebar({
             )}
 
             {/* Stroke Section */}
-            {projectUIKit !== 'none' && (
+            {canInspectStyles && (
               <StrokeSection strokes={strokes} onStrokesChange={setStrokes} syncStyleChange={syncStyleChange} />
             )}
 
