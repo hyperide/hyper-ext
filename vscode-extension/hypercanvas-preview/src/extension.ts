@@ -14,7 +14,7 @@
 
 import { execFile } from 'node:child_process';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
@@ -68,52 +68,57 @@ async function detectPreviewProviders(
   root: string,
 ): Promise<import('@lib/preview-generator').ProviderWrapConfig | undefined> {
   try {
-    // Check App.web.tsx first (RN web projects), then App.tsx
-    let appContent = '';
-    for (const name of ['App.web.tsx', 'App.tsx']) {
-      try {
-        appContent = await readFile(join(root, name), 'utf-8');
-        break;
-      } catch {
-        /* file doesn't exist — try next */
-      }
-    }
-    if (!appContent) return undefined;
+    const previewDir = await getPreviewDir(root);
+    const contextFiles = await readProviderContextFiles(root);
+    if (contextFiles.length === 0) return undefined;
 
     const imports: string[] = [];
     let wrapOpen = '';
     let wrapClose = '';
 
+    const pushImport = (line: string) => {
+      if (!imports.includes(line)) imports.push(line);
+    };
+
+    const appendWrapper = (open: string, close: string) => {
+      wrapOpen += open;
+      wrapClose = `${close}${wrapClose}`;
+    };
+
+    const emotionTheme = findThemeProvider(contextFiles, '@emotion/react');
+    if (emotionTheme) {
+      pushImport("import { ThemeProvider as EmotionThemeProvider } from '@emotion/react';");
+      pushImport(buildThemeImport(root, previewDir, emotionTheme.file, emotionTheme.themeImport));
+      appendWrapper(`<EmotionThemeProvider theme={${emotionTheme.themeImport.localName}}>`, '</EmotionThemeProvider>');
+    }
+
+    const styledTheme = findThemeProvider(contextFiles, 'styled-components');
+    if (styledTheme) {
+      pushImport("import { ThemeProvider as StyledThemeProvider } from 'styled-components';");
+      pushImport(buildThemeImport(root, previewDir, styledTheme.file, styledTheme.themeImport));
+      appendWrapper(`<StyledThemeProvider theme={${styledTheme.themeImport.localName}}>`, '</StyledThemeProvider>');
+    }
+
+    const appContent = contextFiles.map((file) => file.content).join('\n');
+    const appFile = contextFiles.find((file) => file.content.includes('TamaguiProvider')) ?? contextFiles[0];
+
     // Detect TamaguiProvider + config
-    const tamaguiCfg = appContent.match(
+    const tamaguiCfg = appFile.content.match(
       /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
     );
     if (tamaguiCfg && appContent.includes('TamaguiProvider')) {
       const cfgVar = tamaguiCfg[1] || tamaguiCfg[2];
-      // Config path from App.tsx is relative to root — rebase to src/ where __canvas_preview__.tsx lives
-      const cfgPathRaw = tamaguiCfg[3];
-      const absConfigPath = resolve(root, cfgPathRaw);
-      // Detect where __canvas_preview__.tsx will live: apps/next/ for monorepos, src/ otherwise
-      let previewDir = join(root, 'src');
-      try {
-        await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
-        previewDir = join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
-      } catch {
-        /* not a monorepo — keep src/ */
-      }
-      let cfgPath = relative(previewDir, absConfigPath);
-      if (!cfgPath.startsWith('.')) cfgPath = `./${cfgPath}`;
+      const cfgPath = rebaseImportPath(root, previewDir, appFile.relativePath, tamaguiCfg[3]);
       const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
       const theme = themeMatch?.[1] || 'dark';
-      imports.push("import { TamaguiProvider } from 'tamagui';");
-      imports.push(tamaguiCfg[1] ? `import { ${cfgVar} } from '${cfgPath}';` : `import ${cfgVar} from '${cfgPath}';`);
-      wrapOpen += `<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`;
-      wrapClose = `</TamaguiProvider>${wrapClose}`;
+      pushImport("import { TamaguiProvider } from 'tamagui';");
+      pushImport(tamaguiCfg[1] ? `import { ${cfgVar} } from '${cfgPath}';` : `import ${cfgVar} from '${cfgPath}';`);
+      appendWrapper(`<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`, '</TamaguiProvider>');
     }
 
     // Detect SafeAreaProvider
     if (appContent.includes('SafeAreaProvider')) {
-      imports.push("import { SafeAreaProvider } from 'react-native-safe-area-context';");
+      pushImport("import { SafeAreaProvider } from 'react-native-safe-area-context';");
       wrapOpen = `<SafeAreaProvider>${wrapOpen}`;
       wrapClose = `${wrapClose}</SafeAreaProvider>`;
     }
@@ -124,13 +129,13 @@ async function detectPreviewProviders(
     // NavigationIndependentTree sets the independent flag so inner containers don't throw,
     // while the outer container still provides context for useNavigation() in screen components.
     if (appContent.includes('NavigationContainer')) {
-      imports.push("import { NavigationContainer } from '@react-navigation/native';");
-      imports.push("import { NavigationIndependentTree } from '@react-navigation/core';");
+      pushImport("import { NavigationContainer } from '@react-navigation/native';");
+      pushImport("import { NavigationIndependentTree } from '@react-navigation/core';");
       // Place NavigationContainer inside SafeAreaProvider but outside TamaguiProvider,
       // with NavigationIndependentTree wrapping everything inside NavigationContainer.
-      const safeIdx = wrapOpen.indexOf('<TamaguiProvider');
-      if (safeIdx >= 0) {
-        wrapOpen = `${wrapOpen.slice(0, safeIdx)}<NavigationContainer><NavigationIndependentTree>${wrapOpen.slice(safeIdx)}`;
+      const tamaguiIdx = wrapOpen.indexOf('<TamaguiProvider');
+      if (tamaguiIdx >= 0) {
+        wrapOpen = `${wrapOpen.slice(0, tamaguiIdx)}<NavigationContainer><NavigationIndependentTree>${wrapOpen.slice(tamaguiIdx)}`;
         const tamaguiCloseIdx = wrapClose.indexOf('</TamaguiProvider>');
         if (tamaguiCloseIdx >= 0) {
           wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + '</TamaguiProvider>'.length)}</NavigationIndependentTree></NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + '</TamaguiProvider>'.length)}`;
@@ -146,6 +151,123 @@ async function detectPreviewProviders(
   } catch {
     return undefined;
   }
+}
+
+interface ProviderContextFile {
+  relativePath: string;
+  content: string;
+}
+
+interface ThemeImport {
+  importPath: string;
+  importedName: string;
+  localName: string;
+  defaultImport: boolean;
+}
+
+async function getPreviewDir(root: string): Promise<string> {
+  try {
+    await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
+    return join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
+  } catch {
+    return join(root, 'src'); // nosemgrep: path-join-resolve-traversal
+  }
+}
+
+async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
+  const result: ProviderContextFile[] = [];
+  const candidates = [
+    'src/main.tsx',
+    'src/main.ts',
+    'main.tsx',
+    'main.ts',
+    'App.web.tsx',
+    'App.tsx',
+    'src/App.web.tsx',
+    'src/App.tsx',
+    'src/app.tsx',
+  ];
+
+  for (const relativePath of candidates) {
+    try {
+      const content = await readFile(join(root, relativePath), 'utf-8'); // nosemgrep: path-join-resolve-traversal
+      result.push({ relativePath, content });
+    } catch {
+      /* file doesn't exist — try next */
+    }
+  }
+  return result;
+}
+
+function findThemeProvider(
+  files: ProviderContextFile[],
+  packageName: '@emotion/react' | 'styled-components',
+): { file: ProviderContextFile; themeImport: ThemeImport } | null {
+  const escapedPackageName = packageName.replace('/', '\\/');
+  const providerImport = new RegExp(`import\\s+[^;]*\\bThemeProvider\\b[^;]*from\\s+['"]${escapedPackageName}['"]`);
+
+  for (const file of files) {
+    if (!providerImport.test(file.content)) continue;
+    const themeImport = extractThemeImport(file.content);
+    if (themeImport) return { file, themeImport };
+  }
+  return null;
+}
+
+function extractThemeImport(source: string): ThemeImport | null {
+  const namedImport = source.match(/import\s+\{([^}]*\btheme\b[^}]*)\}\s+from\s+['"]([^'"]+)['"]/);
+  if (namedImport) {
+    const spec = namedImport[1]
+      .split(',')
+      .map((part) => part.trim())
+      .find((part) => part === 'theme' || part.startsWith('theme as '));
+    if (spec) {
+      const alias = spec.match(/^theme\s+as\s+(\w+)$/);
+      return {
+        importPath: namedImport[2],
+        importedName: 'theme',
+        localName: alias?.[1] ?? 'theme',
+        defaultImport: false,
+      };
+    }
+  }
+
+  const defaultImport = source.match(/import\s+(\w+)\s+from\s+['"]([^'"]*theme[^'"]*)['"]/);
+  if (defaultImport) {
+    return {
+      importPath: defaultImport[2],
+      importedName: defaultImport[1],
+      localName: defaultImport[1],
+      defaultImport: true,
+    };
+  }
+
+  return null;
+}
+
+function buildThemeImport(
+  root: string,
+  previewDir: string,
+  file: ProviderContextFile,
+  themeImport: ThemeImport,
+): string {
+  const importPath = rebaseImportPath(root, previewDir, file.relativePath, themeImport.importPath);
+  if (themeImport.defaultImport) {
+    return `import ${themeImport.localName} from '${importPath}';`;
+  }
+  const spec =
+    themeImport.importedName === themeImport.localName
+      ? themeImport.importedName
+      : `${themeImport.importedName} as ${themeImport.localName}`;
+  return `import { ${spec} } from '${importPath}';`;
+}
+
+function rebaseImportPath(root: string, previewDir: string, sourceRelativePath: string, importPath: string): string {
+  if (!importPath.startsWith('.')) return importPath;
+  const absImportPath = resolve(dirname(join(root, sourceRelativePath)), importPath);
+  let rebased = relative(previewDir, absImportPath);
+  if (!rebased.startsWith('.')) rebased = `./${rebased}`;
+  return rebased.replace(/\\/g, '/');
 }
 
 export function activate(context: vscode.ExtensionContext) {
