@@ -182,8 +182,8 @@ export async function detectUnsupportedProject(
     }
     return {
       type: 'react-native',
-      message: `${what} projects don't render in a browser without react-native-web. Click "Fix" to install it.`,
-      fixLabel: 'Fix: Add react-native-web',
+      message: `${what} projects need react-native-web and a Vite config to render in a browser. Click "Fix" to set it up automatically.`,
+      fixLabel: 'Fix: Add react-native-web + Vite config',
     };
   }
 

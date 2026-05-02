@@ -13,6 +13,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
@@ -736,7 +737,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
-  // Fix unsupported project — installs react-native-web for React Native / Tamagui projects
+  // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
       const pkgManager = await detectPackageManager(workspaceRoot);
@@ -748,23 +749,126 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             : pkgManager === 'pnpm'
               ? 'pnpm add'
               : 'npm install';
+      const devInstallCmd =
+        pkgManager === 'bun'
+          ? 'bun add -d'
+          : pkgManager === 'yarn'
+            ? 'yarn add -D'
+            : pkgManager === 'pnpm'
+              ? 'pnpm add -D'
+              : 'npm install -D';
 
       try {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: `HyperIDE: Installing react-native-web via ${pkgManager}...`,
+            title: `HyperIDE: Setting up react-native-web + Vite via ${pkgManager}...`,
             cancellable: false,
           },
-          async () => {
+          async (progress) => {
+            // Step 1: Install react-native-web as a dependency
+            progress.report({ message: 'Installing react-native-web...' });
             await new Promise<void>((resolve, reject) => {
               const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-              // shell needed on Windows where npm/yarn/pnpm are .cmd wrappers
               execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
                 if (err) reject(err);
                 else resolve();
               });
             });
+
+            // Step 2: Install Vite toolchain as devDependencies
+            progress.report({ message: 'Installing vite + plugins...' });
+            await new Promise<void>((resolve, reject) => {
+              const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
+              execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+
+            // Step 3: Create vite.config.ts if it doesn't exist
+            progress.report({ message: 'Creating Vite config...' });
+            const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
+            let viteConfigExists = false;
+            try {
+              await readFile(viteConfigPath);
+              viteConfigExists = true;
+            } catch {
+              // File doesn't exist — will create it
+            }
+            if (!viteConfigExists) {
+              const viteConfigContent = [
+                "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
+                "import react from '@vitejs/plugin-react'",
+                "import { defineConfig } from 'vite'",
+                '',
+                'export default defineConfig({',
+                '  plugins: [',
+                '    react(),',
+                '    tamaguiPlugin({',
+                "      components: ['tamagui'],",
+                '    }),',
+                '  ],',
+                '  resolve: {',
+                '    alias: {',
+                "      'react-native': 'react-native-web',",
+                '    },',
+                '  },',
+                '  optimizeDeps: {',
+                '    esbuildOptions: { sourcemap: false },',
+                "    include: ['react-native-web'],",
+                '  },',
+                '})',
+                '',
+              ].join('\n');
+              await writeFile(viteConfigPath, viteConfigContent, 'utf-8');
+            }
+
+            // Step 4: Create index.html if it doesn't exist
+            const indexHtmlPath = join(workspaceRoot, 'index.html');
+            let indexHtmlExists = false;
+            try {
+              await readFile(indexHtmlPath);
+              indexHtmlExists = true;
+            } catch {
+              // File doesn't exist — will create it
+            }
+            if (!indexHtmlExists) {
+              const indexHtmlContent = [
+                '<!DOCTYPE html>',
+                '<html lang="en">',
+                '<head>',
+                '  <meta charset="UTF-8">',
+                '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                '  <title>App</title>',
+                '</head>',
+                '<body>',
+                '  <div id="root"></div>',
+                '  <script type="module" src="/src/main.tsx"></script>',
+                '</body>',
+                '</html>',
+                '',
+              ].join('\n');
+              await writeFile(indexHtmlPath, indexHtmlContent, 'utf-8');
+            }
+
+            // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
+            progress.report({ message: 'Updating package.json scripts...' });
+            try {
+              const pkgJsonPath = join(workspaceRoot, 'package.json');
+              const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
+              const pkg = JSON.parse(pkgRaw);
+              const scripts = (pkg.scripts ?? {}) as Record<string, string>;
+              const currentDev = scripts.dev ?? '';
+              // Replace expo-based or missing dev script with vite
+              if (!currentDev || currentDev.includes('expo') || currentDev.includes('one ')) {
+                scripts.dev = 'vite';
+                pkg.scripts = scripts;
+                await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+              }
+            } catch {
+              // Non-critical — user can set the script manually
+            }
           },
         );
         // Re-check to confirm the package was recorded in package.json
@@ -774,12 +878,14 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
           );
         } else {
-          vscode.window.showInformationMessage('react-native-web installed. Restart the dev server to apply changes.');
+          vscode.window.showInformationMessage(
+            'react-native-web + Vite configured. Run "dev" to start the Vite dev server.',
+          );
           previewPanel?.notifyUnsupportedProject(null);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`HyperIDE: Failed to install react-native-web: ${msg}`);
+        vscode.window.showErrorMessage(`HyperIDE: Failed to set up project: ${msg}`);
       }
     }),
   );

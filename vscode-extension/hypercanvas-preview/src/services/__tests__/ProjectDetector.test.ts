@@ -240,7 +240,7 @@ describe('detectUnsupportedProject', () => {
     const result = await detectUnsupportedProject('/proj');
     expect(result).not.toBeNull();
     expect(result?.type).toBe('react-native');
-    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web + Vite config');
   });
 
   it('returns error for tamagui without react-native-web', async () => {
