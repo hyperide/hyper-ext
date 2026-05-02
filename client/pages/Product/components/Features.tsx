@@ -22,13 +22,12 @@ const features = [
   {
     icon: IconCode,
     title: 'Framework Support',
-    description:
-      'Works with Next.js, Vite, Remix, Create React App, and Bun. Clone your existing project and start editing.',
+    description: 'Works with Next.js, Vite, Remix, Create React App, and Bun directly from your editor workspace.',
   },
   {
     icon: IconBox,
-    title: 'Docker Isolation',
-    description: 'Each project runs in a secure, sandboxed Docker container. Safe execution with easy cleanup.',
+    title: 'Extension Workflow',
+    description: 'Install once from the marketplace, open a React repo, and keep visual editing next to your code.',
   },
 ];
 
@@ -40,7 +39,7 @@ export default function Features() {
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything you need to build faster</h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            HyperIDE combines visual editing, AI assistance, and developer tools in one seamless experience.
+            HyperIDE brings visual editing, AI assistance, and source-aware controls into your existing IDE.
           </p>
         </div>
 

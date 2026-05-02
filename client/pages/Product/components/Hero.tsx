@@ -1,13 +1,8 @@
-import { IconBrandGithub, IconPlayerPlay } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
+import { IconExternalLink } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/stores/authStore';
 import { screenshotSrc } from '../screenshotSrc';
 
 export default function Hero() {
-  // Use actual auth state instead of just localStorage flag
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
   return (
     <section className="relative overflow-hidden py-20 sm:py-32">
       {/* Background gradient */}
@@ -22,7 +17,7 @@ export default function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
             </span>
-            Open Source
+            VS Code Extension
           </div>
 
           {/* Headline */}
@@ -36,22 +31,30 @@ export default function Hero() {
 
           {/* Subheadline */}
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl">
-            Edit React components like Figma. Generate production-ready code with AI. Works with Next.js, Vite, and
-            Remix.
+            Install HyperIDE in VS Code or Cursor, open your React project, and edit the real running UI with visual
+            controls, code navigation, and AI context actions.
           </p>
 
           {/* CTA Buttons */}
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button size="lg" className="gap-2" asChild>
-              <Link to={isAuthenticated ? '/projects' : '/login'}>
-                <IconPlayerPlay className="h-5 w-5" />
-                {isAuthenticated ? 'Continue work' : 'Get Started'}
-              </Link>
+            <Button size="lg" className="w-full gap-2 sm:w-auto" asChild>
+              <a
+                href="https://marketplace.visualstudio.com/itemdetails?itemName=hyperide.hypercanvas-preview"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <IconExternalLink className="h-5 w-5" />
+                Install from VS Marketplace
+              </a>
             </Button>
-            <Button size="lg" variant="outline" className="gap-2" asChild>
-              <a href="https://github.com/hyperide/hypercanvas" target="_blank" rel="noopener noreferrer">
-                <IconBrandGithub className="h-5 w-5" />
-                View on GitHub
+            <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto" asChild>
+              <a
+                href="https://open-vsx.org/extension/hyperide/hypercanvas-preview"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <IconExternalLink className="h-5 w-5" />
+                Open VSX Registry
               </a>
             </Button>
           </div>
