@@ -272,7 +272,7 @@ export function activate(context: vscode.ExtensionContext) {
         (doc) =>
           vscode.window.showTextDocument(doc, {
             viewColumn: vscode.ViewColumn.One,
-            preserveFocus: false,
+            preserveFocus: true,
             preview: true,
           }),
         (err) => console.error('[HyperIDE] Failed to open component file:', err),
