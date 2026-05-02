@@ -150,19 +150,7 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
   });
 
   const handleGenerateAll = useCallback(() => {
-    const generated: Record<string, unknown> = {};
-    for (const { name, typeInfo } of fields) {
-      const gen = getFieldGenerator(name);
-      if (gen) {
-        generated[name] = gen();
-      } else if (typeInfo.type === 'number') {
-        generated[name] = Math.floor(Math.random() * 1000);
-      } else if (typeInfo.type === 'boolean') {
-        generated[name] = Math.random() > 0.5;
-      } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
-        generated[name] = `sample-${name}`;
-      }
-    }
+    const generated = generateObjectValues(fields);
     setValues(generated);
     onChange(generated);
   }, [fields, onChange]);
@@ -236,6 +224,27 @@ const PLACEHOLDER_IMAGE =
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Recursively generate values for a list of fields (handles nested objects) */
+function generateObjectValues(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const { name, typeInfo } of fields) {
+    const gen = getFieldGenerator(name);
+    if (gen) {
+      result[name] = gen();
+    } else if (typeInfo.type === 'object' && typeInfo.objectSchema) {
+      const nestedFields = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
+      result[name] = generateObjectValues(nestedFields);
+    } else if (typeInfo.type === 'number') {
+      result[name] = Math.floor(Math.random() * 1000);
+    } else if (typeInfo.type === 'boolean') {
+      result[name] = Math.random() > 0.5;
+    } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
+      result[name] = `sample-${name}`;
+    }
+  }
+  return result;
 }
 
 /** Detect field purpose from name and return a generator, or null */
@@ -558,9 +567,11 @@ function ObjectPropPopover({
         <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
             <span style={popoverTitleStyle}>{humanize(name)}</span>
-            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
-              &times;
-            </button>
+            {depth === 0 && (
+              <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+                &times;
+              </button>
+            )}
           </div>
           <div style={popoverFieldsStyle}>
             {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
