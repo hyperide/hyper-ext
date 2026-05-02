@@ -324,38 +324,14 @@ export class PreviewPanel {
     }
 
     // === Canvas undo/redo (from iframe Cmd+Z / Shift+Cmd+Z) ===
-    // Falls back to VS Code's native undo/redo when canvas stack is empty,
-    // so Cmd+Z always does something useful.
+    // Delegates to the same undo()/redo() methods used by keybinding commands,
+    // ensuring consistent behavior between keyboard shortcuts and webview messages.
     if (msg.type === 'canvas:undo') {
-      const panel = this._panel;
-      if (!panel) return;
-      const handled = await this._panelRouter.astBridge.undo(panel);
-      if (!handled) {
-        await vscode.commands.executeCommand('undo');
-        const editor = vscode.window.activeTextEditor;
-        if (editor?.document.isDirty) {
-          await editor.document.save();
-        }
-      }
-      if (handled) {
-        this._bumpStyleVersion();
-      }
+      await this.undo();
       return;
     }
     if (msg.type === 'canvas:redo') {
-      const panel = this._panel;
-      if (!panel) return;
-      const handled = await this._panelRouter.astBridge.redo(panel);
-      if (!handled) {
-        await vscode.commands.executeCommand('redo');
-        const editor = vscode.window.activeTextEditor;
-        if (editor?.document.isDirty) {
-          await editor.document.save();
-        }
-      }
-      if (handled) {
-        this._bumpStyleVersion();
-      }
+      await this.redo();
       return;
     }
 
@@ -884,14 +860,18 @@ export class PreviewPanel {
    * Falls back to VS Code native undo when canvas stack is empty.
    */
   public async undo(): Promise<void> {
+    console.log('[PreviewPanel] undo() called (keybinding command)');
     const panel = this._panel;
     if (!panel) {
+      console.log('[PreviewPanel] undo: no panel, falling back to native undo');
       await vscode.commands.executeCommand('undo');
       return;
     }
     const handled = await this._panelRouter.astBridge.undo(panel);
+    console.log(`[PreviewPanel] undo: astBridge.undo returned ${handled}`);
     if (!handled) {
-      await vscode.commands.executeCommand('default:undo');
+      console.log('[PreviewPanel] undo: falling back to native VS Code undo');
+      await vscode.commands.executeCommand('undo');
       const editor = vscode.window.activeTextEditor;
       if (editor?.document.isDirty) {
         await editor.document.save();
@@ -907,14 +887,18 @@ export class PreviewPanel {
    * Falls back to VS Code native redo when canvas stack is empty.
    */
   public async redo(): Promise<void> {
+    console.log('[PreviewPanel] redo() called (keybinding command)');
     const panel = this._panel;
     if (!panel) {
-      await vscode.commands.executeCommand('default:redo');
+      console.log('[PreviewPanel] redo: no panel, falling back to native redo');
+      await vscode.commands.executeCommand('redo');
       return;
     }
     const handled = await this._panelRouter.astBridge.redo(panel);
+    console.log(`[PreviewPanel] redo: astBridge.redo returned ${handled}`);
     if (!handled) {
-      await vscode.commands.executeCommand('default:redo');
+      console.log('[PreviewPanel] redo: falling back to native VS Code redo');
+      await vscode.commands.executeCommand('redo');
       const editor = vscode.window.activeTextEditor;
       if (editor?.document.isDirty) {
         await editor.document.save();

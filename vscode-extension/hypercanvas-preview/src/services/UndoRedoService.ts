@@ -32,22 +32,41 @@ export class UndoRedoService {
   recordEdit(absolutePath: string, contentBefore: string, contentAfter: string): void {
     const resolved = path.resolve(absolutePath);
     // Append separator to prevent prefix match on sibling dirs (e.g. /workspace2)
-    if (!resolved.startsWith(this._workspaceRoot + path.sep) && resolved !== this._workspaceRoot) return;
+    if (!resolved.startsWith(this._workspaceRoot + path.sep) && resolved !== this._workspaceRoot) {
+      console.warn(
+        `[UndoRedoService] recordEdit REJECTED — path outside workspace: ${resolved} (workspace: ${this._workspaceRoot})`,
+      );
+      return;
+    }
 
     this._undoStack.push({ filePath: resolved, contentBefore, contentAfter });
     if (this._undoStack.length > this._maxLength) this._undoStack.shift();
     this._redoStack.length = 0;
+    console.log(
+      `[UndoRedoService] recordEdit: ${path.basename(resolved)}, undoStack=${this._undoStack.length}, before=${contentBefore.length}B, after=${contentAfter.length}B`,
+    );
   }
 
   async undo(panel: vscode.WebviewPanel): Promise<boolean> {
+    console.log(
+      `[UndoRedoService] undo() called — canUndo=${this.canUndo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+    );
     if (this._inProgress || !this.canUndo()) return false;
     this._inProgress = true;
     try {
       const entry = this._undoStack[this._undoStack.length - 1];
+      console.log(
+        `[UndoRedoService] undo: writing contentBefore (${entry.contentBefore.length}B) to ${path.basename(entry.filePath)}`,
+      );
       const success = await this._writeContent(entry.filePath, entry.contentBefore);
       if (success) {
         this._undoStack.pop();
         this._redoStack.push(entry);
+        console.log(
+          `[UndoRedoService] undo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+        );
+      } else {
+        console.warn('[UndoRedoService] undo: _writeContent returned false');
       }
       panel.reveal();
       return success;
@@ -57,14 +76,25 @@ export class UndoRedoService {
   }
 
   async redo(panel: vscode.WebviewPanel): Promise<boolean> {
+    console.log(
+      `[UndoRedoService] redo() called — canRedo=${this.canRedo()}, inProgress=${this._inProgress}, undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+    );
     if (this._inProgress || !this.canRedo()) return false;
     this._inProgress = true;
     try {
       const entry = this._redoStack[this._redoStack.length - 1];
+      console.log(
+        `[UndoRedoService] redo: writing contentAfter (${entry.contentAfter.length}B) to ${path.basename(entry.filePath)}`,
+      );
       const success = await this._writeContent(entry.filePath, entry.contentAfter);
       if (success) {
         this._redoStack.pop();
         this._undoStack.push(entry);
+        console.log(
+          `[UndoRedoService] redo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
+        );
+      } else {
+        console.warn('[UndoRedoService] redo: _writeContent returned false');
       }
       panel.reveal();
       return success;

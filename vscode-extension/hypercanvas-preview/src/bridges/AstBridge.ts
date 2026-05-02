@@ -119,6 +119,7 @@ export class AstBridge {
       contentBefore = await this._fileIO.readFile(absolutePath);
     } catch {
       // File doesn't exist yet — no undo tracking possible
+      console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
       return operation();
     }
     const result = await operation();
@@ -131,6 +132,10 @@ export class AstBridge {
       }
       if (contentBefore !== contentAfter) {
         this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+      } else {
+        console.warn(
+          `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(absolutePath)}`,
+        );
       }
     }
     return result;
