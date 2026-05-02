@@ -4,6 +4,9 @@ import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { StyleReadService } from '../services/StyleReadService';
 
 const SIMPLE_JSX = `const App = () => <div className="text-red"><span>hello</span></div>;`;
+const DYNAMIC_JSX = `const App = ({ active }) => (
+  <button className={\`px-4 py-2 \${active ? 'bg-blue' : 'bg-gray'}\`}>Click</button>
+);`;
 const WORKSPACE = '/workspace';
 const FILE_PATH = '/workspace/src/App.tsx';
 
@@ -99,6 +102,25 @@ describe('StyleReadService', () => {
 
     expect(result.className).toBe('');
     expect(result.tagType).toBe('unknown');
+  });
+
+  it('extracts static parts from dynamic template literal className', async () => {
+    const nodeMap = new NodeMapService();
+
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(DYNAMIC_JSX, 'src/App.tsx');
+    const btnEntry = entries[0]; // button element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', btnEntry.loc.line, btnEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: DYNAMIC_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+
+    expect(result.className).toContain('px-4');
+    expect(result.className).toContain('py-2');
+    expect(result.tagType).toBe('button');
   });
 
   it('returns empty when nodeRef is an opaque UUID and NodeMapService is empty', async () => {

@@ -43,6 +43,78 @@ export function getAttributeString(element: t.JSXElement, attributeName: string)
 }
 
 /**
+ * Extract static string parts from a className attribute.
+ * Handles StringLiteral, TemplateLiteral quasis, and string args in cn()/clsx() calls.
+ * Returns all static class fragments joined by spaces, or null if no className attribute.
+ */
+export function getAttributeStaticClassName(element: t.JSXElement): string | null {
+  const value = getAttribute(element, 'className');
+  if (!value) return null;
+
+  if (t.isStringLiteral(value)) {
+    return value.value;
+  }
+
+  if (t.isJSXExpressionContainer(value)) {
+    const expr = value.expression;
+    if (t.isJSXEmptyExpression(expr)) return null;
+    return collectStaticStrings(expr);
+  }
+
+  return null;
+}
+
+/** Recursively collect static string fragments from an expression. */
+function collectStaticStrings(expr: t.Expression | t.TSType): string | null {
+  // "px-4 py-2"
+  if (t.isStringLiteral(expr)) {
+    return expr.value;
+  }
+
+  // `px-4 ${dynamic} py-2` → extract quasis
+  if (t.isTemplateLiteral(expr)) {
+    const parts = expr.quasis.map((q) => q.value.cooked ?? q.value.raw).filter(Boolean);
+    return parts.join(' ').replace(/\s+/g, ' ').trim() || null;
+  }
+
+  // cn("base", conditional && "extra", ...) or clsx("base", ...)
+  if (t.isCallExpression(expr)) {
+    const parts: string[] = [];
+    for (const arg of expr.arguments) {
+      if (t.isStringLiteral(arg)) {
+        parts.push(arg.value);
+      } else if (t.isTemplateLiteral(arg)) {
+        const sub = collectStaticStrings(arg);
+        if (sub) parts.push(sub);
+      }
+    }
+    return parts.length > 0 ? parts.join(' ').trim() : null;
+  }
+
+  // condition ? "a" : "b" → collect from both branches
+  if (t.isConditionalExpression(expr)) {
+    const parts: string[] = [];
+    const cons = t.isExpression(expr.consequent) ? collectStaticStrings(expr.consequent) : null;
+    const alt = t.isExpression(expr.alternate) ? collectStaticStrings(expr.alternate) : null;
+    if (cons) parts.push(cons);
+    if (alt) parts.push(alt);
+    return parts.length > 0 ? parts.join(' ').trim() : null;
+  }
+
+  // logical: expr && "classes" → collect from right side
+  if (t.isLogicalExpression(expr)) {
+    const right = collectStaticStrings(expr.right);
+    const left = collectStaticStrings(expr.left);
+    const parts: string[] = [];
+    if (left) parts.push(left);
+    if (right) parts.push(right);
+    return parts.length > 0 ? parts.join(' ').trim() : null;
+  }
+
+  return null;
+}
+
+/**
  * Set attribute value on JSX element
  * If attribute exists, it will be updated; otherwise, it will be added
  * @param element - JSX element

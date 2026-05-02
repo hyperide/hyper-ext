@@ -7,7 +7,7 @@
  */
 
 import type { FileIO } from '@lib/ast/file-io';
-import { getAttributeString } from '@lib/ast/mutator';
+import { getAttributeStaticClassName, getAttributeString } from '@lib/ast/mutator';
 import { parseCode } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { analyzeJSXChildren, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
@@ -106,8 +106,8 @@ export class StyleReadService {
 
       const element = result.element;
 
-      // Extract className
-      const className = getAttributeString(element, 'className') || '';
+      // Extract className — prefer exact string, fall back to static parts from dynamic expressions
+      const className = getAttributeString(element, 'className') ?? getAttributeStaticClassName(element) ?? '';
 
       // Extract tag type
       const tagName = getJSXTagName(element);
