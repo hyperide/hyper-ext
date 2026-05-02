@@ -395,18 +395,18 @@ function pick<T>(arr: T[]): T {
 function generateObjectValues(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const { name, typeInfo } of fields) {
-    const gen = getFieldGenerator(name);
-    if (gen) {
-      result[name] = gen();
+    // Type-specific generators take priority over name-based ones
+    if (typeInfo.type === 'boolean') {
+      result[name] = Math.random() > 0.5;
+    } else if (typeInfo.type === 'number') {
+      const gen = getFieldGenerator(name);
+      result[name] = gen ? Number(gen()) : Math.floor(Math.random() * 1000);
     } else if (typeInfo.type === 'object' && typeInfo.objectSchema) {
       const nestedFields = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
       result[name] = generateObjectValues(nestedFields);
-    } else if (typeInfo.type === 'number') {
-      result[name] = Math.floor(Math.random() * 1000);
-    } else if (typeInfo.type === 'boolean') {
-      result[name] = Math.random() > 0.5;
-    } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
-      result[name] = `sample-${name}`;
+    } else {
+      const gen = getFieldGenerator(name);
+      result[name] = gen ? gen() : `sample-${name}`;
     }
   }
   return result;
