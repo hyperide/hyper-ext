@@ -160,6 +160,7 @@ export default function RightSidebar({
   componentGroups,
   explorerVisible,
   onComponentClick,
+  readonly: readonlyProp = false,
 }: RightSidebarProps) {
   const engine = useCanvasEngineOptional();
   const canvas = usePlatformCanvas();
@@ -170,7 +171,7 @@ export default function RightSidebar({
   const componentPath = useComponentPathCompat(engine);
 
   const { openFile, showComments, setShowComments, isReadonly: editorStoreReadonly } = useEditorStore();
-  const isReadonly = isVSCode ? false : editorStoreReadonly;
+  const isReadonly = isVSCode ? readonlyProp : editorStoreReadonly;
 
   // Elements tree for Inspector (VS Code only, when Explorer is hidden)
   const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;

@@ -15,6 +15,7 @@ import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/s
 import type { ComponentGroup } from '../../../../lib/component-scanner/types';
 import type { SharedEditorState } from '../../../../lib/types';
 import { TID } from '../shared/data-testid-map';
+import type { ProjectCapabilities } from '../types';
 
 interface ComponentGroupsData {
   atomGroups: ComponentGroup[];
@@ -42,6 +43,7 @@ function RightPanelContent() {
   const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);
   const [explorerVisible, setExplorerVisible] = useState(false);
   const [insertPanelExpanded, setInsertPanelExpanded] = useState(false);
+  const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -56,6 +58,9 @@ function RightPanelContent() {
       }
       if (data.type === 'inspector:explorerVisible') {
         setExplorerVisible(!!data.visible);
+      }
+      if (data.type === 'projectCapabilities') {
+        setProjectCapabilities(data.capabilities ?? null);
       }
     };
     window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
@@ -105,6 +110,7 @@ function RightPanelContent() {
           componentGroups={componentGroups}
           explorerVisible={explorerVisible}
           onComponentClick={handleComponentClick}
+          readonly={projectCapabilities?.readonly === true}
         />
       </div>
       {showInsertPanel && (

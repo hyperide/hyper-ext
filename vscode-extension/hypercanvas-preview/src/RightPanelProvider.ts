@@ -27,6 +27,17 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     private readonly _getComponentGroups?: () => Promise<ScanResult>,
   ) {}
 
+  private _capabilities: import('./types').ProjectCapabilities | null = null;
+
+  /**
+   * Notify the webview about project capabilities (readonly mode, CSS system).
+   * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
+   */
+  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+    this._capabilities = capabilities;
+    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities });
+  }
+
   /**
    * Force the webview to reload its HTML, clearing all local React state.
    * Returns a promise that resolves when the new React app has mounted and
@@ -78,9 +89,12 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
       if (msg.type === 'webview:ready') {
         this._stateHub.sendInit(RightPanelProvider.viewType);
-        // Send initial explorer visibility + component groups
+        // Send initial explorer visibility + component groups + capabilities
         this._sendExplorerState(webviewView.webview);
         this._sendComponentGroups(webviewView.webview);
+        if (this._capabilities) {
+          webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities });
+        }
         return;
       }
 

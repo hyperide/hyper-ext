@@ -124,6 +124,9 @@ export function activate(context: vscode.ExtensionContext) {
       // Send capabilities to preview panel (readonly badge, style write guard)
       previewPanel?.notifyCapabilities(capabilities);
 
+      // Send capabilities to inspector panel (readonly inputs)
+      rightPanelProvider?.notifyCapabilities(capabilities);
+
       // Legacy: still send projectError for unsupported-project screen
       if (projectError) {
         console.log('[HyperIDE] Unsupported project detected:', projectError.type);
