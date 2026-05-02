@@ -301,11 +301,11 @@ function ComponentErrorOverlay({
         {hasProps && (
           <>
             <PropsForm
-              key={formKey}
               propsSchema={propsSchema ?? null}
               extractedPropNames={extractedProps}
               onChange={handlePropsChange}
               onAllRequiredFilled={setAllRequiredFilled}
+              resetKey={formKey}
             />
             <p style={errorOverlayHintStyle}>
               Fill props here, edit them in the code editor, or combine both approaches.

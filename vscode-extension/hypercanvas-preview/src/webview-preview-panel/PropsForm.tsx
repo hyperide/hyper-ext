@@ -28,6 +28,8 @@ interface PropsFormProps {
   onChange: (values: Record<string, unknown>) => void;
   /** Called when the "all required filled" status changes */
   onAllRequiredFilled?: (allFilled: boolean) => void;
+  /** Increment to reset all field values to empty */
+  resetKey?: number;
 }
 
 /** Convert extension's SimplePropInfo to PropTypeInfo for rendering */
@@ -126,9 +128,24 @@ function parseInlineObjectType(typeStr: string): Record<string, PropTypeInfo> | 
  * When propsSchema is available (from extension), renders type-appropriate inputs.
  * When only extractedPropNames is available (from error parsing), renders text inputs.
  */
-export function PropsForm({ propsSchema, extractedPropNames, onChange, onAllRequiredFilled }: PropsFormProps) {
+export function PropsForm({
+  propsSchema,
+  extractedPropNames,
+  onChange,
+  onAllRequiredFilled,
+  resetKey,
+}: PropsFormProps) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [focusPath, setFocusPath] = useState<string | null>(null);
+
+  // Reset values when resetKey changes (controlled reset from parent)
+  const prevResetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey !== prevResetKeyRef.current) {
+      prevResetKeyRef.current = resetKey;
+      setValues({});
+    }
+  }, [resetKey]);
 
   const handleChange = useCallback(
     (name: string, value: unknown) => {
@@ -390,9 +407,19 @@ interface PropFieldProps {
   depth?: number;
   focusPath?: string | null;
   fieldPath?: string;
+  onPopoverToggle?: (open: boolean) => void;
 }
 
-function PropField({ name, typeInfo, value, onChange, depth = 0, focusPath, fieldPath }: PropFieldProps) {
+function PropField({
+  name,
+  typeInfo,
+  value,
+  onChange,
+  depth = 0,
+  focusPath,
+  fieldPath,
+  onPopoverToggle,
+}: PropFieldProps) {
   // Hooks must be called unconditionally before any early returns
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   useEffect(() => {
@@ -545,6 +572,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0, focusPath, fiel
         depth={depth}
         focusPath={focusPath}
         fieldPath={fieldPath}
+        onPopoverToggle={onPopoverToggle}
       />
     );
   }
@@ -621,6 +649,7 @@ function ObjectPropPopover({
   depth,
   focusPath,
   fieldPath,
+  onPopoverToggle,
 }: {
   name: string;
   typeInfo: PropTypeInfo;
@@ -629,13 +658,20 @@ function ObjectPropPopover({
   depth: number;
   focusPath?: string | null;
   fieldPath?: string;
+  onPopoverToggle?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [childOpen, setChildOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   // biome-ignore lint/style/noNonNullAssertion: caller guarantees objectSchema exists
   const schema = typeInfo.objectSchema!;
+
+  // Notify parent when this popover opens/closes
+  useEffect(() => {
+    onPopoverToggle?.(open);
+  }, [open, onPopoverToggle]);
 
   // Auto-open when focusPath targets a child of this object
   const myPath = fieldPath || name;
@@ -686,6 +722,9 @@ function ObjectPropPopover({
     return v != null && v !== '' && !(Array.isArray(v) && v.length === 0);
   }).length;
 
+  // Show × only when no child popover is open (topmost visible popover gets ×)
+  const showCloseButton = !childOpen;
+
   return (
     <div style={fieldRowStyle}>
       <span style={fieldNameStyle}>{humanize(name)}</span>
@@ -708,9 +747,11 @@ function ObjectPropPopover({
         <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
             <span style={popoverTitleStyle}>{humanize(name)}</span>
-            <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
-              &times;
-            </button>
+            {showCloseButton && (
+              <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
+                &times;
+              </button>
+            )}
           </div>
           <div style={popoverFieldsStyle}>
             {Object.entries(schema).map(([fieldName, fieldTypeInfo]) => (
@@ -725,6 +766,7 @@ function ObjectPropPopover({
                 depth={depth + 1}
                 focusPath={focusPath}
                 fieldPath={`${myPath}.${fieldName}`}
+                onPopoverToggle={setChildOpen}
               />
             ))}
           </div>
