@@ -13,7 +13,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
@@ -803,7 +803,32 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               !existingViteConfig.includes('tamaguiPlugin') ||
               !existingViteConfig.includes('react-native-web');
             if (needsViteConfig) {
+              // Create stub files for deep react-native imports that rolldown can't resolve
+              const stubsDir = join(workspaceRoot, 'src', 'stubs');
+              await mkdir(stubsDir, { recursive: true });
+              const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
+              const appContainerStub = join(stubsDir, 'AppContainer.tsx');
+              try {
+                await readFile(codegenStub);
+              } catch {
+                await writeFile(
+                  codegenStub,
+                  'export default function codegenNativeComponent<P>(_name: string) {\n  return (_props: P) => null;\n}\n',
+                  'utf-8',
+                );
+              }
+              try {
+                await readFile(appContainerStub);
+              } catch {
+                await writeFile(
+                  appContainerStub,
+                  'import React from "react";\nexport default function AppContainer({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n',
+                  'utf-8',
+                );
+              }
+
               const viteConfigContent = [
+                "import path from 'path'",
                 "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
                 "import react from '@vitejs/plugin-react'",
                 "import { defineConfig } from 'vite'",
@@ -816,13 +841,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 '    }),',
                 '  ],',
                 '  resolve: {',
+                "    extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'],",
                 '    alias: {',
                 "      'react-native': 'react-native-web',",
+                "      'react-native/Libraries/Utilities/codegenNativeComponent': path.resolve(__dirname, 'src/stubs/codegenNativeComponent.ts'),",
+                "      'react-native/Libraries/ReactNative/AppContainer': path.resolve(__dirname, 'src/stubs/AppContainer.tsx'),",
                 '    },',
                 '  },',
                 '  optimizeDeps: {',
-                '    esbuildOptions: { sourcemap: false },',
                 "    include: ['react-native-web'],",
+                "    exclude: ['react-native-safe-area-context', 'react-native-screens'],",
                 '  },',
                 '})',
                 '',
@@ -876,30 +904,112 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // Non-critical — user can set the script manually
             }
 
-            // Step 6: Create App.web.tsx if App.tsx has React Native-only imports
-            // The .web.tsx convention is standard for RN — @tamagui/vite-plugin adds
-            // .web.tsx to resolve.extensions, so Vite picks App.web.tsx over App.tsx
-            progress.report({ message: 'Checking for RN-only imports in App.tsx...' });
+            // Step 6: Create App.web.tsx — web entry without native navigation stack
+            // Keeps SafeAreaProvider + NavigationContainer (both work on web via react-native-web)
+            // but replaces native-stack navigator with direct screen render.
+            progress.report({ message: 'Creating web entry point...' });
             try {
               const appPath = join(workspaceRoot, 'App.tsx');
               const appContent = await readFile(appPath, 'utf-8');
-              const hasRNImports =
-                /expo-status-bar|react-native-safe-area-context|react-native-screens|@react-navigation/.test(
-                  appContent,
+              const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
+                appContent,
+              );
+              if (hasNativeImports) {
+                // Find tamagui config import
+                const cfgMatch = appContent.match(
+                  /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
                 );
-              if (hasRNImports) {
-                let webContent = appContent;
-                // Remove expo-status-bar import and <StatusBar /> usage
-                webContent = webContent.replace(/import\s.*?['"]expo-status-bar['"].*?\n/g, '');
-                webContent = webContent.replace(/<StatusBar[^/]*\/>/g, '');
-                // Remove react-native-safe-area-context import and SafeAreaProvider wrapper
-                webContent = webContent.replace(/import\s.*?['"]react-native-safe-area-context['"].*?\n/g, '');
-                webContent = webContent.replace(/<SafeAreaProvider[^>]*>/g, '<>');
-                webContent = webContent.replace(/<\/SafeAreaProvider>/g, '</>');
-                // Clean up empty lines left behind
-                webContent = webContent.replace(/\n{3,}/g, '\n\n');
-                const webAppPath = join(workspaceRoot, 'App.web.tsx');
-                await writeFile(webAppPath, webContent, 'utf-8');
+                const cfgVar = cfgMatch?.[1] || cfgMatch?.[2] || 'config';
+                const cfgPath = cfgMatch?.[3] || './src/theme/tamagui.config';
+                const cfgIsNamed = !!cfgMatch?.[1];
+                // Find default theme
+                const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
+                const theme = themeMatch?.[1] || 'dark';
+
+                // Find first screen in src/screens/
+                let screenName = 'HomeScreen';
+                try {
+                  const files = await readdir(join(workspaceRoot, 'src', 'screens'));
+                  const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
+                  const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
+                  const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
+                  const any = files.find((f) => /Screen\.(tsx|jsx)$/.test(f));
+                  const chosen = home || feed || chat || any;
+                  if (chosen) screenName = chosen.replace(/\.(tsx|jsx)$/, '');
+                } catch {
+                  /* no screens dir — use default */
+                }
+
+                // Check if screen uses useNavigation hook
+                let needsNavContainer = false;
+                try {
+                  const screenSrc = await readFile(join(workspaceRoot, 'src', 'screens', `${screenName}.tsx`), 'utf-8');
+                  needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
+                } catch {
+                  /* can't read screen — skip nav container */
+                }
+
+                // Detect extra context providers (e.g., CartProvider)
+                const extraProviders: Array<{ importLine: string; name: string }> = [];
+                const cartMatch = appContent.match(/import\s+\{\s*CartProvider\s*\}\s+from\s+['"]([^'"]+)['"]/);
+                if (cartMatch) {
+                  extraProviders.push({
+                    importLine: `import { CartProvider } from "${cartMatch[1]}";`,
+                    name: 'CartProvider',
+                  });
+                }
+
+                // Build App.web.tsx
+                const lines: string[] = [
+                  'import React from "react";',
+                  'import { TamaguiProvider } from "tamagui";',
+                  'import { SafeAreaProvider } from "react-native-safe-area-context";',
+                ];
+                if (needsNavContainer) {
+                  lines.push('import { NavigationContainer } from "@react-navigation/native";');
+                }
+                lines.push(
+                  cfgIsNamed ? `import { ${cfgVar} } from "${cfgPath}";` : `import ${cfgVar} from "${cfgPath}";`,
+                );
+                for (const ep of extraProviders) lines.push(ep.importLine);
+                lines.push(`import { ${screenName} } from "./src/screens/${screenName}";`);
+                lines.push('');
+                lines.push('export default function App() {');
+                lines.push('  return (');
+
+                // Build provider nesting
+                let depth = 2;
+                const pad = (d: number) => '  '.repeat(d);
+                lines.push(`${pad(depth)}<SafeAreaProvider>`);
+                depth++;
+                if (needsNavContainer) {
+                  lines.push(`${pad(depth)}<NavigationContainer>`);
+                  depth++;
+                }
+                lines.push(`${pad(depth)}<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`);
+                depth++;
+                for (const ep of extraProviders) {
+                  lines.push(`${pad(depth)}<${ep.name}>`);
+                  depth++;
+                }
+                lines.push(`${pad(depth)}<${screenName} />`);
+                for (const ep of [...extraProviders].reverse()) {
+                  depth--;
+                  lines.push(`${pad(depth)}</${ep.name}>`);
+                }
+                depth--;
+                lines.push(`${pad(depth)}</TamaguiProvider>`);
+                if (needsNavContainer) {
+                  depth--;
+                  lines.push(`${pad(depth)}</NavigationContainer>`);
+                }
+                depth--;
+                lines.push(`${pad(depth)}</SafeAreaProvider>`);
+                lines.push('  );');
+                lines.push('}');
+                lines.push('');
+
+                await writeFile(join(workspaceRoot, 'App.web.tsx'), lines.join('\n'), 'utf-8');
               }
             } catch {
               // App.tsx doesn't exist or can't be read — skip
