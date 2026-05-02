@@ -47,9 +47,7 @@ export function ChatMessages({
           <EmptyState hasApiKey={hasApiKey} onConfigureProvider={onConfigureProvider} />
         )}
 
-        {messages.length > 0 && hasApiKey === false && (
-          <AuthErrorBanner onConfigure={onConfigureProvider} />
-        )}
+        {messages.length > 0 && hasApiKey === false && <AuthErrorBanner onConfigure={onConfigureProvider} />}
 
         {messages.map((msg, index) => (
           <div key={msg.id} data-testid={TID.aiChat.message(index)}>

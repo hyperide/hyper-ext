@@ -834,12 +834,13 @@ export class ComponentService {
       // Check if the type name is a named reference that was not resolved locally
       const typeName = prop.type;
       if (localTypes.has(typeName)) continue; // Already resolved in _extractObjectFields
-      if (!importMap.has(typeName)) continue; // Not an imported type
+      const importInfo = importMap.get(typeName);
+      if (!importInfo) continue; // Not an imported type
 
       try {
         const resolved = await this._resolveTypeFromImport(
           typeName,
-          importMap.get(typeName)!,
+          importInfo,
           componentPath,
           localTypes,
         );
