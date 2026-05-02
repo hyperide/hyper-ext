@@ -211,24 +211,28 @@ export class DevServerManager {
       // Handle stdout
       this._process.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
+        // Strip ANSI escape codes for message detection — Vite 8 (rolldown)
+        // wraps output in color codes that can split keywords across chunks.
+        const clean = text.replace(new RegExp('\\x1b\\[[0-9;]*m', 'g'), '');
         this._outputChannel.append(text);
         this._appendLog(text);
 
         // Detect when server is ready
-        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
+        if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
+          console.log('[HyperIDE] DevServer ready detected via stdout');
           this._updateStatus('running');
         }
       });
 
-      // Handle stderr
+      // Handle stderr — many servers (Vite 8, Next.js) write to stderr
       this._process.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
-        console.log('[HyperIDE] DevServer stderr:', text.trim());
+        const clean = text.replace(new RegExp('\\x1b\\[[0-9;]*m', 'g'), '');
         this._outputChannel.append(text);
         this._appendLog(text);
 
-        // Some servers log to stderr (e.g. Next.js, webpack-dev-server)
-        if (this._status === 'starting' && this._isServerReadyMessage(text)) {
+        if (this._status === 'starting' && this._isServerReadyMessage(clean)) {
+          console.log('[HyperIDE] DevServer ready detected via stderr');
           this._updateStatus('running');
         }
       });
