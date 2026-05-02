@@ -6,12 +6,21 @@
  * Pattern follows StateHub: register panels, broadcast updates.
  */
 
+import { appendFileSync } from 'node:fs';
 import type * as vscode from 'vscode';
 import type { DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import { DIAGNOSTIC_LOG_LIMIT } from '../../../shared/diagnostic-types';
 import type { RuntimeError } from '../../../shared/runtime-error';
 import type { LogEntry } from './services/DevServerManager';
 import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
+
+/**
+ * Optional append-only sink for diagnostic error lines, controlled by
+ * `HYPERIDE_DIAGNOSTIC_ERROR_SINK` env var (path to a file). E2E harnesses
+ * set this so they can tail the file for real-time flood detection — the
+ * sidebar Logs panel is the only place these errors otherwise appear.
+ */
+const ERROR_SINK_PATH = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
 
 /** Max server log entries included in AI diagnostic context */
 const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
@@ -183,6 +192,25 @@ export class DiagnosticHub {
       this._logs = this._logs.slice(-DIAGNOSTIC_LOG_LIMIT);
     }
     this._persistence?.save(this._logs);
+
+    // Forward error-level entries to the optional E2E error sink so test
+    // harnesses see the same failures the user sees in the Hyper Logs panel.
+    // VS Code extension host `console.error` goes to the Extension Host
+    // output channel, not to the Playwright-visible main window — so the
+    // only reliable cross-process channel is a file the fixture tails.
+    if (ERROR_SINK_PATH) {
+      const errorLines = entries
+        .filter((e) => e.level === 'error')
+        .map((e) => `${Date.now()}\t${e.source ?? ''}\t${(e.line ?? '').replace(/\n/g, ' ')}`)
+        .join('\n');
+      if (errorLines.length > 0) {
+        try {
+          appendFileSync(ERROR_SINK_PATH, `${errorLines}\n`);
+        } catch {
+          // Best effort — never crash extension host on logging failure.
+        }
+      }
+    }
   }
 
   private _broadcast(message: Record<string, unknown>): void {
