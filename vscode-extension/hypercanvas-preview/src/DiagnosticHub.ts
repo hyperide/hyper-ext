@@ -13,13 +13,6 @@ import type { RuntimeError } from '../../../shared/runtime-error';
 import type { LogEntry } from './services/DevServerManager';
 import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
 
-/** Strip ANSI escape codes (colors, bold, etc.) from terminal output */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: need to strip ANSI codes
-const ANSI_RE = /\x1B\[[0-9;]*[a-zA-Z]/g;
-function stripAnsi(str: string): string {
-  return str.replace(ANSI_RE, '');
-}
-
 /** Max server log entries included in AI diagnostic context */
 const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
 /** Max console log entries included in AI diagnostic context */
@@ -87,7 +80,7 @@ export class DiagnosticHub {
    */
   pushServerLogs(logs: LogEntry[]): void {
     const entries: DiagnosticLogEntry[] = logs.map((l) => ({
-      line: stripAnsi(l.line),
+      line: l.line,
       timestamp: l.timestamp,
       source: 'server' as const,
       isError: l.isError,
