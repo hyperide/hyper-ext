@@ -837,264 +837,372 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               ? 'pnpm add -D'
               : 'npm install -D';
 
+      // Detect if this is a Next.js project
+      let isNextJs = false;
       try {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: `HyperIDE: Setting up react-native-web + Vite via ${pkgManager}...`,
-            cancellable: false,
-          },
-          async (progress) => {
-            // Step 1: Install react-native-web as a dependency
-            progress.report({ message: 'Installing react-native-web...' });
-            await new Promise<void>((resolve, reject) => {
-              const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-              execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
-                if (err) reject(err);
-                else resolve();
+        const pkgRaw = await readFile(join(workspaceRoot, 'package.json'), 'utf-8');
+        const pkg = JSON.parse(pkgRaw);
+        isNextJs = !!(pkg.dependencies?.next || pkg.devDependencies?.next);
+      } catch {
+        // Can't read package.json — fall through to Vite path
+      }
+
+      try {
+        if (isNextJs) {
+          // ── Next.js + Tamagui path ──
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `HyperIDE: Setting up react-native-web for Next.js via ${pkgManager}...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              // Step 1: Install react-native-web as a dependency (no Vite needed)
+              progress.report({ message: 'Installing react-native-web...' });
+              await new Promise<void>((resolve, reject) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
               });
-            });
 
-            // Step 2: Install Vite toolchain as devDependencies
-            progress.report({ message: 'Installing vite + plugins...' });
-            await new Promise<void>((resolve, reject) => {
-              const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
-              execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
-                if (err) reject(err);
-                else resolve();
+              // Step 2: Create or patch next.config
+              progress.report({ message: 'Configuring Next.js for Tamagui...' });
+
+              // Find existing next.config file (ts > mjs > js)
+              const configVariants = ['next.config.ts', 'next.config.mjs', 'next.config.js'] as const;
+              let existingConfigPath: string | null = null;
+              let existingConfigContent = '';
+              for (const variant of configVariants) {
+                const candidate = join(workspaceRoot, variant);
+                try {
+                  existingConfigContent = await readFile(candidate, 'utf-8');
+                  existingConfigPath = candidate;
+                  break;
+                } catch {
+                  // Try next variant
+                }
+              }
+
+              const targetConfigPath = existingConfigPath ?? join(workspaceRoot, 'next.config.ts');
+              const isTypeScript = targetConfigPath.endsWith('.ts');
+
+              // Check if config already has tamagui transpilePackages and turbo alias
+              const hasTranspile =
+                existingConfigContent.includes('react-native-web') &&
+                existingConfigContent.includes('transpilePackages');
+              const hasTurboAlias =
+                existingConfigContent.includes('resolveAlias') && existingConfigContent.includes('react-native-web');
+
+              if (!hasTranspile || !hasTurboAlias) {
+                // Generate a fresh config — patching arbitrary user configs is fragile,
+                // so we only overwrite if the critical pieces are missing.
+                const configLines: string[] = [];
+                if (isTypeScript) {
+                  configLines.push("import type { NextConfig } from 'next';");
+                  configLines.push('');
+                  configLines.push('const nextConfig: NextConfig = {');
+                } else {
+                  configLines.push('/** @type {import("next").NextConfig} */');
+                  configLines.push('const nextConfig = {');
+                }
+                configLines.push(
+                  "  transpilePackages: ['react-native', 'react-native-web', 'tamagui', '@tamagui/config'],",
+                );
+                configLines.push('  experimental: {');
+                configLines.push('    turbo: {');
+                configLines.push('      resolveAlias: {');
+                configLines.push("        'react-native': 'react-native-web',");
+                configLines.push('      },');
+                configLines.push('      resolveExtensions: [');
+                configLines.push("        '.web.tsx',");
+                configLines.push("        '.web.ts',");
+                configLines.push("        '.web.jsx',");
+                configLines.push("        '.web.js',");
+                configLines.push("        '.tsx',");
+                configLines.push("        '.ts',");
+                configLines.push("        '.jsx',");
+                configLines.push("        '.js',");
+                configLines.push("        '.json',");
+                configLines.push('      ],');
+                configLines.push('    },');
+                configLines.push('  },');
+                configLines.push('};');
+                configLines.push('');
+                if (isTypeScript || targetConfigPath.endsWith('.mjs')) {
+                  configLines.push('export default nextConfig;');
+                } else {
+                  configLines.push('module.exports = nextConfig;');
+                }
+                configLines.push('');
+                await writeFile(targetConfigPath, configLines.join('\n'), 'utf-8');
+              }
+            },
+          );
+        } else {
+          // ── Vite + Tamagui path (existing logic) ──
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `HyperIDE: Setting up react-native-web + Vite via ${pkgManager}...`,
+              cancellable: false,
+            },
+            async (progress) => {
+              // Step 1: Install react-native-web as a dependency
+              progress.report({ message: 'Installing react-native-web...' });
+              await new Promise<void>((resolve, reject) => {
+                const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
+                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
               });
-            });
 
-            // Step 3: Create or patch vite.config.ts
-            // If the file exists but doesn't have tamaguiPlugin / react-native-web
-            // alias, overwrite it — a bare vite.config without these won't work
-            // for Tamagui web builds.
-            progress.report({ message: 'Configuring Vite for Tamagui...' });
-            const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
-            let existingViteConfig = '';
-            try {
-              existingViteConfig = await readFile(viteConfigPath, 'utf-8');
-            } catch {
-              // File doesn't exist
-            }
-            const needsViteConfig =
-              !existingViteConfig ||
-              !existingViteConfig.includes('tamaguiPlugin') ||
-              !existingViteConfig.includes('react-native-web');
-            if (needsViteConfig) {
-              // Create stub files for deep react-native imports that rolldown can't resolve
-              const stubsDir = join(workspaceRoot, 'src', 'stubs');
-              await mkdir(stubsDir, { recursive: true });
-              const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
-              const appContainerStub = join(stubsDir, 'AppContainer.tsx');
+              // Step 2: Install Vite toolchain as devDependencies
+              progress.report({ message: 'Installing vite + plugins...' });
+              await new Promise<void>((resolve, reject) => {
+                const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
+                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+
+              // Step 3: Create or patch vite.config.ts
+              // If the file exists but doesn't have tamaguiPlugin / react-native-web
+              // alias, overwrite it — a bare vite.config without these won't work
+              // for Tamagui web builds.
+              progress.report({ message: 'Configuring Vite for Tamagui...' });
+              const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
+              let existingViteConfig = '';
               try {
-                await readFile(codegenStub);
+                existingViteConfig = await readFile(viteConfigPath, 'utf-8');
               } catch {
-                await writeFile(
-                  codegenStub,
-                  'export default function codegenNativeComponent<P>(_name: string) {\n  return (_props: P) => null;\n}\n',
-                  'utf-8',
-                );
+                // File doesn't exist
               }
+              const needsViteConfig =
+                !existingViteConfig ||
+                !existingViteConfig.includes('tamaguiPlugin') ||
+                !existingViteConfig.includes('react-native-web');
+              if (needsViteConfig) {
+                // Create stub files for deep react-native imports that rolldown can't resolve
+                const stubsDir = join(workspaceRoot, 'src', 'stubs');
+                await mkdir(stubsDir, { recursive: true });
+                const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
+                const appContainerStub = join(stubsDir, 'AppContainer.tsx');
+                try {
+                  await readFile(codegenStub);
+                } catch {
+                  await writeFile(
+                    codegenStub,
+                    'export default function codegenNativeComponent<P>(_name: string) {\n  return (_props: P) => null;\n}\n',
+                    'utf-8',
+                  );
+                }
+                try {
+                  await readFile(appContainerStub);
+                } catch {
+                  await writeFile(
+                    appContainerStub,
+                    'import React from "react";\nexport default function AppContainer({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n',
+                    'utf-8',
+                  );
+                }
+
+                const viteConfigContent = [
+                  "import path from 'path'",
+                  "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
+                  "import react from '@vitejs/plugin-react'",
+                  "import { defineConfig } from 'vite'",
+                  '',
+                  'export default defineConfig({',
+                  '  plugins: [',
+                  '    react(),',
+                  '    tamaguiPlugin({',
+                  "      components: ['tamagui'],",
+                  '    }),',
+                  '  ],',
+                  '  resolve: {',
+                  "    extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'],",
+                  '    alias: {',
+                  "      'react-native': 'react-native-web',",
+                  "      'react-native/Libraries/Utilities/codegenNativeComponent': path.resolve(__dirname, 'src/stubs/codegenNativeComponent.ts'),",
+                  "      'react-native/Libraries/ReactNative/AppContainer': path.resolve(__dirname, 'src/stubs/AppContainer.tsx'),",
+                  '    },',
+                  '  },',
+                  '  optimizeDeps: {',
+                  "    include: ['react-native-web', 'warn-once'],",
+                  "    exclude: ['react-native-safe-area-context', 'react-native-screens'],",
+                  '  },',
+                  '})',
+                  '',
+                ].join('\n');
+                await writeFile(viteConfigPath, viteConfigContent, 'utf-8');
+              }
+
+              // Step 4: Create index.html if it doesn't exist
+              const indexHtmlPath = join(workspaceRoot, 'index.html');
+              let indexHtmlExists = false;
               try {
-                await readFile(appContainerStub);
+                await readFile(indexHtmlPath);
+                indexHtmlExists = true;
               } catch {
-                await writeFile(
-                  appContainerStub,
-                  'import React from "react";\nexport default function AppContainer({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n',
-                  'utf-8',
-                );
+                // File doesn't exist — will create it
+              }
+              if (!indexHtmlExists) {
+                const indexHtmlContent = [
+                  '<!DOCTYPE html>',
+                  '<html lang="en">',
+                  '<head>',
+                  '  <meta charset="UTF-8">',
+                  '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                  '  <title>App</title>',
+                  '</head>',
+                  '<body>',
+                  '  <div id="root"></div>',
+                  '  <script type="module" src="/src/main.tsx"></script>',
+                  '</body>',
+                  '</html>',
+                  '',
+                ].join('\n');
+                await writeFile(indexHtmlPath, indexHtmlContent, 'utf-8');
               }
 
-              const viteConfigContent = [
-                "import path from 'path'",
-                "import { tamaguiPlugin } from '@tamagui/vite-plugin'",
-                "import react from '@vitejs/plugin-react'",
-                "import { defineConfig } from 'vite'",
-                '',
-                'export default defineConfig({',
-                '  plugins: [',
-                '    react(),',
-                '    tamaguiPlugin({',
-                "      components: ['tamagui'],",
-                '    }),',
-                '  ],',
-                '  resolve: {',
-                "    extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'],",
-                '    alias: {',
-                "      'react-native': 'react-native-web',",
-                "      'react-native/Libraries/Utilities/codegenNativeComponent': path.resolve(__dirname, 'src/stubs/codegenNativeComponent.ts'),",
-                "      'react-native/Libraries/ReactNative/AppContainer': path.resolve(__dirname, 'src/stubs/AppContainer.tsx'),",
-                '    },',
-                '  },',
-                '  optimizeDeps: {',
-                "    include: ['react-native-web', 'warn-once'],",
-                "    exclude: ['react-native-safe-area-context', 'react-native-screens'],",
-                '  },',
-                '})',
-                '',
-              ].join('\n');
-              await writeFile(viteConfigPath, viteConfigContent, 'utf-8');
-            }
-
-            // Step 4: Create index.html if it doesn't exist
-            const indexHtmlPath = join(workspaceRoot, 'index.html');
-            let indexHtmlExists = false;
-            try {
-              await readFile(indexHtmlPath);
-              indexHtmlExists = true;
-            } catch {
-              // File doesn't exist — will create it
-            }
-            if (!indexHtmlExists) {
-              const indexHtmlContent = [
-                '<!DOCTYPE html>',
-                '<html lang="en">',
-                '<head>',
-                '  <meta charset="UTF-8">',
-                '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-                '  <title>App</title>',
-                '</head>',
-                '<body>',
-                '  <div id="root"></div>',
-                '  <script type="module" src="/src/main.tsx"></script>',
-                '</body>',
-                '</html>',
-                '',
-              ].join('\n');
-              await writeFile(indexHtmlPath, indexHtmlContent, 'utf-8');
-            }
-
-            // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
-            progress.report({ message: 'Updating package.json scripts...' });
-            try {
-              const pkgJsonPath = join(workspaceRoot, 'package.json');
-              const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
-              const pkg = JSON.parse(pkgRaw);
-              const scripts = (pkg.scripts ?? {}) as Record<string, string>;
-              const currentDev = scripts.dev ?? '';
-              // Replace expo-based or missing dev script with vite
-              if (!currentDev || currentDev.includes('expo') || currentDev.includes('one ')) {
-                scripts.dev = 'vite';
-                pkg.scripts = scripts;
-                await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+              // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
+              progress.report({ message: 'Updating package.json scripts...' });
+              try {
+                const pkgJsonPath = join(workspaceRoot, 'package.json');
+                const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
+                const pkg = JSON.parse(pkgRaw);
+                const scripts = (pkg.scripts ?? {}) as Record<string, string>;
+                const currentDev = scripts.dev ?? '';
+                // Replace expo-based or missing dev script with vite
+                if (!currentDev || currentDev.includes('expo') || currentDev.includes('one ')) {
+                  scripts.dev = 'vite';
+                  pkg.scripts = scripts;
+                  await writeFile(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+                }
+              } catch {
+                // Non-critical — user can set the script manually
               }
-            } catch {
-              // Non-critical — user can set the script manually
-            }
 
-            // Step 6: Create App.web.tsx — web entry without native navigation stack
-            // Keeps SafeAreaProvider + NavigationContainer (both work on web via react-native-web)
-            // but replaces native-stack navigator with direct screen render.
-            progress.report({ message: 'Creating web entry point...' });
-            try {
-              const appPath = join(workspaceRoot, 'App.tsx');
-              const appContent = await readFile(appPath, 'utf-8');
-              const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
-                appContent,
-              );
-              if (hasNativeImports) {
-                // Find tamagui config import
-                const cfgMatch = appContent.match(
-                  /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
+              // Step 6: Create App.web.tsx — web entry without native navigation stack
+              // Keeps SafeAreaProvider + NavigationContainer (both work on web via react-native-web)
+              // but replaces native-stack navigator with direct screen render.
+              progress.report({ message: 'Creating web entry point...' });
+              try {
+                const appPath = join(workspaceRoot, 'App.tsx');
+                const appContent = await readFile(appPath, 'utf-8');
+                const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
+                  appContent,
                 );
-                const cfgVar = cfgMatch?.[1] || cfgMatch?.[2] || 'config';
-                const cfgPath = cfgMatch?.[3] || './src/theme/tamagui.config';
-                const cfgIsNamed = !!cfgMatch?.[1];
-                // Find default theme
-                const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
-                const theme = themeMatch?.[1] || 'dark';
+                if (hasNativeImports) {
+                  // Find tamagui config import
+                  const cfgMatch = appContent.match(
+                    /import\s+(?:\{\s*(\w+)\s*\}|(\w+))\s+from\s+['"]([^'"]*tamagui\.config[^'"]*)['"]/,
+                  );
+                  const cfgVar = cfgMatch?.[1] || cfgMatch?.[2] || 'config';
+                  const cfgPath = cfgMatch?.[3] || './src/theme/tamagui.config';
+                  const cfgIsNamed = !!cfgMatch?.[1];
+                  // Find default theme
+                  const themeMatch = appContent.match(/defaultTheme=["'](\w+)["']/);
+                  const theme = themeMatch?.[1] || 'dark';
 
-                // Find first screen in src/screens/
-                let screenName = 'HomeScreen';
-                try {
-                  const files = await readdir(join(workspaceRoot, 'src', 'screens'));
-                  const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
-                  const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
-                  const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
-                  const any = files.find((f) => /Screen\.(tsx|jsx)$/.test(f));
-                  const chosen = home || feed || chat || any;
-                  if (chosen) screenName = chosen.replace(/\.(tsx|jsx)$/, '');
-                } catch {
-                  /* no screens dir — use default */
-                }
+                  // Find first screen in src/screens/
+                  let screenName = 'HomeScreen';
+                  try {
+                    const files = await readdir(join(workspaceRoot, 'src', 'screens'));
+                    const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
+                    const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
+                    const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
+                    const any = files.find((f) => /Screen\.(tsx|jsx)$/.test(f));
+                    const chosen = home || feed || chat || any;
+                    if (chosen) screenName = chosen.replace(/\.(tsx|jsx)$/, '');
+                  } catch {
+                    /* no screens dir — use default */
+                  }
 
-                // Check if screen uses useNavigation hook
-                let needsNavContainer = false;
-                try {
-                  const screenSrc = await readFile(join(workspaceRoot, 'src', 'screens', `${screenName}.tsx`), 'utf-8');
-                  needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
-                } catch {
-                  /* can't read screen — skip nav container */
-                }
+                  // Check if screen uses useNavigation hook
+                  let needsNavContainer = false;
+                  try {
+                    const screenSrc = await readFile(
+                      join(workspaceRoot, 'src', 'screens', `${screenName}.tsx`),
+                      'utf-8',
+                    );
+                    needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
+                  } catch {
+                    /* can't read screen — skip nav container */
+                  }
 
-                // Detect extra context providers (e.g., CartProvider)
-                const extraProviders: Array<{ importLine: string; name: string }> = [];
-                const cartMatch = appContent.match(/import\s+\{\s*CartProvider\s*\}\s+from\s+['"]([^'"]+)['"]/);
-                if (cartMatch) {
-                  extraProviders.push({
-                    importLine: `import { CartProvider } from "${cartMatch[1]}";`,
-                    name: 'CartProvider',
-                  });
-                }
+                  // Detect extra context providers (e.g., CartProvider)
+                  const extraProviders: Array<{ importLine: string; name: string }> = [];
+                  const cartMatch = appContent.match(/import\s+\{\s*CartProvider\s*\}\s+from\s+['"]([^'"]+)['"]/);
+                  if (cartMatch) {
+                    extraProviders.push({
+                      importLine: `import { CartProvider } from "${cartMatch[1]}";`,
+                      name: 'CartProvider',
+                    });
+                  }
 
-                // Build App.web.tsx
-                const lines: string[] = [
-                  'import React from "react";',
-                  'import { TamaguiProvider } from "tamagui";',
-                  'import { SafeAreaProvider } from "react-native-safe-area-context";',
-                ];
-                if (needsNavContainer) {
-                  lines.push('import { NavigationContainer } from "@react-navigation/native";');
-                }
-                lines.push(
-                  cfgIsNamed ? `import { ${cfgVar} } from "${cfgPath}";` : `import ${cfgVar} from "${cfgPath}";`,
-                );
-                for (const ep of extraProviders) lines.push(ep.importLine);
-                lines.push(`import { ${screenName} } from "./src/screens/${screenName}";`);
-                lines.push('');
-                lines.push('export default function App() {');
-                lines.push('  return (');
+                  // Build App.web.tsx
+                  const lines: string[] = [
+                    'import React from "react";',
+                    'import { TamaguiProvider } from "tamagui";',
+                    'import { SafeAreaProvider } from "react-native-safe-area-context";',
+                  ];
+                  if (needsNavContainer) {
+                    lines.push('import { NavigationContainer } from "@react-navigation/native";');
+                  }
+                  lines.push(
+                    cfgIsNamed ? `import { ${cfgVar} } from "${cfgPath}";` : `import ${cfgVar} from "${cfgPath}";`,
+                  );
+                  for (const ep of extraProviders) lines.push(ep.importLine);
+                  lines.push(`import { ${screenName} } from "./src/screens/${screenName}";`);
+                  lines.push('');
+                  lines.push('export default function App() {');
+                  lines.push('  return (');
 
-                // Build provider nesting
-                let depth = 2;
-                const pad = (d: number) => '  '.repeat(d);
-                lines.push(`${pad(depth)}<SafeAreaProvider>`);
-                depth++;
-                if (needsNavContainer) {
-                  lines.push(`${pad(depth)}<NavigationContainer>`);
+                  // Build provider nesting
+                  let depth = 2;
+                  const pad = (d: number) => '  '.repeat(d);
+                  lines.push(`${pad(depth)}<SafeAreaProvider>`);
                   depth++;
-                }
-                lines.push(`${pad(depth)}<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`);
-                depth++;
-                for (const ep of extraProviders) {
-                  lines.push(`${pad(depth)}<${ep.name}>`);
+                  if (needsNavContainer) {
+                    lines.push(`${pad(depth)}<NavigationContainer>`);
+                    depth++;
+                  }
+                  lines.push(`${pad(depth)}<TamaguiProvider config={${cfgVar}} defaultTheme="${theme}">`);
                   depth++;
-                }
-                lines.push(`${pad(depth)}<${screenName} />`);
-                for (const ep of [...extraProviders].reverse()) {
+                  for (const ep of extraProviders) {
+                    lines.push(`${pad(depth)}<${ep.name}>`);
+                    depth++;
+                  }
+                  lines.push(`${pad(depth)}<${screenName} />`);
+                  for (const ep of [...extraProviders].reverse()) {
+                    depth--;
+                    lines.push(`${pad(depth)}</${ep.name}>`);
+                  }
                   depth--;
-                  lines.push(`${pad(depth)}</${ep.name}>`);
-                }
-                depth--;
-                lines.push(`${pad(depth)}</TamaguiProvider>`);
-                if (needsNavContainer) {
+                  lines.push(`${pad(depth)}</TamaguiProvider>`);
+                  if (needsNavContainer) {
+                    depth--;
+                    lines.push(`${pad(depth)}</NavigationContainer>`);
+                  }
                   depth--;
-                  lines.push(`${pad(depth)}</NavigationContainer>`);
-                }
-                depth--;
-                lines.push(`${pad(depth)}</SafeAreaProvider>`);
-                lines.push('  );');
-                lines.push('}');
-                lines.push('');
+                  lines.push(`${pad(depth)}</SafeAreaProvider>`);
+                  lines.push('  );');
+                  lines.push('}');
+                  lines.push('');
 
-                await writeFile(join(workspaceRoot, 'App.web.tsx'), lines.join('\n'), 'utf-8');
+                  await writeFile(join(workspaceRoot, 'App.web.tsx'), lines.join('\n'), 'utf-8');
+                }
+              } catch {
+                // App.tsx doesn't exist or can't be read — skip
               }
-            } catch {
-              // App.tsx doesn't exist or can't be read — skip
-            }
-          },
-        );
+            },
+          );
+        }
         // Re-check to confirm the package was recorded in package.json
         const stillUnsupported = await detectUnsupportedProject(workspaceRoot);
         if (stillUnsupported) {
@@ -1102,9 +1210,10 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
             'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
           );
         } else {
-          vscode.window.showInformationMessage(
-            'react-native-web + Vite configured. Run "dev" to start the Vite dev server.',
-          );
+          const successMsg = isNextJs
+            ? 'react-native-web + Next.js configured. Run "dev" to start the Next.js dev server.'
+            : 'react-native-web + Vite configured. Run "dev" to start the Vite dev server.';
+          vscode.window.showInformationMessage(successMsg);
           previewPanel?.notifyUnsupportedProject(null);
         }
       } catch (err) {
