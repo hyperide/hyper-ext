@@ -161,6 +161,16 @@ export function PropsForm({ propsSchema, extractedPropNames, onChange }: PropsFo
   );
 }
 
+/** Convert camelCase/PascalCase to human-readable: quoteTweet → quote tweet */
+function humanize(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+/** Generate a random ID string */
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 10);
+}
+
 // ============================================================================
 // PropField — renders a single typed field
 // ============================================================================
@@ -187,10 +197,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
   if (typeInfo.type === 'function' || typeInfo.type === 'reactNode') {
     return (
       <div style={fieldRowStyle}>
-        <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        </span>
+        <span style={fieldNameStyle}>{humanize(name)}</span>
         <span style={nonEditableStyle}>Not editable ({typeInfo.type})</span>
       </div>
     );
@@ -200,10 +207,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
   if (typeInfo.type === 'boolean') {
     return (
       <div style={fieldRowStyle}>
-        <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        </span>
+        <span style={fieldNameStyle}>{humanize(name)}</span>
         <label style={checkboxLabelStyle}>
           <input
             type="checkbox"
@@ -221,10 +225,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
   if (typeInfo.type === 'enum' && typeInfo.enumValues) {
     return (
       <div style={fieldRowStyle}>
-        <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        </span>
+        <span style={fieldNameStyle}>{humanize(name)}</span>
         <select value={String(value ?? '')} onChange={(e) => onChange(name, e.target.value)} style={selectStyle}>
           <option value="">Select...</option>
           {typeInfo.enumValues.map((v) => (
@@ -241,10 +242,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
   if (typeInfo.type === 'number') {
     return (
       <div style={fieldRowStyle}>
-        <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        </span>
+        <span style={fieldNameStyle}>{humanize(name)}</span>
         <input
           type="number"
           value={value != null ? String(value) : ''}
@@ -252,7 +250,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
             const num = Number.parseFloat(e.target.value);
             onChange(name, Number.isNaN(num) ? undefined : num);
           }}
-          placeholder={`Enter ${name}`}
+          placeholder={typeInfo.required ? '' : 'optional'}
           style={inputStyle}
         />
       </div>
@@ -265,9 +263,7 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
     return (
       <div style={fieldColumnStyle}>
         <span style={fieldNameStyle}>
-          {name}
-          {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-          <span style={typeBadgeStyle}>array</span>
+          {humanize(name)} <span style={typeBadgeStyle}>array</span>
         </span>
         <div style={arrayContainerStyle}>
           {items.map((item, index) => (
@@ -314,26 +310,33 @@ function PropField({ name, typeInfo, value, onChange, depth = 0 }: PropFieldProp
 
   // Object without schema — JSON textarea fallback
   if (typeInfo.type === 'object') {
-    return <ObjectJsonFallback name={name} typeInfo={typeInfo} value={value} onChange={onChange} />;
+    return <ObjectJsonFallback name={name} value={value} onChange={onChange} />;
   }
 
-  // String / Unknown — text input
+  // String / Unknown — text input (with "gen" button for id-like fields)
+  const isIdField = /^id$/i.test(name) || name.endsWith('Id') || name.endsWith('ID');
   return (
     <div style={fieldRowStyle}>
-      <span style={fieldNameStyle}>
-        {name}
-        {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        {typeInfo.type !== 'string' && typeInfo.type !== 'unknown' && (
-          <span style={typeBadgeStyle}>{typeInfo.type}</span>
+      <span style={fieldNameStyle}>{humanize(name)}</span>
+      <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+        <input
+          type="text"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(name, e.target.value)}
+          placeholder={typeInfo.required ? '' : 'optional'}
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        {isIdField && (
+          <button
+            type="button"
+            onClick={() => onChange(name, generateId())}
+            style={genButtonStyle}
+            title="Generate random ID"
+          >
+            gen
+          </button>
         )}
-      </span>
-      <input
-        type="text"
-        value={String(value ?? '')}
-        onChange={(e) => onChange(name, e.target.value)}
-        placeholder={`Enter ${name}`}
-        style={inputStyle}
-      />
+      </div>
     </div>
   );
 }
@@ -358,32 +361,9 @@ function ObjectPropPopover({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-
   const objValue = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
   // biome-ignore lint/style/noNonNullAssertion: caller guarantees objectSchema exists
   const schema = typeInfo.objectSchema!;
-
-  // Position the popover next to the trigger button
-  useEffect(() => {
-    if (!open || !triggerRef.current) return;
-
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      // Place popover to the right of the trigger; if it would overflow, place to the left
-      const popoverWidth = 300;
-      const viewportWidth = window.innerWidth;
-      const spaceRight = viewportWidth - rect.right;
-      const left = spaceRight >= popoverWidth + 8 ? rect.right + 8 : rect.left - popoverWidth - 8;
-      // Vertically align with the trigger top, clamped to viewport
-      const viewportHeight = window.innerHeight;
-      const top = Math.min(rect.top, viewportHeight - 320);
-      setPosition({ top: Math.max(4, top), left: Math.max(4, left) });
-    };
-
-    updatePosition();
-  }, [open]);
 
   // Close on click outside
   useEffect(() => {
@@ -422,10 +402,7 @@ function ObjectPropPopover({
 
   return (
     <div style={fieldRowStyle}>
-      <span style={fieldNameStyle}>
-        {name}
-        {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-      </span>
+      <span style={fieldNameStyle}>{humanize(name)}</span>
       <button
         ref={triggerRef}
         type="button"
@@ -441,17 +418,10 @@ function ObjectPropPopover({
         </span>
         <span style={popoverTriggerArrowStyle}>{open ? '\u25BC' : '\u25B6'}</span>
       </button>
-      {open && position && (
-        <div
-          ref={popoverRef}
-          style={{
-            ...popoverContainerStyle,
-            top: position.top,
-            left: position.left,
-          }}
-        >
+      {open && (
+        <div ref={popoverRef} style={popoverContainerStyle}>
           <div style={popoverHeaderStyle}>
-            <span style={popoverTitleStyle}>{name}</span>
+            <span style={popoverTitleStyle}>{humanize(name)}</span>
             <button type="button" onClick={() => setOpen(false)} style={popoverCloseButtonStyle}>
               &times;
             </button>
@@ -482,12 +452,10 @@ function ObjectPropPopover({
 
 function ObjectJsonFallback({
   name,
-  typeInfo,
   value,
   onChange,
 }: {
   name: string;
-  typeInfo: PropTypeInfo;
   value: unknown;
   onChange: (name: string, value: unknown) => void;
 }) {
@@ -522,9 +490,7 @@ function ObjectJsonFallback({
   return (
     <div style={fieldColumnStyle}>
       <span style={fieldNameStyle}>
-        {name}
-        {typeInfo.required && <span style={requiredMarkerStyle}>*</span>}
-        <span style={typeBadgeStyle}>object (JSON)</span>
+        {humanize(name)} <span style={typeBadgeStyle}>object (JSON)</span>
       </span>
       <textarea
         value={jsonText}
@@ -581,9 +547,16 @@ const fieldNameStyle: CSSProperties = {
   gap: 4,
 };
 
-const requiredMarkerStyle: CSSProperties = {
-  color: 'var(--vscode-errorForeground, #f44747)',
-  fontWeight: 600,
+const genButtonStyle: CSSProperties = {
+  padding: '2px 8px',
+  fontSize: 11,
+  fontWeight: 500,
+  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+  color: 'var(--vscode-button-secondaryForeground, #ccc)',
+  border: 'none',
+  borderRadius: 4,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };
 
 const typeBadgeStyle: CSSProperties = {
@@ -716,6 +689,9 @@ const popoverTriggerArrowStyle: CSSProperties = {
 
 const popoverContainerStyle: CSSProperties = {
   position: 'fixed',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
   background: 'var(--vscode-editorWidget-background, #252526)',
   border: '1px solid var(--vscode-editorWidget-border, #454545)',
   borderRadius: 6,
