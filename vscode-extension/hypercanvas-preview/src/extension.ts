@@ -118,20 +118,26 @@ async function detectPreviewProviders(
       wrapClose = `${wrapClose}</SafeAreaProvider>`;
     }
 
-    // Detect NavigationContainer
+    // Detect NavigationContainer — wrap with NavigationIndependentTree inside NavigationContainer
+    // to prevent "nested NavigationContainer" error when previewing navigator components
+    // (e.g. AppNavigator) that render their own NavigationContainer.
+    // NavigationIndependentTree sets the independent flag so inner containers don't throw,
+    // while the outer container still provides context for useNavigation() in screen components.
     if (appContent.includes('NavigationContainer')) {
       imports.push("import { NavigationContainer } from '@react-navigation/native';");
-      // Place inside SafeAreaProvider but outside TamaguiProvider
+      imports.push("import { NavigationIndependentTree } from '@react-navigation/core';");
+      // Place NavigationContainer inside SafeAreaProvider but outside TamaguiProvider,
+      // with NavigationIndependentTree wrapping everything inside NavigationContainer.
       const safeIdx = wrapOpen.indexOf('<TamaguiProvider');
       if (safeIdx >= 0) {
-        wrapOpen = `${wrapOpen.slice(0, safeIdx)}<NavigationContainer>${wrapOpen.slice(safeIdx)}`;
+        wrapOpen = `${wrapOpen.slice(0, safeIdx)}<NavigationContainer><NavigationIndependentTree>${wrapOpen.slice(safeIdx)}`;
         const tamaguiCloseIdx = wrapClose.indexOf('</TamaguiProvider>');
         if (tamaguiCloseIdx >= 0) {
-          wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + '</TamaguiProvider>'.length)}</NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + '</TamaguiProvider>'.length)}`;
+          wrapClose = `${wrapClose.slice(0, tamaguiCloseIdx + '</TamaguiProvider>'.length)}</NavigationIndependentTree></NavigationContainer>${wrapClose.slice(tamaguiCloseIdx + '</TamaguiProvider>'.length)}`;
         }
       } else {
-        wrapOpen = `<NavigationContainer>${wrapOpen}`;
-        wrapClose = `${wrapClose}</NavigationContainer>`;
+        wrapOpen = `<NavigationContainer><NavigationIndependentTree>${wrapOpen}`;
+        wrapClose = `${wrapClose}</NavigationIndependentTree></NavigationContainer>`;
       }
     }
 
