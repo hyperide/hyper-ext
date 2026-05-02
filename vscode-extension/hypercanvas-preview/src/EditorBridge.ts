@@ -61,7 +61,11 @@ async function openFile(filePath: string, line?: number, column?: number): Promi
 
     const doc = await vscode.workspace.openTextDocument(uri);
     const targetColumn = getNonPreviewColumn();
-    const editor = await vscode.window.showTextDocument(doc, targetColumn);
+    const editor = await vscode.window.showTextDocument(doc, {
+      viewColumn: targetColumn,
+      preserveFocus: false,
+      preview: true,
+    });
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -147,13 +151,23 @@ export function setupActiveFileListener(webview: vscode.Webview): vscode.Disposa
 function getNonPreviewColumn(): vscode.ViewColumn {
   const previewViewType = 'hypercanvas.previewPanel';
 
+  // Collect all non-preview groups, prefer ViewColumn.One (leftmost)
+  let bestColumn: vscode.ViewColumn | undefined;
   for (const group of vscode.window.tabGroups.all) {
     const hasPreview = group.tabs.some(
       (tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.includes(previewViewType),
     );
     if (!hasPreview) {
-      return group.viewColumn;
+      if (group.viewColumn === vscode.ViewColumn.One) {
+        return vscode.ViewColumn.One;
+      }
+      if (bestColumn === undefined) {
+        bestColumn = group.viewColumn;
+      }
     }
+  }
+  if (bestColumn !== undefined) {
+    return bestColumn;
   }
 
   // Every group contains the preview (or preview is the only tab).

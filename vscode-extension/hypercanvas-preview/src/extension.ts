@@ -264,6 +264,20 @@ export function activate(context: vscode.ExtensionContext) {
       // Auto-open Preview Panel if not already visible
       previewPanel?.createOrShow(vscode.ViewColumn.Beside);
 
+      // Open the component file in the left editor group (ViewColumn.One)
+      // so the user can see the code alongside the preview.
+      // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
+      const absPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
+      vscode.workspace.openTextDocument(vscode.Uri.file(absPath)).then(
+        (doc) =>
+          vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.One,
+            preserveFocus: false,
+            preview: true,
+          }),
+        (err) => console.error('[HyperIDE] Failed to open component file:', err),
+      );
+
       // Parse component structure
       panelRouter?.componentService
         .parseStructure(componentPath)
