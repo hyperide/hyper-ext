@@ -122,10 +122,11 @@ function PreviewContent() {
           componentPath={componentError.componentPath}
           error={componentError.error}
           propsSchema={componentError.propsSchema}
-          onCreateSample={(propValues?: Record<string, unknown>) => {
+          onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
             canvas.sendEvent({
               type: 'errorBoundary:createSample',
               componentPath: componentError.componentPath,
+              sampleName,
               propValues,
             } as unknown as import('@/lib/platform/types').PlatformMessage);
           }}
@@ -209,7 +210,7 @@ interface ComponentErrorOverlayProps {
   componentPath: string;
   error: string;
   propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
-  onCreateSample: (propValues?: Record<string, unknown>) => void;
+  onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
 }
 
@@ -257,6 +258,7 @@ function ComponentErrorOverlay({
   const [allRequiredFilled, setAllRequiredFilled] = useState(false);
   const [sampleCreated, setSampleCreated] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const [sampleName, setSampleName] = useState('SampleDefault');
 
   const [hasAnyProps, setHasAnyProps] = useState(false);
 
@@ -278,14 +280,17 @@ function ComponentErrorOverlay({
       if (Array.isArray(v)) return v.length > 0;
       return true;
     });
-    onCreateSample(filled.length > 0 ? Object.fromEntries(filled) : undefined);
+    onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
     setSampleCreated(true);
-  }, [onCreateSample]);
+  }, [onCreateSample, sampleName]);
 
+  const sampleCountRef = useRef(1);
   const handleCreateNew = useCallback(() => {
+    sampleCountRef.current += 1;
     setSampleCreated(false);
     setAllRequiredFilled(false);
     setHasAnyProps(false);
+    setSampleName(`Sample${sampleCountRef.current}`);
     propValuesRef.current = {};
     setFormKey((k) => k + 1);
   }, []);
@@ -318,6 +323,20 @@ function ComponentErrorOverlay({
             Could not detect required prop names from the error. The sample file will include a TODO placeholder.
           </p>
         )}
+
+        <div style={sampleNameRowStyle}>
+          <label htmlFor="sample-name" style={sampleNameLabelStyle}>
+            Name
+          </label>
+          <input
+            id="sample-name"
+            type="text"
+            value={sampleName}
+            onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+            placeholder="SampleDefault"
+            style={sampleNameInputStyle}
+          />
+        </div>
 
         {sampleCreated ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -586,6 +605,31 @@ const errorOverlayNoPropsHintStyle: CSSProperties = {
   fontSize: 12,
   margin: '0 0 16px',
   lineHeight: 1.6,
+};
+
+const sampleNameRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 12,
+};
+
+const sampleNameLabelStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  minWidth: 40,
+};
+
+const sampleNameInputStyle: CSSProperties = {
+  flex: 1,
+  padding: '4px 8px',
+  fontSize: 12,
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  color: 'var(--vscode-input-foreground, #e2e8f0)',
+  border: '1px solid var(--vscode-input-border, #444)',
+  borderRadius: 4,
+  outline: 'none',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
 };
 
 const errorOverlayHintStyle: CSSProperties = {

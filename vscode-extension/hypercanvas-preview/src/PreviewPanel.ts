@@ -333,6 +333,7 @@ export class PreviewPanel {
       await this._handleCreateSampleFromError(
         msg.componentPath as string | undefined,
         msg.propValues as Record<string, unknown> | undefined,
+        msg.sampleName as string | undefined,
       );
       return;
     }
@@ -481,16 +482,18 @@ export class PreviewPanel {
   private async _handleCreateSampleFromError(
     componentPath: string | undefined,
     propValues?: Record<string, unknown>,
+    sampleName?: string,
   ): Promise<void> {
     if (!componentPath) return;
 
     const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
+    const exportName = sampleName || 'SampleDefault';
 
     // Extract component name from file path (e.g. 'src/components/Button.tsx' → 'Button')
     const fileName = path.basename(absPath, path.extname(absPath));
     const componentName = fileName.charAt(0).toUpperCase() + fileName.slice(1);
 
-    // Read the file to check if SampleDefault already exists
+    // Read the file to check if this sample name already exists
     let sourceCode: string;
     try {
       const fileUri = vscode.Uri.file(absPath);
@@ -501,11 +504,33 @@ export class PreviewPanel {
       return;
     }
 
-    // Check if SampleDefault already exists
-    if (/export\s+(?:const|function)\s+SampleDefault\b/.test(sourceCode)) {
-      // Sample already exists — just open the file and jump to it
-      const sampleIndex = sourceCode.indexOf('SampleDefault');
-      const lineNumber = sourceCode.substring(0, sampleIndex).split('\n').length;
+    // Check if sample with this name already exists — update it in place
+    const existingRegex = new RegExp(`export\\s+const\\s+${exportName}\\s*=`);
+    if (existingRegex.test(sourceCode)) {
+      // Find and replace the existing sample block
+      const sampleStart = sourceCode.indexOf(`export const ${exportName}`);
+      // Find the end of the sample (next export or end of file)
+      const afterSample = sourceCode.slice(sampleStart);
+      const nextExportMatch = afterSample.match(/\n(export\s)/);
+      const sampleEnd = nextExportMatch
+        ? sampleStart + (nextExportMatch.index ?? afterSample.length)
+        : sourceCode.length;
+
+      // Build replacement
+      const propEntries = this._buildPropEntries(propValues);
+      const replacement = this._buildSampleScaffold(componentName, exportName, propEntries);
+
+      sourceCode = sourceCode.slice(0, sampleStart) + replacement.trimStart() + sourceCode.slice(sampleEnd);
+
+      try {
+        const fileUri = vscode.Uri.file(absPath);
+        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(sourceCode, 'utf-8'));
+      } catch {
+        void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
+        return;
+      }
+
+      const lineNumber = sourceCode.substring(0, sourceCode.indexOf(exportName)).split('\n').length;
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
       await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.One,
@@ -517,32 +542,8 @@ export class PreviewPanel {
     }
 
     // Generate a minimal sample scaffold — include user-provided prop values if available
-    const propEntries = propValues
-      ? Object.entries(propValues).filter(([, v]) => {
-          if (v == null) return false;
-          if (typeof v === 'string') return v.trim() !== '';
-          return true;
-        })
-      : [];
-    const propLines =
-      propEntries.length > 0
-        ? propEntries.map(([key, value]) => {
-            // Typed value serialization for JSX
-            if (typeof value === 'boolean') return `    ${key}={${value}}`;
-            if (typeof value === 'number') return `    ${key}={${value}}`;
-            if (typeof value === 'object') return `    ${key}={${JSON.stringify(value)}}`;
-            return `    ${key}={${JSON.stringify(String(value))}}`;
-          })
-        : [`    // TODO: Add required props here`];
-    const scaffold = [
-      '',
-      `// Sample component — add required props below`,
-      `export const SampleDefault = () => (`,
-      `  <${componentName}`,
-      ...propLines,
-      `  />`,
-      ');',
-    ].join('\n');
+    const propEntries = this._buildPropEntries(propValues);
+    const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries);
 
     // Append to file
     const updatedCode = `${sourceCode}\n${scaffold}\n`;
@@ -557,7 +558,7 @@ export class PreviewPanel {
     // Open the file and position cursor at the scaffold
     const lines = updatedCode.split('\n');
     const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
-    const sampleIdx = lines.findIndex((line) => line.includes('SampleDefault'));
+    const sampleIdx = lines.findIndex((line) => line.includes(exportName));
     const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
     await vscode.window.showTextDocument(doc, {
@@ -567,7 +568,42 @@ export class PreviewPanel {
       selection: new vscode.Range(targetLine, 0, targetLine, 0),
     });
 
-    console.log(`[HyperIDE] Created SampleDefault scaffold in ${componentPath}`);
+    console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
+  }
+
+  private _buildPropEntries(propValues?: Record<string, unknown>): Array<[string, unknown]> {
+    return propValues
+      ? Object.entries(propValues).filter(([, v]) => {
+          if (v == null) return false;
+          if (typeof v === 'string') return v.trim() !== '';
+          return true;
+        })
+      : [];
+  }
+
+  private _buildSampleScaffold(
+    componentName: string,
+    exportName: string,
+    propEntries: Array<[string, unknown]>,
+  ): string {
+    const propLines =
+      propEntries.length > 0
+        ? propEntries.map(([key, value]) => {
+            if (typeof value === 'boolean') return `    ${key}={${value}}`;
+            if (typeof value === 'number') return `    ${key}={${value}}`;
+            if (typeof value === 'object') return `    ${key}={${JSON.stringify(value)}}`;
+            return `    ${key}={${JSON.stringify(String(value))}}`;
+          })
+        : [`    // TODO: Add required props here`];
+    return [
+      '',
+      `// Sample component — add required props below`,
+      `export const ${exportName} = () => (`,
+      `  <${componentName}`,
+      ...propLines,
+      `  />`,
+      ');',
+    ].join('\n');
   }
 
   // === Context menu handlers ===
