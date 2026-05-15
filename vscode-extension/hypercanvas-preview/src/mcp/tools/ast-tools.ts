@@ -146,7 +146,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
       if (!result.success) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ newId: result.newId }) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ duplicated: true }) }] };
     },
   );
 

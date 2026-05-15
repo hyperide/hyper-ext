@@ -475,9 +475,9 @@ export class AstService {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
+      const result = this._resolveElement(ast, nodeRef ?? elementId, elementId, absolutePath);
       if (!result) {
-        return { success: false, error: `Element not found in ${filePath}` };
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
 
       const { inserted } = duplicateElementInAST(result);
@@ -508,9 +508,9 @@ export class AstService {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
+      const result = this._resolveElement(ast, nodeRef ?? elementId, elementId, absolutePath);
       if (!result) {
-        return { success: false, error: `Element not found in ${filePath}` };
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
 
       const { wrapped } = wrapElementInAST(result, wrapperType, wrapperProps);
