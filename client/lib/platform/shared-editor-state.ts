@@ -28,6 +28,41 @@ interface SharedEditorActions {
 
 type SharedEditorStore = SharedEditorState & SharedEditorActions;
 
+/**
+ * Merge an incoming `state:init` snapshot against the current local store.
+ *
+ * `state:init` arrives whenever the webview reconnects (initial load and HMR
+ * full-reload). The extension host's snapshot can race against the user's
+ * own selection: if the user selected an element, then triggered an action
+ * that causes a reload (i18n write → HMR), the host may broadcast the
+ * pre-action default `selectedIds: []` *after* the user's selection is
+ * already in our local store. Adopting that empty default visibly clears
+ * the selection rect for one frame.
+ *
+ * Rule: an incoming EMPTY selection never wipes a non-empty local one.
+ * Same idea for `selectedItemIndices` — they're tied to selection.
+ * Everything else (currentComponent, mode flags, etc.) is replaced
+ * normally because those fields ARE expected to be authoritative from the
+ * host snapshot.
+ *
+ * Exported for unit testing.
+ */
+export function mergeInitState(incoming: SharedEditorState, local: SharedEditorState): SharedEditorState {
+  const localHasSelection = Array.isArray(local.selectedIds) && local.selectedIds.length > 0;
+  const incomingHasSelection = Array.isArray(incoming.selectedIds) && incoming.selectedIds.length > 0;
+
+  if (localHasSelection && !incomingHasSelection) {
+    return {
+      ...incoming,
+      selectedIds: local.selectedIds,
+      // selectedItemIndices is keyed by selectedIds; preserve in lockstep
+      selectedItemIndices: local.selectedItemIndices,
+    };
+  }
+
+  return incoming;
+}
+
 export const useSharedEditorState = create<SharedEditorStore>((set) => ({
   // Initial state
   selectedIds: [],
@@ -40,7 +75,7 @@ export const useSharedEditorState = create<SharedEditorStore>((set) => ({
 
   // Actions
   applyPatch: (patch) => set((state) => ({ ...state, ...patch })),
-  init: (newState) => set(newState),
+  init: (newState) => set((local) => mergeInitState(newState, local as SharedEditorState)),
 }));
 
 // ============================================================================

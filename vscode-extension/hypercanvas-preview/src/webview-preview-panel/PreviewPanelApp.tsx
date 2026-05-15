@@ -9,6 +9,7 @@ import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabl
 import cn from 'clsx';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
@@ -17,11 +18,28 @@ import {
   useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
+import type { PlatformMessage } from '@/lib/platform/types';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
+import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
 import { PropsForm } from './PropsForm';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * How long to wait for the iframe `load` event before assuming the preview is
+ * stuck and switching to the recovery UI. Most cold starts (Vite + ts-checker)
+ * land well under 5s; webpack-react projects can stretch to 20-40s on second
+ * patch cycle (see `DevServerManager` "compiled successfully" notes), but by
+ * then the iframe has at least painted SOMETHING — so 10s is the right guard
+ * against a truly indefinite hang without false positives on slow first paint.
+ */
+const PREVIEW_LOAD_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Main App
@@ -84,19 +102,83 @@ function PreviewContent() {
   const [readonlyDismissed, setReadonlyDismissed] = useState(false);
   const isReadonly = projectCapabilities?.readonly === true;
 
+  // Track iframe load state so we can show the SaaS loading spinner while the
+  // dev server / preview HTML is fetching. Without this, the iframe shows a
+  // bare blank/dev-server-default screen until first paint, which the user
+  // perceives as an indefinite "Loading…" hang.
+  const iframeSrc = !showNoComponentHint && previewUrl ? previewUrl : undefined;
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  // After PREVIEW_LOAD_TIMEOUT_MS without an iframe `load` event, surface a
+  // recovery UI (retry + open output panel) instead of leaving the user on
+  // an indefinite spinner.
+  const [iframeLoadTimedOut, setIframeLoadTimedOut] = useState(false);
+  // Set when the iframe `error` event fires (network failure, dev server
+  // crash mid-load, blocked resource that aborts the document). Without this
+  // state the error decayed into a `previewError` console.error inside
+  // `PreviewPanel.ts` that the user never saw — Task 4 wires it to a
+  // visible recovery overlay instead.
+  const [iframeError, setIframeError] = useState<string | null>(null);
+  // Bumped by the retry button to force the iframe to remount (via `key`)
+  // and reload the same `previewUrl` from scratch. We don't mutate the URL
+  // itself because the dev server doesn't need a cache-buster — the entire
+  // <iframe> element is recreated, which guarantees a fresh fetch.
+  const [retryNonce, setRetryNonce] = useState(0);
+  // Reset the loading state when src changes — covers both the initial load
+  // and explicit URL navigations. Component switches over postMessage do not
+  // change src and therefore do not flip the spinner back on. Retry is also
+  // a reset trigger so the spinner reappears while the new iframe loads.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeSrc + retryNonce are the triggers
+  useEffect(() => {
+    setIframeLoaded(false);
+    setIframeLoadTimedOut(false);
+    setIframeError(null);
+  }, [iframeSrc, retryNonce]);
+
+  // Watchdog: while the loading overlay is up, start a 10s timer that flips
+  // the panel into the timeout/error state if the iframe never reports load.
+  // The timer is cleared when the iframe loads, when a component error or
+  // iframe `error` event overrides the loading shell, or when we already
+  // timed out (so we don't restart it). Retry is observed indirectly: the
+  // reset effect above flips iframeLoadTimedOut back to false, which re-runs
+  // this effect.
+  useEffect(() => {
+    if (!iframeSrc || iframeLoaded || componentError || iframeLoadTimedOut || iframeError) return;
+    const id = setTimeout(() => setIframeLoadTimedOut(true), PREVIEW_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [iframeSrc, iframeLoaded, componentError, iframeLoadTimedOut, iframeError]);
+
   const handleIframeLoad = useCallback(() => {
+    setIframeLoaded(true);
+    setIframeLoadTimedOut(false);
+    setIframeError(null);
     canvas.sendEvent({ type: 'previewLoaded' });
   }, [canvas]);
 
   const handleIframeError = useCallback(
     (e: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
+      const message = (e.nativeEvent as ErrorEvent).message || 'iframe load error';
+      // Surface the error in the webview UI — without this the only signal
+      // was a console.error in the extension host, which the user can't
+      // see. Keep the canvas event for downstream telemetry/listeners.
+      setIframeError(message);
       canvas.sendEvent({
         type: 'previewError',
-        error: (e.nativeEvent as ErrorEvent).message || 'iframe load error',
+        error: message,
       });
     },
     [canvas],
   );
+
+  const handleRetry = useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
+
+  const handleOpenOutput = useCallback(() => {
+    canvas.sendEvent({
+      type: 'command:execute',
+      command: 'hypercanvas.showDevServerOutput',
+    } as unknown as PlatformMessage);
+  }, [canvas]);
 
   // Unsupported project type (React Native / Tamagui without react-native-web)
   // These projects CAN'T render at all — full blocking screen.
@@ -137,6 +219,10 @@ function PreviewContent() {
       {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       <div style={wrapperStyle}>
         <iframe
+          // Remount on retry — recreating the element forces a fresh fetch
+          // without poking at the URL or relying on iframe.contentWindow
+          // APIs that may not exist before first load.
+          key={`${iframeSrc ?? 'none'}-${retryNonce}`}
           ref={iframeCallbackRef}
           data-testid={TID.preview.iframe}
           title="Component Preview"
@@ -144,12 +230,23 @@ function PreviewContent() {
             ...iframeStyle,
             display: showNoComponentHint ? 'none' : undefined,
           }}
-          src={!showNoComponentHint && previewUrl ? previewUrl : undefined}
+          src={iframeSrc}
           sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
           onLoad={handleIframeLoad}
           onError={handleIframeError}
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
+        {iframeSrc && !iframeLoaded && !componentError && !iframeLoadTimedOut && !iframeError && (
+          <div data-testid={TID.preview.loadingOverlay} style={loadingOverlayStyle}>
+            <LoadingSpinner label="Loading component..." />
+          </div>
+        )}
+        {iframeSrc && !componentError && !iframeError && iframeLoadTimedOut && (
+          <PreviewLoadTimeoutOverlay onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
+        )}
+        {iframeSrc && !componentError && iframeError && (
+          <PreviewLoadErrorOverlay error={iframeError} onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
+        )}
       </div>
 
       {componentError && (
@@ -746,6 +843,15 @@ const overlayStyle: React.CSSProperties = {
   inset: 0,
   pointerEvents: 'none',
   zIndex: 10,
+};
+
+const loadingOverlayStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  // Above the canvas-interaction overlay (z=10) and below the component error
+  // overlay (z=100), so a render error replaces the spinner immediately
+  // instead of showing both stacked.
+  zIndex: 15,
 };
 
 const centerScreenStyle: React.CSSProperties = {

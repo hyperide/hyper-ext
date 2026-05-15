@@ -23,9 +23,7 @@ export class AdapterFactory {
   ) {}
 
   async forBinding(binding: I18nTextBinding, locale: string): Promise<I18nAdapter> {
-    const layout = await discoverLayout(this.workspaceRoot, binding.namespace, locale, this.fileIO).catch(
-      () => null,
-    );
+    const layout = await discoverLayout(this.workspaceRoot, binding.namespace, locale, this.fileIO).catch(() => null);
     if (layout?.mergedData) {
       return new TsMergedAdapter(layout.mergedData, layout.availableLocales);
     }
