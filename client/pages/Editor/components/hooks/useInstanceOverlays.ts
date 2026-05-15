@@ -215,8 +215,12 @@ export function useInstanceOverlays({
         initialY: currentY,
       };
 
-      // Note: pointer-events will be disabled in handleDragMove after 5px threshold
-      // to allow Playwright/browser to deliver initial mousemove events
+      // Immediately disable iframe hit-testing so the parent window continues
+      // receiving mousemove/mouseup even if the cursor crosses the iframe boundary
+      // before the 5px drag threshold is reached.
+      if (iframeRef.current) {
+        iframeRef.current.style.pointerEvents = 'none';
+      }
       // Note: window listeners are already attached globally in separate useEffect
     };
 
@@ -239,12 +243,6 @@ export function useInstanceOverlays({
 
         // Start dragging
         dragStateRef.current.isDragging = true;
-
-        // Disable pointer-events on iframe to prevent it from intercepting mouse events
-        // This allows window mousemove listeners to work even when cursor is over iframe
-        if (iframeRef.current) {
-          iframeRef.current.style.pointerEvents = 'none';
-        }
 
         // Disable text selection during drag
         document.body.style.userSelect = 'none';

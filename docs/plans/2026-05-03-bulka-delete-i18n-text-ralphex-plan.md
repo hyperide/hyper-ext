@@ -81,7 +81,7 @@ location. Do not edit the Bulka source as the permanent fix.
 
 ### Task 2: Write The Failing Test First
 
-- [ ] Write AstServiceDelete.test.ts with failing regression test
+- [x] Write AstServiceDelete.test.ts with failing regression test
 
 Add a focused regression test before implementation. Preferred path:
 `vscode-extension/hypercanvas-preview/src/__tests__/AstServiceDelete.test.ts`.
@@ -137,7 +137,7 @@ next failing test lower in the stack:
 
 ### Task 3: Implement The Smallest Proven Fix
 
-- [ ] Update AstService.deleteElements to use _resolveElementInCorrectFile
+- [x] Update AstService.deleteElements to use _resolveElementInCorrectFile
 
 After the failing test proves the failing layer, make the smallest change.
 

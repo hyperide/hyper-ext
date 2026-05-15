@@ -137,14 +137,20 @@ extension consumption. Put shared behavior in `shared/` when applicable.
 
 ### Task 4: Smallest Fix
 
-- [ ] Fix the first proven break in the event chain only.
-- [ ] If parent-window event loss across iframe boundaries is the issue, prefer
+- [x] Fix the first proven break in the event chain only.
+  Moved `iframe.style.pointerEvents = 'none'` from handleDragMove (after 5px threshold)
+  to handleDragStart (immediately on mousedown). Removed redundant assignment in handleDragMove.
+- [x] If parent-window event loss across iframe boundaries is the issue, prefer
   a minimal shared or reusable helper for temporarily disabling iframe hit
   testing during pending overlay drag.
-- [ ] If the issue is duplicated iframe click handling, move or reuse logic in
+  Fix is inline in handleDragStart — no shared helper needed (SaaS-only code path).
+- [x] If the issue is duplicated iframe click handling, move or reuse logic in
   `shared/canvas-interaction/` and consume it from both SaaS and extension paths.
-- [ ] Avoid broad rewrites of `CanvasEditor.tsx`; keep stateful logic inside hooks.
-- [ ] Remove all temporary logging before final verification.
+  Not applicable — extension has no board mode overlay drag, fix stays in useInstanceOverlays.ts.
+- [x] Avoid broad rewrites of `CanvasEditor.tsx`; keep stateful logic inside hooks.
+  Only useInstanceOverlays.ts modified.
+- [x] Remove all temporary logging before final verification.
+  No temporary logging was added.
 
 ### Task 5: Tests
 

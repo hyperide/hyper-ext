@@ -518,19 +518,19 @@ export class AstService {
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       let deletedCount = 0;
+      const mutatedFiles = new Set<string>();
 
-      // Prefer nodeRefs if provided, fall back to elementIds
+      // Prefer nodeRefs if provided, fall back to elementIds.
+      // Treat each identifier as a potential nodeRef (source-location or hash) via
+      // _resolveElementInCorrectFile — same pattern as updateStyles, updateProps, etc.
       const identifiers = nodeRefs ?? elementIds;
-      const useNodeRef = Boolean(nodeRefs);
 
       for (const id of identifiers) {
-        const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+        // _resolveElementInCorrectFile re-reads the AST on every call, so child nodes
+        // removed by earlier deletions do not corrupt Babel path references.
+        const resolved = await this._resolveElementInCorrectFile(absolutePath, id as NodeRef, undefined);
 
-        const result = useNodeRef
-          ? this._resolveElement(ast, id, undefined, absolutePath)
-          : this._resolveElement(ast, undefined, id, absolutePath);
-
-        if (!result) {
+        if (!resolved) {
           // nosemgrep: unsafe-formatstring -- safe: only first 8 chars of id are logged
           console.log(
             `[AstService.deleteElements] Element ${id.substring(0, 8)} not found (may have been deleted as child)`,
@@ -538,23 +538,28 @@ export class AstService {
           continue;
         }
 
-        // Remove element
-        result.path.remove();
+        const { result, ast, resolvedPath } = resolved;
 
-        // Write back to file
-        await this._fileParser.writeAST(ast, absolutePath);
+        // Remove element and write to the actual resolved file (may differ from
+        // absolutePath for cross-file nodeRefs, e.g. Tamagui child components).
+        result.path.remove();
+        await this._fileParser.writeAST(ast, resolvedPath);
+        mutatedFiles.add(resolvedPath);
         deletedCount++;
       }
 
-      if (deletedCount > 0) {
-        await this._updateNodeMap(absolutePath);
+      for (const f of mutatedFiles) {
+        await this._updateNodeMap(f);
       }
 
       if (deletedCount === 0) {
         return { success: false, error: 'No elements found with provided IDs' };
       }
 
-      return { success: true, data: { deletedCount } };
+      // resolvedPath from the last deletion — callers can use it for undo tracking
+      // when the element lived in a file other than filePath.
+      const lastResolvedPath = [...mutatedFiles].at(-1);
+      return { success: true, data: { deletedCount }, resolvedPath: lastResolvedPath };
     } catch (error) {
       console.error('[AstService.deleteElements] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
