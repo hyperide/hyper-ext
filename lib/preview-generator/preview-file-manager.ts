@@ -1250,7 +1250,17 @@ export class PreviewFileManager {
       // Fallback for non-standard entries (ViteReactSSG, custom bootstraps): append conditional
       // import at end of file. The AST-based path only handles createRoot().render() calls.
       const condition = `typeof location !== "undefined" && new URLSearchParams(location.search).get("component") && location.pathname.includes("test-preview")`;
-      const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { import("${importTarget}"); }\n`;
+      const isStandalone = importTarget.includes('standalone');
+      let importBody: string;
+      if (isStandalone) {
+        // Standalone module has its own createRoot() call — just importing it is enough.
+        importBody = `import("${importTarget}")`;
+      } else {
+        // App Shell: __canvas_preview__ only exports a component — must render it explicitly.
+        // React and react-dom/client resolve from Vite's module cache (already loaded by the app).
+        importBody = `import("${importTarget}").then(function(m){var C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){var el=document.getElementById("root")||document.body;mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
+      }
+      const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       await this.io.writeFile(entryFilePath, appendedSource);
       return;
     }

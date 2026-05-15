@@ -1484,6 +1484,33 @@ export const createRoot = ViteReactSSG(<App />);
     expect(patched).toContain('import("');
     // Original code preserved
     expect(patched).toContain('ViteReactSSG');
+    // App Shell fallback must render the component — plain import is not enough because
+    // __canvas_preview__ only exports a React component, it doesn't self-render.
+    expect(patched).toContain('react-dom/client');
+    expect(patched).toContain('createElement');
+  });
+
+  it('falls back to plain import for non-standard entries in Isolated/standalone mode (ViteReactSSG)', async () => {
+    const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
+import App from "./App";
+export const createRoot = ViteReactSSG(<App />);
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx', './__canvas_preview_standalone__');
+    const patched = io.files.get('/project/src/main.tsx');
+    expect(patched).toBeDefined();
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview_standalone__');
+    expect(patched).toContain('test-preview');
+    expect(patched).toContain('import("');
+    // Original code preserved
+    expect(patched).toContain('ViteReactSSG');
+    // Standalone has its own createRoot — should NOT add extra rendering boilerplate
+    expect(patched).not.toContain('react-dom/client');
+    expect(patched).not.toContain('createElement');
   });
 
   it('revertEntryFile restores appended fallback form', async () => {
