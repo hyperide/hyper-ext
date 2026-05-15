@@ -158,6 +158,42 @@ describe('StateHub', () => {
     });
   });
 
+  describe('broadcast', () => {
+    it('sends message to all registered panels verbatim', () => {
+      const hub = createHub();
+      const wv1 = createMockWebview();
+      const wv2 = createMockWebview();
+      hub.register('p1', wv1 as never);
+      hub.register('p2', wv2 as never);
+      wv1.messages.length = 0;
+      wv2.messages.length = 0;
+
+      const message = { type: 'iframe:scrollToElement', elementId: 'foo:1:2' };
+      hub.broadcast(message);
+
+      expect(wv1.messages).toHaveLength(1);
+      expect(wv1.messages[0]).toEqual(message);
+      expect(wv2.messages).toHaveLength(1);
+      expect(wv2.messages[0]).toEqual(message);
+    });
+
+    it('no-op when no panels registered', () => {
+      const hub = createHub();
+      // should not throw
+      hub.broadcast({ type: 'whatever' });
+    });
+
+    it('does not invoke onChange listeners (broadcast is fire-and-forget)', () => {
+      const hub = createHub();
+      let called = false;
+      hub.onChange(() => {
+        called = true;
+      });
+      hub.broadcast({ type: 'whatever' });
+      expect(called).toBe(false);
+    });
+  });
+
   describe('dispose', () => {
     it('clears panels and listeners', () => {
       const hub = createHub();
