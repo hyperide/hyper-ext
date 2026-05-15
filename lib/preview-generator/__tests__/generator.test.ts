@@ -604,7 +604,44 @@ describe('generatePreviewContent — ui-primitive filtering', () => {
     // Not a components/ui/ path — should remain in registry
     expect(content).toContain("'client/components/UserInterface.tsx'");
     expect(content).toContain("'client/pages/ui-dashboard/Dashboard.tsx'");
-    // Actual components/ui/ path — should be excluded
+    // Actual components/ui/ path without SampleDefault — should be excluded
+    expect(content).not.toContain("'client/components/ui/badge.tsx'");
+  });
+
+  it('excludes components/ui/ entries with non-default sample exports but no SampleDefault', () => {
+    // A UI primitive that exports SamplePrimary (or any named sample) but not SampleDefault
+    // must still be excluded — the render path only uses SampleDefault, so without it the
+    // component falls through to <Component {...previewFallbackProps} /> and can crash.
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'client/components/ui/navigation-menu.tsx',
+        componentName: 'NavigationMenu',
+        exportStyle: 'named',
+        sampleExports: ['SamplePrimary'],
+        importPath: './components/ui/navigation-menu',
+      },
+    ];
+    const content = generatePreviewContent(entries);
+    expect(content).not.toContain("'client/components/ui/navigation-menu.tsx'");
+  });
+
+  it('keeps components/ui/ entries that have SampleDefault exports in the registry', () => {
+    // fill-picker, navigation-menu, pagination in this repo live under components/ui/
+    // but have SampleDefault exports — they should remain previewable.
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'client/components/ui/fill-picker.tsx',
+        componentName: 'FillPicker',
+        exportStyle: 'named',
+        sampleExports: ['SampleDefault'],
+        importPath: './components/ui/fill-picker',
+      },
+      makeEntry('client/components/ui/badge.tsx', 'Badge'),
+    ];
+    const content = generatePreviewContent(entries);
+    // Has SampleDefault — must remain in registry
+    expect(content).toContain("'client/components/ui/fill-picker.tsx'");
+    // No SampleDefault — must be excluded
     expect(content).not.toContain("'client/components/ui/badge.tsx'");
   });
 });

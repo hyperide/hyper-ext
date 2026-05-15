@@ -492,10 +492,9 @@ export class PreviewFileManager {
       }
 
       // Stale entries found — regenerate excluding reserved files and ui-primitive paths.
-      // ui-primitive paths must not be in requestedPaths (which becomes exemptFromUiFilter in
-      // _initPreviewFile). They remain in discoveredPaths so the generator can still filter them.
+      // Keep UI primitives that have SampleDefault exports (explicitly previewable).
       const cleanPaths = existingEntries
-        .filter((e) => !isStale(e) && !isUiPrimitive(e.componentPath))
+        .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')))
         .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
@@ -508,8 +507,6 @@ export class PreviewFileManager {
     // Full regen when new components are added — ensures componentRegistry and sampleRenderMap
     // are updated alongside imports. Preserve existing components by parsing the registry via AST,
     // excluding reserved filenames that must not be in the Client Component bundle.
-    // ui-primitive paths are also excluded from requestedPaths to prevent them from becoming
-    // exempt from the isUiPrimitive filter in _initPreviewFile.
     const existingEntries = parseExistingPreview(existingContent);
     const discoveredPaths = await this._scanAllComponents();
     const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
@@ -518,7 +515,7 @@ export class PreviewFileManager {
         (e) =>
           !isFrameworkReserved(basename(e.componentPath)) &&
           !isPreviewIneligibleByName(basename(e.componentPath)) &&
-          !isUiPrimitive(e.componentPath),
+          (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')),
       )
       .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
@@ -602,7 +599,6 @@ export class PreviewFileManager {
       isNextPagesRouter: this.isNextPagesRouter,
       providerWrap: this.providerWrap,
       ssrMock: this.ssrMock,
-      exemptFromUiFilter: new Set(canonicalRequestedPaths),
     });
 
     const valid = await isValidTypeScript(content);

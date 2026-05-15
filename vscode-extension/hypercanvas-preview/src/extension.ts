@@ -497,19 +497,26 @@ export function activate(context: vscode.ExtensionContext) {
     // Self-healing: when the generated preview doesn't have the requested component,
     // re-run ensureComponent so the preview file is regenerated with the missing entry.
     // Retry guard prevents an infinite loop if ensureComponent keeps failing.
+    // Do NOT skip UI primitives here: those with SampleDefault must be addable via this path
+    // (preview-file-manager filters out primitives without SampleDefault, and the diff-before-write
+    // check in _initPreviewFile prevents HMR when the generated content is unchanged).
     previewPanel.onComponentMissing((componentPath) => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relPath = relative(currentWorkspaceRoot, absPath);
-      if (isUiPrimitive(relPath)) return;
       componentMissingRetries.set(componentPath, count + 1);
+      // Capture current component so a stale resolve doesn't snap the preview back
+      // if the user switched to a different component while ensureComponent was running.
+      const capturedCurrentPath = stateHub?.state.currentComponent?.path;
       previewManager
         .ensureComponent([relPath])
         .then(() => {
           componentMissingRetries.delete(componentPath);
-          previewPanel?.setComponentParam(relPath);
+          if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
+            previewPanel?.setComponentParam(relPath);
+          }
         })
         .catch((err) => {
           console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
@@ -599,7 +606,8 @@ export function activate(context: vscode.ExtensionContext) {
     const currentWorkspaceRoot = syncWorkspaceRuntime();
     const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
     const relativePath = relative(currentWorkspaceRoot, absComponentPath);
-    if (isUiPrimitive(relativePath)) return;
+    // No isUiPrimitive guard here: onSampleCreated fires only after SampleDefault is written,
+    // meaning the primitive is now previewable and must be registered in __canvas_preview__.tsx.
     await previewManager.ensureComponent([relativePath]);
     await devServerManager?.awaitRecompile();
     previewPanel?.setComponentParam(relativePath);
@@ -704,9 +712,10 @@ export function activate(context: vscode.ExtensionContext) {
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relativePath = relative(currentWorkspaceRoot, absComponentPath);
 
-      // UI primitives (client/components/ui/*) are excluded from __canvas_preview__.tsx.
-      // Calling ensureComponent on them triggers HMR for every Explorer click and
-      // exhausts the E2E probing budget. Just update the URL param and return.
+      // UI primitives without SampleDefault are excluded from __canvas_preview__.tsx.
+      // Skipping ensureComponent here avoids triggering HMR on every Explorer click for
+      // the ~46 shadcn primitives that don't have SampleDefault. If a UI primitive WITH
+      // SampleDefault is missing from the registry, onComponentMissing below handles recovery.
       if (isUiPrimitive(relativePath)) {
         previewPanel?.setComponentParam(relativePath);
         return;
