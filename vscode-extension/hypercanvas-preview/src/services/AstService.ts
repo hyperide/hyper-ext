@@ -51,6 +51,8 @@ export interface AstOperationResult {
   data?: unknown;
   /** Absolute path of the file that was actually mutated (may differ from the requested filePath for cross-file writes) */
   resolvedPath?: string;
+  /** Content of resolvedPath read BEFORE the write (for undo tracking in cross-file scenarios) */
+  contentBeforeWrite?: string;
 }
 
 export interface UpdateStylesResult extends AstOperationResult {
@@ -335,6 +337,15 @@ export class AstService {
         `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? '?'} resolvedPath=${resolvedPath}`,
       );
 
+      // Read content BEFORE the write so _withUndoTracking can compare before/after for cross-file writes.
+      // Must be done after resolvedPath is known but before executeStyleWriteRequest mutates the file.
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
       const writeResult = await executeStyleWriteRequest({
         ast,
         sourceFilePath: resolvedPath,
@@ -357,7 +368,7 @@ export class AstService {
           await this._updateNodeMap(mutatedFile);
         }
       }
-      return { success: true, resolvedPath };
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateStyles] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -392,13 +403,20 @@ export class AstService {
         `[AstService.updateProps] resolved element=${result.element.openingElement?.name && 'name' in result.element.openingElement.name ? result.element.openingElement.name.name : '?'} resolvedPath=${resolvedPath}`,
       );
 
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
       for (const [propName, propValue] of Object.entries(props)) {
         setAttribute(result.element, propName, valueToJSXAttribute(propValue));
       }
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
-      return { success: true, resolvedPath };
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateProps] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

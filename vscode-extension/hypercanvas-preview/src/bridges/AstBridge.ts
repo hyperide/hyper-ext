@@ -145,24 +145,14 @@ export class AstBridge {
       }
       const result = await operation();
       if (result.success) {
-        // For cross-file writes (e.g. Tamagui: requested App.tsx but wrote to RecordScreen.tsx),
+        // For cross-file writes (e.g. twitter: requested App.tsx but wrote to Feed.tsx),
         // the operation returns resolvedPath pointing to the actual mutated file.
         const actualPath = result.resolvedPath ?? absolutePath;
         const needsSnapshot = actualPath !== absolutePath;
 
-        // Snapshot the actual file that changed (not necessarily the requested file)
-        let contentBeforeActual = needsSnapshot ? '' : contentBefore;
-        if (needsSnapshot) {
-          try {
-            contentBeforeActual = await this._fileIO.readFileFromDisk(actualPath);
-          } catch {
-            try {
-              contentBeforeActual = await this._fileIO.readFile(actualPath);
-            } catch {
-              contentBeforeActual = '';
-            }
-          }
-        }
+        // For cross-file writes the operation captures contentBeforeWrite before the mutation.
+        // For same-file writes contentBefore (read above) is authoritative.
+        const contentBeforeActual = needsSnapshot ? (result.contentBeforeWrite ?? '') : contentBefore;
 
         let contentAfter: string;
         try {
