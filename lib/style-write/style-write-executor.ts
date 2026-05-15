@@ -26,7 +26,14 @@ import {
   createStyleWriteContextFromRequest,
   getRequestRoutableCssSystem,
 } from './style-write-request-context';
-import type { CssFilePlan, StyleWritePlan, StyleWriteResult, TailwindPlan, TargetStyleValue } from './types';
+import type {
+  AdapterPropPlan,
+  CssFilePlan,
+  StyleWritePlan,
+  StyleWriteResult,
+  TailwindPlan,
+  TargetStyleValue,
+} from './types';
 import { errorMessage } from './utils';
 
 export interface StyleWriteExecutorOptions {
@@ -111,6 +118,8 @@ export class StyleWriteExecutor {
           return await this.executeCssFilePlan(plan);
         case 'scriptReactStyleRule':
           return await this.executeInlineStylePlan(plan);
+        case 'adapterKnownElementProp':
+          return await this.executeAdapterPropPlan(plan);
         default:
           return this.unsupported(plan);
       }
@@ -209,6 +218,20 @@ export class StyleWriteExecutor {
     return { success: true, plan, mutatedFiles: [absolutePath] };
   }
 
+  private async executeAdapterPropPlan(plan: AdapterPropPlan): Promise<StyleWriteResult> {
+    const filePath = this.resolveFilePath(plan.target.filePath, plan.projectRoot);
+    const { ast, absolutePath } = await this.fileParser.readAndParseFile(filePath);
+    const element = this.findElement(ast, plan.target.elementRef);
+    if (!element) {
+      return { success: false, plan, error: `Element not found: ${plan.target.elementRef}` };
+    }
+    for (const [key, value] of Object.entries(plan.target.props)) {
+      setAttribute(element, key, t.stringLiteral(String(value)));
+    }
+    await this.fileParser.writeAST(ast, absolutePath);
+    return { success: true, plan, mutatedFiles: [absolutePath] };
+  }
+
   private unsupported(plan: StyleWritePlan): StyleWriteResult {
     return this.failure(plan, `Unsupported style write plan: ${plan.sourceForm}/${cssSystemLabel(plan)}`);
   }
@@ -257,7 +280,7 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     return { success: false, error: 'CSS Modules source owner unavailable for selected source tab' };
   }
 
-  const elementCssSystems = getElementCssSystems(input.element, sourceOwners, cssSystem);
+  const elementCssSystems = getElementCssSystems(input.element, sourceOwners, cssSystem, Object.keys(input.styles));
   const manager = createDefaultStyleWriteManager({
     executor: new StyleWriteExecutor({
       fileIO: input.fileIO,
@@ -315,6 +338,7 @@ function getElementCssSystems(
   element: t.JSXElement,
   sourceOwners: StyleSourceOwner[],
   selectedSystem: CssSystemId | undefined,
+  requestedStyleKeys: string[] = [],
 ): CssSystemId[] {
   const systems: CssSystemId[] = [];
 
@@ -336,6 +360,13 @@ function getElementCssSystems(
   if (getAttribute(element, 'style')) {
     systems.push('inline-style');
   }
+
+  // Detect Tamagui/RN-style elements: style properties written as direct JSX props
+  // (e.g. <YStack backgroundColor={...}> uses backgroundColor as a prop, not className/style)
+  if (requestedStyleKeys.length > 0 && requestedStyleKeys.some((key) => getAttribute(element, key) !== null)) {
+    systems.push('tamagui');
+  }
+
   if (systems.length === 0) {
     systems.push('inline-style');
   }
