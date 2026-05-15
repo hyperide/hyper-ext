@@ -13,10 +13,15 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 
-export interface UndoEntry {
+export interface FileEdit {
   filePath: string;
   contentBefore: string;
   contentAfter: string;
+}
+
+/** One undoable step — may span multiple files (e.g. cross-file batch delete). */
+export interface UndoEntry {
+  files: FileEdit[];
 }
 
 export class UndoRedoService {
@@ -32,22 +37,51 @@ export class UndoRedoService {
 
   constructor(private readonly _workspaceRoot: string) {}
 
-  /** Record a mutation with file content before and after. Clears redo stack (new edit branch). */
+  private _isInWorkspace(resolved: string): boolean {
+    return resolved.startsWith(this._workspaceRoot + path.sep) || resolved === this._workspaceRoot;
+  }
+
+  /** Record a single-file mutation. Clears redo stack (new edit branch). */
   recordEdit(absolutePath: string, contentBefore: string, contentAfter: string): void {
     const resolved = path.resolve(absolutePath);
     // Append separator to prevent prefix match on sibling dirs (e.g. /workspace2)
-    if (!resolved.startsWith(this._workspaceRoot + path.sep) && resolved !== this._workspaceRoot) {
+    if (!this._isInWorkspace(resolved)) {
       console.warn(
         `[UndoRedoService] recordEdit REJECTED — path outside workspace: ${resolved} (workspace: ${this._workspaceRoot})`,
       );
       return;
     }
 
-    this._undoStack.push({ filePath: resolved, contentBefore, contentAfter });
+    this._undoStack.push({ files: [{ filePath: resolved, contentBefore, contentAfter }] });
     if (this._undoStack.length > this._maxLength) this._undoStack.shift();
     this._redoStack.length = 0;
     console.log(
       `[UndoRedoService] recordEdit: ${path.basename(resolved)}, undoStack=${this._undoStack.length}, before=${contentBefore.length}B, after=${contentAfter.length}B`,
+    );
+  }
+
+  /**
+   * Record a multi-file mutation as a single atomic undo entry.
+   * All files in the batch are restored together on one undo press.
+   */
+  recordBatchEdit(edits: Array<{ filePath: string; contentBefore: string; contentAfter: string }>): void {
+    const files: FileEdit[] = [];
+    for (const e of edits) {
+      const resolved = path.resolve(e.filePath);
+      if (!this._isInWorkspace(resolved)) {
+        console.warn(
+          `[UndoRedoService] recordBatchEdit REJECTED entry — path outside workspace: ${resolved} (workspace: ${this._workspaceRoot})`,
+        );
+        continue;
+      }
+      files.push({ filePath: resolved, contentBefore: e.contentBefore, contentAfter: e.contentAfter });
+    }
+    if (files.length === 0) return;
+    this._undoStack.push({ files });
+    if (this._undoStack.length > this._maxLength) this._undoStack.shift();
+    this._redoStack.length = 0;
+    console.log(
+      `[UndoRedoService] recordBatchEdit: ${files.map((f) => path.basename(f.filePath)).join(', ')}, undoStack=${this._undoStack.length}`,
     );
   }
 
@@ -60,17 +94,28 @@ export class UndoRedoService {
     try {
       const entry = this._undoStack[this._undoStack.length - 1];
       console.log(
-        `[UndoRedoService] undo: writing contentBefore (${entry.contentBefore.length}B) to ${path.basename(entry.filePath)}`,
+        `[UndoRedoService] undo: restoring ${entry.files.length} file(s): ${entry.files.map((f) => path.basename(f.filePath)).join(', ')}`,
       );
-      const success = await this._writeContent(entry.filePath, entry.contentBefore);
+      const reverted: Array<{ filePath: string; contentAfter: string }> = [];
+      let success = true;
+      for (const file of entry.files) {
+        const ok = await this._writeContent(file.filePath, file.contentBefore);
+        if (!ok) {
+          console.warn(`[UndoRedoService] undo: _writeContent returned false for ${path.basename(file.filePath)}`);
+          success = false;
+          for (const w of reverted) {
+            await this._writeContent(w.filePath, w.contentAfter);
+          }
+          break;
+        }
+        reverted.push({ filePath: file.filePath, contentAfter: file.contentAfter });
+      }
       if (success) {
         this._undoStack.pop();
         this._redoStack.push(entry);
         console.log(
           `[UndoRedoService] undo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
         );
-      } else {
-        console.warn('[UndoRedoService] undo: _writeContent returned false');
       }
       panel.reveal();
       return success;
@@ -88,17 +133,28 @@ export class UndoRedoService {
     try {
       const entry = this._redoStack[this._redoStack.length - 1];
       console.log(
-        `[UndoRedoService] redo: writing contentAfter (${entry.contentAfter.length}B) to ${path.basename(entry.filePath)}`,
+        `[UndoRedoService] redo: replaying ${entry.files.length} file(s): ${entry.files.map((f) => path.basename(f.filePath)).join(', ')}`,
       );
-      const success = await this._writeContent(entry.filePath, entry.contentAfter);
+      const replayed: Array<{ filePath: string; contentBefore: string }> = [];
+      let success = true;
+      for (const file of entry.files) {
+        const ok = await this._writeContent(file.filePath, file.contentAfter);
+        if (!ok) {
+          console.warn(`[UndoRedoService] redo: _writeContent returned false for ${path.basename(file.filePath)}`);
+          success = false;
+          for (const w of replayed) {
+            await this._writeContent(w.filePath, w.contentBefore);
+          }
+          break;
+        }
+        replayed.push({ filePath: file.filePath, contentBefore: file.contentBefore });
+      }
       if (success) {
         this._redoStack.pop();
         this._undoStack.push(entry);
         console.log(
           `[UndoRedoService] redo OK — undoStack=${this._undoStack.length}, redoStack=${this._redoStack.length}`,
         );
-      } else {
-        console.warn('[UndoRedoService] redo: _writeContent returned false');
       }
       panel.reveal();
       return success;

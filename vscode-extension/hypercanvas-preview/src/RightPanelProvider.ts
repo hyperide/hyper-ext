@@ -32,11 +32,12 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
+   * Pass null to clear capabilities on workspace switch.
    * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities | null): void {
     this._capabilities = capabilities;
-    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities });
+    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities: capabilities ?? null });
   }
 
   /**
@@ -106,9 +107,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
         // Send initial explorer visibility + component groups + capabilities
         this._sendExplorerState(webviewView.webview);
         this._sendComponentGroups(webviewView.webview);
-        if (this._capabilities) {
-          webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities });
-        }
+        webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
         return;
       }
 

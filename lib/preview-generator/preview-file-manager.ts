@@ -594,6 +594,7 @@ export class PreviewFileManager {
       isNextPagesRouter: this.isNextPagesRouter,
       providerWrap: this.providerWrap,
       ssrMock: this.ssrMock,
+      exemptFromUiFilter: new Set(canonicalRequestedPaths),
     });
 
     const valid = await isValidTypeScript(content);

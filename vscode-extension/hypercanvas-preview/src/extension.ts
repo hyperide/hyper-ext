@@ -386,34 +386,42 @@ export function activate(context: vscode.ExtensionContext) {
     aiChatProvider?.sendAIPrompt(prompt);
   });
 
+  let detectionSeq = 0;
+  const runProjectDetection = (root: string): void => {
+    const seq = ++detectionSeq;
+    readPackageJson(root)
+      .then(async (pkg) => {
+        const kit = await detectUIKit(root, pkg);
+        const cssSystem = await detectCssSystem(root, pkg);
+        const projectType = await detectProjectType(root);
+        const projectError = await detectUnsupportedProject(root, pkg);
+        if (seq !== detectionSeq) return;
+
+        stateHub?.applyUpdate({ projectUIKit: kit });
+
+        const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType);
+        console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
+
+        // Send capabilities to preview panel (readonly badge, style write guard)
+        previewPanel?.notifyCapabilities(capabilities);
+
+        // Send capabilities to inspector panel (readonly inputs)
+        rightPanelProvider?.notifyCapabilities(capabilities);
+
+        // Always send projectError — null clears the unsupported-project screen
+        // when switching from an unsupported workspace to a supported one.
+        previewPanel?.notifyUnsupportedProject(projectError ?? null);
+        if (projectError) {
+          console.log('[HyperIDE] Unsupported project detected:', projectError.type);
+        }
+      })
+      .catch((err) => {
+        console.warn('[HyperIDE] Failed to detect project info:', err);
+      });
+  };
+
   // Read package.json once and run all detectors against it
-  readPackageJson(workspaceRoot)
-    .then(async (pkg) => {
-      const kit = await detectUIKit(workspaceRoot, pkg);
-      stateHub?.applyUpdate({ projectUIKit: kit });
-
-      const cssSystem = await detectCssSystem(workspaceRoot, pkg);
-      const projectType = await detectProjectType(workspaceRoot);
-      const projectError = await detectUnsupportedProject(workspaceRoot, pkg);
-
-      const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType);
-      console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
-
-      // Send capabilities to preview panel (readonly badge, style write guard)
-      previewPanel?.notifyCapabilities(capabilities);
-
-      // Send capabilities to inspector panel (readonly inputs)
-      rightPanelProvider?.notifyCapabilities(capabilities);
-
-      // Legacy: still send projectError for unsupported-project screen
-      if (projectError) {
-        console.log('[HyperIDE] Unsupported project detected:', projectError.type);
-        previewPanel?.notifyUnsupportedProject(projectError);
-      }
-    })
-    .catch((err) => {
-      console.warn('[HyperIDE] Failed to detect project info:', err);
-    });
+  runProjectDetection(workspaceRoot);
 
   // Flush .hyperide/ to disk on first component open (deferred write).
   // Only unsubscribe after flush actually writes — scan may still be in progress.
@@ -568,7 +576,10 @@ export function activate(context: vscode.ExtensionContext) {
     modeManager.startWatching();
 
     previewPanel?.setWorkspaceRoot(activeWorkspaceRoot);
+    rightPanelProvider?.notifyCapabilities(null);
     void devServerManager?.setProjectPath(activeWorkspaceRoot);
+    stateHub?.applyUpdate({ projectUIKit: undefined });
+    runProjectDetection(activeWorkspaceRoot);
     return activeWorkspaceRoot;
   };
 

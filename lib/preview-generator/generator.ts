@@ -43,6 +43,11 @@ export interface GeneratePreviewOptions {
   providerWrap?: ProviderWrapConfig;
   /** When set, SSR route components are wrapped in a mock router instead of rendered directly */
   ssrMock?: SSRMockConfig;
+  /**
+   * Component paths that bypass the isUiPrimitive filter even if they live under components/ui/.
+   * Use when a component was explicitly requested by the user (not auto-scanned).
+   */
+  exemptFromUiFilter?: ReadonlySet<string>;
 }
 
 /** Convert 'SampleDefault' → 'default', 'SamplePrimary' → 'primary' */
@@ -171,7 +176,9 @@ function isUiPrimitive(componentPath: string): boolean {
 
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
-  const registryEntries = entries.filter((e) => !isUiPrimitive(e.componentPath));
+  const registryEntries = entries.filter(
+    (e) => !isUiPrimitive(e.componentPath) || (options?.exemptFromUiFilter?.has(e.componentPath) ?? false),
+  );
   const uniqueNames = deriveUniquePrefix(
     registryEntries,
     extractImportedBindings(options?.providerWrap?.imports ?? []),

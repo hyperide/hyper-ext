@@ -64,6 +64,9 @@ export class PreviewPanel {
   // Unsupported project error (React Native / Tamagui), sent to webview on ready
   private _projectError: UnsupportedProjectError | null = null;
 
+  // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
+  private _capabilities: import('./types').ProjectCapabilities | null = null;
+
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
 
@@ -101,9 +104,13 @@ export class PreviewPanel {
     this._previewBaseUrl = 'http://localhost:3000';
     // Clear shared StateHub state so _initializeComponent() re-derives from the
     // active editor instead of picking up the previous workspace's component.
+    this._capabilities = null;
     this._stateHub.applyUpdate({ currentComponent: null });
+    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities: null });
     this.notifyUnsupportedProject(null);
     this.notifyDevServerStopped();
+    this._sampleWatcher?.dispose();
+    this._sampleWatcher = undefined;
     const shouldRestartSync = Boolean(this._syncService);
     this._syncService?.dispose();
     this._syncService = undefined;
@@ -279,6 +286,8 @@ export class PreviewPanel {
       this._requiresPreviewRegeneration = true;
       for (const d of this._disposables) d.dispose();
       this._disposables = [];
+      this._sampleWatcher?.dispose();
+      this._sampleWatcher = undefined;
       this._syncService?.dispose();
       this._stateHub.unregister(PreviewPanel.PANEL_ID);
       this._syncService = undefined;
@@ -1023,6 +1032,8 @@ export class PreviewPanel {
       url: this._devServerRunning ? this._previewBaseUrl : null,
     });
 
+    webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+
     if (this._projectError) {
       webview.postMessage({ type: 'projectError', error: this._projectError });
     }
@@ -1195,6 +1206,7 @@ export class PreviewPanel {
    * Sent after CSS system detection completes during activation.
    */
   public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+    this._capabilities = capabilities;
     this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
   }
 

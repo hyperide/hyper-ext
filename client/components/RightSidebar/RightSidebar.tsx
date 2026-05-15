@@ -404,6 +404,7 @@ export default function RightSidebar({
   const [textContent, setTextContent] = useState('');
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -697,15 +698,18 @@ export default function RightSidebar({
   }, [componentPath, childrenLocation, goToCode]);
 
   const handleI18nResolvedTextChange = useCallback(
-    async (newText: string) => {
+    (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
-      await astOps.writeI18nResource({
-        library: i18nText.library,
-        key: i18nText.key,
-        activeLocale: i18nText.activeLocale,
-        newText,
-      });
-      setStyleRefreshKey((k) => k + 1);
+      if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
+      debouncedI18nWriteRef.current = setTimeout(async () => {
+        await astOps.writeI18nResource({
+          library: i18nText.library,
+          key: i18nText.key,
+          activeLocale: i18nText.activeLocale,
+          newText,
+        });
+        setStyleRefreshKey((k) => k + 1);
+      }, 300);
     },
     [i18nText, astOps],
   );
@@ -1113,7 +1117,7 @@ export default function RightSidebar({
           </div>
 
           {/* Text Content */}
-          {childrenType !== 'jsx' && (
+          {childrenType !== 'jsx' && i18nText?.kind !== 'i18n' && (
             <div
               className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
             >

@@ -199,9 +199,14 @@ export class AstBridge {
     // Clear redo stack before ANY write — even when readFile fails (same invariant as _withUndoTracking).
     this._undoRedoService.beginTracking();
     try {
+      // contentBefore: dirty buffer (preserves unsaved edits for undo snapshot).
+      // diskContentBefore: disk-only read used for change-detection to avoid treating
+      // a dirty buffer as a "modification" when the delete touched a different file.
       let contentBefore: string;
+      let diskContentBefore: string;
       try {
         contentBefore = await this._fileIO.readFile(absolutePath);
+        diskContentBefore = await this._fileIO.readFileFromDisk(absolutePath);
       } catch {
         return this._astService.deleteElements(filePath, elementIds);
       }
@@ -221,16 +226,25 @@ export class AstBridge {
             mainAfter = contentBefore;
           }
         }
-        if (contentBefore !== mainAfter) {
+        // Compare disk-to-disk to detect actual modification by the delete operation.
+        // Using contentBefore (dirty buffer) vs mainAfter (disk) would produce false
+        // positives when the file has unsaved edits but was not touched by this delete.
+        if (diskContentBefore !== mainAfter) {
           batchEdits.push({ filePath: absolutePath, contentBefore, contentAfter: mainAfter });
         }
 
         for (const { resolvedPath: xPath, contentBefore: xBefore } of result.allCrossFileSnapshots ?? []) {
           let xAfter: string;
           try {
-            xAfter = await this._fileIO.readFile(xPath);
+            // Disk-first to match the main-file path and avoid stale dirty-buffer reads
+            // when the applyEdit sync in writeFile fails or lags behind the disk write.
+            xAfter = await this._fileIO.readFileFromDisk(xPath);
           } catch {
-            xAfter = xBefore;
+            try {
+              xAfter = await this._fileIO.readFile(xPath);
+            } catch {
+              xAfter = xBefore;
+            }
           }
           if (xBefore !== xAfter) {
             batchEdits.push({ filePath: xPath, contentBefore: xBefore, contentAfter: xAfter });

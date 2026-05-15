@@ -67,6 +67,18 @@ function setupFileSnapshotsForPath(filePath: string, before: string, after: stri
   vscode.workspace.textDocuments.push(mockDoc as vscode.TextDocument);
 }
 
+/**
+ * Simulate disk content changes for readFileFromDisk (workspace.fs.readFile).
+ * First call per path returns `diskBefore`, subsequent calls return `diskAfter`.
+ * Used by deleteElements change-detection (diskContentBefore vs mainAfter) and
+ * cross-file xAfter reads.
+ */
+const _diskMocks = new Map<string, { before: string; after: string; calls: number }>();
+
+function setupDiskSnapshotsForPath(filePath: string, diskBefore: string, diskAfter: string): void {
+  _diskMocks.set(filePath, { before: diskBefore, after: diskAfter, calls: 0 });
+}
+
 describe('AstBridge', () => {
   let bridge: InstanceType<typeof AstBridge>;
 
@@ -85,6 +97,19 @@ describe('AstBridge', () => {
     mockAstService.duplicateElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'dup-1' }));
     mockAstService.wrapElement.mockImplementation(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' }));
     mockAstService.pasteElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'paste-1' }));
+
+    // Reset disk mock registry and re-install per-path implementation.
+    // mock-vscode.ts uses mockClear() (resets calls, not impl), so we set impl here.
+    _diskMocks.clear();
+    (vscode.workspace.fs.readFile as ReturnType<typeof mock>).mockImplementation((uri) => {
+      const entry = _diskMocks.get((uri as vscode.Uri).fsPath);
+      if (entry) {
+        entry.calls++;
+        const content = entry.calls <= 1 ? entry.before : entry.after;
+        return Promise.resolve(Buffer.from(content, 'utf-8'));
+      }
+      return Promise.resolve(new Uint8Array());
+    });
   });
 
   it('routes ast:updateStyles and returns className', async () => {
@@ -320,6 +345,7 @@ describe('AstBridge', () => {
   describe('public mutation methods', () => {
     it('deleteElements delegates to astService and enables undo', async () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       const result = await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       expect(mockAstService.deleteElements).toHaveBeenCalledWith('/workspace/comp.tsx', ['e1']);
       expect(result.success).toBe(true);
@@ -332,6 +358,7 @@ describe('AstBridge', () => {
         Promise.resolve({ success: true, data: { deletedCount: 3 } }),
       );
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'before', 'after');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1', 'e2', 'e3']);
       const panel = { reveal: mock(() => {}) } as never;
       // Content-based: single undo entry captures the entire before/after diff
@@ -345,6 +372,34 @@ describe('AstBridge', () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'before', 'before');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('deleteElements multi-file batch records a single atomic undo entry', async () => {
+      // Requested file is unmodified: disk stays the same before and after delete
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'comp-content', 'comp-content');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'comp-content', 'comp-content');
+      // Cross-file paths: xAfter is now read via readFileFromDisk, set up disk content
+      setupDiskSnapshotsForPath('/workspace/child-a.tsx', 'child-a-after', 'child-a-after');
+      setupDiskSnapshotsForPath('/workspace/child-b.tsx', 'child-b-after', 'child-b-after');
+
+      mockAstService.deleteElements.mockImplementation(() =>
+        Promise.resolve({
+          success: true,
+          data: { deletedCount: 2 },
+          allCrossFileSnapshots: [
+            { resolvedPath: '/workspace/child-a.tsx', contentBefore: 'child-a-before' },
+            { resolvedPath: '/workspace/child-b.tsx', contentBefore: 'child-b-before' },
+          ],
+        }),
+      );
+
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1', 'e2']);
+      const panel = { reveal: mock(() => {}) } as never;
+
+      // Single atomic undo restores all modified cross-file paths in one press
+      expect(await bridge.undo(panel)).toBe(true);
+      // No more entries — the whole delete is one undoable action
       expect(await bridge.undo(panel)).toBe(false);
     });
 
@@ -379,6 +434,7 @@ describe('AstBridge', () => {
   describe('undo/redo delegation', () => {
     it('undo writes contentBefore via disk-first file write', async () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       const result = await bridge.undo(panel);
@@ -389,6 +445,7 @@ describe('AstBridge', () => {
 
     it('redo writes contentAfter after undo', async () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       await bridge.undo(panel);
@@ -400,6 +457,7 @@ describe('AstBridge', () => {
 
     it('redo works after undo (content-based, not native VS Code redo)', async () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'v1', 'v2');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'v1', 'v2');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
 
@@ -408,6 +466,59 @@ describe('AstBridge', () => {
       // Redo should work — this is the key fix!
       expect(await bridge.redo(panel)).toBe(true);
       // Undo again should work (entry moved back to undo stack)
+      expect(await bridge.undo(panel)).toBe(true);
+    });
+
+    it('deleteElements: dirty main file not added to batchEdits on cross-file delete', async () => {
+      // Main file has unsaved dirty edits (dirty buffer != disk), but delete only touches child.tsx
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'dirty-unsaved-content', 'dirty-unsaved-content');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'disk-saved-content', 'disk-saved-content');
+      // Child file is modified on disk by the delete
+      setupDiskSnapshotsForPath('/workspace/child.tsx', 'child-after', 'child-after');
+
+      mockAstService.deleteElements.mockImplementation(() =>
+        Promise.resolve({
+          success: true,
+          data: { deletedCount: 1 },
+          allCrossFileSnapshots: [{ resolvedPath: '/workspace/child.tsx', contentBefore: 'child-before' }],
+        }),
+      );
+
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+
+      // Undo should work — child.tsx was modified
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+
+      // comp.tsx must NOT have been written (only child.tsx was in batchEdits)
+      const writeCalls = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls;
+      const wroteToComp = writeCalls.some(([uri]) => (uri as vscode.Uri).fsPath === '/workspace/comp.tsx');
+      expect(wroteToComp).toBe(false);
+
+      // No second undo entry
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('deleteElements: stale dirty buffer for cross-file xAfter does not prevent undo entry', async () => {
+      // Main file unmodified
+      setupFileSnapshotsForPath('/workspace/comp.tsx', 'comp-before', 'comp-before');
+      setupDiskSnapshotsForPath('/workspace/comp.tsx', 'comp-before', 'comp-before');
+      // Child file: dirty buffer is stale (still pre-delete), but disk has post-delete content
+      setupFileSnapshotsForPath('/workspace/child.tsx', 'child-before', 'child-before');
+      setupDiskSnapshotsForPath('/workspace/child.tsx', 'child-after', 'child-after');
+
+      mockAstService.deleteElements.mockImplementation(() =>
+        Promise.resolve({
+          success: true,
+          data: { deletedCount: 1 },
+          allCrossFileSnapshots: [{ resolvedPath: '/workspace/child.tsx', contentBefore: 'child-before' }],
+        }),
+      );
+
+      await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
+
+      // xAfter reads disk (not stale buffer), so child.tsx IS in batchEdits
+      const panel = { reveal: mock(() => {}) } as never;
       expect(await bridge.undo(panel)).toBe(true);
     });
   });

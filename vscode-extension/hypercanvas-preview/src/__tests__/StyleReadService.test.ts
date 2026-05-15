@@ -327,8 +327,38 @@ describe('StyleReadService — i18n binding detection', () => {
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
     const result = await service.readElementClassName('src/App.tsx', syntheticRef);
 
-    // <div> has childrenType 'jsx' (contains <span>), so i18nText should be undefined
+    // <div>'s only child is <span>, which is not a known i18n component — i18nText is undefined
     expect(result.i18nText).toBeUndefined();
+  });
+
+  it('detects react-intl FormattedMessage JSX child element as i18n binding', async () => {
+    const JSX_FM = `const Greeting = () => <p className="text-lg"><FormattedMessage id="habits.walks" /></p>;`;
+    const PKG_REACT_INTL = JSON.stringify({ dependencies: { 'react-intl': '^6.0.0' } });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_FM, 'src/App.tsx');
+    const pEntry = entries[0]; // <p> element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const fileIO = makeFileIO({
+      [FILE_PATH]: JSX_FM,
+      '/workspace/package.json': PKG_REACT_INTL,
+      '/workspace/locales/en.json': LOCALES_EN,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('react-intl');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+      expect(result.i18nText.editable).toBe(true);
+    }
   });
 
   it('returns i18nText with null resolvedText when locale file is missing', async () => {
