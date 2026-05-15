@@ -965,6 +965,13 @@ export class PreviewPanel {
    * the component the user was previewing, so re-deriving overwrites a valid
    * selection. Instead we push the existing state into the webview and rely
    * on the `webview:ready` handler to do the same when the React app loads.
+   *
+   * StateHub takes priority over the active editor. When createOrShow is called
+   * from the extension.ts onChange listener (while a component-selection patch
+   * is still being broadcast), StateHub already holds the user's intent.
+   * Deriving from activeEditor at that moment would emit a second applyUpdate
+   * for a different component, triggering a second showTextDocument call —
+   * the root cause of files opening twice (HYP-363).
    */
   private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
     if (this._currentComponent) {
@@ -972,18 +979,20 @@ export class PreviewPanel {
       return;
     }
 
+    // StateHub already has a current component: respect that intent and do NOT
+    // call _setCurrentComponent (which would emit applyUpdate and re-trigger
+    // all onChange listeners). Just cache it locally so the webview gets it.
+    const stateComponent = this._stateHub.state.currentComponent;
+    if (stateComponent?.path) {
+      this._currentComponent = stateComponent.path;
+      return;
+    }
+
+    // No component in StateHub yet — derive from the active editor (first open).
     this._syncWorkspaceRootFromVSCode();
     const component = this._resolveComponentPath(activeEditor);
     if (component) {
       this._setCurrentComponent(component);
-    }
-
-    // Fallback: pick component from StateHub (e.g. opened via Explorer click)
-    if (!this._currentComponent) {
-      const stateComponent = this._stateHub.state.currentComponent;
-      if (stateComponent?.path) {
-        this._currentComponent = stateComponent.path;
-      }
     }
   }
 
