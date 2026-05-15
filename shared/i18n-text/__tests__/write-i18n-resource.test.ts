@@ -297,6 +297,57 @@ describe('read-only filesystem', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Prototype pollution prevention
+// ---------------------------------------------------------------------------
+
+describe('prototype pollution prevention', () => {
+  it('does not pollute Object.prototype via __proto__ dot-path', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
+    });
+
+    await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: '__proto__.polluted',
+      activeLocale: 'en',
+      newText: 'injected',
+      fileIO,
+    });
+
+    // No pollution on Object.prototype
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    // The raw file content must not contain __proto__ as a written key
+    const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
+    expect(rawContent).not.toContain('"__proto__"');
+    // Other keys intact
+    const written = JSON.parse(rawContent) as Record<string, unknown>;
+    expect(written.greeting).toBe('Hello');
+  });
+
+  it('does not pollute via constructor.prototype dot-path', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
+    });
+
+    await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'constructor.prototype.polluted',
+      activeLocale: 'en',
+      newText: 'injected',
+      fileIO,
+    });
+
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
+    expect(rawContent).not.toContain('"constructor"');
+    const written = JSON.parse(rawContent) as Record<string, unknown>;
+    expect(written.greeting).toBe('Hello');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unsupported TS/JS locale format — read-only, do not attempt eval
 // ---------------------------------------------------------------------------
 

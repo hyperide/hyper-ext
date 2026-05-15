@@ -34,8 +34,15 @@ export interface WriteI18nResourceResult {
  * uses flat-key convention (any top-level key contains a dot), then falls back
  * to dot-path traversal with intermediate object creation.
  */
+const FORBIDDEN_KEY_PARTS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function setKey(data: unknown, key: string, value: string): void {
   if (typeof data !== 'object' || data === null) return;
+
+  // Reject keys that could pollute Object.prototype or Function.prototype
+  const parts = key.split('.');
+  if (parts.some((p) => FORBIDDEN_KEY_PARTS.has(p))) return;
+
   const obj = data as Record<string, unknown>;
 
   // Literal key first — handles flat keys containing dots (e.g. "habits.walks")
@@ -53,7 +60,6 @@ function setKey(data: unknown, key: string, value: string): void {
   }
 
   // Dot-path traversal with intermediate object creation
-  const parts = key.split('.');
   let current: Record<string, unknown> = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];

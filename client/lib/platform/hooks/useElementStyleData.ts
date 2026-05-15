@@ -190,7 +190,7 @@ export function mergeRuntimeStyle(
     merged.borderRadius = cs.borderRadius;
   }
 
-  if (!merged.opacity && cs.opacity) {
+  if (merged.opacity == null && cs.opacity) {
     const num = Number.parseFloat(cs.opacity);
     if (!Number.isNaN(num)) merged.opacity = Math.round(num * 100).toString();
   }
