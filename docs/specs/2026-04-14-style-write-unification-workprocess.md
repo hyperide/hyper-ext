@@ -406,11 +406,12 @@ is bind-mounted at runtime so skipping the rebuild is safe.
   - FLAKY: "component with error — error overlay appears" (vite project) — HMR overlay lag
   - FLAKY: "Tamagui: style written as prop, not className" — strict mode violation, retry pass
 
-- **S3**: IN PROGRESS — webpack ast-operations tests (slow cold compile ~600s)
-  - Partial data (3+ hours): 0 hard fails, 3 flakies so far
-  - FLAKY: "insert element command runs without crash" — 604s first attempt, retry passed (warm cache)
-  - FLAKY: "elements identifiable via fiber-based selection" — retry passed
-  - FLAKY: "Tamagui: style written as prop, not className"
+- **S3**: DONE (container hung at 12:04 after ~3h, killed manually) — **0 FAILED**, 3 FLAKY, 36 unique tests, 124 pass entries
+  - FLAKY: "insert element command runs without crash" — 604s first attempt (webpack 600s boundary), retry passed
+  - FLAKY: "elements identifiable via fiber-based selection" — 604s first attempt, retry passed
+  - FLAKY: "Tamagui: style written as prop, not className" — 3/6 attempts failed (~56s = 45s poll exhausted on cold AST parse)
+
+**Run #29 FINAL** (all shards done): **1 hard fail** (redo-limit), **12 flaky**, 900+ passed
 
 ### Root Cause Analysis (Run #29 vs #28 regression)
 
@@ -439,3 +440,20 @@ quickly. New fix: 600→720s poll gives comfortable margin.
 | webpack timeout | poll 600→720s, test.setTimeout 840→960s |
 | undo-redo wait | redo-stack wait 15→25s |
 | undo-redo selection | re-select element after HMR reload in redo-limit test |
+| smoke activation | waitForExtensionActivation() gate before Open Preview command |
+| fallback saves undo | expected-runtime-errors annotation for in-flight style-sync race |
+| tamagui style write | poll 45→60s + 2s pre-poll delay for cold Docker AST parse |
+
+---
+
+## 📍 2026-04-29 15:00 CEST — Run #30 launched (run-20260429-141431-63665)
+
+- Launched with all 9 fixes from this session
+- **HYPER_E2E_BUILD_IMAGE=0** — reuses existing Docker image
+- Expected improvements:
+  - redo-limit hard fail → FIXED (re-select after HMR)
+  - webpack 604s boundary → FIXED (720s poll)
+  - settings flakies → FIXED (+500ms file watcher wait)
+  - smoke/activation flaky → FIXED (waitForExtensionActivation gate)
+  - tamagui style write 50% flaky → FIXED (60s poll)
+- Still watching: "Tamagui: style written as prop, not className" (was 3/6 fails), "Typing in inspector input → canvas remains functional" (SyntaxError flaky from S1)
