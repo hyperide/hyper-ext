@@ -11,6 +11,11 @@ import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolv
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import {
+  computeOrderWritePlan,
+  type OrderWritePlan,
+  type SiblingInfo,
+} from '@shared/canvas-interaction/order-drag-detect';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
 import {
@@ -34,7 +39,6 @@ import html2canvas from 'html2canvas';
 import {
   applySelectionGraceCache,
   hydrateSelectionGraceCache,
-  invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
 } from './selection-grace-cache';
@@ -1029,18 +1033,6 @@ attachClickHandler(
           logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
-          // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
-          // Mark the overlay loop dirty NOW so a fresh paint runs against the
-          // optimistic selection without waiting for the parent stateUpdate
-          // round-trip. Symptom (1) repro: after a drag the RAF loop bailed
-          // (needsOverlayUpdate=false; computedRects last paint was empty due
-          // to grace-cache invalidation), and an HMR-stalled round-trip kept
-          // it dormant — the user's post-drag click set selectedIds locally
-          // but no paint ever ran, so the rect never appeared. Dirtying here
-          // is safe: the round-trip stateUpdate later re-dirties the loop
-          // anyway, and a same-frame double paint dedupes via prevRectsJSON.
-          needsOverlayUpdate = true;
-          scheduleOverlayLoopIfNeeded();
         }
       }
 
@@ -1593,6 +1585,10 @@ function _dragPointerUp(e: PointerEvent): void {
   const wasDragging = _dragState === 'dragging';
   const sourceId = _dragSourceId;
   const sourceFilePath = _dragSourceFilePath;
+  // Capture the live source element BEFORE cleanup nulls it out — the
+  // order-driven branch below needs it to walk up to the common parent and
+  // collect sibling DOM/className data. The AST-move branch never used it.
+  const sourceEl = _dragSourceEl;
 
   _dragCleanup();
 
@@ -1653,6 +1649,28 @@ function _dragPointerUp(e: PointerEvent): void {
       ? 'before'
       : 'after';
 
+  // === Order-driven parent fast path (Tailwind `order-N`) ===
+  // When the source and drop resolve to siblings under a parent that already
+  // declares `order-*` siblings, mutate the order classes on the active
+  // breakpoint instead of rewriting JSX. Falls through to the AST move on any
+  // mismatch (cross-parent, no order classes, dynamic `className={cn(...)}`,
+  // adapter not implemented). See plan 2026-05-08-tw-order-drag-ralphex-plan.md.
+  if (sourceEl) {
+    const orderPlan = _resolveOrderWritePlan(sourceEl, dropEl);
+    if (orderPlan) {
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage(
+        {
+          type: 'hypercanvas:writeOrders',
+          breakpoint: orderPlan.breakpoint,
+          entries: orderPlan.entries,
+        },
+        '*',
+      );
+      return;
+    }
+  }
+
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
@@ -1664,28 +1682,107 @@ function _dragPointerUp(e: PointerEvent): void {
     },
     '*',
   );
+}
 
-  // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
-  // The AST mutation about to land will renumber line/column for elements in
-  // the source file. The grace cache (designed for i18n text changes where
-  // line/col stay stable) would otherwise replay the previously-selected
-  // element's OLD bbox for up to SELECTION_GRACE_PERIOD_MS — that is the
-  // user-reported "stale rect lingers at old position" symptom (#2).
-  //
-  // Drop every cached rect for the mutated file *before* the next paint runs,
-  // so the next miss returns no replay rather than the stale geometry. Also
-  // invalidate target file for cross-file moves; here we only know the source
-  // file from the iframe side, but the dropTargetEl's source location was
-  // resolved into `dropSrc` above — drop its file too if different.
-  invalidateSelectionGraceCacheForFile(selectionGraceCache, sourceFilePath);
-  if (dropSrc.fileName && dropSrc.fileName !== sourceFilePath) {
-    invalidateSelectionGraceCacheForFile(selectionGraceCache, dropSrc.fileName);
+/**
+ * Walk both source and drop DOMs upward to find the lowest common ancestor where
+ * source-branch and drop-branch are distinct direct children. Returns the parent
+ * plus the two "sibling" elements at that level. `null` when no such ancestor
+ * exists (e.g. one is contained in the other, or they share no ancestor before
+ * `<body>`).
+ *
+ * The branches are NOT necessarily the same as the elements the user clicked /
+ * dropped on — e.g. dropping inside a `<p>` nested under an order-driven `<div>`
+ * surfaces the `<div>` as the drop branch, which is the level the order-N class
+ * lives on.
+ */
+function _findReorderSiblings(
+  sourceEl: HTMLElement,
+  dropEl: HTMLElement,
+): { parent: HTMLElement; sourceSibling: HTMLElement; dropSibling: HTMLElement } | null {
+  if (sourceEl === dropEl) return null;
+  // If one contains the other, there's no sibling-pair to reorder at any level.
+  if (sourceEl.contains(dropEl) || dropEl.contains(sourceEl)) return null;
+
+  let srcAncestor: HTMLElement | null = sourceEl;
+  while (srcAncestor?.parentElement) {
+    const parentEl: HTMLElement = srcAncestor.parentElement;
+    let dropBranch: HTMLElement | null = dropEl;
+    while (dropBranch && dropBranch.parentElement !== parentEl) {
+      dropBranch = dropBranch.parentElement;
+    }
+    if (dropBranch && dropBranch !== srcAncestor) {
+      return { parent: parentEl, sourceSibling: srcAncestor, dropSibling: dropBranch };
+    }
+    srcAncestor = parentEl;
   }
-  // Mark overlays dirty so the next RAF tick re-runs the lookup; without this
-  // the loop may have just bailed (needsOverlayUpdate=false) and would not
-  // rediscover the empty cache state until the next MutationObserver hit.
-  needsOverlayUpdate = true;
-  scheduleOverlayLoopIfNeeded();
+  return null;
+}
+
+/**
+ * Build the order-write plan for a drag-drop, or return `null` to fall back to
+ * the AST-move path. Pure DOM inspection — collects classNames + source refs for
+ * the parent's children, asks `computeOrderWritePlan` (pure function) for the
+ * concrete write entries.
+ *
+ * Position semantic: derived from source-vs-drop center along the dominant axis
+ * (NOT cursor coordinate). Dropping at exact target center is ambiguous when
+ * cursor-based; for an order-driven swap we always want "the side opposite where
+ * source currently is". This matches the user's intent — the drag direction
+ * decides which side of the target the source ends up on, regardless of where
+ * the cursor lands inside the target rect.
+ */
+function _resolveOrderWritePlan(sourceEl: HTMLElement, dropEl: HTMLElement): OrderWritePlan | null {
+  const lca = _findReorderSiblings(sourceEl, dropEl);
+  if (!lca) return null;
+  const { parent, sourceSibling, dropSibling } = lca;
+
+  // Collect source-bearing children only — skip whitespace text, comments, and
+  // wrapper artefacts that have no React fiber / source location.
+  // NB: read class via `getAttribute('class')` — `Element.className` is
+  // `SVGAnimatedString` for SVG elements, not a string.
+  const siblings: SiblingInfo[] = [];
+  let domIndex = 0;
+  for (const child of Array.from(parent.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    const loc = iframeResolver.getSourceLocation(child);
+    if (!loc) continue;
+    siblings.push({
+      elementId: `${loc.fileName}:${loc.line}:${loc.column}`,
+      filePath: loc.fileName,
+      className: child.getAttribute('class') ?? '',
+      domIndex: domIndex++,
+    });
+  }
+
+  // The LCA-walked source/drop branches may have different NodeRefs than the
+  // raw source/target IDs the drag pipeline computed (e.g. `dropEl` was a `<p>`
+  // inside an order-driven `<div>` — `dropSibling` is the wrapping `<div>`).
+  // Pass through the *branch*-level NodeRefs so the plan keys correctly.
+  const sourceLoc = iframeResolver.getSourceLocation(sourceSibling);
+  const dropLoc = iframeResolver.getSourceLocation(dropSibling);
+  if (!sourceLoc || !dropLoc) return null;
+  const sourceBranchId = `${sourceLoc.fileName}:${sourceLoc.line}:${sourceLoc.column}`;
+  const dropBranchId = `${dropLoc.fileName}:${dropLoc.line}:${dropLoc.column}`;
+  // Sanity: the branch IDs must be in our siblings list. If not, source-bearing
+  // walk picked a different element than the LCA branch did — fall back rather
+  // than guess.
+  if (!siblings.some((s) => s.elementId === sourceBranchId)) return null;
+  if (!siblings.some((s) => s.elementId === dropBranchId)) return null;
+
+  // Derive position from source-vs-drop geometry on the dominant axis.
+  // _isHorizontalLayout(parent) reads computed style on the parent so we
+  // pick X for grid/flex-row, Y for column / default block flow.
+  const horizontal = _isHorizontalLayout(parent);
+  const sourceRect = sourceSibling.getBoundingClientRect();
+  const dropRect = dropSibling.getBoundingClientRect();
+  const sourceCenter = horizontal ? sourceRect.left + sourceRect.width / 2 : sourceRect.top + sourceRect.height / 2;
+  const dropCenter = horizontal ? dropRect.left + dropRect.width / 2 : dropRect.top + dropRect.height / 2;
+  // Source visually before drop → user wants source AFTER drop (swap).
+  // Source visually after drop  → user wants source BEFORE drop.
+  const position: 'before' | 'after' = sourceCenter < dropCenter ? 'after' : 'before';
+
+  return computeOrderWritePlan(siblings, sourceBranchId, dropBranchId, position, window.innerWidth);
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {
