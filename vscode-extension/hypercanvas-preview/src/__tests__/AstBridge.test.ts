@@ -10,6 +10,7 @@ const mockAstService = {
   updateText: mock(() => Promise.resolve({ success: true })),
   wrapElement: mock(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' })),
   pasteElement: mock(() => Promise.resolve({ success: true, newId: 'paste-1' })),
+  moveElement: mock(() => Promise.resolve({ success: true as const })),
 };
 
 mock.module('../services/AstService', () => ({
@@ -22,6 +23,7 @@ mock.module('../services/AstService', () => ({
     updateText = mockAstService.updateText;
     wrapElement = mockAstService.wrapElement;
     pasteElement = mockAstService.pasteElement;
+    moveElement = mockAstService.moveElement;
   },
 }));
 
@@ -97,6 +99,7 @@ describe('AstBridge', () => {
     mockAstService.duplicateElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'dup-1' }));
     mockAstService.wrapElement.mockImplementation(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' }));
     mockAstService.pasteElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'paste-1' }));
+    mockAstService.moveElement.mockImplementation(() => Promise.resolve({ success: true as const }));
 
     // Reset disk mock registry and re-install per-path implementation.
     // mock-vscode.ts uses mockClear() (resets calls, not impl), so we set impl here.
@@ -520,6 +523,161 @@ describe('AstBridge', () => {
       // xAfter reads disk (not stale buffer), so child.tsx IS in batchEdits
       const panel = { reveal: mock(() => {}) } as never;
       expect(await bridge.undo(panel)).toBe(true);
+    });
+  });
+
+  // === ast:moveElement (Task 7 of move-any-to-any) ===
+  describe('ast:moveElement routing and undo', () => {
+    it('routes ast:moveElement to astService.moveElement and returns success', async () => {
+      setupFileSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+      setupDiskSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:moveElement',
+          requestId: 'm1',
+          filePath: '/workspace/A.tsx',
+          sourceId: 'A.tsx:10:5',
+          targetId: 'A.tsx:20:7',
+          position: 'before',
+        } as never,
+        wv as never,
+      );
+
+      expect(mockAstService.moveElement).toHaveBeenCalledWith('/workspace/A.tsx', 'A.tsx:10:5', 'A.tsx:20:7', 'before');
+      const last = wv.messages[wv.messages.length - 1] as { type: string; success: boolean };
+      expect(last.type).toBe('ast:response');
+      expect(last.success).toBe(true);
+    });
+
+    it('forwards adjustments from MoveResult into the response.data', async () => {
+      setupFileSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+      setupDiskSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+      mockAstService.moveElement.mockImplementation(() =>
+        Promise.resolve({ success: true as const, adjustments: ['added import: Foo'] }),
+      );
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:moveElement',
+          requestId: 'm2',
+          filePath: '/workspace/A.tsx',
+          sourceId: 'A.tsx:1:1',
+          targetId: 'A.tsx:2:1',
+          position: 'after',
+        } as never,
+        wv as never,
+      );
+
+      const last = wv.messages[wv.messages.length - 1] as {
+        success: boolean;
+        data?: { adjustments?: string[] };
+      };
+      expect(last.success).toBe(true);
+      expect(last.data?.adjustments).toEqual(['added import: Foo']);
+    });
+
+    it('same-file move records single undo entry', async () => {
+      setupFileSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+      setupDiskSnapshotsForPath('/workspace/A.tsx', 'before', 'after');
+      // Same-file: AstService returns no allCrossFileSnapshots, just resolvedPath.
+      mockAstService.moveElement.mockImplementation(() =>
+        Promise.resolve({ success: true as const, resolvedPath: '/workspace/A.tsx' }),
+      );
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:moveElement',
+          requestId: 'm3',
+          filePath: '/workspace/A.tsx',
+          sourceId: 'A.tsx:10:5',
+          targetId: 'A.tsx:20:7',
+          position: 'before',
+        } as never,
+        wv as never,
+      );
+
+      const panel = { reveal: mock(() => {}) } as never;
+      expect(await bridge.undo(panel)).toBe(true);
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('cross-file move records single atomic batch undo across both files', async () => {
+      // Source.tsx disk content is the post-cut state ('src-after') while the snapshot
+      // captured 'src-before' BEFORE AstService cut the source subtree out — the bridge
+      // diffs snapshot.contentBefore vs disk-read xAfter, so unequal pairs land in the
+      // batch. Same idea on Target.tsx (post-paste content vs pre-paste snapshot).
+      setupFileSnapshotsForPath('/workspace/Source.tsx', 'src-before', 'src-after');
+      setupDiskSnapshotsForPath('/workspace/Source.tsx', 'src-after', 'src-after');
+      setupFileSnapshotsForPath('/workspace/Target.tsx', 'tgt-before', 'tgt-after');
+      setupDiskSnapshotsForPath('/workspace/Target.tsx', 'tgt-after', 'tgt-after');
+
+      mockAstService.moveElement.mockImplementation(() =>
+        Promise.resolve({
+          success: true as const,
+          allCrossFileSnapshots: [
+            { resolvedPath: '/workspace/Source.tsx', contentBefore: 'src-before' },
+            { resolvedPath: '/workspace/Target.tsx', contentBefore: 'tgt-before' },
+          ],
+          resolvedPath: '/workspace/Target.tsx',
+        }),
+      );
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:moveElement',
+          requestId: 'm4',
+          filePath: '/workspace/Source.tsx',
+          sourceId: 'Source.tsx:5:5',
+          targetId: 'Target.tsx:8:3',
+          position: 'after',
+        } as never,
+        wv as never,
+      );
+
+      const panel = { reveal: mock(() => {}) } as never;
+      (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mockClear();
+      // One Cmd+Z restores both files atomically.
+      expect(await bridge.undo(panel)).toBe(true);
+      const writePaths = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls.map(
+        ([uri]) => (uri as vscode.Uri).fsPath,
+      );
+      expect(writePaths).toContain('/workspace/Source.tsx');
+      expect(writePaths).toContain('/workspace/Target.tsx');
+      // No further entry — the cross-file move is one undoable batch.
+      expect(await bridge.undo(panel)).toBe(false);
+    });
+
+    it('returns success: false when AstService.moveElement throws', async () => {
+      setupFileSnapshotsForPath('/workspace/A.tsx', 'before', 'before');
+      setupDiskSnapshotsForPath('/workspace/A.tsx', 'before', 'before');
+      mockAstService.moveElement.mockImplementation(() =>
+        Promise.reject(new Error('moveElement: source element not found')),
+      );
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:moveElement',
+          requestId: 'm5',
+          filePath: '/workspace/A.tsx',
+          sourceId: 'A.tsx:99:99',
+          targetId: 'A.tsx:1:1',
+          position: 'before',
+        } as never,
+        wv as never,
+      );
+
+      const last = wv.messages[wv.messages.length - 1] as {
+        success: boolean;
+        error?: string;
+      };
+      expect(last.success).toBe(false);
+      expect(last.error).toContain('source element not found');
     });
   });
 });

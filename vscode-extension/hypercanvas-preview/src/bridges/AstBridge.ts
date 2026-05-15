@@ -96,8 +96,8 @@ export class AstBridge {
           response = await this._handleWrapElement(message);
           break;
 
-        case 'ast:reorderElement':
-          response = await this._handleReorderElement(message);
+        case 'ast:moveElement':
+          response = await this._handleMoveElement(message);
           break;
 
         case 'ast:writeI18nResource':
@@ -432,20 +432,124 @@ export class AstBridge {
   }
 
   /**
-   * Handle reorderElement message — moves a JSX sibling before/after another sibling.
+   * Handle moveElement message — moves any JSX element to any place.
+   * Source and target need NOT share a direct JSX parent: same-parent,
+   * cross-parent, cross-component, and cross-file moves are all supported.
+   * Cross-file moves return `allCrossFileSnapshots`
+   * covering BOTH the source and target file pre-write contents, so undo
+   * needs the same batch-edit treatment as `deleteElements`.
+   *
+   * Internal failures (file I/O, parse errors, unresolvable nodeRefs) throw
+   * out of `AstService.moveElement` per its contract — caught here and
+   * surfaced as `success: false` to the iframe via the standard ast:response
+   * envelope. From the iframe's standpoint moveElement otherwise always
+   * succeeds.
    */
-  private async _handleReorderElement(
-    message: Extract<AstMessage, { type: 'ast:reorderElement' }>,
-  ): Promise<AstResponse> {
-    const result = await this._withUndoTracking(message.filePath, () =>
-      this._astService.reorderElement(message.filePath, message.sourceId, message.targetId, message.position),
-    );
-    return {
-      type: 'ast:response',
-      requestId: message.requestId,
-      success: result.success,
-      error: result.error,
-    };
+  private async _handleMoveElement(message: Extract<AstMessage, { type: 'ast:moveElement' }>): Promise<AstResponse> {
+    const absolutePath = this._resolvePath(message.filePath);
+    this._undoRedoService.beginTracking();
+    try {
+      // Snapshot the source file BEFORE the move so single-file moves can
+      // record the standard contentBefore→contentAfter edit. For cross-file
+      // moves the source-file snapshot also lives in `allCrossFileSnapshots`
+      // (captured by AstService at write time) so we don't double-count below.
+      let contentBefore: string;
+      let diskContentBefore: string;
+      try {
+        contentBefore = await this._fileIO.readFile(absolutePath);
+        diskContentBefore = await this._fileIO.readFileFromDisk(absolutePath);
+      } catch {
+        // File doesn't exist locally — run the operation untracked.
+        const r = await this._astService.moveElement(
+          message.filePath,
+          message.sourceId,
+          message.targetId,
+          message.position,
+        );
+        return {
+          type: 'ast:response',
+          requestId: message.requestId,
+          success: r.success,
+          data: r.adjustments ? { adjustments: r.adjustments } : undefined,
+        };
+      }
+
+      let result: Awaited<ReturnType<AstService['moveElement']>>;
+      try {
+        result = await this._astService.moveElement(
+          message.filePath,
+          message.sourceId,
+          message.targetId,
+          message.position,
+        );
+      } catch (error) {
+        return {
+          type: 'ast:response',
+          requestId: message.requestId,
+          success: false,
+          error: error instanceof Error ? error.message : 'moveElement failed',
+        };
+      }
+
+      // Cross-file moves carry their own per-file snapshots. Record those
+      // (source AND target). Same-file moves carry no snapshots, so fall back
+      // to the disk-vs-disk comparison on `absolutePath`.
+      const batchEdits: Array<{ filePath: string; contentBefore: string; contentAfter: string }> = [];
+      const snapshots = result.allCrossFileSnapshots;
+      if (snapshots && snapshots.length > 0) {
+        for (const { resolvedPath: xPath, contentBefore: xBefore } of snapshots) {
+          let xAfter: string;
+          try {
+            xAfter = await this._fileIO.readFileFromDisk(xPath);
+          } catch {
+            try {
+              xAfter = await this._fileIO.readFile(xPath);
+            } catch {
+              xAfter = xBefore;
+            }
+          }
+          if (xBefore !== xAfter) {
+            batchEdits.push({ filePath: xPath, contentBefore: xBefore, contentAfter: xAfter });
+          }
+        }
+      } else {
+        // Same-file move — diff `absolutePath` (or `result.resolvedPath` if it
+        // diverged, mirroring `_withUndoTracking`).
+        const actualPath = result.resolvedPath ?? absolutePath;
+        let mainAfter: string;
+        try {
+          mainAfter = await this._fileIO.readFileFromDisk(actualPath);
+        } catch {
+          try {
+            mainAfter = await this._fileIO.readFile(actualPath);
+          } catch {
+            mainAfter = contentBefore;
+          }
+        }
+        // Use disk-vs-disk on the original absolutePath only when the operation
+        // resolved to that same file. Cross-file resolution (different file)
+        // would have produced an `allCrossFileSnapshots` entry above already.
+        const sameFile = actualPath === absolutePath;
+        const beforeForDiff = sameFile ? diskContentBefore : (result.contentBeforeWrite ?? contentBefore);
+        const beforeForUndo = sameFile ? contentBefore : (result.contentBeforeWrite ?? contentBefore);
+        if (beforeForDiff !== mainAfter) {
+          batchEdits.push({ filePath: actualPath, contentBefore: beforeForUndo, contentAfter: mainAfter });
+        }
+      }
+
+      if (batchEdits.length > 0) {
+        this._undoRedoService.recordBatchEdit(batchEdits);
+      }
+
+      return {
+        type: 'ast:response',
+        requestId: message.requestId,
+        success: true,
+        data: result.adjustments ? { adjustments: result.adjustments } : undefined,
+      };
+    } finally {
+      this._undoRedoService.endTracking();
+    }
   }
 
   /**
@@ -521,7 +625,8 @@ export class AstBridge {
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
+      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;
+      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );
       if (!updateResult.success) {
