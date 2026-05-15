@@ -383,3 +383,59 @@ HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.
 conversion bug in the image freshness check (`date -j` interprets Docker's UTC timestamp as
 local CEST time → image appears 2h older than it is → unnecessary rebuild). The entrypoint
 is bind-mounted at runtime so skipping the rebuild is safe.
+
+---
+
+## 📍 2026-04-29 14:50 CEST — Run #29 partial results (S3 still running)
+
+### Run #29 Partial Results (run-20260429-110015-36155)
+
+- **S1**: DONE — **1 FAILED**, 7 FLAKY, 743 passed (2.8h)
+  - FAILED: `undo-redo.spec.ts:341` "redo limit — no redo after new edit" — both attempts
+    failed at inspector poll (line 382): after undo+HMR reload, selection lost, inspector
+    shows empty. Root cause: Vite HMR page reload clears `selectedIds`. New fix: re-select
+    element after HMR settles before making next edit.
+  - FLAKY (5): settings tests — "Setting change takes effect immediately", "autoStart false",
+    "Model override", "Custom baseURL", "Backend for proxy/opencode" — first attempt failed
+    fast (~8s), retry passed. Fix committed: +500ms wait + 10→15s timeouts.
+  - FLAKY: "open preview command works" — first attempt 16s timeout, retry passed
+  - FLAKY: "Cmd+Shift+Z triggers redo" — first attempt 376s timeout (keybindings.spec.ts),
+    retry passed. Fix committed: getComponentName timeout 10→15s.
+
+- **S2**: DONE — **0 FAILED**, 2 FLAKY, ~428 passed (2.0h)
+  - FLAKY: "component with error — error overlay appears" (vite project) — HMR overlay lag
+  - FLAKY: "Tamagui: style written as prop, not className" — strict mode violation, retry pass
+
+- **S3**: IN PROGRESS — webpack ast-operations tests (slow cold compile ~600s)
+  - Partial data (3+ hours): 0 hard fails, 3 flakies so far
+  - FLAKY: "insert element command runs without crash" — 604s first attempt, retry passed (warm cache)
+  - FLAKY: "elements identifiable via fiber-based selection" — retry passed
+  - FLAKY: "Tamagui: style written as prop, not className"
+
+### Root Cause Analysis (Run #29 vs #28 regression)
+
+**S1 "redo limit" hard fail** — Different root cause than run #28! Not file watcher lag (the 15s
+wait happens LATER in the test). Instead: after `CMD_UNDO` reverts the file, Vite HMR fires →
+page reload → `selectedIds` becomes empty → inspector poll at line 382 times out (20s). The 15s
+wait for redo-stack was never reached because the test failed earlier.
+
+**S1 settings tests FLAKY** — Actual assertion failure (not VS Code state corruption). Tests run
+in ~8s total when they fail, meaning they fail during the poll itself. Root cause: poll starts
+immediately after `setSettingViaJSON` before file watcher propagates the change to VS Code's
+in-memory settings.
+
+**S3 webpack tests FLAKY (not hard fail!)** — webpack cold compile (600s) exceeds first-attempt
+poll timeout (600s) by a few seconds → timeout on first attempt. Retry uses warm cache → passes
+quickly. New fix: 600→720s poll gives comfortable margin.
+
+### Fixes Committed for Run #30 (in ext-test-projects)
+
+| Commit | Fix |
+|--------|-----|
+| tamagui stability (prev) | 600ms stability guard after hasFill in setupWithElementSelected |
+| preview-render timeout | tryRenderComponent 12→20s for Remix cold-start |
+| keybindings/drag/lifecycle | getComponentName 10→15s; bootDesignMode readiness poll; closePreviewPanel 5→10s |
+| settings/error-handling | +500ms file watcher wait; customBaseURL 10→15s; +2s component cache wait |
+| webpack timeout | poll 600→720s, test.setTimeout 840→960s |
+| undo-redo wait | redo-stack wait 15→25s |
+| undo-redo selection | re-select element after HMR reload in redo-limit test |
