@@ -1521,3 +1521,30 @@ s1/s3/s4 продолжают. s4 жуёт spotify, ~120-150 min до конца
 
 Половина flaky на style-editing/css-adapters. Эти тесты часто упирались в
 re-create race. Ожидаю снижения после VSIX 0.1.10.
+
+## 📍 2026-04-27 00:55 CEST: 200339-88217 ЗАКОНЧИЛСЯ — старт overnight
+
+### Финальные итоги 200339-88217
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 637  | 588  | 14   | 9    |
+| s2    | 462  | 332  | 16   | 99   |
+| s3    | 578  | 354  | 27   | 183  |
+| s4    | 275  | 113  | 82   | 67   |
+| **Σ** | **1952** | **1387** | **139** | **358** |
+
+**Pass rate 90.9%**. Disk freed: 34GB → 41GB.
+
+### Старт overnight прогона с VSIX 0.1.10
+
+`bun run test:docker` запущен из `/Users/ultra/work/ext-test-projects/e2e`.
+Image rebuild сработал автоматически (Dockerfile новее image'а), сейчас
+идёт `apt-get install` для baseObr Ubuntu 22.04. Ожидаем:
+
+1. Build ~15-30 min (с COPY --parents bake)
+2. 4-shard прогон ~4h
+3. Гипотеза: spotify cluster ↓ из 64 fail → ≤10 (closes ~50 tests)
+4. Inspector cluster ↓ Y частично
+
+Wakeup каждые 30 min для контроля.
