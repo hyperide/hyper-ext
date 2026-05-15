@@ -47,7 +47,7 @@ export function resolveDragSource(
   // Decorative elements (aria-hidden="true") should never be the drag target themselves —
   // they carry no meaningful structure and their source points to a sub-element that users
   // cannot meaningfully reorder on its own. Always delegate to the nearest ancestor.
-  const isDecorative = target.getAttribute('aria-hidden') === 'true';
+  const isDecorative = target.getAttribute?.('aria-hidden') === 'true';
 
   // Step 1: try source-map-aware resolution on the target itself (skip for decorative elements).
   let source = isDecorative ? null : getSourceLocation(target);
