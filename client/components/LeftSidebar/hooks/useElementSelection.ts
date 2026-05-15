@@ -172,7 +172,7 @@ export function useElementSelection(
           // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
-        dispatch?.({ selectedIds: [dispatchId] });
+        dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
       }
     },
     [engine, dispatch, elementsTree, currentComponent],

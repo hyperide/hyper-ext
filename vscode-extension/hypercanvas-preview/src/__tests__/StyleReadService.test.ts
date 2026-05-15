@@ -361,41 +361,6 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
-  it('detects custom i18n from namespaced layout when no known package installed', async () => {
-    const JSX_NS = `const Greeting = () => <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;`;
-    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
-
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(JSX_NS, 'src/App.tsx');
-    const pEntry = entries[0];
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: JSX_NS,
-      '/workspace/locales/en/common.json': LOCALES_COMMON,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText).toBeDefined();
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.library).toBe('custom');
-      expect(result.i18nText.key).toBe('habits.walks');
-      expect(result.i18nText.namespace).toBe('common');
-      expect(result.i18nText.resolvedText).toBe('Go for a walk');
-      expect(result.i18nText.editable).toBe(true);
-    }
-  });
-
   it('returns i18nText with null resolvedText when locale file is missing', async () => {
     const nodeMap = new NodeMapService();
     const helper = new NodeMapService();

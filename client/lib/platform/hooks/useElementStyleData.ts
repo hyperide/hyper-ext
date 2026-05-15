@@ -157,8 +157,11 @@ export function mergeRuntimeStyle(
   base: ParsedStyles,
   runtime: SelectedElementRuntimeStyle | null | undefined,
   elementId: string | null,
+  itemIndex?: number | null,
 ): ParsedStyles {
   if (!runtime || !elementId || runtime.elementId !== elementId) return base;
+  // For .map()-rendered elements, discard a snapshot from a different item index.
+  if (runtime.itemIndex != null && itemIndex != null && runtime.itemIndex !== itemIndex) return base;
 
   const cs = runtime.computedStyle;
   const merged: ParsedStyles = { ...base };
@@ -408,16 +411,16 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
       clearTimeout(timer);
     };
-  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, refreshKey]);
+  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey]);
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
   const data = useMemo(() => {
     if (!classData.parsedStyles || !runtimeStyle) return classData;
-    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId);
+    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId, itemIndex);
     if (merged === classData.parsedStyles) return classData;
     return { ...classData, parsedStyles: merged };
-  }, [classData, runtimeStyle, elementId]);
+  }, [classData, runtimeStyle, elementId, itemIndex]);
 
   return data;
 }

@@ -29,8 +29,8 @@ import type {
 import type { NodeRef } from '@shared/element-tracing/types';
 import { detectI18nBinding } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
-import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
-import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
+import { resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
+import type { I18nBindingResult, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
 import { isBundleArtifactPath } from './bundle-artifact-path';
 import { resolveWorkspacePath } from './workspace-path';
 
@@ -232,34 +232,13 @@ export class StyleReadService {
     if (!exprLoc) return undefined;
 
     // Read package.json to identify the i18n library in use
-    let library: I18nLibrary | null = null;
+    let library: ReturnType<typeof detectI18nPackage> = null;
     try {
       const pkgContent = await this._fileIO.readFile(`${this._workspaceRoot}/package.json`);
       const pkg = JSON.parse(pkgContent) as PackageJsonDeps;
       library = detectI18nPackage(pkg);
     } catch {
       // No package.json or parse error — proceed with null (allows 'custom' detection)
-    }
-
-    // When no known library found, check if locale files exist — if so treat as custom i18n
-    if (library === null) {
-      const layout = await discoverLayout(this._workspaceRoot, undefined, 'en', this._fileIO).catch(() => null);
-      if (layout && layout.availableLocales.length > 0) {
-        library = 'custom';
-      }
-    }
-
-    // Also detect namespaced custom layouts: locales/{locale}/{namespace}.json
-    // discoverLayout skips this branch when namespace is undefined, so probe separately.
-    if (library === null && this._fileIO.listFiles) {
-      const localesDir = `${this._workspaceRoot}/locales`;
-      const namespacedFiles = await this._fileIO.listFiles(localesDir, ['.json']).catch(() => []);
-      const prefix = `${localesDir}/`;
-      const hasNamespacedFiles = namespacedFiles.some((f) => {
-        const rel = f.slice(prefix.length);
-        return rel.split('/').length === 2;
-      });
-      if (hasNamespacedFiles) library = 'custom';
     }
 
     // AST detection: is the expression a known i18n call?
@@ -282,7 +261,6 @@ export class StyleReadService {
         projectRoot: this._workspaceRoot,
         library: detection.library,
         key: detection.key,
-        namespace: detection.namespace,
         activeLocale: DEFAULT_LOCALE,
         fallbackLocale: 'en-US',
         fileIO: this._fileIO,
@@ -303,7 +281,6 @@ export class StyleReadService {
           projectRoot: this._workspaceRoot,
           library: detection.library,
           key: detection.key,
-          namespace: detection.namespace,
           activeLocale: resolved.availableLocales[0],
           fileIO: this._fileIO,
         });
@@ -316,7 +293,6 @@ export class StyleReadService {
       kind: 'i18n',
       library: detection.library,
       key: detection.key,
-      namespace: detection.namespace,
       activeLocale: resolved.activeLocale,
       availableLocales: resolved.availableLocales,
       resolvedText: resolved.resolvedText,

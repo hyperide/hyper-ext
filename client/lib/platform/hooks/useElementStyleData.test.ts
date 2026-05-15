@@ -44,6 +44,36 @@ describe('mergeRuntimeStyle', () => {
     expect(merged.backgroundColor).toBe(original);
   });
 
+  test('stale runtime style from different .map() itemIndex is ignored', () => {
+    const base = classNameToStyles('bg-primary/15');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      itemIndex: 0,
+      seq: 1,
+      computedStyle: { backgroundColor: 'rgba(255, 0, 0, 1)' },
+    };
+
+    // Snapshot was captured for item 0, but we are now looking at item 1
+    const merged = mergeRuntimeStyle(base, runtime, elementId, 1);
+    // itemIndex mismatch — merge must be skipped
+    expect(merged.backgroundColor).toBeUndefined();
+  });
+
+  test('runtime style with matching itemIndex is applied', () => {
+    const base = classNameToStyles('bg-primary/15');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      itemIndex: 1,
+      seq: 1,
+      computedStyle: { backgroundColor: 'rgba(184, 103, 46, 0.15)' },
+    };
+
+    const merged = mergeRuntimeStyle(base, runtime, elementId, 1);
+    expect(merged.backgroundColor).toBeDefined();
+  });
+
   test('stale runtime style (different elementId) is ignored', () => {
     const base = classNameToStyles('bg-primary/15');
     const runtime: SelectedElementRuntimeStyle = {

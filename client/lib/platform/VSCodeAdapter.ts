@@ -58,13 +58,13 @@ webviewWindow.__hyperTestBridge = {
   selectElement(elementId: string) {
     getVSCodeApi().postMessage({
       type: 'state:update',
-      patch: { selectedIds: [elementId] },
+      patch: { selectedIds: [elementId], selectedItemIndices: {}, selectedElementRuntimeStyle: null },
     });
   },
   selectElements(elementIds: string[]) {
     getVSCodeApi().postMessage({
       type: 'state:update',
-      patch: { selectedIds: elementIds },
+      patch: { selectedIds: elementIds, selectedItemIndices: {}, selectedElementRuntimeStyle: null },
     });
   },
   setCurrentComponent(componentPath: string) {
