@@ -11,13 +11,14 @@ import { memo, useEffect, useRef, useState } from 'react';
 
 export interface I18nTextInspectorProps {
   i18nBinding: I18nBindingResult;
-  onKeyChange: (key: string) => void;
+  /** Not yet implemented — omit to render key field as read-only. */
+  onKeyChange?: (key: string) => void;
   onResolvedTextChange: (text: string) => void;
-  onLocaleChange: (locale: string) => void;
-  /** Whether the key field is editable. False until onKeyChange is wired server-side. */
-  keyEditable?: boolean;
-  /** Whether locale switching is active. False until onLocaleChange is wired server-side. */
-  localeEditable?: boolean;
+  /** Not yet implemented — omit to render locale pills as disabled. */
+  onLocaleChange?: (locale: string) => void;
+  /** Increments ONLY on write failure. Forces localText rollback when write fails and resolvedText stays unchanged.
+   * Must NOT increment on success — doing so snaps localText to stale resolvedText before the RPC re-read returns. */
+  rollbackKey?: number;
 }
 
 export const I18nTextInspector = memo(function I18nTextInspector({
@@ -25,19 +26,32 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   onKeyChange,
   onResolvedTextChange,
   onLocaleChange,
-  keyEditable = false,
-  localeEditable = false,
+  rollbackKey,
 }: I18nTextInspectorProps) {
+  // Local draft prevents snap-back to stale resolvedText during the debounce window.
+  // Component is re-keyed in RightSidebar when key/locale/library changes, so this
+  // state naturally resets on binding identity change without a useEffect.
+  const [localText, setLocalText] = useState(i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '');
+  const textInputRef = useRef<HTMLInputElement>(null);
   const resolvedText = i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '';
-  const [localText, setLocalText] = useState(resolvedText);
-  // Prevents prop sync from overwriting user input mid-typing.
-  const isEditingRef = useRef(false);
 
+  // Track previous rollbackKey to detect write-failure triggers from RightSidebar.
+  // Initialized to the first rollbackKey so the initial render never counts as a "key changed" event.
+  const prevRollbackKeyRef = useRef<number | undefined>(rollbackKey);
+
+  // Re-sync localText when server pushes a new resolvedText (undo/redo, external file edit).
+  // Focus guard prevents snap-back while the user is actively typing — EXCEPT when rollbackKey
+  // changes (write failure). On failure resolvedText stays unchanged, so without bypassing the
+  // focus guard the rollback never fires while the input is focused.
+  // On success rollbackKey does NOT change, so the focus guard keeps localText at what the
+  // user typed until the RPC re-read arrives and resolvedText catches up.
   useEffect(() => {
-    if (!isEditingRef.current) {
-      setLocalText(resolvedText);
-    }
-  }, [resolvedText]);
+    const isRollback = rollbackKey !== prevRollbackKeyRef.current;
+    prevRollbackKeyRef.current = rollbackKey;
+    if (!isRollback && textInputRef.current && document.activeElement === textInputRef.current) return;
+    setLocalText(resolvedText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedText, rollbackKey]);
 
   if (i18nBinding.kind === 'unsupported') {
     return (
@@ -54,25 +68,21 @@ export const I18nTextInspector = memo(function I18nTextInspector({
         <input
           type="text"
           value={i18nBinding.key}
-          onChange={(e) => onKeyChange(e.target.value)}
-          disabled={!keyEditable}
-          className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+          readOnly={!onKeyChange}
+          onChange={onKeyChange ? (e) => onKeyChange(e.target.value) : undefined}
+          className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring read-only:opacity-50 read-only:cursor-default"
         />
       </div>
 
       <div className="flex flex-col gap-1">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Text</span>
         <input
+          ref={textInputRef}
           type="text"
           value={localText}
           onChange={(e) => {
-            isEditingRef.current = true;
             setLocalText(e.target.value);
             onResolvedTextChange(e.target.value);
-          }}
-          onBlur={() => {
-            isEditingRef.current = false;
-            setLocalText(i18nBinding.resolvedText ?? '');
           }}
           disabled={!i18nBinding.editable}
           className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
@@ -85,15 +95,13 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             <button
               key={locale}
               type="button"
-              onClick={() => onLocaleChange(locale)}
-              disabled={!localeEditable || locale === i18nBinding.activeLocale}
+              disabled={!onLocaleChange}
+              onClick={onLocaleChange ? () => onLocaleChange(locale) : undefined}
               className={cn(
                 'h-5 px-1.5 rounded text-[10px] font-medium transition-colors',
                 locale === i18nBinding.activeLocale
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground',
-                localeEditable && locale !== i18nBinding.activeLocale && 'hover:bg-muted/80',
-                !localeEditable && locale !== i18nBinding.activeLocale && 'opacity-50 cursor-not-allowed',
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80',
               )}
             >
               {locale}

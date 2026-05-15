@@ -1405,14 +1405,18 @@ export class PreviewPanel {
    * Used by E2E tests and extension commands to establish full canvas selection state.
    */
   public selectElement(elementId: string): void {
-    this._stateHub.applyUpdate({ selectedIds: [elementId] });
+    this._stateHub.applyUpdate({
+      selectedIds: [elementId],
+      selectedItemIndices: {},
+      selectedElementRuntimeStyle: null,
+    });
   }
 
   /**
    * Programmatically select multiple elements by their nodeRefs.
    */
   public selectElements(elementIds: string[]): void {
-    this._stateHub.applyUpdate({ selectedIds: elementIds });
+    this._stateHub.applyUpdate({ selectedIds: elementIds, selectedItemIndices: {}, selectedElementRuntimeStyle: null });
   }
 
   /**
@@ -1561,9 +1565,12 @@ export class PreviewPanel {
         type: 'goToVisual',
         elementId,
       });
-      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection
+      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection.
+      // Clear stale .map() item snapshot so inspector shows correct colors for the new selection.
       this._stateHub.applyUpdate({
         selectedIds: [elementId],
+        selectedItemIndices: {},
+        selectedElementRuntimeStyle: null,
       });
     }
   }
