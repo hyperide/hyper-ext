@@ -1177,12 +1177,38 @@ function _dragPointerDown(e: PointerEvent): void {
   // then falls back to _debugSource when source maps are cold (React 18 Vite/Babel).
   const resolved = resolveDragSource(target, (el) => iframeResolver.getSourceLocation(el), renderedComponentPath);
   if (!resolved) return;
-  _dragSourceId = `${resolved.source.fileName}:${resolved.source.line}:${resolved.source.column}`;
-  _dragSourceFilePath = resolved.source.fileName;
+
+  // "What is selected is what gets dragged" — if there is a current single selection
+  // and the user grabs anywhere inside that selected element (including decorative
+  // children like emoji spans, or nested <div>{t('...')}</div>), drag the selected
+  // element itself rather than the inner click target. Without this, grabbing an
+  // emoji inside a card resolves to a span/inner-div and the visible "card" the
+  // user sees outlined is NOT what moves.
+  let dragEl = resolved.el;
+  let dragSrc = resolved.source;
+  if (state.selectedIds.length === 1) {
+    const selectedRef = state.selectedIds[0];
+    let cur: HTMLElement | null = target;
+    while (cur && cur !== document.body) {
+      const loc = iframeResolver.getSourceLocation(cur);
+      if (loc) {
+        const ref = `${loc.fileName}:${loc.line}:${loc.column}`;
+        if (ref === selectedRef) {
+          dragEl = cur;
+          dragSrc = loc;
+          break;
+        }
+      }
+      cur = cur.parentElement;
+    }
+  }
+
+  _dragSourceId = `${dragSrc.fileName}:${dragSrc.line}:${dragSrc.column}`;
+  _dragSourceFilePath = dragSrc.fileName;
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
   _dragState = 'pending';
-  _dragSourceEl = resolved.el;
+  _dragSourceEl = dragEl;
 }
 
 function _dragPointerMove(e: PointerEvent): void {

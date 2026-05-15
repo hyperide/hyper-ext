@@ -227,7 +227,7 @@ describe('resolveDragSource', () => {
    * (whose sibling other-card has a source), not inner-div (whose only sibling is
    * aria-hidden emoji-span with no source).
    */
-  describe('walkToMeaningfulDraggable (step 4 — sibling-level walk-up)', () => {
+  describe('decorative-only walk-up (no over-walking)', () => {
     // Build the DOM tree:
     //   grid
     //   ├── outer-card              source: Index.tsx:10
@@ -279,28 +279,30 @@ describe('resolveDragSource', () => {
       });
     }
 
-    it('resolves emoji-span click to outer-card (not inner-div)', () => {
+    it('resolves emoji-span (aria-hidden, no own source) to nearest source ancestor', () => {
       const { outerCard, emojiSpan, innerDiv, textDiv, otherCard } = buildTree();
       const getSourceLocation = makeGetSourceLocation(outerCard, innerDiv, textDiv, otherCard);
 
       const result = resolveDragSource(emojiSpan, getSourceLocation, 'Index.tsx');
 
       expect(result).not.toBeNull();
-      // After step 4: should resolve to outer-card, not inner-div
+      // Decorative span → walk up to its parent (outerCard is the nearest ancestor with a source).
+      // We do NOT over-walk to a "more meaningful draggable" — that decision belongs upstream.
       expect(result?.el).toBe(outerCard);
       expect(result?.source).toEqual(SRC_OUTER);
     });
 
-    it('resolves text-div click (inside inner-div) to outer-card', () => {
+    it('resolves text-div click (own source) to text-div itself — no over-walk', () => {
       const { outerCard, innerDiv, textDiv, otherCard } = buildTree();
       const getSourceLocation = makeGetSourceLocation(outerCard, innerDiv, textDiv, otherCard);
 
       const result = resolveDragSource(textDiv, getSourceLocation, 'Index.tsx');
 
       expect(result).not.toBeNull();
-      // text-div has a source, but inner-div has no meaningful siblings → walk up to outer-card
-      expect(result?.el).toBe(outerCard);
-      expect(result?.source).toEqual(SRC_OUTER);
+      // text-div has a source — drag at text-div level. The user explicitly wants
+      // the element they grabbed to move, not its outer card.
+      expect(result?.el).toBe(textDiv);
+      expect(result?.source).toEqual(SRC_TEXT);
     });
 
     it('does NOT over-walk when element already at correct sibling level', () => {
