@@ -917,7 +917,7 @@ export class PreviewFileManager {
 
     if (framework === 'unknown') return 'unsupported';
 
-    if (framework === 'webpack' || framework === 'vite-spa-jsx-router') {
+    if (framework === 'webpack' || framework === 'vite-spa-jsx-router' || framework === 'bun') {
       // No file-based routing convention — router is defined in JSX code.
       // PreviewModeManager.onComponentSelected patches the entry/router file directly.
       return 'needs-patch';

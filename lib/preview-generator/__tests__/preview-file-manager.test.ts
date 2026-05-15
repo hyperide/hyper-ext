@@ -1275,6 +1275,16 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     const result = await manager.ensurePreviewFiles();
     expect(result).toBe('needs-patch');
   });
+
+  it('returns needs-patch for bun SPA project', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/bun.lock', '');
+    io.files.set('/project/package.json', JSON.stringify({ scripts: { start: 'bun run index.tsx' } }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const result = await manager.ensurePreviewFiles();
+    expect(result).toBe('needs-patch');
+  });
 });
 
 describe('PreviewFileManager.ensureGitExclude', () => {
