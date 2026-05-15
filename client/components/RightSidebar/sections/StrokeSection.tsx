@@ -44,7 +44,7 @@ export const StrokeSection = memo(function StrokeSection({
     return (
       <div
         data-testid={TID.inspector.sectionHeader('stroke')}
-        className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+        className="w-full px-4 py-3 border-t border-border overflow-hidden"
       >
         <div className="flex items-center justify-between">
           <button
@@ -70,7 +70,7 @@ export const StrokeSection = memo(function StrokeSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('stroke')}
-      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-foreground">Stroke</span>

@@ -294,7 +294,7 @@ export const LayoutSection = memo(function LayoutSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('layout')}
-      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">

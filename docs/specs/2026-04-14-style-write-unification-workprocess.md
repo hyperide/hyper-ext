@@ -272,6 +272,13 @@ Status:
 - still needs full-window visual verification against the extension screenshot
 - touches files also changed by merged HYP-357 work; verify no overlap/regression
   around `StateSelectorSection` before committing
+- the live full E2E matrix continued through inspector-focused interaction tests
+  after this change without surfacing a sidebar regression at those checkpoints
+- a dedicated isolated full-window screenshot attempt was started on a separate
+  worker, but launching a second VS Code instance timed out under concurrent
+  heavy E2E load
+- external `claude` review was attempted for this subset, but the CLI produced
+  no findings before timing out
 
 ### Repo guidance updates
 

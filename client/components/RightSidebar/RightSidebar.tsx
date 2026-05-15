@@ -1075,7 +1075,7 @@ export default function RightSidebar({
       {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
         <>
           {/* Frame type */}
-          <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
+          <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
             <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
               {getFrameType()}
             </span>
@@ -1084,7 +1084,7 @@ export default function RightSidebar({
           {/* Text Content */}
           {childrenType !== 'jsx' && (
             <div
-              className={`px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
+              className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div className="flex items-center gap-1">
                 <div className="flex-1 min-w-0 min-h-6 px-2 bg-muted rounded flex items-center gap-1">

@@ -119,10 +119,7 @@ export const MarginSection = memo(function MarginSection({
   };
 
   return (
-    <div
-      data-testid={TID.inspector.sectionHeader('margin')}
-      className="px-4 pb-3 max-w-sidebar-section overflow-hidden"
-    >
+    <div data-testid={TID.inspector.sectionHeader('margin')} className="w-full px-4 pb-3 overflow-hidden">
       <span className="text-xs text-foreground mb-2 block">Margin</span>
       <div className="flex items-start gap-2 mb-2">
         <div className="grid grid-cols-2 gap-2 flex-1">
