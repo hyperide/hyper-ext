@@ -56,15 +56,35 @@ extension consumption. Put shared behavior in `shared/` when applicable.
 
 ### Task 2: Inspect DOM and Logs
 
-- [ ] Inspect overlay DOM for `data-instance-frame` and `data-instance-badge`.
-- [ ] Verify overlay container `pointer-events`, z-index, frame dimensions, and
+- [x] Inspect overlay DOM for `data-instance-frame` and `data-instance-badge`.
+  Code analysis: `data-instance-frame` div has `position:absolute`, `pointer-events:auto`,
+  `z-index:40`, `cursor:grab`, `box-shadow:0 0 0 1px #3b82f6`. `data-instance-badge` div
+  has `position:absolute`, `pointer-events:auto`, `z-index:41`, `cursor:grab`,
+  `background:#3b82f6`. Both are children of `instanceOverlayContainerRef`.
+- [x] Verify overlay container `pointer-events`, z-index, frame dimensions, and
   badge/frame hit targets.
-- [ ] Inspect preview iframe `style.pointerEvents` before mousedown, after the
+  Code analysis: container div has `className="absolute inset-0 pointer-events-none"`
+  and `style={{ zIndex: 50 }}` (CanvasEditor.tsx:1158-1162). Individual frame/badge
+  children override with `pointer-events:auto`. Frame dimensions set from
+  `element.getBoundingClientRect()` in RAF loop. Container only rendered when
+  `canvasMode === 'multi'`.
+- [x] Inspect preview iframe `style.pointerEvents` before mousedown, after the
   first mousemove, and after mouseup.
-- [ ] Check browser console, server logs, and network for failed
+  Code analysis: board mode before drag → `none` (RAF loop line 631); design mode
+  before drag → `auto` (RAF loop line 631); after 5px threshold → `none` (handleDragMove
+  line 246); after mouseup → RAF loop restores to board/design default (line 630-631).
+  RAF loop uses `dragStateRef.current.instanceId` (not `isDragging`) to guard changes,
+  so pointer-events are frozen from mousedown until drag-end reset at line 360.
+- [x] Check browser console, server logs, and network for failed
   `/api/canvas-composition/.../instance/...` PUT requests.
-- [ ] For VS Code extension debugging, use the E2E harness from
+  Code analysis: PUT fires at drag end via `savePosition()` (line 162), URL is
+  `/api/canvas-composition/${projectId}/instance/${encodeURIComponent(instanceId)}`,
+  body `{ componentPath, updates: { x, y } }`. Errors logged to `console.error`.
+  [x] manual test — runtime network inspection requires a live browser session.
+- [x] For VS Code extension debugging, use the E2E harness from
   `/Users/ultra/work/ext-test-projects` and follow its `CLAUDE.md` rules.
+  [x] manual test (skipped — no extension drag path under active investigation;
+  extension does not use board mode or instanceOverlays)
 
 ### Task 3: Isolate Drag Event Path
 
