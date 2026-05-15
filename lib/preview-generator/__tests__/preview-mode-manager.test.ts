@@ -333,3 +333,80 @@ describe('PreviewModeManager — startWatching / stopWatching', () => {
     expect(() => m.stopWatching()).not.toThrow();
   });
 });
+
+describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
+  it('fires before patching the entry file on webpack projects', async () => {
+    const calls: string[] = [];
+    const files: Record<string, string> = {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { 'react-scripts': '^5' } }),
+      [`${root}/src/index.tsx`]:
+        "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\nReactDOM.createRoot(document.getElementById('root')!).render(<App />);\n",
+    };
+    const io: FileIO = {
+      async readFile(p: string) {
+        if (p in files) return files[p];
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async writeFile(p: string, c: string) {
+        calls.push(`write:${p}`);
+        files[p] = c;
+      },
+      async access(p: string) {
+        if (p in files) return;
+        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
+        if (hasChild) return;
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async deleteFile() {},
+    };
+    const onBeforeWebpackEntryPatch = mock(() => {
+      calls.push('arm-gate');
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onBeforeWebpackEntryPatch,
+    });
+
+    await m.onComponentSelected();
+
+    expect(onBeforeWebpackEntryPatch).toHaveBeenCalledTimes(1);
+    // Gate must be armed strictly before any file write happens
+    const armIdx = calls.indexOf('arm-gate');
+    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
+    expect(armIdx).toBeGreaterThanOrEqual(0);
+    expect(firstWriteIdx).toBeGreaterThan(armIdx);
+  });
+
+  it('does NOT fire on Vite projects', async () => {
+    const onBeforeWebpackEntryPatch = mock(() => {});
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onBeforeWebpackEntryPatch,
+    });
+    await m.onComponentSelected();
+    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire on Next.js projects', async () => {
+    const onBeforeWebpackEntryPatch = mock(() => {});
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
+      [`${root}/app/layout.tsx`]: '',
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onBeforeWebpackEntryPatch,
+    });
+    await m.onComponentSelected();
+    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
+  });
+});

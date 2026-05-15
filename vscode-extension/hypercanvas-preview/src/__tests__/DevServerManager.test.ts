@@ -276,4 +276,85 @@ describe('DevServerManager', () => {
       expect(() => manager.dispose()).not.toThrow();
     });
   });
+
+  describe('recompile gate', () => {
+    function appendLog(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      (mgr as unknown as { _appendLog(text: string): void })._appendLog(text);
+    }
+
+    function fireRecompileDetector(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      // Mirrors the path in the stdout/stderr handlers — they call
+      // _maybeResolveRecompileGate(clean) on every chunk.
+      (mgr as unknown as { _maybeResolveRecompileGate(text: string): void })._maybeResolveRecompileGate(text);
+    }
+
+    it('awaitRecompile is a no-op when no gate is armed', async () => {
+      // Should resolve immediately
+      await manager.awaitRecompile();
+    });
+
+    it('arm gate → fire compiled successfully → ready resolves', async () => {
+      manager.armRecompileGate();
+
+      let resolved = false;
+      const wait = manager.awaitRecompile().then(() => {
+        resolved = true;
+      });
+
+      // Microtask flush: gate is armed, awaiter must NOT be resolved yet
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      fireRecompileDetector(manager, 'webpack 5.89.0 compiled successfully in 412 ms\n');
+      await wait;
+      expect(resolved).toBe(true);
+    });
+
+    it('ignores chunks without `compiled successfully`', async () => {
+      manager.armRecompileGate();
+
+      let resolved = false;
+      const wait = manager.awaitRecompile().then(() => {
+        resolved = true;
+      });
+
+      fireRecompileDetector(manager, 'wait until bundle finished\n');
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      fireRecompileDetector(manager, 'compiled successfully\n');
+      await wait;
+      expect(resolved).toBe(true);
+    });
+
+    it('re-arming releases the previous gate so old awaiters do not deadlock', async () => {
+      manager.armRecompileGate();
+      const firstWait = manager.awaitRecompile();
+
+      // Re-arm; previous gate should be released.
+      manager.armRecompileGate();
+      await firstWait; // must not hang
+
+      // Fresh gate is still pending — fire to release.
+      fireRecompileDetector(manager, 'compiled successfully\n');
+      await manager.awaitRecompile();
+    });
+
+    it('case-insensitive match — Webpack capitalizes the line in CRA 5', async () => {
+      manager.armRecompileGate();
+      fireRecompileDetector(manager, 'Compiled successfully!\n');
+      await manager.awaitRecompile();
+    });
+
+    it('logs flowing through _appendLog do not accidentally release the gate', async () => {
+      // _appendLog only buffers/categorizes — it must NOT advance the gate.
+      // The gate is driven only by stdout/stderr handlers via _maybeResolveRecompileGate.
+      manager.armRecompileGate();
+
+      appendLog(manager, 'compiled successfully\n');
+      // Race the gate against a microtask; gate must still be pending.
+      const settled = await Promise.race([manager.awaitRecompile().then(() => 'resolved'), Promise.resolve('pending')]);
+      expect(settled).toBe('pending');
+    });
+  });
 });

@@ -35,6 +35,14 @@ export interface PreviewModeManagerOptions {
    * Pass chokidarWatchFactory on SaaS (handles Docker volumes reliably).
    */
   watcherFactory?: WatcherFactory;
+  /**
+   * Called BEFORE the entry file is AST-rewritten on webpack/parcel projects.
+   * Wire this to `DevServerManager.armRecompileGate()` so the iframe doesn't
+   * race the webpack second-compile (20–40s) and time out at 30s. No-op for
+   * Vite/Remix/Next, which detect the patched file via HMR without a full
+   * recompile.
+   */
+  onBeforeWebpackEntryPatch?: () => void;
 }
 
 /** Default: node:fs.watch with debounce. Suitable for local extension use. */
@@ -89,16 +97,18 @@ export class PreviewModeManager {
   private readonly _io: FileIO;
   private readonly _onModeChange?: (isolated: boolean) => void;
   private readonly _watcherFactory: WatcherFactory;
+  private readonly _onBeforeWebpackEntryPatch?: () => void;
 
   private _watcherDispose: (() => void) | null = null;
   private _modeUpdateInProgress = false;
   private _modeUpdatePending = false;
 
-  constructor({ projectRoot, io, onModeChange, watcherFactory }: PreviewModeManagerOptions) {
+  constructor({ projectRoot, io, onModeChange, watcherFactory, onBeforeWebpackEntryPatch }: PreviewModeManagerOptions) {
     this._projectRoot = projectRoot;
     this._io = io;
     this._onModeChange = onModeChange;
     this._watcherFactory = watcherFactory ?? fsWatchFactory;
+    this._onBeforeWebpackEntryPatch = onBeforeWebpackEntryPatch;
     this._fileManager = new PreviewFileManager({ projectRoot, io });
   }
 
@@ -146,6 +156,12 @@ export class PreviewModeManager {
         return this._patchEntryFile();
       }
       case 'webpack':
+        // Arm the recompile gate BEFORE writing the entry-file patch.
+        // Webpack notices the file change ~20–40s later and emits a second
+        // `compiled successfully`; the gate forces consumers to wait for THAT
+        // message instead of accepting the stale first one. See HYP-363.
+        this._onBeforeWebpackEntryPatch?.();
+        return this._patchEntryFile();
       case 'parcel':
         return this._patchEntryFile();
       case 'unknown':

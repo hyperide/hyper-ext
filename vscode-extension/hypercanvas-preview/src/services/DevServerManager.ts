@@ -43,6 +43,17 @@ export class DevServerManager {
   private _runtimeError: RuntimeError | null = null;
   private _onRuntimeErrorChangeListeners: Array<(error: RuntimeError | null) => void> = [];
 
+  // Recompile gate — webpack-only. Armed by PreviewModeManager BEFORE it AST-rewrites
+  // the entry file. Forces _waitForReady() / consumers to wait for a FRESH
+  // "compiled successfully" message that arrives AFTER the patch was written, instead
+  // of accepting the stale pre-patch one. Without this gate, the iframe can request
+  // /test-preview during webpack's second compile (20–40s) and time out at 30s.
+  private _recompileGate: {
+    promise: Promise<void>;
+    resolve: () => void;
+    armedAt: number;
+  } | null = null;
+
   constructor(projectPath: string) {
     this._projectPath = projectPath;
     this._outputChannel = vscode.window.createOutputChannel('HyperIDE Dev Server');
@@ -230,6 +241,8 @@ export class DevServerManager {
           console.log('[HyperIDE] DevServer ready detected via stdout');
           this._updateStatus('running');
         }
+
+        this._maybeResolveRecompileGate(clean);
       });
 
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
@@ -244,6 +257,8 @@ export class DevServerManager {
           console.log('[HyperIDE] DevServer ready detected via stderr');
           this._updateStatus('running');
         }
+
+        this._maybeResolveRecompileGate(clean);
       });
 
       // Handle process exit
@@ -371,6 +386,55 @@ export class DevServerManager {
     this._previewProxy?.setIsolatedMode(isolated);
   }
 
+  /**
+   * Arm the recompile gate (webpack-only). PreviewModeManager calls this BEFORE
+   * AST-rewriting the entry file when the framework is webpack/parcel. Subsequent
+   * `awaitRecompile()` callers block until a NEW `compiled successfully` line is
+   * observed AFTER this call. Calling again replaces the existing gate.
+   */
+  armRecompileGate(): void {
+    let resolve: () => void = () => {};
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    // If a previous gate was armed and never resolved, drop it — the new patch
+    // supersedes the old one. Resolve the old gate so any awaiters unblock; they
+    // will read the fresh state after the new patch lands.
+    this._recompileGate?.resolve();
+    this._recompileGate = { promise, resolve, armedAt: Date.now() };
+    console.log('[HyperIDE] DevServer recompile gate armed');
+  }
+
+  /**
+   * Await pending recompile gate, if any. No-op when no gate is armed. Used by
+   * preview-side code that must not load the iframe URL until webpack finishes
+   * the SECOND compile (the post-patch one).
+   */
+  async awaitRecompile(): Promise<void> {
+    if (!this._recompileGate) return;
+    await this._recompileGate.promise;
+  }
+
+  /**
+   * Inspect a clean log chunk for a fresh `compiled successfully` line and resolve
+   * the armed gate if the line is observed AFTER the gate was armed. Lines that
+   * predate the arming timestamp are ignored — they belong to the pre-patch compile.
+   *
+   * Note: timestamps are checked against Date.now() at the moment the chunk is
+   * received, not the line's own timestamp (we don't have one). Since stdout/stderr
+   * chunks land within milliseconds of being emitted, this is good enough.
+   */
+  private _maybeResolveRecompileGate(text: string): void {
+    const gate = this._recompileGate;
+    if (!gate) return;
+    if (Date.now() < gate.armedAt) return; // can't happen with monotonic Date.now, but defensive
+    const lower = text.toLowerCase();
+    if (!lower.includes('compiled successfully')) return;
+    console.log('[HyperIDE] DevServer recompile gate released');
+    this._recompileGate = null;
+    gate.resolve();
+  }
+
   private async _syncProjectPathWithWorkspace(): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot || workspaceRoot === this._projectPath) return;
@@ -448,6 +512,21 @@ export class DevServerManager {
     }
 
     proc.kill(signal);
+  }
+
+  /**
+   * Public wait-for-ready: resolves once the dev server is `running` AND any armed
+   * recompile gate has been released. Use this from preview/iframe loading paths
+   * that must not race with a webpack post-patch second compile.
+   *
+   * If the server is already running and no gate is armed, returns immediately.
+   * If a gate is armed (regardless of running state), blocks until release.
+   */
+  async waitForReady(timeoutMs = 90_000): Promise<void> {
+    if (this._status !== 'running') {
+      await this._waitForReady(timeoutMs);
+    }
+    await this.awaitRecompile();
   }
 
   /**

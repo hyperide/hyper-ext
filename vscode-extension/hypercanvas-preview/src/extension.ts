@@ -450,6 +450,12 @@ export function activate(context: vscode.ExtensionContext) {
         // the iframe fetches fresh content from the proxy in its new mode.
         previewPanel?.refresh();
       },
+      onBeforeWebpackEntryPatch: () => {
+        // Webpack rewrites the entry file → triggers a 20–40s second compile.
+        // Arming the gate here forces iframe loaders to await the post-patch
+        // `compiled successfully` instead of racing it. See HYP-363.
+        devServerManager?.armRecompileGate();
+      },
     });
 
   let activeWorkspaceRoot = workspaceRoot;
