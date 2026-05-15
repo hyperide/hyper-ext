@@ -16,7 +16,8 @@
 
 import {
   applyOrderClassChange,
-  hasUnparseableOrderTokenAtBp,
+  hasDuplicateEffectiveOrderTokenAtBp,
+  hasUnparseableEffectiveOrderTokenAtBp,
   readOrderSortValueForBp,
 } from './order-class-utils';
 
@@ -180,13 +181,19 @@ export function computeOrderWritePlan(input: ComputeOrderWritePlanInput): OrderW
   const activeBp = pickActiveBreakpoint(usedBps, viewportWidth);
   if (activeBp === null) return null;
 
-  // 2a. Bail if any sibling carries a non-int arbitrary `order-[<expr>]` at the
-  //     active breakpoint — `applyOrderClassChange` would silently overwrite
-  //     `order-[var(--idx)]` etc. with a dense numeric value, destroying the
-  //     user's CSS-var or non-int reference. Falling back to AST move keeps
-  //     such tokens intact.
+  // 2a. Bail if any sibling's cascade-effective order token at activeBp is either
+  //     - a non-int arbitrary `order-[<expr>]` (CSS-var / non-int reference we cannot
+  //       safely renumber over without destroying user intent), or
+  //     - duplicated (`order-3 order-1`) — Tailwind's CSS-output-order resolution
+  //       is not knowable from className text, so the starting visual sort value
+  //       is unreliable and any dense renumber would build on a guess.
+  //     Cascade-aware: at md viewport a sibling whose only order token is base
+  //     `order-[var(--x)]` still has its CSS `order` driven by that base token; the
+  //     check must walk md → sm → base, not just the active bp. Falling back to AST
+  //     move handles both cases correctly.
   for (const s of siblings) {
-    if (hasUnparseableOrderTokenAtBp(s.className, activeBp)) return null;
+    if (hasUnparseableEffectiveOrderTokenAtBp(s.className, activeBp)) return null;
+    if (hasDuplicateEffectiveOrderTokenAtBp(s.className, activeBp)) return null;
   }
 
   // 3. Build the current visual order.

@@ -90,68 +90,127 @@ export function readOrderForBp(className: string | undefined, breakpoint: string
  * Tokens of the form `order-[<not-an-int>]` (true arbitrary CSS) fall through to `0` —
  * we don't know how to safely renumber them anyway, and this matches the "ignore unknown"
  * policy used elsewhere. Callers that intend to *write* dense renumbering should run
- * `hasUnparseableOrderTokenAtBp` first and bail to avoid silently overwriting
- * `order-[var(--x)]` etc. (the parse-as-0 here is for sort positioning only).
+ * `hasUnparseableEffectiveOrderTokenAtBp` (cascade-aware) first and bail to avoid
+ * silently overwriting `order-[var(--x)]` at base / smaller bps when writing to a
+ * higher activeBp. Callers should ALSO check `hasDuplicateEffectiveOrderTokenAtBp` —
+ * with multiple matching tokens at the effective bp, the first-token-wins parse here
+ * does not match Tailwind's CSS-output-order resolution, so any value is unreliable.
  */
 // Keep in sync with `TAILWIND_BREAKPOINTS` in `order-drag-detect.ts` — both lists
 // must enumerate the same Tailwind v3 default variants.
 const RESPONSIVE_BP_CHAIN: ReadonlyArray<string> = ['sm', 'md', 'lg', 'xl', '2xl'];
 
-function parseOrderSortValueForBp(tokens: readonly string[], breakpoint: string | undefined): number | null {
-  for (const token of tokens) {
-    if (!isOrderClassAtBreakpoint(token, breakpoint)) continue;
-    const bare = breakpoint === undefined ? token : token.slice(breakpoint.length + 1);
-    const numeric = bare.match(/^order-(\d+)$/);
-    if (numeric) return Number.parseInt(numeric[1], 10);
-    if (bare === 'order-first') return -9999;
-    if (bare === 'order-last') return 9999;
-    if (bare === 'order-none') return 0;
-    const arbitrary = bare.match(/^order-\[(-?\d+)\]$/);
-    if (arbitrary) return Number.parseInt(arbitrary[1], 10);
-    return 0;
+function tokensAtBp(tokens: readonly string[], breakpoint: string | undefined): string[] {
+  return tokens.filter((t) => isOrderClassAtBreakpoint(t, breakpoint));
+}
+
+function bareToken(token: string, breakpoint: string | undefined): string {
+  return breakpoint === undefined ? token : token.slice((breakpoint as string).length + 1);
+}
+
+/**
+ * Walk the responsive cascade (activeBp → smaller bps → base) and return the bp
+ * at which the first matching `order-*` token is found, or null if none.
+ *
+ * Mirrors the CSS min-width media-query stacking that `readOrderSortValueForBp`
+ * already uses — extracted so the unparseable-token and duplicate-token checks
+ * can share the same notion of "the effective breakpoint at which this sibling's
+ * order applies right now".
+ */
+function findEffectiveOrderBp(
+  tokens: readonly string[],
+  breakpoint: string | undefined,
+): string | undefined | null {
+  const has = (bp: string | undefined): boolean => tokensAtBp(tokens, bp).length > 0;
+  if (breakpoint === undefined) return has(undefined) ? undefined : null;
+  const idx = RESPONSIVE_BP_CHAIN.indexOf(breakpoint);
+  if (idx < 0) {
+    if (has(breakpoint)) return breakpoint;
+    if (has(undefined)) return undefined;
+    return null;
   }
-  return null;
+  for (let i = idx; i >= 0; i--) {
+    if (has(RESPONSIVE_BP_CHAIN[i])) return RESPONSIVE_BP_CHAIN[i];
+  }
+  return has(undefined) ? undefined : null;
+}
+
+function parseBareSortValue(bare: string): number {
+  const numeric = bare.match(/^order-(\d+)$/);
+  if (numeric) return Number.parseInt(numeric[1], 10);
+  if (bare === 'order-first') return -9999;
+  if (bare === 'order-last') return 9999;
+  if (bare === 'order-none') return 0;
+  const arbitrary = bare.match(/^order-\[(-?\d+)\]$/);
+  if (arbitrary) return Number.parseInt(arbitrary[1], 10);
+  return 0;
 }
 
 export function readOrderSortValueForBp(className: string | undefined, breakpoint: string | undefined): number {
   const tokens = (className ?? '').split(/\s+/).filter(Boolean);
-  if (breakpoint === undefined) {
-    return parseOrderSortValueForBp(tokens, undefined) ?? 0;
-  }
-  const idx = RESPONSIVE_BP_CHAIN.indexOf(breakpoint);
-  if (idx < 0) {
-    // Unknown variant (project-custom prefix): try it directly, then base.
-    return parseOrderSortValueForBp(tokens, breakpoint) ?? parseOrderSortValueForBp(tokens, undefined) ?? 0;
-  }
-  for (let i = idx; i >= 0; i--) {
-    const value = parseOrderSortValueForBp(tokens, RESPONSIVE_BP_CHAIN[i]);
-    if (value !== null) return value;
-  }
-  return parseOrderSortValueForBp(tokens, undefined) ?? 0;
+  const effectiveBp = findEffectiveOrderBp(tokens, breakpoint);
+  if (effectiveBp === null) return 0;
+  const matches = tokensAtBp(tokens, effectiveBp);
+  // `parseBareSortValue` keeps first-token semantics for sort positioning — a
+  // duplicate at the effective bp is detected separately via
+  // `hasDuplicateEffectiveOrderTokenAtBp` and forces the AST fallback.
+  return parseBareSortValue(bareToken(matches[0], effectiveBp));
 }
 
 /**
- * Detect tokens that `applyOrderClassChange` cannot safely round-trip at the given
- * breakpoint — i.e. an `order-[<expr>]` whose payload is NOT a plain integer.
+ * Detect tokens the dense-renumber path cannot safely round-trip at the cascade-
+ * effective breakpoint — i.e. an `order-[<expr>]` whose payload is NOT a plain integer.
  *
- * Rationale: `isOrderClassAtBreakpoint` matches arbitrary tokens, so a dense renumber
- * pass would silently REPLACE `order-[var(--idx)]` (or `order-[10rem]`) with
- * `order-3`, destroying the user's CSS-var or non-int reference. Callers that intend
- * to write should run this first and bail to the AST-move path.
+ * Cascade-aware: at `md` viewport, a sibling whose only order token is base
+ * `order-[var(--idx)]` (or `sm:order-[var(--idx)]`) still has its CSS `order`
+ * driven by that arbitrary expression — `md:order-N` written by the dense renumber
+ * would override it at md+ and destroy the user's `var(--idx)` intent. Callers
+ * must bail to the AST-move path in that case.
+ *
+ * Returns false when no order token is in use anywhere in the cascade (`order: 0`
+ * default — safe to renumber).
  */
-export function hasUnparseableOrderTokenAtBp(
+export function hasUnparseableEffectiveOrderTokenAtBp(
   className: string | undefined,
   breakpoint: string | undefined,
 ): boolean {
   const tokens = (className ?? '').split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
-    if (!isOrderClassAtBreakpoint(token, breakpoint)) continue;
-    const bare = breakpoint === undefined ? token : token.slice(breakpoint.length + 1);
+  const effectiveBp = findEffectiveOrderBp(tokens, breakpoint);
+  if (effectiveBp === null) return false;
+  const matches = tokensAtBp(tokens, effectiveBp);
+  // Inspect every matching token at the effective bp — a single sibling could carry
+  // both `order-3` and `order-[var(--x)]` at the same bp; either alone forces bail
+  // since CSS source-order resolution is not knowable from className text.
+  for (const token of matches) {
+    const bare = bareToken(token, effectiveBp);
     const arbitrary = bare.match(/^order-\[([^\]]+)\]$/);
     if (!arbitrary) continue;
     if (!/^-?\d+$/.test(arbitrary[1])) return true;
   }
   return false;
+}
+
+/**
+ * Detect duplicate `order-*` tokens at the cascade-effective breakpoint.
+ *
+ * When a className carries `order-3 order-1` (or `sm:order-3 sm:order-1` cascading
+ * up to a higher activeBp), the actual CSS-resolved value is ambiguous — it depends
+ * on Tailwind's stylesheet output order for the two utility rules, which the JIT
+ * compiler picks based on class-discovery order across the project, NOT className
+ * token order. Picking either token as the "current" sort value can produce a wrong
+ * starting visual order; the safe move is to bail to the AST fallback.
+ *
+ * `applyOrderClassChange` already drops duplicates on write, so our own writes never
+ * introduce them — but external edits / hand-typed source can.
+ */
+export function hasDuplicateEffectiveOrderTokenAtBp(
+  className: string | undefined,
+  breakpoint: string | undefined,
+): boolean {
+  const tokens = (className ?? '').split(/\s+/).filter(Boolean);
+  const effectiveBp = findEffectiveOrderBp(tokens, breakpoint);
+  if (effectiveBp === null) return false;
+  return tokensAtBp(tokens, effectiveBp).length > 1;
 }
 
 /**

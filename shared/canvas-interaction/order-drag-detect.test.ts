@@ -627,4 +627,100 @@ describe('arbitrary order tokens (review fix)', () => {
     expect(plan).not.toBeNull();
     expect(plan?.breakpoint).toBe('md');
   });
+
+  it('bails when a sibling has only a base order-[var(--x)] at md viewport (cascade)', () => {
+    // Codex follow-up: at md, sibling A has no `md:order-*`, only base
+    // `order-[var(--idx)]`. CSS cascade still applies the base value at md, so
+    // dense md:order-* writes would override `var(--idx)` at md+ and destroy
+    // the user's runtime-controlled order. Bail to AST move.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-[var(--idx)]', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2', domIndex: 2 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'b:1:1',
+      target: 'c:1:1',
+      position: 'after',
+      viewportWidth: 1440,
+    });
+    expect(plan).toBeNull();
+  });
+
+  it('bails when a sibling has only sm:order-[var(--idx)] at md viewport (cascade)', () => {
+    // Same scenario via the sm → md cascade hop.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'sm:order-[var(--idx)]', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2', domIndex: 2 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'b:1:1',
+      target: 'c:1:1',
+      position: 'after',
+      viewportWidth: 1440,
+    });
+    expect(plan).toBeNull();
+  });
+});
+
+describe('computeOrderWritePlan — duplicate order tokens at effective bp', () => {
+  it('bails when a sibling has duplicate base order tokens (order-3 order-1)', () => {
+    // CSS resolution of `class="order-3 order-1"` depends on Tailwind's stylesheet
+    // output order, not on className token order. JIT discovery makes that
+    // nondeterministic from the user's perspective, so picking either token's
+    // numeric value as the starting visual sort is unreliable. Bail to AST move.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-3 order-1', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-4', domIndex: 2 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'b:1:1',
+      target: 'c:1:1',
+      position: 'after',
+      viewportWidth: 500,
+    });
+    expect(plan).toBeNull();
+  });
+
+  it('bails when duplicates live at the cascade-effective bp (sm:order-3 sm:order-1 at md viewport)', () => {
+    // Effective bp at md for sibling A = sm (no md:order-*). Two `sm:order-*`
+    // tokens at the effective bp produce ambiguous CSS resolution → bail.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'sm:order-3 sm:order-1', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-2', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-4', domIndex: 2 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'b:1:1',
+      target: 'c:1:1',
+      position: 'after',
+      viewportWidth: 1440,
+    });
+    expect(plan).toBeNull();
+  });
+
+  it('does NOT bail when duplicates are shadowed by an unambiguous higher-bp token', () => {
+    // Sibling A has `order-3 order-1` (ambiguous) AT BASE, but `md:order-5` shadows
+    // both at md viewport. Effective bp for A = md (single token), so the duplicate
+    // base tokens never drive CSS at md and are safe to ignore for dense md writes.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-3 order-1 md:order-5', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-2', domIndex: 1 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'b:1:1',
+      target: 'a:1:1',
+      position: 'before',
+      viewportWidth: 1440,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan?.breakpoint).toBe('md');
+  });
 });
