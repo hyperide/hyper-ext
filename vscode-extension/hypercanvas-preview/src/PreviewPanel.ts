@@ -1265,7 +1265,7 @@ export class PreviewPanel {
         if (!settled) {
           settled = true;
           unsub();
-          resolve(this._stateHub.state.selectedIds);
+          resolve(this._stateHub.state.selectedIds ?? []);
         }
       }, 500);
     });
