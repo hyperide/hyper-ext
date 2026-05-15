@@ -15,7 +15,7 @@ export interface FiberSourceIndexOptions {
   mapSource?: (source: SourceLocation, fiber: Fiber) => SourceLocation;
 }
 
-export function sourceKeyFromLocation(source: SourceLocation): string {
+function sourceKeyFromLocation(source: SourceLocation): string {
   return `${source.fileName}:${source.line}:${source.column}`;
 }
 
@@ -31,35 +31,6 @@ function parseSourceKey(key: string): SourceLocation | null {
 
 function sameLocation(a: SourceLocation, b: SourceLocation): boolean {
   return a.fileName === b.fileName && a.line === b.line && a.column === b.column;
-}
-
-/**
- * Match two file paths even if one is absolute and the other Vite-relative,
- * and even if separators differ (POSIX `/` vs Windows `\`).
- *
- * Returns true when:
- *   - paths are exactly equal, OR
- *   - after normalizing `\` → `/`, the shorter path is a complete suffix of the
- *     longer one starting at a path segment boundary (so `/workspace/src/Foo.tsx`
- *     and `C:\\workspace\\src\\Foo.tsx` both match `src/Foo.tsx`, but
- *     `b/Foo.tsx` does NOT match `a/b/Foo.tsx`'s subpath `Foo.tsx` claim).
- *
- * Why this exists: tree-driven selection (workspace tree click) dispatches a
- * path produced by Node `path.join` (POSIX-style `/` on macOS/Linux, Windows-
- * style `\` on Windows) while FiberSourceIndex stores Vite-relative POSIX
- * paths (`src/Foo.tsx`). Strict equality misses the cross-format case; raw
- * suffix match misses the Windows separator case.
- */
-function pathsMatchAcrossFormats(a: string, b: string): boolean {
-  if (a === b) return true;
-  if (a.length === 0 || b.length === 0) return false;
-  const normA = a.replace(/\\/g, '/');
-  const normB = b.replace(/\\/g, '/');
-  if (normA === normB) return true;
-  const [shorter, longer] = normA.length < normB.length ? [normA, normB] : [normB, normA];
-  if (!longer.endsWith(shorter)) return false;
-  const boundaryIdx = longer.length - shorter.length - 1;
-  return boundaryIdx === -1 || longer[boundaryIdx] === '/';
 }
 
 export function getOwnFiberSourceLocation(fiber: Fiber): SourceLocation | null {
@@ -167,58 +138,6 @@ export class FiberSourceIndex {
 
     return best;
   }
-
-  // Last-resort fallback: same fileName, line may have shifted (e.g. blank lines
-  // added above). Pick the entry whose source is closest by (line, column). Capped
-  // at MAX_LINE_DISTANCE to avoid highlighting an unrelated element after a heavy
-  // refactor — past the cap, return [] and let grace-cache replay the old rect.
-  findClosestSourceDOMElements(
-    source: SourceLocation,
-    options: { maxLineDistance?: number; matchPathAcrossFormats?: boolean } = {},
-  ): { elements: HTMLElement[]; matchedSource: SourceLocation } | null {
-    const maxLineDistance = options.maxLineDistance ?? FiberSourceIndex.DEFAULT_MAX_LINE_DISTANCE;
-    const matchPathAcrossFormats = options.matchPathAcrossFormats ?? false;
-    this.ensureBuilt();
-    if (this.index === null) return null;
-    if (!source.fileName) return null;
-
-    let bestLineDist = Number.POSITIVE_INFINITY;
-    let bestColDist = Number.POSITIVE_INFINITY;
-    let bestElements: HTMLElement[] = [];
-    let bestSource: SourceLocation | null = null;
-
-    for (const [key, elements] of this.index) {
-      const candidateSource = parseSourceKey(key);
-      if (candidateSource === null) continue;
-      const fileMatches = matchPathAcrossFormats
-        ? pathsMatchAcrossFormats(candidateSource.fileName, source.fileName)
-        : candidateSource.fileName === source.fileName;
-      if (!fileMatches) continue;
-
-      const lineDist = Math.abs(candidateSource.line - source.line);
-      if (lineDist > maxLineDistance) continue;
-
-      const live = elements.filter((el) => this.doc.contains(el));
-      if (live.length === 0) continue;
-
-      // Line proximity dominates; column breaks ties on the same line. Use a
-      // lexicographic (lineDist, colDist) compare instead of `lineDist * 1000 + colDist`
-      // — minified or single-line generated JSX can have column numbers >1000, and a
-      // scalar metric would let one-line-further candidates win on column closeness.
-      const colDist = Math.abs(candidateSource.column - source.column);
-      if (lineDist < bestLineDist || (lineDist === bestLineDist && colDist < bestColDist)) {
-        bestLineDist = lineDist;
-        bestColDist = colDist;
-        bestElements = live;
-        bestSource = candidateSource;
-      }
-    }
-
-    if (bestSource === null) return null;
-    return { elements: bestElements, matchedSource: bestSource };
-  }
-
-  static readonly DEFAULT_MAX_LINE_DISTANCE = 20;
 
   getLiveEntries(): Array<{ key: string; source: SourceLocation; elements: HTMLElement[] }> {
     this.ensureBuilt();
