@@ -456,6 +456,19 @@ export class AstBridge {
   private async _handleWriteI18nResource(
     message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
   ): Promise<AstResponse> {
+    // Diagnostic logging for HYP-i18n-text-edit-disabled Task 3 — verify the
+    // bridge actually receives the message and computes the right branches.
+    console.log('[AstBridge.writeI18nResource] received', {
+      library: message.library,
+      key: message.key,
+      previousKey: message.previousKey,
+      activeLocale: message.activeLocale,
+      namespace: message.namespace,
+      skipResourceWrite: message.skipResourceWrite,
+      hasFilePath: !!message.filePath,
+      hasElementId: !!message.elementId,
+      newTextLen: message.newText.length,
+    });
     // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
     // Key validation prevents JSX injection when key is interpolated into {t("...")} expressions.
     const SAFE_SEGMENT = /^[\w-]{1,64}$/;
@@ -509,6 +522,7 @@ export class AstBridge {
     }
 
     if (!writeResult.success) {
+      console.log('[AstBridge.writeI18nResource] resource write failed', writeResult.error);
       return {
         type: 'ast:response',
         requestId: message.requestId,
@@ -516,14 +530,31 @@ export class AstBridge {
         error: writeResult.error,
       };
     }
+    console.log('[AstBridge.writeI18nResource] resource write done', {
+      filePath: writeResult.filePath,
+      skipResourceWrite: !!message.skipResourceWrite,
+    });
 
     // When the key itself changes, update the JSX child expression so the AST
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
-    if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
-        this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
+    const willRewriteJsx = !!(i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key);
+    console.log('[AstBridge.writeI18nResource] JSX rewrite branch', {
+      willRewriteJsx,
+      hasFilePath: !!i18nFilePath,
+      hasElementId: !!i18nElementId,
+      hasPreviousKey: !!message.previousKey,
+      previousKeyDiffers: message.previousKey !== message.key,
+    });
+    if (willRewriteJsx) {
+      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;
+      const updateResult = await this._withUndoTracking(i18nFilePath as string, () =>
+        this._astService.updateText(i18nFilePath as string, i18nElementId as string, newExpression),
       );
+      console.log('[AstBridge.writeI18nResource] JSX rewrite result', {
+        success: updateResult.success,
+        error: updateResult.error,
+      });
       if (!updateResult.success) {
         return {
           type: 'ast:response',

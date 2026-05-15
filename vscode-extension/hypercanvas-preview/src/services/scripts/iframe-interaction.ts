@@ -1339,7 +1339,8 @@ function _dragPointerUp(e: PointerEvent): void {
   // pre-lift element if the parent layer has no own source.
   const finalSourceSrc =
     _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
-  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  const finalDropSrc =
+    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
@@ -1675,10 +1676,6 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];
-    console.debug('[tree-scroll] leg4 iframe goToVisual → element lookup', {
-      elementId: msg.elementId,
-      found: !!el,
-    });
     if (el) {
       scrollIntoViewCenterSmooth(el);
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -1722,10 +1719,6 @@ window.addEventListener('message', (event: MessageEvent) => {
   // Scroll to element without changing selection (tree row click → canvas scroll)
   if (msg.type === 'hypercanvas:scrollToElement') {
     const el = findElementsByRef(msg.elementId, 0)[0];
-    console.debug('[tree-scroll] leg5 iframe scrollToElement → element lookup', {
-      elementId: msg.elementId,
-      found: !!el,
-    });
     if (el) scrollIntoViewCenterSmooth(el);
     return;
   }

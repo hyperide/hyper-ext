@@ -375,7 +375,12 @@ export class StyleReadService {
         fileIO: this._fileIO,
       });
     } catch {
-      resolved = { availableLocales: [], activeLocale: requestedLocale, resolvedText: null };
+      resolved = {
+        availableLocales: [],
+        activeLocale: requestedLocale,
+        resolvedText: null,
+        unresolvedReason: 'missing-locale-file',
+      };
     }
 
     // If the project has no 'en' locale and no explicit locale was requested, retry with the
@@ -408,7 +413,11 @@ export class StyleReadService {
       activeLocale: resolved.activeLocale,
       availableLocales: resolved.availableLocales,
       resolvedText: resolved.resolvedText,
-      editable: resolved.resolvedText !== null,
+      // editable=true whenever the user can persist a translation. This includes the case
+      // where the active locale file is missing the key (`missing-key`) — typing should
+      // create the entry under the active locale. Only block when the underlying file
+      // cannot be safely written (missing-locale-file / parse-error / unsupported-format).
+      editable: resolved.unresolvedReason === undefined || resolved.unresolvedReason === 'missing-key',
       sourceLocation: {
         filePath,
         line: detection.sourceLocation.line,
