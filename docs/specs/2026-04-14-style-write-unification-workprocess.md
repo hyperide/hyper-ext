@@ -136,25 +136,26 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 ## Known Open Issues (to fix)
 
-### 1. ✅ Tamagui "style written as prop" — FIXED (3287880)
+### 1. ✅ Tamagui "style written as prop" — FIXED (f85f4d3)
 
-**Root cause (final)**: `editor.getActiveEditorContent()` reads `.editor-instance .view-lines`
-via `innerText()` which returns `''` (NOT throws) when the Hyper Canvas preview webview
-panel occupies the center editor area. The write to App.tsx DID happen (confirmed: App.tsx
-marked M in file explorer during run #35 teardown), but the poll value was always `''`.
+**Root cause (final, run #37)**: `readModifiedFile()` hardcoded `App.tsx` but the extension
+writes to the selected element's source file — `HomeScreen.tsx`, `RecordScreen.tsx`, etc.,
+depending on which element `setupWithElementSelected` iterates to with a fill input.
+Confirmed from run #37 teardown log: `"saving dirty editors before close: HomeScreen.tsx"`.
+DOM returns `''` (preview webview covers editor), disk fallback reads wrong file → always `''` → 150s timeout.
 
-**Prior fix `1522602`** wrapped in `.catch(() => '')` to prevent throw — still failed because
-the real problem is the value being `''`, not a throw.
+VSCodeFileIO uses `workspace.fs.writeFile` (direct disk write) as PRIMARY — file IS on disk
+immediately. `workspace.applyEdit()` is secondary (syncs in-memory doc). Neither auto-save nor
+dirty-tab timing was the issue; only the hardcoded App.tsx path was wrong.
 
-**Fix `3287880`**: after DOM read returns empty, fall back to `readFileSync(App.tsx)` from
-disk. App.tsx is always the write target for Tamagui tests (setupWithElementSelected falls
-back to SafeAreaProvider in App.tsx — all 5 navigation-wrapper elements have no fill input).
+**Fix `f85f4d3`**: `readModifiedFile` now queries VS Code dirty tabs via `window.evaluate()`,
+extracts the filename (`.label-name` textContent), searches for it recursively in the project
+directory, then reads that file and checks for `#123456`. Falls back to App.tsx if no dirty
+tab found.
 
-**Run #36** is the first validation run for this fix.
-`setColor` may write to RecordScreen.tsx via `workspace.fs.writeFile` (disk-only,
-no dirty tab), so dirty tab wait also needed longer timeout.
-
-**Fix (1522602)**: Wrap `getActiveEditorContent()` in `.catch(() => '')` in the poll;
+**Prior fixes (still active)**:
+- `3287880`: Added initial disk fallback (fixed wrong path assumption)
+- `aeb693c`: `files.autoSave: afterDelay 500ms` (belt-and-suspenders; harmless since writeFile already disk-first)
 increase dirty tab `isVisible` timeout 500ms → 2000ms.
 
 **Commit**: `ext-test-projects:1522602`
@@ -265,7 +266,7 @@ _Составлен 2026-04-29. Основан на: анализе частот
 
 | Тест | Частота | Статус | Root cause |
 |------|---------|--------|-----------|
-| Tamagui: style written as prop | 37x | ✅ FIXED (3287880) | DOM hidden behind webview → disk fallback |
+| Tamagui: style written as prop | 37x | ✅ FIXED (f85f4d3) | DOM hidden + wrong file: readModifiedFile searched App.tsx but write went to HomeScreen.tsx etc. |
 | elements/nested/ExportNamed (ast-ops) | 74x | 🔄 monitoring | OOM→webpack timeout, ожидаем fix из run #29 |
 | duplicate element (preserves/grows) | 33x | ❓ unknown | требует анализа run #29 |
 | component with error (607s) | 17x | ⚠️ known | Vite watcher degradation (NEEDS LINEAR) |
@@ -851,10 +852,18 @@ HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 HYPER_E2E_IGNORE_HOST_RUNS=1 bash e2e
 
 **Fix `aeb693c`**: add `'files.autoSave': 'afterDelay', 'files.autoSaveDelay': 500` to test VS Code settings. With this, disk is flushed within 500ms of the write, making disk fallback effective.
 
-**Status of known issues after run #37 partial data:**
-- Tamagui "style written as prop" → still hard fail (needs `aeb693c`, NOT in run #37). Expected: up to 5 hard fails (×2 attempts per Tamagui project)
-- redo-limit → not tested yet in #37 (S1 needs to reach undo-redo.spec.ts)
+**Status of known issues after run #37 partial data (06:37 CEST checkpoint):**
+- Tamagui "style written as prop" → still hard fail (root cause found: wrong file in readModifiedFile). FIXED in `f85f4d3`.
+- redo-limit → not tested yet in #37 (S1 at PI-18 tests, undo-redo not reached)
 - component-with-error → FLAKY as expected
 
-**Run #38 will include**: `aeb693c` (auto-save) + all previous fixes.
+**Root cause analysis (run #37 S3 teardown log)**:
+```
+[fixture-cleanup] test "Tamagui: style written as prop, not className" teardown: saving dirty editors before close: HomeScreen.tsx
+```
+Extension writes to `HomeScreen.tsx` (not App.tsx), but `readModifiedFile` was reading `App.tsx`. Direct disk fallback read correct path but wrong filename.
+
+**Fix `f85f4d3`**: readModifiedFile now async, queries dirty tabs via window.evaluate(), finds actual written file, searches recursively.
+
+**Run #38 will include**: `f85f4d3` (correct file search) + `aeb693c` (auto-save) + `4909041` (redo-limit 75s) + all previous fixes.
 
