@@ -3385,3 +3385,89 @@ Full E2E rerun:
 - Initial progress: run started and passed the first AI Chat tests; continue
   monitoring for the first real failure and analyze it before adding fixes.
 ```
+
+## Claude Review Follow-Up 2026-04-21 author: codex
+
+Claude review command:
+
+```text
+claude -p --permission-mode dontAsk --add-dir
+/Users/ultra/xp/codex-tg-bot /Users/ultra/work/ext-test-projects -- ...
+```
+
+Review summary:
+
+```text
+- hyper-canvas-draft commit 131c3a5a: overlay source-map invalidation is
+  correct and consistent with the server source-map path. Main residual risk:
+  no focused unit test around the timing race; validation is E2E-based.
+- ext-test-projects commit 6defbda: lifecycle close fix is correct, but the
+  preview-tab matcher drifted from another matcher in the same file. Claude
+  also identified a product gap: a pinned Hyper Canvas preview not closing via
+  generic VS Code close paths is user-visible, not only a test concern.
+- codex-tg-bot commit d119bd6: app-server discovery shape is correct, but the
+  manual /bind_current path did not preserve endpoint/token metadata; partial
+  discovery failures were silent; connect failure cleanup depended on
+  CodexClient semantics; duplicate endpoint/token collisions were silent; and
+  one function shadowed Node's global process object.
+```
+
+Fixes made from review:
+
+```text
+- Bot repo /Users/ultra/xp/codex-tg-bot:
+  Commit 9a68acf fix: harden Codex app-server binding.
+  Changes: /bind_current now supports endpoint/token binding and enriches from
+  live discovery when unambiguous; old endpoint-less bindings must also match
+  cwd; partial app-server discovery failures log even when another endpoint
+  succeeds; duplicate endpoint/token collisions warn; connect/send paths are
+  wrapped in try/finally; the process-shadowing parameter was renamed.
+  Validation: bun test passed (12 tests); bunx tsc --noEmit --pretty false
+  passed; bunx biome check current-session/index/test files passed;
+  git diff --check passed. Bot restarted on the new code, PID observed as
+  19611.
+- Ext-test repo /Users/ultra/work/ext-test-projects:
+  Commit ffec9f5 test: reuse preview tab matcher in lifecycle tests.
+  Changes: extension-lifecycle.spec.ts now has one PREVIEW_TAB_LABEL matcher and
+  previewTabLocator helper for all preview-tab lookups.
+  Validation: git diff --check passed for the file. A focused lifecycle rerun
+  after this tiny matcher change was stopped intentionally at 18/25 passed so
+  it would not compete with the active full E2E run; the prior lifecycle
+  validation for the disposal fix had already passed 25/25 before commit
+  6defbda.
+- Linear:
+  Created HYP-364 for the product gap around pinned Hyper Canvas preview close
+  behavior:
+  https://linear.app/glide-vc/issue/HYP-364/decide-close-behavior-for-pinned-hyper-canvas-preview
+```
+
+Full E2E status after review follow-up:
+
+```text
+- Active run 20260421j continues with --workers=1 and --retries=0.
+- At this entry it had progressed through early lifecycle, canvas interaction,
+  drag/resize, and error-handling tests, reaching approximately 217/2209.
+- No failure patterns found yet by grep for failed tests, TimeoutError,
+  AssertionError, file save conflicts, unhandled errors, invalid panel layout,
+  or [test-errors].
+- Continue monitoring and stop only on a real analyzed failure.
+```
+
+Full E2E diagnostic stop:
+
+```text
+- Run 20260421j was stopped after the first [test-errors] marker appeared.
+- Marker: "element deleted while selected clears inspector gracefully" passed,
+  but VS Code console.error logged "The editor could not be opened because the
+  file was not found".
+- Repro attempts after stopping: the single test passed 1/1 with no
+  [test-errors]; the minimal pair with the previous
+  "explorer component cache is rebuilt after extension reload" test passed 2/2
+  with no [test-errors].
+- Likely cause: an operator error during this run. A focused lifecycle run was
+  accidentally started in parallel earlier with the same workerIndex/project
+  ports and then killed. It used the same test project and likely caused a
+  transient VS Code/editor state race during the full run.
+- Decision: do not change product code for this non-reproduced signal; restart
+  the full E2E run cleanly with no parallel E2E jobs.
+```
