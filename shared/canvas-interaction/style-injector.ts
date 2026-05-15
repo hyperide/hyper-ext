@@ -71,20 +71,6 @@ html.design-mode select:disabled,
 html.design-mode textarea:disabled,
 html.design-mode fieldset:disabled {
   pointer-events: auto !important;
-}
-
-/* Disable native HTML5 drag-tracking on every element in design mode.
-   Chromium starts a native drag candidate on pointerdown for elements that
-   are draggable (img/a default to draggable=true). Once that drag candidate
-   is established, subsequent pointermove events are consumed by the drag
-   tracker before our document-capture handler sees them, so the move-element
-   pipeline silently aborts (PI-5-DR-EK-IMG repro: 0 pointerdowns, 8 stale
-   pointerups in run-20260507-130145). The non-standard webkit-user-drag
-   property prevents the drag candidate from being established at all. */
-html.design-mode,
-html.design-mode * {
-  -webkit-user-drag: none !important;
-  user-drag: none !important;
 }`);
 
   // Board mode: only instances are clickable

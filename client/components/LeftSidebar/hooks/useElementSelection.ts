@@ -166,24 +166,18 @@ export function useElementSelection(
         // Canvas iframe expects nodeRef format ("fileName:line:col") for overlay rendering.
         // Tree sends UUID — find matching nodeRef from tree node loc if available.
         let dispatchId = elementId;
-        let syntheticRef: string | null = null;
         const node = findTreeNode(elementsTree, elementId);
         if (node?.loc && currentComponent?.path) {
           // Build a syntheticRef that the iframe can use for overlay rendering.
           // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
-          syntheticRef = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
-          dispatchId = syntheticRef;
+          dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
         dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
-        // Tell the canvas iframe to scroll the element into view.
-        // Path: LeftPanel webview → extension host → StateHub.broadcast → PreviewPanel
-        //       webview → iframe (`hypercanvas:scrollToElement` postMessage).
-        // SaaS uses the engine.select branch above and never reaches this code path.
-        // Skip when we couldn't synthesize a nodeRef — the iframe's findElementsByRef
-        // parses only "file:line:col" and would silently no-op on a bare UUID.
-        if (syntheticRef !== null) {
-          canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: syntheticRef });
-        }
+        canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
+        // Also notify preview panel locally to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — complements the bus event
+        // for environments where the extension-host round-trip echo is not enough.
+        window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },
     [engine, dispatch, elementsTree, canvas, currentComponent],
