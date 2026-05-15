@@ -4,8 +4,8 @@
  * Implements drag & drop with 16px grid snap
  *
  * Past bugs: HYP-363 — drag lost mousemove events when cursor entered iframe before the 5px
- * threshold (iframe was pointer-events:auto in design mode). Fixed by moving
- * iframe.style.pointerEvents='none' to handleDragStart (immediately on mousedown).
+ * threshold. Fixed by moving iframe.style.pointerEvents='none' to handleDragStart (immediately
+ * on mousedown) so the parent window always receives mousemove/mouseup during a pending drag.
  */
 
 import { type RefObject, useCallback, useEffect, useRef } from 'react';
@@ -637,28 +637,10 @@ export function useInstanceOverlays({
       cancelAnimationFrame(rafId);
 
       // Note: window listeners are managed by separate useEffect with empty deps
-
-      // Clear pending single-click timer to avoid stale callback after unmount/re-render
-      if (doubleClickStateRef.current.singleClickTimer) {
-        clearTimeout(doubleClickStateRef.current.singleClickTimer);
-        doubleClickStateRef.current.singleClickTimer = null;
-      }
-
-      // If a drag was pending (mousedown fired but effect re-ran before mouseup),
-      // restore iframe hit-testing and clear stale drag state.
-      // handleDragStart sets pointer-events='none' immediately on mousedown, so
-      // without this the iframe stays blind until the next component mount.
-      if (dragStateRef.current.instanceId && iframeRef.current) {
-        iframeRef.current.style.pointerEvents = '';
-      }
-      dragStateRef.current = {
-        isDragging: false,
-        instanceId: null,
-        startX: 0,
-        startY: 0,
-        initialX: 0,
-        initialY: 0,
-      };
+      // Note: singleClickTimer and dragStateRef are intentionally NOT reset here —
+      // both refs persist across effect re-runs by design (doubleClickStateRef comment above).
+      // The RAF loop restores iframe pointer-events once dragStateRef.instanceId is cleared
+      // by handleDragEnd (via the stable window mouseup listener).
 
       // Reset cursor and user-select
       document.body.style.cursor = '';
