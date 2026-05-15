@@ -3257,3 +3257,79 @@ Post-commit entry 2026-04-21 22:18 CEST:
   Remaining risk: the full 2209-test E2E run was stopped for analyzed signals
   and has not yet completed end-to-end after these fixes.
 ```
+
+## VS Code E2E Overlay Source-Map Cache Fix 2026-04-21 author: codex
+
+Full VS Code extension E2E rerun 20260421f was stopped at the first real
+failure:
+
+```text
+Test:
+tests/project-independent/canvas-interactions.spec.ts
+"PI-5-2: overlay rect appears on selection"
+
+Failure:
+The Inspector selected h1 and iframe state contained
+selectedIds=["src/components/Feed.tsx:13:8"], but the preview overlay DOM had
+0 data-selection-overlay nodes and 111 placeholder overlay nodes.
+```
+
+Root cause:
+
+```text
+The iframe FiberSourceIndex could be built before Vite client source maps
+finished warming. Click resolution then used the warmed original source
+location, while reverse lookup for overlays still used the cached compiled
+coordinates. The selected nodeRef and source index no longer matched, so
+computeOverlayRects returned no selection rects.
+```
+
+Fix:
+
+```text
+vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts
+now invalidates FiberSourceIndex when warmClientChunk resolves a client
+source-map location. Server source-map resolution already had this invalidation;
+the client-side Vite path now follows the same cache rule.
+```
+
+Validation:
+
+```text
+- npm run build passed in vscode-extension/hypercanvas-preview.
+- ./build-and-install.sh passed and installed hypercanvas-preview 0.1.9.
+- vscmd workbench.action.reloadWindow ran for react-vite-tw4-twitter.
+- Focused E2E with --retries=0 passed:
+  "PI-5-2: overlay rect appears on selection".
+- Temporary diagnostics before removal showed overlayCount changed from 0 to 1
+  for selectedIds=["src/components/Feed.tsx:13:8"].
+```
+
+Next:
+
+```text
+Run the standard pre-commit checks, commit this focused overlay fix, then
+restart the full 2209-test VS Code extension E2E run with --retries=0 and stop
+again only for analyzed failures.
+```
+
+Post-commit entry 2026-04-21 22:34 CEST:
+
+```text
+- Commit 131c3a5a fix(ext): refresh overlay source index after source maps.
+  Scope: client source-map warming now invalidates the iframe FiberSourceIndex
+  before scheduling overlay redraws, matching the existing server source-map
+  invalidation path.
+  Validation before commit: npm run build passed; ./build-and-install.sh
+  passed and installed hypercanvas-preview 0.1.9; vscmd reload ran; focused
+  E2E with --retries=0 passed for "PI-5-2: overlay rect appears on selection";
+  bunx biome check iframe-interaction.ts passed; bunx tsc --noEmit --pretty
+  false passed; markdownlint on this file passed; git diff --check passed.
+  Required bunx knip was run and still fails on the known repository-wide
+  unused-file report.
+  Commit hooks: react-hooks-import, lint, and typecheck passed.
+  Review note: nested codex review was skipped because the user explicitly
+  forbade launching Codex from inside Codex.
+  Remaining risk: the full 2209-test E2E run needs to restart from the top
+  after this focused overlay fix.
+```
