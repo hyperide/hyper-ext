@@ -3456,3 +3456,31 @@ S3: `Tamagui: style written as prop, not className` failed TWICE (tamagui-fitnes
 3. `preview-routing.spec.ts`: boundingBox poll 30s (S3 tamagui-food-delivery)
 4. `settings.spec.ts`: 3 fixes (poll timeouts + Close All Editors)
 5. `style-editing.spec.ts`: dirty tab activation + 5→15s (S3 tamagui)
+
+## 📍 Run #21 Checkpoint 3 (2026-04-28 ~16:15 CEST, ~48 min)
+
+| Shard | Done | Fail | Notes |
+|-------|------|------|-------|
+| s1    | 159  |   0  | drag tests continuing (DR-13 done) |
+| s2    | 211  |   1  | preview-render, CSS adapters |
+| s3    | 223  |   6  | style-editing (multiple Tamagui projects) |
+
+No new failure types since checkpoint 2.
+
+**S1 apparent hang (false alarm):** PI-5-DR-8 appeared hung at `devServer:start` for 10 min
+but was a `tail -20` snapshot artifact. Test passed at 17795ms (normal duration).
+S1 never actually hung — was producing fixture-timing lines faster than the tail window.
+
+**S3 new failures (same root causes, different projects):**
+- `styles applied correctly`: tamagui-whatsapp 15980ms — fix already committed (20s timeout)
+- `component has non-zero dimensions`: tamagui-whatsapp 26210ms — fix committed (boundingBox poll)
+
+All 6 S3 failures = same 3 root causes across 2 Tamagui projects (food-delivery + whatsapp).
+All fixes are in ext-test-projects main. Run #22 should have 0 failures for these.
+
+**Total fix inventory (for Run #22):**
+1. error-overlay timeout 90→120s (S2 react-vite-tw3-kanban)
+2. element visibility 10→20s (S3 tamagui food-delivery/whatsapp)
+3. App Shell boundingBox poll 30s (S3 tamagui food-delivery/whatsapp)
+4. settings: 3 race condition fixes
+5. style-editing: dirty tab activation + 5→15s poll (Tamagui nested components)
