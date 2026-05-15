@@ -39,13 +39,28 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #28** (`run-20260429-075702-41743`) in progress, ~55 min, 3 shards:
-  - S1: 246 steps, last: "worker thread error is captured in logs"
-  - S2: 198 steps, last: "component with error — error overlay appears" ← FLAKY
-  - S3: 203 steps, last: "duplicate element preserves file integrity"
-- Previous run (#28 S3 previous context): 0 hard failures, 4 FLAKY:
-  - 3× "Tamagui: style written as prop" (fitness/food-delivery/uber) — warm VS Code stale element cache
-  - 1× "component with error — error overlay appears" — 607s timeout from Vite watcher degradation
+- **Run #29** (`run-20260429-110015-36155`) in progress, ~42 min:
+  - S1: 163 tests, MEM 1.5GiB/6GiB, drag-reorder tests
+  - S2: 155 tests, MEM 1.6GiB/6GiB, project-dependent empty/nested
+  - S3: 192 tests, MEM 3.4GiB/6GiB, tamagui-style tests — healthy
+  - 0 hard failures detected in any shard
+
+### Test Matrix: Projects That NEVER Ran (run #28 OOM)
+
+Run #28 S3 was killed at worker 62 (OOM). As a result, ~280 tests never executed:
+
+**5 supported projects (×~40 tests each = ~200 tests)**:
+- `webpack-react-cssmodules-spotify` — 0 test results
+- `webpack-react-emotion-dashboard` — 0 test results
+- `react-vite-sass-portfolio` — 0 test results
+- `bun-tw-shadcn-sample` — 0 test results
+- `nextjs-tw-sample` — 0 test results
+- `webpack-react-tw3-kanban` — partial (killed mid)
+
+**12 unsupported projects (~60 tests total)**:
+react-vite-stylex, vanilla-extract, pandacss, unocss, mui, fluentui, antd, chakra, mantine, nextui, remix-mui, remix-antd — all 0
+
+Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 ---
 
@@ -73,6 +88,8 @@
 2. Update workfile after every commit: what changed, why, validation, next.
 3. Do not claim a test/run passed unless it actually happened.
 4. Do not self-nest codex CLI. Other agent CLIs (claude) are fine for review.
+5. **Any user question → background research → answer in Telegram** (`/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`).
+   User reads chat from phone. TG answer is mandatory — not optional, not "instead of inline". Russian, detailed (3-6 sentences, key numbers, root cause, next steps). Never dump raw logs.
 
 ### Failure classification
 
@@ -100,7 +117,25 @@ increase dirty tab `isVisible` timeout 500ms → 2000ms.
 
 **Commit**: `ext-test-projects:1522602`
 
-### 2. "component with error" 607s timeout — Vite watcher degradation
+### 2. ⚠️ ast-operations 606s timeouts — S3 OOM-induced (run #28)
+
+**Root cause**: `setupPreviewWithDevServer()` polls up to 600s for dev server ready.
+Under OOM-induced memory pressure (workers 63-68 in S3), webpack page-thrashed for 600s
+without ever completing compilation → preview never loaded → timeout.
+
+**Tests**: `ast-operations.spec.ts:58/89/106`:
+- "elements identifiable via fiber-based selection (replaces data-uniq-id)"
+- "nested components — multiple selectors found"
+- "ExportNamedDeclaration — correct traversal order"
+
+Both attempts failed at ~606s (HARD FAIL in run #28 S3).
+
+**Expected fix**: run #29 with `--memory-swap -1` prevents OOM → webpack compiles normally.
+These tests should pass in run #29. If they still fail → investigate separately.
+
+**Status**: monitoring in run #29.
+
+### 3. "component with error" 607s timeout — Vite watcher degradation
 
 **Root cause**: after ~40min of tests on warm VS Code, Vite's FS watcher degrades.
 `editor.save()` writes to disk but Vite never detects the change.
