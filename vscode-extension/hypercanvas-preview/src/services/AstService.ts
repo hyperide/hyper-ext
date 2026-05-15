@@ -49,6 +49,8 @@ export interface AstOperationResult {
   success: boolean;
   error?: string;
   data?: unknown;
+  /** Absolute path of the file that was actually mutated (may differ from the requested filePath for cross-file writes) */
+  resolvedPath?: string;
 }
 
 export interface UpdateStylesResult extends AstOperationResult {
@@ -151,7 +153,7 @@ export class AstService {
     if (this._initialized) return;
     if (!this._fileIO.listFiles) return; // FileIO doesn't support directory listing
 
-    const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+    const SOURCE_DIRS = ['src', 'app', 'pages', 'components', 'client'];
     const allFiles: string[] = [];
 
     for (const dir of SOURCE_DIRS) {
@@ -355,7 +357,7 @@ export class AstService {
           await this._updateNodeMap(mutatedFile);
         }
       }
-      return { success: true };
+      return { success: true, resolvedPath };
     } catch (error) {
       console.error('[AstService.updateStyles] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -396,7 +398,7 @@ export class AstService {
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
-      return { success: true };
+      return { success: true, resolvedPath };
     } catch (error) {
       console.error('[AstService.updateProps] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

@@ -145,22 +145,41 @@ export class AstBridge {
       }
       const result = await operation();
       if (result.success) {
+        // For cross-file writes (e.g. Tamagui: requested App.tsx but wrote to RecordScreen.tsx),
+        // the operation returns resolvedPath pointing to the actual mutated file.
+        const actualPath = result.resolvedPath ?? absolutePath;
+        const needsSnapshot = actualPath !== absolutePath;
+
+        // Snapshot the actual file that changed (not necessarily the requested file)
+        let contentBeforeActual = needsSnapshot ? '' : contentBefore;
+        if (needsSnapshot) {
+          try {
+            contentBeforeActual = await this._fileIO.readFileFromDisk(actualPath);
+          } catch {
+            try {
+              contentBeforeActual = await this._fileIO.readFile(actualPath);
+            } catch {
+              contentBeforeActual = '';
+            }
+          }
+        }
+
         let contentAfter: string;
         try {
           // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
-          contentAfter = await this._fileIO.readFileFromDisk(absolutePath);
+          contentAfter = await this._fileIO.readFileFromDisk(actualPath);
         } catch {
           try {
-            contentAfter = await this._fileIO.readFile(absolutePath);
+            contentAfter = await this._fileIO.readFile(actualPath);
           } catch {
-            contentAfter = contentBefore;
+            contentAfter = contentBeforeActual;
           }
         }
-        if (contentBefore !== contentAfter) {
-          this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+        if (contentBeforeActual !== contentAfter) {
+          this._undoRedoService.recordEdit(actualPath, contentBeforeActual, contentAfter);
         } else {
           console.warn(
-            `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(absolutePath)}`,
+            `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(actualPath)}`,
           );
         }
       }
