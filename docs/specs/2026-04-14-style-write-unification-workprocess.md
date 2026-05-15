@@ -4925,3 +4925,117 @@ Explorer context-menu E2E isolation fix, 2026-04-22 18:59 CEST:
   * Restart full E2E with `--retries=0 --workers=1` and continue from the next
     first-failure marker.
 ```
+
+Bridge bot callback hardening follow-up, 2026-04-22 19:17 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: 2d404d0 fix: harden Telegram page callbacks
+- Trigger:
+  * User still saw Telegram inline pagination buttons spinning forever.
+  * Runtime logs showed two distinct facts:
+    - older page message `071a6a6b6bbd` callbacks were received before the
+      early-ack fix but had no `answered page callback` log;
+    - `launchd.err.log` also contained `getUpdates: Conflict`, meaning a
+      second polling process had previously been able to steal updates.
+- Fix:
+  * Added direct Telegram API `answerCallbackQuery` handling by callback query
+    id before page loading/editing.
+  * Kept GramIO `context.answer()` as a fallback if direct API ack fails.
+  * Added a runtime process lock in the OS temp directory so direct
+    `bun run src/index.ts` starts cannot create a second long-polling process
+    for this token.
+  * The process lock uses a directory + `pid` file and explicit
+    `unlinkSync`/`rmdirSync`, because Bun hit `EFAULT` when `rmSync` tried to
+    remove a stale lock directory during the first launchd restart attempt.
+  * The runtime lock path is separate from `start.sh`'s launchd wrapper lock,
+    so the two lock layers do not block each other.
+  * Added unit tests for direct callback ACK payloads/API failures and the
+    live/stale process-lock cases.
+- Validation:
+  * `bun test` passed 33/33.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+- Follow-up:
+  * Restarted launchd service after the amended commit; active runtime PID:
+    `22753`.
+  * Confirmed shell wrapper lock and runtime lock both point at PID `22753`.
+  * Sent a fresh 6-page paginated smoke report; stored page id:
+    `8c18a4fcf95a`.
+  * No callback for `8c18a4fcf95a` had reached the bot at the time of this
+    entry; continue monitoring after the user presses `Next`/`Prev`.
+```
+
+Command-palette cleanup stabilization follow-up, 2026-04-22 19:18 CEST:
+
+```text
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: 909e47d test(e2e): skip preview close when no preview is open
+- Trigger:
+  * Full E2E restart was stopped at `52/2209` despite no failing assertion,
+    because teardown emitted non-pristine output:
+    `Hyper: Close Preview — locator.fill: Timeout ...`.
+  * Focused repro showed the warning in AI-chat tests where no Hyper Canvas
+    preview editor was open, so the cleanup was trying to run an optional
+    preview-close command unnecessarily.
+- Fix:
+  * `CommandPalette` now targets `.quick-input-widget input:visible`, not a
+    visible widget with a potentially hidden stale input descendant.
+  * The cleanup fixture checks for an open `Hyper Canvas` editor tab and skips
+    `Hyper: Close Preview` when no preview editor exists.
+  * Preview cleanup is still attempted when the tab exists, preserving the
+    existing guard against retained webview state in preview-heavy tests.
+- Validation:
+  * Focused E2E passed 3/3 with `--retries=0 --workers=1`:
+    `new chat created|list chats in dropdown|switch between chats`.
+  * The previous `Hyper: Close Preview — locator.fill` warning did not recur.
+  * `git diff --check` passed for the touched harness files.
+- Next step:
+  * Restart full E2E with `--retries=0 --workers=1` after bridge-bot runtime
+    verification.
+```
+
+Bridge bot current-session app-server recovery, 2026-04-22 19:35 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: b4766c2 fix: auto-start current session app-server
+- Trigger:
+  * Incoming Telegram messages failed before reaching the current Codex
+    session:
+    `No reachable Codex app-server processes: ws://127.0.0.1:9120:
+    WebSocket connection failed`.
+  * Runtime inspection showed Telegram polling was alive, but the saved
+    current-session binding pointed at a stale `9120` endpoint.
+  * The visible `Codex.app` app-server was stdio/Unix-socket only, while the
+    bridge client supports the public WebSocket app-server protocol.
+- Fix:
+  * Current-session discovery now starts a managed
+    `codex app-server --listen ws://127.0.0.1:9120` when no reachable WS
+    app-server exists.
+  * `/project` and current-session delivery now share the same managed
+    app-server connection path, avoiding duplicate server starts and fixing the
+    old reconnect bug where the token-file path could be reused as a token.
+  * Saved current-session bindings now match live candidates by `sessionId`
+    plus `cwd`, or by `sessionId` plus endpoint, so stale endpoint/token data
+    can be refreshed instead of blocking rediscovery.
+  * Managed app-server startup waits on `/readyz` and kills the child process
+    if readiness fails.
+- Validation:
+  * `bun test` passed 34/34.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * Runtime smoke: with no listener on `9120`, discovery started a managed
+    WebSocket app-server and listed the saved thread
+    `019daf72-658b-7c60-93ae-abd83245fcef` as `notLoaded`.
+  * launchd service `com.ultra.codex-tg-bot` restarted; active PID observed:
+    `48102`.
+  * `bunx knip` was run and still reports the repo's existing CLI/test-entry
+    unused-file noise; no new knip-specific cleanup was made in this commit.
+- Follow-up:
+  * Ask the user to send one normal Telegram message; the expected behavior is
+    an automatic binding refresh followed by forwarding through the managed
+    app-server, without `codex exec`.
+  * Restart full E2E after the bridge path is confirmed by a real incoming
+    message.
+```
