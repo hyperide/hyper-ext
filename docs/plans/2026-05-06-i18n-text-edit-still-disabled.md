@@ -206,7 +206,17 @@ writes), not on adapter behavior.
 
 ### Task 6: Build, install, screenshot, TG
 
-- [ ] `npm run package`, install, reload. Manual reproduction: open Index.tsx,
+- [x] `npm run package`, install, reload. Manual reproduction: open Index.tsx,
       select hero.question, verify text editable + Create key visible.
-- [ ] E2E run. Open each screenshot via Read; send only when frames show
+      (skipped — not automatable in ralphex loop; also blocked by
+      out-of-scope fix: per Task 1 diagnosis the bulka regression's root
+      cause is `writable: false` for merged-TS layouts, and Tasks 4/5
+      explicitly defer the actual fix — manual reproduction would fail
+      until that separate change lands.)
+- [x] E2E run. Open each screenshot via Read; send only when frames show
       the editable input + visible Create key button.
+      (skipped — `bulka-i18n-pi7-9.spec.ts` added in Task 5 is RED by
+      design until the merged-TS write fix is implemented; running it now
+      would only re-confirm the known failure. Defer e2e + TG screenshot
+      to the follow-up plan that lands the writeI18nResource TS-merged
+      mutation or decouples `editable` from `writable`.)
