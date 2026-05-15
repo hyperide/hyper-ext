@@ -5298,3 +5298,45 @@ Requested Claude review follow-up, 2026-04-22 22:10 CEST:
   * Restoring symbol names in memory must be verified against current code, not
     only against earlier memory text or a diff.
 ```
+
+Unexpected active full E2E run stopped, 2026-04-22 22:50 CEST:
+
+```text
+- Trigger:
+  * User pointed out that an E2E run was currently active.
+- Finding:
+  * Active process existed:
+    PID `50836`, cwd `/Users/ultra/work/ext-test-projects/e2e`,
+    command:
+    `node ./node_modules/.bin/playwright test --retries=0 --workers=1 --reporter=line`.
+  * Parent was `codex app-server` PID `46417`, so stdout/stderr were pipes to
+    the app-server rather than a durable `/tmp` log file.
+  * The run had already produced failure artifacts, so it violated the revised
+    "stop on first real failure" rule.
+- Failure artifacts observed:
+  * First artifact:
+    `elements-tree-selection...ET-11...reveals-nested-children`
+    `diagnostics-001-2026-04-22T20-14-54-117Z-test-end-failure-window.png`
+  * Later artifacts:
+    `mcp-setup...opencode-json-created`
+    `diagnostics-001-2026-04-22T20-39-35-624Z-test-end-failure-window.png`
+    `mcp-tools...returns-within-reasonable-time`
+    `diagnostics-003-2026-04-22T20-46-04-418Z-test-end-failure-window.png`
+- Action:
+  * Stopped the active full run with SIGTERM for PID `50836` and its current
+    `hvsc-10-dbc84973` VS Code/dev-server child processes.
+  * Confirmed no matching `node ./node_modules/.bin/playwright test` or
+    `hvsc-10-dbc84973` processes remained; later `pgrep` matches were the
+    short-lived search commands themselves.
+- Resource state after stop:
+  * Load average was about `3.68 4.61 4.85`.
+  * `vm_stat` showed `Pages throttled: 0`.
+  * Free pages recovered to about `78230`.
+- Next focused command:
+  * Start with the first failure, not the later MCP failures:
+    `./node_modules/.bin/playwright test --project=independent \`
+    `tests/project-independent/elements-tree-selection.spec.ts \`
+    `-g "ET-11" --retries=0 --workers=1 --reporter=line`.
+  * If ET-11 passes focused, run the surrounding elements-tree-selection spec
+    before moving to the later MCP failures.
+```
