@@ -18,7 +18,9 @@ export function detectTailwindExplicitSize(className: string | undefined): { wid
   let width = false;
   let height = false;
   for (const cls of className.split(/\s+/)) {
-    const bare = cls.includes(':') ? cls.substring(cls.lastIndexOf(':') + 1) : cls;
+    const colonIdx = cls.indexOf(':');
+    const bracketIdx = cls.indexOf('[');
+    const bare = colonIdx !== -1 && (bracketIdx === -1 || colonIdx < bracketIdx) ? cls.slice(colonIdx + 1) : cls;
     if (!width && isTailwindSizeClass(bare, 'w')) width = true;
     if (!height && isTailwindSizeClass(bare, 'h')) height = true;
     if (width && height) break;

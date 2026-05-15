@@ -339,6 +339,10 @@ describe('detectTailwindExplicitSize', () => {
     expect(detectTailwindExplicitSize('md:w-12 lg:h-8')).toEqual({ width: true, height: true });
   });
 
+  it('detects w-[length:50px] with CSS type-hint arbitrary value', () => {
+    expect(detectTailwindExplicitSize('w-[length:50px] h-[percentage:50%]')).toEqual({ width: true, height: true });
+  });
+
   it('returns false/false for undefined', () => {
     expect(detectTailwindExplicitSize(undefined)).toEqual({ width: false, height: false });
   });

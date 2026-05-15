@@ -46,14 +46,21 @@ function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
 }
 
 function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect): void {
-  for (const child of Array.from(overlay.children)) {
-    if ((child as HTMLElement).hasAttribute('data-resize-handle')) {
-      child.remove();
-    }
+  const wantWidth = rect.type === 'selection' && !!rect.resizable?.width;
+  const wantHeight = rect.type === 'selection' && !!rect.resizable?.height;
+  let hasWidth = false;
+  let hasHeight = false;
+  for (const child of overlay.children) {
+    const axis = (child as HTMLElement).getAttribute('data-resize-handle');
+    if (axis === 'width') hasWidth = true;
+    else if (axis === 'height') hasHeight = true;
   }
-  if (rect.type !== 'selection' || !rect.resizable) return;
-  if (rect.resizable.width) overlay.appendChild(createResizeHandleDot('width'));
-  if (rect.resizable.height) overlay.appendChild(createResizeHandleDot('height'));
+  if (hasWidth === wantWidth && hasHeight === wantHeight) return;
+  for (const child of Array.from(overlay.children)) {
+    if ((child as HTMLElement).hasAttribute('data-resize-handle')) child.remove();
+  }
+  if (wantWidth) overlay.appendChild(createResizeHandleDot('width'));
+  if (wantHeight) overlay.appendChild(createResizeHandleDot('height'));
 }
 
 // ============================================================================
