@@ -37,6 +37,21 @@ existing keys. Also after picking "Create key" for a new key, nothing happens.
 - [ ] In RightSidebar handleI18nKeyChange, verify the writeI18nResource RPC is invoked with skipResourceWrite=false for unknown keys.
 - [ ] In AstBridge's writeI18nResource handler, verify the JSX rewrite + JSON write happens.
 
+### Task 3.5: Replace polling with event-based wait (no race in production)
+
+If the test that asserts "JSX rewrite landed" needs polling to pass, that
+means the production write is fire-and-forget — the user sees a flicker /
+delay too. **Polling masks a real race; do NOT add polling, fix the race.**
+
+- [ ] Make `writeI18nResource` RPC reply ONLY after the AST mutation has been
+      flushed to disk and the dev server has acknowledged the change (or
+      the file watcher has produced a settled re-read).
+- [ ] If full settle is not feasible, return a `writeId` and emit a
+      `ast:writeI18nResource:done` event when settle completes. The webview
+      awaits the matching event before considering the write finished.
+- [ ] `handleI18nKeyChange` `await`s until done (not just RPC ack). Test
+      waits for the same signal — never polls state.
+
 ### Task 4: Add E2E coverage
 
 - [ ] Extend `../ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`:
