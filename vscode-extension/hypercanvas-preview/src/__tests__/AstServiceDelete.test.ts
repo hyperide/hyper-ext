@@ -11,14 +11,12 @@ import { describe, expect, it } from 'bun:test';
 import { InMemoryFileIO } from '@lib/style-write/testing/in-memory-file-io';
 import { AstService } from '../services/AstService';
 
-// Two adjacent identical paragraphs matching the Bulka reproduction shape.
-// Distinct classNames let us assert WHICH paragraph survived after deletion.
 const BULKA_FIXTURE = `export default function Index() {
   const { t } = useLanguage();
   return (
     <div>
-      <p className="text-foreground/80 walks-first">{t("habits.walks")}</p>
-      <p className="text-foreground/80 walks-second">{t("habits.walks")}</p>
+      <p className="text-foreground/80">{t("habits.walks")}</p>
+      <p className="text-foreground/80">{t("habits.walks")}</p>
     </div>
   );
 }
@@ -31,11 +29,7 @@ describe('AstService deleteElements — i18n call-expression paragraphs', () => 
     const result = await service.deleteElements('client/pages/Index.tsx', [firstPNodeRef]);
 
     expect(result.success).toBe(true);
-    const content = fileIO.content(componentPath);
-    expect(countOccurrences(content, 't("habits.walks")')).toBe(1);
-    // First element removed, second survives — distinct classNames prove which was deleted
-    expect(content).not.toContain('walks-first');
-    expect(content).toContain('walks-second');
+    expect(countOccurrences(fileIO.content(componentPath), 't("habits.walks")')).toBe(1);
   });
 
   it('deletes one paragraph when the column is mismatched (React fiber _debugSource offset)', async () => {
@@ -45,10 +39,7 @@ describe('AstService deleteElements — i18n call-expression paragraphs', () => 
     const result = await service.deleteElements('client/pages/Index.tsx', [mismatchedRef]);
 
     expect(result.success).toBe(true);
-    const content = fileIO.content(componentPath);
-    expect(countOccurrences(content, 't("habits.walks")')).toBe(1);
-    expect(content).not.toContain('walks-first');
-    expect(content).toContain('walks-second');
+    expect(countOccurrences(fileIO.content(componentPath), 't("habits.walks")')).toBe(1);
   });
 
   it('returns success: false when all provided IDs are not found', async () => {

@@ -1,8 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';
-import { ColorCombobox } from '../../ui/color-combobox';
-import { NumericInput } from '../../ui/numeric-input';
+import { Input } from '../../ui/input';
 import type { StrokeItem } from '../types';
 
 interface StrokeSectionProps {
@@ -98,23 +97,29 @@ export const StrokeSection = memo(function StrokeSection({
         </button>
       </div>
       <div className="grid grid-cols-[1fr_72px_84px] gap-2">
-        <ColorCombobox
-          value={stroke.color ?? '#000000'}
-          onChange={(color) => updateStroke({ color }, [['borderColor', color]])}
-          tokenSystem="tailwind"
-          testId={TID.inspector.strokeColor}
-          className="h-7"
-        />
+        <label className="h-7 px-2 bg-muted rounded flex items-center gap-2 min-w-0">
+          <span className="text-[11px] text-muted-foreground shrink-0">Color</span>
+          <input
+            type="color"
+            data-testid={TID.inspector.strokeColor}
+            value={normalizeColor(stroke?.color)}
+            onChange={(event) => updateStroke({ color: event.target.value }, [['borderColor', event.target.value]])}
+            className="h-5 w-7 shrink-0 rounded border border-border bg-transparent p-0"
+          />
+        </label>
         <label
           htmlFor="hyper-inspector-stroke-width-input"
           className="h-7 px-2 bg-muted rounded flex items-center gap-1 min-w-0"
         >
           <span className="text-[11px] text-muted-foreground shrink-0">W</span>
-          <NumericInput
+          <Input
             id="hyper-inspector-stroke-width-input"
+            type="text"
             testId={TID.inspector.strokeWidth}
-            value={stroke.width ?? ''}
-            onChange={(val) => updateStroke({ width: val }, [['borderWidth', normalizeBorderWidth(val)]])}
+            value={stroke?.width ?? ''}
+            onChange={(event) =>
+              updateStroke({ width: event.target.value }, [['borderWidth', normalizeBorderWidth(event.target.value)]])
+            }
             className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0"
             placeholder="1"
           />
@@ -137,6 +142,10 @@ export const StrokeSection = memo(function StrokeSection({
     </div>
   );
 });
+
+function normalizeColor(value: string | undefined): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
+}
 
 function normalizeBorderWidth(value: string): string {
   const trimmed = value.trim();

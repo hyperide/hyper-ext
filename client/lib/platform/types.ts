@@ -137,14 +137,6 @@ export type PlatformMessage =
       text: string;
     }
   | {
-      type: 'ast:reorderElement';
-      requestId: string;
-      filePath: string;
-      sourceId: string;
-      targetId: string;
-      position: 'before' | 'after';
-    }
-  | {
       type: 'ast:writeI18nResource';
       requestId: string;
       library: I18nLibrary;
@@ -211,7 +203,6 @@ export type PlatformMessage =
 
   // Keyboard operations (visual editor → extension host)
   | { type: 'keyboard:delete'; elementIds: string[] }
-  | { type: 'keyboard:duplicate'; elementId: string }
   | { type: 'canvas:undo' }
   | { type: 'canvas:redo' }
 

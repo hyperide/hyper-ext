@@ -201,17 +201,9 @@ export default function RightSidebar({
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
-  const sharedItemIndices = useSharedEditorState((s) => s.selectedItemIndices);
   const selectedItemIndex =
-    selectedId && engine
-      ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null)
-      : selectedId
-        ? (sharedItemIndices?.[selectedId] ?? null)
-        : null;
+    selectedId && engine ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null) : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
-  // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
-  // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
-  const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
   const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
@@ -709,25 +701,14 @@ export default function RightSidebar({
     (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = setTimeout(() => {
-        void (async () => {
-          try {
-            await astOps.writeI18nResource({
-              library: i18nText.library,
-              key: i18nText.key,
-              namespace: i18nText.namespace,
-              activeLocale: i18nText.activeLocale,
-              newText,
-            });
-          } catch {
-            // write failed — rollback scoped to this binding so other visible bindings are not affected
-            const bindingId = `${i18nText.library}|${i18nText.key}|${i18nText.activeLocale}`;
-            setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
-          } finally {
-            // always re-read to sync inspector with file state
-            setStyleRefreshKey((k) => k + 1);
-          }
-        })();
+      debouncedI18nWriteRef.current = setTimeout(async () => {
+        await astOps.writeI18nResource({
+          library: i18nText.library,
+          key: i18nText.key,
+          activeLocale: i18nText.activeLocale,
+          newText,
+        });
+        setStyleRefreshKey((k) => k + 1);
       }, 300);
     },
     [i18nText, astOps],
@@ -989,12 +970,6 @@ export default function RightSidebar({
       if (syncToastTimerRef.current) {
         clearTimeout(syncToastTimerRef.current);
       }
-      if (debouncedI18nWriteRef.current) {
-        clearTimeout(debouncedI18nWriteRef.current);
-      }
-      if (editingTextResetRef.current) {
-        clearTimeout(editingTextResetRef.current);
-      }
     };
   }, []);
 
@@ -1197,18 +1172,15 @@ export default function RightSidebar({
           )}
 
           {/* i18n Text Inspector */}
-          {i18nText?.kind === 'i18n' &&
-            (() => {
-              const bindingKey = `${i18nText.library}|${i18nText.key}|${i18nText.activeLocale}`;
-              return (
-                <I18nTextInspector
-                  key={bindingKey}
-                  i18nBinding={i18nText}
-                  onResolvedTextChange={handleI18nResolvedTextChange}
-                  rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
-                />
-              );
-            })()}
+          {i18nText?.kind === 'i18n' && (
+            <I18nTextInspector
+              i18nBinding={i18nText}
+              onKeyChange={() => {}}
+              onResolvedTextChange={handleI18nResolvedTextChange}
+              onLocaleChange={() => {}}
+            />
+          )}
+
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection

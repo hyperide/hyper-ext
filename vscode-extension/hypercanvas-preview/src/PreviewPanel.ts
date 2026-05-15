@@ -453,18 +453,6 @@ export class PreviewPanel {
       return;
     }
 
-    // === Keyboard-driven duplicate (from iframe keyboard handler) ===
-    if (msg.type === 'keyboard:duplicate') {
-      const elementId = msg.elementId as string | undefined;
-      const componentPath = this._currentComponent;
-      if (!componentPath || !elementId) return;
-      const result = await this._panelRouter.astBridge.duplicateElement(componentPath, elementId);
-      if (result.success && result.newId) {
-        this._stateHub.applyUpdate({ selectedIds: [result.newId] });
-      }
-      return;
-    }
-
     // === Context menu actions ===
     if (msg.type === 'contextMenu:goToCode') {
       await this._handleContextMenuGoToCode(msg, webview);
@@ -1417,18 +1405,14 @@ export class PreviewPanel {
    * Used by E2E tests and extension commands to establish full canvas selection state.
    */
   public selectElement(elementId: string): void {
-    this._stateHub.applyUpdate({
-      selectedIds: [elementId],
-      selectedItemIndices: {},
-      selectedElementRuntimeStyle: null,
-    });
+    this._stateHub.applyUpdate({ selectedIds: [elementId] });
   }
 
   /**
    * Programmatically select multiple elements by their nodeRefs.
    */
   public selectElements(elementIds: string[]): void {
-    this._stateHub.applyUpdate({ selectedIds: elementIds, selectedItemIndices: {}, selectedElementRuntimeStyle: null });
+    this._stateHub.applyUpdate({ selectedIds: elementIds });
   }
 
   /**
@@ -1577,12 +1561,9 @@ export class PreviewPanel {
         type: 'goToVisual',
         elementId,
       });
-      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection.
-      // Clear stale .map() item snapshot so inspector shows correct colors for the new selection.
+      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection
       this._stateHub.applyUpdate({
         selectedIds: [elementId],
-        selectedItemIndices: {},
-        selectedElementRuntimeStyle: null,
       });
     }
   }

@@ -157,69 +157,49 @@ export function mergeRuntimeStyle(
   base: ParsedStyles,
   runtime: SelectedElementRuntimeStyle | null | undefined,
   elementId: string | null,
-  itemIndex?: number | null,
 ): ParsedStyles {
   if (!runtime || !elementId || runtime.elementId !== elementId) return base;
-  // For .map()-rendered elements, discard a snapshot from a different item index.
-  if (runtime.itemIndex != null && itemIndex != null && runtime.itemIndex !== itemIndex) return base;
 
   const cs = runtime.computedStyle;
   const merged: ParsedStyles = { ...base };
-  let changed = false;
 
   if (!merged.backgroundColor && cs.backgroundColor) {
     const normalized = normalizeComputedColor(cs.backgroundColor);
-    if (normalized) {
-      merged.backgroundColor = normalized;
-      changed = true;
-    }
+    if (normalized) merged.backgroundColor = normalized;
   }
 
   if (!merged.color && cs.color) {
     const normalized = normalizeComputedColor(cs.color);
-    if (normalized) {
-      merged.color = normalized;
-      changed = true;
-    }
+    if (normalized) merged.color = normalized;
   }
 
   if (!merged.borderColor && cs.borderColor) {
     const normalized = normalizeComputedColor(cs.borderColor);
-    if (normalized) {
-      merged.borderColor = normalized;
-      changed = true;
-    }
+    if (normalized) merged.borderColor = normalized;
   }
 
   if (!merged.borderWidth && cs.borderWidth && cs.borderWidth !== '0px') {
     merged.borderWidth = cs.borderWidth;
-    changed = true;
   }
 
   if (!merged.borderStyle && cs.borderStyle) {
     merged.borderStyle = cs.borderStyle;
-    changed = true;
   }
 
   if (!merged.borderRadius && cs.borderRadius) {
     merged.borderRadius = cs.borderRadius;
-    changed = true;
   }
 
   if (merged.opacity == null && cs.opacity) {
     const num = Number.parseFloat(cs.opacity);
-    if (!Number.isNaN(num)) {
-      merged.opacity = Math.round(num * 100).toString();
-      changed = true;
-    }
+    if (!Number.isNaN(num)) merged.opacity = Math.round(num * 100).toString();
   }
 
   if (!merged.fontSize && cs.fontSize) {
     merged.fontSize = cs.fontSize;
-    changed = true;
   }
 
-  return changed ? merged : base;
+  return merged;
 }
 
 // ============================================================================
@@ -428,16 +408,16 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
       clearTimeout(timer);
     };
-  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey]);
+  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, refreshKey]);
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
   const data = useMemo(() => {
     if (!classData.parsedStyles || !runtimeStyle) return classData;
-    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId, itemIndex);
+    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId);
     if (merged === classData.parsedStyles) return classData;
     return { ...classData, parsedStyles: merged };
-  }, [classData, runtimeStyle, elementId, itemIndex]);
+  }, [classData, runtimeStyle, elementId]);
 
   return data;
 }

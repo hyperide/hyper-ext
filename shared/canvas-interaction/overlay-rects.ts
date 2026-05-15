@@ -118,7 +118,6 @@ export function computeOverlayRects(
       const key = itemIndex !== null ? `select-${id}-${itemIndex}` : `select-${id}-${i}`;
       const overlayRect: OverlayRect = {
         key,
-        elementId: id,
         left: rect.left,
         top: rect.top,
         width: rect.width,
@@ -129,16 +128,7 @@ export function computeOverlayRects(
       // SVGElement.className is SVGAnimatedString in the browser, not a plain string
       const rawClass = typeof cn === 'string' ? cn : (cn as unknown as SVGAnimatedString).baseVal;
       const resizable = detectTailwindExplicitSize(rawClass);
-      if (resizable.width || resizable.height) {
-        const hasSizeClass = rawClass.split(/\s+/).some((cls) => {
-          const bracketIdx = cls.indexOf('[');
-          const searchEnd = bracketIdx === -1 ? cls.length : bracketIdx;
-          const colonIdx = cls.lastIndexOf(':', searchEnd - 1);
-          const bare = colonIdx !== -1 ? cls.slice(colonIdx + 1) : cls;
-          return isTailwindSizeClass(bare, 'size');
-        });
-        overlayRect.resizable = hasSizeClass ? { ...resizable, hasSizeClass: true } : resizable;
-      }
+      if (resizable.width || resizable.height) overlayRect.resizable = resizable;
       overlayRects.push(overlayRect);
     }
   }

@@ -8,8 +8,8 @@
  */
 import { describe, expect, it } from 'bun:test';
 import { act, createElement, useEffect, useState } from 'react';
-import { createRoot } from 'react-dom/client';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
+import { createRoot } from '../../node_modules/react-dom/client';
 import {
   buildComponentPreviewUrl,
   canUpdatePreviewComponentInPlace,

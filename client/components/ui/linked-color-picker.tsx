@@ -84,7 +84,7 @@ export function LinkedColorPicker({ componentColors, recentColors }: LinkedColor
           </CommandList>
         </Command>
       </PopoverContent>
-      {/* Color info panel — positioned above the dropdown trigger (top placement) */}
+      {/* Color info panel — positioned to the left of popover, Y centered on hovered item */}
       {ctx.open &&
         ctx.hoveredColor &&
         ctx.popoverContentRef.current &&
@@ -110,8 +110,9 @@ export function LinkedColorPicker({ componentColors, recentColors }: LinkedColor
             style={{
               position: 'fixed',
               zIndex: 60,
-              left: `${ctx.popoverContentRef.current.getBoundingClientRect().left}px`,
-              bottom: `${window.innerHeight - ctx.popoverContentRef.current.getBoundingClientRect().top + 8}px`,
+              right: `${window.innerWidth - ctx.popoverContentRef.current.getBoundingClientRect().left + 8}px`,
+              top: `${ctx.hoveredColor.anchorRect.top + ctx.hoveredColor.anchorRect.height / 2}px`,
+              transform: 'translateY(-50%)',
             }}
           />,
           document.body,

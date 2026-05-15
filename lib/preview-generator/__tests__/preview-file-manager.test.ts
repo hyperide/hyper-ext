@@ -1984,7 +1984,7 @@ export function cn(...classes: string[]) {
 `;
 
 describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern', () => {
-  it('excludes components/ui/* without SampleDefault from registry even when explicitly requested', async () => {
+  it('discovers components under client/ when index.html points to client/main.tsx', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/index.html',
@@ -1994,50 +1994,10 @@ describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern'
     io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    // Sheet has no SampleDefault — excluded from registry to prevent fallback-prop crashes
+    // sheet.tsx is lowercase but exports PascalCase Sheet — must be discovered and registered
     const content = await manager.ensureComponent(['client/components/ui/sheet.tsx']);
-    expect(content).not.toContain("'client/components/ui/sheet.tsx'");
-  });
-
-  it('excludes components/ui/* with non-default samples but no SampleDefault', async () => {
-    const io = new InMemoryFileIO();
-    io.files.set(
-      '/project/index.html',
-      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
-    );
-    const navMenuSource = `
-import React from 'react';
-export function NavigationMenu() { return <nav />; }
-export const SamplePrimary = () => <NavigationMenu />;
-`;
-    io.files.set('/project/client/components/ui/navigation-menu.tsx', navMenuSource);
-    io.files.set('/project/package.json', '{}');
-    const manager = createManager(io);
-
-    // Has SamplePrimary but no SampleDefault — render path would fall through to fallback-prop
-    // spread and crash, so must still be excluded from registry.
-    const content = await manager.ensureComponent(['client/components/ui/navigation-menu.tsx']);
-    expect(content).not.toContain("'client/components/ui/navigation-menu.tsx'");
-  });
-
-  it('keeps components/ui/* with SampleDefault in registry when explicitly requested', async () => {
-    const io = new InMemoryFileIO();
-    io.files.set(
-      '/project/index.html',
-      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
-    );
-    const fillPickerSource = `
-import React from 'react';
-export function FillPicker() { return <div />; }
-export const SampleDefault = () => <FillPicker />;
-`;
-    io.files.set('/project/client/components/ui/fill-picker.tsx', fillPickerSource);
-    io.files.set('/project/package.json', '{}');
-    const manager = createManager(io);
-
-    // fill-picker has SampleDefault — explicitly previewable, must remain in registry
-    const content = await manager.ensureComponent(['client/components/ui/fill-picker.tsx']);
-    expect(content).toContain("'client/components/ui/fill-picker.tsx'");
+    expect(content).toContain('Sheet');
+    expect(content).toContain("'client/components/ui/sheet.tsx'");
   });
 
   it('does not register lowercase files that export no PascalCase component', async () => {
@@ -2057,6 +2017,19 @@ export const SampleDefault = () => <FillPicker />;
     expect(content).not.toContain('utils');
     // Button is valid → included
     expect(content).toContain('Button');
+  });
+
+  it('explicit ensureComponent for shadcn sheet.tsx registers it regardless of scan', async () => {
+    // Even without index.html, an explicit ensureComponent call for a lowercase file
+    // with a PascalCase export must succeed.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/ui/sheet.tsx', SHEET_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/ui/sheet.tsx']);
+    expect(content).toContain('Sheet');
+    expect(content).toContain("'src/components/ui/sheet.tsx'");
   });
 
   it('scans src/ in addition to detected root so shared components are not missed', async () => {
