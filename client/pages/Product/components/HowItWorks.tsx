@@ -1,33 +1,26 @@
 import { IconGitBranch, IconPointer, IconSparkles } from '@tabler/icons-react';
-import { screenshotSrc } from '../screenshotSrc';
 
 const steps = [
   {
     icon: IconGitBranch,
-    title: 'Inspect the Live Tree',
+    title: 'Connect Your Project',
     description:
-      'Open the running React screen in Hyper Canvas. HyperIDE maps the rendered UI into an element tree, so structure, canvas, and code stay connected.',
+      'Clone your existing React project from Git, or let AI create a new one from scratch. Supports Next.js, Vite, Remix, and more.',
     color: 'from-blue-500 to-cyan-500',
-    image: screenshotSrc('/screenshots/panel-tree.png'),
-    imageAlt: 'HyperIDE Hyper Canvas next to the Inspector element tree for the bulka-the-dog project',
   },
   {
     icon: IconPointer,
     title: 'Edit Visually',
     description:
-      'Select the Jump button on the canvas and adjust spacing, variants, and Tailwind styles in the Inspector while the JSX stays in sync.',
+      'Select elements on the canvas and modify styles through the visual editor. Change layouts, colors, spacing, and effects without touching code.',
     color: 'from-purple-500 to-pink-500',
-    image: screenshotSrc('/screenshots/panel-inspector.png'),
-    imageAlt: 'HyperIDE canvas showing the selected Jump button with Inspector style controls',
   },
   {
     icon: IconSparkles,
-    title: 'Use Context Actions',
+    title: 'AI Generates Code',
     description:
-      'Right-click the selected element to jump to code, copy, duplicate, wrap, delete, or hand the exact element context to AI.',
+      'HyperIDE generates clean, production-ready TypeScript code. All changes are saved to your component files and synced with Git.',
     color: 'from-orange-500 to-yellow-500',
-    image: screenshotSrc('/screenshots/panel-canvas-preview.png'),
-    imageAlt: 'HyperIDE context menu opened on the selected Jump button with Go to Code and edit actions',
   },
 ];
 
@@ -39,7 +32,7 @@ export default function HowItWorks() {
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">How it works</h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Open the real app, select an element, and act on it without leaving the IDE.
+            From project setup to production code in three simple steps.
           </p>
         </div>
 
@@ -49,33 +42,27 @@ export default function HowItWorks() {
             {/* Connection line */}
             <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-border lg:block" />
 
-            <div className="grid gap-16 lg:grid-cols-3 lg:gap-8">
-              {steps.map((step) => (
+            <div className="grid gap-12 lg:grid-cols-3 lg:gap-8">
+              {steps.map((step, index) => (
                 <div key={step.title} className="relative">
-                  <div className="overflow-hidden rounded-xl border bg-background p-2 shadow-xl sm:p-3">
-                    <img
-                      src={step.image}
-                      alt={step.imageAlt}
-                      className="aspect-[4/3] w-full rounded-lg object-cover object-top"
-                      loading="lazy"
-                    />
-                  </div>
-
-                  <div className="mt-6 flex items-start gap-4 lg:flex-col lg:items-center lg:text-center">
-                    {/* Step number */}
-                    <div className="relative shrink-0">
+                  {/* Step number */}
+                  <div className="mb-6 flex items-center gap-4 lg:flex-col lg:items-center lg:text-center">
+                    <div className="relative">
                       <div
                         className={`flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br ${step.color} text-white shadow-lg`}
                       >
                         <step.icon className="h-7 w-7" />
                       </div>
+                      <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background text-sm font-bold shadow">
+                        {index + 1}
+                      </div>
                     </div>
+                  </div>
 
-                    {/* Content */}
-                    <div className="min-w-0 pt-1 lg:pt-0">
-                      <h3 className="text-xl font-semibold">{step.title}</h3>
-                      <p className="mt-3 text-muted-foreground">{step.description}</p>
-                    </div>
+                  {/* Content */}
+                  <div className="lg:text-center">
+                    <h3 className="text-xl font-semibold">{step.title}</h3>
+                    <p className="mt-3 text-muted-foreground">{step.description}</p>
                   </div>
                 </div>
               ))}

@@ -4,17 +4,17 @@ const faqs = [
   {
     question: 'What frameworks does HyperIDE support?',
     answer:
-      'HyperIDE supports Vite, Next.js (both App Router and Pages Router), Remix, Create React App, and Bun-based React projects.',
+      'HyperIDE supports Vite, Next.js (both App Router and Pages Router), Remix, Create React App, and Bun-based projects. Any React project with a standard package.json can be connected.',
   },
   {
-    question: 'Where do I install HyperIDE?',
+    question: 'Do I need Docker installed?',
     answer:
-      'Install the HyperIDE extension from the Visual Studio Marketplace or Open VSX, then open a React workspace in VS Code, Cursor, or another compatible editor.',
+      'Yes, Docker is required. HyperIDE uses Docker to run your projects in isolated containers, ensuring consistent environments and safe code execution.',
   },
   {
     question: 'Can I use my existing project?',
     answer:
-      'Yes. Open your existing repository, start its dev server, and HyperIDE maps the running UI back to components, styles, and source locations.',
+      'Absolutely! Clone your project from Git and HyperIDE will analyze and configure it automatically. Your original repository is never modified — changes are made in a local copy.',
   },
   {
     question: 'How does the AI assistant work?',
@@ -24,7 +24,7 @@ const faqs = [
   {
     question: 'Is my code sent to external servers?',
     answer:
-      'Visual editing runs inside your editor workspace. AI features only send the context needed for the specific request to the configured AI provider.',
+      'AI features require sending code context to AI providers. Check the privacy policy and project settings for configuration options. The editor itself runs locally.',
   },
   {
     question: 'Is HyperIDE free to use?',
