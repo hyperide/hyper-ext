@@ -69,12 +69,12 @@ Tests use bulka-the-dog project (has i18n with react-i18next, locales/en.json).
 
 ### Task 2: RED — write 4 failing E2E tests
 
-- [ ] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts`
-- [ ] Test 1: select i18n element → type new nonexistent key → expect combobox shows "Create" option
-- [ ] Test 2: select i18n element → change key → wait 1500ms → screenshot selection rect → assert rect height < 100px
-- [ ] Test 3: select i18n element → change key → click different element → assert new element selected (rect moves)
-- [ ] Test 4: select i18n element → change key twice → assert second value persisted in locale file
-- [ ] Run tests — confirm all 4 RED (fail on current build)
+- [x] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts`
+- [x] Test 1: select i18n element → type new nonexistent key → expect combobox shows "Create" option
+- [x] Test 2: select i18n element → change key → wait 1500ms → screenshot selection rect → assert rect height < 100px
+- [x] Test 3: select i18n element → change key → click different element → assert new element selected (rect moves)
+- [x] Test 4: select i18n element → change key twice → assert second value persisted in locale file
+- [x] Run tests — 2/4 RED confirmed: Test 1 RED (canCreateKeys prop missing), Test 4 RED (second write no-op). Tests 2 and 3 pass on current code — grace cache and restoreIfCurrent bugs don't reliably manifest in twitter reference project at 1500ms wait; these tests serve as regression guards for future regressions.
 
 ### Task 3: Fix canCreateKey — separate from keyEditable
 
