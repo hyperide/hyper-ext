@@ -313,27 +313,32 @@ describe('generatePreviewContent', () => {
   });
 
   it('should generate valid imports for same-directory files that export the same component name', () => {
+    // Use a non-ui/ path so the entries are not filtered by the isUiPrimitive guard
     const entries: PreviewComponentEntry[] = [
       {
-        componentPath: 'client/components/ui/toaster.tsx',
+        componentPath: 'client/components/notifications/toaster.tsx',
         componentName: 'Toaster',
         exportStyle: 'named',
         sampleExports: [],
-        importPath: './components/ui/toaster',
+        importPath: './components/notifications/toaster',
       },
       {
-        componentPath: 'client/components/ui/sonner.tsx',
+        componentPath: 'client/components/notifications/sonner.tsx',
         componentName: 'Toaster',
         exportStyle: 'named',
         sampleExports: [],
-        importPath: './components/ui/sonner',
+        importPath: './components/notifications/sonner',
       },
     ];
 
     const content = generatePreviewContent(entries);
 
-    expect(content).toContain("import { Toaster as ComponentsUiToaster } from './components/ui/toaster';");
-    expect(content).toContain("import { Toaster as ComponentsUiSonner } from './components/ui/sonner';");
+    expect(content).toContain(
+      "import { Toaster as ComponentsNotificationsToaster } from './components/notifications/toaster';",
+    );
+    expect(content).toContain(
+      "import { Toaster as ComponentsNotificationsSonner } from './components/notifications/sonner';",
+    );
     expect(() =>
       parse(content, {
         sourceType: 'module',

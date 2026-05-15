@@ -159,9 +159,23 @@ function toIdentifierSegment(segment: string): string {
   return /^[0-9]/.test(value) ? `_${value}` : value;
 }
 
+// Shadcn/ui and similar primitive libraries land in components/ui/.
+// These components crash when event-like fallback props are spread into them
+// (Badge passes unknown props to <div> → React warns), and each probe can
+// consume up to 20 s of isPreviewLoaded polling. Exclude them from the
+// componentRegistry so the E2E probing loop only iterates actual project
+// components, keeping total probe time within the test budget.
+function isUiPrimitive(componentPath: string): boolean {
+  return /(\/|^)components\/ui\//.test(componentPath);
+}
+
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
-  const uniqueNames = deriveUniquePrefix(entries, extractImportedBindings(options?.providerWrap?.imports ?? []));
+  const registryEntries = entries.filter((e) => !isUiPrimitive(e.componentPath));
+  const uniqueNames = deriveUniquePrefix(
+    registryEntries,
+    extractImportedBindings(options?.providerWrap?.imports ?? []),
+  );
   const lines: string[] = [];
 
   // 1. React import + InstanceEntry type for multi-instance mode
@@ -174,7 +188,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   }
 
   // Remix SSR mock: import createMemoryRouter + RouterProvider when any entry uses loader data hooks
-  const ssrRoutes = new Set(entries.filter((e) => e.isSSRRoute).map((e) => e.componentPath));
+  const ssrRoutes = new Set(registryEntries.filter((e) => e.isSSRRoute).map((e) => e.componentPath));
   const needsRemixMock = options?.ssrMock?.framework === 'remix' && ssrRoutes.size > 0;
   if (needsRemixMock) {
     lines.push("import { createMemoryRouter, RouterProvider } from 'react-router-dom';");
@@ -197,7 +211,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('');
 
   // 2. Component imports
-  for (const entry of entries) {
+  for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     lines.push(buildImportLine(entry, alias));
   }
@@ -206,7 +220,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 
   // 3. componentRegistry
   lines.push('const componentRegistry: Record<string, PreviewComponent> = {');
-  for (const entry of entries) {
+  for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     lines.push(`  '${entry.componentPath}': toPreviewComponent(${alias}),`);
   }
@@ -215,7 +229,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 
   // 4. sampleRenderMap (SampleDefault only)
   lines.push('const sampleRenderMap: Record<string, React.FC> = {');
-  for (const entry of entries) {
+  for (const entry of registryEntries) {
     if (entry.sampleExports.includes('SampleDefault')) {
       const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
       lines.push(`  '${entry.componentPath}': ${alias}SampleDefault,`);
@@ -226,7 +240,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 
   // 5. sampleRenderersMap (all variants)
   lines.push('const sampleRenderersMap: Record<string, Record<string, React.FC>> = {');
-  for (const entry of entries) {
+  for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     if (entry.sampleExports.length > 0) {
       lines.push(`  '${entry.componentPath}': {`);

@@ -149,11 +149,14 @@ The secondary suspect is generated preview fallback props:
 
 ### Task 3: Implement The Smallest Proven Fix
 
-- [ ] Fix the production root cause identified by Task 1 and covered by Task 2.
-- [ ] Keep the fix at the generator/source or shared page-object layer, not in
+- [x] Fix the production root cause identified by Task 1 and covered by Task 2.
+  Added `isUiPrimitive()` filter in `generatePreviewContent` — entries whose
+  `componentPath` matches `/(\/|^)components\/ui\//` are excluded from
+  componentRegistry, sampleRenderMap, sampleRenderersMap, and imports.
+- [x] Keep the fix at the generator/source or shared page-object layer, not in
   Bulka's generated `__canvas_preview__.tsx`.
-- [ ] Do not increase timeouts as the fix.
-- [ ] Preserve unrelated dirty files and other ralphex lanes.
+- [x] Do not increase timeouts as the fix.
+- [x] Preserve unrelated dirty files and other ralphex lanes.
 
 ### Task 4: Verify Focused Behavior
 
