@@ -20,7 +20,9 @@ mock.module('../services/PreviewProxy', () => ({
     stop = mock();
   },
 }));
-const { DevServerManager } = await import('../services/DevServerManager');
+const { appendScriptCliArgs, buildInstallCommand, DevServerManager, shouldRepairDependencies } = await import(
+  '../services/DevServerManager'
+);
 
 describe('DevServerManager', () => {
   let manager: InstanceType<typeof DevServerManager>;
@@ -254,6 +256,12 @@ describe('DevServerManager', () => {
       )._buildCommand(pm, script);
     }
 
+    function buildCommandWithScriptArgs(pm: 'npm' | 'yarn' | 'pnpm' | 'bun', args: string[]) {
+      const command = buildCommand(manager, pm, 'dev');
+      appendScriptCliArgs(command, pm, args);
+      return command;
+    }
+
     it('builds npm command', () => {
       expect(buildCommand(manager, 'npm', 'dev')).toEqual({ cmd: 'npm', args: ['run', 'dev'] });
     });
@@ -268,6 +276,51 @@ describe('DevServerManager', () => {
 
     it('builds yarn command (no run)', () => {
       expect(buildCommand(manager, 'yarn', 'dev')).toEqual({ cmd: 'yarn', args: ['dev'] });
+    });
+
+    it('uses npm argument separator for script CLI args', () => {
+      expect(buildCommandWithScriptArgs('npm', ['--port', '5173'])).toEqual({
+        cmd: 'npm',
+        args: ['run', 'dev', '--', '--port', '5173'],
+      });
+    });
+
+    it('passes pnpm script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('pnpm', ['--port', '5173'])).toEqual({
+        cmd: 'pnpm',
+        args: ['run', 'dev', '--port', '5173'],
+      });
+    });
+
+    it('passes yarn script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('yarn', ['--port', '5173'])).toEqual({
+        cmd: 'yarn',
+        args: ['dev', '--port', '5173'],
+      });
+    });
+
+    it('passes bun script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('bun', ['--port', '5173'])).toEqual({
+        cmd: 'bun',
+        args: ['run', 'dev', '--port', '5173'],
+      });
+    });
+  });
+
+  describe('dependency repair detection', () => {
+    it('detects missing rolldown optional native binding crashes', () => {
+      expect(shouldRepairDependencies("Cannot find module '@rolldown/binding-darwin-arm64'", [])).toBe(true);
+    });
+
+    it('does not repair ordinary syntax errors', () => {
+      expect(shouldRepairDependencies('Unexpected token in client/pages/Index.tsx', [])).toBe(false);
+    });
+
+    it('builds package-manager install commands for dependency repair', () => {
+      expect(buildInstallCommand('pnpm')).toEqual({ cmd: 'pnpm', args: ['install', '--force'] });
+      expect(buildInstallCommand('npm')).toEqual({ cmd: 'npm', args: ['install'] });
+      expect(buildInstallCommand('yarn')).toEqual({ cmd: 'yarn', args: ['install'] });
+      expect(buildInstallCommand('bun')).toEqual({ cmd: 'bun', args: ['install'] });
     });
   });
 
