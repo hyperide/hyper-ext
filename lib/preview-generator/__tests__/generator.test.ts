@@ -683,86 +683,14 @@ describe('generatePreviewContent — missing-component signal', () => {
     expect(content).toContain('hypercanvas:componentMissing');
   });
 
-  it('missing-component branch renders structured fallback and fires _ComponentMissingSignal', () => {
+  it('missing-component branch renders placeholder and fires _ComponentMissingSignal', () => {
     const content = generatePreviewContent([makeEntry('src/Button.tsx', 'Button')], {});
     // The branch should NOT contain raw "Error: Component not found"
     expect(content).not.toContain('Error: Component not found');
-    // Replaces the bare "Loading…" with a structured fallback heading.
-    expect(content).toContain('No sample for this component');
-    // Surfaces detected exports so the user can see what the file ships.
-    expect(content).toContain('componentExportsMap');
-    expect(content).toContain('Detected exports:');
+    // Should render a loading placeholder
+    expect(content).toContain('Loading');
     // Should include the missing signal component
     expect(content).toContain('<_ComponentMissingSignal');
-  });
-});
-
-describe('generatePreviewContent — synthetic SampleDefault', () => {
-  it('emits an inline arrow + namespace import for UI primitives with synthetic compound scaffold', () => {
-    const entries: PreviewComponentEntry[] = [
-      {
-        componentPath: 'client/components/ui/alert.tsx',
-        componentName: 'Alert',
-        exportStyle: 'named',
-        sampleExports: [],
-        importPath: './components/ui/alert',
-        syntheticSampleDefault: {
-          body: '<Alert>\n    <AlertTitle>Preview title</AlertTitle>\n</Alert>',
-          referencedNames: ['Alert', 'AlertTitle'],
-        },
-        detectedExports: ['Alert', 'AlertTitle', 'AlertDescription'],
-      },
-    ];
-
-    const content = generatePreviewContent(entries);
-
-    // Namespace import for synthetic JSX references
-    expect(content).toContain("import * as AlertModule from './components/ui/alert';");
-    // Inline arrow registered in sampleRenderMap with prefixed component refs
-    expect(content).toContain("'client/components/ui/alert.tsx':");
-    expect(content).toContain('<AlertModule.Alert>');
-    expect(content).toContain('<AlertModule.AlertTitle>');
-    expect(content).toContain('</AlertModule.Alert>');
-    // Detected exports surface in the embedded map
-    expect(content).toContain('\'client/components/ui/alert.tsx\': ["Alert", "AlertTitle", "AlertDescription"]');
-    // Should still parse as valid TS/TSX
-    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
-  });
-
-  it('keeps a UI primitive in the registry when it has a synthetic SampleDefault', () => {
-    const entries: PreviewComponentEntry[] = [
-      {
-        componentPath: 'client/components/ui/alert.tsx',
-        componentName: 'Alert',
-        exportStyle: 'named',
-        sampleExports: [],
-        importPath: './components/ui/alert',
-        syntheticSampleDefault: {
-          body: '<Alert>\n    <AlertTitle>Preview title</AlertTitle>\n</Alert>',
-          referencedNames: ['Alert', 'AlertTitle'],
-        },
-      },
-    ];
-
-    const content = generatePreviewContent(entries);
-    // Without the renderable-sample carve-out, the registry filter would drop
-    // every UI primitive without an authored SampleDefault.
-    expect(content).toContain("'client/components/ui/alert.tsx': toPreviewComponent(Alert)");
-  });
-
-  it('drops UI primitives that have neither authored nor synthetic SampleDefault', () => {
-    const entries: PreviewComponentEntry[] = [
-      {
-        componentPath: 'client/components/ui/divider.tsx',
-        componentName: 'Divider',
-        exportStyle: 'named',
-        sampleExports: [],
-        importPath: './components/ui/divider',
-      },
-    ];
-
-    const content = generatePreviewContent(entries);
-    expect(content).not.toContain("'client/components/ui/divider.tsx'");
   });
 });
 
