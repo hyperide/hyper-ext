@@ -100,6 +100,37 @@ Follow-up:
   - ...
 ```
 
+VS Code command-palette E2E cleanup fix, 2026-04-22 19:05 CEST:
+
+```text
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: f2b144c test(e2e): target visible VS Code command input
+- Trigger:
+  * Full E2E restart was manually stopped after a non-failing but unacceptable
+    cleanup warning:
+    `Hyper: Close Preview — locator.fill: Timeout 30000ms exceeded`.
+  * The warning happened after `new chat created`; the test passed, but cleanup
+    took 31 seconds and polluted output.
+- Root cause:
+  * `CommandPalette.open()` validated that a quick-input was visible, but
+    `runCommand()` then refetched `.quick-input-widget input`, which could match
+    a hidden stale quick-input input.
+  * Playwright then waited the default 30 seconds trying to fill the hidden
+    input.
+- Fix:
+  * `CommandPalette` now targets `.quick-input-widget:visible input`.
+  * `runCommand()` verifies the visible input and bounds `fill()` to 5 seconds.
+- Validation:
+  * Focused E2E passed 2/2 with `--retries=0 --workers=1`:
+    `new chat created|switch between chats`.
+  * The previous `new chat created` cleanup timeout did not recur; teardown
+    `Hyper: Close Preview` finished in about 0.46 seconds.
+  * `git diff --check` passed for `CommandPalette.ts`.
+- Next step:
+  * Restart full E2E from a new log and keep treating cleanup warnings as
+    actionable, even when the test result is technically green.
+```
+
 Bridge bot page-callback spinner fix, 2026-04-22 18:52 CEST:
 
 ```text
