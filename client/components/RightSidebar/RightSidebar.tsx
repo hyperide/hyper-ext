@@ -438,6 +438,9 @@ export default function RightSidebar({
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set to true on unmount so any in-flight i18n write callbacks bail out instead of
+  // dispatching selection / writeInProgress updates to a detached component.
+  const i18nWriteAbortedRef = useRef(false);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -761,20 +764,24 @@ export default function RightSidebar({
           // Detect if user navigates to a different element during the write window.
           // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
           unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
+            if (i18nWriteAbortedRef.current) {
+              unsubscribeNavigation?.();
+              return;
+            }
             if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
               navigationAway = true;
               unsubscribeNavigation?.();
             }
           });
         }
-        // Guard: only restore selection if user hasn't navigated to a different element.
-        // Without this, mid-write navigation gets clobbered by the delayed dispatches.
+        // Guard: only restore selection if user hasn't navigated to a different element
+        // and the component is still mounted.
         // navigationAway is set if the user explicitly selected a different element;
         // HMR-induced transient selectedIds:[] does not set it.
         // Defined before try so catch can call it too (partial write may have triggered
         // HMR even when writeI18nResource throws, e.g. JSON wrote → JSX update failed).
         const restoreIfCurrent = () => {
-          if (!i18nDispatch || navigationAway) return;
+          if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
           const cur = useSharedEditorState.getState().selectedIds;
           if (cur.length === 0 || cur[0] === previousSelectedId) {
             i18nDispatch({ selectedIds: [previousSelectedId] });
@@ -843,12 +850,27 @@ export default function RightSidebar({
             // Detect if user navigates to a different element during the write window.
             // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
             unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
+              if (i18nWriteAbortedRef.current) {
+                unsubscribeNavigation?.();
+                return;
+              }
               if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
                 navigationAway = true;
                 unsubscribeNavigation?.();
               }
             });
           }
+          // Guard: only restore selection if user hasn't navigated away mid-write and
+          // the component is still mounted. Defined before try so catch can call it too
+          // (partial write may have triggered HMR even when writeI18nResource throws,
+          // e.g. JSON wrote → JSX update failed).
+          const restoreIfCurrent = () => {
+            if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
+            const cur = useSharedEditorState.getState().selectedIds;
+            if (cur.length === 0 || cur[0] === previousSelectedId) {
+              i18nDispatch({ selectedIds: [previousSelectedId] });
+            }
+          };
           try {
             await astOps.writeI18nResource({
               library: i18nText.library,
@@ -860,16 +882,6 @@ export default function RightSidebar({
             // Restore selection — locale JSON rewrite triggers HMR which rebuilds the
             // fiber tree, dropping the iframe selection. Mirror key-change pattern.
             if (i18nDispatch) {
-              // Guard: only restore selection if user hasn't navigated away mid-write.
-              // navigationAway is set if the user explicitly selected a different element;
-              // HMR-induced transient selectedIds:[] does not set it.
-              const restoreIfCurrent = () => {
-                if (navigationAway) return;
-                const cur = useSharedEditorState.getState().selectedIds;
-                if (cur.length === 0 || cur[0] === previousSelectedId) {
-                  i18nDispatch({ selectedIds: [previousSelectedId] });
-                }
-              };
               restoreIfCurrent();
               setTimeout(restoreIfCurrent, 250);
               setTimeout(() => {
@@ -881,6 +893,9 @@ export default function RightSidebar({
               }, 800);
             }
           } catch {
+            // Restore selection in case the write partially succeeded (e.g., JSON wrote and
+            // triggered HMR, but something else then threw). Harmless if HMR never fired.
+            restoreIfCurrent();
             unsubscribeNavigation?.();
             if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
               i18nDispatch({ writeInProgress: null });
@@ -1165,8 +1180,11 @@ export default function RightSidebar({
 
   // Clear writeInProgress if component unmounts while a write is in flight.
   // Without this the iframe stays frozen and Zustand retains stale writeInProgress state.
+  // Also set the abort flag so any pending post-write callbacks (restoreIfCurrent,
+  // navigation subscriptions) bail out instead of dispatching to a detached component.
   useEffect(() => {
     return () => {
+      i18nWriteAbortedRef.current = true;
       if (i18nDispatch && useSharedEditorState.getState().writeInProgress) {
         i18nDispatch({ writeInProgress: null });
       }
