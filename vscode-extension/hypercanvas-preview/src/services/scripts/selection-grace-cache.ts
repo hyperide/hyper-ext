@@ -105,7 +105,10 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
  *
  * Cross-file moves should call this for both the source and target paths.
  */
-export function invalidateSelectionGraceCacheForFile(state: SelectionGraceCacheState, filePath: string): void {
+export function invalidateSelectionGraceCacheForFile(
+  state: SelectionGraceCacheState,
+  filePath: string,
+): void {
   if (!filePath) return;
   const prefix = `${filePath}:`;
   for (const id of Array.from(state.rectsByElementId.keys())) {
