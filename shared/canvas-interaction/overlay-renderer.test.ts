@@ -264,3 +264,99 @@ describe('renderPlaceholderOverlays', () => {
     expect(tooltip.style.opacity).toBe('0');
   });
 });
+
+/** Collect all direct children with data-resize-handle attribute. */
+function getResizeHandles(overlay: HTMLDivElement): Array<{ axis: string; el: HTMLElement }> {
+  return Array.from(overlay.children)
+    .map((el) => {
+      const axis = (el as HTMLElement).getAttribute('data-resize-handle');
+      return axis ? { axis, el: el as HTMLElement } : null;
+    })
+    .filter(Boolean) as Array<{ axis: string; el: HTMLElement }>;
+}
+
+describe('renderOverlayRects — resize handles for explicit Tailwind sizes', () => {
+  let container: HTMLDivElement;
+  let elements: Map<string, HTMLDivElement>;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    elements = new Map();
+  });
+
+  it('renders width and height resize handle dots for w-12 h-12 selection rect', () => {
+    // Fixture class: "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary"
+    // w-12 = 48px, h-12 = 48px — both axes have explicit Tailwind size, so both handles must render
+    const rect: OverlayRect = {
+      key: 'select-w12h12',
+      left: 10,
+      top: 20,
+      width: 48,
+      height: 48,
+      type: 'selection',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-w12h12');
+    const handles = getResizeHandles(overlay);
+    const axes = handles.map((h) => h.axis);
+
+    expect(axes).toContain('width');
+    expect(axes).toContain('height');
+  });
+
+  it('renders only width handle when only width is explicit', () => {
+    const rect: OverlayRect = {
+      key: 'select-w-only',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 80,
+      type: 'selection',
+      resizable: { width: true, height: false },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-w-only');
+    const axes = getResizeHandles(overlay).map((h) => h.axis);
+
+    expect(axes).toContain('width');
+    expect(axes).not.toContain('height');
+  });
+
+  it('does not render resize handles for hover rects even with resizable metadata', () => {
+    const rect: OverlayRect = {
+      key: 'hover-w12h12',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 48,
+      type: 'hover',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'hover-w12h12');
+    expect(getResizeHandles(overlay)).toHaveLength(0);
+  });
+
+  it('does not render resize handles for selection rect without explicit size', () => {
+    const rect: OverlayRect = {
+      key: 'select-no-size',
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 50,
+      type: 'selection',
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-no-size');
+    expect(getResizeHandles(overlay)).toHaveLength(0);
+  });
+});

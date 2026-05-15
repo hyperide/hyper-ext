@@ -10,7 +10,7 @@
 
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { parse } from '@babel/parser';
-import { builders as b, type namedTypes } from 'ast-types';
+import { builders as b, namedTypes } from 'ast-types';
 import * as recast from 'recast';
 import type { FileIO } from '../ast/file-io';
 import {
@@ -34,8 +34,13 @@ import {
   detectSSRHooks,
   type ExportStyle,
   extractComponentName,
+  hasComponentExport,
   scanSampleExports,
 } from './scanner';
+
+interface BuildEntryOptions {
+  allowRouterShell?: boolean;
+}
 
 /**
  * Next.js App Router special file names that must not be added to the preview registry.
@@ -105,6 +110,10 @@ function isPreviewIneligibleByName(fileName: string): boolean {
   const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
   const TEST_SUFFIXES = new Set(['test', 'spec', 'stories']);
   return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg));
+}
+
+function isExplicitWebAppShell(componentPath: string): boolean {
+  return /^App\.web\.[jt]sx$/.test(basename(componentPath));
 }
 
 export interface PreviewFileManagerConfig {
@@ -479,7 +488,10 @@ export class PreviewFileManager {
         isFrameworkReserved(basename(e.componentPath)) ||
         isPreviewIneligibleByName(basename(e.componentPath)) ||
         this.hasPathCaseMismatch(e.componentPath, canonicalPaths);
-      if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate) return existingContent;
+      const needsSampleUpdate = await this.hasSampleExportMismatch(componentPaths, existingEntries, canonicalPaths);
+      if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate && !needsSampleUpdate) {
+        return existingContent;
+      }
 
       // Stale entries found — regenerate excluding reserved files
       const cleanPaths = existingEntries
@@ -508,6 +520,35 @@ export class PreviewFileManager {
     return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
   }
 
+  private async hasSampleExportMismatch(
+    componentPaths: string[],
+    existingEntries: PreviewComponentEntry[],
+    canonicalPaths: Map<string, string>,
+  ): Promise<boolean> {
+    const entryByPath = new Map(
+      existingEntries.map((entry) => [this.canonicalizeComponentPath(entry.componentPath, canonicalPaths), entry]),
+    );
+
+    for (const componentPath of componentPaths) {
+      const canonicalPath = this.canonicalizeComponentPath(componentPath, canonicalPaths);
+      const entry = entryByPath.get(canonicalPath);
+      if (!entry) continue;
+
+      let sourceCode: string;
+      try {
+        sourceCode = await this.io.readFile(join(this.projectRoot, canonicalPath));
+      } catch {
+        continue;
+      }
+
+      const currentSamples = scanSampleExports(sourceCode);
+      if (currentSamples.length !== entry.sampleExports.length) return true;
+      if (currentSamples.some((sample) => !entry.sampleExports.includes(sample))) return true;
+    }
+
+    return false;
+  }
+
   /** Init: scan all TSX/TS files and generate a complete preview file. */
   private async _initPreviewFile(
     previewPath: string,
@@ -522,7 +563,9 @@ export class PreviewFileManager {
     // Build entries for explicitly requested paths first
     const requestedEntries: PreviewComponentEntry[] = [];
     for (const compPath of canonicalRequestedPaths) {
-      const entry = await this.buildEntry(compPath, previewDir);
+      const entry = await this.buildEntry(compPath, previewDir, {
+        allowRouterShell: isExplicitWebAppShell(compPath),
+      });
       if (entry) requestedEntries.push(entry);
     }
 
@@ -697,7 +740,9 @@ export class PreviewFileManager {
 
     const entries: PreviewComponentEntry[] = [];
     for (const compPath of componentPaths) {
-      const entry = await this.buildEntry(compPath, previewDir);
+      const entry = await this.buildEntry(compPath, previewDir, {
+        allowRouterShell: isExplicitWebAppShell(compPath),
+      });
       if (entry) entries.push(entry);
     }
 
@@ -721,7 +766,11 @@ export class PreviewFileManager {
   }
 
   /** Build a PreviewComponentEntry by reading the component source */
-  private async buildEntry(componentPath: string, previewDir: string): Promise<PreviewComponentEntry | null> {
+  private async buildEntry(
+    componentPath: string,
+    previewDir: string,
+    options: BuildEntryOptions = {},
+  ): Promise<PreviewComponentEntry | null> {
     // Guard against path traversal — componentPath must stay within projectRoot
     if (componentPath.includes('..')) {
       console.warn(`[PreviewFileManager] Skipping suspicious path: ${componentPath}`);
@@ -768,11 +817,14 @@ export class PreviewFileManager {
       // These files wrap the whole app with a router provider and, when included alongside
       // the page components they import, cause a Vite/ESM temporal dead zone (TDZ) error
       // in the generated __canvas_preview__.tsx registry.
-      if (detectRouterShell(sourceCode)) {
+      if (detectRouterShell(sourceCode) && !options.allowRouterShell) {
         return null;
       }
 
       componentName = extractComponentName(sourceCode, fileName);
+      if (!hasComponentExport(sourceCode, componentName)) {
+        return null;
+      }
       sampleExports = scanSampleExports(sourceCode);
       exportStyle = detectExportStyle(sourceCode, componentName);
       if (this.ssrMock?.framework === 'remix') {
@@ -1063,19 +1115,42 @@ export class PreviewFileManager {
    * Uses recast for AST editing (preserves formatting). Tags with @hyperide-managed.
    * Only for Vite SPA JSX router (App Shell mode, no wrapper).
    */
-  async patchRouterConfig(routerFilePath: string): Promise<void> {
+  async patchRouterConfig(routerFilePath: string, onBeforeWrite?: () => void): Promise<boolean> {
     const source = await this.io.readFile(routerFilePath);
-
-    // Idempotency check — already patched
-    if (source.includes('@hyperide-managed')) return;
-
     const ast = recast.parse(source, { parser: RECAST_PARSER });
+
+    const isRouteWithPath = (child: namedTypes.Node, routePath: string): boolean => {
+      if (!namedTypes.JSXElement.check(child)) return false;
+      return (
+        child.openingElement.name.type === 'JSXIdentifier' &&
+        child.openingElement.name.name === 'Route' &&
+        (child.openingElement.attributes ?? []).some(
+          (attr) =>
+            attr.type === 'JSXAttribute' &&
+            attr.name.type === 'JSXIdentifier' &&
+            attr.name.name === 'path' &&
+            attr.value?.type === 'StringLiteral' &&
+            attr.value.value === routePath,
+        )
+      );
+    };
 
     let patched = false;
     recast.visit(ast, {
       visitJSXElement(path) {
         const el = path.node;
         if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
+          if (!el.children) el.children = [];
+          const existingPreviewRouteIndex = el.children.findIndex((child) => isRouteWithPath(child, '/test-preview'));
+          const existingCatchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
+
+          if (
+            existingPreviewRouteIndex >= 0 &&
+            (existingCatchAllIndex === -1 || existingPreviewRouteIndex < existingCatchAllIndex)
+          ) {
+            return false;
+          }
+
           const newRoute = b.jsxElement(
             b.jsxOpeningElement(
               b.jsxIdentifier('Route'),
@@ -1093,8 +1168,16 @@ export class PreviewFileManager {
             null,
             [],
           );
-          if (!el.children) el.children = [];
-          el.children.push(b.jsxText('\n        '), newRoute, b.jsxText('\n      '));
+          if (existingPreviewRouteIndex >= 0) {
+            el.children = el.children.filter((_, index) => index !== existingPreviewRouteIndex);
+          }
+          const routeNodes = [b.jsxText('\n        '), newRoute, b.jsxText('\n      ')];
+          const catchAllIndex = el.children.findIndex((child) => isRouteWithPath(child, '*'));
+          if (catchAllIndex >= 0) {
+            el.children.splice(catchAllIndex, 0, ...routeNodes);
+          } else {
+            el.children.push(...routeNodes);
+          }
           patched = true;
           return false;
         }
@@ -1104,7 +1187,7 @@ export class PreviewFileManager {
 
     if (!patched) {
       console.warn('[PreviewFileManager] Could not find <Routes> in', routerFilePath);
-      return;
+      return false;
     }
 
     // Add CanvasPreview import at top — path relative to router file directory
@@ -1115,7 +1198,10 @@ export class PreviewFileManager {
 
     const previewImport = `import CanvasPreview from '${importPath}'; // @hyperide-managed\n`;
     const output = recast.print(ast).code;
-    await this.io.writeFile(routerFilePath, previewImport + output);
+    const alreadyImportsPreview = await this._hasImport(routerFilePath, importPath);
+    onBeforeWrite?.();
+    await this.io.writeFile(routerFilePath, alreadyImportsPreview ? output : previewImport + output);
+    return true;
   }
 
   /**
@@ -1169,9 +1255,13 @@ export class PreviewFileManager {
    *   App Shell mode: './__canvas_preview__' (component registry, no createRoot)
    *   Isolated mode: './__canvas_preview_standalone__' (has createRoot + PreviewWrapper)
    */
-  async patchEntryFile(entryFilePath: string, importTarget = './__canvas_preview__'): Promise<void> {
+  async patchEntryFile(
+    entryFilePath: string,
+    importTarget = './__canvas_preview__',
+    onBeforeWrite?: () => void,
+  ): Promise<boolean> {
     const source = await this.io.readFile(entryFilePath);
-    if (source.includes('@hyperide-managed')) return;
+    if (source.includes('@hyperide-managed')) return false;
 
     const ast = recast.parse(source, { parser: RECAST_PARSER });
     let patched = false;
@@ -1300,11 +1390,14 @@ export class PreviewFileManager {
         importBody = `import("${importTarget}").then(function(m){var C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){var el=document.getElementById("root")||document.body;mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
       }
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
+      onBeforeWrite?.();
       await this.io.writeFile(entryFilePath, appendedSource);
-      return;
+      return true;
     }
 
+    onBeforeWrite?.();
     await this.io.writeFile(entryFilePath, recast.print(ast).code);
+    return true;
   }
 
   /**

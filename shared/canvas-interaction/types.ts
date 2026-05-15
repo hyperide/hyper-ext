@@ -33,6 +33,8 @@ export interface OverlayRect {
   width: number;
   height: number;
   type: 'selection' | 'hover';
+  /** Present when the selected element has an explicit Tailwind/CSS size on that axis */
+  resizable?: { width: boolean; height: boolean };
 }
 
 export interface PlaceholderRect {
