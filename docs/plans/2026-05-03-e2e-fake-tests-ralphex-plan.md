@@ -161,32 +161,32 @@ Highest-risk examples:
 
 ### Task 5: Fix Screenshot And Visual Assertions
 
-- [ ] Review `visual-regression.spec.ts` preview cases that currently capture
+- [x] Review `visual-regression.spec.ts` preview cases that currently capture
   fallback/default states for board mode, zoom, selection overlays, resize
   handles, spacing guides, and diamond widget.
-- [ ] Add precondition assertions before each visual snapshot so the snapshot is
+- [x] Add precondition assertions before each visual snapshot so the snapshot is
   only taken after the intended state is active.
-- [ ] For resize handles, require actual handle locators before snapshotting.
-- [ ] For zoom cases, interact with real zoom controls or mark the test as
+- [x] For resize handles, require actual handle locators before snapshotting.
+- [x] For zoom cases, interact with real zoom controls or mark the test as
   `fixme` with source proof that controls/test IDs are missing.
-- [ ] For raw screenshot tests in `mcp-tools.spec.ts`, assert content or route
+- [x] For raw screenshot tests in `mcp-tools.spec.ts`, assert content or route
   them into diagnostics-only coverage; buffer length alone is not acceptable.
-- [ ] Decide whether `capture-bulka.spec.ts` and `style-source-screens.spec.ts`
+- [x] Decide whether `capture-bulka.spec.ts` and `style-source-screens.spec.ts`
   belong in normal CI. If they are diagnostics only, mark or move them so they
   do not count as regression coverage.
 
 ### Task 6: Add Guardrail Tests Or Static Checks
 
-- [ ] Add a focused E2E harness unit/static test that fails on newly introduced
+- [x] Add a focused E2E harness unit/static test that fails on newly introduced
   `test.skip(true, ...)` in acceptance specs unless the file is explicitly
   allowlisted with a reason.
-- [ ] Add checks for `expect(true).toBe(true)` and liveness-only "does not
+- [x] Add checks for `expect(true).toBe(true)` and liveness-only "does not
   crash" tests in the critical canvas acceptance specs.
-- [ ] Add or update helper tests for `PreviewCanvas` selection helpers so tests
+- [x] Add or update helper tests for `PreviewCanvas` selection helpers so tests
   cannot accidentally treat CSS selectors as stable element IDs.
-- [ ] Keep allowlists narrow and documented in code; do not allowlist whole
+- [x] Keep allowlists narrow and documented in code; do not allowlist whole
   directories.
-- [ ] Run the new guardrail tests.
+- [x] Run the new guardrail tests. [4 pass, 0 fail]
 
 ### Task 7: Verification And Reporting
 
