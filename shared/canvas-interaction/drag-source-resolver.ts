@@ -95,32 +95,43 @@ export function resolveDragSource(
 }
 
 /**
- * Walk up the DOM from `el` until finding an element that has at least one sibling
- * with a resolvable source location. Returns that element, or the original `el` if
- * no such ancestor is found before reaching document.body.
+ * Walk up the DOM from `el` until finding the "card-level" element — the outermost
+ * element that has at least one meaningful independent sibling.
  *
- * Purpose: resolve to the outermost "card-level" element rather than inner wrappers.
- * Example: in "grid > card > inner-div > text", clicking inner-div walks up to card
- * because card has siblings (other cards) with source locations, but inner-div's only
- * sibling is a decorative aria-hidden span with no source.
+ * Uses fiber _debugSource as fallback when source maps are cold (avoids stopping too
+ * early on decorative-only levels). Requires ≥2 source siblings OR 1 same-tag sibling
+ * to avoid treating compound blocks (h3 + p form a single item) as list levels.
  */
 function walkToMeaningfulDraggable(
   el: HTMLElement,
   getSourceLocation: (el: HTMLElement) => SourceLocation | null,
 ): HTMLElement {
+  // Falls back to fiber _debugSource when source maps are cold.
+  const hasSource = (e: HTMLElement): boolean => {
+    if (getSourceLocation(e) !== null) return true;
+    const fiber = getFiberFromDOM(e);
+    return findNearestSourceLocation(fiber) !== null;
+  };
+
   let cur: HTMLElement = el;
   while (cur.parentElement && cur.parentElement !== document.body) {
     const rawChildren = cur.parentElement.children;
     // Guard: some test environments stub parentElement without children (e.g. bare BODY sentinels).
     if (!rawChildren) break;
-    const siblings = Array.from(rawChildren) as HTMLElement[];
-    const hasMeaningfulSibling = siblings.some((s) => s !== cur && getSourceLocation(s) !== null);
-    if (hasMeaningfulSibling) {
+    const sourceSiblings = Array.from(rawChildren).filter(
+      (s) => s !== cur && hasSource(s as HTMLElement),
+    ) as HTMLElement[];
+    // Stop when siblings look like independent list items:
+    //  – ≥2 source-bearing siblings (real list with 3+ elements), OR
+    //  – 1 sibling with the same tag (2-item list of same-type elements, e.g. two <div>s)
+    // This avoids stopping at compound blocks (h3 + p) where siblings differ in tag.
+    const isListLevel =
+      sourceSiblings.length >= 2 || (sourceSiblings.length === 1 && sourceSiblings[0].tagName === cur.tagName);
+    if (isListLevel) {
       return cur;
     }
-    // No source-bearing sibling — go one level up if parent has a source (otherwise stop).
-    const parentSrc = getSourceLocation(cur.parentElement);
-    if (!parentSrc) break;
+    // Walk up if parent has a source (otherwise stop — no further JSX context).
+    if (!hasSource(cur.parentElement)) break;
     cur = cur.parentElement;
   }
   return cur;

@@ -236,8 +236,14 @@ export class StyleReadService {
       const layout = await discoverLayout(this._workspaceRoot, namespace, activeLocale, this._fileIO);
       if (!layout) return [];
 
+      // Merged single-file format (translations.ts/js): data already parsed by discoverLayout
+      if (layout.mergedData) {
+        const localeData = layout.mergedData[activeLocale] ?? layout.mergedData[layout.availableLocales[0]];
+        return localeData ? extractLeafKeys(localeData) : [];
+      }
+
       const filePath = layout.getLocaleFilePath(activeLocale);
-      // TS/JS locale files are not supported for JSON key extraction
+      // TS/JS locale files without mergedData are not supported for JSON key extraction
       if (filePath.endsWith('.ts') || filePath.endsWith('.js')) return [];
 
       let content: string;
