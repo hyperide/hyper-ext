@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
