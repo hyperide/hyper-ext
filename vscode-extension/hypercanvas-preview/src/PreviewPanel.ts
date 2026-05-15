@@ -40,7 +40,9 @@ function toPascalIdentifier(value: string): string {
 }
 
 export function normalizeSampleComponentName(componentName: string): string {
-  if (isValidJsxComponentName(componentName)) return componentName;
+  // React components must start with an uppercase letter; reject lowercase-leading names
+  // even if they are technically valid JS identifiers (e.g. Next.js "page", Remix "route").
+  if (isValidJsxComponentName(componentName) && /^[A-Z]/.test(componentName)) return componentName;
   const fileName = componentName.split(/[\\/]/).pop() ?? componentName;
   const candidate = toPascalIdentifier(fileName);
   return isValidJsxComponentName(candidate) ? candidate : 'Component';
