@@ -119,6 +119,6 @@ Acceptance: Test passes, combobox shows keys from locale file.
 
 ### Task 8: Telegram Handoff
 
-- [ ] Send summary: what was implemented, test command + result, any remaining risk.
-- [ ] Send screenshot of combobox showing keys.
-- [ ] Do not repeat in later messages once done.
+- [x] Send summary: what was implemented, test command + result, any remaining risk.
+- [x] Send screenshot of combobox showing keys.
+- [x] Do not repeat in later messages once done.

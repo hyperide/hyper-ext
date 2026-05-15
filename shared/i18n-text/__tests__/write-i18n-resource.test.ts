@@ -215,7 +215,6 @@ describe('missing locale file behavior', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('missing-locale-file');
-    // No new file was created for 'en' locale
     expect(fileIO.getFile(`${ROOT}/locales/en.json`)).toBeUndefined();
   });
 
@@ -236,6 +235,27 @@ describe('missing locale file behavior', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('missing-locale-file');
+    expect(fileIO.getFile(`${ROOT}/locales/en.json`)).toBeUndefined();
+  });
+
+  it('returns error without writing when no namespaced locale files are found at all', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/src/App.tsx`]: `export default function App() { return <div /> }`,
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'button.save',
+      namespace: 'common',
+      activeLocale: 'en',
+      newText: 'Save',
+      fileIO,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('missing-locale-file');
+    expect(fileIO.getFile(`${ROOT}/locales/en/common.json`)).toBeUndefined();
   });
 });
 
@@ -271,6 +291,34 @@ describe('parse error in locale file', () => {
 // ---------------------------------------------------------------------------
 
 describe('read-only filesystem', () => {
+  it('returns io-error when an existing locale file cannot be read', async () => {
+    class UnreadableFileIO extends MemoryFileIO {
+      override async readFile(absolutePath: string): Promise<string> {
+        if (absolutePath.endsWith('/locales/en.json')) {
+          throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+        }
+        return super.readFile(absolutePath);
+      }
+    }
+
+    const fileIO = new UnreadableFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'greeting',
+      activeLocale: 'en',
+      newText: 'Hi',
+      fileIO,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('io-error');
+    expect(fileIO.getFile(`${ROOT}/locales/en.json`)).toBe(JSON.stringify({ greeting: 'Hello' }));
+  });
+
   it('returns read-only error when writeFile throws', async () => {
     class ReadOnlyFileIO extends MemoryFileIO {
       override async writeFile(): Promise<void> {
@@ -404,11 +452,11 @@ describe('prototype pollution prevention', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Unsupported TS/JS locale format — read-only, do not attempt eval
+// TS/JS locale format — AST object-literal writes
 // ---------------------------------------------------------------------------
 
-describe('unsupported TS/JS locale format', () => {
-  it('returns unsupported-format error and does not write TS locale files', async () => {
+describe('TS/JS locale format', () => {
+  it('updates per-locale TS object files', async () => {
     const fileIO = new MemoryFileIO({
       [`${ROOT}/messages/en.ts`]: `export default { greeting: 'Hello from TS' } as const;`,
     });
@@ -422,9 +470,150 @@ describe('unsupported TS/JS locale format', () => {
       fileIO,
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('unsupported-format');
-    // Original TS file content untouched
-    expect(fileIO.getFile(`${ROOT}/messages/en.ts`)).toContain('Hello from TS');
+    expect(result.success).toBe(true);
+    expect(fileIO.getFile(`${ROOT}/messages/en.ts`)).toContain('Updated greeting');
+  });
+
+  it('updates merged translations.ts object files', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/client/lib/translations.ts`]: `export const translations = { en: { brand: { name: 'Bulka' } }, ru: { brand: { name: 'Булка' } } };`,
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'custom',
+      key: 'brand.name',
+      activeLocale: 'en',
+      newText: 'Bagel',
+      fileIO,
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.getFile(`${ROOT}/client/lib/translations.ts`) ?? '';
+    expect(written).toContain('Bagel');
+    expect(written).toContain('Булка');
+  });
+
+  // -------------------------------------------------------------------------
+  // Task 1 (HYP merged-TS write) — bulka-the-dog shape (ru/rs/en + typed
+  // `Translations` interface), creating a brand-new top-level key inside
+  // the active locale of a merged translations.ts file.
+  //
+  // Reality (verified by these tests on current main):
+  //  - The ASCII new-key insertion path WORKS end-to-end through
+  //    writeI18nResource → writeTsLocaleValue → setStringProperty.
+  //  - The user-reported "q does not appear" is therefore not in this layer
+  //    — Task 3 e2e will catch any integration-level breakage.
+  //  - HOWEVER: babel-generator default escapes non-ASCII string values
+  //    inserted via `t.stringLiteral(...)` (e.g. "Бублик" → "\\u0411…").
+  //    Pre-existing string literals are preserved verbatim by retainLines.
+  //    The non-ASCII insertion test below is RED on current main and fixed
+  //    in Task 2.
+  // -------------------------------------------------------------------------
+
+  it('inserts a new top-level ASCII key into the active locale of merged translations.ts', async () => {
+    const original = [
+      `export type Language = "ru" | "rs" | "en";`,
+      ``,
+      `export interface Translations {`,
+      `  ru: Record<string, any>;`,
+      `  rs: Record<string, any>;`,
+      `  en: Record<string, any>;`,
+      `}`,
+      ``,
+      `export const translations: Translations = {`,
+      `  ru: { brand: { name: "Булка" } },`,
+      `  rs: { brand: { name: "Bulka (rs)" } },`,
+      `  en: { brand: { name: "Bun" } },`,
+      `};`,
+      ``,
+    ].join('\n');
+
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/client/lib/translations.ts`]: original,
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'custom',
+      key: 'q',
+      activeLocale: 'ru',
+      newText: 'Q!',
+      fileIO,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.filePath).toBe(`${ROOT}/client/lib/translations.ts`);
+
+    const written = fileIO.getFile(`${ROOT}/client/lib/translations.ts`) ?? '';
+    // The new key must appear inside the ru sub-object and carry the new value
+    expect(written).toMatch(/ru\s*:\s*\{[\s\S]*?q\s*:\s*"Q!"[\s\S]*?\},/);
+    // Other locales / existing keys must remain intact (and unescaped)
+    expect(written).toContain('Булка');
+    expect(written).toContain('Bun');
+    expect(written).toContain('Bulka (rs)');
+  });
+
+  it('inserts a nested new ASCII key into the active locale of merged translations.ts', async () => {
+    const original = [
+      `export const translations = {`,
+      `  ru: { brand: { name: "Булка" } },`,
+      `  en: { brand: { name: "Bun" } },`,
+      `};`,
+      ``,
+    ].join('\n');
+
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/client/lib/translations.ts`]: original,
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'custom',
+      key: 'e2e.merged.newkey',
+      activeLocale: 'ru',
+      newText: 'MERGED NEW',
+      fileIO,
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.getFile(`${ROOT}/client/lib/translations.ts`) ?? '';
+    expect(written).toContain('MERGED NEW');
+    // Pre-existing non-ASCII content untouched
+    expect(written).toContain('Булка');
+    expect(written).toContain('Bun');
+  });
+
+  // RED on current main: babel-generator escapes non-ASCII into \uXXXX when
+  // emitting a freshly-constructed t.stringLiteral. Bulka-the-dog uses plain
+  // Cyrillic in its translations.ts; emitting "Бул…" would
+  // diverge visually and confuse anyone diffing the file. Task 2 fixes this.
+  it('preserves non-ASCII characters when inserting a new key', async () => {
+    const original = [
+      `export const translations = {`,
+      `  ru: { brand: { name: "Булка" } },`,
+      `  en: { brand: { name: "Bun" } },`,
+      `};`,
+      ``,
+    ].join('\n');
+
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/client/lib/translations.ts`]: original,
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'custom',
+      key: 'greeting',
+      activeLocale: 'ru',
+      newText: 'Привет, Бублик',
+      fileIO,
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.getFile(`${ROOT}/client/lib/translations.ts`) ?? '';
+    // Non-ASCII must round-trip verbatim, not as \u escapes (any code-point block)
+    expect(written).toContain('Привет, Бублик');
+    expect(written).not.toMatch(/\\u[0-9a-fA-F]{4}/);
   });
 });

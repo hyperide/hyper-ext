@@ -46,12 +46,12 @@ New i18n key creation is also unimplemented.
 
 ## Acceptance Criteria
 
-- [ ] `I18nAdapter` interface defined and all 3 adapters implemented
-- [ ] `getAvailableKeys` refactored to use adapters (same behavior, cleaner code)
-- [ ] `onKeyChange` calls `adapter.writeKey` and updates JSX source
-- [ ] PI-7-I18N-6 e2e test passes: key change persists in file after combobox selection
-- [ ] All existing PI-7-I18N-* tests still pass
-- [ ] TypeScript strict: no `any`, no `as unknown as`
+- [x] `I18nAdapter` interface defined and all 3 adapters implemented
+- [x] `getAvailableKeys` refactored to use adapters (same behavior, cleaner code)
+- [x] `onKeyChange` calls `adapter.writeKey` and updates JSX source
+- [x] PI-7-I18N-6 e2e test passes: key change persists in file after combobox selection
+- [x] All existing PI-7-I18N-* tests still pass
+- [x] TypeScript strict: no `any`, no `as unknown as`
 
 ## Notes
 
@@ -99,5 +99,5 @@ New i18n key creation is also unimplemented.
 
 ### Task 6: Build extension and verify existing tests pass
 
-- [ ] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
-- [ ] Confirm PI-7-I18N-1 through PI-7-I18N-5 tests still green (run in Docker: `HYPER_E2E_SHARDS=1 bun run test:docker`).
+- [x] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
+- [x] Confirm PI-7-I18N-1 through PI-7-I18N-5 tests still green (run in Docker: `HYPER_E2E_SHARDS=1 bun run test:docker`).

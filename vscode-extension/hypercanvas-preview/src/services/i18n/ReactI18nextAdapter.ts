@@ -7,8 +7,8 @@
 
 import type { FileIO } from '@lib/ast/file-io';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
-import type { I18nAdapter } from './I18nAdapter';
 import { extractLeafKeys } from './extract-leaf-keys';
+import type { I18nAdapter } from './I18nAdapter';
 
 type AdapterFileIO = Pick<FileIO, 'readFile' | 'access'> & { listFiles?: FileIO['listFiles'] };
 
@@ -67,9 +67,5 @@ export class ReactI18nextAdapter implements I18nAdapter {
     } catch {
       return null;
     }
-  }
-
-  async writeKey(_elementId: string, _newKey: string): Promise<void> {
-    throw new Error('ReactI18nextAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)');
   }
 }
