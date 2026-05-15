@@ -1,6 +1,6 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
-import { type CSSProperties, forwardRef, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
@@ -26,7 +26,7 @@ interface ContextMenuTarget {
 }
 
 interface CanvasElementContextMenuProps {
-  children?: ReactNode;
+  children?: React.ReactNode;
   selectedIds: string[];
   iframeLoadCounter?: number;
   boardModeActive?: boolean;
@@ -52,6 +52,7 @@ export function CanvasElementContextMenu({
   selectedIds,
   iframeLoadCounter = 0,
   boardModeActive = false,
+  activeDesignInstanceId = null,
   projectId,
   onInstanceEdit,
   onInstanceCopy,
@@ -792,48 +793,50 @@ export function CanvasElementContextMenu({
 // Menu shell with viewport boundary handling
 // ============================================================================
 
-const Menu = forwardRef<HTMLDivElement, { children: ReactNode; style?: CSSProperties }>(({ children, style }, ref) => {
-  const internalRef = useRef<HTMLDivElement | null>(null);
-  const [adjustedStyle, setAdjustedStyle] = useState(style);
+const Menu = React.forwardRef<HTMLDivElement, { children: React.ReactNode; style?: React.CSSProperties }>(
+  ({ children, style }, ref) => {
+    const internalRef = useRef<HTMLDivElement | null>(null);
+    const [adjustedStyle, setAdjustedStyle] = useState(style);
 
-  useEffect(() => {
-    if (!internalRef.current || !style) return;
+    useEffect(() => {
+      if (!internalRef.current || !style) return;
 
-    const menu = internalRef.current;
-    const rect = menu.getBoundingClientRect();
-    const padding = 8;
+      const menu = internalRef.current;
+      const rect = menu.getBoundingClientRect();
+      const padding = 8;
 
-    let { left, top } = style as { left: number; top: number };
+      let { left, top } = style as { left: number; top: number };
 
-    if (left + rect.width > window.innerWidth - padding) {
-      left = window.innerWidth - rect.width - padding;
-    }
-    if (top + rect.height > window.innerHeight - padding) {
-      top = window.innerHeight - rect.height - padding;
-    }
-    left = Math.max(padding, left);
-    top = Math.max(padding, top);
+      if (left + rect.width > window.innerWidth - padding) {
+        left = window.innerWidth - rect.width - padding;
+      }
+      if (top + rect.height > window.innerHeight - padding) {
+        top = window.innerHeight - rect.height - padding;
+      }
+      left = Math.max(padding, left);
+      top = Math.max(padding, top);
 
-    setAdjustedStyle({ left, top });
-  }, [style]);
+      setAdjustedStyle({ left, top });
+    }, [style]);
 
-  return (
-    <div
-      ref={(node) => {
-        internalRef.current = node;
-        if (typeof ref === 'function') ref(node);
-        else if (ref) ref.current = node;
-      }}
-      role="menu"
-      data-role="context-menu"
-      data-testid={TID.preview.contextMenu}
-      className="fixed z-[1100] min-w-[256px] rounded-md border border-border bg-popover p-1 shadow-md"
-      style={adjustedStyle}
-    >
-      {children}
-    </div>
-  );
-});
+    return (
+      <div
+        ref={(node) => {
+          internalRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
+        role="menu"
+        data-role="context-menu"
+        data-testid={TID.preview.contextMenu}
+        className="fixed z-[1100] min-w-[256px] rounded-md border border-border bg-popover p-1 shadow-md"
+        style={adjustedStyle}
+      >
+        {children}
+      </div>
+    );
+  },
+);
 Menu.displayName = 'Menu';
 
 function MenuSeparator() {
@@ -846,7 +849,7 @@ function MenuItem({
   disabled = false,
   'data-testid': testId,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   'data-testid'?: string;

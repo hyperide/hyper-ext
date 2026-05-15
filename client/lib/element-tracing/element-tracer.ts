@@ -5,7 +5,7 @@
  * Assumptions: Adapter and transport are injected; adapter matches the current framework
  */
 
-import { resolveCallSiteTarget } from '../../../shared/canvas-interaction/resolve-source';
+import { resolveCallSiteSource } from '../../../shared/canvas-interaction/resolve-source';
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
 import { getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
 import type {
@@ -68,12 +68,12 @@ export class ElementTracer implements TracingResolver {
 
     // Resolve to call site for imported component internals (shared logic)
     const fiber = getFiberFromDOM(element);
-    const resolvedTarget = resolveCallSiteTarget(source, fiber, this.renderedFile, itemIndex);
-    const resolvedResult = this._findInNodeMaps(resolvedTarget.source, resolvedTarget.itemIndex);
+    const resolvedSource = resolveCallSiteSource(source, fiber, this.renderedFile);
+    const resolvedResult = this._findInNodeMaps(resolvedSource, itemIndex);
     if (resolvedResult) return resolvedResult;
 
     // Fallback: try direct source if resolved source didn't match
-    if (resolvedTarget.source !== source) {
+    if (resolvedSource !== source) {
       const directResult = this._findInNodeMaps(source, itemIndex);
       if (directResult) return directResult;
     }

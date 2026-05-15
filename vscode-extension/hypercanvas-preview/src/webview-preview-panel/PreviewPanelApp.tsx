@@ -35,14 +35,6 @@ export function PreviewPanelApp() {
   );
 }
 
-export function getPreviewShellScreen(
-  devServerRunning: boolean,
-  disconnected: boolean,
-): 'preview' | 'start' | 'disconnected' {
-  if (devServerRunning) return 'preview';
-  return disconnected ? 'disconnected' : 'start';
-}
-
 // ============================================================================
 // Preview Content
 // ============================================================================
@@ -70,9 +62,6 @@ function PreviewContent() {
     componentError,
     clearComponentError,
     handleStartDevServer,
-    autoStart,
-    handleAutoStartChange,
-    handleOpenAutoStartSettings,
   } = usePreviewBridge({
     iframeEl,
     canvas,
@@ -107,33 +96,18 @@ function PreviewContent() {
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
 
-  const shellScreen = getPreviewShellScreen(devServerRunning, disconnected);
-
-  // Dev server stopped after a successful connection — keep a dedicated disconnected
-  // shell instead of relying on a transient blend of banner + stale iframe content.
-  if (shellScreen === 'disconnected') {
+  // Dev server not running — show start button (with reconnecting banner if was connected)
+  if (!devServerRunning) {
     return (
       <>
-        <ReconnectingBanner />
-        <DisconnectedPreviewScreen onStart={handleStartDevServer} />
+        {disconnected && <ReconnectingBanner />}
+        <StartDevServerScreen onStart={handleStartDevServer} />
       </>
     );
   }
 
-  // Dev server not running before any successful connection — show initial start screen.
-  if (shellScreen === 'start') {
-    return (
-      <StartDevServerScreen
-        onStart={handleStartDevServer}
-        autoStart={autoStart}
-        onAutoStartChange={handleAutoStartChange}
-        onOpenSettings={handleOpenAutoStartSettings}
-      />
-    );
-  }
-
   return (
-    <div data-testid={TID.preview.surface} style={surfaceStyle}>
+    <>
       {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       <div style={wrapperStyle}>
         <iframe
@@ -197,7 +171,7 @@ function PreviewContent() {
           onContinueReadonly={() => setReadonlyDismissed(true)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -205,45 +179,11 @@ function PreviewContent() {
 // Sub-components
 // ============================================================================
 
-function StartDevServerScreen({
-  onStart,
-  autoStart,
-  onAutoStartChange,
-  onOpenSettings,
-}: {
-  onStart: () => void;
-  autoStart: boolean;
-  onAutoStartChange: (value: boolean) => void;
-  onOpenSettings: () => void;
-}) {
+function StartDevServerScreen({ onStart }: { onStart: () => void }) {
   return (
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
-      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
-        Start Dev Server
-      </button>
-      <label style={autoStartLabelStyle}>
-        <input
-          type="checkbox"
-          checked={autoStart}
-          onChange={(e) => onAutoStartChange(e.target.checked)}
-          style={{ marginRight: 6, cursor: 'pointer' }}
-        />
-        Start server automatically
-      </label>
-      <button type="button" style={settingsLinkStyle} onClick={onOpenSettings}>
-        Open in Settings: Hyper Canvas › Auto-start
-      </button>
-    </div>
-  );
-}
-
-function DisconnectedPreviewScreen({ onStart }: { onStart: () => void }) {
-  return (
-    <div data-testid="hyper-preview-disconnected-screen" style={disconnectedScreenStyle}>
-      <h2 style={headingStyle}>Hyper Preview</h2>
-      <p style={subtextStyle}>The dev server stopped. Start it again to restore the live preview.</p>
       <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
@@ -305,11 +245,9 @@ function ReadonlyStubScreen({
       }}
     >
       <div style={warningIconStyle}>🔒</div>
-      <h2 style={headingStyle}>Readonly mode</h2>
+      <h2 style={headingStyle}>Readonly mode — {cssSystem}</h2>
       <p style={{ ...subtextStyle, maxWidth: 480 }}>
-        Visual editing is not available for this project — the CSS system is <strong>{cssSystem}</strong>, but the
-        bundler (Next.js / Remix) does not yet support AST-based style writes. The CSS framework itself may be editable
-        on Vite / webpack — see the table below.
+        Visual editing is not available for <strong>{cssSystem}</strong> projects.
         {renderSucceeded
           ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
           : ' Waiting for preview to render...'}
@@ -727,13 +665,6 @@ const wrapperStyle: React.CSSProperties = {
   height: '100%',
 };
 
-const surfaceStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '100%',
-  height: '100%',
-  overflow: 'visible',
-};
-
 const iframeStyle: React.CSSProperties = {
   border: 'none',
   width: '100%',
@@ -791,27 +722,6 @@ const buttonStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
-const autoStartLabelStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  marginTop: 16,
-  fontSize: 12,
-  opacity: 0.75,
-  cursor: 'pointer',
-  userSelect: 'none',
-};
-
-const settingsLinkStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'var(--vscode-textLink-foreground, #4e94ce)',
-  fontSize: 11,
-  cursor: 'pointer',
-  marginTop: 6,
-  padding: 0,
-  textDecoration: 'underline',
-};
-
 const reconnectingBannerStyle: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -824,14 +734,6 @@ const reconnectingBannerStyle: React.CSSProperties = {
   fontFamily: 'var(--vscode-font-family)',
   textAlign: 'center',
   zIndex: 1001,
-};
-
-const disconnectedScreenStyle: React.CSSProperties = {
-  ...centerScreenStyle,
-  ...absoluteFillStyle,
-  justifyContent: 'flex-start',
-  gap: 12,
-  paddingTop: 88,
 };
 
 const warningIconStyle: React.CSSProperties = {

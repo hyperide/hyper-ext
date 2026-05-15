@@ -216,7 +216,6 @@ export function PropsForm({
     setValues(generated);
     onChange(generated);
   }, [fields, onChange]);
-  const generateAllAvailability = useMemo(() => getGenerateAllAvailability(fields), [fields]);
 
   // Compute unfilled required fields recursively
   const unfilledRequired = useMemo(() => {
@@ -250,20 +249,9 @@ export function PropsForm({
     <div style={formContainerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={formLabelStyle}>Props</div>
-        <span title={generateAllAvailability.tooltip} style={generateAllTooltipWrapperStyle}>
-          <button
-            type="button"
-            aria-disabled={generateAllAvailability.disabled}
-            disabled={generateAllAvailability.disabled}
-            onClick={handleGenerateAll}
-            style={{
-              ...generateAllButtonStyle,
-              ...(generateAllAvailability.disabled ? generateAllButtonDisabledStyle : {}),
-            }}
-          >
-            Generate values
-          </button>
-        </span>
+        <button type="button" onClick={handleGenerateAll} style={generateAllButtonStyle}>
+          Generate values
+        </button>
       </div>
       {fields.map(({ name, typeInfo }) => (
         <PropField
@@ -434,28 +422,6 @@ function generateObjectValues(fields: Array<{ name: string; typeInfo: PropTypeIn
   return result;
 }
 
-export function getGenerateAllAvailability(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): {
-  disabled: boolean;
-  tooltip: string;
-} {
-  const generated = generateObjectValues(fields);
-  const canGenerate = Object.values(generated).some(isConcreteGeneratedValue);
-  return canGenerate
-    ? { disabled: false, tooltip: 'Generate example values for supported props' }
-    : {
-        disabled: true,
-        tooltip: 'No supported props are available for deterministic value generation',
-      };
-}
-
-function isConcreteGeneratedValue(value: unknown): boolean {
-  if (value === undefined || value === null) return false;
-  if (typeof value === 'string') return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return Object.values(value).some(isConcreteGeneratedValue);
-  return true;
-}
-
 /** Name-based generator for string fields */
 function getStringFieldGenerator(name: string): (() => string) | null {
   const n = name.toLowerCase();
@@ -467,7 +433,6 @@ function getStringFieldGenerator(name: string): (() => string) | null {
   if (n === 'title' || n === 'subject' || n === 'heading') return () => pick(TITLES);
   if (n === 'description' || n === 'bio' || n === 'summary' || n === 'text' || n === 'content' || n === 'body')
     return () => pick(DESCRIPTIONS);
-  if (n === 'variant') return () => 'default';
   if (n === 'url' || n === 'href' || n === 'link' || n === 'website') return () => pick(URLS);
   if (n === 'color' || n === 'bgcolor' || n === 'background') return () => pick(COLORS);
   if (/avatar|photo|image|pic|thumbnail|icon|logo|src/i.test(n)) return () => PLACEHOLDER_IMAGE;
@@ -963,17 +928,6 @@ const generateAllButtonStyle: CSSProperties = {
   border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
   borderRadius: 4,
   cursor: 'pointer',
-};
-
-const generateAllButtonDisabledStyle: CSSProperties = {
-  color: 'var(--vscode-disabledForeground, #777)',
-  borderColor: 'var(--vscode-widget-border, #444)',
-  cursor: 'not-allowed',
-  opacity: 0.75,
-};
-
-const generateAllTooltipWrapperStyle: CSSProperties = {
-  display: 'inline-flex',
 };
 
 const fieldRowStyle: CSSProperties = {

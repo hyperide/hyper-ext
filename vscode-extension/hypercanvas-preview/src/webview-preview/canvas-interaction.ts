@@ -44,18 +44,11 @@ export function init(
 
     switch (msg.type) {
       case 'hypercanvas:elementClick': {
-        const clickPatch: Record<string, unknown> = {};
-        if (msg.additive) {
-          // iframe already computed the toggled selection — use it directly.
-          clickPatch.selectedIds = Array.isArray(msg.selectedIds) ? msg.selectedIds : [];
-          if (msg.selectedItemIndices && typeof msg.selectedItemIndices === 'object') {
-            clickPatch.selectedItemIndices = msg.selectedItemIndices;
-          }
-        } else {
-          clickPatch.selectedIds = msg.elementId ? [msg.elementId] : [];
-          if (msg.itemIndex !== null && msg.itemIndex !== undefined && msg.elementId) {
-            clickPatch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
-          }
+        const clickPatch: Record<string, unknown> = {
+          selectedIds: [msg.elementId],
+        };
+        if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
+          clickPatch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
         }
         if (msg.source) {
           clickPatch.source = msg.source;

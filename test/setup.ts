@@ -24,7 +24,6 @@ Object.assign(globalThis, {
   SVGElement: win.SVGElement,
   Element: win.Element,
   Node: win.Node,
-  NodeFilter: win.NodeFilter,
   Text: win.Text,
   DocumentFragment: win.DocumentFragment,
   // Events

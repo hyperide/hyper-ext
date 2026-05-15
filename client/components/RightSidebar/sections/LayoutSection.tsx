@@ -294,7 +294,7 @@ export const LayoutSection = memo(function LayoutSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('layout')}
-      className="w-full px-4 py-3 border-t border-border overflow-hidden"
+      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">
@@ -618,14 +618,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
             >
-              <IconBorderSides className="w-4 h-4" stroke={1.5} />
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
             </button>
           </div>
         </>
@@ -1045,14 +1045,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
             >
-              <IconBorderSides className="w-4 h-4" stroke={1.5} />
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
             </button>
           </div>
         </>
@@ -1179,14 +1179,14 @@ export const LayoutSection = memo(function LayoutSection({
             type="button"
             data-testid={TID.inspector.spacingLink('padding')}
             onClick={() => setPaddingExpanded(!paddingExpanded)}
-            className={cn(
-              'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-              paddingExpanded
-                ? 'bg-accent text-accent-foreground'
-                : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
+            className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+              paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+            }`}
           >
-            <IconBorderSides className="w-4 h-4" stroke={1.5} />
+            <IconBorderSides
+              className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+              stroke={1.5}
+            />
           </button>
         </div>
       )}

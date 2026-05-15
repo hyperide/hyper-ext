@@ -323,14 +323,15 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  * - Dev server management (start/stop/port detection)
  * - HMR round-trip (AST write → file save → HMR → preview update)
  * - File watching (vite.config or webpack.config presence)
- *
- * Next.js was historically in READONLY_BUNDLERS due to server components +
- * SSR re-renders on file change. In practice the AST writes still persist
- * to disk and Next's Fast Refresh reloads the iframe, so the editing loop
- * works for the common client-component case. Promoted to full-edit; the
- * readonly badge stays available for genuine non-writable systems.
  */
-const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
+const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack'];
+
+/**
+ * Bundlers where preview renders but AST writes may not persist
+ * (SSR re-renders, server components, different file conventions).
+ * Show readonly badge but allow preview interaction.
+ */
+const READONLY_BUNDLERS: import('../types').ProjectType[] = ['nextjs', 'remix'];
 
 // 'unknown' and 'bun' → unsupported (no dev server management)
 
@@ -351,6 +352,7 @@ export function computeCapabilities(
 ): import('../types').ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
+  const bundlerReadonly = projectType ? READONLY_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;
   return {

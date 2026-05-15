@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import type { DebugSource, Fiber } from '../../../shared/element-tracing/fiber-internals';
 import type {
   FrameworkAdapter,
   NodeMapEntry,
@@ -9,26 +8,6 @@ import type {
   TracingTransport,
 } from '../../../shared/element-tracing/types';
 import { ElementTracer } from './element-tracer';
-
-function mockFiber(overrides: Partial<Fiber> = {}): Fiber {
-  return {
-    tag: 5,
-    type: 'div',
-    stateNode: null,
-    return: null,
-    child: null,
-    sibling: null,
-    memoizedProps: {},
-    _debugSource: null,
-    _debugOwner: null,
-    ...overrides,
-  };
-}
-
-function attachFiber(element: HTMLElement, fiber: Fiber): HTMLElement {
-  (element as HTMLElement & Record<'__reactFiber$test', Fiber>).__reactFiber$test = fiber;
-  return element;
-}
 
 function mockAdapter(overrides: Partial<FrameworkAdapter> = {}): FrameworkAdapter {
   return {
@@ -248,86 +227,6 @@ describe('ElementTracer', () => {
       const result = tracer.resolveClickLocal({} as HTMLElement);
       expect(result).toBeNull();
       expect(transport.sent).toHaveLength(1);
-    });
-
-    it('resolves imported component internals to the clicked map item call site', () => {
-      const callSiteSource: DebugSource = {
-        fileName: '/app/src/components/TrendingSidebar.tsx',
-        lineNumber: 53,
-        columnNumber: 12,
-      };
-      const firstUserSuggestion = mockFiber({
-        tag: 0,
-        type: function UserSuggestion() {},
-        _debugSource: callSiteSource,
-      });
-      const secondUserSuggestion = mockFiber({
-        tag: 0,
-        type: function UserSuggestion() {},
-        _debugSource: callSiteSource,
-      });
-      const sidebar = mockFiber({
-        tag: 0,
-        type: function TrendingSidebar() {},
-        child: firstUserSuggestion,
-        _debugSource: {
-          fileName: '/app/src/components/TrendingSidebar.tsx',
-          lineNumber: 4,
-          columnNumber: 1,
-        },
-      });
-      firstUserSuggestion.return = sidebar;
-      firstUserSuggestion.sibling = secondUserSuggestion;
-      secondUserSuggestion.return = sidebar;
-
-      const internalButton = mockFiber({
-        tag: 5,
-        type: 'button',
-        return: secondUserSuggestion,
-        _debugSource: {
-          fileName: '/app/src/components/UserSuggestion.tsx',
-          lineNumber: 39,
-          columnNumber: 7,
-        },
-      });
-      secondUserSuggestion.child = internalButton;
-
-      adapter = mockAdapter({
-        getSourceLocation: () => ({ fileName: '/app/src/components/UserSuggestion.tsx', line: 39, column: 6 }),
-        getItemIndex: () => 0,
-      });
-      transport = mockTransport();
-      tracer = new ElementTracer(adapter, transport);
-      tracer.renderedFile = 'src/components/TrendingSidebar.tsx';
-      transport.simulateMessage({
-        type: 'node-map-update',
-        filePath: '/app/src/components/TrendingSidebar.tsx',
-        fileHash: 'abc123',
-        version: 1,
-        nodes: [
-          {
-            nodeRef: '/app/src/components/TrendingSidebar.tsx:53:11',
-            tag: 'UserSuggestion',
-            loc: { fileName: '/app/src/components/TrendingSidebar.tsx', line: 53, column: 11 },
-            endLoc: { fileName: '/app/src/components/TrendingSidebar.tsx', line: 53, column: 50 },
-            parentRef: null,
-            children: [],
-            isComponent: true,
-            fingerprint: 'callsite',
-          },
-        ],
-      });
-
-      const result = tracer.resolveClickLocal(attachFiber({} as HTMLElement, internalButton));
-
-      expect(result?.nodeRef).toBe('/app/src/components/TrendingSidebar.tsx:53:11');
-      expect(result?.itemIndex).toBe(1);
-      expect(result?.source).toEqual({
-        fileName: '/app/src/components/TrendingSidebar.tsx',
-        line: 53,
-        column: 11,
-      });
-      expect(transport.sent).toHaveLength(0);
     });
   });
 

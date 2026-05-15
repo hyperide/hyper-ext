@@ -36,40 +36,36 @@ html, body {
 }`);
   }
 
-  // Default cursor in design mode — covers pseudo-elements so CSS-generated
-  // content (::before/::after) doesn't leak pointer/text cursors into the canvas.
+  // Default cursor in design mode
   parts.push(`
-html.design-mode,
-html.design-mode *,
-html.design-mode *::before,
-html.design-mode *::after {
+body.design-mode, body.design-mode * {
   cursor: default !important;
 }
 
 /* Prevent native focus outlines and focus behavior in design mode.
    All navigation is handled by HyperCanvas selection, not browser focus. */
-html.design-mode *:focus,
-html.design-mode *:focus-visible {
+body.design-mode *:focus,
+body.design-mode *:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
-html.design-mode a,
-html.design-mode button,
-html.design-mode input,
-html.design-mode select,
-html.design-mode textarea,
-html.design-mode [tabindex] {
+body.design-mode a,
+body.design-mode button,
+body.design-mode input,
+body.design-mode select,
+body.design-mode textarea,
+body.design-mode [tabindex] {
   -webkit-user-modify: read-only !important;
 }
 
 /* Ensure disabled form elements are clickable in design mode.
    Browsers may skip pointer events on disabled elements; override to
    guarantee they can be selected on the canvas. */
-html.design-mode button:disabled,
-html.design-mode input:disabled,
-html.design-mode select:disabled,
-html.design-mode textarea:disabled,
-html.design-mode fieldset:disabled {
+body.design-mode button:disabled,
+body.design-mode input:disabled,
+body.design-mode select:disabled,
+body.design-mode textarea:disabled,
+body.design-mode fieldset:disabled {
   pointer-events: auto !important;
 }`);
 
@@ -80,41 +76,6 @@ html.design-mode fieldset:disabled {
   pointer-events: auto !important;
 }`);
   }
-
-  // Drop indicator for drag/reorder visual feedback (data-dir="h" = horizontal line, "v" = vertical line)
-  parts.push(`
-.hyper-drop-indicator {
-  position: fixed !important;
-  background: #3b82f6 !important;
-  z-index: 2147483646 !important;
-  pointer-events: none !important;
-  border-radius: 2px !important;
-}
-.hyper-drop-indicator[data-dir="h"] { height: 2px !important; }
-.hyper-drop-indicator[data-dir="v"] { width: 2px !important; }
-.hyper-drop-indicator::before,
-.hyper-drop-indicator::after {
-  content: '' !important;
-  position: absolute !important;
-  width: 6px !important;
-  height: 6px !important;
-  border-radius: 50% !important;
-  background: #3b82f6 !important;
-}
-.hyper-drop-indicator[data-dir="h"]::before,
-.hyper-drop-indicator[data-dir="h"]::after {
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-}
-.hyper-drop-indicator[data-dir="h"]::before { left: -3px !important; }
-.hyper-drop-indicator[data-dir="h"]::after  { right: -3px !important; }
-.hyper-drop-indicator[data-dir="v"]::before,
-.hyper-drop-indicator[data-dir="v"]::after {
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-}
-.hyper-drop-indicator[data-dir="v"]::before { top: -3px !important; }
-.hyper-drop-indicator[data-dir="v"]::after  { top: auto !important; bottom: -3px !important; }`);
 
   return parts.join('\n');
 }

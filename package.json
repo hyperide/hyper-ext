@@ -20,7 +20,7 @@
     "build:monaco-workers": "bun scripts/build-monaco-workers.ts",
     "build:css": "bun x tailwindcss -i ./client/global.css -o ./dist/client/global.css",
     "start": "NODE_ENV=production bun server/main.ts",
-    "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ && bun test ./packages/",
+    "test": "bun test ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/",
     "lint": "biome check ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/ && tsc --noEmit",
     "lint:fix": "biome check --write ./client/ ./lib/ ./server/ ./shared/ ./vscode-extension/hypercanvas-preview/src/ ./vscode-extension/hypercanvas-code-server/src/ ./packages/",
     "typecheck": "tsc",

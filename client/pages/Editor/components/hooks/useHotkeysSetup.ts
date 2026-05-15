@@ -616,7 +616,7 @@ export function useHotkeysSetup({
       cleanup?.();
       window.removeEventListener('component-loaded', handleComponentLoaded);
     };
-  }, [engine, iframeLoadedCounter, nodeMapLookup]);
+  }, [engine, activeDesignInstanceId, iframeLoadedCounter, nodeMapLookup]);
 
   // Handle keyboard shortcuts: Delete, Backspace, Shift+Enter, Enter, Escape, Tab
   useEffect(() => {
@@ -743,7 +743,6 @@ export function useHotkeysSetup({
     activeDesignInstanceId,
     isBoardModeActive,
     activeBoardInstance,
-    nodeMapLookup,
     handleInstancePaste,
     handleInstanceDelete,
     handleInstanceDuplicate,

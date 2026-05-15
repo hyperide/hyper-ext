@@ -85,16 +85,4 @@ describe('LayoutSection toggle classes', () => {
       ['paddingRight', '16', { debounceOnly: true }],
     ]);
   });
-
-  it('uses semantic theme classes for the expanded padding link', () => {
-    const { getByTestId } = render(<LayoutSection {...defaultProps} />);
-    const button = getByTestId(TID.inspector.spacingLink('padding'));
-
-    fireEvent.click(button);
-
-    expect(button.classList.contains('bg-accent')).toBe(true);
-    expect(button.classList.contains('text-accent-foreground')).toBe(true);
-    expect(button.className).not.toContain('bg-blue-100');
-    expect(button.innerHTML).not.toContain('3479DE');
-  });
 });

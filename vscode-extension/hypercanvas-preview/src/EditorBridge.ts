@@ -8,9 +8,6 @@
  */
 
 import * as vscode from 'vscode';
-import { isBundleArtifactPath } from './services/bundle-artifact-path';
-
-export { isBundleArtifactPath };
 
 /**
  * Callback to move the preview panel to ViewColumn.Two.
@@ -58,10 +55,6 @@ export async function handleEditorMessage(message: EditorMessage, webview: vscod
  * Open a file in the editor, optionally at a specific line/column
  */
 async function openFile(filePath: string, line?: number, column?: number): Promise<void> {
-  if (isBundleArtifactPath(filePath)) {
-    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-    return;
-  }
   try {
     // Resolve path relative to workspace
     const uri = resolveFilePath(filePath);
@@ -99,10 +92,6 @@ export async function goToCode(
   column: number,
   options?: { preserveFocus?: boolean },
 ): Promise<void> {
-  if (isBundleArtifactPath(filePath)) {
-    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-    return;
-  }
   try {
     const uri = resolveFilePath(filePath);
     const position = new vscode.Position(line - 1, column - 1);

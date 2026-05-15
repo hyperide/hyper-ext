@@ -14,10 +14,10 @@ import { type ComponentNode, type ParseContext, parseJSXElement } from '@lib/ser
 import { convertComponentNodesToTreeNodes } from '@lib/services/tree-adapter';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
 import * as vscode from 'vscode';
+import { analyzeWithAI, resolveAnalyzerConfig } from '../../../../lib/component-scanner/ai-analyzer';
 import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
 import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
-import { extractPropsFromDestructuring, isForwardRefCall } from './componentSourceParser';
 import { FileProjectStructureStore } from './FileStructureStore';
 
 // Re-export shared types for convenience
@@ -115,7 +115,6 @@ export class ComponentService {
       const backend = config.get<string>('backend');
 
       if (apiKey && model) {
-        const { analyzeWithAI, resolveAnalyzerConfig } = await import('../../../../lib/component-scanner/ai-analyzer');
         const resolved = resolveAnalyzerConfig({
           provider: provider as string,
           apiKey,
@@ -369,7 +368,6 @@ export class ComponentService {
       let hasDefaultExport = false;
       let hasSampleRender = false;
       const props: PropInfo[] = [];
-      const exportedVarNames: string[] = [];
 
       // Look for component declarations and exports
       traverse(ast, {
@@ -389,12 +387,10 @@ export class ComponentService {
         ExportNamedDeclaration(nodePath: NodePath<t.ExportNamedDeclaration>) {
           const declaration = nodePath.node.declaration;
 
+          // Check for sampleRender export
           if (t.isFunctionDeclaration(declaration) && declaration.id) {
             if (declaration.id.name === 'sampleRender') {
               hasSampleRender = true;
-            }
-            if (/^[A-Z]/.test(declaration.id.name)) {
-              exportedVarNames.push(declaration.id.name);
             }
           }
 
@@ -403,9 +399,6 @@ export class ComponentService {
               if (t.isIdentifier(decl.id)) {
                 if (decl.id.name === 'sampleRender') {
                   hasSampleRender = true;
-                }
-                if (/^[A-Z]/.test(decl.id.name)) {
-                  exportedVarNames.push(decl.id.name);
                 }
               }
             }
@@ -418,45 +411,51 @@ export class ComponentService {
             if (!componentName) {
               componentName = nodePath.node.id.name;
             }
+
+            // Extract props from first parameter
             const firstParam = nodePath.node.params[0];
             if (t.isObjectPattern(firstParam)) {
-              props.push(...extractPropsFromDestructuring(firstParam));
+              for (const prop of firstParam.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  props.push({
+                    name: prop.key.name,
+                    type: 'unknown',
+                    required: true,
+                  });
+                }
+              }
             }
           }
         },
 
-        // Variable declarations (sampleRender and arrow/forwardRef function components)
+        // Variable declarations (sampleRender and arrow function components)
         VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
           const id = nodePath.node.id;
           const init = nodePath.node.init;
 
           if (t.isIdentifier(id)) {
+            // Check for sampleRender
             if (id.name === 'sampleRender') {
               hasSampleRender = true;
             }
 
-            const isArrowOrFn = t.isArrowFunctionExpression(init) || t.isFunctionExpression(init);
-            const isForwardRef = isForwardRefCall(init);
-
-            if (/^[A-Z]/.test(id.name) && (isArrowOrFn || isForwardRef)) {
+            // Check for arrow function components (PascalCase)
+            if (/^[A-Z]/.test(id.name) && t.isArrowFunctionExpression(init)) {
               if (!componentName) {
                 componentName = id.name;
               }
 
-              let renderFn: t.ArrowFunctionExpression | t.FunctionExpression | null = null;
-              if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
-                renderFn = init;
-              } else if (isForwardRef) {
-                const firstArg = (init as t.CallExpression).arguments[0];
-                if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
-                  renderFn = firstArg;
-                }
-              }
-
-              if (renderFn) {
-                const firstParam = renderFn.params[0];
-                if (t.isObjectPattern(firstParam)) {
-                  props.push(...extractPropsFromDestructuring(firstParam));
+              // Extract props from first parameter
+              const firstParam = init.params[0];
+              if (t.isObjectPattern(firstParam)) {
+                for (const prop of firstParam.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    props.push({
+                      name: prop.key.name,
+                      type: 'unknown',
+                      required: true,
+                    });
+                  }
                 }
               }
             }
@@ -536,14 +535,6 @@ export class ComponentService {
 
       // Post-traverse: resolve imported type references that weren't found locally
       await this._resolveImportedTypeReferences(props, importMap, componentPath, localTypes);
-
-      // Prefer exported name matching file basename (case-insensitive), then first exported name.
-      // Only when there's no default export (which already set componentName reliably).
-      if (!hasDefaultExport && exportedVarNames.length > 0) {
-        const fileBasenameLC = path.basename(componentPath, path.extname(componentPath)).toLowerCase();
-        const basenameMatch = exportedVarNames.find((n) => n.toLowerCase() === fileBasenameLC);
-        componentName = basenameMatch ?? exportedVarNames[0];
-      }
 
       // Skip if no component found
       if (!componentName) {
@@ -926,8 +917,6 @@ export class ComponentService {
 // ============================================
 // Module-level helpers
 // ============================================
-
-export { parseComponentSource } from './componentSourceParser';
 
 /**
  * Extract the top-level return JSX from a function body.

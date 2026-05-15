@@ -22,7 +22,7 @@ export function StyleSourceTabsSection({ tabs, selectedTabId, onSourceTabChange 
   }
 
   return (
-    <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
+    <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
       <fieldset className="border-0 p-0 m-0 min-w-0">
         <legend className="sr-only">Style source</legend>
         <div

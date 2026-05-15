@@ -20,50 +20,6 @@ import type {
 const HOVER_BORDER = '2px solid rgba(59, 130, 246, 0.5)';
 const SELECTION_BORDER = '2px solid rgb(59, 130, 246)';
 
-const HANDLE_SIZE = 8;
-
-function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
-  const dot = document.createElement('div');
-  dot.setAttribute('data-resize-handle', axis);
-  dot.style.position = 'absolute';
-  dot.style.width = `${HANDLE_SIZE}px`;
-  dot.style.height = `${HANDLE_SIZE}px`;
-  dot.style.borderRadius = '50%';
-  dot.style.background = 'rgb(59, 130, 246)';
-  dot.style.border = '2px solid white';
-  dot.style.boxSizing = 'border-box';
-  dot.style.pointerEvents = 'auto';
-  dot.style.cursor = axis === 'width' ? 'ew-resize' : 'ns-resize';
-  if (axis === 'width') {
-    dot.style.right = `${-HANDLE_SIZE / 2}px`;
-    dot.style.top = '50%';
-    dot.style.transform = 'translateY(-50%)';
-  } else {
-    dot.style.bottom = `${-HANDLE_SIZE / 2}px`;
-    dot.style.left = '50%';
-    dot.style.transform = 'translateX(-50%)';
-  }
-  return dot;
-}
-
-function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect, enable: boolean): void {
-  const wantWidth = enable && rect.type === 'selection' && !!rect.resizable?.width;
-  const wantHeight = enable && rect.type === 'selection' && !!rect.resizable?.height;
-  let hasWidth = false;
-  let hasHeight = false;
-  for (const child of overlay.children) {
-    const axis = (child as HTMLElement).getAttribute('data-resize-handle');
-    if (axis === 'width') hasWidth = true;
-    else if (axis === 'height') hasHeight = true;
-  }
-  if (hasWidth === wantWidth && hasHeight === wantHeight) return;
-  for (const child of Array.from(overlay.children)) {
-    if ((child as HTMLElement).hasAttribute('data-resize-handle')) child.remove();
-  }
-  if (wantWidth) overlay.appendChild(createResizeHandleDot('width'));
-  if (wantHeight) overlay.appendChild(createResizeHandleDot('height'));
-}
-
 // ============================================================================
 // Low-level: render pre-computed rects as overlay divs
 // ============================================================================
@@ -76,9 +32,7 @@ export function renderOverlayRects(
   container: HTMLElement,
   rects: OverlayRect[],
   overlayElements: Map<string, HTMLDivElement>,
-  options?: { enableResizeHandles?: boolean },
 ): void {
-  const enableHandles = options?.enableResizeHandles ?? true;
   const currentKeys = new Set<string>();
 
   for (const rect of rects) {
@@ -95,23 +49,10 @@ export function renderOverlayRects(
       overlayElements.set(rect.key, element);
     }
 
-    if (rect.elementId) {
-      element.dataset.elementId = rect.elementId;
-    } else {
-      delete element.dataset.elementId;
-    }
-
-    if (rect.resizable?.hasSizeClass) {
-      element.dataset.hasSizeClass = 'true';
-    } else {
-      delete element.dataset.hasSizeClass;
-    }
-
     element.style.left = `${rect.left}px`;
     element.style.top = `${rect.top}px`;
     element.style.width = `${rect.width}px`;
     element.style.height = `${rect.height}px`;
-    syncResizeHandles(element, rect, enableHandles);
   }
 
   // Remove unused overlays
@@ -321,7 +262,7 @@ export function createOverlayRenderer(
       );
 
       const transformedOverlay = transformRects(result.overlayRects, offsetX, offsetY, zoom);
-      renderOverlayRects(container, transformedOverlay, overlayElements, { enableResizeHandles: false });
+      renderOverlayRects(container, transformedOverlay, overlayElements);
 
       if (onPlaceholderClick && editorMode !== 'interact') {
         const transformedPlaceholders = transformRects(result.placeholderRects, offsetX, offsetY, zoom);

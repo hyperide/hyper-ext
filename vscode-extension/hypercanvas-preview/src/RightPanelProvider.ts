@@ -32,12 +32,11 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
-   * Pass null to clear capabilities on workspace switch.
    * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities | null): void {
+  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
     this._capabilities = capabilities;
-    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities: capabilities ?? null });
+    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities });
   }
 
   /**
@@ -49,8 +48,6 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     if (!this._view) return;
     const webview = this._view.webview;
     this._ready = false;
-    // Webview reloads — old inputs lose focus without firing focusout, clear the guard
-    void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
     const ready = new Promise<void>((resolve) => {
       const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
         if (msg?.type === 'webview:ready') {
@@ -91,6 +88,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
     };
 
+    webviewView.webview.html = this._getHtml(webviewView.webview);
+
     // Register with StateHub for cross-panel sync
     this._stateHub.register(RightPanelProvider.viewType, webviewView.webview);
 
@@ -109,7 +108,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
         // Send initial explorer visibility + component groups + capabilities
         this._sendExplorerState(webviewView.webview);
         this._sendComponentGroups(webviewView.webview);
-        webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+        if (this._capabilities) {
+          webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities });
+        }
         return;
       }
 
@@ -131,11 +132,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       this._view = undefined;
       this._ready = false;
       this._stateHub.unregister(RightPanelProvider.viewType);
-      // Clear input-focus guard so canvas keybindings aren't permanently blocked
-      void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
     });
-
-    webviewView.webview.html = this._getHtml(webviewView.webview);
   }
 
   private _sendExplorerState(webview: vscode.Webview): void {

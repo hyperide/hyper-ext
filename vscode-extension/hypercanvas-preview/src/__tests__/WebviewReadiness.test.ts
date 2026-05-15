@@ -27,11 +27,7 @@ interface MockWebviewView {
   fireDispose: () => void;
 }
 
-interface MockWebviewViewOptions {
-  onHtmlWrite?: (webview: MockWebview, writeCount: number) => void;
-}
-
-function createMockWebviewView(options: MockWebviewViewOptions = {}): MockWebviewView {
+function createMockWebviewView(): MockWebviewView {
   const messageHandlers: Array<(message: { type?: string }) => void> = [];
   const disposeHandlers: Array<() => void> = [];
   const webview = {
@@ -57,7 +53,6 @@ function createMockWebviewView(options: MockWebviewViewOptions = {}): MockWebvie
     },
     set(value: string) {
       webview.htmlWrites.push(value);
-      options.onHtmlWrite?.(webview, webview.htmlWrites.length);
     },
   });
 
@@ -115,32 +110,6 @@ describe('sidebar webview readiness recovery', () => {
 
     await provider.resetIfNotReady();
     expect(view.webview.htmlWrites).toHaveLength(2);
-  });
-
-  it('RightPanelProvider accepts webview:ready fired during the initial HTML write', async () => {
-    let firedInitialReady = false;
-    const view = createMockWebviewView({
-      onHtmlWrite(webview, writeCount) {
-        if (writeCount === 1 && !firedInitialReady) {
-          firedInitialReady = true;
-          webview.fireMessage({ type: 'webview:ready' });
-        }
-      },
-    });
-    const stateHub = createStateHub();
-    const provider = new RightPanelProvider(
-      vscode.Uri.file('/extension'),
-      stateHub as never,
-      { routeMessage: mock(() => Promise.resolve(false)) } as never,
-    );
-
-    provider.resolveWebviewView(view as never, {} as never, {} as never);
-    await flushPromises();
-
-    expect(stateHub.sendInit).toHaveBeenCalledWith(RightPanelProvider.viewType);
-
-    await provider.resetIfNotReady();
-    expect(view.webview.htmlWrites).toHaveLength(1);
   });
 
   it('AIChatPanelProvider resets unresolved webview HTML and stops resetting after webview:ready', async () => {

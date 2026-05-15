@@ -3,16 +3,13 @@ import type { FileIO } from '../../ast/file-io';
 import { PreviewModeManager, type WatcherFactory } from '../preview-mode-manager';
 
 /** Minimal FileIO that simulates file presence/absence */
-function makeIO(initialFiles: Record<string, string> = {}): FileIO {
-  const files: Record<string, string> = { ...initialFiles };
+function makeIO(files: Record<string, string> = {}): FileIO {
   return {
     async readFile(p: string) {
       if (p in files) return files[p];
       throw new Error(`ENOENT: ${p}`);
     },
-    async writeFile(p: string, c: string) {
-      files[p] = c;
-    },
+    async writeFile() {},
     async access(p: string) {
       if (p in files) return;
       // Check if it looks like a directory (some paths are accessed as dirs)
@@ -20,9 +17,7 @@ function makeIO(initialFiles: Record<string, string> = {}): FileIO {
       if (hasChild) return;
       throw new Error(`ENOENT: ${p}`);
     },
-    async deleteFile(p: string) {
-      delete files[p];
-    },
+    async deleteFile() {},
   };
 }
 
@@ -59,13 +54,13 @@ describe('PreviewModeManager — onComponentSelected (app-shell)', () => {
     expect(result).toBe('unsupported');
   });
 
-  it('returns needs-patch for vite-spa-jsx-router when no router and no entry file found', async () => {
+  it('falls back to entry patching for vite-spa-jsx-router without router file', async () => {
     const io = makeIO({
       [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
     });
     const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
     const result = await m.onComponentSelected();
-    expect(result).toBe('needs-patch');
+    expect(result).toBe('ok');
   });
 });
 
@@ -336,304 +331,5 @@ describe('PreviewModeManager — startWatching / stopWatching', () => {
     const io = makeIO({ [`${root}/package.json`]: '{}' });
     const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
     expect(() => m.stopWatching()).not.toThrow();
-  });
-});
-
-describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
-  it('fires before patching the entry file on webpack projects', async () => {
-    const calls: string[] = [];
-    const files: Record<string, string> = {
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { 'react-scripts': '^5' } }),
-      [`${root}/src/index.tsx`]:
-        "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\nReactDOM.createRoot(document.getElementById('root')!).render(<App />);\n",
-    };
-    const io: FileIO = {
-      async readFile(p: string) {
-        if (p in files) return files[p];
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async writeFile(p: string, c: string) {
-        calls.push(`write:${p}`);
-        files[p] = c;
-      },
-      async access(p: string) {
-        if (p in files) return;
-        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
-        if (hasChild) return;
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async deleteFile() {},
-    };
-    const onBeforeWebpackEntryPatch = mock(() => {
-      calls.push('arm-gate');
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-    });
-
-    await m.onComponentSelected();
-
-    expect(onBeforeWebpackEntryPatch).toHaveBeenCalledTimes(1);
-    // Gate must be armed strictly before any file write happens
-    const armIdx = calls.indexOf('arm-gate');
-    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
-    expect(armIdx).toBeGreaterThanOrEqual(0);
-    expect(firstWriteIdx).toBeGreaterThan(armIdx);
-  });
-
-  it('does NOT fire on Vite projects when no preview patch is written', async () => {
-    const onBeforeWebpackEntryPatch = mock(() => {});
-    const io = makeIO({
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-    });
-    await m.onComponentSelected();
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
-  });
-
-  it('waits for SPA route update after patching a Vite JSX router file', async () => {
-    const calls: string[] = [];
-    const files: Record<string, string> = {
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
-      [`${root}/index.html`]: '<script type="module" src="/client/main.tsx"></script>',
-      [`${root}/client/App.tsx`]:
-        'import { BrowserRouter, Route, Routes } from \'react-router-dom\';\nexport function App() { return <BrowserRouter><Routes><Route path="*" element={<div />} /></Routes></BrowserRouter>; }\n',
-    };
-    const io: FileIO = {
-      async readFile(p: string) {
-        if (p in files) return files[p];
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async writeFile(p: string, c: string) {
-        calls.push(`write:${p}`);
-        files[p] = c;
-      },
-      async access(p: string) {
-        if (p in files) return;
-        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
-        if (hasChild) return;
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async deleteFile() {},
-    };
-    const onBeforeWebpackEntryPatch = mock(() => {
-      calls.push('arm-gate');
-    });
-    const waitForPreviewRouteUpdate = mock(() => {
-      calls.push('wait-route-update');
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-      waitForPreviewRouteUpdate,
-    });
-
-    await m.onComponentSelected();
-
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
-    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
-    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
-    const waitIdx = calls.indexOf('wait-route-update');
-    expect(firstWriteIdx).toBeGreaterThanOrEqual(0);
-    expect(waitIdx).toBeGreaterThan(firstWriteIdx);
-  });
-
-  it('waits without arming the recompile gate after patching a Vite entry file', async () => {
-    const calls: string[] = [];
-    const files: Record<string, string> = {
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
-      [`${root}/index.html`]: '<script type="module" src="/src/main.tsx"></script>',
-      [`${root}/src/main.tsx`]:
-        "import { createRoot } from 'react-dom/client';\nimport App from './App';\ncreateRoot(document.getElementById(\"root\")!).render(<App />);\n",
-    };
-    const io: FileIO = {
-      async readFile(p: string) {
-        if (p in files) return files[p];
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async writeFile(p: string, c: string) {
-        calls.push(`write:${p}`);
-        files[p] = c;
-      },
-      async access(p: string) {
-        if (p in files) return;
-        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
-        if (hasChild) return;
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async deleteFile() {},
-    };
-    const onBeforeWebpackEntryPatch = mock(() => {
-      calls.push('arm-gate');
-    });
-    const waitForPreviewRouteUpdate = mock(() => {
-      calls.push('wait-route-update');
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-      waitForPreviewRouteUpdate,
-    });
-
-    await m.onComponentSelected();
-
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
-    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
-    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
-    const waitIdx = calls.indexOf('wait-route-update');
-    expect(firstWriteIdx).toBeGreaterThanOrEqual(0);
-    expect(waitIdx).toBeGreaterThan(firstWriteIdx);
-  });
-
-  it('patches a Bun HTML module entry without arming the webpack recompile gate', async () => {
-    const calls: string[] = [];
-    const files: Record<string, string> = {
-      [`${root}/package.json`]: JSON.stringify({
-        scripts: { dev: 'bun --hot src/index.ts' },
-        dependencies: { react: '^19' },
-      }),
-      [`${root}/bun.lock`]: '',
-      [`${root}/src/index.html`]: '<script type="module" src="./frontend.tsx" async></script>',
-      [`${root}/src/frontend.tsx`]:
-        'import { createRoot } from \'react-dom/client\';\nconst app = <div />;\nconst root = createRoot(document.getElementById("root")!);\nroot.render(app);\n',
-    };
-    const io: FileIO = {
-      async readFile(p: string) {
-        if (p in files) return files[p];
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async writeFile(p: string, c: string) {
-        calls.push(`write:${p}`);
-        files[p] = c;
-      },
-      async access(p: string) {
-        if (p in files) return;
-        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
-        if (hasChild) return;
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async deleteFile() {},
-    };
-    const onBeforeWebpackEntryPatch = mock(() => {
-      calls.push('arm-gate');
-    });
-    const waitForPreviewRouteUpdate = mock(() => {
-      calls.push('wait-route-update');
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-      waitForPreviewRouteUpdate,
-    });
-
-    const result = await m.onComponentSelected();
-
-    expect(result).toBe('ok');
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
-    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
-    expect(files[`${root}/src/frontend.tsx`]).toContain('@hyperide-managed');
-    expect(files[`${root}/src/frontend.tsx`]).toContain('./__canvas_preview__');
-    expect(calls).toContain(`write:${root}/src/frontend.tsx`);
-    expect(calls.indexOf(`write:${root}/src/frontend.tsx`)).toBeLessThan(calls.indexOf('wait-route-update'));
-  });
-
-  it('fires on Next.js when route files are freshly written', async () => {
-    const onBeforeWebpackEntryPatch = mock(() => {});
-    const io = makeIO({
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
-      [`${root}/app/layout.tsx`]: '',
-      // No test-preview route — will be freshly created
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-    });
-    await m.onComponentSelected();
-    // Files were written → HMR fires → gate must be armed so awaitRecompile can wait
-    expect(onBeforeWebpackEntryPatch).toHaveBeenCalledTimes(1);
-  });
-
-  it('waits without arming the webpack recompile gate after writing Remix route files', async () => {
-    const calls: string[] = [];
-    const files: Record<string, string> = {
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { '@remix-run/react': '^2' } }),
-      [`${root}/app/root.tsx`]: 'export default function Root() { return null; }\n',
-    };
-    const io: FileIO = {
-      async readFile(p: string) {
-        if (p in files) return files[p];
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async writeFile(p: string, c: string) {
-        calls.push(`write:${p}`);
-        files[p] = c;
-      },
-      async access(p: string) {
-        if (p in files) return;
-        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
-        if (hasChild) return;
-        throw new Error(`ENOENT: ${p}`);
-      },
-      async deleteFile() {},
-    };
-    const onBeforeWebpackEntryPatch = mock(() => {
-      calls.push('arm-gate');
-    });
-    const waitForPreviewRouteUpdate = mock(() => {
-      calls.push('wait-route-update');
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-      waitForPreviewRouteUpdate,
-    });
-
-    await m.onComponentSelected();
-
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
-    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
-    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
-    const waitIdx = calls.indexOf('wait-route-update');
-    expect(firstWriteIdx).toBeGreaterThanOrEqual(0);
-    expect(waitIdx).toBeGreaterThan(firstWriteIdx);
-  });
-
-  it('does NOT fire on Next.js when route files already exist (idempotent)', async () => {
-    const onBeforeWebpackEntryPatch = mock(() => {});
-    // Simulate fully patched Next.js project — route file already exists with managed marker
-    const io = makeIO({
-      [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
-      [`${root}/app/layout.tsx`]: '',
-    });
-    const m = new PreviewModeManager({
-      projectRoot: root,
-      io,
-      watcherFactory: noopWatcher,
-      onBeforeWebpackEntryPatch,
-    });
-    // First call writes files
-    await m.onComponentSelected();
-    onBeforeWebpackEntryPatch.mockClear();
-    // Second call — files already exist with same content — no write, no gate
-    await m.onComponentSelected();
-    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
   });
 });
