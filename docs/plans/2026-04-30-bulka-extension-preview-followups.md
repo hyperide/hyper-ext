@@ -89,15 +89,15 @@ traces under `/Users/ultra/.vscode/extensions/open.bun-vscode-*` and
 
 ### Task 2: Inspector Fill Does Not Show `bg-primary/15`
 
-- [ ] Extend iframe interaction to send `computedStyle` snapshot on `hypercanvas:elementClick`
-- [ ] Add `selectedElementRuntimeStyle` field to `lib/types.ts`
-- [ ] Forward runtime style snapshot via `useCanvasInteraction.ts` into `state:update` patch
-- [ ] Merge runtime computed values into `parsedStyles` in `useElementStyleData.ts` for VS Code mode
-- [ ] Add color normalization for `rgba()` in `shared/utils/color.ts`
-- [ ] Support request/response path for non-click selections (keyboard nav, goToVisual, HMR restore)
-- [ ] Clear `selectedElementRuntimeStyle` on component change, empty click, and iframe reload
-- [ ] Unit test: `bg-primary/15` + computed `rgba(...)` populates `backgroundColor` and `fillOpacity`
-- [ ] Unit test: `shared/utils/color.ts` handles `rgb()`, `rgba()`, and transparent
+- [x] Extend iframe interaction to send `computedStyle` snapshot on `hypercanvas:elementClick`
+- [x] Add `selectedElementRuntimeStyle` field to `lib/types.ts`
+- [x] Forward runtime style snapshot via `useCanvasInteraction.ts` into `state:update` patch
+- [x] Merge runtime computed values into `parsedStyles` in `useElementStyleData.ts` for VS Code mode
+- [x] Add color normalization for `rgba()` in `shared/utils/color.ts`
+- [x] Support request/response path for non-click selections (keyboard nav, goToVisual, HMR restore)
+- [x] Clear `selectedElementRuntimeStyle` on component change, empty click, and iframe reload
+- [x] Unit test: `bg-primary/15` + computed `rgba(...)` populates `backgroundColor` and `fillOpacity`
+- [x] Unit test: `shared/utils/color.ts` handles `rgb()`, `rgba()`, and transparent
 
 **Symptom:** selecting the FAQ banner shows visible background in preview, but
 Inspector `Fill` is `none`.
@@ -171,14 +171,14 @@ extension host. The browser already knows the final computed value.
 
 ### Task 3: `menubar.tsx` Props Overlay Does Not Disappear
 
-- [ ] Add `hypercanvas:componentRenderSucceeded` message from generated `CanvasPreview` on success
-- [ ] Handle `componentRenderSucceeded` in `usePreviewBridge.ts` to clear matching `componentError`
-- [ ] Improve `ComponentService` to recognize `React.forwardRef(...)` as component declarations
-- [ ] Prefer exported component matching file basename over internal helpers
-- [ ] Mark `className`, `children`, `ref`, `asChild`, event handlers as optional for HTMLAttributes/Radix wrappers
-- [ ] Do not mark destructured `...props` keys as required unless type annotation requires it
-- [ ] Unit test: `menubar.tsx`-style file → main component `Menubar`, required props none
-- [ ] Unit test: same-component render-succeeded signal clears `componentError`
+- [x] Add `hypercanvas:componentRenderSucceeded` message from generated `CanvasPreview` on success
+- [x] Handle `componentRenderSucceeded` in `usePreviewBridge.ts` to clear matching `componentError`
+- [x] Improve `ComponentService` to recognize `React.forwardRef(...)` as component declarations
+- [x] Prefer exported component matching file basename over internal helpers
+- [x] Mark `className`, `children`, `ref`, `asChild`, event handlers as optional for HTMLAttributes/Radix wrappers
+- [x] Do not mark destructured `...props` keys as required unless type annotation requires it
+- [x] Unit test: `menubar.tsx`-style file → main component `Menubar`, required props none
+- [x] Unit test: same-component render-succeeded signal clears `componentError`
 
 **Symptom:** preview shows the component-error overlay:
 `This component requires props to render`, with a missing field named
@@ -257,17 +257,17 @@ optional.
 
 ### Task 4: Raw "Component not found" During Component Switch
 
-- [ ] Replace raw `Error: Component not found` branch in generator with standard placeholder markup
-- [ ] Generated missing-component branch posts `hypercanvas:componentMissing` with `componentPath`
-- [ ] Handle `componentMissing` in `usePreviewBridge.ts` → forward to extension host
-- [ ] Extension host handles it via `previewManager.ensureComponent([componentPath])` with retry guard
-- [ ] `PreviewFileManager._scanAllComponents()`: replace hardcoded `src` with multi-root detection
-- [ ] Include lowercase files if they export PascalCase components (shadcn pattern)
-- [ ] Keep explicit `ensureComponent()` paths as authoritative regardless of scan result
-- [ ] Unit test: `client/components/ui/sheet.tsx` with `export const Sheet` → registered by scan
-- [ ] Unit test: lowercase non-component helper under `client/` → not registered
-- [ ] Unit test: explicit `ensureComponent(['client/components/ui/sheet.tsx'])` → registered
-- [ ] Generator unit test: missing component renders placeholder and posts `componentMissing`
+- [x] Replace raw `Error: Component not found` branch in generator with standard placeholder markup
+- [x] Generated missing-component branch posts `hypercanvas:componentMissing` with `componentPath`
+- [x] Handle `componentMissing` in `usePreviewBridge.ts` → forward to extension host
+- [x] Extension host handles it via `previewManager.ensureComponent([componentPath])` with retry guard
+- [x] `PreviewFileManager._scanAllComponents()`: replace hardcoded `src` with multi-root detection
+- [x] Include lowercase files if they export PascalCase components (shadcn pattern)
+- [x] Keep explicit `ensureComponent()` paths as authoritative regardless of scan result
+- [x] Unit test: `client/components/ui/sheet.tsx` with `export const Sheet` → registered by scan
+- [x] Unit test: lowercase non-component helper under `client/` → not registered
+- [x] Unit test: explicit `ensureComponent(['client/components/ui/sheet.tsx'])` → registered
+- [x] Generator unit test: missing component renders placeholder and posts `componentMissing`
 
 **Symptom:** clicking `client/components/ui/sheet.tsx` can temporarily show:
 
@@ -345,13 +345,13 @@ the URL changes before the generated preview bundle is compiled and loaded.
 
 ### Task 5: Verification Script
 
-- [ ] Create `ext-test-projects/debug-bulka-preview-followups.ts` following CLAUDE.md template
-- [ ] Assert BulkaDay renders and logs `previewLoaded`
-- [ ] Assert FAQ banner Inspector Fill populated for `bg-primary/15`
-- [ ] Assert Menubar: `hypercanvas:componentRenderSucceeded` clears props overlay
-- [ ] Assert Sheet: no raw `Error: Component not found` text visible
-- [ ] Assert no HyperIDE-owned runtime errors in diagnostics
-- [ ] Verify Bulka repo clean: no generated files committed (run `git status --short`)
+- [x] Create `ext-test-projects/debug-bulka-preview-followups.ts` following CLAUDE.md template
+- [x] Assert BulkaDay renders and logs `previewLoaded`
+- [x] Assert FAQ banner Inspector Fill populated for `bg-primary/15`
+- [x] Assert Menubar: `hypercanvas:componentRenderSucceeded` clears props overlay
+- [x] Assert Sheet: no raw `Error: Component not found` text visible
+- [x] Assert no HyperIDE-owned runtime errors in diagnostics
+- [x] Verify Bulka repo clean: no generated files committed (run `git status --short`)
 
 Create or update an ext-test debug script. It must follow
 `/Users/ultra/work/ext-test-projects/CLAUDE.md`.
