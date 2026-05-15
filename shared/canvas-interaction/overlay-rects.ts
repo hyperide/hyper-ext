@@ -14,7 +14,7 @@ import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './typ
  * Does NOT match keyword sizes: auto, full, screen, min, max, fit.
  */
 export function detectTailwindExplicitSize(className: string | undefined): { width: boolean; height: boolean } {
-  if (!className) return { width: false, height: false };
+  if (!className || typeof className !== 'string') return { width: false, height: false };
   let width = false;
   let height = false;
   for (const cls of className.split(/\s+/)) {
@@ -33,7 +33,7 @@ function isTailwindSizeClass(cls: string, axis: 'w' | 'h'): boolean {
   if (!rest) return false;
   if (rest === 'px') return true;
   if (rest[0] === '[') return true;
-  return rest[0] >= '0' && rest[0] <= '9';
+  return rest[0] >= '0' && rest[0] <= '9' && !rest.includes('/');
 }
 
 export interface OverlayComputeState {

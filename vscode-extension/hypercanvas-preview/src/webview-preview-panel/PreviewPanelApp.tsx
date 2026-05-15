@@ -699,7 +699,7 @@ const surfaceStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   height: '100%',
-  overflow: 'hidden',
+  overflow: 'visible',
 };
 
 const iframeStyle: React.CSSProperties = {
