@@ -180,8 +180,33 @@ N adjustments") rather than blocking the drop.
 
 ### Task 6: Drop into a non-container leaf
 
-- [ ] If the target JSX node has no children (e.g. an `<img>`), insert
+- [x] If the target JSX node has no children (e.g. an `<img>`), insert
       the source as a sibling at `position`. Never split the leaf.
+      → No new code path required: `AstService.moveElement` already treats
+      `target` as a sibling-adjacent reference. It uses
+      `target.path.parent.children`, finds the target's index, and splices
+      the source at `position` ('before'/'after'). When the target is a
+      self-closing leaf (`<img />`, `<input />`, `<br />`), the existing
+      same-parent and different-parent branches both handle it without ever
+      attempting to nest INTO the leaf — there is no special-case for void
+      elements because `target.children` is never touched. Tests in
+      `vscode-extension/hypercanvas-preview/src/__tests__/AstServiceMoveLeafTarget.test.ts`
+      cover (a) same-parent reorder around a self-closing `<img />` —
+      `<button>` lands AFTER `<img />` as next sibling, leaf stays
+      self-closing (`/>` preserved, no synthesized `</img>`); (b) same-parent
+      reorder BEFORE a self-closing `<input />` — leaf stays self-closing,
+      no `</input>`; (c) same-parent reorder AFTER a classless `<br />` leaf
+      (resolved tag-only via the node map) — leaf stays self-closing, no
+      `</br>`; (d) different-parent move using `<img className="hero-art" />`
+      as the landing reference — `<p>` from `<main>` lands inside `<header>`
+      after the leaf, leaf stays self-closing; (e) symmetric different-parent
+      move with `position: 'before'` — `<span>` from `<aside>` lands inside
+      `<header>` before the leaf; (f) leaf-invariant guard — moved source
+      MUST NOT appear between the leaf's `<img …` open and its terminating
+      `/>`, proving the implementation never tried to nest INTO the leaf.
+      29/29 same-file + cross-file + cross-component + cross-component-cross-file
+      + leaf-target move tests pass (23 across the original 5 files + 6 new in
+      AstServiceMoveLeafTarget.test.ts).
 
 ### Task 7: Wire iframe-interaction to the new RPC
 
