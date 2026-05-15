@@ -2865,3 +2865,72 @@ hypercanvas-preview \
   --workers=1 --reporter=line --output=/tmp/hyper-e2e-ai-context-results
   Result: 2 passed.
 ```
+
+## VS Code E2E Preview Routing Follow-Up 2026-04-21 author: codex
+
+Root-cause chain:
+
+```text
+The blank preview was not a single failure. The first bug was the offscreen
+webview iframe described above. After that was fixed, the remaining empty
+states came from preview routing and harness readiness races:
+- the webview bridge could post `setComponent` into an `about:blank` iframe or
+  a bare `/test-preview` route instead of navigating to the selected component;
+- opening commands through the palette could move focus away from the component
+  editor before PreviewPanel captured the active component;
+- the E2E dev-server helper treated the static "Hyper Canvas" status bar item
+  as proof that the dev server was ready;
+- Remix preview routes restored stale tracked generated files and rendered
+  `CanvasPreview` without passing URL search params, so SSR/app-shell routing
+  showed "No component specified";
+- proxy-injected scripts caused Remix hydration mismatch, so Remix now loads
+  HyperCanvas iframe scripts through `/__hypercanvas/*` virtual endpoints.
+```
+
+Fixes in progress:
+
+```text
+Main extension/library:
+- PreviewPanel captures the current component before revealing/focusing the
+  webview and falls back to visible editors and open text tabs.
+- usePreviewBridge navigates the iframe when the current source is about:blank
+  or a bare preview route, while preserving postMessage switching for already
+  loaded component routes.
+- PreviewProxy serves HyperCanvas iframe scripts from virtual endpoints and
+  skips direct HTML injection for Remix projects.
+- generated Remix routes read search params with useSearchParams and pass
+  component/mode into CanvasPreview.
+- PreviewFileManager updates changed @hyperide-managed generated route files
+  instead of preserving stale generated content forever.
+
+E2E harness:
+- setupPreviewWithDevServer infers Remix/Next.js default previewable component
+  paths and polls before refresh so refresh does not race component URL sync.
+- DevServerControls no longer uses the static status bar fallback.
+- CommandPalette defaults to zero retries; command failures must be analyzed.
+- tracked generated Remix test-preview routes are removed from fixtures so the
+  generator owns them during tests.
+```
+
+Validation so far:
+
+```text
+Focused unit tests:
+bun test lib/preview-generator/__tests__/framework-routing.test.ts \
+  lib/preview-generator/__tests__/preview-file-manager.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/PreviewPanel.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/usePreviewBridge.test.ts
+Result: 109 pass, 0 fail.
+
+Focused E2E:
+- Remix preview-render open component smoke across both Remix projects:
+  2 passed, no test-errors.
+- insert-panel/AST focused slice:
+  24 passed.
+- nextjs-tw-sample AST command smoke after DOM-error detector tightening:
+  1 passed, no test-errors.
+
+Full E2E:
+Started 2026-04-21 from /Users/ultra/work/ext-test-projects/e2e with
+workers=1 and retries=0. Result pending in this session.
+```
