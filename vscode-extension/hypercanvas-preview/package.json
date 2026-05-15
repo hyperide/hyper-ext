@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
@@ -300,7 +300,7 @@
             "Multi-provider proxy (Gemini, DeepSeek, Mistral, Groq)",
             "OpenCode native SDK (Gemini, DeepSeek, Qwen)"
           ],
-          "markdownDescription": "AI provider. To set API key, run **Hyper: Configure AI API Key** (Ctrl+Shift+P). Recommended: GLM via Z.ai \u2014 flat-rate from $10/mo.",
+          "markdownDescription": "AI provider. To set API key, run **Hyper: Configure AI API Key** (Ctrl+Shift+P). Recommended: GLM via Z.ai — flat-rate from $10/mo.",
           "description": "AI provider for project structure analysis"
         },
         "hypercanvas.ai.backend": {
@@ -343,7 +343,7 @@
         "hypercanvas.preview.autoSampleGeneration": {
           "type": "boolean",
           "default": true,
-          "description": "Auto-generate a SampleDefault export in component files (for preview wrapping). Disable for E2E test harnesses that reset source files between runs \u2014 the export drop would trigger Vite 'export removed' errors and full reloads."
+          "description": "Auto-generate a SampleDefault export in component files (for preview wrapping). Disable for E2E test harnesses that reset source files between runs — the export drop would trigger Vite 'export removed' errors and full reloads."
         }
       }
     }
