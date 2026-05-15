@@ -120,6 +120,56 @@ describe('useInstanceOverlays — drag-start iframe hit-testing', () => {
     unmount();
   });
 
+  it('fires onInstanceDragging and onInstanceDragEnd on a complete drag gesture', async () => {
+    const onInstanceDragging = mock(() => {});
+    const onInstanceDragEnd = mock(() => {});
+
+    // Use multiples of GRID_SIZE (16) for predictable snap: 4*16=64
+    instanceEl.style.left = '64px';
+    instanceEl.style.top = '64px';
+
+    const { unmount } = renderHook(() =>
+      useInstanceOverlays({
+        boardModeActive: true,
+        activeInstanceId: null,
+        selectedInstancesInBoard: [],
+        mode: 'design',
+        overlayContainerRef: containerRef,
+        iframeLoadedCounter: 0,
+        projectId: 'proj-1',
+        componentPath: 'src/App.tsx',
+        onDoubleClick: () => {},
+        onInstanceDragging,
+        onInstanceDragEnd,
+        viewport: VIEWPORT,
+      }),
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const frame = container.querySelector('[data-instance-frame="instance-1"]');
+    if (!frame) throw new Error('frame overlay not found');
+
+    // Start drag
+    frame.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100, bubbles: true }));
+
+    // Move 32px — above 5px threshold. newX=round((64+32)/16)*16=96, newY=96, delta=32 both axes.
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 132, clientY: 132, bubbles: true }));
+
+    expect(onInstanceDragging).toHaveBeenCalledWith('instance-1', 32, 32);
+
+    // End drag
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    expect(onInstanceDragEnd).toHaveBeenCalledWith('instance-1', 32, 32);
+
+    instanceEl.style.left = '50px';
+    instanceEl.style.top = '80px';
+    unmount();
+  });
+
   it('does not set pointer-events:none for right-click (non-left button)', async () => {
     const { unmount } = renderHook(() =>
       useInstanceOverlays({

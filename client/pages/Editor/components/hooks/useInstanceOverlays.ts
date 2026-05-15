@@ -2,6 +2,10 @@
  * Hook for rendering instance overlays (frames and badges) in multi-instance mode
  * Overlays are rendered outside iframe using RAF loop for performance
  * Implements drag & drop with 16px grid snap
+ *
+ * Past bugs: HYP-363 — drag lost mousemove events when cursor entered iframe before the 5px
+ * threshold (iframe was pointer-events:auto in design mode). Fixed by moving
+ * iframe.style.pointerEvents='none' to handleDragStart (immediately on mousedown).
  */
 
 import { type RefObject, useCallback, useEffect, useRef } from 'react';
@@ -89,7 +93,6 @@ export function useInstanceOverlays({
   // Stable refs for drag handlers to prevent cleanup issues
   const handleDragMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
   const handleDragEndRef = useRef<(() => void) | null>(null);
-  const listenersAttachedRef = useRef(false);
 
   // Persistent refs for data accessed by drag handlers
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -108,13 +111,11 @@ export function useInstanceOverlays({
   useEffect(() => {
     window.addEventListener('mousemove', stableHandleDragMove);
     window.addEventListener('mouseup', stableHandleDragEnd);
-    listenersAttachedRef.current = true;
 
     return () => {
       // Only cleanup on unmount
       window.removeEventListener('mousemove', stableHandleDragMove);
       window.removeEventListener('mouseup', stableHandleDragEnd);
-      listenersAttachedRef.current = false;
     };
   }, [stableHandleDragMove, stableHandleDragEnd]);
 
@@ -218,9 +219,7 @@ export function useInstanceOverlays({
       // Immediately disable iframe hit-testing so the parent window continues
       // receiving mousemove/mouseup even if the cursor crosses the iframe boundary
       // before the 5px drag threshold is reached.
-      if (iframeRef.current) {
-        iframeRef.current.style.pointerEvents = 'none';
-      }
+      iframe.style.pointerEvents = 'none';
       // Note: window listeners are already attached globally in separate useEffect
     };
 
@@ -320,16 +319,6 @@ export function useInstanceOverlays({
           // Notify about drag end with delta for moving comments
           const deltaX = finalX - dragState.initialX;
           const deltaY = finalY - dragState.initialY;
-          console.log('[useInstanceOverlays] Drag ended:', {
-            instanceId: dragState.instanceId,
-            initialX: dragState.initialX,
-            initialY: dragState.initialY,
-            finalX,
-            finalY,
-            deltaX,
-            deltaY,
-            hasCallback: !!onInstanceDragEnd,
-          });
           if ((deltaX !== 0 || deltaY !== 0) && onInstanceDragEnd) {
             onInstanceDragEnd(dragState.instanceId, deltaX, deltaY);
           }
@@ -615,8 +604,8 @@ export function useInstanceOverlays({
         overlay.badge.style.opacity = opacity;
 
         // Pointer events: in board mode - frame handles interaction, in design/interact - frame transparent for clicks
-        // IMPORTANT: Don't change pointer-events during drag - handleDragStart sets them to 'none'
-        // Check both isDragging AND instanceId (pointer-events disabled on mousedown, before drag starts)
+        // IMPORTANT: Don't update while a drag is pending — handleDragStart sets iframe pointer-events to 'none'
+        // on mousedown (before the 5px threshold). instanceId is set from mousedown until handleDragEnd clears it.
         if (!dragStateRef.current.instanceId) {
           overlay.frame.style.pointerEvents = boardModeActive ? 'auto' : 'none';
           overlay.badge.style.pointerEvents = 'auto';
