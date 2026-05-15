@@ -12,6 +12,7 @@ import {
   renderOverlayRects,
   renderPlaceholderOverlays,
 } from '@shared/canvas-interaction/overlay-renderer';
+import { computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter } from '@/lib/platform/types';
@@ -329,9 +330,66 @@ export function useCanvasInteraction(
 
     window.addEventListener('message', handleMessage);
 
+    // Resize drag — intercept pointerdown on handle dots inside the overlay container.
+    // Handle dots have pointer-events:auto; events bubble through the container's
+    // pointer-events:none to this listener.
+    function handleResizePointerDown(event: PointerEvent) {
+      const handle = (event.target as HTMLElement).closest?.('[data-resize-handle]') as HTMLElement | null;
+      if (!handle) return;
+
+      const overlayDiv = handle.closest('[data-selection-overlay]') as HTMLDivElement | null;
+      if (!overlayDiv) return;
+
+      const elementId = overlayDiv.dataset.elementId;
+      if (!elementId) return;
+
+      // Capture narrowed references so TypeScript can see their types inside closures.
+      const capturedHandle: HTMLElement = handle;
+      const capturedElementId: string = elementId;
+
+      const axis = capturedHandle.getAttribute('data-resize-handle') as 'width' | 'height';
+      const baseW = parseFloat(overlayDiv.style.width) || 0;
+      const baseH = parseFloat(overlayDiv.style.height) || 0;
+      const startX = event.clientX;
+      const startY = event.clientY;
+
+      capturedHandle.setPointerCapture(event.pointerId);
+      event.stopPropagation();
+
+      function onPointerUp(e: PointerEvent) {
+        capturedHandle.removeEventListener('pointermove', onPointerMove);
+        capturedHandle.removeEventListener('pointerup', onPointerUp);
+
+        const dX = e.clientX - startX;
+        const dY = e.clientY - startY;
+        const styles = computeResizeStyles(axis, baseW, baseH, dX, dY);
+        if (!styles) return;
+
+        const filePathMatch = capturedElementId.match(/^(.+):\d+:\d+$/);
+        if (!filePathMatch) return;
+
+        canvas.sendEvent({
+          type: 'ast:updateStyles',
+          requestId: `resize-${Date.now()}`,
+          filePath: filePathMatch[1],
+          elementId: capturedElementId,
+          styles,
+        });
+      }
+
+      // pointermove is required for setPointerCapture to release on pointerup
+      function onPointerMove(_e: PointerEvent) {}
+
+      capturedHandle.addEventListener('pointermove', onPointerMove);
+      capturedHandle.addEventListener('pointerup', onPointerUp);
+    }
+
+    container.addEventListener('pointerdown', handleResizePointerDown);
+
     return () => {
       window.removeEventListener('message', handleMessage);
       frame.removeEventListener('load', handleIframeLoad);
+      container.removeEventListener('pointerdown', handleResizePointerDown);
       clearOverlays(overlayElements.current);
       clearOverlays(placeholderElements.current);
     };

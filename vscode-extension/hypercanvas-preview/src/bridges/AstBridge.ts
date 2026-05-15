@@ -438,14 +438,14 @@ export class AstBridge {
     // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
     // Key validation prevents JSX injection when key is interpolated into {t("...")} expressions.
     const SAFE_SEGMENT = /^[\w-]{1,64}$/;
-    const SAFE_KEY = /^[\w\-:]+(?:\.[\w\-:]+)*$/;
+    const SAFE_KEY = /^[\w.\-:]{1,256}$/;
     if (!SAFE_SEGMENT.test(message.activeLocale)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid activeLocale' };
     }
     if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
     }
-    if (message.key.length > 256 || !SAFE_KEY.test(message.key)) {
+    if (!SAFE_KEY.test(message.key)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }
 
