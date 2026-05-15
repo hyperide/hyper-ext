@@ -46,13 +46,20 @@ git -C /Users/ultra/work/hyper-canvas-draft worktree add \
 
 ### Task 1: Check Scroll Message Chain in Code
 
-- [ ] Read `client/lib/platform/hooks/useElementSelection.ts` — find `iframe:scrollToElement` send.
-- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find the echo handler.
-- [ ] Read `client/lib/platform/hooks/usePreviewBridge.ts` — find scroll forwarding.
-- [ ] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — find `scrollIntoViewCenterSmooth`.
-- [ ] Trace: is there any async gap where the message could be dropped? Any condition check?
+- [x] Read `client/lib/platform/hooks/useElementSelection.ts` — find `iframe:scrollToElement` send.
+- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find the echo handler.
+- [x] Read `client/lib/platform/hooks/usePreviewBridge.ts` — find scroll forwarding.
+- [x] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — find `scrollIntoViewCenterSmooth`.
+- [x] Trace: is there any async gap where the message could be dropped? Any condition check?
 
 Acceptance: understand exactly where the message chain could fail.
+
+FINDING: commit `0809d36e` does not exist in any branch. `iframe:scrollToElement` is NOT in any file.
+The entire scroll chain is MISSING. `scrollIntoViewCenterSmooth` exists (iframe-interaction.ts:764)
+but is only called from `hypercanvas:goToVisual` handler. Tree selection sends `state:update` →
+`hypercanvas:stateUpdate` to iframe (updates overlays only), no scroll triggered.
+Fix must add scroll call after `hypercanvas:stateUpdate` in iframe-interaction.ts, or trigger
+`goToVisual` from StateHub when `selectedIds` changes.
 
 ### Task 2: Write RED e2e Test
 
