@@ -8,6 +8,7 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
+import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1215,14 +1216,14 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
+// Delegates to the shared `isHorizontalLayout` (drop-indicator-orientation.ts),
+// which walks past wrapper divs and treats `grid-cols-N` (multi-track,
+// default `grid-auto-flow: row`) as a horizontal layout. The old inline
+// version checked only `dropEl.parentElement` and required
+// `gridAutoFlow.includes('column')` — that broke Tailwind grids and any
+// drop element wrapped in a transparent block container.
 function _isHorizontalLayout(el: HTMLElement): boolean {
-  const parent = el.parentElement;
-  if (!parent) return false;
-  const s = getComputedStyle(parent);
-  const d = s.display;
-  if (d === 'flex' || d === 'inline-flex') return s.flexDirection === 'row' || s.flexDirection === 'row-reverse';
-  if (d === 'grid' || d === 'inline-grid') return s.gridAutoFlow.includes('column');
-  return false;
+  return _isHorizontalLayoutShared(el);
 }
 
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
@@ -1237,9 +1238,26 @@ let _dragIndicatorEl: HTMLElement | null = null;
 let _dragBadgeEl: HTMLElement | null = null;
 let _dragOffsetX = 0;
 let _dragOffsetY = 0;
+// Pointer/selection guard state: when pending drag begins on a text container
+// (<p>, <h3>, <span> with text), native text-selection grabs the pointer and
+// pointermove never crosses DRAG_THRESHOLD_PX. We capture the pointer and
+// disable user-select on body for the duration of the drag, restoring on up.
+let _dragCapturedPointerId: number | null = null;
+let _dragCapturedTarget: HTMLElement | null = null;
+// `null` sentinel = "nothing saved, do not restore". Without it, _dragCleanup
+// running twice (pointerup then lostpointercapture, or compat-fired pointercancel
+// alongside pointerup) writes the empty string to body styles on the second
+// pass, clobbering whatever the host app set inline (e.g. modals that disable
+// selection while open).
+let _dragPrevBodyUserSelect: string | null = null;
+let _dragPrevBodyWebkitUserSelect: string | null = null;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
+  // Reentry guard: a second pointerdown without an intervening pointerup
+  // (multi-touch, missed pointercancel, etc) would otherwise overwrite
+  // _dragPrevBodyUserSelect with 'none' and leak user-select forever.
+  if (_dragState !== 'idle') return;
   const target = e.target as HTMLElement;
   // resolveDragSource: walks up for decorative children (emoji, aria-hidden),
   // then falls back to _debugSource when source maps are cold (React 18 Vite/Babel).
@@ -1277,9 +1295,49 @@ function _dragPointerDown(e: PointerEvent): void {
   _dragStartY = e.clientY;
   _dragState = 'pending';
   _dragSourceEl = dragEl;
+
+  // Suppress native text-selection that otherwise consumes pointermove on
+  // <p>/<h3>/<span> with text. Without this, the user's drag never crosses
+  // DRAG_THRESHOLD_PX because the browser is busy extending a text range
+  // instead of dispatching pointermove events with non-trivial deltas.
+  // preventDefault on pointerdown stops the compat-fired mousedown's default
+  // (selection start) in modern browsers; user-select:none on body blocks
+  // selection for the rest of the drag regardless.
+  e.preventDefault();
+  _dragPrevBodyUserSelect = document.body.style.userSelect;
+  _dragPrevBodyWebkitUserSelect =
+    (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect ?? '';
+  document.body.style.userSelect = 'none';
+  (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect = 'none';
+
+  // Capture the pointer on the resolved dragEl (not the raw event target) so
+  // capture survives when the user grabs a decorative inner element (emoji
+  // span, aria-hidden wrapper) that may re-render mid-drag. dragEl is held
+  // alive by `_dragSourceEl` and is the element receiving the opacity/pointer-
+  // events styling during drag, so it's the stable choice.
+  // Track the pointer id regardless of capture success so the multi-touch
+  // guards in _dragPointerMove / _dragPointerUp still reject hijacks from a
+  // second pointer when setPointerCapture happens to throw (e.g. target
+  // detached mid-render). _dragCapturedTarget is only set on success so the
+  // cleanup path doesn't call releasePointerCapture on a target that never
+  // captured.
+  _dragCapturedPointerId = e.pointerId;
+  if (typeof dragEl.setPointerCapture === 'function') {
+    try {
+      dragEl.setPointerCapture(e.pointerId);
+      _dragCapturedTarget = dragEl;
+    } catch {
+      // setPointerCapture can throw if the target was detached; ignore.
+    }
+  }
 }
 
 function _dragPointerMove(e: PointerEvent): void {
+  // Multi-touch guard: once we've captured a pointer, ignore moves from any
+  // other pointerId. Without this, a second finger / pen lifts the touch off
+  // the first one's start coords, dx/dy explode past DRAG_THRESHOLD_PX, and
+  // the ghost jumps to (and follows) the wrong cursor.
+  if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
   if (_dragState === 'pending') {
     const dx = e.clientX - _dragStartX;
     const dy = e.clientY - _dragStartY;
@@ -1383,10 +1441,11 @@ function _dragPointerMove(e: PointerEvent): void {
   }
 }
 
-function _dragPointerUp(e: PointerEvent): void {
-  const wasDragging = _dragState === 'dragging';
-  const sourceId = _dragSourceId;
-  const sourceFilePath = _dragSourceFilePath;
+// Runs the DOM/state cleanup for any drag-end path: pointerup, pointercancel,
+// lostpointercapture. Restores userSelect, releases pointer capture, removes
+// ghost/indicator/badge, clears source-el styles. Idempotent — safe to call
+// multiple times in a row (every branch nulls its target ref).
+function _dragCleanup(): void {
   _dragState = 'idle';
   _dragSourceId = null;
   _dragSourceFilePath = null;
@@ -1411,7 +1470,59 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragOffsetX = 0;
   _dragOffsetY = 0;
 
+  // Only restore when we actually saved values on a matching pointerdown.
+  // After restoration both sentinels go back to `null` so a second cleanup
+  // pass (pointerup → lostpointercapture chain) leaves host-set inline
+  // styles alone.
+  if (_dragPrevBodyUserSelect !== null) {
+    document.body.style.userSelect = _dragPrevBodyUserSelect;
+    _dragPrevBodyUserSelect = null;
+  }
+  if (_dragPrevBodyWebkitUserSelect !== null) {
+    (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect = _dragPrevBodyWebkitUserSelect;
+    _dragPrevBodyWebkitUserSelect = null;
+  }
+  if (
+    _dragCapturedTarget &&
+    _dragCapturedPointerId !== null &&
+    typeof _dragCapturedTarget.releasePointerCapture === 'function'
+  ) {
+    try {
+      _dragCapturedTarget.releasePointerCapture(_dragCapturedPointerId);
+    } catch {
+      // Capture may have been lost already; ignore.
+    }
+  }
+  _dragCapturedPointerId = null;
+  _dragCapturedTarget = null;
+}
+
+function _dragPointerUp(e: PointerEvent): void {
+  // Multi-touch guard: only the captured pointer's release ends the drag.
+  // A different pointerId lifting first must not consume the captured drag.
+  if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
+  const wasDragging = _dragState === 'dragging';
+  const sourceId = _dragSourceId;
+  const sourceFilePath = _dragSourceFilePath;
+
+  _dragCleanup();
+
   if (!wasDragging || !sourceId || !sourceFilePath) return;
+
+  // Suppress the synthetic click that browsers fire after pointerup. The user
+  // committed a drag (ghost rendered, threshold crossed) regardless of whether
+  // the drop ultimately resolves to a valid target — without this, a drag that
+  // ends over empty space / the same source / a non-source-bearing element
+  // produces a click that re-selects whatever lands under the cursor.
+  // Failsafe: when threshold is crossed, browsers typically do NOT fire a
+  // compat click, and a pointerup outside the iframe never produces a click
+  // at all. Without this timeout the flag would leak and suppress an
+  // unrelated legitimate click made later. Synthetic click (if any) fires
+  // synchronously before this macrotask, so suppression still works.
+  _dragSuppressNextClick = true;
+  setTimeout(() => {
+    _dragSuppressNextClick = false;
+  }, 0);
 
   const rawDropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (!rawDropEl) return;
@@ -1453,7 +1564,6 @@ function _dragPointerUp(e: PointerEvent): void {
       ? 'before'
       : 'after';
 
-  _dragSuppressNextClick = true;
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
@@ -1479,6 +1589,19 @@ function _dragClickSuppressor(e: MouseEvent): void {
 document.addEventListener('pointerdown', _dragPointerDown, true);
 document.addEventListener('pointermove', _dragPointerMove, true);
 document.addEventListener('pointerup', _dragPointerUp, true);
+// pointercancel fires on touch interruption, OS-level focus loss, browser
+// gesture takeover. lostpointercapture fires when the captured pointer is
+// hijacked. Without these, userSelect:'none' / opacity / capture leak forever
+// and the iframe becomes unusable until reload. Gate by pointerId: these
+// listeners are document-level capture-phase, so an unrelated widget in the
+// rendered app losing its own pointer capture (different pointerId) would
+// otherwise abort our active drag mid-gesture.
+function _dragCleanupForPointerEvent(e: PointerEvent): void {
+  if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
+  _dragCleanup();
+}
+document.addEventListener('pointercancel', _dragCleanupForPointerEvent, true);
+document.addEventListener('lostpointercapture', _dragCleanupForPointerEvent, true);
 
 // === Focus prevention in design mode (mousedown, not focusin) ===
 const mousedownHandler = (e: MouseEvent) => {
@@ -1698,6 +1821,8 @@ window.addEventListener('unload', () => {
   document.removeEventListener('pointerdown', _dragPointerDown, true);
   document.removeEventListener('pointermove', _dragPointerMove, true);
   document.removeEventListener('pointerup', _dragPointerUp, true);
+  document.removeEventListener('pointercancel', _dragCleanupForPointerEvent, true);
+  document.removeEventListener('lostpointercapture', _dragCleanupForPointerEvent, true);
   document.removeEventListener('click', _dragClickSuppressor, true);
 });
 
