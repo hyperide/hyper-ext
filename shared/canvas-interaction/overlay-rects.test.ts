@@ -51,7 +51,6 @@ describe('computeOverlayRects', () => {
     expect(result.overlayRects).toHaveLength(1);
     expect(result.overlayRects[0]).toEqual({
       key: 'select-ref-1-0',
-      elementId: 'ref-1',
       left: 10,
       top: 20,
       width: 100,
