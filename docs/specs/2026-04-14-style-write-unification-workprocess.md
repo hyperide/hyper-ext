@@ -758,3 +758,40 @@ S3 deep-dive revealed 4 Tamagui projects failing "style written as prop" (not 3 
 | `5a7402b` | HMR isPreviewLoaded timeout 30s→150s | tamagui-fitness "opacity HMR" |
 | `499e786` | Monaco editor focus: activity bar click + 1000ms | react-vite-styled-shopify "component with error" |
 
+---
+
+## 📍 2026-04-30 00:15 CEST — Run #32/#33/#34 summary + Run #35 launched
+
+### Run #32 / #33 (not logged in detail — post-context-compaction)
+
+Runs #32 and #33 ran between the previous session and this one. Details not available from
+container logs (containers auto-removed). Confirmed fixes from run #31 cycle were applied.
+
+### Run #34 (`run-20260429-211849-86173`) — DONE (1 shard, ~3.1h)
+
+**All fixes from runs #29–#31 active (bind-mounted ext-test-projects).**
+
+Results:
+- **1 HARD FAIL**: "redo limit — no redo after new edit" (both attempts: 36961ms + 38846ms)
+- **8 FLAKY** (all retry-pass): 5 settings tests + "open preview command works" + "rapid edit after undo" + "autoStart setting can be written" (360s timedOut → 1889ms pass) + "component with error"
+
+**Root cause "redo limit"**: After CMD_UNDO, Vite HMR fires. `isPreviewLoaded()` poll on line 381
+of `undo-redo.spec.ts` has `{ timeout: 15_000 }`. Under Docker inotify lag, HMR takes 15-20s
+to settle, exhausting the budget. Inspector poll on line 390 also at 15s.
+
+**Fix committed**: `d5507ea` — `isPreviewLoaded` poll 15s→45s, inspector poll 15s→30s.
+
+### Run #35 (`run-20260430-003332-21049`) — IN PROGRESS (3 shards, started 00:33 CEST)
+
+```bash
+HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+```
+
+**Fixes active in run #35** (all bind-mounted, no image rebuild needed):
+- All 11 fixes from run #31 cycle
+- `1889eda`: App.tsx preference over App.web.tsx for Tamagui (reverted to correct order)
+- `db75f80`: hyper_duplicate_element poll 30s→60s
+- `d5507ea`: redo-limit isPreviewLoaded 15s→45s, inspector 15s→30s
+
+**Expected**: 0 hard fails. The one remaining hard fail (redo-limit) is now covered.
+
