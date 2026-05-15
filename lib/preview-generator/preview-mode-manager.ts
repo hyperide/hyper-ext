@@ -143,10 +143,20 @@ export class PreviewModeManager {
       case 'nextjs-app-router':
       case 'nextjs-pages-router':
       case 'remix':
-      case 'vite-spa-file-based':
-        // These frameworks use file-based routing; ensurePreviewFiles() may skip
-        // writing when marker files already exist — no HMR fires, so no recompile gate.
-        return this._fileManager.ensurePreviewFiles();
+      case 'vite-spa-file-based': {
+        // ensurePreviewFiles() is idempotent — returns 'ok-files-written' only when
+        // route files are freshly created or updated. Fresh writes trigger HMR/recompile,
+        // so we arm the gate beforehand (same pattern as webpack/parcel) to let
+        // awaitRecompile() in extension.ts hold off the iframe until the dev server
+        // emits "hmr update" / "page reload" / "compiled successfully".
+        // On 2nd+ tests the same files already exist (content identical) — _writeIfSafe
+        // skips writing → 'ok' returned → no gate armed → awaitRecompile is a no-op.
+        const fileResult = await this._fileManager.ensurePreviewFiles();
+        if (fileResult === 'ok-files-written') {
+          this._onBeforeWebpackEntryPatch?.();
+        }
+        return fileResult === 'ok-files-written' ? 'ok' : fileResult;
+      }
       case 'vite-spa-jsx-router': {
         const routerFile = await this.detectRouterFile();
         if (routerFile) {
@@ -165,8 +175,10 @@ export class PreviewModeManager {
         return this._patchEntryFile();
       case 'unknown':
         return 'unsupported';
-      default:
-        return this._fileManager.ensurePreviewFiles();
+      default: {
+        const r = await this._fileManager.ensurePreviewFiles();
+        return r === 'ok-files-written' ? 'ok' : r;
+      }
     }
   }
 

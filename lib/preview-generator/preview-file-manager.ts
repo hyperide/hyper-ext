@@ -762,9 +762,10 @@ export class PreviewFileManager {
    * Ensure framework-specific route file(s) exist for App Shell mode.
    * Idempotent — skips files that already contain @hyperide-managed.
    * Does not overwrite user files (P3-3).
-   * Returns 'ok' | 'unsupported' | 'needs-patch'.
+   * Returns 'ok' | 'ok-files-written' | 'unsupported' | 'needs-patch'.
+   * 'ok-files-written' means new/updated files were written (HMR will fire).
    */
-  async ensurePreviewFiles(): Promise<'ok' | 'unsupported' | 'needs-patch'> {
+  async ensurePreviewFiles(): Promise<'ok' | 'ok-files-written' | 'unsupported' | 'needs-patch'> {
     const detection = await detectFramework(this.projectRoot, this.io);
     const { framework } = detection;
 
@@ -786,15 +787,15 @@ export class PreviewFileManager {
     let importPath = relative(routeDir, previewPath).replace(/\.\w+$/, '');
     if (!importPath.startsWith('.')) importPath = `./${importPath}`;
 
-    await this._writeIfSafe(paths.routeFile, generateRouteFileContent(framework, importPath));
+    let wrote = await this._writeIfSafe(paths.routeFile, generateRouteFileContent(framework, importPath));
 
     if (paths.layoutFile) {
-      await this._writeIfSafe(paths.layoutFile, generateBlankLayoutContent());
+      wrote = (await this._writeIfSafe(paths.layoutFile, generateBlankLayoutContent())) || wrote;
     }
 
     await this.ensureGitExclude();
 
-    return 'ok';
+    return wrote ? 'ok-files-written' : 'ok';
   }
 
   /**
@@ -939,23 +940,25 @@ export class PreviewFileManager {
   /**
    * Write file only if it doesn't exist or already contains @hyperide-managed.
    * Prevents overwriting user files.
+   * Returns true if the file was written (new or updated), false if skipped.
    */
-  private async _writeIfSafe(filePath: string, content: string): Promise<void> {
+  private async _writeIfSafe(filePath: string, content: string): Promise<boolean> {
     try {
       const existing = await this.io.readFile(filePath);
       if (!existing.includes('@hyperide-managed')) {
         console.warn(`[PreviewFileManager] Skipping ${filePath} — exists without @hyperide-managed marker`);
-        return;
+        return false;
       }
-      if (existing === content) return;
+      if (existing === content) return false;
       await this.io.mkdir?.(dirname(filePath));
       await this.io.writeFile(filePath, content);
-      return;
+      return true;
     } catch {
       // File doesn't exist — safe to write
     }
     await this.io.mkdir?.(dirname(filePath));
     await this.io.writeFile(filePath, content);
+    return true;
   }
 
   /**

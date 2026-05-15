@@ -953,7 +953,8 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
 
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const result = await manager.ensurePreviewFiles();
-    expect(result).toBe('ok');
+    // Files freshly written → 'ok-files-written' so caller can arm recompile gate
+    expect(result).toBe('ok-files-written');
 
     const routeFile = io.files.get('/project/app/test-preview/page.tsx');
     expect(routeFile).toBeDefined();
@@ -964,6 +965,10 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     const layoutFile = io.files.get('/project/app/test-preview/layout.tsx');
     expect(layoutFile).toBeDefined();
     expect(layoutFile).toContain('@hyperide-managed');
+
+    // Idempotent — same content, no new writes → 'ok'
+    const result2 = await manager.ensurePreviewFiles();
+    expect(result2).toBe('ok');
   });
 
   it('updates route file if it already exists with @hyperide-managed', async () => {

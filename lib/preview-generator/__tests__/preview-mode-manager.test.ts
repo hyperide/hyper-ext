@@ -3,13 +3,16 @@ import type { FileIO } from '../../ast/file-io';
 import { PreviewModeManager, type WatcherFactory } from '../preview-mode-manager';
 
 /** Minimal FileIO that simulates file presence/absence */
-function makeIO(files: Record<string, string> = {}): FileIO {
+function makeIO(initialFiles: Record<string, string> = {}): FileIO {
+  const files: Record<string, string> = { ...initialFiles };
   return {
     async readFile(p: string) {
       if (p in files) return files[p];
       throw new Error(`ENOENT: ${p}`);
     },
-    async writeFile() {},
+    async writeFile(p: string, c: string) {
+      files[p] = c;
+    },
     async access(p: string) {
       if (p in files) return;
       // Check if it looks like a directory (some paths are accessed as dirs)
@@ -17,7 +20,9 @@ function makeIO(files: Record<string, string> = {}): FileIO {
       if (hasChild) return;
       throw new Error(`ENOENT: ${p}`);
     },
-    async deleteFile() {},
+    async deleteFile(p: string) {
+      delete files[p];
+    },
   };
 }
 
@@ -394,8 +399,27 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
     expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
   });
 
-  it('does NOT fire on Next.js projects', async () => {
+  it('fires on Next.js when route files are freshly written', async () => {
     const onBeforeWebpackEntryPatch = mock(() => {});
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
+      [`${root}/app/layout.tsx`]: '',
+      // No test-preview route — will be freshly created
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onBeforeWebpackEntryPatch,
+    });
+    await m.onComponentSelected();
+    // Files were written → HMR fires → gate must be armed so awaitRecompile can wait
+    expect(onBeforeWebpackEntryPatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fire on Next.js when route files already exist (idempotent)', async () => {
+    const onBeforeWebpackEntryPatch = mock(() => {});
+    // Simulate fully patched Next.js project — route file already exists with managed marker
     const io = makeIO({
       [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
       [`${root}/app/layout.tsx`]: '',
@@ -406,6 +430,10 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
       watcherFactory: noopWatcher,
       onBeforeWebpackEntryPatch,
     });
+    // First call writes files
+    await m.onComponentSelected();
+    onBeforeWebpackEntryPatch.mockClear();
+    // Second call — files already exist with same content — no write, no gate
     await m.onComponentSelected();
     expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
   });
