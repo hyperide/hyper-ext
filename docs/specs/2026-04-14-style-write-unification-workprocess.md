@@ -888,3 +888,28 @@ Extension writes to `HomeScreen.tsx` (not App.tsx), but `readModifiedFile` was r
 
 **Run #38 will include**: `f85f4d3` (correct file search) + `aeb693c` (auto-save) + `4909041` (redo-limit 75s) + all previous fixes.
 
+---
+
+## 📍 2026-04-30 ~10:30 CEST — Run #38 partial results + new fixes
+
+**Run #38 S3 results (Tamagui shards):**
+- S3: 8 HARD FAILS — "Tamagui: style written as prop, not className" × 4 projects (fitness/food-delivery/uber/whatsapp) × 2 attempts each. All ~160-175s (150s poll timeout).
+- S1: 79+ tests, 0 fails (react-vite-tw4-twitter, still running)
+- S2: 29+ tests, 0 fails (react-vite-tw4-cssmodules-notion, still running)
+
+**Root cause Tamagui (final, definitive):**
+`AstService._resolveElement` receives `filePath=<abs>/App.tsx` but `elementId="src/screens/HomeScreen.tsx:10:5"`. The `fileMatches = filePath.endsWith('/' + fileName)` check fails (App.tsx ≠ HomeScreen.tsx) → returns null → `updateProps` returns `{success: false}` silently → write never happens → no dirty editor → poll times out at 150s.
+
+Note: `f85f4d3` + `aeb693c` don't help when write never reaches disk. They only help when write succeeds but assertion reads wrong file.
+
+**Fixes being deployed (2026-04-30):**
+
+1. `3e39f08e`: ViteReactSSG fallback in `patchEntryFile` now renders the component via
+   `import("__canvas_preview__").then(m => createRoot(el).render(createElement(m.default)))`.
+   Previously: plain `import(...)` (no-op for ViteReactSSG router — shows 404).
+   Affects: bulka-the-dog and any ViteReactSSG project in App Shell mode.
+
+2. **PENDING**: `AstService._resolveElement` fix — when `elementId` file doesn't match `filePath`,
+   resolve the correct file from `elementId` path and parse that file instead.
+   Affects: all 4 Tamagui projects (fitness/food-delivery/uber/whatsapp).
+
