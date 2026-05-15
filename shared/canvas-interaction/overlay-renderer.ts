@@ -32,7 +32,8 @@ function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
   dot.style.background = 'rgb(59, 130, 246)';
   dot.style.border = '2px solid white';
   dot.style.boxSizing = 'border-box';
-  dot.style.pointerEvents = 'none';
+  dot.style.pointerEvents = 'auto';
+  dot.style.cursor = axis === 'width' ? 'ew-resize' : 'ns-resize';
   if (axis === 'width') {
     dot.style.right = `${-HANDLE_SIZE / 2}px`;
     dot.style.top = '50%';
@@ -90,6 +91,12 @@ export function renderOverlayRects(
       element.style.border = rect.type === 'hover' ? HOVER_BORDER : SELECTION_BORDER;
       container.appendChild(element);
       overlayElements.set(rect.key, element);
+    }
+
+    if (rect.elementId) {
+      element.dataset.elementId = rect.elementId;
+    } else {
+      delete element.dataset.elementId;
     }
 
     element.style.left = `${rect.left}px`;

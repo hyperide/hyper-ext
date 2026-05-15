@@ -119,7 +119,7 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       const componentLibrary = JSX_COMPONENT_LIBRARY[componentName] ?? null;
-      const resolvedLibrary = componentLibrary;
+      const resolvedLibrary = library ?? componentLibrary;
       if (!resolvedLibrary) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;

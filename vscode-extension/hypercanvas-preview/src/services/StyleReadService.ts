@@ -55,9 +55,6 @@ export class StyleReadService {
   private _fileIO: FileIO;
   private _nodeMapService: NodeMapService;
   private _styleReadManager: StyleReadManager;
-  // package.json doesn't change during a session — cache detection result after first read
-  private _cachedI18nLibrary: ReturnType<typeof detectI18nPackage> | undefined = undefined;
-  private _i18nLibraryResolved = false;
 
   constructor(
     workspaceRoot: string,
@@ -234,18 +231,15 @@ export class StyleReadService {
     }
     if (!exprLoc) return undefined;
 
-    // Read package.json once per session to identify the i18n library in use
-    if (!this._i18nLibraryResolved) {
-      try {
-        const pkgContent = await this._fileIO.readFile(`${this._workspaceRoot}/package.json`);
-        const pkg = JSON.parse(pkgContent) as PackageJsonDeps;
-        this._cachedI18nLibrary = detectI18nPackage(pkg);
-      } catch {
-        // No package.json or parse error — proceed with null (allows 'custom' detection)
-      }
-      this._i18nLibraryResolved = true;
+    // Read package.json to identify the i18n library in use
+    let library: ReturnType<typeof detectI18nPackage> = null;
+    try {
+      const pkgContent = await this._fileIO.readFile(`${this._workspaceRoot}/package.json`);
+      const pkg = JSON.parse(pkgContent) as PackageJsonDeps;
+      library = detectI18nPackage(pkg);
+    } catch {
+      // No package.json or parse error — proceed with null (allows 'custom' detection)
     }
-    const library = this._cachedI18nLibrary ?? null;
 
     // AST detection: is the expression a known i18n call?
     const detection = detectI18nBinding({

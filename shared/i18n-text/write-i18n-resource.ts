@@ -117,10 +117,7 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
     return { success: false, filePath: null, error: 'unsupported-format' };
   }
 
-  // Detect original indentation to avoid reformatting files that use tabs or 4-space indent
-  const indentMatch = content.match(/^(\t| {2,4})(?=\S)/m);
-  const indent = indentMatch ? indentMatch[1] : '  ';
-  const updated = `${JSON.stringify(data, null, indent)}\n`;
+  const updated = `${JSON.stringify(data, null, 2)}\n`;
   try {
     await fileIO.writeFile(filePath, updated);
   } catch (err) {
