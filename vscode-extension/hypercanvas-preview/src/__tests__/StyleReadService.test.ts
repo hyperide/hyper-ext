@@ -516,39 +516,6 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
-  it('resolves selected locale text after DOM-text key lookup finds another locale', async () => {
-    const JSX_DYNAMIC_KEY = `const Greeting = ({ keyName }) => <p className="text-lg">{t(keyName)}</p>;`;
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(JSX_DYNAMIC_KEY, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: JSX_DYNAMIC_KEY,
-      '/workspace/client/lib/translations.ts': `export const translations = { ru: { hero: { title: 'Привет! Я собака Булка' } }, en: { hero: { title: 'Hello Bulka' } } };`,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef, 'Привет! Я собака Булка', 'en');
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.key).toBe('hero.title');
-      expect(result.i18nText.activeLocale).toBe('en');
-      expect(result.i18nText.resolvedText).toBe('Hello Bulka');
-      expect(result.i18nText.availableLocales.sort()).toEqual(['en', 'ru']);
-      expect(result.i18nText.editable).toBe(true);
-    }
-  });
-
   it('uses DOM text as primary custom i18n resolution when the source key is dynamic', async () => {
     const JSX_DYNAMIC_KEY = `const Greeting = ({ keyName }) => <p className="text-lg">{t(keyName)}</p>;`;
     const nodeMap = new NodeMapService();

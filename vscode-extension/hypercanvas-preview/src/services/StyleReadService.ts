@@ -29,7 +29,7 @@ import type {
 import type { NodeRef } from '@shared/element-tracing/types';
 import { detectI18nBinding, resolveCalleeOriginAtLocation } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
-import { type DomTextI18nMatch, resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
+import { resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
 import { isBundleArtifactPath } from './bundle-artifact-path';
@@ -329,13 +329,19 @@ export class StyleReadService {
     if (library === 'custom' && domTextContent) {
       const domMatch = await resolveI18nByDomText(domTextContent, this._workspaceRoot, this._fileIO).catch(() => null);
       if (domMatch) {
-        return this._createBindingFromDomMatch(
-          domMatch,
+        const binding: I18nTextBinding = {
+          kind: 'i18n',
           library,
-          activeLocale,
-          { filePath, line: exprLoc.line, column: exprLoc.column },
-          confidence ?? 'locale-heuristic',
-        );
+          key: domMatch.key,
+          namespace: domMatch.namespace,
+          activeLocale: activeLocale ?? domMatch.locale,
+          availableLocales: domMatch.availableLocales,
+          resolvedText: domMatch.resolvedText,
+          editable: true,
+          sourceLocation: { filePath, line: exprLoc.line, column: exprLoc.column },
+          confidence: confidence ?? 'locale-heuristic',
+        };
+        return binding;
       }
     }
 
@@ -406,13 +412,19 @@ export class StyleReadService {
           () => null,
         );
         if (domMatch) {
-          return this._createBindingFromDomMatch(
-            domMatch,
-            library ?? 'custom',
-            activeLocale,
-            { filePath, line: exprLoc.line, column: exprLoc.column },
-            'locale-heuristic',
-          );
+          const binding: I18nTextBinding = {
+            kind: 'i18n',
+            library: library ?? 'custom',
+            key: domMatch.key,
+            namespace: domMatch.namespace,
+            activeLocale: domMatch.locale,
+            availableLocales: domMatch.availableLocales,
+            resolvedText: domMatch.resolvedText,
+            editable: true,
+            sourceLocation: { filePath, line: exprLoc.line, column: exprLoc.column },
+            confidence: 'locale-heuristic',
+          };
+          return binding;
         }
       }
       return detection;
@@ -484,62 +496,6 @@ export class StyleReadService {
       confidence,
     };
     return binding;
-  }
-
-  /**
-   * Build an i18n binding starting from a DOM-text dictionary lookup.
-   *
-   * Re-resolves via `resolveI18nResource` using the locale the panel asked for
-   * (`requestedLocale`), so the inspector reflects the user-selected locale rather
-   * than whichever locale the DOM-text scan happened to land on first. Falls back
-   * to `domMatch.resolvedText` only when the requested locale equals the DOM-match
-   * locale; otherwise honours `resolved.resolvedText` (which may be `null` when the
-   * key is missing in the requested locale — the inspector handles null by showing
-   * an empty input).
-   *
-   * Restored from `d8874e13`; deleted in `3bff90dd`. Keep `editable`/`writable`
-   * plumbed from `resolved.writable` for parity with `c5a0c82a` and the deferred
-   * merged-TS write work.
-   */
-  private async _createBindingFromDomMatch(
-    domMatch: DomTextI18nMatch,
-    library: I18nLibrary,
-    requestedLocale: string | undefined,
-    sourceLocation: { filePath: string; line: number; column: number },
-    confidence: I18nTextBinding['confidence'],
-  ): Promise<I18nTextBinding> {
-    const targetLocale = requestedLocale ?? domMatch.locale;
-    const resolved = await resolveI18nResource({
-      projectRoot: this._workspaceRoot,
-      library,
-      key: domMatch.key,
-      namespace: domMatch.namespace,
-      activeLocale: targetLocale,
-      fileIO: this._fileIO,
-    }).catch(() => null);
-
-    // When requested locale matches the DOM-text locale, prefer the DOM-text resolved
-    // value (already known to render in the live DOM). When they differ, the panel is
-    // asking for a switch — pass through whatever the dictionary lookup returns, even
-    // if that is null (locale missing the key).
-    const resolvedText =
-      targetLocale === domMatch.locale
-        ? (resolved?.resolvedText ?? domMatch.resolvedText)
-        : (resolved?.resolvedText ?? null);
-
-    return {
-      kind: 'i18n',
-      library,
-      key: domMatch.key,
-      namespace: domMatch.namespace,
-      activeLocale: resolved?.activeLocale ?? targetLocale,
-      availableLocales: resolved?.availableLocales ?? domMatch.availableLocales,
-      resolvedText,
-      editable: resolved?.writable ?? true,
-      writable: resolved?.writable ?? true,
-      sourceLocation,
-      confidence,
-    };
   }
 }
 
