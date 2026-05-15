@@ -684,8 +684,8 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
   return [
     '  if (!componentPath) {',
     "    return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>",
-    '      <h2>Error: No component specified</h2>',
-    '      <p>Add ?component=... to URL</p>',
+    '      <h2>Loading preview...</h2>',
+    '      <p>Waiting for component selection</p>',
     '    </div>;',
     '  }',
     '',
