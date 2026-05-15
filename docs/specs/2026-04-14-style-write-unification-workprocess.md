@@ -1055,6 +1055,8 @@ reads all `.ts/.tsx` under `src/`. Changed both tests to use it.
 
 ## 📍 2026-04-30 — Run #42 launched
 
+Run ID: `run-20260430-163057-39937` — 3 shards, ext v0.1.41.
+
 ```bash
 cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
 ```
