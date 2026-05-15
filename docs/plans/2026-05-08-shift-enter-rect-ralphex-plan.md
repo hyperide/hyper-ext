@@ -56,66 +56,72 @@ Out of scope:
 - Renaming/restructuring nodeRef formats.
 - Anything in i18n / canvas-discard / other parallel ralphex plans.
 
-### Task 1 — RED e2e on bulka GalleryImage
+### Task 1: RED e2e on bulka GalleryImage
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-shift-enter-rect-survives.spec.ts`:
 
-1. Launch bulka, open `client/pages/Index.tsx` in Hyper Canvas.
-2. Find a `<GalleryImage src={images.…}` element on the canvas (via
-   `frame.getByText(...)` against the surrounding section, then walk up to the gallery
-   container, then click the `<img>` rendered inside GalleryImage).
-3. Confirm a selection rectangle is rendered (poll the overlay element with the
-   `data-testid` for the selection rect, e.g. `selection-rect-active` — verify the actual
-   testid/class via `grep` first).
-4. Press **Shift+Enter** via `window.keyboard.press('Shift+Enter')` (drive through the
-   webview's iframe, NOT VS Code keyboard — see existing `bulka-shift-enter-*` tests for
-   the canonical pattern).
-5. Assert the inspector now shows the *inner* element (read the right-pane element type).
-6. Assert the selection rect **still renders** AND its bounding box has changed
-   (the rect now wraps the inner element, not the gallery wrapper).
-7. Screenshot before+after Shift+Enter. Visual check: rect visible on the inner element.
+- [ ] Launch bulka, open `client/pages/Index.tsx` in Hyper Canvas.
+- [ ] Find a `<GalleryImage src={images.…}` element on the canvas (via
+      `frame.getByText(...)` against the surrounding section, then walk up to the gallery
+      container, then click the `<img>` rendered inside GalleryImage).
+- [ ] Confirm a selection rectangle is rendered (poll the overlay element with the
+      `data-testid` for the selection rect, e.g. `selection-rect-active` — verify the actual
+      testid/class via `grep` first).
+- [ ] Press **Shift+Enter** via `window.keyboard.press('Shift+Enter')` (drive through the
+      webview's iframe, NOT VS Code keyboard — see existing `bulka-shift-enter-*` tests for
+      the canonical pattern).
+- [ ] Assert the inspector now shows the *inner* element (read the right-pane element type).
+- [ ] Assert the selection rect **still renders** AND its bounding box has changed
+      (the rect now wraps the inner element, not the gallery wrapper).
+- [ ] Screenshot before+after Shift+Enter. Visual check: rect visible on the inner element.
+- [ ] Commit the spec on its own (RED). Ralphex's review pass needs to see real diff before
+      Task 2 starts; do not bundle it with later commits.
 
 Test must be **RED on current main** (rect disappears).
 
-### Task 2 — Diagnose the divergence
+### Task 2: Diagnose the divergence
 
 Compare the selection-rect path and the inspector-update path for the same Shift+Enter
-event. Likely sites:
+event. Likely sites (probe each):
 
-- `shared/canvas-interaction/iframe-interaction.ts` — keyboard handler that dispatches to
-  the iframe DOM handler (per `dc9f7c5b`).
-- `shared/canvas-interaction/keyboard-handler.ts` (and its test) —
-  `findTraceableParent`/child traversal.
-- `shared/canvas-interaction/selection-utils.ts` — `getSourceKey`, `computeEffectiveRef`.
-- `client/components/LeftSidebar/hooks/useElementSelection.ts` — nodeRef ↔ uuid mapping
-  (line 50 onwards). Inspector path uses this; rect overlay may not.
-- `client/lib/element-tracing/id-bridge` — bridge between element id and source location.
+- [ ] `shared/canvas-interaction/iframe-interaction.ts` — keyboard handler that dispatches
+      to the iframe DOM handler (per `dc9f7c5b`).
+- [ ] `shared/canvas-interaction/keyboard-handler.ts` (and its test) —
+      `findTraceableParent` / child traversal.
+- [ ] `shared/canvas-interaction/selection-utils.ts` — `getSourceKey`, `computeEffectiveRef`.
+- [ ] `client/components/LeftSidebar/hooks/useElementSelection.ts` — nodeRef ↔ uuid mapping
+      (line 50 onwards). Inspector path uses this; rect overlay may not.
+- [ ] `client/lib/element-tracing/id-bridge` — bridge between element id and source location.
 
-Add tracing console logs at the divergence point to compare:
-- nodeRef the inspector resolves to its inner div (works → has fiber `_debugSource`).
-- nodeRef the rect overlay tries to render (fails → empty DOM match).
+- [ ] Add tracing `console.debug` at the divergence candidate. Run the e2e from Task 1 once
+      locally (NOT through Docker — diagnosis loop only) to capture which key the rect path
+      computes vs the inspector path. Capture the dump in the commit message.
+- [ ] Commit the diagnosis (notes file under `docs/notes/2026-05-08-shift-enter-divergence.md`)
+      so the review pass sees real progress between Task 1 and Task 3.
 
 You'll likely find that the rect path uses one of the old/non-uniform key derivations that
-355321c5 already fixed for one direction but not the other.
+`355321c5` already fixed for one direction but not the other.
 
-### Task 3 — Apply minimal fix
+### Task 3: Apply minimal fix
 
-Restore consistency: both paths use the **same** key derivation (`resolveSourceIndexFiberSource`
-or `computeEffectiveRef`, depending on where 355321c5/06913a91 landed). Add a unit test
-into `shared/canvas-interaction/keyboard-handler.test.ts` (or the closest `__tests__/`)
-covering the GalleryImage-style nested-component case so regressions surface before e2e
-next time.
+- [ ] Restore consistency: both paths use the **same** key derivation
+      (`resolveSourceIndexFiberSource` or `computeEffectiveRef`, depending on where
+      `355321c5` / `06913a91` landed).
+- [ ] Add a unit test into `shared/canvas-interaction/keyboard-handler.test.ts`
+      (or the closest `__tests__/`) covering the GalleryImage-style nested-component case
+      so regressions surface before e2e next time.
+- [ ] Re-run the Task 1 e2e through Docker (`HYPER_E2E_SHARDS=1 bun run test:docker`).
+      Confirm GREEN.
+- [ ] If the cause is missing `_debugSource` on the host element (the React 19
+      `_debugStack` finding from `project_ext_click_debug.md`), fall back to `_debugStack`
+      for that lookup the same way `06913a91` aligned the inspector path.
 
-If the cause is missing `_debugSource` on the host element (the React 19 `_debugStack`
-finding from `project_ext_click_debug.md`), the fix is to fall back to `_debugStack` for
-that lookup the same way `06913a91` aligned the inspector path.
+### Task 4: Telegram handoff
 
-### Task 4 — Telegram handoff
-
-- TG report listing: divergence found, file changes, e2e/unit verdicts, commit hashes.
-- E2E before/after screenshots from Task 1, **manually inspected** before sending. The
-  AFTER screenshot must show the rect on the inner element, not nothing.
-- CLAUDE.md rule: no screenshot in TG = bug not fixed.
+- [ ] TG report listing: divergence found, file changes, e2e/unit verdicts, commit hashes.
+- [ ] E2E before/after screenshots from Task 1, **manually inspected** before sending.
+      The AFTER screenshot must show the rect on the inner element, not nothing.
+- [ ] CLAUDE.md rule: no screenshot in TG = bug not fixed.
 
 ## Hard Rules
 

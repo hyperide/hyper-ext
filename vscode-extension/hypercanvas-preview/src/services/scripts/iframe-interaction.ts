@@ -34,7 +34,6 @@ import html2canvas from 'html2canvas';
 import {
   applySelectionGraceCache,
   hydrateSelectionGraceCache,
-  invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
 } from './selection-grace-cache';
@@ -1029,18 +1028,6 @@ attachClickHandler(
           logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
-          // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
-          // Mark the overlay loop dirty NOW so a fresh paint runs against the
-          // optimistic selection without waiting for the parent stateUpdate
-          // round-trip. Symptom (1) repro: after a drag the RAF loop bailed
-          // (needsOverlayUpdate=false; computedRects last paint was empty due
-          // to grace-cache invalidation), and an HMR-stalled round-trip kept
-          // it dormant — the user's post-drag click set selectedIds locally
-          // but no paint ever ran, so the rect never appeared. Dirtying here
-          // is safe: the round-trip stateUpdate later re-dirties the loop
-          // anyway, and a same-frame double paint dedupes via prevRectsJSON.
-          needsOverlayUpdate = true;
-          scheduleOverlayLoopIfNeeded();
         }
       }
 
@@ -1664,28 +1651,6 @@ function _dragPointerUp(e: PointerEvent): void {
     },
     '*',
   );
-
-  // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
-  // The AST mutation about to land will renumber line/column for elements in
-  // the source file. The grace cache (designed for i18n text changes where
-  // line/col stay stable) would otherwise replay the previously-selected
-  // element's OLD bbox for up to SELECTION_GRACE_PERIOD_MS — that is the
-  // user-reported "stale rect lingers at old position" symptom (#2).
-  //
-  // Drop every cached rect for the mutated file *before* the next paint runs,
-  // so the next miss returns no replay rather than the stale geometry. Also
-  // invalidate target file for cross-file moves; here we only know the source
-  // file from the iframe side, but the dropTargetEl's source location was
-  // resolved into `dropSrc` above — drop its file too if different.
-  invalidateSelectionGraceCacheForFile(selectionGraceCache, sourceFilePath);
-  if (dropSrc.fileName && dropSrc.fileName !== sourceFilePath) {
-    invalidateSelectionGraceCacheForFile(selectionGraceCache, dropSrc.fileName);
-  }
-  // Mark overlays dirty so the next RAF tick re-runs the lookup; without this
-  // the loop may have just bailed (needsOverlayUpdate=false) and would not
-  // rediscover the empty cache state until the next MutationObserver hit.
-  needsOverlayUpdate = true;
-  scheduleOverlayLoopIfNeeded();
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {
