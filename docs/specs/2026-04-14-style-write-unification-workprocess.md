@@ -4501,3 +4501,82 @@ Bridge bot and process hygiene entry 2026-04-22 17:00 CEST:
   * Start full E2E only after another process/load check and only with
     `--retries=0`; retry failures must be analyzed, not hidden.
 ```
+
+Bridge bot follow-up and E2E hold, 2026-04-22 17:06 CEST:
+
+```text
+- User sent another bridge-bot message and the bot replied:
+  `Codex app-server bridge failed: WebSocket connection failed`.
+- Root cause:
+  * Telegram inbound polling was alive: the bot saw the message and attempted
+    to forward to thread `019daf72-658b-7c60-93ae-abd83245fcef`.
+  * The saved current-session binding did not contain the live app-server
+    token file.
+  * If discovery failed during startup, `resolveCurrentSessionForMessage`
+    returned the saved binding anyway, causing resume to connect with stale
+    endpoint/token data.
+- Runtime repair:
+  * Wrote the current state with the live endpoint/token:
+    `ws://127.0.0.1:9120` and `/tmp/codex-tg-bot-token-1776870016926`.
+  * Verified app-server connectivity without sending a prompt:
+    `thread/resume` returned the current thread with cwd
+    `/Users/ultra/work/hyper-canvas-draft` and status `idle`.
+- Code fix:
+  * Repo: `/Users/ultra/xp/codex-tg-bot`.
+  * Commit: 749c807 fix: refuse stale current-session fallback after discovery
+    failure
+  * `resolveCurrentSessionForMessage` no longer forwards with a saved binding
+    when app-server discovery fails; it reports the discovery failure instead.
+- Validation:
+  * `bun test` passed 22/22.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; new PID observed:
+    26742.
+- Current E2E decision:
+  * Do not start E2E yet.
+  * User killed a `bun` process that consumed about 60GB memory.
+  * Current load after cleanup is still elevated: around `4.32 4.82 6.61`.
+  * Top CPU/memory is Hyper/WindowServer/Virtualization/Claude, not a running
+    VS Code E2E test.
+  * Wait for bridge-bot inbound confirmation and a safer load snapshot before
+    any full E2E run.
+```
+
+Bridge bot persisted-thread resume follow-up, 2026-04-22 17:09 CEST:
+
+```text
+- User retried the bridge bot and it still did not deliver the message.
+  The visible bot output was:
+  `Current Codex app-server binding is stale; rediscovering live threads...`
+- Live app-server discovery showed the target thread exists and is recoverable:
+  * thread `019daf72-658b-7c60-93ae-abd83245fcef`
+  * cwd `/Users/ultra/work/hyper-canvas-draft`
+  * status `notLoaded`
+  * endpoint `ws://127.0.0.1:9120`
+  * token file `/tmp/codex-tg-bot-token-1776870374646`
+- Root cause:
+  * For persisted/unloaded threads, app-server can return
+    `RPC error -32600: thread not found` from `turn/start`.
+  * The bridge previously treated `thread not found` as unrecoverably stale.
+  * Correct flow is to call `thread/resume` first for both `thread not loaded`
+    and first-pass `thread not found`, then retry `turn/start`.
+- Code fix:
+  * Repo: `/Users/ultra/xp/codex-tg-bot`.
+  * Commit: 45bff28 fix: resume persisted Codex threads before marking stale
+  * Added `isThreadResumeRequiredErrorMessage()` and use it before marking the
+    binding stale.
+  * Added regression coverage for both not-found and not-loaded first-pass
+    errors.
+- Validation:
+  * `bun test` passed 23/23.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * Service `com.ultra.codex-tg-bot` restarted; new PID observed: 34648.
+  * Current-session state saved endpoint-less to the target thread/cwd so the
+    next inbound message refreshes endpoint/token from discovery before
+    forwarding.
+- Current E2E decision remains unchanged:
+  * Do not start E2E while bridge delivery is unconfirmed and load is elevated.
+  * Latest load snapshot: around `3.58 4.54 6.36`.
+```
