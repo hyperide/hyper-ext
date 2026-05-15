@@ -22,7 +22,6 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
-  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -69,8 +68,6 @@ describe('I18nTextInspector (VS Code webview)', () => {
     );
     const ruButton = screen.getByText('ru');
     expect(ruButton).toBeTruthy();
-    expect(screen.getByText('en').getAttribute('aria-pressed')).toBe('true');
-    expect(ruButton.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(ruButton);
     expect(onLocaleChange).toHaveBeenCalledWith('ru');
   });
@@ -80,17 +77,12 @@ describe('I18nTextInspector (VS Code webview)', () => {
     render(
       <I18nTextInspector
         i18nBinding={supportedBinding}
-        keyEditable
         onKeyChange={onKeyChange}
         onResolvedTextChange={mock(() => {})}
         onLocaleChange={mock(() => {})}
       />,
     );
-    // The key input is uncontrolled (defaultValue) and commits on blur or Enter,
-    // not on every keystroke. Mutate the DOM value, then dispatch blur to fire onBlur.
-    const input = screen.getByDisplayValue('habits.walks') as HTMLInputElement;
-    input.value = 'habits.runs';
-    fireEvent.blur(input);
+    fireEvent.change(screen.getByDisplayValue('habits.walks'), { target: { value: 'habits.runs' } });
     expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
   });
 
@@ -108,91 +100,6 @@ describe('I18nTextInspector (VS Code webview)', () => {
     expect(onResolvedTextChange).toHaveBeenCalledWith('Take a walk');
   });
 
-  describe('interaction flow after local edits', () => {
-    it('shows the newly selected locale text after editing the previous locale', () => {
-      const { rerender } = render(
-        <I18nTextInspector
-          i18nBinding={{ ...supportedBinding, activeLocale: 'en', availableLocales: ['en', 'ru', 'rs'] }}
-          localeEditable
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-          onLocaleChange={mock(() => {})}
-        />,
-      );
-
-      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited English' } });
-      expect(screen.getByDisplayValue('Edited English')).toBeTruthy();
-
-      rerender(
-        <I18nTextInspector
-          i18nBinding={{
-            ...supportedBinding,
-            activeLocale: 'ru',
-            availableLocales: ['en', 'ru', 'rs'],
-            resolvedText: 'Русский текст',
-          }}
-          localeEditable
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-          onLocaleChange={mock(() => {})}
-        />,
-      );
-
-      expect(screen.getByDisplayValue('Русский текст')).toBeTruthy();
-
-      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Отредактированный русский' } });
-      expect(screen.getByDisplayValue('Отредактированный русский')).toBeTruthy();
-
-      rerender(
-        <I18nTextInspector
-          i18nBinding={{
-            ...supportedBinding,
-            activeLocale: 'rs',
-            availableLocales: ['en', 'ru', 'rs'],
-            resolvedText: 'Srpski tekst',
-          }}
-          localeEditable
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-          onLocaleChange={mock(() => {})}
-        />,
-      );
-
-      expect(screen.getByDisplayValue('Srpski tekst')).toBeTruthy();
-      expect(screen.queryByDisplayValue('Отредактированный русский')).toBeNull();
-    });
-
-    it('shows the newly selected key text after editing the previous key', () => {
-      const { rerender } = render(
-        <I18nTextInspector
-          i18nBinding={{ ...supportedBinding, key: 'hero.title', resolvedText: 'Hero title' }}
-          keyEditable
-          availableKeys={['hero.title', 'hero.subtitle']}
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-          onLocaleChange={mock(() => {})}
-        />,
-      );
-
-      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited title' } });
-      expect(screen.getByDisplayValue('Edited title')).toBeTruthy();
-
-      rerender(
-        <I18nTextInspector
-          i18nBinding={{ ...supportedBinding, key: 'hero.subtitle', resolvedText: 'Hero subtitle' }}
-          keyEditable
-          availableKeys={['hero.title', 'hero.subtitle']}
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-          onLocaleChange={mock(() => {})}
-        />,
-      );
-
-      expect(screen.getByDisplayValue('Hero subtitle')).toBeTruthy();
-      expect(screen.queryByDisplayValue('Edited title')).toBeNull();
-    });
-  });
-
   it('renders text input as disabled when editable is false', () => {
     const nonEditableBinding: I18nTextBinding = { ...supportedBinding, resolvedText: null, editable: false };
     render(
@@ -205,64 +112,6 @@ describe('I18nTextInspector (VS Code webview)', () => {
     );
     const textInput = screen.getByDisplayValue('');
     expect((textInput as HTMLInputElement).disabled).toBe(true);
-  });
-
-  // Regression: read-only layouts (canCreateKeys=false) — switch-to-existing
-  // must still work (JSX-only rewrite via skipResourceWrite=true), but Create
-  // affordance must be hidden so the user cannot push the inspector into a
-  // write that the locale-file format would refuse.
-  describe('read-only layout existing-key flow', () => {
-    it('lets user pick an existing key from the combobox even when canCreateKeys is false', () => {
-      const onKeyChange = mock(() => {});
-      render(
-        <I18nTextInspector
-          i18nBinding={supportedBinding}
-          availableKeys={['habits.walks', 'habits.runs']}
-          keyEditable
-          canCreateKeys={false}
-          onKeyChange={onKeyChange}
-          onResolvedTextChange={mock(() => {})}
-        />,
-      );
-      fireEvent.click(screen.getByTestId('i18n-key-input'));
-      fireEvent.click(screen.getByText('habits.runs'));
-      expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
-    });
-
-    it('hides the Create key affordance for an unknown typed key when canCreateKeys is false', () => {
-      render(
-        <I18nTextInspector
-          i18nBinding={supportedBinding}
-          availableKeys={['habits.walks']}
-          keyEditable
-          canCreateKeys={false}
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-        />,
-      );
-      fireEvent.click(screen.getByTestId('i18n-key-input'));
-      const searchInput = screen.getByPlaceholderText('Search or create key...');
-      fireEvent.change(searchInput, { target: { value: 'brand.new.key' } });
-      expect(screen.queryByTestId('i18n-key-create')).toBeNull();
-    });
-  });
-
-  it('allows creating a key before the available key list has loaded', () => {
-    const onKeyChange = mock(() => {});
-    render(
-      <I18nTextInspector
-        i18nBinding={supportedBinding}
-        keyEditable
-        canCreateKeys
-        onKeyChange={onKeyChange}
-        onResolvedTextChange={mock(() => {})}
-      />,
-    );
-    fireEvent.click(screen.getByTestId('i18n-key-input'));
-    const searchInput = screen.getByPlaceholderText('Search or create key...');
-    fireEvent.change(searchInput, { target: { value: 'brand.loading.key' } });
-    fireEvent.click(screen.getByTestId('i18n-key-create'));
-    expect(onKeyChange).toHaveBeenCalledWith('brand.loading.key');
   });
 
   it('renders raw expression fallback for unsupported bindings and hides i18n controls', () => {

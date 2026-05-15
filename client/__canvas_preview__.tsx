@@ -3,7 +3,6 @@ import React from 'react';
 // Component imports will be added automatically
 
 import { SampleDefault as DividerSampleDefault } from './components/icons/Divider';
-import { LoadingSpinner } from './components/LoadingSpinner';
 // Sample component map - React.FC components for HMR compatibility
 import { SampleDefault as indexSampleDefault } from './components/RightSidebar/index';
 import { SampleDefault as RightSidebarSampleDefault } from './components/RightSidebar/RightSidebar';
@@ -60,10 +59,17 @@ export default function CanvasPreview({ component }: CanvasPreviewProps) {
   }
 
   if (!componentPath) {
-    // Show loading during SSR and before mount (to prevent hydration mismatch).
-    // Same spinner UI the SaaS uses elsewhere — see Loading screen plan.
+    // Show loading during SSR and before mount (to prevent hydration mismatch)
     if (!isMounted) {
-      return <LoadingSpinner label="Loading preview..." />;
+      return (
+        <div
+          style={{
+            padding: '20px',
+          }}
+        >
+          Loading...
+        </div>
+      );
     }
     // Show error only after mount
     return (
