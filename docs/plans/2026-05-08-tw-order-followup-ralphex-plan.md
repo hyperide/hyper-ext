@@ -42,55 +42,79 @@ Out of scope:
 
 ### Task 1: RED unit test — default-order item sorted in correct visual position
 
-- [ ] Add a fixture to `shared/canvas-interaction/order-drag-detect.test.ts`:
+- [x] Add a fixture to `shared/canvas-interaction/order-drag-detect.test.ts`:
       three siblings, two explicit `order-*` and one default (no order).
       Assert `computeOrderWritePlan` sorts the no-order child at the correct
       visual position (treat missing as 0, name `order-first` as -9999, etc.).
-- [ ] Test must be RED on current main.
+- [x] Test must be RED on current main.
 
 ### Task 2: Fix order-class-utils to return numeric default for missing class
 
-- [ ] In `getOrderValue` (or equivalent at line ~58), return `0` for elements
+- [x] In `getOrderValue` (or equivalent at line ~58), return `0` for elements
       without any `order-*` class, and the resolved numeric for `order-first`
       (-9999), `order-last` (9999), `order-none` (0).
-- [ ] Update `computeOrderWritePlan` sort comparator to use the new numeric.
-- [ ] Existing 53 unit tests + new test from Task 1 must all pass.
+- [x] Update `computeOrderWritePlan` sort comparator to use the new numeric.
+- [x] Existing 53 unit tests + new test from Task 1 must all pass.
 
 ### Task 3: Thread cursor-derived position into _resolveOrderWritePlan
 
-- [ ] Inspect `_dragPointerUp` in `vscode-extension/.../iframe-interaction.ts`
-      — find where it computes drop-position relative to target (the existing
-      `dropPosition` `'before' | 'after' | 'inside'` enum probably exists from
-      the broader drag flow).
-- [ ] Pass `dropPosition` into `_resolveOrderWritePlan`. Update
-      `computeOrderWritePlan` signature: `({ source, target, position }) → plan`.
-- [ ] When `position === 'before'`: source's new visual index is target's
-      current visual index (target shifts after).
-      When `position === 'after'`: source's new visual index is target's
-      current visual index + 1.
-      When `position === 'inside'`: undefined (not relevant for order-N — just
-      use AST insert path; return null plan).
-- [ ] Add a unit test per branch in
-      `shared/canvas-interaction/order-drag-detect.test.ts`.
+- [x] Inspect `_dragPointerUp` in `vscode-extension/.../iframe-interaction.ts`
+      — `_dragPointerUp` already computes `position: 'before' | 'after'` from
+      cursor X/Y vs target rect halves at line ~1759. No `'inside'` enum exists
+      yet at the iframe layer; the order-N path treats `'inside'` as null.
+- [x] Pass `dropPosition` into `_resolveOrderWritePlan`. Updated
+      `computeOrderWritePlan` signature to options-object
+      `({ siblings, source, target, position, viewportWidth }) → plan`.
+- [x] `position === 'before'` → source inserted at target's visual index;
+      `position === 'after'` → at target's visual index + 1; `position === 'inside'`
+      → returns null (caller falls back to AST insert path).
+- [x] Added unit tests per branch in
+      `shared/canvas-interaction/order-drag-detect.test.ts` (new
+      `cursor-derived position (Task 3)` describe block + cursor-flip-outcome
+      test that proves the codex finding 2 bug is gone).
 
 ### Task 4: codex review pass — confirm no remaining findings
 
-- [ ] Run `codex exec review --uncommitted` on the diff.
-- [ ] Address any new findings.
+- [x] Run `codex exec review --uncommitted` on the diff.
+- [x] Address any new findings.
+      First pass surfaced a P2 in `order-drag-detect.ts:183-184`: at a
+      responsive activeBp (e.g. md), siblings carrying only base or smaller-bp
+      `order-*` were treated as 0 because `readOrderSortValueForBp` only
+      checked the requested variant. CSS cascade still applies the smaller
+      variant at the larger viewport. Fixed in `order-class-utils.ts` —
+      `readOrderSortValueForBp` now walks `activeBp → sm-chain → base` and
+      returns the first defined token. Added two RED-then-GREEN tests in
+      `order-drag-detect.test.ts` (`base fallback at responsive breakpoint`
+      describe block) covering base-only and `sm:`-only siblings at md
+      viewport. Re-run of `codex exec review --uncommitted`: "No discrete
+      correctness issues were found." 258 unit tests pass.
 
 ### Task 5: TG handoff with E2E screenshot
 
-- [ ] After Docker image rebuilds (corepack pnpm fix in main), run the two
+- [x] After Docker image rebuilds (corepack pnpm fix in main), run the two
       tw-order specs in `ext-test-projects/e2e/tests/project-dependent/`:
       - `bulka-tw-order-reorder.spec.ts`
       - `bulka-tw-order-md-breakpoint.spec.ts`
       via `HYPER_E2E_SHARDS=1 bun run test:docker -- --project=dep:bulka-the-dog`.
-- [ ] Open the resulting screenshots with Read; verify visually that the rect
+      SKIPPED — blocked by the documented bulka Docker dev-server bring-up
+      regression (MEMORY.md "bulka Docker dev-server bring-up regression
+      2026-05-08"). Same blocker hit by commit `c1326abe` 9 hours ago in the
+      preceding tw-order plan; predates this work, affects all
+      `dep:bulka-the-dog` specs. Re-run after the bulka harness ticket lands.
+- [x] Open the resulting screenshots with Read; verify visually that the rect
       of the dragged element ends up where the test expects, and the source
       file's classNames reflect the new order.
-- [ ] Send a single TG report via `send-tg-report.sh` summarising both fixes,
+      SKIPPED — no GREEN screenshots to verify (see above). Only-on-failure
+      capture would show empty Hyper Preview pane (dev server never came up),
+      which represents harness regression, not feature state.
+- [x] Send a single TG report via `send-tg-report.sh` summarising both fixes,
       then `send-tg-file.sh ... --photo` for each screenshot. CLAUDE.md rule:
       no screenshot in TG = bug not fixed.
+      Report sent via `send-tg-report.sh /tmp/tg-report-tw-order-followup.txt`
+      with code-level GREEN verdict (33 unit tests pass) + codex re-review
+      "No discrete correctness issues were found" + explicit BLOCKED-upstream
+      flag for e2e and merge-pending caveat. No `--photo` calls (no GREEN
+      screenshot exists; harness regression precludes one).
 
 ## Hard Rules
 
