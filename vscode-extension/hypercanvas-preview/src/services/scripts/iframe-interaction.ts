@@ -850,6 +850,41 @@ const state = {
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
+
+// === Selection-survive diagnostics (Task 2 of selection-survive-text-change plan) ===
+// Tag: [selsurv]. Goal: pinpoint whether the 500ms gap user reports is
+// (a) selectedIds[0] reset to empty/different value, or
+// (b) DOM lookup miss for an unchanged ID (cache wiped by HMR).
+// Filter logs in DevTools console with `[selsurv]`.
+const SELSURV_TAG = '[selsurv]';
+function logSelsurvSelectedIdsAssign(reason: string, prev: string[], next: string[]): void {
+  if (prev.length === next.length && prev.every((v, i) => v === next[i])) return;
+  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
+  console.debug(SELSURV_TAG, 'selectedIds change', {
+    t: Math.round(performance.now()),
+    reason,
+    prev,
+    next,
+  });
+}
+let lastOverlayLogKey = '';
+function logSelsurvOverlayPaint(
+  selectedId: string | null,
+  domElementFound: boolean,
+  rectVisible: boolean,
+): void {
+  // Coalesce identical consecutive paints so the console isn't flooded.
+  const key = `${selectedId ?? ''}|${domElementFound}|${rectVisible}`;
+  if (key === lastOverlayLogKey) return;
+  lastOverlayLogKey = key;
+  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
+  console.debug(SELSURV_TAG, 'overlay paint', {
+    t: Math.round(performance.now()),
+    selectedId,
+    domElementFound,
+    rectVisible,
+  });
+}
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -869,6 +904,7 @@ attachClickHandler(
       if (additive) {
         const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
         const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
+        logSelsurvSelectedIdsAssign('click:additive', state.selectedIds, nextIds);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
       } else {
@@ -878,6 +914,7 @@ attachClickHandler(
         // state.selectedIds is populated — matches sourceToElementId() in the extension host.
         const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
         if (effectiveRef) {
+          logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
         }
@@ -1469,6 +1506,25 @@ function sendOverlayRects(): void {
     ...(r.resizable && { resizable: r.resizable }),
   }));
 
+  // Diagnostic: did this paint find a DOM element for the current selection,
+  // and is its rect non-empty? See Task 2 of selection-survive-text-change plan.
+  // Tag: [selsurv]. Only logs when (selectedId, found, visible) tuple changes.
+  {
+    const sel0 = state.selectedIds[0] ?? null;
+    if (sel0 !== null) {
+      const itemIdx = state.selectedItemIndices[sel0] ?? null;
+      const elements = iframeElementResolver.findElements(sel0, itemIdx);
+      const domElementFound = elements.length > 0;
+      const selectionRect = result.overlayRects.find(
+        (r) => r.type === 'selection' && r.elementId === sel0,
+      );
+      const rectVisible = !!selectionRect && selectionRect.width > 0 && selectionRect.height > 0;
+      logSelsurvOverlayPaint(sel0, domElementFound, rectVisible);
+    } else {
+      logSelsurvOverlayPaint(null, false, false);
+    }
+  }
+
   const { placeholderRects } = result;
 
   const payload = JSON.stringify({ rects, placeholderRects });
@@ -1660,7 +1716,10 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   if (msg.type === 'hypercanvas:stateUpdate') {
-    if (msg.selectedIds !== undefined) state.selectedIds = msg.selectedIds;
+    if (msg.selectedIds !== undefined) {
+      logSelsurvSelectedIdsAssign('msg:stateUpdate', state.selectedIds, msg.selectedIds);
+      state.selectedIds = msg.selectedIds;
+    }
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
     if (msg.selectedItemIndices !== undefined) state.selectedItemIndices = msg.selectedItemIndices;
@@ -1678,6 +1737,7 @@ window.addEventListener('message', (event: MessageEvent) => {
 
   // Go to Visual: select element, scroll, and send computed style snapshot
   if (msg.type === 'hypercanvas:goToVisual') {
+    logSelsurvSelectedIdsAssign('msg:goToVisual', state.selectedIds, [msg.elementId]);
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];

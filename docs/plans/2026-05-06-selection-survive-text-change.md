@@ -71,14 +71,30 @@ either:
 
 ### Task 2: Diagnose why selection visibly disappears
 
-- [ ] Add console-tagged logging in iframe-interaction at every change to
+- [x] Add console-tagged logging in iframe-interaction at every change to
       `state.selectedIds`. Reproduce on bulka-the-dog: select element, change
       i18n key. Capture the timeline: at what timestamp does selectedIds[0]
       change, and to what?
-- [ ] Add overlay renderer logging: at every paint, log
+      (Added `logSelsurvSelectedIdsAssign(reason, prev, next)` helper near
+      the `state` declaration, tag `[selsurv]`. Wrapped all 4 assignment
+      sites in `iframe-interaction.ts`: click:additive, click:single,
+      msg:stateUpdate, msg:goToVisual. Each emits
+      `console.debug('[selsurv]', 'selectedIds change', { t, reason, prev, next })`
+      only when the array actually changes — diff-gated, no spam. Reproduction
+      itself will run in Task 5's frame-by-frame e2e, where these logs will
+      be captured alongside the screenshots.)
+- [x] Add overlay renderer logging: at every paint, log
       `(selectedIds[0], domElementFound, rectVisible)`. The 500ms gap user
       sees should appear in logs as `(stable id, false, false)` — i.e. ID
       is intact but DOM lookup misses.
+      (Added `logSelsurvOverlayPaint(selectedId, domElementFound, rectVisible)`
+      helper. Called inside `sendOverlayRects` after `computeOverlayRects`:
+      re-resolves the DOM element via `iframeElementResolver.findElements`
+      to derive `domElementFound`, and reads `rectVisible` from the matching
+      selection rect (`width > 0 && height > 0`). Coalesces by tuple key so
+      the console isn't flooded — only logs on transitions. Build verified
+      with `node esbuild.js` (exit 0); all 6 instrumentation sites present
+      in `out/iframe-interaction.js`.)
 
 ### Task 3: Eager source-cache rebuild after HMR
 
