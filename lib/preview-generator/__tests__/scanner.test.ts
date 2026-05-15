@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { detectExportStyle, detectSSRHooks, escapeRegex, extractComponentName, scanSampleExports } from '../scanner';
+import {
+  detectExportStyle,
+  detectRouterShell,
+  detectSSRHooks,
+  escapeRegex,
+  extractComponentName,
+  scanSampleExports,
+} from '../scanner';
 
 describe('scanSampleExports', () => {
   it('should find exported const Sample* functions', () => {
@@ -211,6 +218,27 @@ export default React.memo(MyButton);`;
     const source = `export { default as Button } from './BaseButton';`;
     expect(extractComponentName(source, 'index.tsx')).toBe('Button');
   });
+
+  it('should skip createContext exports and extract the provider component', () => {
+    const source = `
+      import { createContext } from 'react';
+      export const LanguageContext = createContext(null);
+      export function LanguageProvider({ children }: { children: React.ReactNode }) {
+        return <LanguageContext.Provider value={null}>{children}</LanguageContext.Provider>;
+      }
+    `;
+    expect(extractComponentName(source, 'LanguageContext.tsx')).toBe('LanguageProvider');
+  });
+
+  it('should skip type-only export specifiers', () => {
+    const source = `
+      type ToastProps = { title: string };
+      const ToastProvider = Provider.Root;
+      const Toast = () => <div />;
+      export { type ToastProps, ToastProvider, Toast };
+    `;
+    expect(extractComponentName(source, 'toast.tsx')).toBe('ToastProvider');
+  });
 });
 
 describe('detectSSRHooks', () => {
@@ -276,6 +304,71 @@ describe('detectSSRHooks', () => {
       }
     `;
     expect(detectSSRHooks(source).size).toBe(0);
+  });
+});
+
+describe('detectRouterShell', () => {
+  it('returns true for BrowserRouter import from react-router-dom', () => {
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      const App = () => <BrowserRouter><Routes><Route path="/" element={<div />} /></Routes></BrowserRouter>;
+      export default App;
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for StaticRouter import from react-router-dom/server', () => {
+    const source = `
+      import { StaticRouter } from 'react-router-dom/server';
+      export default function App() { return <StaticRouter location="/"><div /></StaticRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for HashRouter import from react-router-dom', () => {
+    const source = `
+      import { HashRouter } from 'react-router-dom';
+      export default function App() { return <HashRouter><div /></HashRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true when BrowserRouter and StaticRouter are both imported (Bulka pattern)', () => {
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      import { StaticRouter } from 'react-router-dom/server';
+      const isBrowser = typeof window !== 'undefined';
+      function Router({ children }: { children: React.ReactNode }) {
+        return isBrowser ? <BrowserRouter>{children}</BrowserRouter> : <StaticRouter location="/">{children}</StaticRouter>;
+      }
+      const App = () => <Router><Routes><Route path="/" element={<div />} /></Routes></Router>;
+      export default App;
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns false for plain page component that only imports Link', () => {
+    const source = `
+      import { Link, useNavigate } from 'react-router-dom';
+      export default function Index() { return <Link to="/">Home</Link>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false for component with no router imports at all', () => {
+    const source = `
+      import React from 'react';
+      export default function Button({ label }: { label: string }) { return <button>{label}</button>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false when BrowserRouter is imported from an unrecognized package', () => {
+    const source = `
+      import { BrowserRouter } from 'my-custom-router';
+      export default function App() { return <BrowserRouter><div /></BrowserRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
   });
 });
 

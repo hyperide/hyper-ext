@@ -30,6 +30,7 @@ import {
 } from './generator';
 import {
   detectExportStyle,
+  detectRouterShell,
   detectSSRHooks,
   type ExportStyle,
   extractComponentName,
@@ -757,11 +758,20 @@ export class PreviewFileManager {
     if (sourceCode.includes('@hyperide-managed')) {
       return null;
     }
+
     let componentName: string;
     let sampleExports: string[];
     let exportStyle: ExportStyle;
     let isSSRRoute = false;
     try {
+      // Skip router application shells (files importing BrowserRouter/HashRouter/StaticRouter).
+      // These files wrap the whole app with a router provider and, when included alongside
+      // the page components they import, cause a Vite/ESM temporal dead zone (TDZ) error
+      // in the generated __canvas_preview__.tsx registry.
+      if (detectRouterShell(sourceCode)) {
+        return null;
+      }
+
       componentName = extractComponentName(sourceCode, fileName);
       sampleExports = scanSampleExports(sourceCode);
       exportStyle = detectExportStyle(sourceCode, componentName);

@@ -117,7 +117,9 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
 
     // Re-exports: export { default as Button } from './...'
     for (const spec of node.specifiers) {
-      if (spec.type === 'ExportSpecifier' && spec.exported.type === 'Identifier') {
+      if (spec.type !== 'ExportSpecifier') continue;
+      if (node.exportKind === 'type' || spec.exportKind === 'type') continue;
+      if (spec.exported.type === 'Identifier') {
         const name = spec.exported.name;
         if (/^[A-Z]/.test(name) && !name.startsWith('Sample')) {
           return name;
@@ -134,9 +136,11 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     } else if (decl.type === 'ClassDeclaration' && decl.id) {
       name = decl.id.name;
     } else if (decl.type === 'VariableDeclaration') {
-      const first = decl.declarations[0];
-      if (first?.id.type === 'Identifier') {
-        name = first.id.name;
+      for (const candidate of decl.declarations) {
+        if (candidate.id.type === 'Identifier' && isRenderableVariable(candidate)) {
+          name = candidate.id.name;
+          break;
+        }
       }
     }
 
@@ -147,6 +151,53 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
 
   // 4. Filename fallback
   return fileName.replace(/\.[^.]+$/, '');
+}
+
+type VariableDeclarationNode = ReturnType<typeof parseSource>['program']['body'][number];
+type VariableDeclaratorNode = Extract<
+  Extract<VariableDeclarationNode, { type: 'ExportNamedDeclaration' }>['declaration'],
+  { type: 'VariableDeclaration' }
+>['declarations'][number];
+
+function isRenderableVariable(declaration: VariableDeclaratorNode): boolean {
+  const init = declaration.init;
+  if (!init) return false;
+  if (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') return true;
+  if (init.type === 'Identifier' || init.type === 'MemberExpression') return true;
+  if (init.type !== 'CallExpression') return false;
+  return !isCreateContextCall(init);
+}
+
+function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'], { type: 'CallExpression' }>): boolean {
+  const callee = expression.callee;
+  if (callee.type === 'Identifier') return callee.name === 'createContext';
+  if (callee.type !== 'MemberExpression') return false;
+  const property = callee.property;
+  return property.type === 'Identifier' && property.name === 'createContext';
+}
+
+const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set(['BrowserRouter', 'HashRouter', 'StaticRouter']);
+
+const ROUTER_SHELL_SOURCES = new Set(['react-router-dom', 'react-router-dom/server']);
+
+/**
+ * Detect whether the file is a router application shell — a file that imports
+ * BrowserRouter, HashRouter, or StaticRouter from react-router-dom.
+ * Such files set up routing context for the whole app and cause TDZ errors
+ * in the preview registry when co-imported with the pages they wrap.
+ */
+export function detectRouterShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (!ROUTER_SHELL_SOURCES.has(node.source.value as string)) continue;
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ImportSpecifier') continue;
+      const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
+      if (name && ROUTER_SHELL_IMPORTS.has(name)) return true;
+    }
+  }
+  return false;
 }
 
 /** Escape regex metacharacters in a string */

@@ -115,8 +115,8 @@ function RightPanelContent() {
       </div>
       {showInsertPanel && (
         <div
-          className="min-h-0 flex flex-col border-t border-border transition-[height] duration-[233ms] ease-in-out"
-          style={{ height: insertPanelExpanded ? '66.67%' : '33.33%' }}
+          className="min-h-0 flex flex-col border-t border-border transition-[height] ease-in-out"
+          style={{ height: insertPanelExpanded ? '66.67%' : '33.33%', transitionDuration: '233ms' }}
         >
           <div className="flex-1 min-h-0 overflow-y-auto">
             <ComponentNavigatorPanel

@@ -6,7 +6,7 @@
 import { basename, dirname } from 'node:path';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v5';
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v7';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -55,7 +55,10 @@ export function sampleExportToKey(exportName: string): string {
  * Detect name collisions and derive unique prefixes.
  * Two `Button.tsx` in different dirs → `UiButton` / `FormButton`.
  */
-export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string, string> {
+export function deriveUniquePrefix(
+  entries: PreviewComponentEntry[],
+  reservedNames: ReadonlySet<string> = new Set(),
+): Map<string, string> {
   const nameToEntries = new Map<string, PreviewComponentEntry[]>();
   for (const entry of entries) {
     const list = nameToEntries.get(entry.componentName) ?? [];
@@ -65,7 +68,7 @@ export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string
 
   const result = new Map<string, string>();
   for (const [, group] of nameToEntries) {
-    if (group.length === 1) {
+    if (group.length === 1 && !reservedNames.has(group[0].componentName)) {
       result.set(group[0].componentPath, group[0].componentName);
       continue;
     }
@@ -80,7 +83,7 @@ export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string
 
     // Check if parent dir prefix resolves all collisions
     const names = [...prefixed.values()];
-    const hasDupes = new Set(names).size !== names.length;
+    const hasDupes = hasAliasConflict(names, reservedNames);
 
     if (hasDupes) {
       // Try platform-suffix disambiguation before grandparent escalation.
@@ -98,26 +101,38 @@ export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string
         }
       }
       const platformAliases = group.map((e) => platformResolved.get(e.componentPath) ?? e.componentName);
-      if (new Set(platformAliases).size === group.length) {
+      if (!hasAliasConflict(platformAliases, reservedNames)) {
         for (const entry of group) {
           result.set(entry.componentPath, platformResolved.get(entry.componentPath) ?? entry.componentName);
         }
         continue;
       }
 
-      // Escalate to grandparent/parent prefix
+      // Escalate to grandparent/parent/file prefix. The file stem is needed for
+      // same-directory collisions where different files export the same component
+      // name, e.g. shadcn ui/toaster.tsx and ui/sonner.tsx both exporting Toaster.
+      const pathResolved = new Map<string, string>();
       for (const entry of group) {
         const parts = dirname(entry.componentPath)
           .split('/')
           .filter((p) => p && p !== '.');
         const grandparent = parts.length >= 2 ? parts[parts.length - 2] : '';
         const parent = parts[parts.length - 1] ?? '';
-        const combined = grandparent
-          ? `${grandparent.charAt(0).toUpperCase()}${grandparent.slice(1)}${parent.charAt(0).toUpperCase()}${parent.slice(1)}`
-          : parent
-            ? `${parent.charAt(0).toUpperCase()}${parent.slice(1)}`
-            : 'Root';
-        result.set(entry.componentPath, `${combined}${entry.componentName}`);
+        const fileStem = basename(entry.componentPath).replace(/\.(tsx?|jsx?)$/, '');
+        const segments = [grandparent, parent, fileStem].filter(Boolean).map(toIdentifierSegment);
+        pathResolved.set(entry.componentPath, segments.join('') || `Root${entry.componentName}`);
+      }
+
+      const pathAliases = group.map((e) => pathResolved.get(e.componentPath) ?? e.componentName);
+      if (!hasAliasConflict(pathAliases, reservedNames)) {
+        for (const entry of group) {
+          result.set(entry.componentPath, pathResolved.get(entry.componentPath) ?? entry.componentName);
+        }
+        continue;
+      }
+
+      for (const [index, entry] of group.entries()) {
+        result.set(entry.componentPath, `${pathResolved.get(entry.componentPath) ?? entry.componentName}${index + 1}`);
       }
     } else {
       for (const [path, name] of prefixed) {
@@ -128,9 +143,25 @@ export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string
   return result;
 }
 
+function hasAliasConflict(names: string[], reservedNames: ReadonlySet<string>): boolean {
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (seen.has(name) || reservedNames.has(name)) return true;
+    seen.add(name);
+  }
+  return false;
+}
+
+function toIdentifierSegment(segment: string): string {
+  const words = segment.split(/[^A-Za-z0-9_$]+/).filter(Boolean);
+  const value = words.map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join('');
+  if (!value) return '';
+  return /^[0-9]/.test(value) ? `_${value}` : value;
+}
+
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
-  const uniqueNames = deriveUniquePrefix(entries);
+  const uniqueNames = deriveUniquePrefix(entries, extractImportedBindings(options?.providerWrap?.imports ?? []));
   const lines: string[] = [];
 
   // 1. React import + InstanceEntry type for multi-instance mode
@@ -570,6 +601,29 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+function extractImportedBindings(importLines: string[]): Set<string> {
+  const bindings = new Set<string>();
+  for (const line of importLines) {
+    const defaultMatch = line.match(/^import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:,|\s+from\b)/);
+    if (defaultMatch?.[1]) bindings.add(defaultMatch[1]);
+
+    const namedMatch = line.match(/\{([^}]+)\}/);
+    if (!namedMatch?.[1]) continue;
+    for (const part of namedMatch[1].split(',')) {
+      const trimmed = part.trim();
+      if (!trimmed || trimmed.startsWith('type ')) continue;
+      const aliasMatch = trimmed.match(/\bas\s+([A-Za-z_$][A-Za-z0-9_$]*)$/);
+      if (aliasMatch?.[1]) {
+        bindings.add(aliasMatch[1]);
+        continue;
+      }
+      const nameMatch = trimmed.match(/^([A-Za-z_$][A-Za-z0-9_$]*)$/);
+      if (nameMatch?.[1]) bindings.add(nameMatch[1]);
+    }
+  }
+  return bindings;
 }
 
 /**

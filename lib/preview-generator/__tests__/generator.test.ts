@@ -93,6 +93,16 @@ describe('deriveUniquePrefix', () => {
       expect(name).toMatch(/^[A-Za-z_$][A-Za-z0-9_$]*$/);
     }
   });
+
+  it('should disambiguate same-directory files that export the same component name', () => {
+    const entries: PreviewComponentEntry[] = [
+      makeEntry('client/components/ui/toaster.tsx', 'Toaster'),
+      makeEntry('client/components/ui/sonner.tsx', 'Toaster'),
+    ];
+    const result = deriveUniquePrefix(entries);
+    expect(result.get('client/components/ui/toaster.tsx')).toBe('ComponentsUiToaster');
+    expect(result.get('client/components/ui/sonner.tsx')).toBe('ComponentsUiSonner');
+  });
 });
 
 describe('generatePreviewContent', () => {
@@ -294,6 +304,64 @@ describe('generatePreviewContent', () => {
     );
 
     // Should still be valid TSX
+    expect(() =>
+      parse(content, {
+        sourceType: 'module',
+        plugins: ['typescript', 'jsx'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('should generate valid imports for same-directory files that export the same component name', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'client/components/ui/toaster.tsx',
+        componentName: 'Toaster',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './components/ui/toaster',
+      },
+      {
+        componentPath: 'client/components/ui/sonner.tsx',
+        componentName: 'Toaster',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './components/ui/sonner',
+      },
+    ];
+
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain("import { Toaster as ComponentsUiToaster } from './components/ui/toaster';");
+    expect(content).toContain("import { Toaster as ComponentsUiSonner } from './components/ui/sonner';");
+    expect(() =>
+      parse(content, {
+        sourceType: 'module',
+        plugins: ['typescript', 'jsx'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('should avoid aliases that collide with provider wrapper imports', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'client/components/Gallery.tsx',
+        componentName: 'GalleryProvider',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './components/Gallery',
+      },
+    ];
+
+    const content = generatePreviewContent(entries, {
+      providerWrap: {
+        imports: ["import { GalleryProvider, GalleryLightbox } from '@/components/Gallery';"],
+        wrapOpen: '<GalleryProvider>',
+        wrapClose: '<GalleryLightbox /></GalleryProvider>',
+      },
+    });
+
+    expect(content).toContain("import { GalleryProvider as ComponentsGalleryProvider } from './components/Gallery';");
     expect(() =>
       parse(content, {
         sourceType: 'module',

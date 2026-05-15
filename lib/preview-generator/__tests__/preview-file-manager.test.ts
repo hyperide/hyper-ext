@@ -1023,6 +1023,70 @@ export default function CanvasPreview() { return null; }
   });
 });
 
+describe('PreviewFileManager — router shell exclusion (Bulka/Vite React SSG regression)', () => {
+  const ROUTER_SHELL_APP = `
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { StaticRouter } from 'react-router-dom/server';
+import Index from './pages/Index';
+
+const isBrowser = typeof window !== 'undefined';
+
+function Router({ children }: { children: React.ReactNode }) {
+  return isBrowser
+    ? <BrowserRouter>{children}</BrowserRouter>
+    : <StaticRouter location="/">{children}</StaticRouter>;
+}
+
+const App = () => (
+  <Router>
+    <Routes>
+      <Route path="/" element={<Index />} />
+    </Routes>
+  </Router>
+);
+
+export default App;
+`;
+
+  const INDEX_PAGE = `
+export default function Index() {
+  return <main><h1>Bulka the Dog</h1></main>;
+}
+`;
+
+  it('excludes App.tsx (router shell) and includes pages/Index.tsx when Index is requested', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/client/App.tsx', ROUTER_SHELL_APP);
+    io.files.set('/project/client/pages/Index.tsx', INDEX_PAGE);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+
+    const content = await manager.ensureComponent(['client/pages/Index.tsx']);
+
+    // Router shell must be absent from the registry
+    expect(content).not.toContain("'client/App.tsx'");
+    expect(content).not.toContain("from './App'");
+    // The requested page component must be present
+    expect(content).toContain("'client/pages/Index.tsx'");
+    expect(content).toContain('Index');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('also excludes App.tsx when both App.tsx and Index.tsx are passed explicitly', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/client/App.tsx', ROUTER_SHELL_APP);
+    io.files.set('/project/client/pages/Index.tsx', INDEX_PAGE);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+
+    const content = await manager.ensureComponent(['client/App.tsx', 'client/pages/Index.tsx']);
+
+    expect(content).not.toContain("'client/App.tsx'");
+    expect(content).toContain("'client/pages/Index.tsx'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+});
+
 describe('isValidTypeScript', () => {
   it('should return true for valid TSX code', () => {
     expect(isValidTypeScript('const x: number = 1;')).toBe(true);
