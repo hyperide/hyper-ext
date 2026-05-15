@@ -183,27 +183,33 @@ export class AstBridge {
 
   async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
     const absolutePath = this._resolvePath(filePath);
-    let contentBefore: string;
+    // Clear redo stack before ANY write — even when readFile fails (same invariant as _withUndoTracking).
+    this._undoRedoService.beginTracking();
     try {
-      contentBefore = await this._fileIO.readFile(absolutePath);
-    } catch {
-      return this._astService.deleteElements(filePath, elementIds);
-    }
-    const result = await this._astService.deleteElements(filePath, elementIds);
-    if (result.success) {
-      let contentAfter: string;
+      let contentBefore: string;
       try {
-        contentAfter = await this._fileIO.readFile(absolutePath);
+        contentBefore = await this._fileIO.readFile(absolutePath);
       } catch {
-        contentAfter = contentBefore;
+        return this._astService.deleteElements(filePath, elementIds);
       }
-      if (contentBefore !== contentAfter) {
-        // Single undo entry for the entire delete operation (regardless of element count).
-        // Content snapshots capture the full before/after — no need for per-element entries.
-        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+      const result = await this._astService.deleteElements(filePath, elementIds);
+      if (result.success) {
+        let contentAfter: string;
+        try {
+          contentAfter = await this._fileIO.readFile(absolutePath);
+        } catch {
+          contentAfter = contentBefore;
+        }
+        if (contentBefore !== contentAfter) {
+          // Single undo entry for the entire delete operation (regardless of element count).
+          // Content snapshots capture the full before/after — no need for per-element entries.
+          this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+        }
       }
+      return result;
+    } finally {
+      this._undoRedoService.endTracking();
     }
-    return result;
   }
 
   async duplicateElement(filePath: string, elementId: string): Promise<DuplicateElementResult> {

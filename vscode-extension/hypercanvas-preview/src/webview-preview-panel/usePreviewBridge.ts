@@ -366,6 +366,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           setDevServerRunning(msg.running);
           devServerUrlRef.current = msg.url ?? null;
           setDevServerUrl(devServerUrlRef.current);
+          if (!msg.running) {
+            // Reset so navigateToComponent fires again when server restarts on a new URL.
+            previewUrlRef.current = null;
+          }
           if (msg.running && devServerUrlRef.current && currentComponentRef.current && !previewUrlRef.current) {
             navigateToComponent(currentComponentRef.current, devServerUrlRef.current);
           }
