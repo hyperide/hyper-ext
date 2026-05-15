@@ -175,6 +175,27 @@ export function mergeRuntimeStyle(
     if (normalized) merged.borderColor = normalized;
   }
 
+  if (!merged.borderWidth && cs.borderWidth && cs.borderWidth !== '0px') {
+    merged.borderWidth = cs.borderWidth;
+  }
+
+  if (!merged.borderStyle && cs.borderStyle) {
+    merged.borderStyle = cs.borderStyle;
+  }
+
+  if (!merged.borderRadius && cs.borderRadius) {
+    merged.borderRadius = cs.borderRadius;
+  }
+
+  if (!merged.opacity && cs.opacity) {
+    const num = Number.parseFloat(cs.opacity);
+    if (!Number.isNaN(num)) merged.opacity = Math.round(num * 100).toString();
+  }
+
+  if (!merged.fontSize && cs.fontSize) {
+    merged.fontSize = cs.fontSize;
+  }
+
   return merged;
 }
 

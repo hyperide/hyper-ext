@@ -287,6 +287,7 @@ export class PreviewPanel {
     panel.onDidDispose(() => {
       for (const d of this._disposables) d.dispose();
       this._disposables = [];
+      this._syncService?.dispose();
       this._stateHub.unregister(PreviewPanel.PANEL_ID);
       this._syncService = undefined;
       this._panel = undefined;
@@ -306,7 +307,8 @@ export class PreviewPanel {
       () => this._currentComponent,
     );
     this._syncService.start();
-    this._disposables.push(this._syncService);
+    // Not added to _disposables — disposed explicitly in onDidDispose and setWorkspaceRoot
+    // to avoid accumulating stale entries on workspace switches.
   }
 
   /**

@@ -156,6 +156,11 @@ export class PreviewProxy {
    * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
+    if (this._isStopping) {
+      clientRes.writeHead(503);
+      clientRes.end();
+      return;
+    }
     const proxyPath = clientReq.url || '/';
     const virtualScript = HYPERCANVAS_SCRIPT_RESPONSES.get(proxyPath);
     if (virtualScript !== undefined) {
