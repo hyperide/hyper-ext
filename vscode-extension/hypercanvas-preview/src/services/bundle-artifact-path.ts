@@ -1,9 +1,7 @@
-const BUNDLE_PATH_PATTERNS: readonly RegExp[] = [
-  /(?:^|\/)_bun\/client\//,
-  /(?:^|\/)_next\/static\/chunks\//,
-  /(?:^|\/)node_modules\//,
-];
-
+/**
+ * Returns true when the path points to a compiled/bundled artifact that should
+ * not be opened in the editor (Bun _bun/, Next.js _next/, node_modules/).
+ */
 export function isBundleArtifactPath(filePath: string): boolean {
-  return BUNDLE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
+  return /(^|\/)_bun\//.test(filePath) || /(^|\/)_next\//.test(filePath) || /(^|\/)node_modules\//.test(filePath);
 }
