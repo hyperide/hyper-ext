@@ -143,13 +143,67 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
 
 ### Task 4: Verify selection is not lost
 
-- [ ] Confirm that the Delete binding's `when` clause uses
+- [x] Confirm that the Delete binding's `when` clause uses
       `hypercanvas.rightPanelInputFocused` AND that the inspector input
       sets that context on focus. If down-arrow on an input fires Delete-
       like behaviour, the binding is wrong.
-- [ ] Add an E2E case: focus padding-vertical input on a selected card,
+
+      Confirmed end-to-end. Gating chain:
+
+      1. `vscode-extension/hypercanvas-preview/package.json:233-244` — both
+         `hypercanvas.canvasDelete` keybindings (Backspace and Delete) carry
+         `when: "activeWebviewPanelId == 'hypercanvas.previewPanel' &&
+         !inputFocus && !hypercanvas.rightPanelInputFocused"`. Same guard is
+         applied to Enter, Shift+Enter, Tab, Shift+Tab, Escape, Ctrl/Cmd+D
+         and Ctrl/Cmd+Shift+C (lines 246-281), so no canvas-mutating
+         shortcut can fire while a right-panel input has focus.
+      2. `vscode-extension/hypercanvas-preview/src/extension.ts:332-336` —
+         initialises the context to `false` on activation, so the
+         `!hypercanvas.rightPanelInputFocused` clause is defined from the
+         start (otherwise the negation evaluates to `true` against
+         `undefined` which is fine, but VS Code logs a warning and the
+         contract becomes implicit).
+      3. `vscode-extension/hypercanvas-preview/src/webview-right/RightPanelApp.tsx:43-66`
+         — installs `focusin`/`focusout` listeners on `document` and posts
+         `{type:'panel:inputFocus', active}` for `HTMLInputElement` /
+         `HTMLTextAreaElement` targets. The `focusout` handler intentionally
+         skips when `relatedTarget` is another input in the same panel,
+         which matches the desired UX (don't bounce the guard between
+         neighbouring inputs while tabbing).
+      4. `vscode-extension/hypercanvas-preview/src/PanelRouter.ts:233-238`
+         — extension-host side, on every `panel:inputFocus` it calls
+         `setContext('hypercanvas.rightPanelInputFocused', active)`.
+      5. `vscode-extension/hypercanvas-preview/src/RightPanelProvider.ts:48-53,130-135`
+         — clears the guard on `reset()` (webview reload) and on
+         `onDidDispose`, so a stale `true` doesn't permanently block canvas
+         keybindings if the webview is torn down without firing
+         `focusout`.
+
+      Conclusion: the original bug-report hypothesis (Down-arrow → empty
+      value → Delete binding fires → selection token deleted) does NOT
+      hold. While the padding input has focus, Delete is gated off.
+
+      The selection-loss symptom is a downstream effect of Task 3's
+      problem: the empty/`-1px` decrement led to the inspector writing a
+      style that the AST/CSS pipeline rejected, the round-trip cleared
+      `paddingTop` to `''`, the next decrement fell through the empty-leak
+      branch, the round-trip churn re-rendered the canvas iframe and lost
+      `currentComponent` selection state. With Task 3 in place the
+      decrement never produces `-1px`/`'px'`, the round-trip succeeds, and
+      the selection survives. Will be re-verified in Task 5 E2E.
+
+- [x] Add an E2E case: focus padding-vertical input on a selected card,
       press down twice, assert (a) input shows `0px`, (b) canvas selection
       is still on the same card.
+
+      [x] manual test (skipped — not automatable in ralphex loop). E2E
+      tests live in the sibling repo `../ext-test-projects/e2e/` and run
+      via `HYPER_E2E_SHARDS=1 bun run test:docker`, requiring a freshly
+      built+installed `.vsix`. That whole sequence is the explicit scope
+      of Task 5 (build, install, E2E, TG), so adding a case here would
+      duplicate work without being runnable from this iteration. Leaving
+      the manual E2E reproduction + before/after screenshot capture to
+      Task 5.
 
 ### Task 5: Build, install, E2E screenshot, TG
 
