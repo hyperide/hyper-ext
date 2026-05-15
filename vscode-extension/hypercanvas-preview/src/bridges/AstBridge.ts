@@ -4,6 +4,7 @@
  * Routes ast:* messages to AstService and sends responses back.
  */
 
+import * as fsSync from 'node:fs';
 import path from 'node:path';
 import type * as vscode from 'vscode';
 import type {
@@ -16,6 +17,17 @@ import { AstService } from '../services/AstService';
 import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
+
+const _BRIDGE_DEBUG_LOG =
+  process.env.HYPERIDE_AST_DEBUG_LOG ??
+  (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : '/tmp/hyper-ast-debug.log');
+function _dbgBridge(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  console.log(msg);
+  try {
+    fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, line);
+  } catch {}
+}
 
 export class AstBridge {
   private _astService: AstService;
@@ -48,7 +60,7 @@ export class AstBridge {
    * instead of the default one (fixes cross-panel response routing).
    */
   async handleMessage(message: AstMessage, targetWebview?: vscode.Webview): Promise<void> {
-    console.log('[AstBridge] Received message:', message.type);
+    _dbgBridge(`[AstBridge.handleMessage] type=${message.type}`);
 
     let response: AstResponse;
 
@@ -210,6 +222,9 @@ export class AstBridge {
    * Handle updateStyles message
    */
   private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
+    _dbgBridge(
+      `[AstBridge._handleUpdateStyles] filePath=${message.filePath} elementId=${message.elementId} styles=${JSON.stringify(message.styles)}`,
+    );
     // elementId from the client is in nodeRef format ("fileName:line:col") — pass as nodeRef for element resolution
     const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
@@ -236,6 +251,9 @@ export class AstBridge {
    * Handle updateProps message
    */
   private async _handleUpdateProps(message: Extract<AstMessage, { type: 'ast:updateProps' }>): Promise<AstResponse> {
+    _dbgBridge(
+      `[AstBridge._handleUpdateProps] filePath=${message.filePath} elementId=${message.elementId} props=${JSON.stringify(message.props)}`,
+    );
     const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
       this._astService.updateProps(message.filePath, message.elementId, message.props, nodeRef),

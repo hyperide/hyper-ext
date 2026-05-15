@@ -29,8 +29,10 @@ import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 
-// Debug log sink — written to /tmp/hyper-ast-debug.log during local repro runs
-const DEBUG_LOG = process.env.HYPERIDE_AST_DEBUG_LOG ?? '/tmp/hyper-ast-debug.log';
+// Debug log sink — /tmp locally, /artifacts/ast-debug.log in CI/Docker
+const DEBUG_LOG =
+  process.env.HYPERIDE_AST_DEBUG_LOG ??
+  (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : '/tmp/hyper-ast-debug.log');
 function dbg(msg: string) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   console.log(msg);
@@ -313,6 +315,9 @@ export class AstService {
     nodeRef?: NodeRef,
     selectedSourceTabId?: string,
   ): Promise<UpdateStylesResult> {
+    dbg(
+      `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
+    );
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
@@ -320,9 +325,13 @@ export class AstService {
 
       const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
       if (!resolved) {
+        dbg(`[AstService.updateStyles] element NOT FOUND nodeRef=${nodeRef} elementId=${elementId}`);
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
       const { result, ast, resolvedPath } = resolved;
+      dbg(
+        `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? '?'} resolvedPath=${resolvedPath}`,
+      );
 
       const writeResult = await executeStyleWriteRequest({
         ast,

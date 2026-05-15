@@ -156,6 +156,28 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 - Screenshots are ground truth. Check for empty panes, wrong tabs, offscreen webviews, stale dialogs.
 
+### After every extension fix: run diagnostic script, not just Docker
+
+**NEVER** build extension and claim "done" without verifying via harness. Mandatory steps:
+
+1. `./vscode-extension/hypercanvas-preview/build-and-install.sh patch` — rebuild
+2. Run the matching debug script via Playwright (`launchVSCode` harness), e.g.:
+   - Tamagui write bug → `bun run /Users/ultra/work/ext-test-projects/debug-tamagui-write.ts`
+   - Webview errors → `bun run /Users/ultra/work/ext-test-projects/debug-webview-errors.ts`
+   - Bulka 404 → `bun run /Users/ultra/work/ext-test-projects/capture-bulka-cdp.ts`
+   - General overlay/style → `bun run /Users/ultra/work/ext-test-projects/debug-overlay-pi5.ts`
+3. Read output: extension-host logs, `[exthost:stdout]` lines, disk file contents.
+4. Only launch Docker run after step 3 confirms the fix works.
+
+`debug-tamagui-write.ts` specifically:
+- Launches isolated VS Code with tamagui-fitness via `launchVSCode()`
+- Selects first styleable element, sets backgroundColor=#123456
+- Checks extension-host logs for `[AstService]` / `nodeRef` / `resolveElement` lines
+- Checks disk for `#123456` in any .tsx file
+- Screenshot saved to `/tmp/hyper-tamagui-write-debug/`
+
+**Codex review before every commit** — `codex exec review --uncommitted`. It IS available.
+
 ---
 
 ## Known Open Issues (to fix)
