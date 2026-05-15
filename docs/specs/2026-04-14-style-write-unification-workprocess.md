@@ -39,19 +39,19 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards, ~1h 20m elapsed). Active fixes: `3287880`, `aeb693c`, `4909041`. NOT active: `f85f4d3`, `2ec61e5`, `d08744a`.
-  - S1: 302 tests done, **0 hard fails**
-  - S2: 266 tests done, **0 hard fails** (1 flaky: "component with error" retry-passed)
-  - S3: 240 tests done, **8 failures** = 4 Tamagui projects × 2 attempts:
-    - tamagui-fitness: dirty=App.tsx, style written as `style={{ backgroundColor: '#123456' }}`, regex missed space → poll timeout 150s
-    - tamagui-food-delivery: dirty=HomeScreen.tsx, readModifiedFile read App.tsx → ''
-    - tamagui-uber: dirty=DriverMatchScreen.tsx, readModifiedFile read App.tsx → ''
-    - tamagui-whatsapp: dirty=ChatListScreen.tsx, readModifiedFile read App.tsx → ''
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS (~2h)**. Active fixes: `3287880`, `aeb693c`, `4909041`. NOT active: `f85f4d3`, `2ec61e5`, `d08744a`.
+  - S1: ~650/737 done, **1 flaky** ("hyper_duplicate_element" 56919ms → retry-passed), 0 hard fails
+  - S2: DONE (653 tests), **2 hard fail** (Tamagui: tamagui-crypto CryptoScreen.tsx + tamagui-banking App.tsx), 1 flaky ("component with error" retry-passed)
+  - S3: ~507/737 done, **10 failures**: 8 Tamagui hard fails (4 projects × 2 attempts each: fitness/food-delivery/uber/whatsapp) + 2 webpack hard fails ("elements identifiable" 904865ms + 903564ms)
   
-  **Fixes committed AFTER run #37 started** (will be in run #38):
-  - `f85f4d3`: dirty tab search (fixes food-delivery, uber, whatsapp)
+  **Expected: all failures are pre-fix (Tamagui) or known infrastructure issue (webpack).**
+  
+  **Fixes committed AFTER run #37 started** (active in run #38):
+  - `f85f4d3`: dirty tab search (fixes food-delivery, uber, whatsapp, banking, crypto)
   - `2ec61e5`: full project scan fallback (safety net for non-dirty files)
   - `d08744a`: regex `\s*` fix (fixes fitness: style-object format)
+  - `a744506`: tamagui-whatsapp submodule pointer update (navigation stub fix)
+  - `c1736c6`: Phase 2 webpack pre-warm (populates dynamic-import chunk cache for `__canvas_preview__` → eliminates 900s "elements identifiable" compile)
 
 - **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **KILLED** (timeout after 927/2211 tests, exit code 124). Reached `react-vite-cssmodules-spotify` (project #3), never reached bulka-the-dog (#23).
   - **1 HARD FAIL**: "redo limit — no redo after new edit" — both attempts timed out at ~48-52s. Root cause: `isPreviewLoaded(45s)` exhausted in 1-shard low-memory Docker (avail≈4.4GB). Fixed in `4909041` (75s).
@@ -172,7 +172,7 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 **Expected result in run #38**: 0 hard fails on Tamagui style-write test.
 
-### 2. ⚠️ ast-operations 600s timeouts — NOT OOM, root cause: slow patched-entry compile
+### 2. 🔧 ast-operations 900s timeouts — webpack `__canvas_preview__` chunk cold-assembly (fix: c1736c6)
 
 **Run #29 finding (2026-04-29)**: `--memory-swap -1` did NOT fix these tests.
 S3 memory at failure point: 1.5GiB (well under 6GiB limit). Memory is not the cause.
@@ -212,12 +212,15 @@ Pattern: first test per webpack project takes 600s (compiling new `__canvas_prev
 attempts use filesystem cache (2.4s). With `--retries=1`, these tests now show as FLAKY (fail+retry-pass),
 not HARD FAIL. Acceptable per green definition.
 
-**Fix to reduce flakiness** (implement next): pre-warm should include `__canvas_preview__` compilation:
-generate `__canvas_preview__.tsx` before test run and include in webpack pre-warm. Then first attempt
-would also be fast. Alternatively: after `_patchEntryFile()`, the DevServerManager should await
-the second webpack `compiled successfully` before exposing the preview URL.
+**Fix (c1736c6)**: Phase 2 pre-warm in docker-entrypoint.sh:
+1. Generates stub `__canvas_preview__.tsx` importing all project source .tsx files
+2. Appends conditional dynamic import to `src/index.tsx`
+3. Runs `webpack build --mode development` (900s timeout) → caches dynamic chunk + all module compilations
+4. Restores original state
 
-**Status**: FLAKY (not HARD FAIL). Monitoring run #29 for full confirmation.
+When real test runs: `__canvas_preview__` deps already in chunk cache → second compile takes seconds not 900s.
+
+**Status**: HARD FAIL in run #37 (2 × 904/903s failures on webpack-react-tw3-kanban). Fix `c1736c6` targets run #38.
 
 ### 3. "component with error" 607s timeout — Vite watcher degradation
 
