@@ -3615,3 +3615,61 @@ Progress: S1 139/769, S2 173/691, S3 224/729 (~25% overall).
 - Фиксы без прерывания прогона (только глобальный баг = стоп)
 - Атомарные коммиты после каждого фикса
 - После каждого прогона: обновить этот файл, создать коммит
+
+## 📍 2026-04-28 Run #22 Full Tally + Run #23 Start
+
+**Run #22 final state (still running at 21:15 CEST, S3 stuck in 600s loops):**
+
+- S1: ~505 passed, 0 failed (65% done at last check — likely clean)
+- S2: 391 passed, 2 failed (57% done)
+- S3: 177 passed, 10 failed (24% done — blocked by 600s timeout loops for `remix-cssmodules-spotify` worker 27)
+
+**S3 failure breakdown:**
+
+| Test | Count | Duration | Root cause |
+|------|-------|----------|-----------|
+| `style written as prop, not className` | 4× | 23-26s | old test code (97c690b not yet in container) |
+| `styles applied correctly (element has non-zero dimensions)` | 2× | 27s | old test code (ff7b45d not yet in container) |
+| `nested components — multiple selectors found` | 1× | 605s | SSR `<h2>Error:…</h2>` + Vite 403 on JS assets → React never mounts |
+| `ExportNamedDeclaration — correct traversal order` | 1× | 605s | same |
+| `duplicate element preserves file integrity` | 1× | 606s | same |
+| `insert element command runs without crash` | 1× | 603s | same |
+| + more 600s timeouts still in progress | N× | 600s | same root cause |
+
+**S2 failures:**
+
+| Test | Count | Duration | Root cause |
+|------|-------|----------|-----------|
+| `component with error — error overlay appears` | 2× | 128s | old test code (d1387ff not yet in container) |
+
+**New root cause identified (600s loops):**
+
+Dual root cause for `remix-cssmodules-spotify` tests:
+1. Remix SSR renders `<h2>Error: No component specified</h2>` when `componentPath=null`
+   (transient state before client-side useEffect reads URL params) → `isPreviewLoaded()`
+   detects `/^Error:/` heading → returns false indefinitely
+2. Vite 5.4+ returns 403 for JS asset requests during initialization window
+   → PreviewProxy didn't retry asset 403s → React never mounts → SSR heading persists
+
+**Fixes committed for Run #23:**
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `18775895` | hyper-canvas-draft | `generator.ts`: change transient SSR heading `Error: No component specified` → `Loading preview...` |
+| `00eae5b5` | hyper-canvas-draft | `PreviewProxy`: retry asset 403s (30× for Vite init window, 5× others) |
+| `f1b9d53` | ext-test-projects | `remix-cssmodules-spotify/__canvas_preview__`: same heading rename |
+| `d1387ff` | ext-test-projects | error overlay poll 120→150s |
+| `97c690b` | ext-test-projects | style-as-prop: poll+dirty-tab loop 20s |
+| `ff7b45d` | ext-test-projects | non-zero dimensions: boundingBox poll 30s |
+
+**Run #23:** `run-20260428-212143-83027` started 21:21 CEST. 3 shards (`s{1,2,3}`, slots 21-23).
+Log: `/tmp/hyper-e2e-run23.log`
+Artifacts: `e2e/docker-artifacts/run-20260428-212143-83027/`
+
+**Why Run #23 started in parallel with Run #22:**
+S3 of Run #22 has 542 remaining tests but is blocked on 600s timeout loops (each taking 10 min).
+ETA for S3 completion: 2+ hours. Starting Run #23 in parallel avoids the wait.
+Machine resources: 14 CPUs, 24GB RAM — actual S3 usage is 0.4% CPU (mostly sleeping).
+
+**Expected Run #23 outcome:** All previously observed failure categories should be fixed.
+Watch for any NEW failure categories not seen in Runs #21-22.
