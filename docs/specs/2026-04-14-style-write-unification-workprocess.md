@@ -2709,3 +2709,106 @@ bunx knip remains blocked by the existing repository-wide unused-file report.
 Self-review was done by reading `git diff --staged`; Codex does not run
 `codex exec review --uncommitted` against itself.
 ```
+
+## 📍 Codex Final Report 2026-04-21 author: codex
+
+Main change status:
+
+```text
+All blocking Claude review findings from Review Session 2026-04-21 are fixed
+and committed. The final review-fix commit set is:
+- 5013b97f fix(style-write): route update style errors through AppError
+- 8999063c refactor(style-write): deduplicate shared helpers
+- c1225686 fix(ext): align style read service conventions
+- f47a816f fix(tailwind): forward selected source tab in adapter writes
+
+Workflow documentation was committed separately:
+- 807b5461 docs(workflow): document Codex review workflow
+```
+
+Review discipline:
+
+```text
+Codex does not run `codex exec review --uncommitted` from inside Codex.
+The review pass for these changes uses in-agent staged-diff review plus local
+checks: markdownlint, git diff --check, comment hygiene, token-pattern scan,
+focused tests, typecheck, extension build, and full bun run test.
+```
+
+Known remaining repository state:
+
+```text
+Related style-write plan/spec files are tracked and pass markdownlint.
+
+bunx knip still fails on the existing repository-wide unused-file report; no
+new review-fix source files are listed as unused by that report.
+```
+
+Bridge bot follow-up:
+
+```text
+The Telegram bridge must not use the current-session `codex exec resume`
+fallback. Incoming Telegram messages should use an already-connected app-server
+thread only, or fail fast with an explicit "live API chat cannot be injected"
+message. Nested Codex execution is disallowed for this workflow.
+```
+
+## 📍 Bridge Bot Fix + Validation 2026-04-21 author: codex
+
+Bridge bot fix:
+
+```text
+Repository: /Users/ultra/xp/codex-tg-bot
+Commit: 40e18f8 feat: add Codex Telegram bridge bot
+
+Current-session delivery is now app-server-only:
+- removed the `codex exec resume` fallback path from `src/current-session.ts`;
+- removed the 600s current-session turn timeout race;
+- legacy `CODEX_TG_CURRENT_SESSION_MODE=auto|exec` values are forced to
+  app-server mode and only warn;
+- `.env.example` documents `CODEX_TG_CURRENT_SESSION_MODE=app-server`;
+- local ignored `.env` was updated to `CODEX_TG_CURRENT_SESSION_MODE=app-server`;
+- launchd service `com.ultra.codex-tg-bot` was restarted and is running.
+```
+
+Bridge bot validation:
+
+```text
+cd /Users/ultra/xp/codex-tg-bot
+bun test
+  3 pass, 0 fail
+bunx tsc --noEmit
+  pass
+git diff --cached --check
+  pass
+token-pattern scan outside .env/logs/node_modules
+  token_pattern_not_found
+
+Runtime probe with an invalid thread id returned an app-server protocol error
+directly. It did not invoke `codex exec resume` and did not produce a timeout
+message.
+```
+
+Main repository validation:
+
+```text
+cd /Users/ultra/work/hyper-canvas-draft
+bun run test
+  2995 pass, 0 fail
+```
+
+Extension E2E validation:
+
+```text
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/commands.spec.ts \
+  -g "hypercanvas.open(AIChat|Inspector)" --workers=1 --reporter=line \
+  --output=/tmp/hyper-e2e-test-results
+
+Result: 2 passed.
+- hypercanvas.openAIChat — chat panel opens
+- hypercanvas.openInspector — inspector sidebar opens
+```
