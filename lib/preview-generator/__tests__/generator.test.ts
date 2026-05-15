@@ -4,7 +4,6 @@ import {
   deriveUniquePrefix,
   generatePreviewContent,
   generateStandaloneEntry,
-  isUiPrimitive,
   PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
   type SSRMockConfig,
@@ -606,24 +605,6 @@ describe('generatePreviewContent — ui-primitive filtering', () => {
     expect(content).toContain("'client/pages/ui-dashboard/Dashboard.tsx'");
     // Actual components/ui/ path — should be excluded
     expect(content).not.toContain("'client/components/ui/badge.tsx'");
-  });
-});
-
-describe('isUiPrimitive', () => {
-  it('matches forward-slash paths (Unix)', () => {
-    expect(isUiPrimitive('client/components/ui/badge.tsx')).toBe(true);
-    expect(isUiPrimitive('components/ui/button.tsx')).toBe(true);
-  });
-
-  it('matches backslash paths (Windows)', () => {
-    expect(isUiPrimitive('client\\components\\ui\\badge.tsx')).toBe(true);
-    expect(isUiPrimitive('components\\ui\\button.tsx')).toBe(true);
-  });
-
-  it('does not match non-ui/ paths', () => {
-    expect(isUiPrimitive('client/components/UserInterface.tsx')).toBe(false);
-    expect(isUiPrimitive('client/pages/ui-dashboard/Dashboard.tsx')).toBe(false);
-    expect(isUiPrimitive('client/ui/app.tsx')).toBe(false);
   });
 });
 

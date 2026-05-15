@@ -23,7 +23,6 @@ import {
 } from './framework-routing';
 import {
   generatePreviewContent,
-  isUiPrimitive,
   PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
   type ProviderWrapConfig,
@@ -491,11 +490,9 @@ export class PreviewFileManager {
         return existingContent;
       }
 
-      // Stale entries found — regenerate excluding reserved files and ui-primitive paths.
-      // ui-primitive paths must not be in requestedPaths (which becomes exemptFromUiFilter in
-      // _initPreviewFile). They remain in discoveredPaths so the generator can still filter them.
+      // Stale entries found — regenerate excluding reserved files
       const cleanPaths = existingEntries
-        .filter((e) => !isStale(e) && !isUiPrimitive(e.componentPath))
+        .filter((e) => !isStale(e))
         .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
@@ -508,17 +505,12 @@ export class PreviewFileManager {
     // Full regen when new components are added — ensures componentRegistry and sampleRenderMap
     // are updated alongside imports. Preserve existing components by parsing the registry via AST,
     // excluding reserved filenames that must not be in the Client Component bundle.
-    // ui-primitive paths are also excluded from requestedPaths to prevent them from becoming
-    // exempt from the isUiPrimitive filter in _initPreviewFile.
     const existingEntries = parseExistingPreview(existingContent);
     const discoveredPaths = await this._scanAllComponents();
     const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
     const existingPaths = existingEntries
       .filter(
-        (e) =>
-          !isFrameworkReserved(basename(e.componentPath)) &&
-          !isPreviewIneligibleByName(basename(e.componentPath)) &&
-          !isUiPrimitive(e.componentPath),
+        (e) => !isFrameworkReserved(basename(e.componentPath)) && !isPreviewIneligibleByName(basename(e.componentPath)),
       )
       .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
