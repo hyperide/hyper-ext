@@ -78,4 +78,10 @@ export class CustomJsonAdapter implements I18nAdapter {
       return null;
     }
   }
+
+  async writeKey(_elementId: string, _newKey: string): Promise<void> {
+    throw new Error(
+      'CustomJsonAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)',
+    );
+  }
 }

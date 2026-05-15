@@ -20,3 +20,27 @@ export function isForeignExtensionError(reason: unknown): boolean {
   // (Remote SSH/WSL/Codespaces) but not our extension ID is a foreign error.
   return /[/\\]\.vscode(?:-server)?[/\\]extensions[/\\](?!hyperide\.hypercanvas[-./])/.test(stack);
 }
+
+export type SerializedReason = { name: string; message: string; stack?: string } | string;
+
+/**
+ * Converts an unhandled rejection / uncaught exception reason to a
+ * JSON-safe value for structured log sinks.
+ *
+ * Returns `{ name, message, stack? }` for Error instances.
+ * Returns a JSON string for everything else; falls back to `String(reason)`
+ * when the value contains circular references or is otherwise not serialisable.
+ */
+export function serializeRejectionReason(reason: unknown): SerializedReason {
+  if (reason instanceof Error) {
+    return { name: reason.name, message: reason.message, stack: reason.stack };
+  }
+  try {
+    // JSON.stringify returns undefined for `undefined` itself (not a string) —
+    // fall through to String() for that case too.
+    const s = JSON.stringify(reason);
+    return s !== undefined ? s : String(reason);
+  } catch {
+    return String(reason);
+  }
+}
