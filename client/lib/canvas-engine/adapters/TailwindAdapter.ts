@@ -185,6 +185,7 @@ export class TailwindAdapter implements StyleAdapter {
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
+      selectedSourceTabId?: string;
     },
   ): Promise<void> {
     // Convert margin object to individual properties
@@ -210,6 +211,7 @@ export class TailwindAdapter implements StyleAdapter {
       instanceProps: options?.instanceProps,
       instanceId: options?.instanceId,
       state: options?.state,
+      selectedSourceTabId: options?.selectedSourceTabId,
     });
   }
 

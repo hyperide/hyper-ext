@@ -43,6 +43,7 @@ export interface StyleAdapter {
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string; // Optional state modifier (hover, focus, etc.)
+      selectedSourceTabId?: string;
     },
   ): Promise<void>;
 
