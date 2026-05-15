@@ -14,11 +14,8 @@ the i18n key inspector:
 
 2. **Selection rect wrong/too large after key change** — after writing a new i18n key,
    the overlay rect covers the parent container instead of the specific element (e.g., h1
-   rect becomes section-sized). Screenshot confirms: "Appearance" h1 selected, rect covers
-   h1 + photo + paragraph. Root cause: after JSX edit + HMR, FiberSourceIndex rebuild
+   rect becomes section-sized). Root cause: after JSX edit + HMR, FiberSourceIndex rebuild
    shifts source locations. `findElements(oldId)` misses → grace cache replays stale rects.
-   But the stale rects may have been accumulated from a parent container paint (e.g. when
-   grace cache was last written, the overlay was briefly painting the parent).
    Fix: after `writeI18nResource` completes (success path in RightSidebar), explicitly
    clear grace cache for the written elementId so the overlay forces a fresh DOM lookup
    after HMR instead of replaying stale rects.
@@ -56,15 +53,57 @@ Tests use bulka-the-dog project (has i18n with react-i18next, locales/en.json).
 - Test 3 (RED): change key → click different element → expect selection moves correctly
 - Test 4 (RED): change key twice in sequence → expect second change takes effect
 
-## Tasks
+### Task 1: Read all relevant files, understand current data flow
 
-- [ ] Task 1: RED — write 4 failing E2E tests to establish baseline
-- [ ] Task 2: Fix `canCreateKey` — separate from `keyEditable`, true when layout.writable
-- [ ] Task 3: Fix grace cache invalidation on write — call `clearSelectionGraceCache` (or
-  per-elementId prune) in success path of `handleI18nKeyChange` before restoreIfCurrent
-- [ ] Task 4: Fix `writeInProgress` not clearing — ensure dispatch fires even when
-  restoreIfCurrent returns early (navigationAway case)
-- [ ] Task 5: Fix repeated key change guard — identify and fix what blocks second write
-- [ ] Task 6: Build + install ext, run E2E → GREEN
-- [ ] Task 7: Codex review, fix findings
-- [ ] Task 8: Send before/after screenshots to TG
+- [ ] Read `client/components/RightSidebar/RightSidebar.tsx` focusing on `handleI18nKeyChange`, `writeInProgress`, `writeId`, `restoreIfCurrent`
+- [ ] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` focusing on `keyEditable`, combobox render, `onKeyChange` prop
+- [ ] Read `shared/canvas-interaction/selection-grace-cache.ts` — understand full API, find per-elementId invalidation or add one
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` lines around `writeInProgress` state update and grace cache apply
+- [ ] Document findings: what blocks `canCreateKey`, what guard blocks repeated writes, where `writeInProgress` fails to clear
+
+### Task 2: RED — write 4 failing E2E tests
+
+- [ ] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts`
+- [ ] Test 1: select i18n element → type new nonexistent key → expect combobox shows "Create" option
+- [ ] Test 2: select i18n element → change key → wait 1500ms → screenshot selection rect → assert rect height < 100px
+- [ ] Test 3: select i18n element → change key → click different element → assert new element selected (rect moves)
+- [ ] Test 4: select i18n element → change key twice → assert second value persisted in locale file
+- [ ] Run tests — confirm all 4 RED (fail on current build)
+
+### Task 3: Fix canCreateKey — separate from keyEditable
+
+- [ ] In `I18nTextInspector.tsx`: add `canCreateKey` prop (boolean)
+- [ ] `canCreateKey` = true when i18n layout exists and is writable, regardless of available keys count
+- [ ] Pass `canCreateKey` from `RightSidebar.tsx` — derive from `styleData.i18nText?.layout?.writable ?? false`
+- [ ] In combobox: show "Create" option when `canCreateKey && inputValue && !availableI18nKeys.includes(inputValue)`
+- [ ] Run typecheck: `bun run typecheck` (or equivalent)
+
+### Task 4: Fix grace cache invalidation on write
+
+- [ ] In `selection-grace-cache.ts`: add `clearGraceCacheForElement(elementId: string)` export (or clear all if per-id not feasible)
+- [ ] In `RightSidebar.tsx` success path of `handleI18nKeyChange`: call `clearGraceCacheForElement(elementId)` before `restoreIfCurrent()`
+- [ ] This forces fresh DOM lookup after HMR instead of replaying stale rects
+- [ ] Message `clearGraceCacheForElement` to iframe via postMessage if grace cache lives in iframe context
+
+### Task 5: Fix writeInProgress not clearing + repeated write guard
+
+- [ ] Trace what happens when `writeInProgress` fails to clear: find the guard that blocks second write
+- [ ] Ensure `writeInProgress: null` dispatch fires unconditionally at end of success path (not gated on `navigationAway` check)
+- [ ] If guard uses `if (state.writeInProgress)` flat check: change to `if (state.writeInProgress && state.writeInProgress.writeId === currentWriteId)`
+- [ ] Ensure `needsOverlayUpdate=true` is sent to iframe after write completes
+
+### Task 6: Build + install ext, run E2E → GREEN
+
+- [ ] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` in hyper-canvas-draft root
+- [ ] Wait for build to complete
+- [ ] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-key-bugs"`
+- [ ] All 4 tests must be GREEN
+- [ ] Screenshot artifacts in `docker-artifacts/run-*/shard-*/`
+
+### Task 7: Take E2E screenshots and send to Telegram
+
+- [ ] Find screenshot artifacts from the E2E run
+- [ ] Read each screenshot with Read tool, visually verify it shows the bug is fixed
+- [ ] Send passing screenshots to Telegram: `cd /Users/ultra/work/hyper-canvas-draft && ./send-tg-photo.sh <screenshot> "i18n key bugs fixed: <description>"`
+- [ ] One screenshot per bug fixed (4 total)
+- [ ] Commit any remaining uncommitted changes with descriptive message
