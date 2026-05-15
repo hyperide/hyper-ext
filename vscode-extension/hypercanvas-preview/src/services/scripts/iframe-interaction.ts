@@ -1140,6 +1140,16 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
+function _dragEffectiveBg(el: HTMLElement): string {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    node = node.parentElement;
+  }
+  return '#ffffff';
+}
+
 function _isHorizontalLayout(el: HTMLElement): boolean {
   const parent = el.parentElement;
   if (!parent) return false;
@@ -1157,12 +1167,9 @@ let _dragStartX = 0;
 let _dragStartY = 0;
 let _dragSuppressNextClick = false;
 let _dragSourceEl: HTMLElement | null = null;
-let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
 let _dragBadgeEl: HTMLElement | null = null;
 let _dragOrigStyleAttr = '';
-let _dragOffsetX = 0;
-let _dragOffsetY = 0;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1212,25 +1219,19 @@ function _dragPointerMove(e: PointerEvent): void {
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
       if (_dragSourceEl) {
-        const rect = _dragSourceEl.getBoundingClientRect();
-        _dragOffsetX = _dragStartX - rect.left;
-        _dragOffsetY = _dragStartY - rect.top;
-
-        // Fade the source element in place — shows "where it came from"
-        _dragSourceEl.style.opacity = '0.35';
-        _dragSourceEl.style.pointerEvents = 'none';
-
-        // Create ghost clone that follows the cursor
-        const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
-        ghost.className = 'hyper-drag-ghost';
-        ghost.removeAttribute('data-uniq-id');
-        ghost.style.width = `${rect.width}px`;
-        ghost.style.height = `${rect.height}px`;
-        ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
-        ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
-        document.body.appendChild(ghost);
-        _dragGhostEl = ghost;
-
+        _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
+        const s = _dragSourceEl.style;
+        const computedBg = getComputedStyle(_dragSourceEl).backgroundColor;
+        if (computedBg === 'rgba(0, 0, 0, 0)' || computedBg === 'transparent') {
+          s.backgroundColor = _dragEffectiveBg(_dragSourceEl);
+        }
+        s.transition = 'box-shadow 0.12s ease';
+        s.transform = 'scale(1.03)';
+        s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
+        s.opacity = '0.88';
+        s.position = 'relative';
+        s.zIndex = '2147483647';
+        s.pointerEvents = 'none';
         const indicator = document.createElement('div');
         indicator.className = 'hyper-drop-indicator';
         indicator.style.display = 'none';
@@ -1256,9 +1257,10 @@ function _dragPointerMove(e: PointerEvent): void {
 
   if (_dragState !== 'dragging') return;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
-    _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
+  const dx = e.clientX - _dragStartX;
+  const dy = e.clientY - _dragStartY;
+  if (_dragSourceEl) {
+    _dragSourceEl.style.transform = `scale(1.03) translate(${dx}px, ${dy}px)`;
   }
 
   if (_dragIndicatorEl) {
@@ -1297,9 +1299,9 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragSourceId = null;
   _dragSourceFilePath = null;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.remove();
-    _dragGhostEl = null;
+  if (_dragSourceEl) {
+    _dragSourceEl.setAttribute('style', _dragOrigStyleAttr);
+    _dragSourceEl = null;
   }
   _dragOrigStyleAttr = '';
   if (_dragBadgeEl) {
@@ -1310,13 +1312,6 @@ function _dragPointerUp(e: PointerEvent): void {
     _dragIndicatorEl.remove();
     _dragIndicatorEl = null;
   }
-  if (_dragSourceEl) {
-    _dragSourceEl.style.opacity = '';
-    _dragSourceEl.style.pointerEvents = '';
-    _dragSourceEl = null;
-  }
-  _dragOffsetX = 0;
-  _dragOffsetY = 0;
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
@@ -1344,8 +1339,7 @@ function _dragPointerUp(e: PointerEvent): void {
   // pre-lift element if the parent layer has no own source.
   const finalSourceSrc =
     _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
-  const finalDropSrc =
-    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
@@ -1681,6 +1675,10 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];
+    console.debug('[tree-scroll] leg4 iframe goToVisual → element lookup', {
+      elementId: msg.elementId,
+      found: !!el,
+    });
     if (el) {
       scrollIntoViewCenterSmooth(el);
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -1724,6 +1722,10 @@ window.addEventListener('message', (event: MessageEvent) => {
   // Scroll to element without changing selection (tree row click → canvas scroll)
   if (msg.type === 'hypercanvas:scrollToElement') {
     const el = findElementsByRef(msg.elementId, 0)[0];
+    console.debug('[tree-scroll] leg5 iframe scrollToElement → element lookup', {
+      elementId: msg.elementId,
+      found: !!el,
+    });
     if (el) scrollIntoViewCenterSmooth(el);
     return;
   }
