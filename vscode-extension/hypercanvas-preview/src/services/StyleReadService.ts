@@ -33,25 +33,9 @@ import { resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
 import { isBundleArtifactPath } from './bundle-artifact-path';
+import { AdapterFactory } from './i18n/AdapterFactory';
 import { resolveWorkspacePath } from './workspace-path';
 
-/** Recursively extract all leaf keys from a JSON object, producing dot-path keys. */
-function extractLeafKeys(obj: unknown, prefix = ''): string[] {
-  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
-    return prefix ? [prefix] : [];
-  }
-  const keys: string[] = [];
-  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    const path = prefix ? `${prefix}.${k}` : k;
-    if (typeof v === 'string') {
-      keys.push(path);
-    } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-      keys.push(...extractLeafKeys(v, path));
-    }
-    // Skip non-string leaves (numbers, booleans, arrays)
-  }
-  return keys;
-}
 
 export interface ElementStyleReadResult {
   className: string;
@@ -233,41 +217,19 @@ export class StyleReadService {
    */
   async getAvailableKeys(namespace: string | undefined, activeLocale: string): Promise<string[]> {
     try {
-      const layout = await discoverLayout(this._workspaceRoot, namespace, activeLocale, this._fileIO);
-      if (!layout) return [];
-
-      // Merged single-file format (translations.ts/js): data already parsed by discoverLayout
-      if (layout.mergedData) {
-        const localeData = layout.mergedData[activeLocale] ?? layout.mergedData[layout.availableLocales[0]];
-        return localeData ? extractLeafKeys(localeData) : [];
-      }
-
-      const filePath = layout.getLocaleFilePath(activeLocale);
-      // TS/JS locale files without mergedData are not supported for JSON key extraction
-      if (filePath.endsWith('.ts') || filePath.endsWith('.js')) return [];
-
-      let content: string;
-      try {
-        content = await this._fileIO.readFile(filePath);
-      } catch {
-        // Try first available locale as fallback
-        const fallback = layout.availableLocales[0];
-        if (!fallback || fallback === activeLocale) return [];
-        try {
-          content = await this._fileIO.readFile(layout.getLocaleFilePath(fallback));
-        } catch {
-          return [];
-        }
-      }
-
-      let data: unknown;
-      try {
-        data = JSON.parse(content);
-      } catch {
-        return [];
-      }
-
-      return extractLeafKeys(data);
+      const stub: I18nTextBinding = {
+        kind: 'i18n',
+        library: 'custom',
+        key: '',
+        namespace,
+        activeLocale,
+        availableLocales: [],
+        resolvedText: null,
+        editable: false,
+        sourceLocation: { filePath: '', line: 0, column: 0 },
+      };
+      const adapter = await new AdapterFactory(this._workspaceRoot, this._fileIO).forBinding(stub, activeLocale);
+      return adapter.getAvailableKeys(activeLocale);
     } catch {
       return [];
     }
