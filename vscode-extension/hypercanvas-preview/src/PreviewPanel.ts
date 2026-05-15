@@ -1096,6 +1096,7 @@ export class PreviewPanel {
    * across tests and causes intermittent click-resolution failures.
    */
   public dispose(): void {
+    this.clearSelection();
     this._panel?.dispose();
   }
 

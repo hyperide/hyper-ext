@@ -14,10 +14,16 @@ import type { StateHub } from '../StateHub';
 
 interface MockStateHubState {
   currentComponent: { name: string; path: string } | null;
+  insertTargetId: string | null;
+  selectedIds: string[];
 }
 
 function createStateHub(initial: MockStateHubState['currentComponent'] = null) {
-  const state: MockStateHubState = { currentComponent: initial };
+  const state: MockStateHubState = {
+    currentComponent: initial,
+    insertTargetId: null,
+    selectedIds: [],
+  };
   return {
     state,
     applyUpdate: mock((patch: Partial<MockStateHubState>) => {
@@ -35,11 +41,12 @@ function createPanel(stateHub: ReturnType<typeof createStateHub>) {
     {} as vscode.ExtensionContext,
   );
   const postMessage = mock(() => Promise.resolve(true));
+  const dispose = mock(() => {});
   Object.assign(panel as PreviewPanel & { _devServerRunning: boolean; _panel: unknown }, {
     _devServerRunning: true,
-    _panel: { webview: { postMessage } },
+    _panel: { dispose, webview: { postMessage } },
   });
-  return { panel, postMessage };
+  return { dispose, panel, postMessage };
 }
 
 function createEditor(path: string): vscode.TextEditor {
@@ -114,5 +121,20 @@ describe('PreviewPanel component selection', () => {
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({
       currentComponent: { name: 'App', path: 'src/App.tsx' },
     });
+  });
+
+  it('clears shared selection when disposing the preview panel', () => {
+    const stateHub = createStateHub();
+    stateHub.state.selectedIds = ['src/components/Feed.tsx:13:8'];
+    stateHub.state.insertTargetId = 'src/components/Feed.tsx:13:8';
+    const { dispose, panel } = createPanel(stateHub);
+
+    panel.dispose();
+
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      insertTargetId: null,
+      selectedIds: [],
+    });
+    expect(dispose).toHaveBeenCalled();
   });
 });
