@@ -353,6 +353,7 @@ export default function RightSidebar({
   // Color state
   const [backgroundColor, setBackgroundColor] = useState('');
   const [textColor, setTextColor] = useState('');
+  const [fontSize, setFontSize] = useState('');
   const [fillOpacity, setFillOpacity] = useState('');
   const [textOpacity, setTextOpacity] = useState('');
   const [opacity, setOpacity] = useState('');
@@ -686,6 +687,7 @@ export default function RightSidebar({
       setGridRows('');
       setBackgroundColor('');
       setTextColor('');
+      setFontSize('');
       setTextOpacity('');
       setBorderRadius('');
       setOpacity('');
@@ -756,6 +758,8 @@ export default function RightSidebar({
       setTextColor('');
       setTextOpacity('');
     }
+
+    setFontSize(ep.fontSize ?? '');
 
     // Update border radius
     setBorderRadius(ep.borderRadius || '');
@@ -1212,6 +1216,7 @@ export default function RightSidebar({
                 fillOpacity={fillOpacity}
                 backgroundImage={backgroundImage}
                 textColor={textColor}
+                fontSize={fontSize}
                 fillMode={fillMode}
                 projectUIKit={inspectorUIKit}
                 publicDirExists={publicDirExists}
@@ -1220,6 +1225,7 @@ export default function RightSidebar({
                 onFillOpacityChange={setFillOpacity}
                 onBackgroundImageChange={setBackgroundImage}
                 onTextColorChange={setTextColor}
+                onFontSizeChange={setFontSize}
                 onFillModeChange={setFillMode}
                 syncStyleChange={syncStyleChange}
                 engine={engine}

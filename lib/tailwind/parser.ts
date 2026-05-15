@@ -234,12 +234,55 @@ const TAILWIND_TEXT_NON_COLOR_CLASSES = new Set([
   'text-end',
 ]);
 
+const TAILWIND_TEXT_SIZE_CLASSES = new Set([
+  'text-xs',
+  'text-sm',
+  'text-base',
+  'text-lg',
+  'text-xl',
+  'text-2xl',
+  'text-3xl',
+  'text-4xl',
+  'text-5xl',
+  'text-6xl',
+  'text-7xl',
+  'text-8xl',
+  'text-9xl',
+]);
+
+function isArbitraryTextSizeValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return /^-?\d*\.?\d+(px|r?em|ex|ch|lh|rlh|vw|vh|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqmin|cqmax|%)$/.test(
+    normalized,
+  );
+}
+
+function isArbitraryTextSizeClass(baseClass: string): boolean {
+  const match = baseClass.match(/^text-\[(.+)\]$/);
+  if (!match) return false;
+  return isArbitraryTextSizeValue(match[1]);
+}
+
+function isTailwindTextSizeClass(baseClass: string): boolean {
+  return TAILWIND_TEXT_SIZE_CLASSES.has(baseClass) || isArbitraryTextSizeClass(baseClass);
+}
+
+function isTailwindTextOtherNonColorClass(baseClass: string): boolean {
+  return TAILWIND_TEXT_NON_COLOR_CLASSES.has(baseClass) && !TAILWIND_TEXT_SIZE_CLASSES.has(baseClass);
+}
+
+function isTailwindTextColorClass(baseClass: string): boolean {
+  return (
+    baseClass.startsWith('text-') && !isTailwindTextSizeClass(baseClass) && !isTailwindTextOtherNonColorClass(baseClass)
+  );
+}
+
 /**
  * Determines if a class matched by prefix should be preserved (not removed).
  * Handles Tailwind prefix overlaps where different CSS properties share the same prefix
  * (e.g. shadow-md is boxShadow, shadow-red-500 is shadowColor — both start with "shadow").
  */
-function shouldPreserveClass(prefix: string, baseClass: string): boolean {
+function shouldPreserveClass(prefix: string, baseClass: string, styleKeys: string[]): boolean {
   switch (prefix) {
     case 'border-':
       // 'border' (bare width) is not a color
@@ -258,8 +301,19 @@ function shouldPreserveClass(prefix: string, baseClass: string): boolean {
       // flex-col/flex-row belong to flexDirection, not display
       return baseClass === 'flex-col' || baseClass === 'flex-row';
 
-    case 'text-':
-      return TAILWIND_TEXT_NON_COLOR_CLASSES.has(baseClass);
+    case 'text-': {
+      const isSizeClass = isTailwindTextSizeClass(baseClass);
+      const isOtherNonColorClass = isTailwindTextOtherNonColorClass(baseClass);
+      const isColorClass = isTailwindTextColorClass(baseClass);
+      const removingColor = styleKeys.includes('color');
+      const removingFontSize = styleKeys.includes('fontSize');
+
+      if (isOtherNonColorClass) return true;
+      if (removingColor && !removingFontSize) return isSizeClass;
+      if (removingFontSize && !removingColor) return isColorClass;
+      if (removingColor && removingFontSize) return false;
+      return false;
+    }
 
     case 'shadow-':
       // shadow-md/lg/xl are boxShadow, not shadowColor
@@ -322,7 +376,7 @@ export function removeConflictingClasses(
     // Check if base class (without modifier) matches any conflicting prefix
     for (const prefix of prefixes) {
       if (baseClass === prefix || baseClass.startsWith(prefix)) {
-        if (shouldPreserveClass(prefix, baseClass)) continue;
+        if (shouldPreserveClass(prefix, baseClass, styleKeys)) continue;
         shouldRemove = true;
         break;
       }
@@ -553,8 +607,13 @@ export function mapPropertiesToTailwindClasses(domClasses: string): Record<strin
       result[`${prefix}backgroundColor`] = cls;
     }
 
+    // Text size
+    else if (isTailwindTextSizeClass(baseClass)) {
+      result[`${prefix}fontSize`] = cls;
+    }
+
     // Text color
-    else if (baseClass.startsWith('text-') && !baseClass.includes('/')) {
+    else if (isTailwindTextColorClass(baseClass) && !baseClass.includes('/')) {
       result[`${prefix}color`] = cls;
     }
 

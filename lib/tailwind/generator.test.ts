@@ -108,6 +108,18 @@ describe('generateTailwindClasses', () => {
     expect(result).toContain('border-black');
   });
 
+  it('should generate text size classes', () => {
+    const result = generateTailwindClasses({ fontSize: '15px' });
+
+    expect(result).toContain('text-[15px]');
+  });
+
+  it('should generate text size classes from unitless values', () => {
+    const result = generateTailwindClasses({ fontSize: '15' });
+
+    expect(result).toContain('text-[15px]');
+  });
+
   it('should generate border radius', () => {
     const result = generateTailwindClasses({
       borderRadius: '8px',

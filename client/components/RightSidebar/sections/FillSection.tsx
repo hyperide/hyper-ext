@@ -2,6 +2,7 @@ import { TID } from '@shared/data-testid-map';
 import { memo } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
 import { type FillMode, FillPicker } from '../../ui/fill-picker';
+import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
 import { hexWithAlpha, parseHexWithAlpha } from '../utils';
 
@@ -10,6 +11,7 @@ interface FillSectionProps {
   fillOpacity: string;
   backgroundImage: string | null;
   textColor: string;
+  fontSize: string;
   fillMode: FillMode;
   projectUIKit: UIKitType;
   publicDirExists: boolean;
@@ -18,6 +20,7 @@ interface FillSectionProps {
   onFillOpacityChange: (value: string) => void;
   onBackgroundImageChange: (path: string | null) => void;
   onTextColorChange: (value: string) => void;
+  onFontSizeChange: (value: string) => void;
   onFillModeChange: (mode: FillMode) => void;
   syncStyleChange: (key: string, value: string) => void;
   engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
@@ -31,6 +34,7 @@ export const FillSection = memo(function FillSection({
   fillOpacity,
   backgroundImage,
   textColor,
+  fontSize,
   fillMode,
   projectUIKit,
   publicDirExists,
@@ -39,6 +43,7 @@ export const FillSection = memo(function FillSection({
   onFillOpacityChange,
   onBackgroundImageChange,
   onTextColorChange,
+  onFontSizeChange,
   onFillModeChange,
   syncStyleChange,
   engine,
@@ -78,6 +83,18 @@ export const FillSection = memo(function FillSection({
     if (path && backgroundColor) {
       onBackgroundColorChange('');
       syncStyleChange('backgroundColor', '');
+    }
+  };
+
+  const handleFontSizeBlur = () => {
+    const trimmed = fontSize.trim();
+    if (!trimmed) return;
+    if (/^-?\d*\.?\d+$/.test(trimmed)) {
+      const normalized = `${trimmed}px`;
+      if (normalized !== fontSize) {
+        onFontSizeChange(normalized);
+        syncStyleChange('fontSize', normalized);
+      }
     }
   };
 
@@ -145,6 +162,20 @@ export const FillSection = memo(function FillSection({
           contrastPairedHex={backgroundColor || undefined}
           contrastRole="text"
         />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground min-w-[60px]">Size</span>
+          <Input
+            testId={TID.inspector.fontSize}
+            value={fontSize ?? ''}
+            onChange={(e) => {
+              onFontSizeChange(e.target.value);
+              syncStyleChange('fontSize', e.target.value);
+            }}
+            onBlur={handleFontSizeBlur}
+            placeholder="15px"
+            className="h-8 flex-1"
+          />
+        </div>
       </div>
     </div>
   );
@@ -157,6 +188,7 @@ export const SampleDefault = () => {
       fillOpacity="90"
       backgroundImage="/assets/wood-texture.png"
       textColor="#333333"
+      fontSize="15px"
       fillMode="color"
       projectUIKit="tailwind"
       publicDirExists={true}
@@ -165,6 +197,7 @@ export const SampleDefault = () => {
       onFillOpacityChange={(value) => console.log('Fill opacity changed:', value)}
       onBackgroundImageChange={(path) => console.log('Background image changed:', path)}
       onTextColorChange={(value) => console.log('Text color changed:', value)}
+      onFontSizeChange={(value) => console.log('Font size changed:', value)}
       onFillModeChange={(mode) => console.log('Fill mode changed:', mode)}
       syncStyleChange={
         (key, value) => console.log(`Style synchronized: ${key} = ${value}`) // nosemgrep: unsafe-formatstring -- JS template literal, not a format string

@@ -3,7 +3,27 @@
  * Converts style values to Tailwind CSS classes
  */
 
-import colors from 'tailwindcss/colors';
+import tailwindColors from 'tailwindcss/colors';
+
+type TailwindColorPalette = { [shade: string]: string };
+
+function isTailwindColorPalette(value: unknown): value is TailwindColorPalette {
+  return typeof value === 'object' && value !== null;
+}
+
+function buildTailwindColorMap(input: object): Map<string, TailwindColorPalette | string> {
+  const colorMap = new Map<string, TailwindColorPalette | string>();
+
+  for (const [name, palette] of Object.entries(input)) {
+    if (typeof palette === 'string' || isTailwindColorPalette(palette)) {
+      colorMap.set(name, palette);
+    }
+  }
+
+  return colorMap;
+}
+
+const colors = buildTailwindColorMap(tailwindColors);
 
 // Build reverse lookup map: hex -> tailwind class (e.g., '#3b82f6' -> 'blue-500')
 const HEX_TO_TW_CLASS: Record<string, string> = {};
@@ -35,7 +55,7 @@ const colorNames = [
 ];
 
 for (const colorName of colorNames) {
-  const palette = colors[colorName as keyof typeof colors];
+  const palette = colors.get(colorName);
   if (palette && typeof palette === 'object') {
     for (const [shade, hex] of Object.entries(palette)) {
       if (typeof hex === 'string') {
@@ -68,6 +88,7 @@ interface StyleUpdate {
   paddingRight?: string;
   paddingBottom?: string;
   paddingLeft?: string;
+  fontSize?: string;
   backgroundColor?: string;
   backgroundImage?: string; // Image path for bg-[url('...')]
   color?: string; // text color
@@ -292,6 +313,43 @@ function toColorClass(type: 'bg' | 'text' | 'border' | 'shadow', value: string |
   // Use arbitrary value for custom colors — replace commas/spaces per Tailwind v3 syntax
   const escaped = value.replace(/,\s*/g, '_').replace(/\s+/g, '_');
   return `${type}-[${escaped}]`;
+}
+
+/**
+ * Convert font size to Tailwind text class
+ */
+function toTextSizeClass(value: string | undefined): string | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const normalizedMap: Record<string, string> = {
+    '0.75rem': 'xs',
+    '0.875rem': 'sm',
+    '1rem': 'base',
+    '1.125rem': 'lg',
+    '1.25rem': 'xl',
+    '1.5rem': '2xl',
+    '1.875rem': '3xl',
+    '2.25rem': '4xl',
+    '3rem': '5xl',
+    '3.75rem': '6xl',
+    '4.5rem': '7xl',
+    '6rem': '8xl',
+    '8rem': '9xl',
+  };
+
+  if (normalizedMap[trimmed]) {
+    return `text-${normalizedMap[trimmed]}`;
+  }
+
+  let normalized = trimmed;
+  if (/^-?\d*\.?\d+$/.test(normalized)) {
+    normalized = `${normalized}px`;
+  }
+
+  return `text-[${normalized}]`;
 }
 
 /**
@@ -548,9 +606,11 @@ export function generateTailwindClasses(styles: StyleUpdate, state?: string): st
 
   // Colors
   const bg = toColorClass('bg', styles.backgroundColor);
+  const fontSize = toTextSizeClass(styles.fontSize);
   const textColor = toColorClass('text', styles.color);
   const border = toColorClass('border', styles.borderColor);
   if (bg) classes.push(bg);
+  if (fontSize) classes.push(fontSize);
   if (textColor) classes.push(textColor);
   if (border) classes.push(border);
 
@@ -669,6 +729,7 @@ const TEST_VALUES_FOR_PREFIX: Record<string, { value: string; suffix: string }> 
   height: { value: '100px', suffix: '[100px]' },
   // Colors
   backgroundColor: { value: '#ff0000', suffix: '[#ff0000]' },
+  fontSize: { value: '15px', suffix: '[15px]' },
   color: { value: '#ff0000', suffix: '[#ff0000]' },
   borderColor: { value: '#ff0000', suffix: '[#ff0000]' },
   // Position

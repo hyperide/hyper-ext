@@ -3,7 +3,12 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import { getConflictingPrefixes, parseTailwindClasses, removeConflictingClasses } from './parser';
+import {
+  getConflictingPrefixes,
+  mapPropertiesToTailwindClasses,
+  parseTailwindClasses,
+  removeConflictingClasses,
+} from './parser';
 
 describe('parseTailwindClasses', () => {
   it('should parse position classes', () => {
@@ -39,11 +44,12 @@ describe('parseTailwindClasses', () => {
     expect(result.top).toBe('-2rem');
   });
 
-  it('should parse color classes', () => {
-    const result = parseTailwindClasses('bg-[#ff0000] border-[rgba(0,0,0,0.5)]');
+  it('should map text size classes separately from text colors', () => {
+    const result = mapPropertiesToTailwindClasses('text-[15px] text-[#fff] text-cyan-400');
 
-    expect(result.backgroundColor).toBe('#ff0000');
-    expect(result.borderColor).toBe('rgba(0,0,0,0.5)');
+    expect(result.fontSize).toBe('text-[15px]');
+    expect(result.color).toBe('text-cyan-400');
+    expect(result['text-[#fff]']).toBeUndefined();
   });
 
   it('should parse border radius', () => {
@@ -208,6 +214,14 @@ describe('removeConflictingClasses', () => {
     expect(preserved).toContain('text-3xl');
     expect(removed).toContain('text-cyan-400');
     expect(preserved).toContain('font-mono');
+  });
+
+  it('should preserve text color classes when removing font size conflicts', () => {
+    const { preserved, removed } = removeConflictingClasses('text-[#fff] text-sm text-cyan-400', ['fontSize']);
+
+    expect(removed).toContain('text-sm');
+    expect(preserved).toContain('text-[#fff]');
+    expect(preserved).toContain('text-cyan-400');
   });
 
   it('should not remove text-align or text-wrap classes when removing color', () => {
