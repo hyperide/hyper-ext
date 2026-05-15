@@ -3988,11 +3988,34 @@ if (componentFile === DEFAULT_COMPONENT_FILE_SENTINEL) {
    - Projects: tamagui-fitness, tamagui-food-delivery, tamagui-whatsapp, + 1 more
    - No fix needed — inherent retry-pass flake in Tamagui file model sync
 
-### Net assessment
+### Net assessment (04:12 CEST — INCORRECT, see correction below)
 
-Run #26 is healthy. No hard failures yet. The ReferenceError fix (`ead694e`) is
-confirmed working — all project-dependent tests proceed past `preview:poll-loaded:start`.
+At 466/2189, all 5 observed failures were classified as retry-pass flakes.
+The "error overlay" first attempt (307793ms) was incorrectly classified as flaky —
+a "retry: 15108ms passed" entry was noted but this was based on incomplete data.
 
-### Fix committed during run
+### Correction (04:57 CEST — actual outcome)
 
-`4bae85a` (ext-test-projects, pushed): error overlay poll 300s→450s + 600s timeout
+**S2 "component with error — error overlay appears"**: BOTH attempts failed:
+- Attempt 1: 307793ms — failed
+- Attempt 2 (retry): 309663ms — failed
+→ **HARD FAILURE** — not a flake. Root: `4bae85a` committed at 04:04 CEST, but
+  Run #26 containers were built at 03:31 CEST (14s after `ead694e`) → 4bae85a
+  was NOT in the containers. Old 300s poll was used.
+
+**S3 "elements identifiable via fiber-based selection" (webpack-react-tw3-kanban)**:
+BOTH attempts failed:
+- Attempt 1: 483738ms — failed
+- Attempt 2 (retry): 484260ms — failed
+→ **HARD FAILURE** — 480s poll insufficient. Root: same container timing issue;
+  `227c6ea` (600s fix) was committed at 04:52, long after Run #26 start.
+
+**S3 "Tamagui: style written as prop, not className" ×4**: first attempts ~11s,
+retries passed → FLAKY (inherent File Modified Since stale model, no fix needed).
+
+**S1**: 0 hard failures.
+
+### Commits during Run #26 (will be in Run #27)
+
+- `4bae85a`: error overlay poll 300s→450s + 600s timeout
+- `227c6ea`: webpack poll 480s→600s, setTimeout 600s→840s
