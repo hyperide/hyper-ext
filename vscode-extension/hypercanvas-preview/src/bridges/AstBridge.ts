@@ -361,28 +361,7 @@ export class AstBridge {
   private async _handleDeleteElements(
     message: Extract<AstMessage, { type: 'ast:deleteElements' }>,
   ): Promise<AstResponse> {
-    const absolutePath = this._resolvePath(message.filePath);
-    let contentBefore: string | undefined;
-    try {
-      contentBefore = await this._fileIO.readFile(absolutePath);
-    } catch {
-      // ignore — no undo tracking for missing files
-    }
-
-    const result = await this._astService.deleteElements(message.filePath, message.elementIds);
-
-    if (result.success && contentBefore !== undefined) {
-      let contentAfter: string;
-      try {
-        contentAfter = await this._fileIO.readFile(absolutePath);
-      } catch {
-        contentAfter = contentBefore;
-      }
-      if (contentBefore !== contentAfter) {
-        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
-      }
-    }
-
+    const result = await this.deleteElements(message.filePath, message.elementIds);
     return {
       type: 'ast:response',
       requestId: message.requestId,
