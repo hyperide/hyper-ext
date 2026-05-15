@@ -213,7 +213,10 @@ export class PreviewProxy {
       const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(';') : (contentTypeHeader ?? '');
       const isHtml = contentType.includes('text/html');
       const assetContentType = getPreviewAssetContentType(proxyPath);
-      if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < 5) {
+      // 403 on assets: Vite not fully initialised — allow more retries (30 × 200ms = 6s).
+      // Other retry conditions (wrong content-type / 503): 5 retries is sufficient.
+      const assetRetryLimit = proxyRes.statusCode === 403 ? 30 : 5;
+      if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < assetRetryLimit) {
         proxyRes.resume();
         setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
         return;

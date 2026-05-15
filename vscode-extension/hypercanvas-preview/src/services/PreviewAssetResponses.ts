@@ -36,7 +36,11 @@ export function getPreviewAssetContentType(proxyPath: string): string | null {
 }
 
 export function shouldRetryAssetResponse(statusCode: number | undefined, isHtml: boolean): boolean {
-  return isHtml || statusCode === 503;
+  // Also retry 403 — Vite 5.4+ returns 403 for asset requests while still initialising
+  // (before the dev server has compiled routes). Worker ordering races cause this for
+  // the first worker to start on a project: assets return 403 briefly, JS bundle can't
+  // load, React never executes and the SSR initial state persists.
+  return isHtml || statusCode === 503 || statusCode === 403;
 }
 
 export function shouldReturnEmptyAssetResponse(statusCode: number | undefined, isHtml: boolean): boolean {
