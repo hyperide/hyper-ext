@@ -109,6 +109,10 @@ export class UndoRedoService {
 
   beginTracking(): void {
     this._trackingCount++;
+    // Eagerly clear redo when a new edit begins. Even if the write fails and
+    // recordEdit() is skipped, the user's intent was a new action — redo history
+    // should not survive.
+    this._redoStack.length = 0;
   }
 
   endTracking(): void {

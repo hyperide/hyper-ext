@@ -305,11 +305,30 @@ export class PreviewProxy {
 
     proxyReq.on('error', (err) => {
       console.error('[PreviewProxy] HTTP proxy error:', err.message);
-      clientRes.writeHead(502);
-      clientRes.end('Proxy error');
+      // Retry GET requests on socket errors (ECONNRESET, socket hang up, ECONNREFUSED).
+      // Vite's keep-alive pool can drop a connection immediately after the initial HTML
+      // response; subsequent @vite/client and module fetches hit the stale socket and
+      // get ECONNRESET. Without retry these requests return 502 and React never mounts.
+      // Only retrying GET because POST/PUT bodies are consumed after the first attempt.
+      if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
+        const retryDelay = 300 * (retryCount + 1);
+        console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), retryDelay);
+        return;
+      }
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(502);
+        clientRes.end('Proxy error');
+      }
     });
 
-    clientReq.pipe(proxyReq);
+    // On retry, clientReq body stream is already consumed. For GET requests there is
+    // no body anyway — end the proxy request directly to trigger the upstream send.
+    if (retryCount > 0 && clientReq.method === 'GET') {
+      proxyReq.end();
+    } else {
+      clientReq.pipe(proxyReq);
+    }
   }
 
   /**
