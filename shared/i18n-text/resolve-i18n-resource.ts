@@ -5,6 +5,8 @@
  * Assumptions: pure logic, host I/O is injected via FileIO adapter
  */
 
+import { parse as babelParse } from '@babel/parser';
+import type { ObjectExpression, ObjectProperty } from '@babel/types';
 import type { FileIO } from '../../lib/ast/file-io';
 import type { I18nLibrary, ResolveI18nResourceResult } from './types';
 
@@ -21,6 +23,135 @@ export interface ResolveI18nResourceParams {
 export interface Layout {
   getLocaleFilePath: (locale: string) => string;
   availableLocales: string[];
+  /**
+   * For merged single-file format: parsed locale data already in memory.
+   * Shape: { [locale]: { [key]: string | nested object } }
+   */
+  mergedData?: Record<string, unknown>;
+}
+
+/**
+ * Candidate file paths for merged single-file translation format
+ * (a single TS/JS file exporting an object keyed by locale).
+ */
+const MERGED_FILE_CANDIDATES = [
+  'src/translations.ts',
+  'src/lib/translations.ts',
+  'client/lib/translations.ts',
+  'lib/translations.ts',
+  'src/i18n.ts',
+  'src/translations.js',
+  'src/lib/translations.js',
+  'client/lib/translations.js',
+  'lib/translations.js',
+  'src/i18n.js',
+];
+
+/**
+ * Walk a Babel ObjectExpression AST node and extract a plain JS object.
+ * Only handles ObjectProperty (not SpreadElement/ObjectMethod).
+ * Template literals without substitutions are extracted as their static string.
+ * Template literals with substitutions are skipped (null value).
+ */
+function extractObjectLiteral(node: ObjectExpression): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const prop of node.properties) {
+    if (prop.type !== 'ObjectProperty') continue;
+    const p = prop as ObjectProperty;
+
+    // Extract key
+    let key: string | null = null;
+    if (p.key.type === 'Identifier') key = p.key.name;
+    else if (p.key.type === 'StringLiteral') key = p.key.value;
+    if (!key) continue;
+
+    // Extract value
+    if (p.value.type === 'ObjectExpression') {
+      result[key] = extractObjectLiteral(p.value);
+    } else if (p.value.type === 'StringLiteral') {
+      result[key] = p.value.value;
+    } else if (p.value.type === 'TemplateLiteral') {
+      // Only extract template literals with no dynamic substitutions
+      if (p.value.expressions.length === 0) {
+        result[key] = p.value.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
+      }
+      // Skip template literals with substitutions — can't statically resolve them
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse a TypeScript/JavaScript file and extract the exported `translations`
+ * or `messages` object. Returns null if parsing fails or the export is not found.
+ */
+function parseTranslationsTsFile(content: string): Record<string, unknown> | null {
+  try {
+    const ast = babelParse(content, {
+      sourceType: 'module',
+      plugins: ['typescript'],
+    });
+
+    for (const node of ast.program.body) {
+      // export const translations = {...}  or  export const messages = {...}
+      if (node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration') {
+        for (const decl of node.declaration.declarations) {
+          if (
+            decl.id.type === 'Identifier' &&
+            (decl.id.name === 'translations' || decl.id.name === 'messages') &&
+            decl.init?.type === 'ObjectExpression'
+          ) {
+            return extractObjectLiteral(decl.init);
+          }
+        }
+      }
+      // const translations = {...} (no export keyword — module.exports style projects)
+      if (node.type === 'VariableDeclaration') {
+        for (const decl of node.declarations) {
+          if (
+            decl.id.type === 'Identifier' &&
+            (decl.id.name === 'translations' || decl.id.name === 'messages') &&
+            decl.init?.type === 'ObjectExpression'
+          ) {
+            return extractObjectLiteral(decl.init);
+          }
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Try to discover a merged single-file translation layout
+ * (e.g. `translations.ts` with `export const translations = { ru: {...}, en: {...} }`).
+ * Returns a Layout with `mergedData` populated, or null if not found.
+ */
+async function discoverMergedLayout(
+  projectRoot: string,
+  fileIO: Pick<FileIO, 'readFile' | 'access'>,
+): Promise<Layout | null> {
+  for (const candidate of MERGED_FILE_CANDIDATES) {
+    const filePath = `${projectRoot}/${candidate}`;
+    let content: string;
+    try {
+      content = await fileIO.readFile(filePath);
+    } catch {
+      continue;
+    }
+    const parsed = parseTranslationsTsFile(content);
+    if (!parsed) continue;
+    const locales = Object.keys(parsed);
+    if (locales.length === 0) continue;
+    return {
+      getLocaleFilePath: () => filePath,
+      availableLocales: locales,
+      mergedData: parsed as Record<string, unknown>,
+    };
+  }
+  return null;
 }
 
 // Well-known flat locale directory layouts, tried in priority order.
@@ -149,6 +280,14 @@ export async function discoverLayout(
     }
   }
 
+  // Merged single-file format (last resort — only when no structured layout was found).
+  // Handles projects like Bulka where translations live in a single file keyed by locale:
+  //   export const translations = { ru: {...}, en: {...}, rs: {...} }
+  if (!namespace) {
+    const merged = await discoverMergedLayout(projectRoot, fileIO);
+    if (merged) return merged;
+  }
+
   return null;
 }
 
@@ -181,9 +320,28 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
     return { availableLocales: [], activeLocale, resolvedText: null, unresolvedReason: 'missing-locale-file' };
   }
 
-  const { getLocaleFilePath, availableLocales } = layout;
+  const { getLocaleFilePath, availableLocales, mergedData } = layout;
 
-  // Detect unsupported format (TS/JS) before attempting to read
+  // Merged single-file format: data already parsed, no file I/O needed
+  if (mergedData) {
+    const localeData = mergedData[activeLocale] ?? (fallbackLocale ? mergedData[fallbackLocale] : undefined);
+    const effectiveLocale = mergedData[activeLocale] !== undefined ? activeLocale : (fallbackLocale ?? activeLocale);
+    if (!localeData) {
+      return {
+        availableLocales,
+        activeLocale: effectiveLocale,
+        resolvedText: null,
+        unresolvedReason: 'missing-locale-file',
+      };
+    }
+    const resolvedText = resolveKey(localeData, key);
+    if (resolvedText === null) {
+      return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'missing-key' };
+    }
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText };
+  }
+
+  // Detect unsupported format (TS/JS per-locale files)
   const activeFilePath = getLocaleFilePath(activeLocale);
   if (activeFilePath.endsWith('.ts') || activeFilePath.endsWith('.js')) {
     return { availableLocales, activeLocale, resolvedText: null, unresolvedReason: 'unsupported-format' };
