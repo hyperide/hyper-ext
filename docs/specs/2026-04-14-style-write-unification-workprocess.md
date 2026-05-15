@@ -4606,3 +4606,48 @@ Ext-test inspector readiness commit, 2026-04-22 17:11 CEST:
   * Full E2E remains on hold while system load is elevated and bridge-bot
     delivery is not yet confirmed after the latest fixes.
 ```
+
+Bridge bot pagination fix and full E2E restart, 2026-04-22 17:33 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: eb9d335 fix: paginate Telegram bridge responses
+- Scope:
+  * Removed the current-session Telegram trim path that produced
+    `[truncated N chars]`.
+  * Added `src/telegram-pages.ts` to build Telegram-safe HTML pages.
+  * Escapes HTML-sensitive text before sending with `parse_mode=HTML`.
+  * Reasoning deltas from `item/reasoning/summaryTextDelta` and
+    `item/reasoning/textDelta` are captured separately and sent as
+    `<blockquote expandable>...</blockquote>` pages.
+  * Each split reasoning page opens and closes its own blockquote, so
+    pagination never leaves unclosed Telegram HTML tags.
+  * Added inline pagination callbacks (`Prev`, `N/M`, `Next`) for multi-page
+    responses and `/resend_last` for cached current-session responses in the
+    live bot process.
+- Validation:
+  * `bun test` passed 26/26.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; new PID observed:
+    79261.
+  * Re-sent the latest available assistant message to Telegram through the new
+    HTML formatter (1 page, 275 raw chars).
+  * Only untracked bot repo item after commit is `.serena/`; it was not
+    committed.
+- E2E run:
+  * Initial shell-background launch died immediately and did not start VS Code.
+  * Verified harness with a focused single-spec run:
+    `commands.spec.ts -g "hypercanvas.openPreview"` passed and launched the
+    isolated VS Code instance correctly.
+  * Restarted the full run as a live exec session with `tee`:
+    `bun run test -- --retries=0 --workers=1 --reporter=line`.
+  * Current log: `/tmp/hyper-e2e-full-20260422-1730.log`.
+  * Early progress: 99 tests done, 0 `[test-errors]`.
+  * One isolated VS Code under an `hvsc-*` user-data-dir is running.
+  * Current load snapshot: about `4.44 3.94 4.13`, CPU not saturated.
+- Ongoing requirement:
+  * Continue monitoring E2E by log, `[test-errors]`, VS Code process count,
+    save dialogs, and system load. Stop immediately on error floods or runaway
+    memory/CPU.
+```
