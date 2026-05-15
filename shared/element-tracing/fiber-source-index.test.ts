@@ -182,13 +182,7 @@ describe('FiberSourceIndex.findClosestSourceDOMElements', () => {
     });
     const root = buildTree(entries.map((e, i) => ({ el: elements[i], source: e.source })));
     const index = new FiberSourceIndex(() => root, document);
-    return {
-      index,
-      elements,
-      cleanup: () => {
-        for (const el of elements) el.remove();
-      },
-    };
+    return { index, elements, cleanup: () => elements.forEach((el) => el.remove()) };
   }
 
   it('returns null when no entries share the requested fileName', () => {
