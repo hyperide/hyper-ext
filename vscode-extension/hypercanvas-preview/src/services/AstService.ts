@@ -215,6 +215,19 @@ export class AstService {
       // Try nodeRef lookup first (format: "filePath:index")
       const entry = this._nodeMapService.resolveNodeRef(nodeRef);
       if (entry) {
+        // Guard: entry.loc.fileName is the ORIGINAL source file the node belongs to.
+        // If it differs from the AST being searched (filePath), the coordinates
+        // would be applied to the wrong file — e.g. RecordScreen.tsx:10:5 accidentally
+        // hitting <SafeAreaProvider> at the same position in App.tsx.
+        // Returning null lets _resolveElementInCorrectFile retry with the right file.
+        const entryFile = entry.loc.fileName;
+        const entryFileMatchesAst =
+          !filePath ||
+          !entryFile ||
+          entryFile === filePath ||
+          filePath.endsWith(`/${entryFile}`) ||
+          entryFile.endsWith(`/${filePath}`);
+        if (!entryFileMatchesAst) return null;
         return findElementByPosition(ast, entry.loc.line, entry.loc.column);
       }
 
