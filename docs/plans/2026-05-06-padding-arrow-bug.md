@@ -37,48 +37,10 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
 
 ### Task 1: Locate the padding decrement logic
 
-- [x] Find the input that handles padding-vertical down-arrow. Is it a
+- [ ] Find the input that handles padding-vertical down-arrow. Is it a
       shared `LengthInput` or per-section?
-
-      Findings: NOT a shared `LengthInput`. Each section composes a raw
-      `<Input>` from `client/components/ui/input.tsx` and wires its
-      `onKeyDown` to a shared keyboard handler `handleNumericKeyDown` in
-      `client/components/RightSidebar/RightSidebar.tsx:449-504`. The handler
-      is passed down to sections as the `onNumericKeyDown` prop.
-      The vertical-padding input lives in
-      `client/components/RightSidebar/sections/LayoutSection.tsx:602-613`
-      (and again at the expanded variants on lines 1029-1037 and
-      1163-1171), where each call site does
-      `onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')`.
-      The input renders `value={paddingTop || paddingBottom}` and
-      writes via `handleVerticalPaddingChange` which fans out to both
-      `paddingTop` and `paddingBottom` through `onPaddingChange` +
-      `syncStyleChange`.
-
-- [x] Identify the parser that turns `'2px'` into a number, and the formatter
+- [ ] Identify the parser that turns `'2px'` into a number, and the formatter
       that writes back. Find where the empty branch leaks through.
-
-      Parser: `trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/)` at
-      `RightSidebar.tsx:466`. Number = `Number.parseFloat(match[1])`,
-      unit = `match[2] || (isUnitless ? '' : 'px')`. Formatter:
-      `` `${newNum}${unit}` `` at line 499.
-
-      Empty-branch leak (the `if (!match)` block, lines 468-486):
-      hit when `currentValue` is `''`, whitespace, or a non-numeric
-      string. There is no clamp; for ArrowDown it produces
-      `newNum = 0 + (-1)*1 = -1`, formatted as `'-1px'`.
-
-      No clamp anywhere in the handler — only `opacity` is clamped to
-      [0, 100] (lines 477-479 and 495-497). Padding can therefore go
-      negative; CSS rejects negative padding, so the round-trip through
-      `syncStyleChange` writes nothing back, the parsed style becomes
-      missing, and `setPaddingTop('')` is invoked at line 879 with
-      `ep.paddingTop || ''`. On the next ArrowDown, `currentValue` is
-      `''` and we fall through the empty-leak branch again. The
-      bare-`px` rendering reported in the memory note is reachable
-      because nothing in this code path enforces `newNum >= 0` for
-      length properties (paddings, margins-on-some-engines, gaps,
-      border-radius, font-size, dimensions).
 
 ### Task 2: Add a unit test for the decrement
 
