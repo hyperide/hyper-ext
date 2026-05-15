@@ -178,7 +178,7 @@ export class FiberSourceIndex {
   findClosestSourceDOMElements(
     source: SourceLocation,
     options: { maxLineDistance?: number; matchPathAcrossFormats?: boolean } = {},
-  ): { elements: HTMLElement[]; matchedSource: SourceLocation } | null {
+  ): { elements: HTMLElement[]; matchedSource: SourceLocation; lineDistance: number; columnDistance: number } | null {
     const maxLineDistance = options.maxLineDistance ?? FiberSourceIndex.DEFAULT_MAX_LINE_DISTANCE;
     const matchPathAcrossFormats = options.matchPathAcrossFormats ?? false;
     this.ensureBuilt();
@@ -218,7 +218,12 @@ export class FiberSourceIndex {
     }
 
     if (bestSource === null) return null;
-    return { elements: bestElements, matchedSource: bestSource };
+    return {
+      elements: bestElements,
+      matchedSource: bestSource,
+      lineDistance: bestLineDist,
+      columnDistance: bestColDist,
+    };
   }
 
   static readonly DEFAULT_MAX_LINE_DISTANCE = 20;

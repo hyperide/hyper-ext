@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { DebugSource, Fiber } from './fiber-internals';
-import { FiberTag, debugSourceToLocation } from './fiber-internals';
+import { debugSourceToLocation, FiberTag } from './fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation, sourceKeyFromLocation } from './fiber-source-index';
 import type { SourceLocation } from './types';
 
@@ -422,6 +422,39 @@ describe('FiberSourceIndex.findClosestSourceDOMElements', () => {
       );
       expect(out).not.toBeNull();
       expect(out?.elements).toEqual([elements[0]]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Regression: caller (findElementsByRef in iframe-interaction) treats lineDistance=0 &&
+  // columnDistance=0 as exact match when only path format differs, so itemIndex slicing is
+  // safe. Method must report zero distance, not approximate, when (line, column) are equal.
+  it('reports zero line/column distance for exact line+col match across path formats', () => {
+    const { index, cleanup } = setup([{ source: { fileName: 'src/Foo.tsx', line: 50, column: 8 } }]);
+    try {
+      const out = index.findClosestSourceDOMElements(
+        { fileName: '/workspace/src/Foo.tsx', line: 50, column: 8 },
+        { matchPathAcrossFormats: true },
+      );
+      expect(out).not.toBeNull();
+      expect(out!.lineDistance).toBe(0);
+      expect(out!.columnDistance).toBe(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('reports non-zero line distance when only path format matches and lines differ', () => {
+    const { index, cleanup } = setup([{ source: { fileName: 'src/Foo.tsx', line: 50, column: 8 } }]);
+    try {
+      const out = index.findClosestSourceDOMElements(
+        { fileName: '/workspace/src/Foo.tsx', line: 52, column: 8 },
+        { matchPathAcrossFormats: true },
+      );
+      expect(out).not.toBeNull();
+      expect(out!.lineDistance).toBe(2);
+      expect(out!.columnDistance).toBe(0);
     } finally {
       cleanup();
     }

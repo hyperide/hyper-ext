@@ -808,9 +808,14 @@ function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLEleme
       const matchedKey = `${matched.fileName}:${matched.line}:${matched.column}`;
       const exactPath = matched.fileName === source.fileName;
       logSelsurvClosestSourceFallback(exactPath ? nodeRef : `${nodeRef}#xfmt`, matchedKey, live.length);
-      // matchIsExact stays false: a different (line, column) means a different JSX call
-      // site whose `.map()` cardinality may differ. Applying the original itemIndex
-      // could target a sibling element's row instead of the intended one.
+      // Treat as exact when (line, column) match precisely — only the path format
+      // differs (POSIX vs Windows, abs vs Vite-relative). Same JSX site, so itemIndex
+      // slicing is still meaningful. Otherwise matchIsExact stays false: a different
+      // (line, column) means a different JSX call site whose `.map()` cardinality may
+      // differ, and applying the original itemIndex could target a sibling row.
+      if (closest.lineDistance === 0 && closest.columnDistance === 0) {
+        matchIsExact = true;
+      }
     }
   }
 
