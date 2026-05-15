@@ -10,12 +10,11 @@ import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
-import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import {
-  computeOrderWritePlan,
-  type OrderWritePlan,
-  type SiblingInfo,
-} from '@shared/canvas-interaction/order-drag-detect';
+  findTraceableParent as findTraceableParentIndexAware,
+  type TraceableParentStep,
+} from '@shared/canvas-interaction/find-traceable-parent';
+import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
 import {
@@ -1094,15 +1093,60 @@ function getSourceKey(el: HTMLElement): string | null {
   return `${loc.fileName}:${loc.line}:${loc.column}`;
 }
 
-/** Find the nearest ancestor DOM element that has a traceable fiber source. */
-function findTraceableParent(el: HTMLElement): { element: HTMLElement; ref: string } | null {
-  let current = el.parentElement;
-  while (current && current !== document.body) {
-    const ref = getSourceKey(current);
-    if (ref) return { element: current, ref };
-    current = current.parentElement;
-  }
-  return null;
+// Diagnostic tag for Shift+Enter / parent-walk regression (Task 2 of
+// docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md). Filter DevTools
+// console with `[shiftparent]`. Goal: capture for each parent-walk
+//   1. the selectedId Shift+Enter started from,
+//   2. each DOM ancestor walked + its getSourceKey result,
+//   3. the chosen parentRef,
+//   4. whether findElementsByRef(parentRef) immediately finds a DOM element.
+// Combined with the existing [selsurv] `findElements miss` log on the overlay
+// path, this pinpoints whether the rect vanishes because (a) parentRef itself
+// is malformed/missing, (b) parentRef is well-formed but FiberSourceIndex was
+// indexed under a deduplicated key, or (c) the OUTERMOST host fiber whose key
+// equals parentRef has been unmounted by HMR mid-walk.
+const SHIFTPARENT_TAG = '[shiftparent]';
+function logShiftParentWalk(
+  selectedId: string,
+  steps: TraceableParentStep[],
+  parent: { tag: string; ref: string } | null,
+  parentLookupStatus: 'indexed' | null,
+): void {
+  console.debug(SHIFTPARENT_TAG, 'parent-walk', {
+    t: Math.round(performance.now()),
+    selectedId,
+    renderedComponentPath,
+    steps,
+    parentRef: parent?.ref ?? null,
+    parentTag: parent?.tag ?? null,
+    parentLookupStatus,
+  });
+}
+
+/**
+ * Find the nearest ancestor DOM element with a traceable fiber source whose
+ * key resolves back to itself in the FiberSourceIndex.
+ *
+ * Index-aware to keep the inspector path and rect-overlay path in sync after
+ * Shift+Enter parent navigation (regression fix from
+ * docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md, Task 3).
+ *
+ * Calls `findElementsByRef(ref, null)` (full set, not itemIndex 0) so that
+ * walked-up `.map()`-row siblings register as members of the indexed entry.
+ */
+function findTraceableParent(
+  el: HTMLElement,
+  trace?: TraceableParentStep[],
+): { element: HTMLElement; ref: string } | null {
+  return findTraceableParentIndexAware(
+    el,
+    {
+      getSourceKey,
+      findElementsByRef: (ref) => findElementsByRef(ref, null),
+      stopAt: document.body,
+    },
+    trace,
+  );
 }
 
 /** Find direct child DOM elements that have traceable fiber sources. */
@@ -1142,10 +1186,63 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     // backslashes) fail the exact and closest-line lookups (both compare fileName),
     // so getEntry returns null and Shift+Enter clears selection instead of
     // navigating to parent.
-    const el = findElementsByRef(nodeRef, 0)[0];
-    if (!el) return null;
+    //
+    // Start the walk-up from the user's actually-selected instance, not always
+    // from instance 0. The win this buys is correctness of ref *derivation* in
+    // dedup/HMR-mid-walk cases (covered by `find-traceable-parent.test.ts` —
+    // sibling-outer skip and unmounted-outer skip): starting from the wrong
+    // base element lets the walk pick an ancestor whose `getSourceKey` hashes
+    // to a deduped sibling host, so the returned `parentRef` no longer
+    // resolves back to anything in the index → rect overlay vanishes. By
+    // starting from row N's element, the predicate
+    // `findElementsByRef(ref).includes(parent)` evaluates against the right
+    // chain.
+    //
+    // Known pre-existing limitation (NOT introduced or resolved by this fix):
+    // when the parent itself is a repeated-instance host (e.g. bulka's
+    // `Section` wrapper `<div>` rendered once per Section invocation), all
+    // instances share the SAME source ref. The walk now correctly identifies
+    // row N's parent DOM element internally, but `onSelectElement(parentRef)`
+    // (keyboard-handler.ts:181) emits id-only with `itemIndex: null` and
+    // `useCanvasInteraction.ts:211` only updates `selectedItemIndices` when
+    // `msg.itemIndex` is non-null. Result: `overlay-rects.ts:113` calls
+    // `findElements(parentRef, null)` and highlights every parent instance.
+    // Fixing the visible rect-pinning requires plumbing parent itemIndex
+    // through the keyboard-handler callback API + SaaS engine.select; that
+    // refactor is out of the plan's scope (docs/plans/
+    // 2026-05-08-shift-enter-rect-ralphex-plan.md → "Out of scope:
+    // Refactoring the keyboard shortcut state machine").
+    //
+    // Falls back to `0` when no entry exists for nodeRef (chained navigation
+    // after a Shift+Enter selects a parent and selectedItemIndices wasn't
+    // patched for the new id — see useCanvasInteraction.ts:211 contract).
+    const startIdx = state.selectedItemIndices[nodeRef] ?? 0;
+    const el = findElementsByRef(nodeRef, startIdx)[0] ?? findElementsByRef(nodeRef, 0)[0];
+    if (!el) {
+      // Diagnostic: parent-walk asked about a nodeRef the rect path also can't
+      // resolve. Emitting from the keyboard-side too lets us cross-reference
+      // against the [selsurv] `findElements miss` log timestamp.
+      console.debug(SHIFTPARENT_TAG, 'getEntry missing-base', {
+        t: Math.round(performance.now()),
+        nodeRef,
+        renderedComponentPath,
+      });
+      return null;
+    }
 
-    const parent = findTraceableParent(el);
+    const trace: TraceableParentStep[] = [];
+    const parent = findTraceableParent(el, trace);
+    // The walk-up's index-aware predicate (`findElementsByRef(ref).includes(parent)`)
+    // already proved the parent is in the indexed set, so when `parent !== null`
+    // we know hits >= 1. We don't recall `findElementsByRef` here just for the
+    // diagnostic — that doubled the per-keypress cost without adding signal.
+    // Distinguish only the resolvable-vs-unresolvable case in the log.
+    logShiftParentWalk(
+      nodeRef,
+      trace,
+      parent ? { tag: parent.element.tagName.toLowerCase(), ref: parent.ref } : null,
+      parent ? 'indexed' : null,
+    );
     const children = findTraceableChildren(el);
 
     return {
@@ -1585,10 +1682,6 @@ function _dragPointerUp(e: PointerEvent): void {
   const wasDragging = _dragState === 'dragging';
   const sourceId = _dragSourceId;
   const sourceFilePath = _dragSourceFilePath;
-  // Capture the live source element BEFORE cleanup nulls it out — the
-  // order-driven branch below needs it to walk up to the common parent and
-  // collect sibling DOM/className data. The AST-move branch never used it.
-  const sourceEl = _dragSourceEl;
 
   _dragCleanup();
 
@@ -1649,28 +1742,6 @@ function _dragPointerUp(e: PointerEvent): void {
       ? 'before'
       : 'after';
 
-  // === Order-driven parent fast path (Tailwind `order-N`) ===
-  // When the source and drop resolve to siblings under a parent that already
-  // declares `order-*` siblings, mutate the order classes on the active
-  // breakpoint instead of rewriting JSX. Falls through to the AST move on any
-  // mismatch (cross-parent, no order classes, dynamic `className={cn(...)}`,
-  // adapter not implemented). See plan 2026-05-08-tw-order-drag-ralphex-plan.md.
-  if (sourceEl) {
-    const orderPlan = _resolveOrderWritePlan(sourceEl, dropEl, sourceId, targetId, e.clientX, e.clientY);
-    if (orderPlan) {
-      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-      window.parent.postMessage(
-        {
-          type: 'hypercanvas:writeOrders',
-          breakpoint: orderPlan.breakpoint,
-          entries: orderPlan.entries,
-        },
-        '*',
-      );
-      return;
-    }
-  }
-
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
@@ -1682,116 +1753,6 @@ function _dragPointerUp(e: PointerEvent): void {
     },
     '*',
   );
-}
-
-/**
- * Walk both source and drop DOMs upward to find the lowest common ancestor where
- * source-branch and drop-branch are distinct direct children. Returns the parent
- * plus the two "sibling" elements at that level. `null` when no such ancestor
- * exists (e.g. one is contained in the other, or they share no ancestor before
- * `<body>`).
- *
- * The branches are NOT necessarily the same as the elements the user clicked /
- * dropped on — e.g. dropping inside a `<p>` nested under an order-driven `<div>`
- * surfaces the `<div>` as the drop branch, which is the level the order-N class
- * lives on.
- */
-function _findReorderSiblings(
-  sourceEl: HTMLElement,
-  dropEl: HTMLElement,
-): { parent: HTMLElement; sourceSibling: HTMLElement; dropSibling: HTMLElement } | null {
-  if (sourceEl === dropEl) return null;
-  // If one contains the other, there's no sibling-pair to reorder at any level.
-  if (sourceEl.contains(dropEl) || dropEl.contains(sourceEl)) return null;
-
-  let srcAncestor: HTMLElement | null = sourceEl;
-  while (srcAncestor?.parentElement) {
-    const parentEl: HTMLElement = srcAncestor.parentElement;
-    let dropBranch: HTMLElement | null = dropEl;
-    while (dropBranch && dropBranch.parentElement !== parentEl) {
-      dropBranch = dropBranch.parentElement;
-    }
-    if (dropBranch && dropBranch !== srcAncestor) {
-      return { parent: parentEl, sourceSibling: srcAncestor, dropSibling: dropBranch };
-    }
-    srcAncestor = parentEl;
-  }
-  return null;
-}
-
-/**
- * Build the order-write plan for a drag-drop, or return `null` to fall back to
- * the AST-move path. Pure DOM inspection — collects classNames + source refs for
- * the parent's children, asks `computeOrderWritePlan` (pure function) for the
- * concrete write entries.
- *
- * Position semantic: derived from source-vs-drop center along the dominant axis
- * (NOT cursor coordinate). Dropping at exact target center is ambiguous when
- * cursor-based; for an order-driven swap we always want "the side opposite where
- * source currently is". This matches the user's intent — the drag direction
- * decides which side of the target the source ends up on, regardless of where
- * the cursor lands inside the target rect.
- */
-function _resolveOrderWritePlan(
-  sourceEl: HTMLElement,
-  dropEl: HTMLElement,
-  sourceId: string,
-  targetId: string,
-  _cursorX: number,
-  _cursorY: number,
-): OrderWritePlan | null {
-  const lca = _findReorderSiblings(sourceEl, dropEl);
-  if (!lca) return null;
-  const { parent, sourceSibling, dropSibling } = lca;
-
-  // Collect source-bearing children only — skip whitespace text, comments, and
-  // wrapper artefacts that have no React fiber / source location.
-  const siblings: SiblingInfo[] = [];
-  let domIndex = 0;
-  for (const child of Array.from(parent.children)) {
-    if (!(child instanceof HTMLElement)) continue;
-    const loc = iframeResolver.getSourceLocation(child);
-    if (!loc) continue;
-    siblings.push({
-      elementId: `${loc.fileName}:${loc.line}:${loc.column}`,
-      filePath: loc.fileName,
-      className: typeof child.className === 'string' ? child.className : '',
-      domIndex: domIndex++,
-    });
-  }
-
-  // The LCA-walked source/drop branches may have different NodeRefs than the
-  // raw source/target IDs the drag pipeline computed (e.g. `dropEl` was a `<p>`
-  // inside an order-driven `<div>` — `dropSibling` is the wrapping `<div>`).
-  // Pass through the *branch*-level NodeRefs so the plan keys correctly.
-  const sourceLoc = iframeResolver.getSourceLocation(sourceSibling);
-  const dropLoc = iframeResolver.getSourceLocation(dropSibling);
-  if (!sourceLoc || !dropLoc) return null;
-  const sourceBranchId = `${sourceLoc.fileName}:${sourceLoc.line}:${sourceLoc.column}`;
-  const dropBranchId = `${dropLoc.fileName}:${dropLoc.line}:${dropLoc.column}`;
-  // Sanity: the branch IDs must be in our siblings list. If not, source-bearing
-  // walk picked a different element than the LCA branch did — fall back rather
-  // than guess.
-  if (!siblings.some((s) => s.elementId === sourceBranchId)) return null;
-  if (!siblings.some((s) => s.elementId === dropBranchId)) return null;
-  // Suppress noisy "unused" lint when the original source/target IDs from the
-  // raw drag pipeline diverge from the LCA branch; tracked via branch IDs.
-  void sourceId;
-  void targetId;
-
-  // Derive position from source-vs-drop geometry on the dominant axis.
-  // _isHorizontalLayout(parent) reads computed style on the parent so we
-  // pick X for grid/flex-row, Y for column / default block flow.
-  const horizontal = _isHorizontalLayout(parent);
-  const sourceRect = sourceSibling.getBoundingClientRect();
-  const dropRect = dropSibling.getBoundingClientRect();
-  const sourceCenter = horizontal ? sourceRect.left + sourceRect.width / 2 : sourceRect.top + sourceRect.height / 2;
-  const dropCenter = horizontal ? dropRect.left + dropRect.width / 2 : dropRect.top + dropRect.height / 2;
-  // Source visually before drop → user wants source AFTER drop (swap).
-  // Source visually after drop  → user wants source BEFORE drop.
-  const position: 'before' | 'after' = sourceCenter < dropCenter ? 'after' : 'before';
-
-  return computeOrderWritePlan(siblings, sourceBranchId, dropBranchId, position, window.innerWidth);
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {
