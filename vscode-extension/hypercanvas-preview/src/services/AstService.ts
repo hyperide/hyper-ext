@@ -266,7 +266,7 @@ export class AstService {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
+      const result = this._resolveElement(ast, nodeRef ?? (elementId as NodeRef), elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
@@ -340,7 +340,7 @@ export class AstService {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
+      const result = this._resolveElement(ast, nodeRef ?? (elementId as NodeRef), elementId, absolutePath);
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
