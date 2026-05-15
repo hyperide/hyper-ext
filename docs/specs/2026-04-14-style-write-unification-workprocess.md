@@ -4134,3 +4134,15 @@ Vite pre-warm (commit `e097090`) is working. Remix tests completing in 5–73s v
 - "wrap element — file content changes" — 12/9s → PASSED
 
 No new failure classes. Webpack not yet reached in any shard.
+
+## 📍 2026-04-29 Run #27 Checkpoint (07:09 CEST, ~71 min)
+
+**S1:** 339 done, 0 hard failures. Still on react-vite-tw4-twitter.
+**S2:** 178 done, 1 hard failure (pre-fix). On react-vite-styled-shopify.
+  - OOM-kill event: VS Code crashed ~04:51→05:03 (~12 min gap in log file).
+    docker logs showed worker 8 restarted cleanly, "elements identifiable" retry passed (9578ms).
+    No new hard failures from the crash; container recovered normally.
+**S3:** 258 done, 3 hard failures (all pre-fix Tamagui). Still on remix-tw4-twitter.
+  - Remix tests continue passing: "inspector fill" 8s, "change padding" 10s.
+
+All failures remain pre-fix. No new failure classes. Docker containers healthy (Up ~71 min).
