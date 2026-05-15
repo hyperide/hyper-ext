@@ -312,6 +312,10 @@ export class DevServerManager {
     this._port = null;
     this._stopProxy();
 
+    // Unblock any awaitRecompile() callers — server is stopping so recompile will never land.
+    this._recompileGate?.resolve();
+    this._recompileGate = null;
+
     if (proc) {
       // Wait for process to exit (with timeout)
       await new Promise<void>((resolve) => {

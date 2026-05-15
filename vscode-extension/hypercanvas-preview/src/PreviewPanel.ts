@@ -117,6 +117,9 @@ export class PreviewPanel {
     this._defaultComponent = undefined;
     this._devServerRunning = false;
     this._previewBaseUrl = 'http://localhost:3000';
+    // Clear shared StateHub state so _initializeComponent() re-derives from the
+    // active editor instead of picking up the previous workspace's component.
+    this._stateHub.applyUpdate({ currentComponent: null });
     this.notifyDevServerStopped();
     const shouldRestartSync = Boolean(this._syncService);
     this._syncService?.dispose();
