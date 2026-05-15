@@ -162,6 +162,13 @@ export function useCanvasInteraction(
               seq: typeof msg.computedStyleSeq === 'number' ? msg.computedStyleSeq : Date.now(),
               computedStyle: msg.computedStyle as Record<string, string>,
             } satisfies SelectedElementRuntimeStyle;
+          } else {
+            // No inline computed style (e.g. keyboard nav) — request it from the iframe
+            frame.contentWindow?.postMessage(
+              // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+              { type: 'hypercanvas:requestComputedStyle', elementId, itemIndex: msg.itemIndex ?? null },
+              '*',
+            );
           }
           canvas.sendEvent({ type: 'state:update', patch });
           setContextMenu(null);

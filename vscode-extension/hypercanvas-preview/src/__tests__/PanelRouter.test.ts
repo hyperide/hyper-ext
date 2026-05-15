@@ -39,6 +39,7 @@ mock.module('../services/ComponentService', () => ({
     getComponent = mock(() => Promise.resolve(null));
     parseStructure = mock(() => Promise.resolve(null));
   },
+  parseComponentSource: () => null,
 }));
 // StyleReadService is NOT mocked — it's a leaf class with its own test file (StyleReadService.test.ts).
 // Mocking it here would poison that test file (bun mock.module is global).
@@ -205,10 +206,18 @@ describe('PanelRouter', () => {
     expect(handled).toBe(false);
   });
 
-  it('setAstResponseTarget delegates to AstBridge', () => {
-    const wv = createMockWebview();
-    router.setAstResponseTarget(wv as never);
-    // No crash — AstBridge.setWebview was called
+  it('setAstResponseTarget sets default webview for unsolicited AstBridge responses', async () => {
+    const target = createMockWebview();
+    router.setAstResponseTarget(target as never);
+    // Route directly through AstBridge without a target webview — response must go to the set target
+    await router.astBridge.handleMessage({
+      type: 'ast:updateStyles',
+      requestId: 'r-target',
+      filePath: 'f',
+      elementId: 'e',
+      styles: {},
+    });
+    expect(target.messages[0]).toEqual(expect.objectContaining({ type: 'ast:response', requestId: 'r-target' }));
   });
 
   describe('hypercanvas:resolveServerSourceMap (Approach B)', () => {

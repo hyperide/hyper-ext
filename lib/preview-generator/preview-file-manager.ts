@@ -420,15 +420,7 @@ export class PreviewFileManager {
       // No index.html or no matching script tag
     }
 
-    // Try src/ — most common Vite/CRA layout
-    try {
-      await this.io.access(join(this.projectRoot, 'src')); // nosemgrep: path-join-resolve-traversal
-      return join(this.projectRoot, 'src/__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
-    } catch {
-      // No src/ dir
-    }
-
-    // Fallback: src/
+    // Fallback: src/ — most common Vite/CRA layout (also used when src/ doesn't exist yet)
     return join(this.projectRoot, 'src/__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
   }
 

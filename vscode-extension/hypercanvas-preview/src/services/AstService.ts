@@ -29,9 +29,8 @@ import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 
-// File sink only when explicitly requested or in CI — never in normal production use
-const DEBUG_LOG: string | null =
-  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
+// File sink only when explicitly requested via env var — never in normal production use
+const DEBUG_LOG: string | null = process.env.HYPERIDE_AST_DEBUG_LOG ?? null;
 function dbg(msg: string) {
   console.log(msg);
   if (DEBUG_LOG) {
@@ -783,7 +782,7 @@ export class AstService {
   }
 
   /** Find direct child element nodeRefs (for Select Child). */
-  async getChildElementIds(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string[]> {
+  async getChildElementIds(nodeRef?: NodeRef): Promise<string[]> {
     try {
       if (nodeRef) {
         const entry = this._resolveNodeMapEntry(nodeRef);

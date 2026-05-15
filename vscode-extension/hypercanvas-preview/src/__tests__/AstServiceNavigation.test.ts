@@ -46,11 +46,7 @@ describe('AstService selection navigation', () => {
       mismatchedRelativeRef(button),
       mismatchedRelativeRef(button),
     );
-    const childIds = await service.getChildElementIds(
-      'src/App.tsx',
-      mismatchedRelativeRef(section),
-      mismatchedRelativeRef(section),
-    );
+    const childIds = await service.getChildElementIds(mismatchedRelativeRef(section));
 
     expect(parentId).toBe(section.nodeRef);
     expect(childIds).toEqual([button.nodeRef]);

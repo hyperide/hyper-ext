@@ -415,7 +415,12 @@ export class DevServerManager {
    */
   async awaitRecompile(timeoutMs = 300_000): Promise<void> {
     if (!this._recompileGate) return;
-    await Promise.race([this._recompileGate.promise, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timerId = setTimeout(resolve, timeoutMs);
+    });
+    await Promise.race([this._recompileGate.promise, timeoutPromise]);
+    clearTimeout(timerId);
   }
 
   /**

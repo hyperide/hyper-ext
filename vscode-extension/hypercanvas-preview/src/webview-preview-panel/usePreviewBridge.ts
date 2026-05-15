@@ -415,6 +415,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           if (comp) currentComponentRef.current = comp;
           // Only clear error when switching to a DIFFERENT component
           setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
+          // Clear stale runtime style from previous component (postMessage switch skips iframe reload)
+          canvas.sendEvent({ type: 'state:update', patch: { selectedElementRuntimeStyle: null } });
           const frame = iframeElRef.current;
           const frameSrc = frame?.getAttribute('src') || frame?.src;
           if (frame?.contentWindow && hasNavigatedPreviewSource(frameSrc)) {
@@ -546,7 +548,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
-  }, [doRefresh, getFrameHref, iframeEl, navigateToComponent, setStoredPreviewUrl, syncComponentToFrame]);
+  }, [canvas, doRefresh, getFrameHref, iframeEl, navigateToComponent, setStoredPreviewUrl, syncComponentToFrame]);
 
   // === Signal webview ready to extension ===
   // 'webview:ready' is an internal extension event, not a PlatformMessage —

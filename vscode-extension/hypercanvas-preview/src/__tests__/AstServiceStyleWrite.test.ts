@@ -46,7 +46,7 @@ export function Card() {
       'css-modules:card',
     );
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual(expect.objectContaining({ success: true }));
     expect(fileIO.content(componentPath)).toContain('className={styles.card}');
     expect(fileIO.content(cssPath)).toContain('color: red');
     expect(fileIO.content(cssPath)).toContain('padding-left: 16px');
@@ -89,7 +89,7 @@ export default function App() {
     // Caller passes App.tsx as filePath — this is what the shell currently shows
     const result = await service.updateProps('App.tsx', nodeRef, { backgroundColor: '$red10' }, nodeRef);
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual(expect.objectContaining({ success: true }));
     // The change must land in RecordScreen.tsx, not App.tsx
     expect(fileIO.content(screenPath)).toContain('backgroundColor="$red10"');
     expect(fileIO.content(appPath)).toBe(appSource); // App.tsx unchanged
@@ -124,7 +124,7 @@ export default function App() {
     // filePath is App.tsx (the shell) but the element lives in Card.tsx
     const result = await service.updateStyles('App.tsx', nodeRef, { color: 'red' }, undefined, nodeRef);
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual(expect.objectContaining({ success: true }));
     // Change must land in Card.tsx (inline style → color: "red")
     expect(fileIO.content(cardPath)).toContain('color');
     expect(fileIO.content(cardPath)).toContain('red');

@@ -871,11 +871,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(
-      componentPath,
-      elementId,
-      elementId,
-    );
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(elementId);
 
     if (childIds.length > 0) {
       this._stateHub.applyUpdate({
@@ -1328,11 +1324,7 @@ export class PreviewPanel {
     const selectedIds = await this._waitForSelectedIds();
     const componentPath = this._currentComponent;
     if (componentPath && selectedIds.length > 0) {
-      const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(
-        componentPath,
-        selectedIds[0],
-        selectedIds[0],
-      );
+      const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(selectedIds[0]);
       if (childIds.length > 0) {
         this._stateHub.applyUpdate({ selectedIds: childIds });
         return;
