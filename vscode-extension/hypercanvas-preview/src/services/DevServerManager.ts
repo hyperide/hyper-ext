@@ -15,6 +15,7 @@ import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
 
 const MAX_LOG_ENTRIES = 200;
+const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 export interface LogEntry {
   line: string;
@@ -213,7 +214,7 @@ export class DevServerManager {
         const text = data.toString();
         // Strip ANSI escape codes for message detection — Vite 8 (rolldown)
         // wraps output in color codes that can split keywords across chunks.
-        const clean = text.replace(new RegExp('\\x1b\\[[0-9;]*m', 'g'), '');
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(text);
         this._appendLog(text);
 
@@ -227,7 +228,7 @@ export class DevServerManager {
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
       this._process.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
-        const clean = text.replace(new RegExp('\\x1b\\[[0-9;]*m', 'g'), '');
+        const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(text);
         this._appendLog(text);
 
@@ -277,7 +278,11 @@ export class DevServerManager {
     const proc = this._process;
     if (proc) {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
+    }
 
+    this._stopProxy();
+
+    if (proc) {
       // Try graceful shutdown first
       proc.kill('SIGTERM');
 
@@ -301,7 +306,6 @@ export class DevServerManager {
       this._port = null;
     }
 
-    this._stopProxy();
     this._updateStatus('stopped');
   }
 

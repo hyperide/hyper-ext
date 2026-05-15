@@ -43,6 +43,8 @@ export class PreviewProxy {
   private _isRemixProject = false;
   private _projectRoot: string | undefined;
   private _viteBase: string | undefined;
+  private _isStopping = false;
+  private _sockets = new Set<net.Socket>();
 
   get isIsolatedMode(): boolean {
     return this._isIsolatedMode;
@@ -99,6 +101,7 @@ export class PreviewProxy {
    */
   async start(): Promise<void> {
     if (this._server) return;
+    this._isStopping = false;
     this._viteBase = await this._readViteBase();
     this._isRemixProject = await this._detectRemixProject();
 
@@ -130,6 +133,12 @@ export class PreviewProxy {
    * Stop the proxy server
    */
   stop(): void {
+    this._isStopping = true;
+    for (const socket of this._sockets) {
+      socket.destroy();
+    }
+    this._sockets.clear();
+
     if (this._server) {
       this._server.close();
       this._server = null;
@@ -258,6 +267,11 @@ export class PreviewProxy {
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
+    if (this._isStopping || !this._server) {
+      clientSocket.destroy();
+      return;
+    }
+
     const targetSocket = net.connect(this._targetPort, 'localhost', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
@@ -278,13 +292,25 @@ export class PreviewProxy {
       clientSocket.pipe(targetSocket);
     });
 
+    this._trackSocket(clientSocket);
+    this._trackSocket(targetSocket);
+
     targetSocket.on('error', (err) => {
-      console.error('[PreviewProxy] WS proxy error:', err.message);
+      if (!this._isStopping) {
+        console.error('[PreviewProxy] WS proxy error:', err.message);
+      }
       clientSocket.destroy();
     });
 
     clientSocket.on('error', () => {
       targetSocket.destroy();
+    });
+  }
+
+  private _trackSocket(socket: net.Socket): void {
+    this._sockets.add(socket);
+    socket.once('close', () => {
+      this._sockets.delete(socket);
     });
   }
 }

@@ -72,6 +72,40 @@ describe('DevServerManager', () => {
     });
   });
 
+  describe('stop', () => {
+    it('stops the preview proxy before terminating the dev server process', async () => {
+      const events: string[] = [];
+      const proxy = {
+        stop: mock(() => {
+          events.push('proxy.stop');
+        }),
+      };
+      const proc = {
+        killed: false,
+        kill: mock((signal: string) => {
+          events.push(`process.kill:${signal}`);
+          proc.killed = true;
+          return true;
+        }),
+        once: mock((event: string, callback: () => void) => {
+          expect(event).toBe('exit');
+          queueMicrotask(callback);
+          return proc;
+        }),
+      };
+
+      Object.assign(manager, {
+        _previewProxy: proxy,
+        _process: proc,
+        _port: 5173,
+      });
+
+      await manager.stop();
+
+      expect(events).toEqual(['proxy.stop', 'process.kill:SIGTERM']);
+    });
+  });
+
   describe('clearLogs', () => {
     it('clears log buffer and resets error flag', () => {
       // We need to access _appendLog indirectly. Use the callback to verify.
