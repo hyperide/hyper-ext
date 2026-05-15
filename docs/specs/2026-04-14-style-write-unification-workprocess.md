@@ -134,20 +134,50 @@ Remix routes using `useLoaderData()`/`useRouteLoaderData()` now get wrapped in
 
 ---
 
-## 📍 2026-04-29 09:35 CEST — Run #28 in progress (2h+ running)
+## 📍 2026-04-29 10:25 CEST — Run #28 final
 
-Run started: 07:57 CEST | Shards: 3 | Mode: `--retries=1`
+### Run #28 Results (run-20260429-075702-41743)
 
-Progress as of 09:35 CEST:
-- S1: 526/769 done (68%) — 0 hard failures
-- S2: 455/691 done (66%) — 2 hard failures ("component with error" 607s ×2)
-- S3: 356/729 done (49%) — stuck on webpack build, 6 test-done marked failed:
-  - 4× "Tamagui: style written as prop" (all proj) — FIXED by 1522602
-  - 1× "elements identifiable via fiber-based selection" — 606s timeout, FLAKY (retry passed)
-  - 1× "component with error" — needs investigation
+- **S1**: DONE — **1 FAILED**, 10 FLAKY, 744 passed (2.5h)
+  - FAILED: `undo-redo.spec.ts:341` — "redo limit — no redo after new edit" — 8s wait for redo-stack clear not enough under Docker watcher lag (watcher fires 7-9s after write)
+  - FLAKY: "explorer component cache is rebuilt after extension reload" — error-handling
+  - FLAKY: "worker thread error is captured in logs" — error-handling
+  - FLAKY: "Typing in inspector input → canvas remains functional" — keybindings
+  - FLAKY: "Setting change takes effect immediately", "autoStart false", "Model override", "Custom baseURL", "Backend for proxy/opencode" — settings timing (5 tests, all share VS Code instance, settings propagation lag)
+  - FLAKY: "open preview command works" — smoke (extension activation timing)
+  - FLAKY: "fallback saves file before undo" — unexpected `[useStyleSync] Element not found` console error (transient HMR race)
+- **S2**: DONE — **1 FAILED**, 3 FLAKY, 425 passed (2.0h)
+  - FAILED: `project-switching-stale-preview.spec.ts:118` — "switching from Twitter to Tamagui food delivery" — file picker returned AppContainer.tsx instead of App.tsx after workspace switch (VS Code indexer lag)
+  - FLAKY: "component with error" ×2 (react-vite-tw3-kanban, react-vite-cssmodules-spotify) — 607-608s → retry pass
+  - FLAKY: "Tamagui: style written as prop" (tamagui-banking) — strict mode violation → retry pass
+- **S3**: KILLED — 360/729 — memory exhausted at worker 62+; 5 HARD FAILS (3 webpack 606s, 2 Tamagui prop)
 
-Commits since run #28 start (not in this run):
-- `b3bf206e` (hyper-canvas-draft): SSR mock adapter for Remix route components
-- `1522602` (ext-test-projects): Tamagui poll resilience + dirty tab timeout
+### Root Cause Analysis (Run #28)
 
-Next: start run #29 when #28 completes.
+**S1 hard failure** — `redo limit`: VS Code file watcher fires 7-9s after write under 3-shard Docker load. The 8s fixed wait for `recordEdit()` to clear the redo stack is insufficient. REDO executes before stack is cleared.
+
+**S2 hard failure** — `project-switching-stale-preview`: VS Code file indexer lags 10-30s after workspace switch. 3×1s retry in file picker insufficient.
+
+**S3 webpack failures** — Memory exhaustion: by worker 62, container has 6.6GB used + swap full. webpack second compile page-thrashes for 285s instead of 1-2s.
+
+**Vite "component with error" FLAKY** — Vite HMR watcher degrades under memory pressure, retry gets fresher state.
+
+### Fixes Applied (not in run #28, landed for run #29)
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `1522602` | ext-test-projects | Tamagui poll resilience + dirty tab 500ms→2000ms |
+| `b3bf206e` | hyper-canvas-draft | SSR mock adapter for Remix routes |
+| `804eea3` | ext-test-projects | Vite refresh fallback: HMR 60s → force refresh → 180s |
+| `08ed413` | ext-test-projects | Editor.ts file picker: 3×1s retry → 6×3s (post-workspace-switch) |
+| `4f802bd` | ext-test-projects | docker --init + --memory-swap -1 |
+| `a1ac0698` | hyper-canvas-draft | ext v0.1.29 built |
+| `6df6548` | ext-test-projects | undo-redo: redo-stack wait 8s→15s for Docker watcher lag |
+
+---
+
+## 📍 2026-04-29 10:55 CEST — Run #29 launched
+
+```bash
+cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 bash e2e/scripts/docker-parallel-run.sh
+```
