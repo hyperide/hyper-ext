@@ -761,8 +761,9 @@ export function activate(context: vscode.ExtensionContext) {
     const scheduleRepatch = () => {
       clearTimeout(repatchTimer);
       repatchTimer = setTimeout(async () => {
+        // No previewPanel.refresh() — watcher fires on extension's own patch writes too;
+        // calling refresh() here resets the iframe mid-setup. HMR handles the reload.
         await mgr.onComponentSelected().catch(() => {});
-        previewPanel?.refresh();
       }, 300);
     };
 
