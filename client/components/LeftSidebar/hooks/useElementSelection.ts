@@ -184,6 +184,9 @@ export function useElementSelection(
         if (syntheticRef !== null) {
           canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: syntheticRef });
         }
+        // Notify preview panel to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — no round-trip through extension host.
+        window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },
     [engine, dispatch, elementsTree, canvas, currentComponent],
