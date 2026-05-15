@@ -15,6 +15,8 @@ export default {
     '../../client/components/ComponentGroupList.tsx',
     '../../client/components/ElementsTree.tsx',
     '../../client/components/icons/IconSquareRotatedPlus.tsx',
+    // Shared loading spinner reused by the preview shell
+    '../../client/components/LoadingSpinner.tsx',
     // Reused components for right panel (inspector)
     '../../client/components/RightSidebar/**/*.{ts,tsx}',
     // Shared context menu

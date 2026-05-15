@@ -182,7 +182,41 @@ describe('app/{locale}/messages layout — Next.js App Router', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Empty / edge cases
+// 7. Static TS/JS object-literal dictionaries
+// ---------------------------------------------------------------------------
+
+describe('static TS/JS object-literal dictionaries', () => {
+  it('finds key by DOM text in merged translations.ts', async () => {
+    const fileIO = makeFileIO({
+      [`${ROOT}/client/lib/translations.ts`]: `
+        export const translations = {
+          en: { hero: { title: 'Hello Bulka' } },
+          ru: { hero: { title: 'Привет, Булка' } },
+        };
+      `,
+    });
+
+    const result = await resolveI18nByDomText('Привет, Булка', ROOT, fileIO);
+    expect(result?.key).toBe('hero.title');
+    expect(result?.locale).toBe('ru');
+    expect(result?.availableLocales.sort()).toEqual(['en', 'ru']);
+  });
+
+  it('finds key by DOM text in per-locale TS files', async () => {
+    const fileIO = makeFileIO({
+      [`${ROOT}/messages/en.ts`]: `export default { hero: { title: 'Hello from TS' } } as const;`,
+      [`${ROOT}/messages/ru.ts`]: `export default { hero: { title: 'Привет из TS' } } as const;`,
+    });
+
+    const result = await resolveI18nByDomText('Hello from TS', ROOT, fileIO);
+    expect(result?.key).toBe('hero.title');
+    expect(result?.locale).toBe('en');
+    expect(result?.availableLocales.sort()).toEqual(['en', 'ru']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Empty / edge cases
 // ---------------------------------------------------------------------------
 
 describe('edge cases', () => {

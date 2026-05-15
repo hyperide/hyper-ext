@@ -13,6 +13,14 @@ export const TID = {
     componentErrorOverlay: 'hyper-preview-component-error',
     componentErrorCreateSample: 'hyper-preview-component-error-create-sample',
     componentErrorConfigureAI: 'hyper-preview-component-error-configure-ai',
+    loadingOverlay: 'hyper-preview-loading-overlay',
+    loadingTimeout: 'hyper-preview-loading-timeout',
+    loadingTimeoutRetry: 'hyper-preview-loading-timeout-retry',
+    loadingTimeoutOpenOutput: 'hyper-preview-loading-timeout-open-output',
+    loadingError: 'hyper-preview-loading-error',
+    loadingErrorRetry: 'hyper-preview-loading-error-retry',
+    loadingErrorOpenOutput: 'hyper-preview-loading-error-open-output',
+    loadingErrorMessage: 'hyper-preview-loading-error-message',
   },
 
   // Inspector (Right Sidebar)

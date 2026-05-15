@@ -1,0 +1,1 @@
+[2026-05-08 00:46:35] Task 1 complete: _createBindingFromDomMatch helper restored, 30 unit tests pass
