@@ -16,44 +16,11 @@ import { detectPackageManager, getPackageScripts, getProjectInfo } from './Proje
 
 const MAX_LOG_ENTRIES = 200;
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
-type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
 export interface LogEntry {
   line: string;
   timestamp: number;
   isError: boolean;
-}
-
-export function appendScriptCliArgs(command: { args: string[] }, packageManager: PackageManager, args: string[]): void {
-  if (packageManager === 'npm') {
-    command.args.push('--', ...args);
-    return;
-  }
-  command.args.push(...args);
-}
-
-export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
-  const text = `${errorMessage}\n${logs.map((entry) => entry.line).join('\n')}`.toLowerCase();
-  return (
-    text.includes('cannot find native binding') ||
-    text.includes('optional dependencies') ||
-    text.includes('@rolldown/binding') ||
-    text.includes('@rollup/rollup-') ||
-    (text.includes('node_modules') && text.includes('module_not_found') && text.includes('binding'))
-  );
-}
-
-export function buildInstallCommand(packageManager: PackageManager): { cmd: string; args: string[] } {
-  switch (packageManager) {
-    case 'bun':
-      return { cmd: 'bun', args: ['install'] };
-    case 'pnpm':
-      return { cmd: 'pnpm', args: ['install', '--force'] };
-    case 'yarn':
-      return { cmd: 'yarn', args: ['install'] };
-    default:
-      return { cmd: 'npm', args: ['install'] };
-  }
 }
 
 export class DevServerManager {
@@ -175,7 +142,7 @@ export class DevServerManager {
   /**
    * Start the dev server
    */
-  async start(dependencyRepairAttempted = false): Promise<DevServerState> {
+  async start(): Promise<DevServerState> {
     await this._syncProjectPathWithWorkspace();
 
     if (this._status === 'running') {
@@ -233,11 +200,11 @@ export class DevServerManager {
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
       if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
-        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+        command.args.push('--', '--port', String(this._port));
       } else if (projectInfo.type === 'nextjs') {
-        appendScriptCliArgs(command, packageManager, ['-p', String(this._port)]);
+        command.args.push('--', '-p', String(this._port));
       } else if (projectInfo.type === 'webpack') {
-        appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
+        command.args.push('--', '--port', String(this._port));
       }
       // CRA reads PORT env var — no CLI flag needed
 
@@ -324,19 +291,6 @@ export class DevServerManager {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[HyperIDE] Dev server failed:', errorMessage);
       this._outputChannel.appendLine(`[DevServer] Failed to start: ${errorMessage}`);
-
-      if (!dependencyRepairAttempted && shouldRepairDependencies(errorMessage, this._logs)) {
-        try {
-          await this.stop();
-          const packageManager = await detectPackageManager(this._projectPath);
-          await this._repairDependencies(packageManager);
-          return this.start(true);
-        } catch (repairError) {
-          const repairMessage = repairError instanceof Error ? repairError.message : 'Unknown dependency repair error';
-          this._outputChannel.appendLine(`[DevServer] Dependency repair failed: ${repairMessage}`);
-        }
-      }
-
       this._stopProxy();
       this._updateStatus('error', errorMessage);
       return this.getState();
@@ -563,7 +517,10 @@ export class DevServerManager {
   /**
    * Build command based on package manager
    */
-  private _buildCommand(packageManager: PackageManager, script: string): { cmd: string; args: string[] } {
+  private _buildCommand(
+    packageManager: 'npm' | 'yarn' | 'pnpm' | 'bun',
+    script: string,
+  ): { cmd: string; args: string[] } {
     switch (packageManager) {
       case 'bun':
         return { cmd: 'bun', args: ['run', script] };
@@ -574,46 +531,6 @@ export class DevServerManager {
       default:
         return { cmd: 'npm', args: ['run', script] };
     }
-  }
-
-  private async _repairDependencies(packageManager: PackageManager): Promise<void> {
-    const command = buildInstallCommand(packageManager);
-    this._outputChannel.appendLine(`[DevServer] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}`);
-    this._appendLog(`[HyperIDE] Repairing dependencies with ${command.cmd} ${command.args.join(' ')}\n`);
-
-    await new Promise<void>((resolve, reject) => {
-      // nosemgrep: spawn-shell-true -- package-manager commands may resolve through shell shims/corepack
-      const child = spawn(command.cmd, command.args, {
-        cwd: this._projectPath,
-        env: {
-          ...process.env,
-          CI: 'true',
-        },
-        shell: true,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      child.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        this._outputChannel.append(text);
-        this._appendLog(text);
-      });
-
-      child.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        this._outputChannel.append(text);
-        this._appendLog(text);
-      });
-
-      child.on('error', (error) => reject(error));
-      child.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-          return;
-        }
-        reject(new Error(`${command.cmd} ${command.args.join(' ')} exited with code ${code}`));
-      });
-    });
   }
 
   private _killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {

@@ -47,18 +47,6 @@ describe('buildDesignStylesCSS', () => {
     expect(css).toContain('pointer-events: auto !important');
   });
 
-  it('disables native HTML5 drag in design mode (img/a, PI-5-DR-EK-IMG fix)', () => {
-    // -webkit-user-drag: none prevents Chromium from establishing a native
-    // drag candidate at pointerdown. Without this, img/a default
-    // draggable=true makes the browser swallow pointer events before our
-    // document-capture handler can observe them, and the move-element
-    // pipeline silently aborts. See iframe-interaction.ts:_nativeDragSuppressor.
-    const css = buildDesignStylesCSS({ mode: 'design' });
-    expect(css).toContain('-webkit-user-drag: none !important');
-    expect(css).toContain('user-drag: none !important');
-    expect(css).toMatch(/html\.design-mode\s*\*/);
-  });
-
   it('returns a non-empty string', () => {
     const css = buildDesignStylesCSS({ mode: 'design' });
     expect(css.length).toBeGreaterThan(0);
