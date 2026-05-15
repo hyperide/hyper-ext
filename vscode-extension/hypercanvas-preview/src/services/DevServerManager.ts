@@ -558,7 +558,7 @@ export class DevServerManager {
     if (this._status !== 'running') {
       await this._waitForReady(timeoutMs);
     }
-    await this.awaitRecompile();
+    await this.awaitRecompile(timeoutMs);
   }
 
   /**

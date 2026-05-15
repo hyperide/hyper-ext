@@ -650,10 +650,13 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
       // Parse component structure
+      const capturedComponentPath = componentPath;
       panelRouter?.componentService
-        .parseStructure(componentPath)
+        .parseStructure(capturedComponentPath)
         .then((structure) => {
-          stateHub?.applyUpdate({ astStructure: structure });
+          if (stateHub?.state.currentComponent?.path === capturedComponentPath) {
+            stateHub.applyUpdate({ astStructure: structure });
+          }
         })
         .catch((err) => {
           console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
