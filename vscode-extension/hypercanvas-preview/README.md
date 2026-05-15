@@ -76,6 +76,8 @@ Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 | Hyper: Open Explorer | — | Open the component explorer sidebar |
 | Hyper: Open Inspector | — | Open the style inspector sidebar |
 | Hyper: Open AI Chat | — | Open the AI chat panel |
+| Hyper: Start Diagnostic Capture | — | Start capturing extension-host errors to a structured NDJSON log |
+| Hyper: Stop Diagnostic Capture | — | Stop capture, open the log, and show rejection/exception counts |
 
 ## Requirements
 
