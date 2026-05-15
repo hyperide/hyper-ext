@@ -6,7 +6,7 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { StyleReadService } from '../services/StyleReadService';
@@ -52,6 +52,20 @@ async function captureWarnings<T>(run: () => Promise<T>): Promise<{ result: T; w
     return { result: await run(), warnings };
   } finally {
     console.warn = originalWarn;
+  }
+}
+
+async function captureErrors<T>(run: () => Promise<T>): Promise<{ result: T; errors: string[] }> {
+  const originalError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(' '));
+  };
+
+  try {
+    return { result: await run(), errors };
+  } finally {
+    console.error = originalError;
   }
 }
 
@@ -223,5 +237,122 @@ describe('StyleReadService', () => {
     expect(warnings).toEqual([
       '[HyperCanvas] Selection lost after HMR — element not found for nodeRef: some-uuid-that-doesnt-exist',
     ]);
+  });
+
+  it('ignores stale bundle artifact nodeRefs without reading or logging errors', async () => {
+    const nodeMap = new NodeMapService();
+    const fileIO: FileIO = {
+      readFile: mock(async () => {
+        throw new Error('readFile should not be called for generated bundle artifacts');
+      }),
+      writeFile: async () => {},
+      access: async () => {},
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const { result, errors } = await captureErrors(() =>
+      service.readElementClassName('src/App.tsx', '/workspace/bun-tw-shadcn-sample/_bun/client/index-abc.js:10:5'),
+    );
+
+    expect(result.className).toBe('');
+    expect(result.tagType).toBe('unknown');
+    expect(fileIO.readFile).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
+});
+
+// =============================================================================
+// i18n binding detection
+// =============================================================================
+
+const I18N_JSX = `const Greeting = () => <p className="text-lg">{t("habits.walks")}</p>;`;
+const PKG_WITH_I18N = JSON.stringify({ dependencies: { 'react-i18next': '^13.0.0' } });
+const LOCALES_EN = JSON.stringify({ habits: { walks: 'Go for a walk' } });
+
+describe('StyleReadService — i18n binding detection', () => {
+  it('detects react-i18next t() call and resolves key from locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0]; // <p> element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const fileIO = makeFileIO({
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': LOCALES_EN,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('react-i18next');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+      expect(result.i18nText.activeLocale).toBe('en');
+      expect(result.i18nText.editable).toBe(true);
+    }
+  });
+
+  it('returns unsupported when no i18n library is detected in package.json', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    // No package.json — library stays null → detectI18nBinding returns unsupported
+    const fileIO = makeFileIO({ [FILE_PATH]: I18N_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('unsupported');
+  });
+
+  it('returns undefined i18nText for elements with plain text children', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(SIMPLE_JSX, FILE_PATH);
+    const divEntry = entries[0]; // <div> with text children
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', divEntry.loc.line, divEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    // <div> has childrenType 'jsx' (contains <span>), so i18nText should be undefined
+    expect(result.i18nText).toBeUndefined();
+  });
+
+  it('returns i18nText with null resolvedText when locale file is missing', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    // Has package.json (library detected) but no locale files
+    const fileIO = makeFileIO({
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBeNull();
+      expect(result.i18nText.editable).toBe(false);
+    }
   });
 });

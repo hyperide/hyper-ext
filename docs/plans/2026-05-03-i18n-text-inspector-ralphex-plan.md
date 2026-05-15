@@ -216,15 +216,15 @@ bun test shared/i18n-text/__tests__/detect-i18n-binding.test.ts
 
 ### Task 6: Add Locale Resource Resolution Tests First
 
-- [ ] Add failing tests:
+- [x] Add failing tests:
   `shared/i18n-text/__tests__/resolve-i18n-resource.test.ts`.
-- [ ] Use in-memory `FileIO` fixtures with common resource layouts:
+- [x] Use in-memory `FileIO` fixtures with common resource layouts:
   `locales/en.json`, `src/i18n/en.json`, `messages/en.json`,
   `messages/en.ts`, `app/[locale]/messages/en.json`, and namespaced
   `locales/en/common.json`.
-- [ ] Cover active locale, fallback locale, missing key, nested dot key, and
+- [x] Cover active locale, fallback locale, missing key, nested dot key, and
   namespace handling.
-- [ ] Confirm failure is missing resource resolution, not broken test setup.
+- [x] Confirm failure is missing resource resolution, not broken test setup.
 
 Verification:
 
@@ -234,13 +234,13 @@ bun test shared/i18n-text/__tests__/resolve-i18n-resource.test.ts
 
 ### Task 7: Implement Locale Resource Resolution
 
-- [ ] Implement shared resource discovery using `FileIO`.
-- [ ] Support JSON first; support simple TS/JS object exports only if the project
+- [x] Implement shared resource discovery using `FileIO`.
+- [x] Support JSON first; support simple TS/JS object exports only if the project
   already has parser utilities that make this safe.
-- [ ] Return `availableLocales`, `activeLocale`, `resolvedText`, and a precise
+- [x] Return `availableLocales`, `activeLocale`, `resolvedText`, and a precise
   unresolved reason.
-- [ ] Do not evaluate arbitrary project code.
-- [ ] Add a narrow host adapter if `FileIO` lacks directory scanning needed for
+- [x] Do not evaluate arbitrary project code.
+- [x] Add a narrow host adapter if `FileIO` lacks directory scanning needed for
   locale discovery.
 
 Verification:
@@ -251,15 +251,17 @@ bun test shared/i18n-text/__tests__/resolve-i18n-resource.test.ts
 
 ### Task 8: Thread I18n Metadata Through SaaS And VS Code Reads
 
-- [ ] Extend shared platform message types in `client/lib/platform/types.ts` and
+- [x] Extend shared platform message types in `client/lib/platform/types.ts` and
   `vscode-extension/hypercanvas-preview/src/types.ts` before sending new message
   fields.
-- [ ] Extend `ElementStyleData` with optional `i18nText`.
-- [ ] In SaaS, enrich `useElementStyleData` through a server/shared read path
-  that can access project files safely.
-- [ ] In VS Code, enrich `StyleReadService.readClassName` with shared detection
+- [x] Extend `ElementStyleData` with optional `i18nText`.
+- [x] In SaaS, enrich `useElementStyleData` through a server/shared read path
+  that can access project files safely. (RPC path: VS Code mode threads i18nText
+  from StyleReadService response. SaaS browser mode leaves i18nText undefined —
+  requires server-side read route, deferred to Task 12.)
+- [x] In VS Code, enrich `StyleReadService.readClassName` with shared detection
   and resource resolution through `VSCodeFileIO`.
-- [ ] Keep pure logic shared; keep Node/VS Code I/O at the boundary.
+- [x] Keep pure logic shared; keep Node/VS Code I/O at the boundary.
 
 Verification:
 

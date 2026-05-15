@@ -9,6 +9,7 @@
 import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
+import type { I18nBindingResult } from '../../../shared/i18n-text/types';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -160,6 +161,7 @@ export type PlatformMessage =
       tagType?: string;
       childrenLocation?: { line: number; column: number };
       styleReadResult?: StyleReadResult;
+      i18nText?: I18nBindingResult;
       error?: string;
     }
 

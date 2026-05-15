@@ -27,6 +27,11 @@ import type {
   StyleReadManager,
 } from '@lib/style-read/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import { detectI18nBinding } from '@shared/i18n-text/detect-i18n-binding';
+import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
+import { resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
+import type { I18nBindingResult, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
+import { isBundleArtifactPath } from './bundle-artifact-path';
 import { resolveWorkspacePath } from './workspace-path';
 
 export interface ElementStyleReadResult {
@@ -36,6 +41,7 @@ export interface ElementStyleReadResult {
   tagType: string;
   childrenLocation?: { line: number; column: number };
   styleReadResult?: SharedStyleReadResult;
+  i18nText?: I18nBindingResult;
 }
 
 const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
@@ -111,6 +117,9 @@ export class StyleReadService {
       }
 
       const filePath = directPath ?? absolutePath;
+      if (isBundleArtifactPath(filePath)) {
+        return empty;
+      }
       const content = await this._fileIO.readFile(filePath);
       const ast = parseCode(content);
 
@@ -166,6 +175,11 @@ export class StyleReadService {
         },
       });
 
+      const i18nText =
+        childrenType === 'expression' || childrenType === 'expression-complex'
+          ? await this._tryDetectI18n(element, filePath, content)
+          : undefined;
+
       return {
         className,
         childrenType,
@@ -173,11 +187,89 @@ export class StyleReadService {
         tagType: tagName,
         childrenLocation: childrenLoc || undefined,
         styleReadResult,
+        i18nText,
       };
     } catch (error) {
       console.error('[StyleReadService] Error reading element className:', error);
       return empty;
     }
+  }
+
+  /**
+   * Try to detect and resolve an i18n binding from the first expression container child.
+   * Returns undefined when no i18n expression is found or the expression is complex/unknown.
+   */
+  private async _tryDetectI18n(
+    element: t.JSXElement,
+    filePath: string,
+    content: string,
+  ): Promise<I18nBindingResult | undefined> {
+    // Find the first non-empty JSXExpressionContainer child
+    let exprLoc: { line: number; column: number } | null = null;
+    for (const child of element.children) {
+      if (t.isJSXExpressionContainer(child) && !t.isJSXEmptyExpression(child.expression)) {
+        const expr = child.expression;
+        if (expr.loc) {
+          exprLoc = { line: expr.loc.start.line, column: expr.loc.start.column };
+          break;
+        }
+      }
+    }
+    if (!exprLoc) return undefined;
+
+    // Read package.json to identify the i18n library in use
+    let library: ReturnType<typeof detectI18nPackage> = null;
+    try {
+      const pkgContent = await this._fileIO.readFile(`${this._workspaceRoot}/package.json`);
+      const pkg = JSON.parse(pkgContent) as PackageJsonDeps;
+      library = detectI18nPackage(pkg);
+    } catch {
+      // No package.json or parse error — proceed with null (allows 'custom' detection)
+    }
+
+    // AST detection: is the expression a known i18n call?
+    const detection = detectI18nBinding({
+      source: content,
+      filePath,
+      location: exprLoc,
+      library,
+    });
+
+    if (detection.kind === 'unsupported') {
+      return detection;
+    }
+
+    // Resolve locale resources to get translated text
+    const DEFAULT_LOCALE = 'en';
+    let resolved: Awaited<ReturnType<typeof resolveI18nResource>>;
+    try {
+      resolved = await resolveI18nResource({
+        projectRoot: this._workspaceRoot,
+        library: detection.library,
+        key: detection.key,
+        activeLocale: DEFAULT_LOCALE,
+        fallbackLocale: 'en-US',
+        fileIO: this._fileIO,
+      });
+    } catch {
+      resolved = { availableLocales: [], activeLocale: DEFAULT_LOCALE, resolvedText: null };
+    }
+
+    const binding: I18nTextBinding = {
+      kind: 'i18n',
+      library: detection.library,
+      key: detection.key,
+      activeLocale: resolved.activeLocale,
+      availableLocales: resolved.availableLocales,
+      resolvedText: resolved.resolvedText,
+      editable: resolved.resolvedText !== null,
+      sourceLocation: {
+        filePath,
+        line: detection.sourceLocation.line,
+        column: detection.sourceLocation.column,
+      },
+    };
+    return binding;
   }
 }
 

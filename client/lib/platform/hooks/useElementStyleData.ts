@@ -10,6 +10,7 @@
 
 import type { StyleReadResult } from '@lib/style-read/types';
 import type { SelectedElementRuntimeStyle } from '@lib/types';
+import type { I18nBindingResult } from '@shared/i18n-text/types';
 import { normalizeComputedColor } from '@shared/utils/color';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNodeById } from '@/components/RightSidebar/utils';
@@ -42,6 +43,8 @@ export interface ElementStyleData {
   childrenLocation?: { line: number; column: number };
   /** Shared read result with source ownership tabs and inspector decisions */
   styleReadResult?: StyleReadResult;
+  /** i18n binding detected in JSX expression children (VS Code only; SaaS browser requires server-side read path) */
+  i18nText?: I18nBindingResult;
 }
 
 export interface UseElementStyleDataOptions {
@@ -383,6 +386,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         loading: false,
         childrenLocation: response.childrenLocation,
         styleReadResult: response.styleReadResult,
+        i18nText: response.i18nText,
       });
     });
 

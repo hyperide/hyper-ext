@@ -376,6 +376,7 @@ export interface StylesResponse {
   textContent?: string;
   tagType?: string;
   childrenLocation?: { line: number; column: number };
+  i18nText?: import('@shared/i18n-text/types').I18nBindingResult;
   error?: string;
 }
 
@@ -445,3 +446,5 @@ export type {
   PrintOptions,
   SharedEditorState,
 } from '@lib/types';
+
+export type { I18nBindingResult } from '@shared/i18n-text/types';
