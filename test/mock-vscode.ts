@@ -124,6 +124,9 @@ class MockWorkspaceEdit {
 
 const workspace = {
   workspaceFolders: [{ uri: MockUri.file('/test-workspace'), name: 'test', index: 0 }],
+  getConfiguration: mock(() => ({
+    get: <T>(_key: string, defaultValue?: T) => defaultValue,
+  })),
   openTextDocument: mock(() =>
     Promise.resolve({
       getText: () => '',
@@ -178,6 +181,7 @@ const allMockFns = [
   window.showTextDocument,
   window.createOutputChannel,
   window.onDidChangeActiveTextEditor,
+  workspace.getConfiguration,
   workspace.openTextDocument,
   workspace.applyEdit,
   workspace.fs.readFile,

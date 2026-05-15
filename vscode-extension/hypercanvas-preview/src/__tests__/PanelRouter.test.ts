@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 // Leaf mocks — these don't have their own test files that would conflict
 mock.module('../services/AstService', () => ({
   AstService: class {
+    ensureInitialized = mock(() => Promise.resolve());
     updateStyles = mock(() => Promise.resolve({ success: true, className: 'c' }));
     updateProps = mock(() => Promise.resolve({ success: true }));
     insertElement = mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 }));

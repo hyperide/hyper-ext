@@ -1,21 +1,16 @@
 /**
  * VS Code implementation of FileIO.
  *
- * Two-phase write strategy:
- * 1. Apply WorkspaceEdit to an open TextDocument (creates native VS Code undo entry).
- * 2. Save the document to disk (triggers Vite HMR).
+ * Disk-first write strategy:
+ * 1. Write directly to disk via workspace.fs.writeFile (triggers Vite HMR reliably).
+ * 2. If the document is already open in VS Code's model AND content differs,
+ *    apply a WorkspaceEdit to sync the in-memory buffer so the next readFile()
+ *    returns fresh content immediately (before the file-system watcher fires).
  *
- * If the document is not yet open, we open it with openTextDocument first.
- * The previous approach (disk-first via workspace.fs.writeFile, then best-effort
- * WorkspaceEdit sync) had a race: the file-system watcher could reload the document
- * between the disk write and the WorkspaceEdit check, causing the WorkspaceEdit to
- * be skipped (content already matches) and leaving no undo entry. That broke undo
- * for some style writes and made redo impossible.
+ * Undo/redo uses content-based snapshots in UndoRedoService, not VS Code native undo.
  *
- * doc.save() was historically unreliable for "background" documents not visible in
- * any editor tab, but openTextDocument ensures the document is in VS Code's model,
- * and applyEdit + save on a model-resident document works reliably.
- * Fallback: if save fails, we write directly to disk.
+ * A previous WorkspaceEdit-first approach (openTextDocument → applyEdit → save)
+ * was reverted because it caused "file is newer" conflict dialogs in VS Code.
  */
 
 import type { FileIO } from '@lib/ast/file-io';

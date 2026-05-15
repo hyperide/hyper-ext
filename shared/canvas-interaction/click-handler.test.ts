@@ -426,11 +426,11 @@ describe('attachClickHandler', () => {
 
       const dispose = attachClickHandler(doc, callbacks, resolver);
 
-      expect(doc.addEventListener).toHaveBeenCalledTimes(5);
+      expect(doc.addEventListener).toHaveBeenCalledTimes(6);
 
       dispose();
 
-      expect(doc.removeEventListener).toHaveBeenCalledTimes(5);
+      expect(doc.removeEventListener).toHaveBeenCalledTimes(6);
     });
   });
 });

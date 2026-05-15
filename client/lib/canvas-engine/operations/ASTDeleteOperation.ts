@@ -20,8 +20,9 @@ export class ASTDeleteOperation extends BaseOperation {
   name = 'ASTDelete';
   private params: ASTDeleteOperationParams;
   private deletedElement?: ASTNode; // Store deleted element structure for undo
-  private parentId?: string; // Store parent ID for undo
+  private parentId?: string; // Store parent ID for undo (undefined = root-level element)
   private elementIndex?: number; // Store position in parent for undo
+  private elementStored = false; // True after successful storeElementForUndo
 
   constructor(api: ASTApiService, params: ASTDeleteOperationParams) {
     super(api);
@@ -55,7 +56,7 @@ export class ASTDeleteOperation extends BaseOperation {
    * Undo delete: restore the deleted element with original ID
    */
   undo(_tree: DocumentTree): OperationResult {
-    if (!this.deletedElement || this.parentId === undefined) {
+    if (!this.deletedElement || !this.elementStored) {
       console.warn('[ASTDeleteOperation] No element data to restore');
       return this.error('No deleted element to restore');
     }
@@ -135,6 +136,7 @@ export class ASTDeleteOperation extends BaseOperation {
         this.deletedElement = JSON.parse(JSON.stringify(result.element));
         this.parentId = result.parent?.id;
         this.elementIndex = result.index;
+        this.elementStored = true;
         console.log(
           '[ASTDeleteOperation] Stored element:',
           this.params.elementId.substring(0, 8),
@@ -157,6 +159,7 @@ export class ASTDeleteOperation extends BaseOperation {
           this.deletedElement = JSON.parse(JSON.stringify(result.element));
           this.parentId = result.parent?.id;
           this.elementIndex = result.index;
+          this.elementStored = true;
           console.log(
             '[ASTDeleteOperation] Stored element:',
             this.params.elementId.substring(0, 8),
