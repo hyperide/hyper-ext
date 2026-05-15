@@ -13,7 +13,9 @@
  */
 
 import { execFile } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   ensureSample,
@@ -31,7 +33,7 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
-import { isForeignExtensionError } from './extension-utils';
+import { isForeignExtensionError, serializeRejectionReason } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -67,6 +69,9 @@ let rightPanelProvider: RightPanelProvider | null = null;
 let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
+let diagnosticsChannel: vscode.OutputChannel | null = null;
+let _prevDiagnosticSinkPath: string | undefined;
+let _diagnosticCaptureActive = false;
 
 /**
  * Detect project-specific providers needed by preview components.
@@ -335,24 +340,156 @@ export function activate(context: vscode.ExtensionContext) {
   // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
   void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
 
-  // Catch unhandled rejections inside the extension host process so they
-  // don't bubble up as VS Code ".error" notification toasts containing
-  // "Unhandled rejection ...". A specific known source was already fixed
-  // (extension.ts:537 showTextDocument chain, extension.ts:778 autoStart
-  // .then without .catch); this is a safety net for anything we missed
-  // and for VS Code core / library promises that escape in a hot path.
-  // Logged so real issues are still discoverable in the Output channel.
-  // Foreign extension rejections are filtered out — they must not be
-  // logged as [HyperIDE] when the stack points to another extension dir.
-  const unhandledHandler = (reason: unknown) => {
-    if (!isForeignExtensionError(reason)) {
-      console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+  // Catch unhandled rejections and uncaught exceptions inside the extension
+  // host process. Extension host is shared across all installed extensions, so
+  // foreign-extension errors are filtered out via isForeignExtensionError.
+  // Events are written to the 'HyperIDE Diagnostics' output channel (always)
+  // and optionally to HYPERIDE_DIAGNOSTIC_ERROR_SINK (a file path) so E2E
+  // harnesses and debug sessions can tail the structured log.
+  diagnosticsChannel = vscode.window.createOutputChannel('HyperIDE Diagnostics');
+  context.subscriptions.push(diagnosticsChannel);
+  const ch = diagnosticsChannel;
+
+  const logProcessError = (kind: 'unhandledRejection' | 'uncaughtException', reason: unknown) => {
+    if (isForeignExtensionError(reason)) return;
+    const serialized = serializeRejectionReason(reason);
+    const label = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason);
+    ch.appendLine(`[HyperIDE] ${kind}: ${label}`);
+    if (reason instanceof Error && reason.stack) {
+      ch.appendLine(reason.stack);
+    }
+    // Also emit to console so Playwright window.on('console') can detect these in E2E tests.
+    const consoleLabel = kind === 'unhandledRejection' ? 'Unhandled rejection' : 'Uncaught exception';
+    console.error(`[HyperIDE] ${consoleLabel} in extension host:`, label);
+    const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+    if (sinkPath) {
+      try {
+        appendFileSync(sinkPath, `${JSON.stringify({ ts: Date.now(), kind, reason: serialized })}\n`);
+      } catch {
+        // best effort — never crash extension host on logging failure
+      }
     }
   };
+
+  const unhandledHandler = (reason: unknown) => logProcessError('unhandledRejection', reason);
+  // Log and swallow — do NOT re-throw. The extension host is a shared Node.js
+  // process; re-throwing inside an uncaughtException handler terminates the
+  // entire host, taking all other extensions down with it.
+  const uncaughtHandler = (error: unknown) => {
+    logProcessError('uncaughtException', error);
+  };
   process.on('unhandledRejection', unhandledHandler);
+  process.on('uncaughtException', uncaughtHandler);
   context.subscriptions.push({
-    dispose: () => process.off('unhandledRejection', unhandledHandler),
+    dispose: () => {
+      process.off('unhandledRejection', unhandledHandler);
+      process.off('uncaughtException', uncaughtHandler);
+    },
   });
+
+  // Diagnostic capture commands — registered before workspace guard so they work
+  // even when no folder is open (the process error handlers above are also pre-guard).
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.startDiagnosticCapture', async () => {
+      if (_diagnosticCaptureActive) {
+        void vscode.window.showWarningMessage(
+          'Diagnostic capture already active. Stop the current one before starting a new one.',
+        );
+        return;
+      }
+      // Set flag before the first await so a second concurrent invocation is blocked
+      // even while the input box is open (double-trigger, keybinding repeat, etc.).
+      _diagnosticCaptureActive = true;
+      const defaultPath = join(homedir(), `.hyperide-diagnostics-${Date.now()}.log`);
+      const filePath = await vscode.window.showInputBox({
+        prompt: 'Path for diagnostic capture output (NDJSON)',
+        value: defaultPath,
+        validateInput: (v: string) => (v.trim().length === 0 ? 'Path cannot be empty' : undefined),
+      });
+      if (!filePath) {
+        _diagnosticCaptureActive = false;
+        return;
+      }
+      const trimmedPath = resolve(filePath.trim());
+      try {
+        await mkdir(dirname(trimmedPath), { recursive: true });
+        appendFileSync(trimmedPath, '');
+      } catch (err) {
+        _diagnosticCaptureActive = false;
+        void vscode.window.showErrorMessage(`Cannot write to diagnostic sink path: ${(err as Error).message}`);
+        return;
+      }
+      _prevDiagnosticSinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+      process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = trimmedPath;
+      void vscode.window.showInformationMessage(
+        "Diagnostic capture active. Reproduce the bug, then run 'Stop Diagnostic Capture' to finish.",
+      );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.stopDiagnosticCapture', async () => {
+      if (!_diagnosticCaptureActive) {
+        void vscode.window.showWarningMessage('No active diagnostic capture session.');
+        return;
+      }
+      // env var was set by startDiagnosticCapture; could only be missing if something
+      // external cleared it between start and stop — treat as empty string (no file).
+      const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK ?? '';
+      // Stop capture: restore the previous sink path (e.g. E2E harness path) rather
+      // than deleting the key entirely, so the harness stays functional for the rest
+      // of the worker session.
+      if (_prevDiagnosticSinkPath !== undefined) {
+        process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = _prevDiagnosticSinkPath;
+      } else {
+        delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+      }
+      _prevDiagnosticSinkPath = undefined;
+      _diagnosticCaptureActive = false;
+
+      if (!sinkPath) {
+        void vscode.window.showWarningMessage(
+          'Diagnostic capture stopped, but the sink path was externally cleared — no log data was recorded.',
+        );
+        return;
+      }
+
+      let rejections = 0;
+      let exceptions = 0;
+      let diagnosticEntries = 0;
+      let fileExists = false;
+      try {
+        const content = await readFile(sinkPath, 'utf8');
+        fileExists = true;
+        for (const line of content.split('\n')) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line) as { kind?: string };
+            if (entry.kind === 'unhandledRejection') rejections++;
+            else if (entry.kind === 'uncaughtException') exceptions++;
+            else if (entry.kind === 'diagnosticEntry') diagnosticEntries++;
+          } catch {
+            // skip malformed lines
+          }
+        }
+      } catch {
+        // file may not exist if no errors occurred
+      }
+
+      void vscode.window.showInformationMessage(
+        `Diagnostic capture stopped. Rejections: ${rejections}, exceptions: ${exceptions}, log errors: ${diagnosticEntries}.`,
+      );
+
+      if (fileExists && rejections + exceptions + diagnosticEntries > 0) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(sinkPath);
+          await vscode.window.showTextDocument(doc, { preview: true });
+        } catch {
+          // ignore if file cannot be opened
+        }
+      }
+    }),
+  );
 
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
@@ -506,9 +643,11 @@ export function activate(context: vscode.ExtensionContext) {
     // Self-healing: when the generated preview doesn't have the requested component,
     // re-run ensureComponent so the preview file is regenerated with the missing entry.
     // Retry guard prevents an infinite loop if ensureComponent keeps failing.
-    // Do NOT skip UI primitives here: those with SampleDefault must be addable via this path
-    // (preview-file-manager filters out primitives without SampleDefault, and the diff-before-write
-    // check in _initPreviewFile prevents HMR when the generated content is unchanged).
+    // Do NOT skip UI primitives here: those with SampleDefault — or with a synthesized
+    // compound scaffold (Task 2 / Task 3) — must be addable via this path. The
+    // diff-before-write check in _initPreviewFile prevents HMR when the generated content
+    // is unchanged. Primitives that have neither authored nor synthetic SampleDefault
+    // remain filtered out by entryHasRenderableSample and surface the "no sample" toast.
     previewPanel.onComponentMissing((componentPath) => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
@@ -527,12 +666,14 @@ export function activate(context: vscode.ExtensionContext) {
             const entries = parseExistingPreview(content);
             const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
             if (!inRegistry) {
-              // Primitive without SampleDefault will never be added to the registry.
-              // Don't call setComponentParam — the same-value React state bail-out would
-              // leave the preview stuck on "Loading…" indefinitely. Keep the retry count
-              // so repeated _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+              // Primitive that has neither an authored SampleDefault nor a synthesizable
+              // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
+              // returned false, so it stays filtered out of the registry. Don't call
+              // setComponentParam — the same-value React state bail-out would leave the
+              // preview stuck on "Loading…" indefinitely. Keep the retry count so repeated
+              // _ComponentMissingSignal fires are blocked by the count >= 2 guard.
               vscode.window.showInformationMessage(
-                `Hyper Canvas: "${relPath}" is a UI primitive without a SampleDefault export — preview not available.`,
+                `Hyper Canvas: "${relPath}" has no SampleDefault and its exports don't form a renderable compound — preview not available.`,
               );
               return;
             }
@@ -736,14 +877,19 @@ export function activate(context: vscode.ExtensionContext) {
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relativePath = relative(currentWorkspaceRoot, absComponentPath);
 
-      // UI primitives without SampleDefault are excluded from __canvas_preview__.tsx.
-      // Skipping ensureComponent here avoids triggering HMR on every Explorer click for
-      // the ~46 shadcn primitives that don't have SampleDefault. If a UI primitive WITH
-      // SampleDefault is missing from the registry, onComponentMissing below handles recovery.
-      if (isUiPrimitive(relativePath)) {
-        previewPanel?.setComponentParam(relativePath);
-        return;
-      }
+      // UI primitives (shadcn-style ui/<name>.tsx) must NOT have SampleDefault written
+      // into their source — keeping the file pristine matters for users who track shadcn
+      // updates, and writing a deterministic scaffold into Carousel/Tabs/etc. would lose
+      // exports that don't match the suffix allow-list. Instead, preview-file-manager
+      // synthesizes a SampleDefault inline inside __canvas_preview__.tsx via
+      // syntheticSampleDefault (Task 2). We still need to register the primitive in the
+      // registry so the iframe can find it — call ensureComponent below, but skip the
+      // ensureSample / ensureDefaultSampleForNoProps mutations.
+      //
+      // No unit test covers the !isPrimitive split here — extension.ts is hard to harness
+      // in isolation. The behavior is covered by the project-dependent E2E spec
+      // `component-load.spec.ts` (sibling repo `ext-test-projects/e2e/`).
+      const isPrimitive = isUiPrimitive(relativePath);
 
       // Skip source-file mutation entirely when the harness disables it.
       // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
@@ -755,24 +901,31 @@ export function activate(context: vscode.ExtensionContext) {
         .getConfiguration('hypercanvas.preview')
         .get<boolean>('autoSampleGeneration', true);
 
-      const ensureSamplePromise = autoSampleEnabled
-        ? ensureSample({
-            io: vsCodeIO,
-            absolutePath: absComponentPath,
-            componentName: sampleComponentName,
-            sampleName: 'SampleDefault',
-            generate: sampleGenerator,
-          })
-        : Promise.resolve({ generated: false, exists: false });
+      const ensureSamplePromise =
+        autoSampleEnabled && !isPrimitive
+          ? ensureSample({
+              io: vsCodeIO,
+              absolutePath: absComponentPath,
+              componentName: sampleComponentName,
+              sampleName: 'SampleDefault',
+              generate: sampleGenerator,
+            })
+          : Promise.resolve({ generated: false, exists: false });
 
       ensureSamplePromise
         .then(async (sampleResult) => {
           if (ac.signal.aborted) return;
-          const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
-          if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
-            await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
+          // Skip ensureDefaultSampleForNoProps for UI primitives — same rationale as the
+          // ensureSample skip above: don't mutate shadcn source files. The synthetic scaffold
+          // generated by preview-file-manager.buildEntry covers the no-SampleDefault case.
+          if (!isPrimitive) {
+            const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
+            if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
+              await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
+            }
           }
-          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
+          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
+          // For UI primitives this is what bakes the syntheticSampleDefault into the registry.
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {
@@ -995,6 +1148,19 @@ export async function deactivate() {
     diagnosticHub.dispose();
     diagnosticHub = null;
   }
+
+  // Reset diagnostic capture state so re-activation in the same process starts clean.
+  // Also restore the env var to avoid a stale sink path surviving deactivation.
+  if (_diagnosticCaptureActive) {
+    if (_prevDiagnosticSinkPath !== undefined) {
+      process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = _prevDiagnosticSinkPath;
+    } else {
+      delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+    }
+  }
+  _diagnosticCaptureActive = false;
+  _prevDiagnosticSinkPath = undefined;
+  diagnosticsChannel = null;
 
   if (stateHub) {
     stateHub.dispose();

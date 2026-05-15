@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.41",
+  "version": "0.1.44",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
@@ -203,6 +203,14 @@
       {
         "command": "hypercanvas.canvasGoToCode",
         "title": "Hyper: Go to Code"
+      },
+      {
+        "command": "hypercanvas.startDiagnosticCapture",
+        "title": "Hyper: Start Diagnostic Capture"
+      },
+      {
+        "command": "hypercanvas.stopDiagnosticCapture",
+        "title": "Hyper: Stop Diagnostic Capture"
       }
     ],
     "keybindings": [
@@ -370,6 +378,7 @@
     "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
     "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
     "compile": "tsc -p ./",
+    "test": "bun test src/__tests__/",
     "package": "npm run build && npx @vscode/vsce package"
   },
   "dependencies": {

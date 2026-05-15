@@ -22,13 +22,12 @@ const features = [
   {
     icon: IconCode,
     title: 'Framework Support',
-    description:
-      'Works with Next.js, Vite, Remix, Create React App, and Bun. Clone your existing project and start editing.',
+    description: 'Works with Next.js, Vite, Remix, Create React App, and Bun directly from your editor workspace.',
   },
   {
     icon: IconBox,
-    title: 'Docker Isolation',
-    description: 'Each project runs in a secure, sandboxed Docker container. Safe execution with easy cleanup.',
+    title: 'Extension Workflow',
+    description: 'Install once from the marketplace, open a React repo, and keep visual editing next to your code.',
   },
 ];
 
@@ -40,15 +39,14 @@ export default function Features() {
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything you need to build faster</h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            HyperIDE combines visual editing, AI assistance, and developer tools in one seamless experience.
+            HyperIDE brings visual editing, AI assistance, and source-aware controls into your existing IDE.
           </p>
         </div>
 
-        {/* Features grid */}
+        {/* Features grid — icon-only for uniform card heights; visuals live in HowItWorks / Demo */}
         <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <Card key={feature.title} className="relative overflow-hidden">
-              <div className="absolute right-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-primary/5" />
               <CardHeader>
                 <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <feature.icon className="h-6 w-6 text-primary" />

@@ -1984,7 +1984,7 @@ export function cn(...classes: string[]) {
 `;
 
 describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern', () => {
-  it('excludes components/ui/* without SampleDefault from registry even when explicitly requested', async () => {
+  it('synthesizes SampleDefault for components/ui/* compound shadcn modules so they preview without fallback-prop crashes', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/index.html',
@@ -1994,9 +1994,15 @@ describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern'
     io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    // Sheet has no SampleDefault — excluded from registry to prevent fallback-prop crashes
+    // Sheet has no authored SampleDefault but it does export the compound
+    // SheetTrigger sibling — Task 4 broadens the suffix allow-list so this
+    // file gets a synthetic SampleDefault and stays in the registry. The
+    // crash-prevention invariant still holds: rendering goes through the
+    // synthesized sample arrow, never the bare fallback-prop spread.
     const content = await manager.ensureComponent(['client/components/ui/sheet.tsx']);
-    expect(content).not.toContain("'client/components/ui/sheet.tsx'");
+    expect(content).toContain("'client/components/ui/sheet.tsx'");
+    expect(content).toContain('SheetModule.Sheet');
+    expect(content).toContain('SheetModule.SheetTrigger');
   });
 
   it('excludes components/ui/* with non-default samples but no SampleDefault', async () => {
@@ -2015,9 +2021,28 @@ export const SamplePrimary = () => <NavigationMenu />;
     const manager = createManager(io);
 
     // Has SamplePrimary but no SampleDefault — render path would fall through to fallback-prop
-    // spread and crash, so must still be excluded from registry.
+    // spread and crash, so must still be excluded from componentRegistry/sampleRenderMap.
+    // It IS allowed (and now expected) to appear in componentExportsMap so the iframe's
+    // fallback UI can show "Detected exports: NavigationMenu" instead of "Generating sample…".
     const content = await manager.ensureComponent(['client/components/ui/navigation-menu.tsx']);
-    expect(content).not.toContain("'client/components/ui/navigation-menu.tsx'");
+    // Build the registry/sampleRenderMap region to assert the path is NOT registered there.
+    const registrySection = content.slice(
+      content.indexOf('const componentRegistry'),
+      content.indexOf('const componentExportsMap'),
+    );
+    const sampleRenderMapSection = content.slice(
+      content.indexOf('const sampleRenderMap'),
+      content.indexOf('const componentExportsMap'),
+    );
+    expect(registrySection).not.toContain("'client/components/ui/navigation-menu.tsx'");
+    expect(sampleRenderMapSection).not.toContain("'client/components/ui/navigation-menu.tsx'");
+    // componentExportsMap MAY include the path so the fallback UI can list detected exports.
+    const exportsSection = content.slice(
+      content.indexOf('const componentExportsMap'),
+      content.indexOf('const sampleRenderersMap'),
+    );
+    expect(exportsSection).toContain("'client/components/ui/navigation-menu.tsx'");
+    expect(exportsSection).toContain('"NavigationMenu"');
   });
 
   it('keeps components/ui/* with SampleDefault in registry when explicitly requested', async () => {

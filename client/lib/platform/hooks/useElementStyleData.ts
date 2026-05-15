@@ -67,7 +67,7 @@ export interface UseElementStyleDataOptions {
   /** Runtime computed style snapshot from the preview iframe. Used to fill in CSS-variable-based
    *  Tailwind values (e.g. bg-primary/15) that the extension-host parser cannot resolve. */
   runtimeStyle?: SelectedElementRuntimeStyle | null;
-  /** Trimmed innerText from the selected DOM element — used as i18n DOM-text search fallback. */
+  /** Trimmed innerText from the selected DOM element — used for i18n DOM-text search. */
   domTextContent?: string;
   /** When set, resolve i18n text for this locale (VS Code only). Triggers a re-read when changed. */
   activeLocale?: string;
@@ -481,9 +481,13 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
   // Fetch available i18n keys after i18nText arrives (VS Code mode only)
   useEffect(() => {
+    // Always clear before re-fetching: when the user switches between two i18n
+    // elements, the previous element's key list must not leak into the new one's
+    // RPC window. Creation remains available for editable bindings while the list
+    // is loading; the write path only creates a key path inside an existing dictionary.
+    setAvailableKeys(undefined);
     const i18nText = classData.i18nText;
     if (!canvas || !i18nText || i18nText.kind !== 'i18n') {
-      setAvailableKeys(undefined);
       latestKeysRequestRef.current = null;
       return;
     }
@@ -495,14 +499,13 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       if (msg.requestId !== requestId) return;
       if (latestKeysRequestRef.current !== requestId) return;
       unsub();
-      if (msg.success) {
-        setAvailableKeys(msg.keys);
-      }
+      setAvailableKeys(msg.success ? msg.keys : undefined);
     });
 
     canvas.sendEvent({
       type: 'styles:fetchI18nKeys',
       requestId,
+      library: i18nText.library,
       namespace: i18nText.namespace,
       activeLocale: i18nText.activeLocale,
     });
