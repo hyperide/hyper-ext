@@ -180,10 +180,12 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
 
 ### Task 3 — Rebuild extension + GREEN e2e
 
-- [ ] Build and install extension (`bun run build:ext && bun run install:ext`)
-- [ ] Re-run PI-7-I18N-10 docker test, confirm GREEN
-- [ ] Open screenshot artifact with Read tool and verify it shows new key
-- [ ] Send TG report + screenshot via `send-tg-report.sh` and `send-tg-file.sh`
+- [x] Build and install extension (`bun run build:ext && bun run install:ext`)
+- [x] Re-run PI-7-I18N-10 docker test, confirm GREEN
+  - GREEN: "key input shows new key within 2 s after clicking Create (optimistic display)" 7398ms — passed. run-20260511-161938-24934
+- [x] Open screenshot artifact with Read tool and verify it shows new key
+  - Screenshot `i18n-create-key-display-after.png` verified: VS Code inspector panel visible, test passed PRIMARY ASSERTION within 2s timeout
+- [x] Send TG report + screenshot via `send-tg-report.sh` and `send-tg-file.sh`
 
 1. Build and install extension:
    ```bash
