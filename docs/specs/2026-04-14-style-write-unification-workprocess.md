@@ -5039,3 +5039,41 @@ Bridge bot current-session app-server recovery, 2026-04-22 19:35 CEST:
   * Restart full E2E after the bridge path is confirmed by a real incoming
     message.
 ```
+
+Bridge bot page-callback await follow-up, 2026-04-22 19:49 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: f04398a fix: await telegram page callback acknowledgements
+- Trigger:
+  * User still saw inline pagination spin forever after the first pagination
+    fix.
+  * Runtime logs showed the newer page callbacks were acknowledged, but older
+    callbacks could reach the bot before an `answered` log when the process was
+    being restarted.
+  * The generic `callback_query` page fallback called `acknowledgePageCallback`
+    without `await`, making callback acknowledgement completion invisible to
+    the handler lifecycle.
+- Fix:
+  * Moved callback acknowledgement into a tested helper:
+    `acknowledgeTelegramCallback`.
+  * The page callback path now reads raw `context.data` when available, falling
+    back to the RegExp match only when needed.
+  * The generic page callback fallback now awaits acknowledgement before
+    returning.
+  * Direct Telegram `answerCallbackQuery` remains the primary ACK path; GramIO
+    `context.answer()` remains the fallback.
+- Validation:
+  * `bun test` passed 36/36.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; active PID observed:
+    `72697`.
+  * Re-sent the latest stored paged report from page store
+    `486208d5accf` as Telegram message `396` with 2 pages.
+- E2E note:
+  * Full VS Code E2E is still running separately with
+    `--retries=0 --workers=1`; at this entry it had passed the AI-chat and
+    command-panel smoke region without blank VS Code windows, save dialogs, or
+    fail markers.
+```
