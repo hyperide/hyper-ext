@@ -1288,17 +1288,16 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   getState: () => ({
     selectedIds: state.selectedIds,
     activeInstanceId,
-    selectedItemIndices: state.selectedItemIndices,
   }),
   getDocument: () => document,
   callbacks: {
-    onSelectElement: (id, itemIndex) =>
+    onSelectElement: (id) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
           type: 'hypercanvas:elementClick',
           elementId: id,
-          itemIndex: itemIndex ?? null,
+          itemIndex: null,
         },
         '*',
       ),
