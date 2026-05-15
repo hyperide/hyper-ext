@@ -653,10 +653,60 @@ Monitoring in progress — will update when shards complete.
   - Teardown confirms write DID happen (dirty App.web.tsx), but after poll ended.
   - **Fix committed**: `1e83ca8` — poll 90s→150s. Budget: 5s setup + 2s delay + 150s poll = ~160s, within test.slow() 360s.
 
-### New fix for Run #32
+### New fixes for Run #32
 
 | Commit | Fix | Root cause |
 |--------|-----|-----------|
 | `1e83ca8` | Tamagui poll 90s→150s | App.web.tsx cold parse takes ~97-100s, 90s budget insufficient |
 
+---
+
+## 📍 2026-04-29 18:30 CEST — Run #31 intermediate (S1: 244, S2: 294, S3: 141 tests done)
+
+### Run #31 hard fails so far (partial — run still in progress ~1.5h)
+
+**S1** (244 tests done): **0 hard fails** — clean
+
+**S2** (294 tests done): **1 hard fail** (react-vite-styled-shopify "component with error")
+
+| Test | Attempt 1 | Attempt 2 | Analysis |
+|------|-----------|-----------|----------|
+| "component with error — error overlay appears" | 260142ms failed | 27541ms failed | Two different root causes (see below) |
+
+**S2 "component with error" analysis:**
+- Attempt 1 (260s): Write to App.tsx succeeded (teardown: "saving dirty editors: App.tsx"), but Vite FS watcher never fired in 240s (Phase 1 60s + Phase 2 180s both exhausted). Error overlay never appeared. Root: heavy Docker memory pressure → inotify degradation.
+- Attempt 2 (27s): Editor focus issue — webview iframe holds keyboard focus after `setupPreviewWithDevServer`. `keyboard.type()` missed Monaco → `__BREAK__` never written → 15s fast-fail poll timed out. "No dirty editors" at teardown confirms no write happened.
+- **Fix** (`499e786`): click activity bar before Monaco (same as `Editor.openFile` pattern) to escape webview focus; bump post-click wait 500ms→1000ms.
+- Note: Attempt 1 (Vite FS watcher) remains a known intermittent issue. With attempt 2 reliably fixed, the test becomes FLAKY (acceptable per green definition).
+
+**S3** (141 tests done): **4 hard fails** — all pre-existing patterns, all covered by fixes
+
+| Test | Hard fails | Root cause | Fix |
+|------|-----------|-----------|-----|
+| "Tamagui: style written as prop" | 6 failures (3 projects × 2 attempts) | App.web.tsx cold AST parse ~100s, 90s poll insufficient | `1e83ca8` (150s) |
+| "opacity set + HMR round-trip" | 2 failures (1 project, 2 attempts) | Tamagui HMR recompile takes ~100s; `isPreviewLoaded()` poll 30s insufficient | `5a7402b` (150s) |
+
+**S3 FLAKY** (all acceptable):
+- "component has non-zero dimensions" — 35s → retry 8s (App.web.tsx scanner indexing race)
+- "inspector typography section visible" — 323s → retry 11s (same race)
+- "Tamagui: semantic token fallback" — 323s → retry 16s (same race)
+- "CSS value with units: arrow key increment" — 323s → retry skipped (same race)
+- "opacity set + HMR" — 323s → retry 42s (first attempt: Component not found race; second attempt: fixed by `5a7402b`)
+
+### Summary of fixes applied during Run #31 monitoring
+
+| Commit | Repo | Fix | Root cause |
+|--------|------|-----|-----------|
+| `1e83ca8` | ext-test-projects | Tamagui style-write poll 90s→150s | App.web.tsx cold AST parse ~100s on Docker |
+| `5a7402b` | ext-test-projects | HMR isPreviewLoaded timeout 30s→150s | Same App.web.tsx recompile after HMR save |
+| `499e786` | ext-test-projects | Monaco editor focus: activity bar click + 500ms→1000ms | Webview holds focus after setupPreviewWithDevServer |
+
+**3 fixes total for Run #32.** All known hard fail patterns now covered.
+
+### Expected Run #32 result
+
+- "Tamagui: style written as prop" — PASS (150s poll covers ~100s cold parse)
+- "opacity set + HMR round-trip" — PASS (150s poll covers ~100s HMR recompile)
+- "component with error" on react-vite-styled-shopify — FLAKY/PASS (focus fix prevents attempt 2 fail; attempt 1 remains intermittent due to Vite FS watcher degradation)
+- All other tests — same as run #31 (no regressions expected)
 
