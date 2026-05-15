@@ -1584,6 +1584,9 @@ function _dragPointerMove(e: PointerEvent): void {
 
   if (_dragState !== 'dragging') return;
 
+  needsOverlayUpdate = true;
+  scheduleOverlayLoopIfNeeded();
+
   if (_dragGhostEl) {
     _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
     _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;

@@ -92,8 +92,8 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 
 ### Task 3: Fix overlay update during drag
 
-- [ ] In `iframe-interaction.ts` in `_dragPointerMove` handler: set `needsOverlayUpdate = true` at start of every call
-- [ ] Verify overlay loop checks `needsOverlayUpdate` flag and repaints
+- [x] In `iframe-interaction.ts` in `_dragPointerMove` handler: set `needsOverlayUpdate = true` at start of every call
+- [x] Verify overlay loop checks `needsOverlayUpdate` flag and repaints
 
 ### Task 4: Fix selection disappears after drop
 
