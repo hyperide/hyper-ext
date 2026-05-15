@@ -9,7 +9,9 @@
  */
 
 import type { StyleReadResult } from '@lib/style-read/types';
-import { useEffect, useRef, useState } from 'react';
+import type { SelectedElementRuntimeStyle } from '@lib/types';
+import { normalizeComputedColor } from '@shared/utils/color';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNodeById } from '@/components/RightSidebar/utils';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
@@ -57,6 +59,9 @@ export interface UseElementStyleDataOptions {
   itemIndex?: number | null;
   /** Increment to force re-read of styles (VS Code mode) */
   refreshKey?: number;
+  /** Runtime computed style snapshot from the preview iframe. Used to fill in CSS-variable-based
+   *  Tailwind values (e.g. bg-primary/15) that the extension-host parser cannot resolve. */
+  runtimeStyle?: SelectedElementRuntimeStyle | null;
 }
 
 // ============================================================================
@@ -135,6 +140,45 @@ export function classNameToStyles(className: string): ParsedStyles {
 }
 
 // ============================================================================
+// Runtime style merge helper
+// ============================================================================
+
+/**
+ * Fill in ParsedStyles fields that Tailwind parsing could not resolve
+ * (e.g. CSS-variable-backed tokens like bg-primary/15) using the browser's
+ * getComputedStyle snapshot captured in the iframe on element click.
+ *
+ * Only fills missing/empty values — never overwrites Tailwind-parsed results.
+ */
+export function mergeRuntimeStyle(
+  base: ParsedStyles,
+  runtime: SelectedElementRuntimeStyle | null | undefined,
+  elementId: string | null,
+): ParsedStyles {
+  if (!runtime || !elementId || runtime.elementId !== elementId) return base;
+
+  const cs = runtime.computedStyle;
+  const merged: ParsedStyles = { ...base };
+
+  if (!merged.backgroundColor && cs.backgroundColor) {
+    const normalized = normalizeComputedColor(cs.backgroundColor);
+    if (normalized) merged.backgroundColor = normalized;
+  }
+
+  if (!merged.color && cs.color) {
+    const normalized = normalizeComputedColor(cs.color);
+    if (normalized) merged.color = normalized;
+  }
+
+  if (!merged.borderColor && cs.borderColor) {
+    const normalized = normalizeComputedColor(cs.borderColor);
+    if (normalized) merged.borderColor = normalized;
+  }
+
+  return merged;
+}
+
+// ============================================================================
 // Default empty state
 // ============================================================================
 
@@ -159,9 +203,20 @@ const RPC_TIMEOUT = 10_000;
  * VS Code mode: sends `styles:readClassName` RPC to extension host.
  */
 export function useElementStyleData(options: UseElementStyleDataOptions): ElementStyleData {
-  const { elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey } = options;
+  const {
+    elementId,
+    componentPath,
+    canvas,
+    engine,
+    styleAdapter,
+    activeInstanceId,
+    itemIndex,
+    refreshKey,
+    runtimeStyle,
+  } = options;
 
-  const [data, setData] = useState<ElementStyleData>(EMPTY_DATA);
+  // Base style data from className RPC or engine — runtime merge applied via useMemo below
+  const [classData, setData] = useState<ElementStyleData>(EMPTY_DATA);
 
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
@@ -329,6 +384,15 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       clearTimeout(timer);
     };
   }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, refreshKey]);
+
+  // Apply runtime style merge reactively — updates whenever runtimeStyle changes
+  // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
+  const data = useMemo(() => {
+    if (!classData.parsedStyles || !runtimeStyle) return classData;
+    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId);
+    if (merged === classData.parsedStyles) return classData;
+    return { ...classData, parsedStyles: merged };
+  }, [classData, runtimeStyle, elementId]);
 
   return data;
 }

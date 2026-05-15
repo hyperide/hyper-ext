@@ -561,7 +561,17 @@ function retryPendingClick(): void {
   const itemIndex = target.itemIndex;
   const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-  window.parent.postMessage({ type: 'hypercanvas:elementClick', elementId: syntheticRef, itemIndex, source }, '*');
+  window.parent.postMessage(
+    {
+      type: 'hypercanvas:elementClick',
+      elementId: syntheticRef,
+      itemIndex,
+      source,
+      computedStyle: extractComputedStyle(element),
+      computedStyleSeq: ++elementClickSeq,
+    },
+    '*',
+  );
 }
 
 // ============================================
@@ -763,6 +773,38 @@ function scrollIntoViewCenterSmooth(el: Element): void {
   }
 }
 
+// ============================================
+// Computed style extraction for Inspector fill/color population
+// ============================================
+
+const COMPUTED_STYLE_PROPS = [
+  'backgroundColor',
+  'backgroundImage',
+  'color',
+  'borderColor',
+  'borderTopColor',
+  'borderWidth',
+  'borderStyle',
+  'borderRadius',
+  'opacity',
+  'fontSize',
+  'width',
+  'height',
+] as const;
+
+/** Monotonic counter so the webview can discard stale snapshots on rapid clicks. */
+let elementClickSeq = 0;
+
+function extractComputedStyle(el: HTMLElement): Record<string, string> {
+  const cs = window.getComputedStyle(el);
+  const result: Record<string, string> = {};
+  for (const prop of COMPUTED_STYLE_PROPS) {
+    const value = cs[prop as keyof CSSStyleDeclaration] as string;
+    if (value) result[prop] = value;
+  }
+  return result;
+}
+
 // === Rendered component path (from URL ?component= param) ===
 // Used to determine if a clicked element is from the rendered file or an imported component.
 // Same logic as ElementTracer.renderedFile in SaaS.
@@ -795,7 +837,7 @@ const activeInstanceId: string | null = null;
 attachClickHandler(
   document,
   {
-    onElementClick: (nodeRef, _el, _e, itemIndex, source) => {
+    onElementClick: (nodeRef, el, _e, itemIndex, source) => {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
@@ -803,6 +845,8 @@ attachClickHandler(
           elementId: nodeRef,
           itemIndex,
           source,
+          computedStyle: extractComputedStyle(el),
+          computedStyleSeq: ++elementClickSeq,
         },
         '*',
       );
@@ -1272,14 +1316,48 @@ window.addEventListener('message', (event: MessageEvent) => {
     return;
   }
 
-  // Go to Visual: select element and scroll to it
+  // Go to Visual: select element, scroll, and send computed style snapshot
   if (msg.type === 'hypercanvas:goToVisual') {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];
-    if (el) scrollIntoViewCenterSmooth(el);
+    if (el) {
+      scrollIntoViewCenterSmooth(el);
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage(
+        {
+          type: 'hypercanvas:computedStyleResult',
+          elementId: msg.elementId,
+          itemIndex: null,
+          computedStyle: extractComputedStyle(el),
+          computedStyleSeq: ++elementClickSeq,
+        },
+        '*',
+      );
+    }
     needsOverlayUpdate = true;
     scheduleOverlayLoopIfNeeded();
+    return;
+  }
+
+  // Computed style request — for keyboard navigation and non-click selections
+  if (msg.type === 'hypercanvas:requestComputedStyle') {
+    const elementId = msg.elementId as string;
+    const itemIndex = (msg.itemIndex as number | null | undefined) ?? null;
+    const el = findElementsByRef(elementId, itemIndex)[0] ?? null;
+    if (el) {
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage(
+        {
+          type: 'hypercanvas:computedStyleResult',
+          elementId,
+          itemIndex,
+          computedStyle: extractComputedStyle(el),
+          computedStyleSeq: ++elementClickSeq,
+        },
+        '*',
+      );
+    }
     return;
   }
 

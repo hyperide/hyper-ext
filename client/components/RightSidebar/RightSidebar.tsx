@@ -205,6 +205,7 @@ export default function RightSidebar({
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
+  const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
   const {
     parsedStyles,
     childrenType,
@@ -222,6 +223,7 @@ export default function RightSidebar({
     activeInstanceId,
     itemIndex: selectedItemIndex,
     refreshKey: styleRefreshKey + styleVersion,
+    runtimeStyle,
   });
   const sourceTabs = useMemo(
     () =>

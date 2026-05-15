@@ -186,6 +186,41 @@ export function hexWithAlpha(hex: string, opacity: string): string {
   return `#${cleanHex}${alphaHex}`;
 }
 
+/**
+ * Normalize a browser computed color value (rgb/rgba) to hex or hex-with-alpha.
+ *
+ * Returns '#rrggbb' for fully opaque, '#rrggbbaa' when alpha < 1, null for transparent/unset.
+ * Used to bridge iframe computed-style values into the Inspector's hex-based color model.
+ */
+export function normalizeComputedColor(value: string): string | null {
+  if (!value || value === 'transparent') return null;
+
+  const rgbaMatch = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/i.exec(value);
+  if (rgbaMatch) {
+    const r = Number.parseInt(rgbaMatch[1], 10);
+    const g = Number.parseInt(rgbaMatch[2], 10);
+    const b = Number.parseInt(rgbaMatch[3], 10);
+    const a = Number.parseFloat(rgbaMatch[4]);
+    if (a === 0) return null;
+    const hex = rgbToHex(r, g, b);
+    if (a >= 1) return hex;
+    const alphaHex = Math.round(a * 255)
+      .toString(16)
+      .padStart(2, '0');
+    return `${hex}${alphaHex}`;
+  }
+
+  const rgbMatch = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i.exec(value);
+  if (rgbMatch) {
+    const r = Number.parseInt(rgbMatch[1], 10);
+    const g = Number.parseInt(rgbMatch[2], 10);
+    const b = Number.parseInt(rgbMatch[3], 10);
+    return rgbToHex(r, g, b);
+  }
+
+  return null;
+}
+
 /** Parse hex with alpha channel (#rrggbbaa) → { color: '#rrggbb', opacity: '0-100' } */
 export function parseHexWithAlpha(hex: string): {
   color: string;

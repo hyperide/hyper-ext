@@ -6,7 +6,7 @@
  * manages overlay rendering, and handles context menu events.
  */
 
-import type { SharedEditorState } from '@lib/types';
+import type { SelectedElementRuntimeStyle, SharedEditorState } from '@lib/types';
 import {
   clearOverlays,
   renderOverlayRects,
@@ -98,6 +98,11 @@ export function useCanvasInteraction(
     // Re-derive origin after iframe navigates (e.g. devserver URL update)
     function handleIframeLoad() {
       iframeOriginRef.current = getIframeOrigin(frame);
+      // Clear stale runtime style on component change / iframe reload
+      canvas.sendEvent({
+        type: 'state:update',
+        patch: { selectedElementRuntimeStyle: null },
+      });
     }
     frame.addEventListener('load', handleIframeLoad);
 
@@ -148,8 +153,36 @@ export function useCanvasInteraction(
           if (msg.source) {
             patch.source = msg.source;
           }
+          if (msg.computedStyle && typeof msg.computedStyle === 'object') {
+            const refMatch = typeof elementId === 'string' ? elementId.match(/^(.+):\d+:\d+$/) : null;
+            patch.selectedElementRuntimeStyle = {
+              componentPath: refMatch ? refMatch[1] : null,
+              elementId,
+              itemIndex: msg.itemIndex ?? null,
+              seq: typeof msg.computedStyleSeq === 'number' ? msg.computedStyleSeq : Date.now(),
+              computedStyle: msg.computedStyle as Record<string, string>,
+            } satisfies SelectedElementRuntimeStyle;
+          }
           canvas.sendEvent({ type: 'state:update', patch });
           setContextMenu(null);
+          break;
+        }
+
+        case 'hypercanvas:computedStyleResult': {
+          const elementId = typeof msg.elementId === 'string' ? msg.elementId : null;
+          if (!elementId || !msg.computedStyle || typeof msg.computedStyle !== 'object') break;
+          const refMatch = elementId.match(/^(.+):\d+:\d+$/);
+          const runtimeStyle: SelectedElementRuntimeStyle = {
+            componentPath: refMatch ? refMatch[1] : null,
+            elementId,
+            itemIndex: typeof msg.itemIndex === 'number' ? msg.itemIndex : null,
+            seq: typeof msg.computedStyleSeq === 'number' ? msg.computedStyleSeq : Date.now(),
+            computedStyle: msg.computedStyle as Record<string, string>,
+          };
+          canvas.sendEvent({
+            type: 'state:update',
+            patch: { selectedElementRuntimeStyle: runtimeStyle },
+          });
           break;
         }
 
@@ -169,6 +202,7 @@ export function useCanvasInteraction(
           const emptyPatch: Partial<SharedEditorState> = {
             selectedIds: [],
             insertTargetId: null,
+            selectedElementRuntimeStyle: null,
           };
           canvas.sendEvent({ type: 'state:update', patch: emptyPatch });
           setContextMenu(null);
