@@ -4733,3 +4733,63 @@ Bridge bot current-session discovery and E2E disk-save cleanup,
     time is inside the documented 15:00-21:00 no-Claude interval.
   * Full E2E has not yet been restarted after commit 81bec84.
 ```
+
+Bridge bot report pagination and E2E teardown noise fix,
+2026-04-22 18:25 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commits:
+  * 5f618b8 fix: persist Telegram pagination for reports
+  * aa681de fix: paginate current-session candidate list
+- Trigger:
+  * `scripts/send-tg-report.sh` still used raw Telegram `sendMessage`, so
+    long report/status messages bypassed the HTML pagination code path.
+  * Shell startup noise from zplug appeared in forwarded output:
+    `touch/rm: /opt/homebrew/opt/zplug/log/...: Operation not permitted`.
+  * A user message hit `sendMessage: Bad Request: message is too long` while
+    showing dozens of current-session candidates.
+- Fix:
+  * Added a disk-backed paged-message store shared by the bot process and
+    one-way report sender.
+  * Added `src/send-report.ts`; `scripts/send-tg-report.sh` now pipes text
+    into that sender instead of calling Telegram `sendMessage` directly.
+  * Page callbacks can reload stored page payloads after bot restart.
+  * Telegram HTML output strips ANSI escapes and filters the zplug startup
+    permission-noise lines before escaping/pagination.
+  * Current-session candidate details now go through paginated HTML first;
+    the candidate chooser is a separate short button message.
+- Validation:
+  * `bun test` passed 29/29.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * `bash -n scripts/send-tg-report.sh` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; active PID observed:
+    53013.
+  * Sent a post-restart report through `send-tg-report.sh`; stored payload had
+    4 pages and `hasZplug: false`.
+  * `logs/launchd.err.log` mtime remained `2026-04-22 17:06:17`, so no new
+    bot stderr errors appeared after restart.
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: 4a59e0b test(e2e): ignore teardown-only disposed webview noise
+- Trigger:
+  * Full E2E restarted with `--retries=0 --workers=1` and stopped at first
+    fail marker around `139/2209`.
+  * Failing test:
+    `log entries with stack traces are expandable`.
+  * Product scenario passed, but fixture teardown after `Hyper: Close Preview`
+    captured VS Code workbench internal console errors:
+    `OverlayWebview has been disposed`.
+- Fix:
+  * The harness now ignores that specific workbench disposal noise only after
+    test teardown has started.
+  * If the same error appears during the test body, before teardown, it still
+    counts as an unexpected test error.
+- Validation:
+  * Focused E2E passed 1/1 with `--retries=0 --workers=1`:
+    `dev-server-lifecycle.spec.ts -g "log entries with stack traces are expandable"`.
+  * `git diff --check -- e2e/fixtures/base.fixture.ts` passed.
+- Next step:
+  * Restart full E2E with `--retries=0 --workers=1` and continue monitoring
+    fail markers, VS Code windows/dialogs, CPU, and memory.
+```
