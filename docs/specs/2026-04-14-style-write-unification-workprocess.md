@@ -5385,3 +5385,236 @@ Focused elements-tree verification after active run stop, 2026-04-22 22:58 CEST:
   * Start focused, with a durable log or foreground tool session, not a full
     suite restart.
 ```
+
+Claude review, 2026-04-22 23:00 CEST:
+
+```text
+- Scope:
+  * `/Users/ultra/work/ext-test-projects/e2e/tests/project-independent/mcp-setup.spec.ts`
+  * `/Users/ultra/work/ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts`
+  * This workprocess file.
+- Command:
+  * `claude -p` read-only review; no nested Codex.
+- Result:
+  * No blocker findings.
+  * Medium: `ensureQuickPickRowChecked` could double-toggle the canPickMany
+    row by clicking and then pressing Space before `aria-checked` settled.
+  * Low: the MCP setup helper said "select all" but used a fixed agent list;
+    if a new agent appeared, the test could keep passing while skipping it.
+  * Low: the malformed JSON test accepted any status >= 400, despite the
+    intended result being HTTP 400.
+  * Low: `parseMcpResponse` could throw on a non-JSON SSE data candidate
+    instead of continuing to later candidates.
+  * Low: `callMcpTool` returned the full payload when `result` was missing,
+    which biased protocol-shape failures toward passing assertions.
+  * Informational: the workprocess entry for ET-11 was acceptable; the failure
+    was reproduced focused, the shard passed, and the deferral is conditional
+    on reappearance rather than hidden by retry.
+  * Informational: the `expected-runtime-errors` annotation on malformed JSON
+    is acceptable because the test intentionally triggers the parse error.
+- Fixes applied after review:
+  * These fixes are currently in the `ext-test-projects` working tree; they
+    still need a separate E2E-repo commit before the review loop is considered
+    fully closed.
+  * Removed the fallback Space toggle from `ensureQuickPickRowChecked`; the row
+    now clicks once and polls for checked state.
+  * Added an exact QuickPick row-count assertion for the expected AI agent
+    labels so new options fail visibly.
+  * Changed malformed JSON assertion to require HTTP 400.
+  * Made MCP SSE parsing skip malformed JSON candidates and keep looking for a
+    JSON-RPC `result` or `error`.
+  * Changed `callMcpTool` to return only `result` and fail on `error`.
+- Required validation before commit:
+  * Focused `mcp-setup.spec.ts`.
+  * Focused MCP tools coverage for `list_color_tokens`, `malformed JSON`, and
+    `concurrent tool calls`.
+  * Then rerun the full `mcp-tools.spec.ts` slice with durable logging and
+    first-failure analysis.
+```
+
+Focused MCP failure-family verification, 2026-04-22 23:02 CEST:
+
+```text
+- Purpose:
+  * This is a focused repro of the previously observed full-run failure
+    families, not the required post-review validation sequence from 23:00.
+- Follow-up to the prior full-run artifacts:
+  * `mcp-setup...opencode-json-created`.
+  * `mcp-tools...returns-within-reasonable-time`.
+- Focused `mcp-setup` repro:
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-setup.spec.ts`
+    `-g "opencode.json created" --retries=0 --workers=1 --reporter=line`.
+  * Result: 1/1 passed in 5.4s.
+- Focused `mcp-tools` repro:
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts`
+    `-g "timeout on slow operation" --retries=0 --workers=1 --reporter=line`.
+  * Result: 1/1 passed in 5.5s.
+- Interpretation:
+  * Together with the previous 22:58 ET-11 focused pass, the three observed
+    full-run failure families now pass as focused repros:
+    ET-11, mcp-setup opencode, and mcp-tools timeout.
+  * Treat the full-run artifacts as stale/environmental until a focused shard
+    or a final verification run reproduces a concrete failure.
+- Next target:
+  * Run the surrounding MCP shards next, still focused and serial.
+  * Do not restart the 2209-test full suite until the surrounding shards are
+    clean and process/log monitoring is stable.
+```
+
+MCP required validation partial checkpoint, 2026-04-22 23:06 CEST:
+
+```text
+- Required checks 1-2 completed after the 23:00 Claude review:
+  * Full `mcp-setup.spec.ts`:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-setup.spec.ts`
+    `--retries=0 --workers=1 --reporter=line`.
+    Result: 15/15 passed in 37.7s.
+  * Focused `mcp-tools.spec.ts` coverage for the reviewed behaviors:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts`
+    `-g "hyper_list_color_tokens|malformed JSON input|concurrent tool calls"`
+    `--retries=0 --workers=1 --reporter=line`.
+    Result: 6/6 passed in 12.0s.
+- Diagnostics:
+  * The malformed JSON tests intentionally produced parse/runtime diagnostics.
+    This is the same `expected-runtime-errors` path called out in the 23:00
+    Claude review. The test harness marked the diagnostics as expected and
+    cleared them afterwards; this means the final diagnostic state was checked
+    clean, not silently ignored.
+- Interrupted follow-up:
+  * A full `mcp-tools.spec.ts` slice was started with 80 tests.
+  * It had passed the first three tests and reached
+    `hyper_insert_element with import — import statement added`.
+  * The process exited with code `-1` during the context/tool transition rather
+    than producing a Playwright assertion failure or final summary.
+  * Working hypothesis: resource pressure or session interruption, not a known
+    product assertion failure. Re-run on a quieter system state before using
+    this slice as evidence.
+  * Post-transition process check showed no remaining `playwright test`,
+    `hvsc-*`, or Vite dev-server process.
+  * This is not counted as a green or red test result; rerun the slice with a
+    durable log before treating the MCP shard as verified.
+- Resource state after the interrupted slice:
+  * Load average: about `9.27 6.35 5.30`.
+  * `vm_stat` showed `Pages throttled: 0`.
+  * Free pages: about `310748`.
+- Next command:
+  * Re-run `tests/project-independent/mcp-tools.spec.ts` serially with
+    `--retries=0 --workers=1 --reporter=line` and a durable `/tmp` log.
+  * Stop on the first real failure; do not move to the 2209-test full suite
+    until this shard is clean.
+```
+
+Claude follow-up fixes and E2E guard, 2026-04-22 23:10 CEST:
+
+```text
+- Applied Claude review fixes:
+  * `mcp-setup.spec.ts`: removed the second Space toggle after row click and
+    added exact row-count assertion for the known AI agent QuickPick.
+  * `mcp-tools.spec.ts`: malformed JSON now requires HTTP 400.
+  * `mcp-tools.spec.ts`: JSON-RPC SSE parser now skips non-JSON candidates,
+    fails on JSON-RPC `error`, and returns only `result`.
+- Focused validation:
+  * `bun test e2e/setup/electron-app.test.ts`: 3/3 passed.
+  * `mcp-setup.spec.ts`: 15/15 passed before the launch-guard addition.
+  * `mcp-tools.spec.ts -g "list_color_tokens|malformed JSON|concurrent tool calls"`:
+    6/6 passed.
+- Full `mcp-tools.spec.ts` fail-fast attempt:
+  * Command used durable log `/tmp/hyper-mcp-tools-2303.log` and
+    `--max-failures=1`.
+  * It stopped at `hyper_inject_element_ids — idempotent`.
+  * Body work completed, but teardown timed out at `File: Save All` after 60s.
+  * Investigation found a second stale `mcp-tools` Playwright process from the
+    earlier run, using the same `workerIndex=0`, same dev-server port `10000`,
+    and a second `hvsc-0-*` VS Code window.
+  * That made the full-run failure contaminated by port/window collision, not a
+    clean product failure.
+- Systemic fix added in ext-test harness:
+  * `launchVSCode()` now refuses to start when another `hvsc-<worker>-*` VS Code
+    process or `bun run dev -- --port <workerPort>` already exists.
+  * New unit tests cover VS Code conflict detection, dev-server conflict
+    detection, and clean launch allowance.
+- Clean focused repro after the guard:
+  * `mcp-tools.spec.ts -g "hyper_inject_element_ids — idempotent"` passed 1/1.
+  * Teardown `File: Save All` completed in about 223ms.
+- Process state:
+  * After the focused repro, no matching `playwright test`, `hvsc-*`, or
+    `bun run dev` processes remained.
+- Next:
+  * Rerun the full `mcp-tools.spec.ts` fail-fast slice cleanly. If it fails,
+    analyze the new first failure; if it passes, commit the ext-test fixes
+    atomically and then commit this workprocess update.
+```
+
+Clean full MCP tools validation, 2026-04-22 23:18 CEST:
+
+```text
+- False start:
+  * A foreground `exec_command` full run with redirected output was killed by
+    the tool session around 29/80, leaving no Playwright summary.
+  * Lesson applied immediately: long E2E runs must be detached/backgrounded and
+    monitored via `tail`, not held as foreground exec sessions.
+- Clean monitored run:
+  * Log: `/tmp/hyper-mcp-tools-clean-20260422-231304.log`.
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts`
+    `--retries=0 --workers=1 --reporter=line --max-failures=1`.
+  * Result: 77 passed, 3 skipped, 0 failed in 5.2m.
+  * The previous failure point,
+    `hyper_inject_element_ids — idempotent`, passed cleanly.
+  * The malformed JSON test emitted only annotated expected runtime errors and
+    cleared them afterward.
+- Process/resource state:
+  * The clean run used a single `node ./node_modules/.bin/playwright test`
+    runner and one `hvsc-0-f3f3b1ce` VS Code user-data-dir.
+  * Worker teardown closed VS Code and removed the `hvsc-0-f3f3b1ce`
+    user-data-dir.
+  * After teardown, `pgrep -fl "playwright test|hvsc-|bun run dev"` returned no
+    active E2E processes.
+  * Load average: about `4.83 5.31 5.28`.
+  * `vm_stat` showed `Pages throttled: 0`.
+  * Free pages recovered to about `251823`.
+- Next:
+  * Run final Claude review on the final E2E diff before committing, because
+    the current time is outside the 15:00-21:00 no-extra-Claude window.
+  * Commit ext-test changes atomically, then update/commit this workprocess.
+```
+
+E2E commit gate after clean MCP shard, 2026-04-22 23:25 CEST:
+
+```text
+- E2E repo validation completed:
+  * `git diff --check` on the four intended files passed.
+  * `bun test e2e/setup/electron-app.test.ts` passed 3/3.
+  * Earlier required checks still stand:
+    `mcp-setup.spec.ts` passed 15/15 and focused reviewed
+    `mcp-tools` coverage passed 6/6.
+  * Clean full `mcp-tools.spec.ts` passed 77 runnable tests with 3 skipped and
+    0 failures; see the 23:18 entry above.
+- Commit gate:
+  * Relevant E2E files to commit:
+    `e2e/setup/electron-app.ts`,
+    `e2e/setup/electron-app.test.ts`,
+    `e2e/tests/project-independent/mcp-setup.spec.ts`,
+    `e2e/tests/project-independent/mcp-tools.spec.ts`.
+  * The E2E repo still contains unrelated staged/unstaged changes, so commit
+    only these files and do not touch the rest of the index.
+  * Required Claude review before the E2E commit is currently blocked:
+    three `claude -p --no-session-persistence --model sonnet` attempts
+    produced no stdout and were killed instead of being treated as a review.
+  * A docs-only Claude review with timeout confirmed this gate as the remaining
+    blocker.
+  * Do not claim the E2E code commit is complete until a Claude review result
+    exists or the user explicitly waives that gate.
+```
