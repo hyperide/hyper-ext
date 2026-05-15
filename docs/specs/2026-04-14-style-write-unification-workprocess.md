@@ -1181,3 +1181,48 @@ Cycle outcome looking like: matrix is green except for 1
 architectural limitation that needs HYP-289 ticket. Will let
 both shards finish, write the final tally, atomic-commit any
 remaining working tree, and report final outcome via TG.
+
+### 2026-04-25, 17:30 CEST: `component with error — error overlay appears` Cat-2 root cause + skip
+
+Sub-agent investigation of the lingering Cat-2 cluster on
+`tamagui-banking` (and the same failure on `tamagui-fitness`,
+`tamagui-food-delivery`, `tamagui-uber` per earlier shard runs).
+
+**Root cause classification: (a) — test premise broken on RN-Web
+projects.** All Tamagui projects ship a platform-specific shadow
+file `App.web.tsx` next to `App.tsx`. Their `vite.config.ts`
+sets `resolve.extensions: ['.web.tsx', '.web.ts', ...]` BEFORE
+`.tsx`, so `import App from '../App'` in `src/main.tsx` resolves
+to `App.web.tsx`. The test opens `componentNames[0]` (which the
+auto-detect picks as `App.tsx` in the editor) and types
+`<div<div>;` after `End` on line 1. The corrupted file is
+`App.tsx` — but Vite's module graph never references it, so the
+syntax error is invisible to the parser, no overlay fires, the
+preview keeps rendering, the 15s poll exhausts, body fails.
+
+Hypothesis (b) — extension's HYP-363 preview shell intercepting
+the overlay — **ruled out**: `getPreviewShellScreen` only switches
+to `disconnected` when the dev server actually stops, which a
+Vite syntax error does not do. The shell stays in `'preview'`,
+the iframe stays mounted, and the test's selectors would still
+work if there were an actual overlay to find.
+
+**Fix**: skip on `cssSystem === 'tamagui'` in
+`e2e/tests/project-dependent/preview-render.spec.ts:283`. The
+existing `bundler !== 'vite'` skip stays. Comment in the test
+explains the `.web.tsx` shadow rationale so the next reader
+doesn't try to "re-enable" it. Why this is safe — error-overlay
+coverage is exercised on every other Vite project (kanban,
+twitter, spotify, shopify, dashboard, notion, calendar, drive,
+linear, instagram, portfolio + the experimental matrix), so we
+lose zero unique signal by skipping on the four tamagui dirs
+that physically can't satisfy the test premise.
+
+Affected test-projects: `tamagui-banking`, `tamagui-fitness`,
+`tamagui-food-delivery`, `tamagui-uber`, `tamagui-whatsapp` (the
+fifth Tamagui project, also configured with the same Vite
+resolve order — preemptive coverage).
+
+Commit lands in `ext-test-projects` only; no `hyper-canvas-draft`
+change required (root cause is in test-project config + test
+assumption, not in extension code).
