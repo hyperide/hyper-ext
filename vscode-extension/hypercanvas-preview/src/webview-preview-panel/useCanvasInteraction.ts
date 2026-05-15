@@ -51,6 +51,30 @@ export function sourceToElementId(source: unknown): string | null {
   return null;
 }
 
+/**
+ * Creates a transparent full-viewport ghost div that intercepts all pointer events
+ * during a resize drag. Without this, CDP-dispatched pointerup events fall through
+ * pointer-events:none overlay elements into the nested preview iframe and never
+ * reach the webview document's listeners.
+ */
+export function createDragGhost(axis: 'width' | 'height'): HTMLDivElement {
+  const ghost = document.createElement('div');
+  ghost.style.cssText = [
+    'position:fixed',
+    'top:0',
+    'right:0',
+    'bottom:0',
+    'left:0',
+    `z-index:${Number.MAX_SAFE_INTEGER}`,
+    'pointer-events:all',
+    `cursor:${axis === 'width' ? 'ew-resize' : 'ns-resize'}`,
+    'touch-action:none',
+    'user-select:none',
+    'background:transparent',
+  ].join(';');
+  return ghost;
+}
+
 /** Derive the origin from an iframe's src attribute, or null if unknown. */
 function getIframeOrigin(frame: HTMLIFrameElement): string | null {
   try {
@@ -334,8 +358,9 @@ export function useCanvasInteraction(
     // Handle dots have pointer-events:auto; events bubble through the container's
     // pointer-events:none to this listener.
 
-    // Track doc-level fallback listener so effect cleanup can remove it if effect tears down mid-drag.
+    // Track doc-level fallback listener and ghost so effect cleanup can remove them if effect tears down mid-drag.
     let activeDocPointerUp: ((e: PointerEvent) => void) | null = null;
+    let activeGhost: HTMLDivElement | null = null;
 
     function handleResizePointerDown(event: PointerEvent) {
       if (event.button !== 0) return;
@@ -366,12 +391,24 @@ export function useCanvasInteraction(
       }
       event.stopPropagation();
 
+      // Ghost div intercepts all pointer events during drag. CDP-dispatched pointerup
+      // from window.mouse.up() would otherwise fall through pointer-events:none overlay
+      // elements into the nested preview iframe, never reaching webview listeners.
+      const ghost = createDragGhost(axis);
+      document.body.appendChild(ghost);
+      activeGhost = ghost;
+
       const dragPointerId = event.pointerId;
       let dragFinished = false;
 
       function finishDrag(endX: number, endY: number) {
         if (dragFinished) return;
         dragFinished = true;
+
+        ghost.removeEventListener('pointerup', onPointerUp);
+        ghost.removeEventListener('pointercancel', onPointerCancel);
+        ghost.remove();
+        activeGhost = null;
 
         capturedHandle.removeEventListener('pointermove', onPointerMove);
         capturedHandle.removeEventListener('pointerup', onPointerUp);
@@ -382,6 +419,7 @@ export function useCanvasInteraction(
         const dX = endX - startX;
         const dY = endY - startY;
         const styles = computeResizeStyles(axis, baseW, baseH, dX, dY);
+        console.log('[resize] finishDrag', { axis, dX, dY, styles, elementId: capturedElementId });
         if (!styles) return;
 
         // size-* sets both axes — stripping it for one axis loses the other.
@@ -418,6 +456,10 @@ export function useCanvasInteraction(
       function onPointerCancel() {
         if (dragFinished) return;
         dragFinished = true;
+        ghost.removeEventListener('pointerup', onPointerUp);
+        ghost.removeEventListener('pointercancel', onPointerCancel);
+        ghost.remove();
+        activeGhost = null;
         capturedHandle.removeEventListener('pointermove', onPointerMove);
         capturedHandle.removeEventListener('pointerup', onPointerUp);
         capturedHandle.removeEventListener('pointercancel', onPointerCancel);
@@ -429,6 +471,8 @@ export function useCanvasInteraction(
       function onPointerMove(_e: PointerEvent) {}
 
       activeDocPointerUp = onDocPointerUp;
+      ghost.addEventListener('pointerup', onPointerUp);
+      ghost.addEventListener('pointercancel', onPointerCancel);
       capturedHandle.addEventListener('pointermove', onPointerMove);
       capturedHandle.addEventListener('pointerup', onPointerUp);
       capturedHandle.addEventListener('pointercancel', onPointerCancel);
@@ -459,6 +503,10 @@ export function useCanvasInteraction(
       container.removeEventListener('pointerdown', handleResizePointerDown);
       container.removeEventListener('contextmenu', handleResizeContextMenu);
       if (activeDocPointerUp) document.removeEventListener('pointerup', activeDocPointerUp);
+      if (activeGhost) {
+        activeGhost.remove();
+        activeGhost = null;
+      }
       clearOverlays(overlayElements.current);
       clearOverlays(placeholderElements.current);
     };

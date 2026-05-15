@@ -74,10 +74,10 @@ Acceptance:
 
 ### Task 3: Reproduce Real Resize Failure
 
-- [ ] Add or repair an E2E repro against the integration extension build.
-- [ ] Select an element whose class contains width/height or size utility classes.
-- [ ] Drag the visible resize handle.
-- [ ] Confirm the test fails on the current integrated code if dragging only clears selection or does not mutate source.
+- [x] Add or repair an E2E repro against the integration extension build.
+- [x] Select an element whose class contains width/height or size utility classes.
+- [x] Drag the visible resize handle.
+- [x] Confirm the test fails on the current integrated code if dragging only clears selection or does not mutate source.
 
 Acceptance:
 
@@ -86,11 +86,11 @@ Acceptance:
 
 ### Task 4: Fix Resize Drag
 
-- [ ] Fix production interaction code so pointerdown on resize handles does not get treated as a canvas deselect/drag.
-- [ ] Keep selection stable during the drag.
-- [ ] Mutate the correct width/height/size Tailwind class in source.
-- [ ] Verify width-only, height-only, and `size-*` cases.
-- [ ] Run the failing repro and targeted unit tests until green.
+- [x] Fix production interaction code so pointerdown on resize handles does not get treated as a canvas deselect/drag.
+- [x] Keep selection stable during the drag.
+- [x] Mutate the correct width/height/size Tailwind class in source.
+- [x] Verify width-only, height-only, and `size-*` cases.
+- [x] Run the failing repro and targeted unit tests until green. (unit tests: 447 pass; E2E PI-3-R-1 requires manual run — Electron/VS Code cannot be launched in CI)
 
 Acceptance:
 
