@@ -724,7 +724,7 @@ export function activate(context: vscode.ExtensionContext) {
               )
               .then(async (choice) => {
                 if (choice === 'Auto fix') {
-                  const prompt = await buildNeedsPatchPrompt(workspaceRoot, vsCodeIO);
+                  const prompt = await buildNeedsPatchPrompt(currentWorkspaceRoot, vsCodeIO);
                   aiChatProvider?.sendAIPrompt(prompt);
                 }
               });

@@ -32,6 +32,7 @@ export class PanelRouter {
   private _styleReadService: StyleReadService;
   private _workspaceRoot: string;
   private _context: vscode.ExtensionContext;
+  private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
   private _onElementTracingMessage?: (msg: TracingClientMessage) => void;
 
@@ -260,6 +261,7 @@ export class PanelRouter {
    * Called when a panel is created or focused.
    */
   setAstResponseTarget(webview: vscode.Webview): void {
+    this._currentWebview = webview;
     this._astBridge.setWebview(webview);
   }
 
@@ -298,6 +300,7 @@ export class PanelRouter {
     if (!workspaceRoot || workspaceRoot === this._workspaceRoot) return;
     this._workspaceRoot = workspaceRoot;
     this._astBridge = new AstBridge(workspaceRoot);
+    if (this._currentWebview) this._astBridge.setWebview(this._currentWebview);
     this._componentService = this._createComponentService(workspaceRoot);
     this._styleReadService = this._createStyleReadService(workspaceRoot);
   }
