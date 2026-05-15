@@ -4822,11 +4822,15 @@ Bridge bot page-callback hardening and full E2E restart,
     68361.
   * Sent a new long paginated report after restart asking the user to press
     `Next`/`Prev`.
-  * As of this note, no `page callback` log line has appeared yet.
+  * Follow-up log check confirmed callbacks are now reaching the bot:
+    `page:071a6a6b6bbd:1`, `page:071a6a6b6bbd:2`, and
+    `page_noop:071a6a6b6bbd:2`.
+  * No `Failed to answer` or `Failed to edit paged` errors were present in
+    the callback log scan.
 - E2E:
   * Full E2E restarted at `/tmp/hyper-e2e-full-20260422-1827.log` with
     `--retries=0 --workers=1`.
   * The previous failure point passed:
     `log entries with stack traces are expandable` at `139/2209`.
-  * Progress observed at `150/2209`; no `[test-errors]` or save dialogs.
+  * Progress observed at `234/2209`; no `[test-errors]` or save dialogs.
 ```
