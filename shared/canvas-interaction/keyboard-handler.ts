@@ -26,7 +26,7 @@ export interface NodeMapLookup {
 }
 
 export interface KeyboardHandlerCallbacks {
-  onSelectElement: (id: string) => void;
+  onSelectElement: (id: string, itemIndex?: number | null) => void;
   onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;
   onDeleteElements: (ids: string[]) => void;
@@ -173,14 +173,15 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
 
       const shiftKey = e.shiftKey;
       enterDebounceTimer = setTimeout(() => {
-        const { selectedIds: freshIds } = getState();
+        const { selectedIds: freshIds, selectedItemIndices } = getState();
         const freshId = freshIds[0];
         if (!freshId) return;
 
         if (shiftKey) {
           const parentRef = findParentNodeRef(freshId, nodeMapLookup);
           if (parentRef) {
-            callbacks.onSelectElement(parentRef);
+            const itemIndex = selectedItemIndices?.[freshId];
+            callbacks.onSelectElement(parentRef, itemIndex);
           } else {
             callbacks.onClearSelection();
           }

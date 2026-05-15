@@ -1288,6 +1288,7 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   getState: () => ({
     selectedIds: state.selectedIds,
     activeInstanceId,
+    selectedItemIndices: state.selectedItemIndices,
   }),
   getDocument: () => document,
   callbacks: {
