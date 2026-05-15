@@ -40,7 +40,12 @@
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
 
-- **Run #40** (`run-20260430-112941-82810`, 2026-04-30 13:29 CEST) — **IN PROGRESS**. 3 shards.
+- **Run #41** (`run-20260430-123732-60926`, 2026-04-30 12:37 CEST) — **RUNNING** (~15 min). 3 shards.
+  - New fixes vs run #40: `9fc8de3d` (hash nodeRef cross-file fallback), `9aca060d` (debug logging gate), `225658f4` (cross-file undo fix + client/ nodeMap), `a9d096b` in ext-test-projects (App.tsx fallback scan)
+  - S3 early results: Tamagui "style written as prop" → **PASSED (12.9s)**; ast-debug.log confirms `resolvedPath=App.tsx` correct
+  - S1: 41 tests done, 0 fails | S2: 2 tests done, 0 fails | S3: 16 tests done, 0 fails (as of 10:52 UTC)
+
+- **Run #40** (`run-20260430-112941-82810`, 2026-04-30 13:29 CEST) — **SUPERSEDED** by run #41.
   - New fixes vs run #39: `b53e1331` (AstService cross-file resolve), `3e39f08e` (ViteReactSSG fallback render), `dee4d183` (bulka client/ root detection + PreviewProxy isolated path), `f756a802` (Tamagui root cause fix: resolveNodeRef file guard)
   - Root causes fixed: Tamagui write went to App.tsx (coordinates of RecordScreen.tsx:10:5 accidentally matched SafeAreaProvider at App.tsx:10:5); bulka 404 (detectRouterFile/detectEntryFile didn't check client/ dir)
 
