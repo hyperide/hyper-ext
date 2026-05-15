@@ -222,13 +222,6 @@ export function findTsDomTextHit(
   return null;
 }
 
-// Property keys that aren't valid JS identifiers (e.g. `foo-bar`, `1key`, `with space`)
-// must be emitted as quoted string-literal keys, not bare identifiers — otherwise
-// babel-generator silently produces unparseable TS like `foo-bar: "val"`.
-function makeObjectPropertyKey(name: string): t.Identifier | t.StringLiteral {
-  return t.isValidIdentifier(name) ? t.identifier(name) : t.stringLiteral(name);
-}
-
 function setStringProperty(object: t.ObjectExpression, key: string, value: string): boolean {
   const parts = key.split('.');
   if (parts.some((part) => FORBIDDEN_KEY_PARTS.has(part))) return false;
@@ -244,7 +237,7 @@ function setStringProperty(object: t.ObjectExpression, key: string, value: strin
     const prop = getObjectProperty(current, parts[i]);
     if (!prop) {
       const child = t.objectExpression([]);
-      current.properties.push(t.objectProperty(makeObjectPropertyKey(parts[i]), child));
+      current.properties.push(t.objectProperty(t.identifier(parts[i]), child));
       current = child;
       continue;
     }
@@ -258,7 +251,7 @@ function setStringProperty(object: t.ObjectExpression, key: string, value: strin
   if (leafProp) {
     leafProp.value = t.stringLiteral(value);
   } else {
-    current.properties.push(t.objectProperty(makeObjectPropertyKey(leaf), t.stringLiteral(value)));
+    current.properties.push(t.objectProperty(t.identifier(leaf), t.stringLiteral(value)));
   }
   return true;
 }
@@ -280,8 +273,5 @@ export function writeTsLocaleValue(content: string, activeLocale: string, key: s
   }
 
   if (!setStringProperty(targetObject, key, value)) return null;
-  // jsescOption.minimal keeps non-ASCII code points verbatim instead of emitting
-  // \uXXXX escapes for freshly-built `t.stringLiteral` nodes. Pre-existing literals
-  // ride through retainLines untouched, but new ones go through jsesc by default.
-  return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
+  return generate(ast, { retainLines: true }).code;
 }
