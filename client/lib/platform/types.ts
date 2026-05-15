@@ -264,6 +264,12 @@ export type PlatformMessage =
   // Scroll iframe to element (tree click → canvas scroll, no selection change)
   | { type: 'iframe:scrollToElement'; elementId: string }
 
+  // Selection-freeze coordination during i18n writes
+  // Sidebar dispatches `start` before the JSX rewrite and `done` in `finally`
+  // so the preview iframe can retain the last-known selection rect during the
+  // HMR window — see docs/plans/2026-05-06-selection-survives-i18n-write.md.
+  | { type: 'iframe:writeI18nResource'; phase: 'start' | 'done' }
+
   // Right panel input focus guard (sidebar webview → extension host)
   // Used to set `hypercanvas.rightPanelInputFocused` context variable so
   // canvas keybindings don't fire while the user types in inspector fields.
@@ -399,7 +405,14 @@ export interface AstOperations {
   /** Update text/expression children of a JSX element */
   updateText(params: { elementId: string; filePath: string; text: string }): Promise<void>;
 
-  /** Write a translated value for an i18n key in the active locale dictionary */
+  /**
+   * Write a translated value for an i18n key in the active locale JSON file.
+   * When `previousKey` triggers a JSX rewrite, the implementation may return
+   * `newElementId` — the canonical `${fileName}:${line}:${column}` ID of the
+   * rewritten JSX element after the write. Callers (e.g. handleI18nKeyChange)
+   * use it to re-broadcast selection in a single dispatch without timeout-spam
+   * kostyls. Browser/SaaS path doesn't rewrite JSX → returns undefined.
+   */
   writeI18nResource(params: {
     library: I18nLibrary;
     key: string;
@@ -414,7 +427,7 @@ export interface AstOperations {
     elementId?: string;
     /** Skip writing to the locale dictionary; only update the JSX expression. */
     skipResourceWrite?: boolean;
-  }): Promise<void>;
+  }): Promise<{ newElementId?: string }>;
 }
 
 // ============================================================================

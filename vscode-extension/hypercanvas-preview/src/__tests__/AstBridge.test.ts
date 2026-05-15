@@ -526,6 +526,61 @@ describe('AstBridge', () => {
     });
   });
 
+  // === Path A: writeI18nResource returns post-write JSX node location ===
+  describe('ast:writeI18nResource newElementId', () => {
+    it('returns data.newElementId equal to elementId when previousKey changes (position invariant)', async () => {
+      mockAstService.updateI18nKey.mockImplementation(() =>
+        Promise.resolve({ success: true, resolvedPath: '/workspace/Greet.tsx' }),
+      );
+      setupFileSnapshotsForPath('/workspace/Greet.tsx', 'before', 'after');
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:writeI18nResource',
+          requestId: 'i18n-1',
+          library: 'react-i18next',
+          key: 'new.key',
+          activeLocale: 'en',
+          newText: 'Hello',
+          previousKey: 'old.key',
+          filePath: '/workspace/Greet.tsx',
+          elementId: 'src/Greet.tsx:5:6',
+          skipResourceWrite: true,
+        } as never,
+        wv as never,
+      );
+
+      const response = wv.messages[0] as { success: boolean; data: { newElementId?: string } };
+      expect(response.success).toBe(true);
+      expect(response.data.newElementId).toBe('src/Greet.tsx:5:6');
+    });
+
+    it('omits newElementId when previousKey is unchanged (no JSX rewrite)', async () => {
+      setupFileSnapshotsForPath('/workspace/Greet.tsx', 'before', 'after');
+
+      const wv = createMockWebview();
+      await bridge.handleMessage(
+        {
+          type: 'ast:writeI18nResource',
+          requestId: 'i18n-2',
+          library: 'react-i18next',
+          key: 'same.key',
+          activeLocale: 'en',
+          newText: 'Hi',
+          filePath: '/workspace/Greet.tsx',
+          elementId: 'src/Greet.tsx:5:6',
+          skipResourceWrite: true,
+        } as never,
+        wv as never,
+      );
+
+      const response = wv.messages[0] as { success: boolean; data: { newElementId?: string } };
+      expect(response.success).toBe(true);
+      expect(response.data.newElementId).toBeUndefined();
+    });
+  });
+
   // === ast:moveElement (Task 7 of move-any-to-any) ===
   describe('ast:moveElement routing and undo', () => {
     it('routes ast:moveElement to astService.moveElement and returns success', async () => {

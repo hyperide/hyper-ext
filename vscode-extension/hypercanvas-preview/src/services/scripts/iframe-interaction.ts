@@ -938,7 +938,6 @@ const state = {
 const SELSURV_TAG = '[selsurv]';
 function logSelsurvSelectedIdsAssign(reason: string, prev: string[], next: string[]): void {
   if (prev.length === next.length && prev.every((v, i) => v === next[i])) return;
-  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
   console.debug(SELSURV_TAG, 'selectedIds change', {
     t: Math.round(performance.now()),
     reason,
@@ -952,7 +951,6 @@ function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: bool
   const key = `${selectedId ?? ''}|${domElementFound}|${rectVisible}`;
   if (key === lastOverlayLogKey) return;
   lastOverlayLogKey = key;
-  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
   console.debug(SELSURV_TAG, 'overlay paint', {
     t: Math.round(performance.now()),
     selectedId,

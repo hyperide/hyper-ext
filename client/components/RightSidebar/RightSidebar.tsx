@@ -754,41 +754,25 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
+      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
+      // pollute prod consoles. Tracks the i18n-key-change flicker window
+      // (Task 1 of selection-survives-i18n-write).
+      const dbg = (label: string, extra?: unknown): void => {
+        const w = window as unknown as Record<string, unknown>;
+        if (!w.__HC_DEBUG_SELECTION) return;
+        // eslint-disable-next-line no-console
+        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
+      };
+      const t0 = performance.now();
+      dbg('start', { previousSelectedId, newKey, isNewKey });
       void (async () => {
         const writeId = crypto.randomUUID();
         if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
-        // Only track navigation in VS Code mode (where i18nDispatch is available and HMR fires).
-        let navigationAway = false;
-        let unsubscribeNavigation: (() => void) | undefined;
-        if (i18nDispatch) {
-          // Detect if user navigates to a different element during the write window.
-          // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
-          unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
-            if (i18nWriteAbortedRef.current) {
-              unsubscribeNavigation?.();
-              return;
-            }
-            if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
-              navigationAway = true;
-              unsubscribeNavigation?.();
-            }
-          });
-        }
-        // Guard: only restore selection if user hasn't navigated to a different element
-        // and the component is still mounted.
-        // navigationAway is set if the user explicitly selected a different element;
-        // HMR-induced transient selectedIds:[] does not set it.
-        // Defined before try so catch can call it too (partial write may have triggered
-        // HMR even when writeI18nResource throws, e.g. JSON wrote → JSX update failed).
-        const restoreIfCurrent = () => {
-          if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
-          const cur = useSharedEditorState.getState().selectedIds;
-          if (cur.length === 0 || cur[0] === previousSelectedId) {
-            i18nDispatch({ selectedIds: [previousSelectedId] });
-          }
-        };
+        // Path B: freeze selection rect during JSX rewrite — HMR gap would otherwise
+        // flicker the outline off until the new fiber settles.
+        canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'start' });
         try {
-          await astOps.writeI18nResource({
+          const writeResult = await astOps.writeI18nResource({
             library: i18nText.library,
             key: newKey,
             namespace: i18nText.namespace,
@@ -799,39 +783,31 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
-          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
-          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
-          // immediately and after a short delay to outrun the HMR window.
-          // Clear writeInProgress in the last timeout (after HMR window) — NOT in finally,
-          // because HMR fires async ~100-500ms after writeI18nResource resolves.
+          dbg('writeI18nResource resolved', writeResult);
+          // Path A: bridge returns post-write canonical ID, single dispatch re-attaches
+          // selection without timeout chains. Falls back to previousSelectedId.
           if (i18nDispatch) {
-            restoreIfCurrent();
-            setTimeout(restoreIfCurrent, 250);
-            setTimeout(() => {
-              restoreIfCurrent();
-              unsubscribeNavigation?.();
-              // Guard: only clear if this write is still the active one — concurrent writes
-              // would overwrite writeId, and the earlier timeout must not clear the later write.
-              if (useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
-                i18nDispatch({ writeInProgress: null });
-              }
-            }, 800);
+            const targetId = writeResult.newElementId ?? previousSelectedId;
+            i18nDispatch({ selectedIds: [targetId] });
+            dbg('dispatch sent', { selectedIds: [targetId] });
           }
         } catch {
-          // Restore selection in case the write partially succeeded (e.g., JSON wrote and
-          // triggered HMR, but the JSX update then threw). Harmless if HMR never fired.
-          restoreIfCurrent();
-          unsubscribeNavigation?.();
-          // key change failed — no rollback needed (source file unchanged)
+          // Restore selection on partial write (JSON wrote but JSX update failed).
+          if (i18nDispatch) {
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+          }
+        } finally {
+          // Always release the freeze, even on throw.
+          canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
+          // Clear writeInProgress so keyBusy disabling is released.
           if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
             i18nDispatch({ writeInProgress: null });
           }
-        } finally {
           setStyleRefreshKey((k) => k + 1);
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys, canvas],
   );
 
   const handleI18nResolvedTextChange = useCallback(

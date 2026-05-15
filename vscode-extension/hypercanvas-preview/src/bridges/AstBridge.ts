@@ -644,6 +644,7 @@ export class AstBridge {
     // current JSX child expression so custom helper shape is preserved.
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     const previousKey = message.previousKey;
+    let newElementId: string | undefined;
     if (i18nFilePath && i18nElementId && previousKey && previousKey !== message.key) {
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
@@ -656,13 +657,16 @@ export class AstBridge {
           error: updateResult.error,
         };
       }
+      // JSX element opening tag position is invariant under key-only rewrites.
+      // Return i18nElementId as canonical post-write ID for Path A selection re-attach.
+      newElementId = i18nElementId;
     }
 
     return {
       type: 'ast:response',
       requestId: message.requestId,
       success: true,
-      data: { filePath: writeResult.filePath },
+      data: { filePath: writeResult.filePath, newElementId },
     };
   }
 
