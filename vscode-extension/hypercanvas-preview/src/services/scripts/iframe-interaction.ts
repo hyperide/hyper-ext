@@ -31,7 +31,6 @@ import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tra
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
-import { applySelectionGraceCache, makeSelectionGraceCacheState } from './selection-grace-cache';
 
 // ============================================
 // Composition helpers (combine shared fiber primitives for IIFE-specific use)
@@ -311,45 +310,6 @@ devtoolsHook.onCommitFiberRoot = (...args: unknown[]) => {
   requestServerSourceMaps();
   originalCommit?.(...args);
 };
-
-// Hook into Vite HMR so the source-cache rebuild and source-map warm cycle fire
-// against the freshly-applied module BEFORE the next overlay paint queries it.
-// Without this, the cache is invalidated only when React commits — which can lag
-// behind the Vite swap by a frame or two and produces the visible 500ms gap users
-// reported when changing i18n keys (HYP — selection-survive-text-change Task 3).
-//
-// vite:beforeUpdate fires while the old module is still mounted; do not invalidate
-// here, just remember to refresh maps. vite:afterUpdate fires once HMR finishes
-// applying the new module, which is when the new fibers exist — invalidate then.
-type ViteHmrApi = {
-  on(event: 'vite:beforeUpdate' | 'vite:afterUpdate', cb: () => void): void;
-};
-type WindowWithHmr = typeof window & { __vite_hot__?: ViteHmrApi };
-function tryRegisterViteHmrHooks(): boolean {
-  const api = (window as WindowWithHmr).__vite_hot__;
-  if (!api || typeof api.on !== 'function') return false;
-  api.on('vite:afterUpdate', () => {
-    invalidateSourceCache();
-    void warmClientSourceMaps();
-    requestServerSourceMaps();
-    needsOverlayUpdate = true;
-    scheduleOverlayLoopIfNeeded();
-  });
-  return true;
-}
-// __vite_hot__ may not exist yet during the first frames after iframe load — Vite
-// installs it asynchronously when the runtime client boots. Poll briefly until it
-// shows up; give up after 5s rather than leaking a forever-running interval.
-if (!tryRegisterViteHmrHooks()) {
-  const HMR_HOOK_POLL_MS = 100;
-  const HMR_HOOK_TIMEOUT_MS = 5000;
-  const start = performance.now();
-  const intervalId = setInterval(() => {
-    if (tryRegisterViteHmrHooks() || performance.now() - start > HMR_HOOK_TIMEOUT_MS) {
-      clearInterval(intervalId);
-    }
-  }, HMR_HOOK_POLL_MS);
-}
 
 // ============================================
 // Approach A: client-side Next.js source map pre-warming
@@ -890,37 +850,6 @@ const state = {
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
-
-// === Selection-survive diagnostics (Task 2 of selection-survive-text-change plan) ===
-// Tag: [selsurv]. Goal: pinpoint whether the 500ms gap user reports is
-// (a) selectedIds[0] reset to empty/different value, or
-// (b) DOM lookup miss for an unchanged ID (cache wiped by HMR).
-// Filter logs in DevTools console with `[selsurv]`.
-const SELSURV_TAG = '[selsurv]';
-function logSelsurvSelectedIdsAssign(reason: string, prev: string[], next: string[]): void {
-  if (prev.length === next.length && prev.every((v, i) => v === next[i])) return;
-  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
-  console.debug(SELSURV_TAG, 'selectedIds change', {
-    t: Math.round(performance.now()),
-    reason,
-    prev,
-    next,
-  });
-}
-let lastOverlayLogKey = '';
-function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: boolean, rectVisible: boolean): void {
-  // Coalesce identical consecutive paints so the console isn't flooded.
-  const key = `${selectedId ?? ''}|${domElementFound}|${rectVisible}`;
-  if (key === lastOverlayLogKey) return;
-  lastOverlayLogKey = key;
-  // biome-ignore lint/suspicious/noConsole: diagnostic logging gated by tag, see Task 2
-  console.debug(SELSURV_TAG, 'overlay paint', {
-    t: Math.round(performance.now()),
-    selectedId,
-    domElementFound,
-    rectVisible,
-  });
-}
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -940,7 +869,6 @@ attachClickHandler(
       if (additive) {
         const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
         const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
-        logSelsurvSelectedIdsAssign('click:additive', state.selectedIds, nextIds);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
       } else {
@@ -950,7 +878,6 @@ attachClickHandler(
         // state.selectedIds is populated — matches sourceToElementId() in the extension host.
         const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
         if (effectiveRef) {
-          logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
         }
@@ -1213,6 +1140,16 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
+function _dragEffectiveBg(el: HTMLElement): string {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    node = node.parentElement;
+  }
+  return '#ffffff';
+}
+
 function _isHorizontalLayout(el: HTMLElement): boolean {
   const parent = el.parentElement;
   if (!parent) return false;
@@ -1230,12 +1167,9 @@ let _dragStartX = 0;
 let _dragStartY = 0;
 let _dragSuppressNextClick = false;
 let _dragSourceEl: HTMLElement | null = null;
-let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
 let _dragBadgeEl: HTMLElement | null = null;
 let _dragOrigStyleAttr = '';
-let _dragOffsetX = 0;
-let _dragOffsetY = 0;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1285,25 +1219,19 @@ function _dragPointerMove(e: PointerEvent): void {
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
       if (_dragSourceEl) {
-        const rect = _dragSourceEl.getBoundingClientRect();
-        _dragOffsetX = _dragStartX - rect.left;
-        _dragOffsetY = _dragStartY - rect.top;
-
-        // Fade the source element in place — shows "where it came from"
-        _dragSourceEl.style.opacity = '0.35';
-        _dragSourceEl.style.pointerEvents = 'none';
-
-        // Create ghost clone that follows the cursor
-        const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
-        ghost.className = 'hyper-drag-ghost';
-        ghost.removeAttribute('data-uniq-id');
-        ghost.style.width = `${rect.width}px`;
-        ghost.style.height = `${rect.height}px`;
-        ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
-        ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
-        document.body.appendChild(ghost);
-        _dragGhostEl = ghost;
-
+        _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
+        const s = _dragSourceEl.style;
+        const computedBg = getComputedStyle(_dragSourceEl).backgroundColor;
+        if (computedBg === 'rgba(0, 0, 0, 0)' || computedBg === 'transparent') {
+          s.backgroundColor = _dragEffectiveBg(_dragSourceEl);
+        }
+        s.transition = 'box-shadow 0.12s ease';
+        s.transform = 'scale(1.03)';
+        s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
+        s.opacity = '0.88';
+        s.position = 'relative';
+        s.zIndex = '2147483647';
+        s.pointerEvents = 'none';
         const indicator = document.createElement('div');
         indicator.className = 'hyper-drop-indicator';
         indicator.style.display = 'none';
@@ -1329,9 +1257,10 @@ function _dragPointerMove(e: PointerEvent): void {
 
   if (_dragState !== 'dragging') return;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
-    _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
+  const dx = e.clientX - _dragStartX;
+  const dy = e.clientY - _dragStartY;
+  if (_dragSourceEl) {
+    _dragSourceEl.style.transform = `scale(1.03) translate(${dx}px, ${dy}px)`;
   }
 
   if (_dragIndicatorEl) {
@@ -1370,9 +1299,9 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragSourceId = null;
   _dragSourceFilePath = null;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.remove();
-    _dragGhostEl = null;
+  if (_dragSourceEl) {
+    _dragSourceEl.setAttribute('style', _dragOrigStyleAttr);
+    _dragSourceEl = null;
   }
   _dragOrigStyleAttr = '';
   if (_dragBadgeEl) {
@@ -1383,13 +1312,6 @@ function _dragPointerUp(e: PointerEvent): void {
     _dragIndicatorEl.remove();
     _dragIndicatorEl = null;
   }
-  if (_dragSourceEl) {
-    _dragSourceEl.style.opacity = '';
-    _dragSourceEl.style.pointerEvents = '';
-    _dragSourceEl = null;
-  }
-  _dragOffsetX = 0;
-  _dragOffsetY = 0;
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
@@ -1417,7 +1339,8 @@ function _dragPointerUp(e: PointerEvent): void {
   // pre-lift element if the parent layer has no own source.
   const finalSourceSrc =
     _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
-  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  const finalDropSrc =
+    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
@@ -1503,27 +1426,6 @@ let prevRectsJSON = '';
 let needsOverlayUpdate = true;
 let overlayRafScheduled = false;
 
-// === Selection-survive grace cache (Task 3 of selection-survive-text-change) ===
-// When the JSX text mutates via i18n key change, React commits a new fiber tree.
-// Between the commit and the moment FiberSourceIndex is rebuilt against the new
-// host fibers, findElements(selectedId) misses for one or more frames even though
-// the source location (and therefore the element identity) has not changed.
-// Without this cache, the overlay disappears for ~500ms — confirmed by user
-// screenshot before this fix landed. Pure logic + tests live in selection-grace-cache.ts.
-const SELECTION_GRACE_PERIOD_MS = 800;
-const SELECTION_GRACE_RETRY_MS = 50;
-const selectionGraceCache = makeSelectionGraceCacheState();
-let selectionGraceRetryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleSelectionGraceRetry(): void {
-  if (selectionGraceRetryTimeoutId !== null) return;
-  selectionGraceRetryTimeoutId = setTimeout(() => {
-    selectionGraceRetryTimeoutId = null;
-    needsOverlayUpdate = true;
-    scheduleOverlayLoopIfNeeded();
-  }, SELECTION_GRACE_RETRY_MS);
-}
-
 function scheduleOverlayLoopIfNeeded(): void {
   if (!overlayRafScheduled) {
     overlayRafScheduled = true;
@@ -1551,21 +1453,6 @@ function sendOverlayRects(): void {
     iframeElementResolver,
   );
 
-  // Replay last-known selection rect for IDs whose DOM lookup transiently missed
-  // (typically during the post-HMR window before FiberSourceIndex rebuild). See
-  // selection-grace-cache.ts for the full strategy.
-  const graced = applySelectionGraceCache({
-    selectedIds: state.selectedIds,
-    computedRects: result.overlayRects,
-    cache: selectionGraceCache,
-    now: performance.now(),
-    gracePeriodMs: SELECTION_GRACE_PERIOD_MS,
-  });
-  result.overlayRects = graced.rects;
-  if (graced.inGracePeriod) {
-    scheduleSelectionGraceRetry();
-  }
-
   const rects = result.overlayRects.map((r) => ({
     key: r.key,
     ...(r.elementId && { elementId: r.elementId }),
@@ -1576,23 +1463,6 @@ function sendOverlayRects(): void {
     type: r.type,
     ...(r.resizable && { resizable: r.resizable }),
   }));
-
-  // Diagnostic: did this paint find a DOM element for the current selection,
-  // and is its rect non-empty? See Task 2 of selection-survive-text-change plan.
-  // Tag: [selsurv]. Only logs when (selectedId, found, visible) tuple changes.
-  {
-    const sel0 = state.selectedIds[0] ?? null;
-    if (sel0 !== null) {
-      const itemIdx = state.selectedItemIndices[sel0] ?? null;
-      const elements = iframeElementResolver.findElements(sel0, itemIdx);
-      const domElementFound = elements.length > 0;
-      const selectionRect = result.overlayRects.find((r) => r.type === 'selection' && r.elementId === sel0);
-      const rectVisible = !!selectionRect && selectionRect.width > 0 && selectionRect.height > 0;
-      logSelsurvOverlayPaint(sel0, domElementFound, rectVisible);
-    } else {
-      logSelsurvOverlayPaint(null, false, false);
-    }
-  }
 
   const { placeholderRects } = result;
 
@@ -1785,10 +1655,7 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   if (msg.type === 'hypercanvas:stateUpdate') {
-    if (msg.selectedIds !== undefined) {
-      logSelsurvSelectedIdsAssign('msg:stateUpdate', state.selectedIds, msg.selectedIds);
-      state.selectedIds = msg.selectedIds;
-    }
+    if (msg.selectedIds !== undefined) state.selectedIds = msg.selectedIds;
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
     if (msg.selectedItemIndices !== undefined) state.selectedItemIndices = msg.selectedItemIndices;
@@ -1806,7 +1673,6 @@ window.addEventListener('message', (event: MessageEvent) => {
 
   // Go to Visual: select element, scroll, and send computed style snapshot
   if (msg.type === 'hypercanvas:goToVisual') {
-    logSelsurvSelectedIdsAssign('msg:goToVisual', state.selectedIds, [msg.elementId]);
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];

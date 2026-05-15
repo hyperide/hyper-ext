@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -735,24 +735,39 @@ export default function RightSidebar({
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
   }, []);
 
+  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
+  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
+  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
+  // is no longer attached to the same DOM node.
+  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
+      if (!i18nText || i18nText.kind !== 'i18n') return;
+      // Trim before comparison so trailing whitespace from blur/Enter doesn't
+      // bypass the equality check and write a whitespace-padded key into JSX/JSON.
+      const trimmedKey = newKey.trim();
+      if (!trimmedKey || trimmedKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
-      // The JSX node we're editing is THE SAME node before and after — its loc
-      // (filename:line:col) does not change because we only rewrite the argument
-      // string passed to t(...). So the source-id stays valid and selection
-      // survives without any re-dispatch trickery.
+      // Without a loaded keys list we cannot tell "rename to existing" from
+      // "create new", and skipResourceWrite=false would silently overwrite the
+      // real translation under the target key with the current value. Bail.
+      if (availableI18nKeys === undefined) return;
+      const previousSelectedId = selectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
       // as "create new key" — also write the JSON resource so the next re-read
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
-      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
+      const isNewKey = !availableI18nKeys.includes(trimmedKey);
+      // Defensive: even if a UI gate is bypassed, refuse to create a new key on a
+      // read-only locale file format. writeI18nResource would fail server-side anyway,
+      // but bailing early avoids JSX rewrite without a corresponding resource entry.
+      if (isNewKey && !i18nText.writable) return;
       void (async () => {
         try {
           await astOps.writeI18nResource({
             library: i18nText.library,
-            key: newKey,
+            key: trimmedKey,
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
             newText: i18nText.resolvedText ?? '',
@@ -761,6 +776,14 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
+          if (i18nDispatch) {
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
+          }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
         } finally {
@@ -768,7 +791,7 @@ export default function RightSidebar({
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, availableI18nKeys],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
   );
 
   const handleI18nResolvedTextChange = useCallback(
@@ -1279,7 +1302,19 @@ export default function RightSidebar({
                   localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
-                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
+                  // keyEditable: the keys list must have arrived (handleI18nKeyChange bails
+                  // on `availableI18nKeys === undefined` because it cannot tell rename-existing
+                  // from create-new without it). Then either:
+                  //   - the file already has keys → enable for switch-to-existing (JSX-only rewrite,
+                  //     works even on read-only TS/JS merged/per-locale layouts);
+                  //   - no keys yet → enable only if writable so the first-key creation path
+                  //     can write the JSON entry. canCreateKeys gates the Create affordance
+                  //     itself so read-only layouts hide the "+ Create key" branch even when
+                  //     keys are present.
+                  keyEditable={
+                    availableI18nKeys !== undefined && (availableI18nKeys.length > 0 || i18nText.writable)
+                  }
+                  canCreateKeys={i18nText.writable}
                 />
               );
             })()}

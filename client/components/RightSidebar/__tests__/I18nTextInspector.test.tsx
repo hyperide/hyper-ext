@@ -21,6 +21,7 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
+  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -217,6 +218,7 @@ describe('I18nTextInspector', () => {
         onKeyChange={mock(() => {})}
         onResolvedTextChange={mock(() => {})}
         keyEditable
+        canCreateKeys
       />,
     );
     fireEvent.click(screen.getByTestId('i18n-key-input'));
@@ -236,6 +238,7 @@ describe('I18nTextInspector', () => {
         onKeyChange={onKeyChange}
         onResolvedTextChange={mock(() => {})}
         keyEditable
+        canCreateKeys
       />,
     );
     fireEvent.click(screen.getByTestId('i18n-key-input'));
@@ -244,6 +247,49 @@ describe('I18nTextInspector', () => {
     const createBtn = screen.getByText((t) => t.includes('Create key'));
     fireEvent.click(createBtn);
     expect(onKeyChange).toHaveBeenCalledWith('onboarding.step1');
+  });
+
+  // Regression: read-only TS/JS layouts (writable=false) must still allow switching
+  // JSX to an already-existing key. AstBridge handles that path with skipResourceWrite=true,
+  // so no locale-file write happens and the format restriction does not apply.
+  // Only the Create affordance is gated on canCreateKeys.
+  describe('read-only layout (canCreateKeys=false) with existing keys', () => {
+    it('renders the combobox and lets user pick an existing key', () => {
+      const onKeyChange = mock(() => {});
+      render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          availableKeys={['habits.walks', 'habits.runs', 'home.title']}
+          onKeyChange={onKeyChange}
+          onResolvedTextChange={mock(() => {})}
+          keyEditable
+          canCreateKeys={false}
+        />,
+      );
+      const trigger = screen.getByTestId('i18n-key-input');
+      expect(trigger.tagName.toLowerCase()).toBe('button');
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByText('habits.runs'));
+      expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
+    });
+
+    it('hides the Create key affordance when typed text does not match', () => {
+      render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          availableKeys={['habits.walks', 'habits.runs']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          keyEditable
+          canCreateKeys={false}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('i18n-key-input'));
+      const searchInput = screen.getByPlaceholderText('Search or create key...');
+      fireEvent.change(searchInput, { target: { value: 'brand.new.key' } });
+      expect(screen.queryByTestId('i18n-key-create')).toBeNull();
+      expect(screen.queryByText((t) => t.includes('Create key'))).toBeNull();
+    });
   });
 
   it('falls back to plain input when keyEditable is true but no availableKeys provided', () => {

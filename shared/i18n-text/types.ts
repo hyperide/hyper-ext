@@ -29,6 +29,13 @@ export interface I18nTextBinding {
   availableLocales: string[];
   resolvedText: string | null;
   editable: boolean;
+  /**
+   * True when the active locale file format supports writes (JSON). Independent of
+   * `editable`, which also accounts for whether the key is resolvable. UI uses
+   * `writable` to decide whether key edits / first-key creation are allowed even
+   * when no keys exist yet in the file.
+   */
+  writable: boolean;
   sourceLocation: { filePath: string; line: number; column: number };
   /** How the i18n helper was identified. Higher confidence = more reliable detection. */
   confidence?: 'import-chain' | 'package-json' | 'locale-heuristic';
@@ -98,4 +105,12 @@ export interface ResolveI18nResourceResult {
   activeLocale: string;
   resolvedText: string | null;
   unresolvedReason?: I18nUnresolvedReason;
+  /**
+   * True when the active locale file format supports programmatic writes
+   * (`writeI18nResource` will not refuse it for format reasons).
+   * Currently: JSON layouts → true; merged single-file TS/JS or per-locale TS/JS → false.
+   * Layouts we cannot reach (`missing-locale-file`, `parse-error`) → false because the
+   * write path will refuse them too.
+   */
+  writable: boolean;
 }
