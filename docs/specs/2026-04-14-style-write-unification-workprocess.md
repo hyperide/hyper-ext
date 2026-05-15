@@ -3333,3 +3333,55 @@ Post-commit entry 2026-04-21 22:34 CEST:
   Remaining risk: the full 2209-test E2E run needs to restart from the top
   after this focused overlay fix.
 ```
+
+## Bridge Bot and Lifecycle E2E Follow-Up 2026-04-21 author: codex
+
+Bridge bot follow-up:
+
+```text
+- Bot repo: /Users/ultra/xp/codex-tg-bot.
+- Commit d119bd6 fix: discover Codex app-server bindings.
+- Scope: current-session delivery remains app-server only, with no codex exec
+  fallback. The bot now enumerates live codex app-server processes, connects
+  through the discovered endpoint/token-file, persists that endpoint metadata
+  in the current binding, auto-binds only when there is one unambiguous live
+  thread, and shows Telegram inline choices when multiple live threads remain.
+- Runtime: bot restarted after the commit; new PID observed as 13233.
+- Validation: bun test passed; bunx tsc --noEmit --pretty false passed;
+  git diff --check passed; live discovery listed the reachable
+  ws://127.0.0.1:9120 app-server threads without duplicate endpoint rows.
+```
+
+E2E lifecycle follow-up:
+
+```text
+- Ext-test repo: /Users/ultra/work/ext-test-projects.
+- Commit 6defbda fix: close pinned preview in lifecycle e2e.
+- Root cause: VS Code keeps the Hyper Canvas preview tab pinned, so
+  Control+w and View: Close Editor did not dispose the webview. Lifecycle tests
+  then saw stale/offscreen preview webviews and failed with
+  "Preview webview is loaded but not visible in the VS Code viewport".
+- Fix: lifecycle close/reopen tests now use the extension-owned
+  Hyper: Close Preview command, which is the same disposal path already used by
+  the shared E2E fixture cleanup.
+- Validation: focused lifecycle file passed with --retries=0:
+  tests/project-independent/extension-lifecycle.spec.ts, 25/25 passed.
+- Typecheck note: bunx tsc --noEmit in ext-test-projects/e2e still reports
+  existing repo-wide errors outside extension-lifecycle.spec.ts.
+```
+
+Full E2E rerun:
+
+```text
+- Full VS Code extension E2E rerun restarted after the overlay fix and lifecycle
+  harness fix.
+- Command shape: EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview
+  playwright test --workers=1 --retries=0 --reporter=line.
+- Active run id: 20260421j.
+- Log: /tmp/hyper-e2e-full-20260421j.log.
+- Output: /tmp/hyper-e2e-full-20260421j.
+- Detached nohup attempts exited immediately with empty logs, so the run is
+  being kept as an active tool session for reliable VS Code/Electron control.
+- Initial progress: run started and passed the first AI Chat tests; continue
+  monitoring for the first real failure and analyze it before adding fixes.
+```
