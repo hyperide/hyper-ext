@@ -1449,3 +1449,32 @@ Dockerfile — пересобирает. Текущий image от Apr 24 16:50,
 Ожидаем закрытия spotify cluster + аналогичных Remix re-create
 fail'ов. `setupPreview poll-loaded` на cold-start был 60-90s, должно
 упасть до 5-10s в старте.
+
+## 📍 2026-04-26 23:35 CEST: subagent-классификация и валидация находок
+
+Subagent проклассифицировал 95 fail'ов на 6 кластеров (A-F):
+
+| Кластер | Fails | 0.1.10 закроет | Категория |
+|---------|-------|----------------|-----------|
+| A: tw4-twitter Inspector (s1) | 11 | Y для длинных (152s/165s/79s/79s/70s/44s); N для 16s/31s | mixed |
+| B: cssmodules-spotify (s2) Vite | 3 | N (first-on-worker cold start, не re-create) | separate |
+| C: tw3-kanban (s2) | 5 | Частично | mixed |
+| D: tw4-twitter Text/MCP (s2) | 6 | Y частично | medium |
+| E: tamagui-uber (s3) | 9 | N — RN-Web .web.tsx shadow + Vite resolve | separate bug |
+| F: notion/calendar/etc | ~10 | смешанно | mixed |
+
+### Subagent ошибся с "real bug Vite entry resolver"
+
+Заявил: extension hardcodes `src/index.tsx` lookup, ENOENT на всех Vite-проектах с `main.tsx`. Проверил: **это false positive**.
+
+- `lib/preview-generator/preview-mode-manager.ts:252` — `_detectEntryFile()` уже правильно фоллбэчит: `['src/index.tsx', 'src/index.ts', 'src/main.tsx', 'src/main.ts']`. Catch'ит ENOENT и идёт дальше.
+- Лог `[debug] index.tsx: Error: ENOENT` идёт из **e2e debug теста** `tests/project-dependent/debug-webpack-frame.spec.ts:15`, не из extension'а — там hardcoded `fs.readFile(.../src/index.tsx).catch(error => String(error))` и `console.log('[debug] index.tsx:', errStr)`.
+
+Не вношу изменения по этой "находке". Проверять рекомендации subagent'а руками — must, не trust.
+
+### Что реально остаётся актуальным
+
+1. **0.1.10 fix** закроет 15-25 fails (subagent оценил, реально вероятно меньше).
+2. **Tamagui-uber RN-Web cluster (E)** — отдельное расследование в следующем цикле.
+3. **First-on-worker setupPreview hangs (B + некоторые в C/D)** — другая race, не 0.1.10. Нужно отдельно смотреть `editor:tab:wait` race vs extension activation.
+4. **`empty component` короткие fails** на notion/calendar — стоят на втором тесте воркера, скорее всего та же re-create race. Проверится после 0.1.10 прогона.
