@@ -3499,3 +3499,30 @@ Bridge bot process discovery hardening:
   timeout, assertion, save-conflict, unhandled-error, invalid-layout, or
   [test-errors] grep matches.
 ```
+
+Full E2E stop and iframe expected-error fix:
+
+```text
+- Run 20260421k was stopped at approximately 364/2209 on the first
+  [test-errors] marker.
+- Marker: "console.error forwarded" passed, but the fixture logged:
+  [console.error] __e2e_test_error_message__ and matching [diagnostic].
+- Root cause: the test intentionally injects console.error to verify forwarding
+  into the logs panel, but it lacked the same expected-runtime-errors
+  annotation already used by later iframe error-overlay tests.
+- Focused repro before fix:
+  iframe-communication.spec.ts -g "console.error forwarded" passed 1/1 but
+  printed [test-errors] with the intentional message.
+- Ext-test repo /Users/ultra/work/ext-test-projects:
+  Commit 82f6d18 test: mark expected iframe runtime errors.
+  Changes: completed the expected-runtime-errors annotation slice for
+  iframe-communication.spec.ts, including the missing console.error forwarding
+  case.
+  Validation: focused repro after fix passed 1/1 and printed
+  [expected-runtime-errors] instead of [test-errors]; grep for [test-errors]
+  in the focused log was empty. bunx biome check for the spec passed;
+  git diff --check passed.
+- The full E2E run should be restarted cleanly with --workers=1 and
+  --retries=0 after this fix; the previous run should not be resumed because
+  it was intentionally interrupted for analysis.
+```
