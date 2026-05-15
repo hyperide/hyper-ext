@@ -3526,3 +3526,573 @@ Full E2E stop and iframe expected-error fix:
   --retries=0 after this fix; the previous run should not be resumed because
   it was intentionally interrupted for analysis.
 ```
+
+Full E2E modifier-cleanup follow-up:
+
+```text
+- Run 20260421l was stopped after the first actionable failed test:
+  drag-resize-advanced.spec.ts "PI-18-30: fractional margin-horizontal with
+  Alt+hover does not crash". The test failed while resolving the inner
+  test-preview iframe after Alt was pressed.
+- User screenshots then showed VS Code save-dialog / Accessibility Help
+  aftermath. Root cause for the Accessibility Help symptom:
+  CommandPalette.open() uses F1, and a failed Alt-hover test can leave Alt
+  logically pressed; VS Code interprets the next F1 as Alt+F1.
+- Ext-test repo change in progress:
+  add e2e/helpers/input-state.ts resetInputState(), call it in the shared
+  fixture before per-test cleanup and immediately after each test, and call it
+  in CommandPalette.open() before F1 plus command retry cleanup. Also classify
+  VS Code's known DEP0040 punycode extension-host deprecation as a benign
+  captured console error.
+- Validation so far:
+  bunx biome check e2e/helpers/input-state.ts
+  e2e/fixtures/base.fixture.ts
+  e2e/page-objects/vscode/CommandPalette.ts passed.
+  Focused PI-18-30 passed 1/1 before this harness fix; tail
+  PI-18-24..30 passed 7/7 before this harness fix, so the iframe miss is
+  currently a full-run/state-pollution signal rather than a deterministic
+  single-test failure.
+- Full E2E run 20260421m started with --workers=1, --retries=0, and
+  --max-failures=1 against the harness patch. Continue monitoring and stop on
+  the first real failure.
+```
+
+Claude review of modifier-cleanup patch:
+
+```text
+- Claude review was run because local time is outside the 15:00-21:00 commit
+  window.
+- Review log: /tmp/claude-review-e2e-input-state-20260422a.log
+- High finding fixed: CommandPalette.open() originally reset input state after
+  clicking the activity bar. The reset now runs before the first VS Code chrome
+  interaction, so a stuck Alt cannot affect activity-bar click before F1.
+- Medium finding fixed: resetInputState() now releases left, right, and middle
+  mouse buttons, not only the default left button.
+- Low finding fixed: DEP0040 filtering now uses shorter stable substrings
+  ("DEP0040" and "punycode` module is deprecated") instead of a single narrow
+  full message.
+- Medium finding deferred for commit hygiene: the already-staged
+  CommandPalette default retry change (retries 1 -> 0) should be committed
+  separately from the input-state harness fix, with an explicit message and
+  call-site awareness.
+- Validation after fixes:
+  bunx biome check e2e/helpers/input-state.ts
+  e2e/fixtures/base.fixture.ts
+  e2e/page-objects/vscode/CommandPalette.ts passed.
+- Full E2E run 20260421m is still active. It was started before these final
+  review fixes and should not be treated as validation of the exact final
+  CommandPalette ordering patch; use it as a broad signal only, and rerun the
+  focused/tail slices after the run stops.
+```
+
+Commit review timing rule:
+
+```text
+- User instruction added 2026-04-22: before commits outside the 15:00-21:00
+  local-time interval, run Claude for review. This is in addition to the
+  normal self-review/checklist, and replaces any nested-Codex review flow for
+  this session because nested codex exec remains prohibited.
+```
+
+Active AGENTS.md workflow rules for this session:
+
+```text
+- Treat the AGENTS.md instructions provided in this chat as active for
+  /Users/ultra/work/hyper-canvas-draft.
+- Keep this work file current: after every meaningful change and after every
+  commit, append what changed, why, validation, open risks, and the next step.
+- Never run nested Codex from this Codex session. In particular, do not run
+  codex exec, codex exec resume, or codex exec review from inside this live
+  turn.
+- Before commits outside the 15:00-21:00 local-time interval, run Claude for
+  review and record the result in this work file before committing.
+- Do not delete `.serena/` directories or memories. They contain useful
+  repository settings and tracked project memory; inspect and commit relevant
+  changes intentionally instead of treating them as disposable temp files.
+- For commits, follow the repo checklist manually from the command files rather
+  than assuming slash commands are available in Codex.
+- For VS Code extension E2E work, use /Users/ultra/work/ext-test-projects,
+  read /Users/ultra/work/ext-test-projects/CLAUDE.md before debugging, use the
+  E2E harness/launchVSCode path rather than plain browser Playwright, and run
+  with --retries=0 unless a user explicitly asks otherwise.
+- Stop E2E runs on the first real failure or unexpected [test-errors] marker,
+  analyze the marker, and fix or document the root cause instead of retrying
+  blindly.
+- Do not use Restore/retry as a workaround for E2E flakiness. If a retry-like
+  behavior already exists, make it explicit in commit scope and review it
+  separately.
+```
+
+E2E focused validation after final input-state patch:
+
+```text
+- Re-ran the focused error-handling slice after the final harness patch:
+  tests/project-independent/error-handling.spec.ts with:
+  opening a binary file, opening an empty file, very large file, file with BOM,
+  file encoding issues, explorer component cache after reload, and element
+  deleted while selected.
+- Result: 7/7 passed in /tmp/hyper-e2e-focused-error-delete-20260422c.log.
+  Grep for [test-errors], failed test-done, TimeoutError, AssertionError, and
+  Error: was empty.
+- Re-ran the drag-resize tail slice around the previous Alt-hover failure:
+  tests/project-independent/drag-resize-advanced.spec.ts PI-18-24..PI-18-30.
+- Result: 7/7 passed in /tmp/hyper-e2e-drag-tail-20260422c.log. PI-18-30
+  passed in 2113 ms, and grep for [test-errors], failed test-done,
+  TimeoutError, AssertionError, and Error: was empty.
+- The full run 20260421m proved the old PI-18-30 failure point now passes, but
+  it was intentionally stopped at the first unexpected [test-errors] marker in
+  "element deleted while selected clears inspector gracefully". The focused
+  reruns above no longer reproduce that marker after closing temporary editor
+  tabs before deleting temp files.
+- Next required step before committing: run a fresh Claude review on the
+  current diff, because additional Editor/error-handling fixes were made after
+  the prior Claude review.
+```
+
+E2E temp-file cleanup correction:
+
+```text
+- A later self-review found that CommandPalette.open() and Editor._openFileAttempt()
+  still sent Escape before resetInputState() when a stale quick-input was
+  visible. Fixed by making resetInputState() the first operation in both flows,
+  and also before retry Escape / CommandPalette.close().
+- Re-running the focused error-handling slice then reproduced the real
+  [test-errors] marker again: VS Code logged "The editor could not be opened
+  because the file was not found" after the temp file tests. The test bodies
+  passed, but the runtime error was real.
+- Root cause: the tests deleted /tmp/hyper-e2e-* files while the shared VS Code
+  instance was still alive. VS Code can finish setInput asynchronously after the
+  test has already called "View: Close All Editors", so deleting the file in
+  test finally blocks can produce a delayed workbench console.error in the next
+  test.
+- Fix: added e2e/helpers/temp-files.ts, trackTempFile(), and
+  cleanupTrackedTempFiles(); error-handling temp files are now registered when
+  created and deleted only from the worker fixture after closeVSCode(instance).
+  The tests still close all editors before moving on, but no longer unlink
+  files while VS Code can still be resolving editor input.
+- Validation after the cleanup fix:
+  * bunx biome check e2e/helpers/input-state.ts e2e/helpers/temp-files.ts
+    e2e/fixtures/base.fixture.ts e2e/page-objects/vscode/CommandPalette.ts
+    e2e/page-objects/vscode/Editor.ts
+    e2e/tests/project-independent/error-handling.spec.ts passed.
+  * git diff --check in /Users/ultra/work/ext-test-projects passed.
+  * /tmp/hyper-e2e-focused-error-delete-20260422e.log: error-handling focused
+    slice 7/7 passed; grep for [test-errors], failed test-done, TimeoutError,
+    AssertionError, and Error: was empty.
+  * /tmp/hyper-e2e-drag-tail-20260422d.log: PI-18-24..PI-18-30 7/7 passed;
+    grep for [test-errors], failed test-done, TimeoutError, AssertionError,
+    and Error: was empty.
+- The previous Claude review attempt was stopped before output because this
+  self-review fix changed the diff; run a fresh Claude review on the updated
+  diff before any commit.
+```
+
+Claude review after temp-file cleanup:
+
+```text
+- The first two Claude review attempts were stopped because they produced no
+  output after starting MCP/tool-based sessions. A bare run failed because
+  bare mode could not use the local Claude auth. The successful review used
+  Claude with the current diff embedded in the prompt and tools disabled:
+  /tmp/claude-review-e2e-input-state-20260422g.log.
+- Medium finding fixed: error-handling.spec.ts reassigned vscode.window after
+  "Developer: Reload Window", leaving fixture pageerror/console listeners on
+  the old Page object and racing vscode.app.firstWindow(). The test now uses
+  the fixture-provided window throughout, waits for domcontentloaded on that
+  Page, and waits for extension activation before reopening Explorer.
+- Medium commit-splitting finding acknowledged: the ext-test repo contains
+  broader pre-existing staged changes unrelated to this input-state/temp-file
+  fix. Do not commit them accidentally with the current harness fix.
+- Low finding accepted: closeAllEditors() is still best-effort, but temp-file
+  safety no longer depends on it because cleanup happens after closeVSCode().
+- Low finding resolved by the medium fix: teardown reset no longer runs against
+  a reassigned/stale vscode.window in the reload test.
+- Validation after the reload-test fix:
+  * bunx biome check e2e/helpers/input-state.ts e2e/helpers/temp-files.ts
+    e2e/fixtures/base.fixture.ts e2e/page-objects/vscode/CommandPalette.ts
+    e2e/page-objects/vscode/Editor.ts
+    e2e/tests/project-independent/error-handling.spec.ts passed.
+  * git diff --check in /Users/ultra/work/ext-test-projects passed.
+  * /tmp/hyper-e2e-focused-error-delete-20260422f.log: error-handling focused
+    slice 7/7 passed; grep for [test-errors], failed test-done, TimeoutError,
+    AssertionError, and Error: was empty.
+- Full E2E run 20260422a was stopped because it started before the reload-test
+  fix and was therefore validating a stale diff. Restart full E2E on the
+  current diff with --workers=1, --retries=0, and --max-failures=1.
+```
+
+Full E2E run after Claude fixes:
+
+```text
+- Started a fresh full extension E2E run from /Users/ultra/work/ext-test-projects/e2e
+  after the Claude-reviewed reload-test fix:
+  EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview
+  playwright test --workers=1 --retries=0 --max-failures=1 --reporter=line
+  --output=/tmp/hyper-e2e-full-20260422b.
+- Log: /tmp/hyper-e2e-full-20260422b.log.
+- Current checkpoint at the time of this note: about 171/2209, in
+  tests/project-independent/drag-resize-advanced.spec.ts.
+- Grep for [test-errors], failed test-done, TimeoutError, AssertionError, and
+  Error: is still empty at this checkpoint.
+- Later checkpoint: the same full run passed the previous PI-18-30 failure
+  point ("fractional margin-horizontal with Alt+hover does not crash") in
+  2098 ms, then reached about 193/2209 in elements-tree-selection with the
+  same error-marker grep still empty.
+- Later checkpoint: the full run entered error-handling and passed the
+  temp-file/reload/deleted-selection block that previously produced delayed
+  workbench errors. Tests 211-217 passed, including "opening a binary file",
+  "opening an empty file", "very large file", "file with BOM", "file encoding
+  issues", "explorer component cache is rebuilt after extension reload", and
+  "element deleted while selected clears inspector gracefully". The same
+  error-marker grep remained empty at about 222/2209.
+- Later checkpoint: the run reached the iframe error-overlay tests around
+  361-368/2209. Runtime Error lines appeared for intentional overlay scenarios,
+  but they were emitted under [expected-runtime-errors] and the related tests
+  passed. Continue treating [test-errors] and failed test-done markers as
+  stop-and-investigate signals; do not treat expected-runtime-errors as clean
+  output, but do not stop on them without an unexpected failure marker.
+- Final status for this full run: stopped at the first real failure as intended.
+  Result: 401 passed, 9 skipped, 1 failed, 1798 did not run. Failure:
+  tests/project-independent/inspector-ui.spec.ts "position offset input accepts
+  value" at 411/2209. Playwright timed out clicking
+  [data-testid="hyper-inspector-position-abs"] after 30 seconds. Failure
+  screenshot:
+  /tmp/hyper-e2e-full-20260422b/inspector-ui-Inspector-UI--066b4--offset-input-accepts-value-independent/attachments/diagnostics-001-2026-04-22T04-59-25-806Z-test-end-failure-window-png-e99899850d4bc7b4f260cb383c6dc390c45b4c43.png.
+  The screenshot shows the inspector sidebar on the Elements tree/AI chat area,
+  not the Position controls, so the next step is to inspect whether the test is
+  selecting the wrong sidebar frame/tab, whether the inspector switches away
+  after setup, or whether the position controls fail to mount for the selected
+  element.
+- Root cause found: setupWithElementSelected() said it waited for the inspector
+  component name, but it only waited for hyper-inspector-root. That root exists
+  even when no element is selected, so the helper could continue with the
+  inspector showing the Elements tree and no Position controls. Fixed the helper
+  to wait for hyper-inspector-component-name, and to select from the visible
+  Elements tree if the CDP canvas click does not establish selection. Also
+  tightened the container-selection helper to validate componentName instead of
+  root.
+- Focused validation after the helper fix:
+  /tmp/hyper-e2e-focused-inspector-position-20260422a.log passed 3/3 with
+  --retries=0: "clicking abs shows offset inputs", "clicking static hides
+  offset inputs", and "position offset input accepts value".
+- Broader validation after the helper fix:
+  /tmp/hyper-e2e-position-section-20260422a.log passed the full Inspector UI
+  Position Section slice 5/5 with --retries=0.
+- Continue monitoring without retries. If the first real failure appears, stop
+  the run and analyze that failure before changing or retrying anything.
+- Fresh full E2E run 20260422c started after the inspector helper fix:
+  /tmp/hyper-e2e-full-20260422c.log. Current checkpoint: about 53/2209 in
+  tests/project-independent/ai-chat.spec.ts. No [test-errors], failed test-done,
+  TimeoutError, or AssertionError markers at this checkpoint.
+- Later checkpoint: about 140/2209 in
+  tests/project-independent/dev-server-lifecycle.spec.ts. No [test-errors],
+  failed test-done, TimeoutError, or AssertionError markers at this checkpoint.
+- Later checkpoint: about 187/2209 in
+  tests/project-independent/drag-resize-advanced.spec.ts. The run passed the
+  previously sensitive drag-resize/Alt-hover area, including PI-18-19,
+  PI-18-20, and PI-18-27. No [test-errors], failed test-done, TimeoutError, or
+  AssertionError markers at this checkpoint.
+- Later checkpoint: about 229/2209 in
+  tests/project-independent/error-handling.spec.ts. The previously problematic
+  reload/temp-file/deleted-selection block passed again, including tests
+  211-217. No unexpected [test-errors], failed test-done, TimeoutError, or
+  AssertionError markers at this checkpoint.
+- Final status for run 20260422c: stopped at the first real failure as intended.
+  Result: 230 passed, 9 skipped, 1 failed, 1969 did not run. Failure:
+  tests/project-independent/error-handling.spec.ts "CPU-intensive component
+  render does not block the UI thread" at 240/2209. The failure occurs before
+  the CPU workload: setupPreviewWithDevServer calls Editor.openFile("App.tsx"),
+  but the active editor remains /etc/hosts from the previous "disk write error"
+  test. Screenshot:
+  /tmp/hyper-e2e-full-20260422c/error-handling-Error-Handl-a659f-oes-not-block-the-UI-thread-independent/attachments/diagnostics-003-2026-04-22T08-58-13-616Z-test-end-failure-window-png-2c1f98e590b3790321a54f7918ac696ac6724ffa.png.
+  Hypothesis: E2E harness cleanup/openFile is selecting or retaining the wrong
+  editor after an external /etc/hosts tab, not a product CPU-freeze regression.
+  Focused reproduction started with --retries=0 for the disk-write + CPU pair:
+  /tmp/hyper-e2e-focused-cpu-after-hosts-20260422a.log.
+- Focused disk-write + CPU pair before the Editor page-object fix passed 2/2,
+  so the failure is not deterministically reproduced by the adjacent two tests.
+  Still fixed the harness weakness found in the failed screenshot: Editor.openFile
+  no longer accepts the first Quick Open row blindly. It now waits for a row that
+  contains the requested basename and clicks that specific row. This matches the
+  existing CommandPalette pattern of selecting a specific filtered result.
+- Validation after the Editor.openFile fix:
+  * bunx biome check e2e/page-objects/vscode/Editor.ts passed.
+  * git diff --check e2e/page-objects/vscode/Editor.ts passed.
+  * /tmp/hyper-e2e-focused-cpu-after-hosts-20260422b.log passed 2/2 with
+    --retries=0; Editor.openFile("App.tsx") completed quickly and opened the
+    intended tab.
+- Broader focused validation started for the error-handling tail from "dev
+  server connection lost" through "CPU-intensive component render":
+  /tmp/hyper-e2e-focused-error-tail-20260422a.log.
+- Broader focused validation after the Editor.openFile fix passed 12/12 with
+  --retries=0:
+  /tmp/hyper-e2e-focused-error-tail-20260422a.log. This covers the same
+  error-handling tail that led into the full-run failure, including
+  disk-write and CPU-intensive tests.
+- Restart the full 2209-test extension E2E run from the top because
+  /tmp/hyper-e2e-full-20260422c.log stopped on the old page-object behavior.
+- Full E2E run 20260422d started with --workers=1, --retries=0, and
+  --max-failures=1. Log: /tmp/hyper-e2e-full-20260422d.log. Output:
+  /tmp/hyper-e2e-full-20260422d.
+- Checkpoint: run 20260422d passed the sensitive drag-resize block through
+  PI-18-30 and reached about 191/2209. No [test-errors], failed test-done,
+  TimeoutError, or AssertionError markers at this checkpoint.
+- Checkpoint: run 20260422d passed the previous failure point. The
+  CPU-intensive component render test and the rest of error-handling through
+  255/2209 passed, then the run entered explorer-ui at 256/2209. No
+  [test-errors], failed test-done, TimeoutError, or AssertionError markers at
+  this checkpoint.
+- Checkpoint: run 20260422d reached about 365/2209 in iframe-communication.
+  Expected runtime errors appeared only in annotated overlay/console tests; no
+  unexpected [test-errors], failed test-done, TimeoutError, or AssertionError
+  markers at this checkpoint.
+- Checkpoint: run 20260422d passed the previous inspector failure at 411/2209
+  ("position offset input accepts value") and reached about 428/2209. No
+  unexpected [test-errors], failed test-done, TimeoutError, or AssertionError
+  markers at this checkpoint.
+```
+
+UX linter spec location:
+
+```text
+- The UX linter specs are not on the current HYP-363 branch. They are on
+  branch/worktree worktree-specs-review-2026-04 at commit
+  e40f6159 docs(ux linter).
+- Worktree path:
+  /Users/ultra/work/hyper-canvas-draft/.claude/worktrees/specs-review-2026-04.
+- Added files in that commit include:
+  docs/specs/2026-04-01-ai-test-design.md,
+  docs/specs/2026-04-01-apple-hig-design-rules.md,
+  docs/specs/2026-04-01-component-stage-design.md,
+  docs/specs/2026-04-01-ds-core-design.md,
+  docs/specs/2026-04-01-fluent2-design-rules.md,
+  docs/specs/2026-04-01-material-design-rules.md,
+  docs/specs/2026-04-01-mock-server-design.md,
+  docs/specs/2026-04-01-self-improving-templates-research.md, and
+  docs/specs/review-results.html.
+- Do not remove that worktree; it contains the missing UX linter docs.
+```
+
+Bridge bot stale current-session fix:
+
+```text
+- Repo: /Users/ultra/xp/codex-tg-bot.
+- Fixed a stale-binding gap in current-session forwarding. A saved binding
+  without an app-server endpoint could match a discovered live thread by
+  thread id and cwd, but still forward through the default endpoint and produce
+  "RPC error -32600: thread not found".
+- The bot now refreshes saved current-session bindings from the discovered
+  live candidate before forwarding, including appServerUrl and tokenFile.
+- If forwarding still gets a typed stale-thread error, the bot clears the
+  binding and runs the same live-thread discovery path for the original
+  Telegram message one time. With one live thread it auto-binds; with multiple
+  live threads it shows the existing Telegram choice UI.
+- Validation in the bridge bot repo:
+  * bun test passed: 15/15 before Claude follow-up, then 16/16 after adding
+    the negative refresh test.
+  * bunx tsc --noEmit passed.
+- Restarted the live bridge bot process. New process:
+  bun run /Users/ultra/xp/codex-tg-bot/src/index.ts. logs/bot.log shows a clean
+  startup.
+- Claude review for the bridge bot diff:
+  * Log: /tmp/claude-review-bridge-bot-20260422c.log.
+  * Reported HIGH about losing the original Telegram prompt on stale recovery
+    with multiple live candidates. This is a false positive: the existing
+    pendingCurrentBindings map already stores { candidates, prompt }, and the
+    callback handler forwards pending.prompt after the user chooses a binding.
+  * Accepted actionable MEDIUM: add a negative test for
+    currentSessionNeedsRefresh() returning false when the saved binding already
+    has the discovered endpoint and token file. Added the test.
+  * Deferred broader index.ts stale-recovery integration testing as residual
+    risk; the current bot repo has only current-session unit tests and no
+    Telegram API harness.
+- Follow-up Claude review before commit:
+  * Log: /tmp/claude-review-bridge-bot-20260422d.log.
+  * Claude flagged one actionable blocker: when stale rediscovery returns null,
+    the user must have explicit feedback that the original message was not sent.
+    Multiple-candidate rediscovery already preserves the prompt in
+    pendingCurrentBindings; no-live/discovery-failed paths now explicitly say the
+    message was not sent.
+  * Accepted quality findings: currentSessionNeedsRefresh now returns false for
+    non-matching candidates, and tests cover both non-matching candidates and
+    token-file-only refreshes.
+  * Validation after the follow-up: bun test passed 18/18, bunx tsc --noEmit
+    passed, and git diff --check passed in the bridge bot repo.
+  * Second Claude review:
+    /tmp/claude-review-bridge-bot-20260422e.log. It repeated two context-limited
+    concerns: prompt loss for multiple candidates and dead cwd refresh. Both are
+    false positives when the surrounding code is considered:
+    sendCurrentBindingChoices stores { candidates, prompt } in
+    pendingCurrentBindings, and endpoint-matched sessions may need cwd refresh.
+  * Added final clarifying tests: same endpoint with changed cwd refreshes, and
+    candidate input omits absent endpoint/token fields. Also changed the stale
+    error text from "Cleared stale binding" to "Stale binding" so the error
+    object does not claim cleanup when directly constructed in tests.
+  * Final Claude review:
+    /tmp/claude-review-bridge-bot-20260422f.log. No real blockers after the
+    context was included. The only "blocker" was to confirm that
+    staleThreadMessage still contains "No codex exec fallback was used."; bun
+    test and direct grep confirmed it.
+  * Final bridge bot validation before commit: bun test passed 20/20, bunx tsc
+    --noEmit passed, and git diff --check passed.
+  * Commit created in /Users/ultra/xp/codex-tg-bot:
+    2f69635 fix: recover stale current session bindings.
+  * Restarted the live bridge bot after the commit so the running process uses
+    the final code. New process: bun run /Users/ultra/xp/codex-tg-bot/src/index.ts,
+    PID 62235. logs/bot.log shows clean startup.
+  * .serena/ in the bridge bot repo is intentionally left untouched; cache and
+    project.local.yml are ignored by .serena/.gitignore, and project settings
+    should not be deleted as disposable temp files.
+```
+
+E2E harness follow-up from the 20260422d full run:
+
+```text
+- Full run /tmp/hyper-e2e-full-20260422d.log stopped at 500/2209:
+  tests/project-independent/inspector-ui.spec.ts -> "opacity negative clamped
+  to 0".
+- The failure symptom was "no visible editor tab" in setupPreviewWithDevServer.
+  The failure screenshot showed a blank editor area, a selected App.tsx in the
+  explorer, and visible Hyper Logs entries from earlier expected runtime-error
+  tests.
+- User-provided live screenshots exposed a monitoring blind spot: checking only
+  [test-errors] markers missed visible Hyper Logs diagnostics that were logged
+  as expected-runtime-errors, and it also did not catch save dialogs as first
+  class E2E state.
+- Harness changes in /Users/ultra/work/ext-test-projects:
+  * Added e2e/helpers/vscode-cleanup.ts to explicitly find VS Code modal
+    dialogs, dismiss safe options such as "Don't Save", log [fixture-dialog],
+    and assert that no modal remains before a test body starts.
+  * CommandPalette and Editor page objects now drain blocking dialogs before
+    trying to use quick input, so a modal cannot silently turn a command/file
+    open into a later "empty window" failure.
+  * base.fixture.ts now checks dialogs in worker startup, per-test setup, and
+    teardown. Any teardown dialog text is fed into the captured error stream so
+    monitoring can see it instead of relying on screenshots alone.
+  * Expected runtime-error tests now clear the diagnostic error sink and
+    persisted diagnostic logs after their assertions, so intentional Vite/runtime
+    errors do not remain as stale Hyper Logs context for later tests.
+- Validation so far:
+  * bunx biome check passed for the touched E2E harness files.
+  * git diff --check passed for the touched E2E harness files.
+  * bunx tsc --noEmit in ext-test-projects/e2e is still blocked by existing
+    repo-wide type errors unrelated to this change:
+    DiagnosticsPageLike screenshot return type, project.fixture TestProject
+    typing, ai-chat-setup Page.postMessage, diagnostics.test overloads,
+    debug-webpack-frame Page.location, and mcp-tools nullable number.
+  * First focused harness validation was interrupted because the old LogsPanel
+    resolver could wait 30s on the wrong webview while clearing diagnostics.
+    The clear path was changed to scan actual Playwright frames with a short
+    visible check instead.
+  * Focused validation 20260422b is running without retries:
+    iframe expected-runtime tests followed by the previous opacity failure.
+    Output dir: /tmp/hyper-e2e-harness-dialog-20260422b.
+  * Focused validation 20260422b passed 4/4 with --retries=0, including the
+    previous opacity failure, but still showed that the webview clear button was
+    not attached in this cleanup path. That proved file truncation was not
+    enough for in-memory DiagnosticHub state.
+  * Added extension command hypercanvas.clearDiagnostics / "Hyper: Clear
+    Diagnostics" and switched expected-runtime cleanup to run that command.
+    This clears DiagnosticHub memory and broadcasts diagnostic:clear to panels
+    instead of trying to find a specific Logs webview button.
+  * Rebuilt/installed the VS Code extension with
+    ./vscode-extension/hypercanvas-preview/build-and-install.sh. Build/install
+    passed; output still has existing npm audit, Browserslist, and Tailwind
+    ambiguous-duration warnings.
+  * Focused validation 20260422d passed 4/4 with --retries=0 after the command
+    change. The cleanup log now shows "cleared expected runtime diagnostics"
+    without "logs clear button was not attached".
+  * The harness now turns unexpected captured iframe/pageerror/diagnostic output
+    into a Playwright failure after cleanup. Expected runtime-error tests remain
+    allowed only when they carry the expected-runtime-errors annotation.
+  * Pre-commit knip in the main repo is still blocked by the existing repo-wide
+    unused-file report, not by the current diagnostics command diff.
+  * Claude reviews before commit are running because the current time is outside
+    the 15:00-21:00 no-Claude-required window:
+    /tmp/claude-review-main-clear-diagnostics-20260422a.log and
+    /tmp/claude-review-ext-e2e-harness-20260422a.log.
+```
+
+Claude review results before E2E harness commits:
+
+```text
+- Main repo review: /tmp/claude-review-main-clear-diagnostics-20260422a.log.
+  * No command-registration, activation-order, or disposal bugs found.
+  * Low finding: the new "Hyper: Clear Diagnostics" palette command is silent.
+    Decision: keep it silent for this commit because the command is primarily an
+    E2E cleanup primitive and toast/focus side effects would pollute tests; the
+    Logs panel still has the visible clear action for humans.
+  * Low finding: optional view/title discoverability for Logs. Deferred because
+    this change is test-harness support, not user-facing Logs UI work.
+  * Low finding: no command registration unit test. DiagnosticHub.clear is
+    already covered, and focused E2E validation verifies the command wiring.
+- ext-test-projects review: /tmp/claude-review-ext-e2e-harness-20260422a.log.
+  * Critical: CommandPalette default retry dropped from 1 to 0. Fixed by
+    restoring retries = 1 for normal commands; the diagnostics cleanup command
+    still opts into retries = 0 explicitly.
+  * Critical: "Hyper: Clear Diagnostics" might not exist. Fixed in the extension
+    and verified by focused E2E run 20260422d.
+  * Critical: diagnostic file truncate could race with in-memory logs. Mitigated
+    by making the extension command clear DiagnosticHub memory first, then
+    truncating the per-worker sink and removing persisted logs.
+  * Critical: dialog records could duplicate/confuse output. Kept dialogs as
+    first-class failure evidence, but changed the dismiss loop to stop when the
+    same dialog remains after a dismissal attempt.
+  * High: PI-17-18 and PI-17-20 intentionally emit runtime errors but lacked the
+    expected-runtime-errors annotation. Fixed.
+  * High: Editor.openFile basename/click race. Fixed by waiting for the requested
+    basename to appear, then pressing Enter so VS Code accepts the top match for
+    the full query without racing a re-rendered row click.
+  * High: closeAllEditors swallowed failures. Fixed by logging a warning.
+  * Remaining medium/low risks to watch in full E2E: reload-window tests may need
+    handler reattachment after VS Code reload, and temp-file cleanup is still
+    worker-scoped rather than per-test.
+```
+
+Final pre-commit Claude review and validation:
+
+```text
+- Additional read-only Claude review was attempted with Bash tool access first,
+  but that process produced no output and was stopped. Re-run used stdin diff
+  only, no tool access:
+  /tmp/claude-review-final-e2e-diagnostics-20260422b.log.
+- Final Claude review found no blockers.
+- Fixed the recommended teardown issue before commit:
+  * assertNoBlockingDialogs no longer aborts listener removal, diagnostic drain,
+    screenshot capture, idle marker, or settings restore.
+  * Dialog findings are recorded separately from benign console filters.
+- Fixed additional medium findings before commit:
+  * Editor.openFile now asserts the visible top Quick Open row contains the
+    requested basename before pressing Enter.
+  * inspector-ui no longer masks a failed canvas selection by clicking the first
+    Elements tree item; it retries the real CDP canvas selection and then asserts
+    the selected component details.
+- Deferred coverage finding:
+  * PI-17-11 now validates explorer rebuild after VS Code reload, not the older
+    project-switch cache invalidation path.
+  * Created Linear follow-up:
+    https://linear.app/glide-vc/issue/HYP-365/restore-e2e-coverage-for-project-switch-explorer-cache-invalidation
+- Static checks after the final fixes:
+  * ext-test-projects biome check passed for the touched harness/page-object/spec
+    files.
+  * ext-test-projects git diff --check passed for the touched files.
+  * main repo biome check passed for extension.ts and package.json.
+  * main repo markdownlint passed for this workfile.
+  * main repo git diff --check passed for this workfile and extension command
+    files.
+  * main repo bunx knip still fails on the existing repo-wide unused-file report;
+    this is unchanged by the current diff.
+- Focused E2E validation after final fixes:
+  * /tmp/hyper-e2e-harness-dialog-20260422f
+  * Command: iframe expected-runtime tests followed by the previous inspector
+    opacity failure, --workers=1, --retries=0.
+  * Result: 4 passed (28.9s).
+  * Expected runtime errors were logged with expected-runtime-errors markers and
+    followed by "cleared expected runtime diagnostics"; the following inspector
+    test passed without stale Hyper Logs or an empty editor window.
+- Commit created:
+  * 2cbd181b fix(extension): expose diagnostics clear command
+  * ext-test-projects 491ee4b test(e2e): harden extension diagnostics cleanup
+- Docs-only Claude pass before the workfile commit:
+  /tmp/claude-review-workfile-docs-20260422a.log. Result: no blockers.
+```
