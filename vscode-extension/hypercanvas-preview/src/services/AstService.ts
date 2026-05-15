@@ -274,7 +274,7 @@ export class AstService {
         fileIO: this._fileIO,
         projectRoot: this._workspaceRoot,
       });
-      if ('error' in writeResult) return { success: false, error: writeResult.error };
+      if (writeResult.success === false) return { success: false, error: writeResult.error };
 
       for (const mutatedFile of writeResult.mutatedFiles) {
         if (isJsxSourceFile(mutatedFile)) {
