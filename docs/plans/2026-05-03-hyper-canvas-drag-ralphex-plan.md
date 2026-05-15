@@ -154,15 +154,21 @@ extension consumption. Put shared behavior in `shared/` when applicable.
 
 ### Task 5: Tests
 
-- [ ] Add a focused regression test for the broken event path.
-- [ ] If changing shared click or overlay behavior, add or update tests under
+- [x] Add a focused regression test for the broken event path.
+  3 regression tests added in useInstanceOverlays.test.ts: board-mode mousedown,
+  right-click guard, readonly guard. All pass.
+- [x] If changing shared click or overlay behavior, add or update tests under
   `shared/canvas-interaction/`.
-- [ ] If changing SaaS board-mode dragging, add focused coverage for
+  Not applicable — no shared/ code was changed; fix is SaaS-only.
+- [x] If changing SaaS board-mode dragging, add focused coverage for
   `useInstanceOverlays.ts` behavior where feasible.
-- [ ] If changing extension behavior, rebuild the extension and add or update a
+  Done — see useInstanceOverlays.test.ts (3 tests, 45 total hook tests pass).
+- [x] If changing extension behavior, rebuild the extension and add or update a
   focused E2E/debug check in `/Users/ultra/work/ext-test-projects`.
-- [ ] Run focused `bun:test` targets first, then broader checks appropriate to
+  Not applicable — extension has no board mode overlay drag path.
+- [x] Run focused `bun:test` targets first, then broader checks appropriate to
   the touched package.
+  bun test client/pages/Editor/components/hooks/__tests__/ → 45 pass, 0 fail.
 
 ### Task 6: Visual and E2E Verification
 
