@@ -489,6 +489,24 @@ describe('generateStandaloneEntry', () => {
   });
 });
 
+describe('generatePreviewContent — missing-component signal', () => {
+  it('includes _ComponentMissingSignal function in generated output', () => {
+    const content = generatePreviewContent([makeEntry('src/Button.tsx', 'Button')], {});
+    expect(content).toContain('_ComponentMissingSignal');
+    expect(content).toContain('hypercanvas:componentMissing');
+  });
+
+  it('missing-component branch renders placeholder and fires _ComponentMissingSignal', () => {
+    const content = generatePreviewContent([makeEntry('src/Button.tsx', 'Button')], {});
+    // The branch should NOT contain raw "Error: Component not found"
+    expect(content).not.toContain('Error: Component not found');
+    // Should render a loading placeholder
+    expect(content).toContain('Loading');
+    // Should include the missing signal component
+    expect(content).toContain('<_ComponentMissingSignal');
+  });
+});
+
 function makeEntry(path: string, name: string): PreviewComponentEntry {
   return {
     componentPath: path,

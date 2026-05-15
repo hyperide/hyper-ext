@@ -61,6 +61,9 @@ export class PreviewPanel {
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
 
+  // Component-missing callback (triggers self-healing ensureComponent in extension host)
+  private _onComponentMissingCallback: ((componentPath: string) => void) | null = null;
+
   // Console capture callback (from iframe console intercept)
   private _onConsoleCaptureCallback:
     | ((entries: Array<{ level: string; args: string[]; timestamp: number }>) => void)
@@ -356,6 +359,13 @@ export class PreviewPanel {
     if (msg.type === 'runtime:error') {
       const error = (msg as { error?: DevServerRuntimeError | null }).error ?? null;
       this._onRuntimeErrorCallback?.(error);
+      return;
+    }
+    if (msg.type === 'hypercanvas:componentMissing') {
+      const componentPath = (msg as { componentPath?: string }).componentPath;
+      if (componentPath) {
+        this._onComponentMissingCallback?.(componentPath);
+      }
       return;
     }
     if (msg.type === 'diagnostic:console') {
@@ -1493,6 +1503,14 @@ export class PreviewPanel {
    */
   public onRuntimeError(callback: (error: DevServerRuntimeError | null) => void): void {
     this._onRuntimeErrorCallback = callback;
+  }
+
+  /**
+   * Set callback for component-missing signals from the preview iframe.
+   * Extension host wires this to PreviewFileManager.ensureComponent() with a retry guard.
+   */
+  public onComponentMissing(callback: (componentPath: string) => void): void {
+    this._onComponentMissingCallback = callback;
   }
 
   /**

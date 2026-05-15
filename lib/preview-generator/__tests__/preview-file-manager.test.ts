@@ -202,7 +202,8 @@ describe('PreviewFileManager', () => {
       const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Missing.tsx']);
 
       expect(content).toContain('Button');
-      expect(content).not.toContain('Missing');
+      // Path must not appear in the component registry
+      expect(content).not.toContain("'src/components/Missing.tsx'");
     });
 
     it('should throw PreviewGenerationError when no valid components', async () => {
@@ -1682,5 +1683,89 @@ describe('PreviewFileManager.ensureIsolatedNextJsLayout (Tier 3)', () => {
     // Layout is at app/test-preview/layout.tsx, .hyperide is at project root
     // Relative path: ../../.hyperide/preview
     expect(layout).toContain('../../.hyperide/preview');
+  });
+});
+
+const SHEET_SOURCE = `
+import * as React from 'react';
+
+export const Sheet = ({ children }: { children: React.ReactNode }) => (
+  <div role="dialog">{children}</div>
+);
+export const SheetTrigger = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+`;
+
+const UTILS_SOURCE = `
+export function cn(...classes: string[]) {
+  return classes.filter(Boolean).join(' ');
+}
+`;
+
+describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern', () => {
+  it('discovers components under client/ when index.html points to client/main.tsx', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/index.html',
+      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+    );
+    io.files.set('/project/client/components/ui/sheet.tsx', SHEET_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    // sheet.tsx is lowercase but exports PascalCase Sheet — must be discovered and registered
+    const content = await manager.ensureComponent(['client/components/ui/sheet.tsx']);
+    expect(content).toContain('Sheet');
+    expect(content).toContain("'client/components/ui/sheet.tsx'");
+  });
+
+  it('does not register lowercase files that export no PascalCase component', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/index.html',
+      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+    );
+    io.files.set('/project/client/lib/utils.ts', UTILS_SOURCE);
+    io.files.set('/project/client/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['client/components/Button.tsx']);
+    // utils.ts has no PascalCase export → must not appear in registry
+    expect(content).not.toContain("'client/lib/utils.ts'");
+    expect(content).not.toContain('utils');
+    // Button is valid → included
+    expect(content).toContain('Button');
+  });
+
+  it('explicit ensureComponent for shadcn sheet.tsx registers it regardless of scan', async () => {
+    // Even without index.html, an explicit ensureComponent call for a lowercase file
+    // with a PascalCase export must succeed.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/ui/sheet.tsx', SHEET_SOURCE);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/ui/sheet.tsx']);
+    expect(content).toContain('Sheet');
+    expect(content).toContain("'src/components/ui/sheet.tsx'");
+  });
+
+  it('scans src/ in addition to detected root so shared components are not missed', async () => {
+    // Project with client/ as frontend root but also has components in src/
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/index.html',
+      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+    );
+    io.files.set('/project/client/components/Header.tsx', `export function Header() { return <header />; }`);
+    io.files.set('/project/src/components/Sidebar.tsx', `export function Sidebar() { return <nav />; }`);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['client/components/Header.tsx']);
+    // client/ component — explicitly requested
+    expect(content).toContain('Header');
+    // src/ component — discovered via supplemental scan
+    expect(content).toContain('Sidebar');
   });
 });

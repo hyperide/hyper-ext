@@ -583,19 +583,35 @@ export class PreviewFileManager {
   /**
    * Scan all TSX component files in the project via io.listFiles (if available).
    * Falls back to empty array if listFiles is not supported.
+   *
+   * Scans multiple candidate roots (src, app, client) so projects that place
+   * components outside src/ (e.g. Bulka uses client/) are fully discovered.
+   * PascalCase filename filter is intentionally removed — buildEntry does
+   * content-based component detection so lowercase files like shadcn's sheet.tsx
+   * (which exports PascalCase Sheet) are handled correctly there.
    */
   private async _scanAllComponents(): Promise<string[]> {
     if (!this.io.listFiles) return [];
 
-    const srcDir = join(this.projectRoot, 'src');
-    let allFiles: string[] = [];
-    try {
-      allFiles = await this.io.listFiles(srcDir, ['.tsx', '.ts']);
-    } catch {
-      return [];
+    const roots = await this._detectScanRoots();
+    const seen = new Set<string>();
+    const allFiles: string[] = [];
+
+    for (const root of roots) {
+      const dir = join(this.projectRoot, root);
+      try {
+        const files = await this.io.listFiles(dir, ['.tsx', '.ts']);
+        for (const f of files) {
+          if (!seen.has(f)) {
+            seen.add(f);
+            allFiles.push(f);
+          }
+        }
+      } catch {
+        // Directory doesn't exist — skip
+      }
     }
 
-    // Exclude non-component files (__canvas_preview__, index, etc.)
     return allFiles
       .filter((f) => {
         const name = basename(f);
@@ -603,11 +619,34 @@ export class PreviewFileManager {
           !name.startsWith('__') &&
           !name.startsWith('index.') &&
           (f.endsWith('.tsx') || f.endsWith('.ts')) &&
-          /^[A-Z]/.test(name) && // PascalCase = component
-          !isPreviewIneligibleByName(name) // Skip Foo.native.tsx, Foo.css.ts, etc.
+          !isPreviewIneligibleByName(name)
         );
       })
       .map((abs) => relative(this.projectRoot, abs));
+  }
+
+  /**
+   * Detect which source roots to scan. Reads index.html to find the Vite entry
+   * point (same heuristic as detectFrontendRoot in extension.ts), then also
+   * includes static candidate roots so nothing is missed.
+   */
+  private async _detectScanRoots(): Promise<string[]> {
+    const candidates = new Set(['src', 'app', 'client']);
+
+    try {
+      const html = await this.io.readFile(join(this.projectRoot, 'index.html'));
+      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      if (match?.[1]) {
+        // Put detected root first so it's scanned before generic candidates
+        const detected = match[1];
+        const ordered = [detected, ...Array.from(candidates).filter((r) => r !== detected)];
+        return ordered;
+      }
+    } catch {
+      // No index.html or unreadable — fall through to default candidates
+    }
+
+    return Array.from(candidates);
   }
 
   private buildCanonicalPathMap(paths: string[]): Map<string, string> {

@@ -473,6 +473,21 @@ export function activate(context: vscode.ExtensionContext) {
     previewPanel.onConsoleCapture((entries) => {
       diagnosticHub?.handleConsoleCapture(entries);
     });
+
+    // Self-healing: when the generated preview doesn't have the requested component,
+    // re-run ensureComponent so the preview file is regenerated with the missing entry.
+    // Retry guard prevents an infinite loop if ensureComponent keeps failing.
+    previewPanel.onComponentMissing((componentPath) => {
+      const count = componentMissingRetries.get(componentPath) ?? 0;
+      if (count >= 2) return;
+      componentMissingRetries.set(componentPath, count + 1);
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
+      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+      const relPath = relative(currentWorkspaceRoot, absPath);
+      previewManager.ensureComponent([relPath]).catch((err) => {
+        console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
+      });
+    });
   }
 
   context.subscriptions.push(
@@ -586,6 +601,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Serial queue prevents race conditions on rapid component switching:
   // each new switch cancels the previous ensureSample/ensureComponent chain.
   let previewAbortController: AbortController | null = null;
+  // Retry counter for componentMissing self-healing — reset on every component switch.
+  const componentMissingRetries = new Map<string, number>();
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {
@@ -636,6 +653,7 @@ export function activate(context: vscode.ExtensionContext) {
       previewAbortController?.abort();
       const ac = new AbortController();
       previewAbortController = ac;
+      componentMissingRetries.clear();
 
       // Normalize: currentComponent.path may be relative or absolute
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);

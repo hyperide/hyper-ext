@@ -70,6 +70,13 @@ export function shouldNavigateFrameToComponent(src: string | null | undefined, n
   return currentComponent !== nextComponent;
 }
 
+export function applyComponentRenderSucceeded(
+  prev: ComponentError | null,
+  componentPath: string,
+): ComponentError | null {
+  return prev?.componentPath === componentPath ? null : prev;
+}
+
 export function canUpdatePreviewComponentInPlace(
   currentSrc: string | null | undefined,
   nextSrc: string | null | undefined,
@@ -230,6 +237,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
               propsSchema: sameComponent ? prev.propsSchema : undefined,
             };
           });
+        } else if (msg.type === 'hypercanvas:componentRenderSucceeded') {
+          setComponentError((prev) => applyComponentRenderSucceeded(prev, msg.componentPath));
+        } else if (msg.type === 'hypercanvas:componentMissing') {
+          // Component not in registry — forward to extension host to trigger self-healing.
+          canvas.sendEvent({
+            type: 'hypercanvas:componentMissing',
+            componentPath: msg.componentPath,
+          } as unknown as PlatformMessage);
         }
         return;
       }

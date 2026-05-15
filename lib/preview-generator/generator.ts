@@ -555,6 +555,14 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push(...buildErrorBoundary());
   lines.push('');
 
+  // 10b. Success signal — fires after component renders without error, clears stale overlays.
+  lines.push(...buildComponentSuccessSignal());
+  lines.push('');
+
+  // 10c. Missing signal — fires when component is not in registry, triggers self-healing.
+  lines.push(...buildComponentMissingSignal());
+  lines.push('');
+
   // 11. CanvasPreview component
   if (options?.isNextPagesRouter) {
     lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutes));
@@ -695,6 +703,28 @@ function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig, ssrRoute
   ];
 }
 
+function buildComponentSuccessSignal(): string[] {
+  return [
+    'function _ComponentSuccessSignal({ componentPath }: { componentPath: string }) {',
+    '  React.useEffect(() => {',
+    "    window.parent.postMessage({ type: 'hypercanvas:componentRenderSucceeded', componentPath }, '*');",
+    '  }, [componentPath]);',
+    '  return null;',
+    '}',
+  ];
+}
+
+function buildComponentMissingSignal(): string[] {
+  return [
+    'function _ComponentMissingSignal({ componentPath }: { componentPath: string }) {',
+    '  React.useEffect(() => {',
+    "    window.parent.postMessage({ type: 'hypercanvas:componentMissing', componentPath }, '*');",
+    '  }, [componentPath]);',
+    '  return null;',
+    '}',
+  ];
+}
+
 function buildErrorBoundary(): string[] {
   return [
     'class ComponentErrorBoundary extends React.Component<',
@@ -779,12 +809,14 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     "  if (mode !== 'multi') {",
     '    const SampleDefault = sampleRenderMap[componentPath];',
     '    if (!SampleDefault && !Component) {',
-    "      return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>",
-    '        <h2>Error: Component not found</h2>',
-    '        <p>Component &quot;{componentPath}&quot; is not available</p>',
-    '      </div>;',
+    '      return (',
+    '        <div style={{ padding: 20, fontFamily: "sans-serif", color: "#888" }}>',
+    '          <_ComponentMissingSignal componentPath={componentPath} />',
+    '          <p>Loading…</p>',
+    '        </div>',
+    '      );',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>${singleRender}</div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
