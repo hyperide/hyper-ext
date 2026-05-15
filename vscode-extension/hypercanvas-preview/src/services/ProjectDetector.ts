@@ -376,41 +376,14 @@ export async function getPackageScripts(projectPath: string): Promise<Record<str
 }
 
 /**
- * Detect package manager used in project.
- *
- * Priority: lock files → `packageManager` field in package.json → npm.
- *
- * The `packageManager` field is checked AFTER lock files because a lock file is
- * authoritative evidence of what was actually used to install. The field alone
- * (without a lock) is the case for projects that bake the manager into
- * package.json but ship without a committed lockfile (e.g. fresh templates,
- * monorepo subpackages). Skipping it here used to fall back to `npm`, which then
- * tried to forward to corepack and failed with `<manager>: not found` if the
- * shim wasn't enabled — observed on bulka-the-dog (`packageManager: pnpm@10.14.0`,
- * no lockfile) blocking dev-server bring-up.
+ * Detect package manager used in project
  */
 export async function detectPackageManager(projectPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
-  // Check for lock files first — these are the strongest signal.
+  // Check for lock files
   if (await fileExists(path.join(projectPath, 'bun.lockb'))) return 'bun';
   if (await fileExists(path.join(projectPath, 'bun.lock'))) return 'bun';
   if (await fileExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
   if (await fileExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-
-  // Fall back to the `packageManager` field — corepack-style declaration
-  // common in projects that don't commit lock files but pin a manager.
-  try {
-    const pkgRaw = await fs.readFile(path.join(projectPath, 'package.json'), 'utf8');
-    const pkg = JSON.parse(pkgRaw) as { packageManager?: unknown };
-    if (typeof pkg.packageManager === 'string') {
-      // Format is "<name>@<version>[+<integrity>]". We only need the name.
-      const name = pkg.packageManager.split('@', 1)[0]?.trim().toLowerCase();
-      if (name === 'pnpm' || name === 'yarn' || name === 'bun' || name === 'npm') {
-        return name;
-      }
-    }
-  } catch {
-    // No package.json or parse error — fall through to npm default.
-  }
 
   return 'npm';
 }
