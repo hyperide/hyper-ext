@@ -135,12 +135,12 @@ rg -n "habits\\.walks|useLanguage|t\\(" /Users/ultra/work/ext-test-projects/bulk
 
 ### Task 2: Add Shared Types And Package Detection Tests First
 
-- [ ] Add shared types in `shared/i18n-text/` or an equivalent shared module.
-- [ ] Write failing tests before implementation for package detection:
+- [x] Add shared types in `shared/i18n-text/` or an equivalent shared module.
+- [x] Write failing tests before implementation for package detection:
   `shared/i18n-text/__tests__/detect-i18n-package.test.ts`.
-- [ ] Cover dependencies and devDependencies for `react-i18next`, `i18next`,
+- [x] Cover dependencies and devDependencies for `react-i18next`, `i18next`,
   `next-intl`, `react-intl`, `@lingui/react`, and no-library custom mode.
-- [ ] Confirm the tests fail because the production detector does not exist or
+- [x] Confirm the tests fail because the production detector does not exist or
   returns unsupported results.
 
 Verification:
