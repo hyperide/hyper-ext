@@ -33,38 +33,6 @@ describe('AstService wrap element', () => {
   });
 });
 
-describe('AstService updateI18nKey', () => {
-  it('replaces only the selected i18n key literal and preserves the helper expression', async () => {
-    const componentPath = '/workspace/src/App.tsx';
-    const source = `export function App() {
-  return (
-    <main>
-      <h1>{richText(t("hero.title"))}</h1>
-    </main>
-  );
-}
-`;
-    const fileIO = new InMemoryFileIO({ [componentPath]: source });
-    const service = new AstService('/workspace', fileIO);
-    await service.ensureInitialized();
-
-    const entries = service.nodeMapService.getNodeMap(componentPath);
-    const heading = entries?.find((entry) => entry.tag === 'h1');
-    if (!heading) throw new Error('Expected h1 entry in node map');
-
-    const result = await service.updateI18nKey(
-      'src/App.tsx',
-      `src/App.tsx:${heading.loc.line}:${heading.loc.column}`,
-      'hero.title',
-      'hero.new_title',
-    );
-
-    expect(result).toEqual(expect.objectContaining({ success: true }));
-    expect(fileIO.content(componentPath)).toContain('richText(t("hero.new_title"))');
-    expect(fileIO.content(componentPath)).not.toContain("t('hero.new_title')");
-  });
-});
-
 async function createServiceWithButton() {
   const componentPath = '/workspace/src/App.tsx';
   const fileIO = new InMemoryFileIO({

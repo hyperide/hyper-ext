@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -48,14 +48,7 @@ import {
 } from './sections';
 import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import {
-  computeNumericArrowValue,
-  cssToPosition,
-  findNodeById,
-  mapShadowSizeToValues,
-  parseHexWithAlpha,
-  positionToCss,
-} from './utils';
+import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
 
 // ============================================================================
 // Component quick-list (Inspector empty state, VS Code only)
@@ -461,18 +454,49 @@ export default function RightSidebar({
       styleKey?: string,
       defaultValue?: string,
     ) => {
-      const newValue = computeNumericArrowValue({
-        key: e.key,
-        currentValue,
-        styleKey,
-        defaultValue,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-      });
-      if (newValue === null) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
         return;
       }
+
       e.preventDefault();
+
+      const isUnitless =
+        styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
+      const trimmed = currentValue.replace(' Auto', '').trim();
+      const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+
+      if (!match) {
+        const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+        const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
+        const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
+
+        const increment = e.key === 'ArrowUp' ? 1 : -1;
+        const step = e.shiftKey || e.altKey ? 10 : 1;
+        let newNum = baseNum + increment * step;
+
+        if (styleKey === 'opacity') {
+          newNum = Math.max(0, Math.min(100, newNum));
+        }
+
+        const unit = isUnitless ? '' : baseUnit || 'px';
+        const newValue = `${newNum}${unit}`;
+        setValue(newValue);
+        if (styleKey) syncStyleChange(styleKey, newValue);
+        return;
+      }
+
+      const num = Number.parseFloat(match[1]);
+      const unit = match[2] || (isUnitless ? '' : 'px');
+
+      const increment = e.key === 'ArrowUp' ? 1 : -1;
+      const step = e.shiftKey || e.altKey ? 10 : 1;
+      let newNum = num + increment * step;
+
+      if (styleKey === 'opacity') {
+        newNum = Math.max(0, Math.min(100, newNum));
+      }
+
+      const newValue = `${newNum}${unit}`;
       setValue(newValue);
       if (styleKey) syncStyleChange(styleKey, newValue);
     },
@@ -711,32 +735,29 @@ export default function RightSidebar({
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
   }, []);
 
+  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
+  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
+  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
+  // is no longer attached to the same DOM node.
+  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
-      // Trim before comparison so trailing whitespace from blur/Enter doesn't
-      // bypass the equality check and write a whitespace-padded key into JSX/JSON.
-      const trimmedKey = newKey.trim();
-      if (!trimmedKey || trimmedKey === i18nText.key) return;
+      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
-      // The JSX node we're editing is THE SAME node before and after — its loc
-      // (filename:line:col) does not change because we only rewrite the argument
-      // string passed to t(...). So the source-id stays valid and selection
-      // survives without any re-dispatch trickery.
+      const previousSelectedId = selectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
-      // as "create new key" — also write the translation resource. Otherwise (existing key)
-      // skip the resource write and only retarget JSX.
-      const knownI18nKeys = availableI18nKeys ?? [];
-      const isNewKey = !knownI18nKeys.includes(trimmedKey);
-      // Defensive: even if a UI gate is bypassed, refuse to create a new key on a
-      // non-editable binding. writeI18nResource would fail server-side anyway,
-      // but bailing early avoids JSX rewrite without a corresponding resource entry.
-      if (isNewKey && !i18nText.editable) return;
+      // as "create new key" — also write the JSON resource so the next re-read
+      // returns editable=true and the user can immediately type the translation.
+      // Otherwise (existing key) skip the JSON write and only retarget JSX.
+      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
       void (async () => {
+        const writeId = crypto.randomUUID();
+        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
         try {
           await astOps.writeI18nResource({
             library: i18nText.library,
-            key: trimmedKey,
+            key: newKey,
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
             newText: i18nText.resolvedText ?? '',
@@ -745,14 +766,34 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
+          // Clear writeInProgress in the last timeout (after HMR window) — NOT in finally,
+          // because HMR fires async ~100-500ms after writeI18nResource resolves.
+          if (i18nDispatch) {
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => {
+              i18nDispatch({ selectedIds: [previousSelectedId] });
+              // Guard: only clear if this write is still the active one — concurrent writes
+              // would overwrite writeId, and the earlier timeout must not clear the later write.
+              if (useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+                i18nDispatch({ writeInProgress: null });
+              }
+            }, 800);
+          }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
+          if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+            i18nDispatch({ writeInProgress: null });
+          }
         } finally {
           setStyleRefreshKey((k) => k + 1);
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, availableI18nKeys],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
   );
 
   const handleI18nResolvedTextChange = useCallback(
@@ -760,6 +801,8 @@ export default function RightSidebar({
       if (!i18nText || i18nText.kind !== 'i18n') return;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
       debouncedI18nWriteRef.current = setTimeout(() => {
+        const writeId = crypto.randomUUID();
+        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
         void (async () => {
           try {
             await astOps.writeI18nResource({
@@ -769,7 +812,15 @@ export default function RightSidebar({
               activeLocale: i18nText.activeLocale,
               newText,
             });
+            setTimeout(() => {
+              if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+                i18nDispatch({ writeInProgress: null });
+              }
+            }, 800);
           } catch {
+            if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+              i18nDispatch({ writeInProgress: null });
+            }
             // write failed — rollback scoped to this binding so other visible bindings are not affected
             const bindingId = `${i18nText.library}|${i18nText.key}`;
             setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
@@ -780,7 +831,7 @@ export default function RightSidebar({
         })();
       }, 300);
     },
-    [i18nText, astOps],
+    [i18nText, astOps, i18nDispatch],
   );
 
   // ========================================================================
@@ -1263,11 +1314,7 @@ export default function RightSidebar({
                   localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
-                  // Existing keys can be selected even when text editing is disabled,
-                  // because that path only rewrites JSX. Editable bindings can create
-                  // keys inside the resolved dictionary.
-                  keyEditable={(availableI18nKeys?.length ?? 0) > 0 || i18nText.editable}
-                  canCreateKeys={i18nText.editable}
+                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                 />
               );
             })()}
