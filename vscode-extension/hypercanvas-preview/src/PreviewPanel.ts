@@ -1335,6 +1335,26 @@ export class PreviewPanel {
   }
 
   /**
+   * Go to code location of the first selected element (called from VS Code keybinding command).
+   * Mirrors _handleContextMenuGoToCode but driven by VS Code keyboard shortcut rather than
+   * the iframe context menu, so it works even when !inputFocus guard blocks iframe key events.
+   */
+  public async goToCodeSelected(): Promise<void> {
+    const selectedIds = await this._waitForSelectedIds();
+    const componentPath = this._currentComponent;
+    const panel = this._panel;
+    if (!componentPath || !selectedIds?.length || !panel) return;
+
+    const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, selectedIds[0]);
+    if (loc) {
+      await handleEditorMessage(
+        { type: 'editor:goToCode', path: componentPath, line: loc.line, column: loc.column + 1 },
+        panel.webview,
+      );
+    }
+  }
+
+  /**
    * Wrap the first selected element in a new div container (called from VS Code command).
    */
   public async wrapSelected(): Promise<void> {

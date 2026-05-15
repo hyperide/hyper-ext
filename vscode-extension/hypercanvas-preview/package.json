@@ -199,6 +199,10 @@
       {
         "command": "hypercanvas.canvasEscape",
         "title": "Hyper: Clear Selection"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "title": "Hyper: Go to Code"
       }
     ],
     "keybindings": [
@@ -267,6 +271,12 @@
         "command": "hypercanvas.canvasDuplicate",
         "key": "ctrl+d",
         "mac": "cmd+d",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       }
     ],

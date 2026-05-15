@@ -1115,6 +1115,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     vscode.commands.registerCommand('hypercanvas.canvasRedo', () => previewPanel?.redo()),
     vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasDuplicate', () => previewPanel?.duplicateSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasGoToCode', () => previewPanel?.goToCodeSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasWrap', () => previewPanel?.wrapSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasInsertElement', () =>
       previewPanel?.openInsertPanelForSelection(),
