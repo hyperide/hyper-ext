@@ -1862,3 +1862,66 @@ Workfile up-to-date, 8 atomic commits push'нуты сегодня:
 - `84fedbb7` 3h checkpoint
 - `de00ca74` s2 finished new
 - `161d7702` final analysis
+
+## 📍 2026-04-27 08:25 CEST: 4 субагента — 3 отчёта, real fixes применены
+
+### Inspector/styles subagent — REAL ROOT CAUSE FOUND
+
+Все 11+ fails Inspector/styles cluster — это **не** Inspector/scanner/iframe-interaction
+баги, а **timeout setupPreview** до тела теста. Subagent проследил 7 разных
+тестов: все висят в `inspector:open-command → inspector:root:wait` 47s,
+`preview:poll-loaded:start` 90s, `preview:tab:wait` 10s+.
+
+Корневая причина: **DevServerManager recompile gate** работал ТОЛЬКО на
+webpack ('compiled successfully'). Remix/Vite/Next.js использовали file
+writes (ensurePreviewFiles), dev server рекомпилировал, но gate не
+зарм'ивался → iframe гнал /test-preview во время компиляции → 90s hang.
+
+**FIX (commit `2e02e5f2`):**
+1. `lib/preview-generator/preview-mode-manager.ts:onComponentSelected` —
+   arm gate ВСЕГДА перед file write (не webpack-only).
+2. `vscode-extension/.../DevServerManager.ts:_maybeResolveRecompileGate` —
+   расширил marker matching: `compiled successfully` (webpack), `compiled
+   in/client` (Next.js), `hmr update`/`page reload` (Vite/Remix), `rebuilt
+   in` (esbuild), `ready in N ms` (Vite restart).
+3. Bumped VSIX 0.1.10 → **0.1.11**.
+
+### Fiber-tracing subagent — same conclusion
+
+11 fails заголовки про "fiber selection" — но fiber код не
+выполняется. Падает та же setupPreview (HYP-363 webview offscreen +
+recompile race).
+
+### Preview-refresh + AST subagent — три симптома
+
+23 fails разделены на:
+1. **Renderer crashes (Target crashed)** — Electron OOM на тяжёлых проектах
+   (tamagui RN-Web Vite dep prebundle). Не code bug.
+2. **iframe stuck on fake.html** — recompile race. Закроется fix'ом 2e02e5f2.
+3. **React не монтируется на spotify** — отдельный race (200 OK HTML +
+   rootChildren=0). Требует архитектурной работы.
+
+### Test-level workaround — closeVSCode timeout
+
+`fix(e2e): bound app.evaluate / app.close to 3s in closeVSCode`
+(commit `430f676` в ext-test-projects).
+
+Worker teardown 30s exceeded — Electron crashed renderer, app.close
+никогда не резолвится, worker блокирует всю очередь. Promise.race с
+3s timer bounded оба call'а. Fall-through к существующему kill-tree.
+
+### Что ждёт следующий прогон с 0.1.11 + 430f676
+
+Ожидаю значительное снижение fail count:
+- Inspector/styles cluster ~11 fails → большинство закроется
+- Fiber-tracing cluster ~11 fails → закроется
+- preview-refresh + AST iframe-stuck ~13 fails → закроется
+- Worker teardown caskads (5+ fails вокруг crashed renderer) → закроется
+
+Итого ожидаю **~40-50 fewer fails** в новом прогоне.
+
+Что НЕ закроется:
+- empty component cluster (29 fails) — subagent ещё расследует
+- Settings handler bug (12 fails) — отдельный кластер
+- Renderer OOM на tamagui — нужен memory tuning или скип heavy projects
+- spotify React-not-mounting — отдельный race, архитектурный
