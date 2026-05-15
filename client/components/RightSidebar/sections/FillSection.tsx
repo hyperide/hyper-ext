@@ -23,6 +23,13 @@ interface FillSectionProps {
   onFontSizeChange: (value: string) => void;
   onFillModeChange: (mode: FillMode) => void;
   syncStyleChange: (key: string, value: string) => void;
+  onNumericKeyDown?: (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentValue: string,
+    setValue: (value: string) => void,
+    styleKey?: string,
+    defaultValue?: string,
+  ) => void;
   engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
   componentPath?: string | null;
   textOpacity?: string;
@@ -46,6 +53,7 @@ export const FillSection = memo(function FillSection({
   onFontSizeChange,
   onFillModeChange,
   syncStyleChange,
+  onNumericKeyDown,
   engine,
   componentPath,
   textOpacity,
@@ -173,6 +181,7 @@ export const FillSection = memo(function FillSection({
                 syncStyleChange('fontSize', e.target.value);
               }}
               onBlur={handleFontSizeBlur}
+              onKeyDown={(e) => onNumericKeyDown?.(e, fontSize ?? '', onFontSizeChange, 'fontSize')}
               placeholder="15px"
               className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
             />

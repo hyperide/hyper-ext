@@ -1277,6 +1277,7 @@ export default function RightSidebar({
                 onFontSizeChange={setFontSize}
                 onFillModeChange={setFillMode}
                 syncStyleChange={syncStyleChange}
+                onNumericKeyDown={handleNumericKeyDown}
                 engine={engine}
                 componentPath={componentPath}
                 textOpacity={textOpacity}
