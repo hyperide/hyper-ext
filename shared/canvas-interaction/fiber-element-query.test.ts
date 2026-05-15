@@ -3,13 +3,6 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import { Window } from 'happy-dom';
-
-// Set up global DOM APIs from happy-dom
-const win = new Window({ url: 'http://localhost' });
-globalThis.document = win.document as unknown as Document;
-globalThis.HTMLElement = win.HTMLElement as unknown as typeof HTMLElement;
-
 import type { FrameworkAdapter, SourceLocation } from '../element-tracing/types';
 import { buildSourceKey, computeFiberItemIndex, findDOMElementsBySource } from './fiber-element-query';
 

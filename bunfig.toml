@@ -1,2 +1,4 @@
 [test]
 preload = ["./test/setup.ts", "./test/mock-vscode.ts"]
+coverage = false
+exclude = ["vscode-extension/hypercanvas-preview/out/**"]

@@ -8,6 +8,50 @@
 import { isContainerEmpty, MIN_PLACEHOLDER_HEIGHT } from './empty-container-placeholders';
 import type { OverlayElementResolver, OverlayRect, PlaceholderRect } from './types';
 
+/**
+ * Detect whether a Tailwind class list contains explicit fixed-size classes per axis.
+ * Matches: w-{n}, h-{n} (numeric including decimals), w-px/h-px, w-[...]/h-[...] arbitrary.
+ * Does NOT match keyword sizes: auto, full, screen, min, max, fit.
+ *
+ * Design intent for variant-prefixed classes (e.g. md:w-12, hover:md:w-12):
+ * We treat these as "this size class exists and can be edited", regardless of whether
+ * the viewport currently satisfies the breakpoint. A resize handle is shown even if the
+ * class is inactive at the current viewport — this is "editable, not applied" semantics.
+ *
+ * Stacked variants (hover:md:w-12, dark:hover:md:w-12) are handled by stripping all
+ * variant prefixes: lastIndexOf(':') up to (but not including) the first '[', so CSS
+ * type-hint arbitrary values like w-[length:50px] are never mis-parsed.
+ */
+export function detectTailwindExplicitSize(className: string | undefined): { width: boolean; height: boolean } {
+  if (!className || typeof className !== 'string') return { width: false, height: false };
+  let width = false;
+  let height = false;
+  for (const cls of className.split(/\s+/)) {
+    const bracketIdx = cls.indexOf('[');
+    const searchEnd = bracketIdx === -1 ? cls.length : bracketIdx;
+    const colonIdx = cls.lastIndexOf(':', searchEnd - 1);
+    const bare = colonIdx !== -1 ? cls.slice(colonIdx + 1) : cls;
+    if (!width && isTailwindSizeClass(bare, 'w')) width = true;
+    if (!height && isTailwindSizeClass(bare, 'h')) height = true;
+    if ((!width || !height) && isTailwindSizeClass(bare, 'size')) {
+      width = true;
+      height = true;
+    }
+    if (width && height) break;
+  }
+  return { width, height };
+}
+
+function isTailwindSizeClass(cls: string, axis: 'w' | 'h' | 'size'): boolean {
+  const prefix = `${axis}-`;
+  if (!cls.startsWith(prefix)) return false;
+  const rest = cls.slice(prefix.length);
+  if (!rest) return false;
+  if (rest === 'px') return true;
+  if (rest[0] === '[') return true;
+  return rest[0] >= '0' && rest[0] <= '9' && !rest.includes('/');
+}
+
 export interface OverlayComputeState {
   selectedIds: string[];
   hoveredId: string | null;
@@ -72,14 +116,30 @@ export function computeOverlayRects(
     for (let i = 0; i < elements.length; i++) {
       const rect = elements[i].getBoundingClientRect();
       const key = itemIndex !== null ? `select-${id}-${itemIndex}` : `select-${id}-${i}`;
-      overlayRects.push({
+      const overlayRect: OverlayRect = {
         key,
+        elementId: id,
         left: rect.left,
         top: rect.top,
         width: rect.width,
         height: rect.height,
         type: 'selection',
-      });
+      };
+      const cn = elements[i].className;
+      // SVGElement.className is SVGAnimatedString in the browser, not a plain string
+      const rawClass = typeof cn === 'string' ? cn : (cn as unknown as SVGAnimatedString).baseVal;
+      const resizable = detectTailwindExplicitSize(rawClass);
+      if (resizable.width || resizable.height) {
+        const hasSizeClass = rawClass.split(/\s+/).some((cls) => {
+          const bracketIdx = cls.indexOf('[');
+          const searchEnd = bracketIdx === -1 ? cls.length : bracketIdx;
+          const colonIdx = cls.lastIndexOf(':', searchEnd - 1);
+          const bare = colonIdx !== -1 ? cls.slice(colonIdx + 1) : cls;
+          return isTailwindSizeClass(bare, 'size');
+        });
+        overlayRect.resizable = hasSizeClass ? { ...resizable, hasSizeClass: true } : resizable;
+      }
+      overlayRects.push(overlayRect);
     }
   }
 

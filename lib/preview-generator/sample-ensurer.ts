@@ -7,6 +7,7 @@
  */
 
 import type { FileIO } from '../ast/file-io';
+import { buildDeterministicContainerSampleScaffold } from './sample-scaffold';
 import { escapeRegex, scanSampleExports } from './scanner';
 
 /**
@@ -63,6 +64,22 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
   const existingSamples = scanSampleExports(sourceCode);
   if (existingSamples.includes(sampleName)) {
     return { generated: false, exists: true };
+  }
+
+  const deterministicCode = buildDeterministicContainerSampleScaffold({
+    sourceCode,
+    componentName,
+    exportName: sampleName,
+  });
+  if (deterministicCode) {
+    try {
+      await io.writeFile(absolutePath, `${sourceCode}\n\n${deterministicCode.trimStart()}\n`);
+      console.log(`[ensureSample] Generated deterministic ${sampleName} for ${componentName}`);
+      return { generated: true, exists: true };
+    } catch (error) {
+      console.error(`[ensureSample] Failed to write deterministic sample: ${error}`);
+      return { generated: false, exists: false };
+    }
   }
 
   // Generate via AI callback

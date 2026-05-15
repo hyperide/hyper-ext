@@ -100,6 +100,18 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('parcel');
   });
 
+  it('detects Bun from its lockfile and dev script', async () => {
+    const io = makeIO({ scripts: { dev: 'bun --hot src/index.ts' }, dependencies: { react: '^19.0.0' } }, [
+      `${root}/bun.lock`,
+    ]);
+    expect((await detectFramework(root, io)).framework).toBe('bun');
+  });
+
+  it('keeps Vite precedence when a Vite project uses Bun as package manager', async () => {
+    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/bun.lock`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
   it('returns unknown when no known deps and no config files', async () => {
     const io = makeIO({ dependencies: { react: '^18.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('unknown');
@@ -163,6 +175,7 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain('useSearchParams');
     expect(content).toContain('Suspense');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
     expect(content).toContain('CanvasPreview');
     // Must pass component/mode props to CanvasPreview so it doesn't use window.location.search
     // (window is undefined during SSR in Next.js App Router)
@@ -174,6 +187,7 @@ describe('generateRouteFileContent', () => {
     const content = generateRouteFileContent('nextjs-pages-router', '../src/__canvas_preview__');
     expect(content).toContain('CanvasPreview');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
     expect(content).not.toContain('useSearchParams');
   });
 
@@ -181,6 +195,13 @@ describe('generateRouteFileContent', () => {
     const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
     expect(content).toContain('CanvasPreview');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
+    expect(content).toContain('useEffect');
+    expect(content).toContain('useSearchParams');
+    expect(content).toContain("params.get('component')");
+    expect(content).toContain("params.get('mode')");
+    expect(content).toContain('/__hypercanvas/iframe-interaction.js');
+    expect(content).not.toContain('suppressHydrationWarning');
   });
 });
 

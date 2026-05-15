@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { detectExportStyle, escapeRegex, extractComponentName, scanSampleExports } from '../scanner';
+import {
+  detectExportStyle,
+  detectRouterShell,
+  detectSSRHooks,
+  escapeRegex,
+  extractComponentName,
+  scanSampleExports,
+} from '../scanner';
 
 describe('scanSampleExports', () => {
   it('should find exported const Sample* functions', () => {
@@ -39,6 +46,26 @@ describe('scanSampleExports', () => {
       export const Sampledefault = () => <div />;
     `;
     expect(scanSampleExports(source)).toEqual([]);
+  });
+
+  it('should include barrel re-export of Sample*', () => {
+    const source = `export { SampleFoo } from './samples';`;
+    expect(scanSampleExports(source)).toEqual(['SampleFoo']);
+  });
+
+  it('should exclude type-only export statement: export type { SampleFoo }', () => {
+    const source = `export type { SampleFoo } from './types';`;
+    expect(scanSampleExports(source)).toEqual([]);
+  });
+
+  it('should exclude inline type specifier: export { type SampleFoo }', () => {
+    const source = `export { type SampleFoo } from './types';`;
+    expect(scanSampleExports(source)).toEqual([]);
+  });
+
+  it('should include value re-export but skip inline type among mixed specifiers', () => {
+    const source = `export { SampleBar, type SampleFoo } from './samples';`;
+    expect(scanSampleExports(source)).toEqual(['SampleBar']);
   });
 });
 
@@ -210,6 +237,207 @@ export default React.memo(MyButton);`;
   it('should extract from re-export syntax', () => {
     const source = `export { default as Button } from './BaseButton';`;
     expect(extractComponentName(source, 'index.tsx')).toBe('Button');
+  });
+
+  it('should skip createContext exports and extract the provider component', () => {
+    const source = `
+      import { createContext } from 'react';
+      export const LanguageContext = createContext(null);
+      export function LanguageProvider({ children }: { children: React.ReactNode }) {
+        return <LanguageContext.Provider value={null}>{children}</LanguageContext.Provider>;
+      }
+    `;
+    expect(extractComponentName(source, 'LanguageContext.tsx')).toBe('LanguageProvider');
+  });
+
+  it('should extract styled tagged-template exports', () => {
+    const source = `
+      import styled from '@emotion/styled';
+      export const LayoutRoot = styled.div\`
+        display: flex;
+      \`;
+    `;
+    expect(extractComponentName(source, 'Layout.tsx')).toBe('LayoutRoot');
+  });
+
+  it('should skip type-only export specifiers', () => {
+    const source = `
+      type ToastProps = { title: string };
+      const ToastProvider = Provider.Root;
+      const Toast = () => <div />;
+      export { type ToastProps, ToastProvider, Toast };
+    `;
+    expect(extractComponentName(source, 'toast.tsx')).toBe('ToastProvider');
+  });
+});
+
+describe('detectSSRHooks', () => {
+  it('detects useLoaderData from @remix-run/react', () => {
+    const source = `
+      import { useLoaderData, Link } from "@remix-run/react";
+      export default function Route() {
+        const { tweets } = useLoaderData<typeof loader>();
+        return <div>{tweets.map(t => t.id)}</div>;
+      }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useLoaderData')).toBe(true);
+    expect(hooks.has('useRouteLoaderData')).toBe(false);
+    expect(hooks.size).toBe(1);
+  });
+
+  it('detects useRouteLoaderData from @remix-run/react', () => {
+    const source = `
+      import { useRouteLoaderData } from "@remix-run/react";
+      export default function Child() {
+        const data = useRouteLoaderData("root");
+        return <div>{data.user}</div>;
+      }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useRouteLoaderData')).toBe(true);
+    expect(hooks.size).toBe(1);
+  });
+
+  it('detects both hooks when both imported', () => {
+    const source = `
+      import { useLoaderData, useRouteLoaderData, Link } from "@remix-run/react";
+      export default function Route() { return null; }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useLoaderData')).toBe(true);
+    expect(hooks.has('useRouteLoaderData')).toBe(true);
+    expect(hooks.size).toBe(2);
+  });
+
+  it('returns empty set when no SSR hooks imported', () => {
+    const source = `
+      import { Link, Form } from "@remix-run/react";
+      export default function Route() { return <Link to="/">Home</Link>; }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
+  });
+
+  it('returns empty set when useLoaderData imported from wrong package', () => {
+    const source = `
+      import { useLoaderData } from "react-router-dom";
+      export default function Route() { return null; }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
+  });
+
+  it('returns empty set for plain React component', () => {
+    const source = `
+      import React from "react";
+      export default function Button({ label }: { label: string }) {
+        return <button>{label}</button>;
+      }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
+  });
+});
+
+describe('detectRouterShell', () => {
+  it('returns true for BrowserRouter import from react-router-dom', () => {
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      const App = () => <BrowserRouter><Routes><Route path="/" element={<div />} /></Routes></BrowserRouter>;
+      export default App;
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for StaticRouter import from react-router-dom/server', () => {
+    const source = `
+      import { StaticRouter } from 'react-router-dom/server';
+      export default function App() { return <StaticRouter location="/"><div /></StaticRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for HashRouter import from react-router-dom', () => {
+    const source = `
+      import { HashRouter } from 'react-router-dom';
+      export default function App() { return <HashRouter><div /></HashRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for React Navigation containers', () => {
+    const source = `
+      import { NavigationContainer } from '@react-navigation/native';
+      export function AppNavigator() { return <NavigationContainer><div /></NavigationContainer>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for React Navigation navigator factories', () => {
+    const source = `
+      import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+      const Tab = createBottomTabNavigator();
+      export function BottomTabs() { return <Tab.Navigator />; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true when BrowserRouter and StaticRouter are both imported (Bulka pattern)', () => {
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      import { StaticRouter } from 'react-router-dom/server';
+      const isBrowser = typeof window !== 'undefined';
+      function Router({ children }: { children: React.ReactNode }) {
+        return isBrowser ? <BrowserRouter>{children}</BrowserRouter> : <StaticRouter location="/">{children}</StaticRouter>;
+      }
+      const App = () => <Router><Routes><Route path="/" element={<div />} /></Routes></Router>;
+      export default App;
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns false for plain page component that only imports Link', () => {
+    const source = `
+      import { Link, useNavigate } from 'react-router-dom';
+      export default function Index() { return <Link to="/">Home</Link>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false for component with no router imports at all', () => {
+    const source = `
+      import React from 'react';
+      export default function Button({ label }: { label: string }) { return <button>{label}</button>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false when BrowserRouter is imported from an unrecognized package', () => {
+    const source = `
+      import { BrowserRouter } from 'my-custom-router';
+      export default function App() { return <BrowserRouter><div /></BrowserRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false when only MemoryRouter is imported (sample wrapper, not an app shell)', () => {
+    const source = `
+      import { MemoryRouter } from 'react-router-dom';
+      export default function FillPicker() { return <div />; }
+      export const SampleDefault = () => (
+        <MemoryRouter initialEntries={['/projects/proj-1']}>
+          <FillPicker />
+        </MemoryRouter>
+      );
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false for type-only React Navigation props', () => {
+    const source = `
+      import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+      type Props = { navigation: NativeStackNavigationProp<{ Home: undefined }, 'Home'> };
+      export function HomeScreen(_props: Props) { return <div />; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
   });
 });
 

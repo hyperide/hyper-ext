@@ -23,6 +23,13 @@ interface FillSectionProps {
   onFontSizeChange: (value: string) => void;
   onFillModeChange: (mode: FillMode) => void;
   syncStyleChange: (key: string, value: string) => void;
+  onNumericKeyDown?: (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentValue: string,
+    setValue: (value: string) => void,
+    styleKey?: string,
+    defaultValue?: string,
+  ) => void;
   engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
   componentPath?: string | null;
   textOpacity?: string;
@@ -46,6 +53,7 @@ export const FillSection = memo(function FillSection({
   onFontSizeChange,
   onFillModeChange,
   syncStyleChange,
+  onNumericKeyDown,
   engine,
   componentPath,
   textOpacity,
@@ -101,7 +109,7 @@ export const FillSection = memo(function FillSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('fill')}
-      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-foreground">Fill</span>
@@ -164,17 +172,20 @@ export const FillSection = memo(function FillSection({
         />
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground min-w-[60px]">Size</span>
-          <Input
-            testId={TID.inspector.fontSize}
-            value={fontSize ?? ''}
-            onChange={(e) => {
-              onFontSizeChange(e.target.value);
-              syncStyleChange('fontSize', e.target.value);
-            }}
-            onBlur={handleFontSizeBlur}
-            placeholder="15px"
-            className="h-8 flex-1"
-          />
+          <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center">
+            <Input
+              testId={TID.inspector.fontSize}
+              value={fontSize ?? ''}
+              onChange={(e) => {
+                onFontSizeChange(e.target.value);
+                syncStyleChange('fontSize', e.target.value);
+              }}
+              onBlur={handleFontSizeBlur}
+              onKeyDown={(e) => onNumericKeyDown?.(e, fontSize ?? '', onFontSizeChange, 'fontSize')}
+              placeholder="15px"
+              className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
+            />
+          </div>
         </div>
       </div>
     </div>

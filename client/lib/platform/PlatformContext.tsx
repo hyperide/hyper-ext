@@ -340,7 +340,7 @@ function createBrowserAstOperations(): AstOperations {
       const response = await authFetch('/api/delete-elements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
+        body: JSON.stringify({ nodeRefs: params.elementIds, filePath: params.filePath }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -402,6 +402,18 @@ function createBrowserAstOperations(): AstOperations {
           filePath: params.filePath,
           text: params.text,
         }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || response.statusText);
+      }
+    },
+
+    async writeI18nResource(params) {
+      const response = await authFetch('/api/write-i18n-resource', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -539,6 +551,25 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
       );
       if (!result.success) {
         throw new Error(result.error || 'Failed to update text');
+      }
+    },
+
+    async writeI18nResource(params) {
+      const result = await canvasRPC(
+        canvas,
+        {
+          type: 'ast:writeI18nResource',
+          requestId: crypto.randomUUID(),
+          library: params.library,
+          key: params.key,
+          namespace: params.namespace,
+          activeLocale: params.activeLocale,
+          newText: params.newText,
+        },
+        'ast:response',
+      );
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to write i18n resource');
       }
     },
   };

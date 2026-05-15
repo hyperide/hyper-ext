@@ -6,7 +6,7 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { StyleReadService } from '../services/StyleReadService';
@@ -52,6 +52,20 @@ async function captureWarnings<T>(run: () => Promise<T>): Promise<{ result: T; w
     return { result: await run(), warnings };
   } finally {
     console.warn = originalWarn;
+  }
+}
+
+async function captureErrors<T>(run: () => Promise<T>): Promise<{ result: T; errors: string[] }> {
+  const originalError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(' '));
+  };
+
+  try {
+    return { result: await run(), errors };
+  } finally {
+    console.error = originalError;
   }
 }
 
@@ -223,5 +237,269 @@ describe('StyleReadService', () => {
     expect(warnings).toEqual([
       '[HyperCanvas] Selection lost after HMR — element not found for nodeRef: some-uuid-that-doesnt-exist',
     ]);
+  });
+
+  it('ignores stale bundle artifact nodeRefs without reading or logging errors', async () => {
+    const nodeMap = new NodeMapService();
+    const fileIO: FileIO = {
+      readFile: mock(async () => {
+        throw new Error('readFile should not be called for generated bundle artifacts');
+      }),
+      writeFile: async () => {},
+      access: async () => {},
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const { result, errors } = await captureErrors(() =>
+      service.readElementClassName('src/App.tsx', '/workspace/bun-tw-shadcn-sample/_bun/client/index-abc.js:10:5'),
+    );
+
+    expect(result.className).toBe('');
+    expect(result.tagType).toBe('unknown');
+    expect(fileIO.readFile).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
+});
+
+// =============================================================================
+// i18n binding detection
+// =============================================================================
+
+const I18N_JSX = `const Greeting = () => <p className="text-lg">{t("habits.walks")}</p>;`;
+const PKG_WITH_I18N = JSON.stringify({ dependencies: { 'react-i18next': '^13.0.0' } });
+const LOCALES_EN = JSON.stringify({ habits: { walks: 'Go for a walk' } });
+
+describe('StyleReadService — i18n binding detection', () => {
+  it('detects react-i18next t() call and resolves key from locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0]; // <p> element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const fileIO = makeFileIO({
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': LOCALES_EN,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('react-i18next');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+      expect(result.i18nText.activeLocale).toBe('en');
+      expect(result.i18nText.editable).toBe(true);
+    }
+  });
+
+  it('returns unsupported when no i18n library is detected in package.json', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    // No package.json — library stays null → detectI18nBinding returns unsupported
+    const fileIO = makeFileIO({ [FILE_PATH]: I18N_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('unsupported');
+  });
+
+  it('returns undefined i18nText for elements with plain text children', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(SIMPLE_JSX, FILE_PATH);
+    const divEntry = entries[0]; // <div> with text children
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', divEntry.loc.line, divEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    // <div>'s only child is <span>, which is not a known i18n component — i18nText is undefined
+    expect(result.i18nText).toBeUndefined();
+  });
+
+  it('detects react-intl FormattedMessage JSX child element as i18n binding', async () => {
+    const JSX_FM = `const Greeting = () => <p className="text-lg"><FormattedMessage id="habits.walks" /></p>;`;
+    const PKG_REACT_INTL = JSON.stringify({ dependencies: { 'react-intl': '^6.0.0' } });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_FM, 'src/App.tsx');
+    const pEntry = entries[0]; // <p> element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const fileIO = makeFileIO({
+      [FILE_PATH]: JSX_FM,
+      '/workspace/package.json': PKG_REACT_INTL,
+      '/workspace/locales/en.json': LOCALES_EN,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('react-intl');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+      expect(result.i18nText.editable).toBe(true);
+    }
+  });
+
+  it('detects custom i18n from namespaced layout when no known package installed', async () => {
+    const JSX_NS = `const Greeting = () => <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;`;
+    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_NS, 'src/App.tsx');
+    const pEntry = entries[0];
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const files: Record<string, string> = {
+      [FILE_PATH]: JSX_NS,
+      '/workspace/locales/en/common.json': LOCALES_COMMON,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText).toBeDefined();
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.namespace).toBe('common');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+      expect(result.i18nText.editable).toBe(true);
+    }
+  });
+
+  it('returns i18nText with null resolvedText when locale file is missing', async () => {
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
+    const pEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    // Has package.json (library detected) but no locale files
+    const fileIO = makeFileIO({
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBeNull();
+      expect(result.i18nText.editable).toBe(false);
+    }
+  });
+});
+
+// =============================================================================
+// getAvailableKeys
+// =============================================================================
+
+const FLAT_LOCALES_EN = JSON.stringify({
+  'habits.walks': 'Go for a walk',
+  'habits.runs': 'Go for a run',
+  greeting: 'Hello',
+});
+const NESTED_LOCALES_EN = JSON.stringify({
+  habits: { walks: 'Go for a walk', runs: 'Go for a run' },
+  greeting: 'Hello',
+});
+
+describe('StyleReadService — getAvailableKeys', () => {
+  it('returns all leaf keys from a flat locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': FLAT_LOCALES_EN,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toContain('habits.walks');
+    expect(keys).toContain('habits.runs');
+    expect(keys).toContain('greeting');
+    expect(keys.length).toBe(3);
+  });
+
+  it('returns dot-path keys from a nested locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': NESTED_LOCALES_EN,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toContain('habits.walks');
+    expect(keys).toContain('habits.runs');
+    expect(keys).toContain('greeting');
+    expect(keys.length).toBe(3);
+  });
+
+  it('returns empty array when locale file is missing', async () => {
+    const nodeMap = new NodeMapService();
+    const fileIO = makeFileIO({ [FILE_PATH]: I18N_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toEqual([]);
+  });
+
+  it('returns empty array on parse error', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      '/workspace/locales/en.json': 'not valid json',
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toEqual([]);
   });
 });

@@ -172,15 +172,11 @@ export function useElementSelection(
           // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
-        if (dispatch) {
-          dispatch({ selectedIds: [dispatchId] });
-          // Notify preview panel to scroll canvas to this element.
-          // Custom DOM event stays local to the webview — no round-trip through extension host.
-          window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
-        }
+        dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
+        canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
       }
     },
-    [engine, dispatch, elementsTree],
+    [engine, dispatch, elementsTree, canvas, currentComponent],
   );
 
   const handleHover = useCallback(
@@ -189,11 +185,18 @@ export function useElementSelection(
         // SaaS: propagate via prop callback
         onHoverElement?.(id);
       } else {
-        // VS Code: dispatch to shared state
-        dispatch?.({ hoveredId: id });
+        // VS Code: resolve UUID → nodeRef so iframe can find the DOM element
+        let hoverId = id;
+        if (id !== null && nodeRefToUuid && currentComponent?.path) {
+          const node = findTreeNode(elementsTree, id);
+          if (node?.loc) {
+            hoverId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
+          }
+        }
+        dispatch?.({ hoveredId: hoverId });
       }
     },
-    [engine, dispatch, onHoverElement],
+    [engine, dispatch, onHoverElement, nodeRefToUuid, elementsTree, currentComponent],
   );
 
   return { selectedIds, hoveredId, handleSelect, handleHover };

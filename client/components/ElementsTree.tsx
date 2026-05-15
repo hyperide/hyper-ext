@@ -38,7 +38,9 @@ function TreeNodeItem({
   const isHovered = hoveredElement === node.id;
 
   useEffect(() => {
-    if (isSelected && elementRef.current && onElementPosition) {
+    if (!isSelected || !elementRef.current) return;
+    elementRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (onElementPosition) {
       const rect = elementRef.current.getBoundingClientRect();
       onElementPosition(node.id, rect.top);
     }

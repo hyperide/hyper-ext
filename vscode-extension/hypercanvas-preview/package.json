@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.9",
+  "version": "0.1.41",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
@@ -133,6 +133,10 @@
         "title": "Hyper: Open Logs"
       },
       {
+        "command": "hypercanvas.clearDiagnostics",
+        "title": "Hyper: Clear Diagnostics"
+      },
+      {
         "command": "hypercanvas.openAIChat",
         "title": "Hyper: Open AI Chat"
       },
@@ -173,6 +177,10 @@
         "title": "Hyper: Wrap Selected Element"
       },
       {
+        "command": "hypercanvas.canvasInsertElement",
+        "title": "Hyper: Insert Element"
+      },
+      {
         "command": "hypercanvas.canvasSelectChildren",
         "title": "Hyper: Select Children"
       },
@@ -191,6 +199,10 @@
       {
         "command": "hypercanvas.canvasEscape",
         "title": "Hyper: Clear Selection"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "title": "Hyper: Go to Code"
       }
     ],
     "keybindings": [
@@ -213,41 +225,59 @@
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' || focusedView == 'hypercanvas.inspectorView' || focusedView == 'hypercanvas.explorerView'"
       },
       {
+        "command": "workbench.action.files.saveAll",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
         "command": "hypercanvas.canvasDelete",
         "key": "backspace",
         "mac": "backspace",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasDelete",
         "key": "delete",
         "mac": "delete",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectChildren",
         "key": "enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectParent",
         "key": "shift+enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectNextSibling",
         "key": "tab",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectPrevSibling",
         "key": "shift+tab",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasEscape",
         "key": "escape",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasDuplicate",
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       }
     ],
     "menus": {

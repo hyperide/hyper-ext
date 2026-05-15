@@ -7,6 +7,7 @@
  * Uses fiber-based nodeRef resolution (via NodeMapService + findElementByPosition).
  */
 
+import * as fsSync from 'node:fs';
 import * as t from '@babel/types';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
@@ -25,8 +26,18 @@ import { findElementAtPosition } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import type { FindElementResult } from '@lib/types';
-import type { NodeRef } from '@shared/element-tracing/types';
+import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
+
+// File sink only when explicitly requested via env var — never in normal production use
+const DEBUG_LOG: string | null = process.env.HYPERIDE_AST_DEBUG_LOG ?? null;
+function dbg(msg: string) {
+  if (!DEBUG_LOG) return;
+  console.log(msg);
+  try {
+    fsSync.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
+}
 
 // ============================================
 // Response Types
@@ -36,6 +47,12 @@ export interface AstOperationResult {
   success: boolean;
   error?: string;
   data?: unknown;
+  /** Absolute path of the file that was actually mutated (may differ from the requested filePath for cross-file writes) */
+  resolvedPath?: string;
+  /** Content of resolvedPath read BEFORE the write (for undo tracking in cross-file scenarios) */
+  contentBeforeWrite?: string;
+  /** All cross-file paths mutated, with pre-write content — for multi-file undo tracking in batch operations */
+  allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
 }
 
 export interface UpdateStylesResult extends AstOperationResult {
@@ -80,6 +97,24 @@ export class AstService {
     return `${path.join(this._workspaceRoot, filePath)}:${line}:${col}`;
   }
 
+  private _resolveNodeMapEntry(nodeRef: NodeRef): NodeMapEntry | null {
+    const normalizedRef = this._normalizeNodeRef(nodeRef);
+    const sourceRef = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
+    if (sourceRef) {
+      // Fiber source refs can be relative and can report columns that differ from Babel's node map.
+      const entry = this._nodeMapService.resolveSourceLocation({
+        fileName: sourceRef[1],
+        line: Number.parseInt(sourceRef[2], 10),
+        column: Number.parseInt(sourceRef[3], 10),
+      });
+      if (entry) {
+        return entry;
+      }
+    }
+
+    return this._nodeMapService.resolveNodeRef(normalizedRef) ?? this._nodeMapService.resolveNodeRef(nodeRef);
+  }
+
   private _initPromise: Promise<void>;
   private _initError: unknown = null;
 
@@ -120,7 +155,7 @@ export class AstService {
     if (this._initialized) return;
     if (!this._fileIO.listFiles) return; // FileIO doesn't support directory listing
 
-    const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+    const SOURCE_DIRS = ['src', 'app', 'pages', 'components', 'client'];
     const allFiles: string[] = [];
 
     for (const dir of SOURCE_DIRS) {
@@ -160,7 +195,7 @@ export class AstService {
 
     this._initialized = true;
     if (allFiles.length > 0) {
-      console.log(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
+      dbg(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
     }
   }
 
@@ -187,17 +222,35 @@ export class AstService {
    * Resolve an element by nodeRef via NodeMapService + position lookup.
    * Returns the AST element result or null if not found.
    */
-  private _resolveElement(
-    ast: t.File,
-    nodeRef: NodeRef | undefined,
-    _elementId: string | undefined,
-    filePath?: string,
-  ): FindElementResult | null {
+  private _resolveElement(ast: t.File, nodeRef: NodeRef | undefined, filePath?: string): FindElementResult | null {
+    dbg(`[AstService._resolveElement] nodeRef=${nodeRef} filePath=${filePath}`);
     if (nodeRef) {
       // Try nodeRef lookup first (format: "filePath:index")
       const entry = this._nodeMapService.resolveNodeRef(nodeRef);
       if (entry) {
-        return findElementByPosition(ast, entry.loc.line, entry.loc.column);
+        // Guard: entry.loc.fileName is the ORIGINAL source file the node belongs to.
+        // If it differs from the AST being searched (filePath), the coordinates
+        // would be applied to the wrong file — e.g. RecordScreen.tsx:10:5 accidentally
+        // hitting <SafeAreaProvider> at the same position in App.tsx.
+        // Returning null lets _resolveElementInCorrectFile retry with the right file.
+        const entryFile = entry.loc.fileName;
+        const entryFileMatchesAst =
+          !filePath ||
+          !entryFile ||
+          entryFile === filePath ||
+          filePath.endsWith(`/${entryFile}`) ||
+          entryFile.endsWith(`/${filePath}`);
+        if (!entryFileMatchesAst) {
+          dbg(
+            `[AstService._resolveElement] entryFile=${entryFile} != filePath=${filePath}, returning null (cross-file)`,
+          );
+          return null;
+        }
+        const posResult = findElementByPosition(ast, entry.loc.line, entry.loc.column);
+        dbg(
+          `[AstService._resolveElement] nodeMap hit: entryFile=${entryFile} line=${entry.loc.line} col=${entry.loc.column} found=${!!posResult}`,
+        );
+        return posResult;
       }
 
       // Fallback: parse as source location "filePath:line:column" (from React fiber _debugSource)
@@ -205,27 +258,41 @@ export class AstService {
       if (m) {
         const line = Number.parseInt(m[2], 10);
         const column = Number.parseInt(m[3], 10);
-        // Try resolving via source map location
+        const fileName = m[1];
+
+        // Try resolving via source map location.
+        // Only use the result when the resolved location belongs to the ast we're searching
+        // (i.e. locEntry.loc.fileName matches filePath).  If the nodeRef points to a
+        // different file — e.g. "src/screens/RecordScreen.tsx:5:4" while filePath is
+        // "App.tsx" — the NodeMapService will still find the entry, but applying those
+        // coordinates to the wrong AST would silently mutate the wrong element.
+        // Returning null here lets _resolveElementInCorrectFile re-try with the right file.
         const locEntry = this._nodeMapService.resolveSourceLocation({
-          fileName: m[1],
+          fileName,
           line,
           column,
         });
         if (locEntry) {
-          return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
+          const locFile = locEntry.loc.fileName;
+          const locMatchesAst =
+            !filePath || locFile === filePath || filePath.endsWith(`/${locFile}`) || locFile.endsWith(`/${filePath}`);
+          if (locMatchesAst) {
+            return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
+          }
+          // locEntry belongs to a different file — caller should parse that file instead.
+          return null;
         }
 
         // Fallback: if source map resolution failed, try direct AST position lookup.
         // Vite source maps may return positions that match original source (not transformed),
         // especially for React 18 _debugSource which gives original positions directly.
         // Only use when the nodeRef fileName matches the file being edited (same file = safe).
-        const fileName = m[1];
         const fileMatches =
           filePath && (filePath.endsWith(`/${fileName}`) || filePath.endsWith(fileName) || fileName === filePath);
         if (fileMatches) {
           const result = findElementByPosition(ast, line, column);
           if (result) {
-            console.log(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
+            dbg(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
             return result;
           }
         }
@@ -243,19 +310,36 @@ export class AstService {
     nodeRef?: NodeRef,
     selectedSourceTabId?: string,
   ): Promise<UpdateStylesResult> {
+    dbg(
+      `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
+    );
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        dbg(`[AstService.updateStyles] element NOT FOUND nodeRef=${nodeRef} elementId=${elementId}`);
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
+      }
+      const { result, ast, resolvedPath } = resolved;
+      dbg(
+        `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? '?'} resolvedPath=${resolvedPath}`,
+      );
+
+      // Read content BEFORE the write so _withUndoTracking can compare before/after for cross-file writes.
+      // Must be done after resolvedPath is known but before executeStyleWriteRequest mutates the file.
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
       }
 
       const writeResult = await executeStyleWriteRequest({
         ast,
-        sourceFilePath: absolutePath,
+        sourceFilePath: resolvedPath,
         element: result.element,
         styles,
         state,
@@ -275,7 +359,7 @@ export class AstService {
           await this._updateNodeMap(mutatedFile);
         }
       }
-      return { success: true };
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateStyles] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -292,20 +376,38 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
+      dbg(
+        `[AstService.updateProps] filePath=${filePath} absolutePath=${absolutePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${effectiveNodeRef} props=${JSON.stringify(props)}`,
+      );
+
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        dbg(
+          `[AstService.updateProps] _resolveElementInCorrectFile returned null for effectiveNodeRef=${effectiveNodeRef}`,
+        );
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
+      }
+      const { result, ast, resolvedPath } = resolved;
+      dbg(
+        `[AstService.updateProps] resolved element=${result.element.openingElement?.name && 'name' in result.element.openingElement.name ? result.element.openingElement.name.name : '?'} resolvedPath=${resolvedPath}`,
+      );
+
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
       }
 
       for (const [propName, propValue] of Object.entries(props)) {
         setAttribute(result.element, propName, valueToJSXAttribute(propValue));
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
-      return { success: true };
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateProps] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -320,18 +422,26 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
+      }
+      const { result, ast, resolvedPath } = resolved;
+
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
       }
 
       updateElementChildren(result.element, text);
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
-      return { success: true };
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -375,9 +485,7 @@ export class AstService {
       }
 
       // Resolve parent element if parentId/parentNodeRef provided
-      const parentResult = parentNodeRef
-        ? this._resolveElement(ast, parentNodeRef, parentId ?? undefined, absolutePath)
-        : null;
+      const parentResult = parentNodeRef ? this._resolveElement(ast, parentNodeRef, absolutePath) : null;
 
       const { inserted, actualIndex } = insertElementIntoAST(ast, {
         parent: parentResult,
@@ -401,25 +509,22 @@ export class AstService {
     }
   }
 
-  /** Delete elements by IDs or nodeRefs. Re-reads AST between deletions (children may disappear). */
-  async deleteElements(filePath: string, elementIds: string[], nodeRefs?: NodeRef[]): Promise<AstOperationResult> {
+  /** Delete elements by nodeRefs. Re-reads AST between deletions (children may disappear). */
+  async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       let deletedCount = 0;
 
-      // Prefer nodeRefs if provided, fall back to elementIds
-      const identifiers = nodeRefs ?? elementIds;
-      const useNodeRef = Boolean(nodeRefs);
+      // For cross-file deletes: capture content before the first write to each non-requested file.
+      const contentBeforeByPath = new Map<string, string>();
 
-      for (const id of identifiers) {
-        const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      for (const id of elementIds) {
+        // _resolveElementInCorrectFile re-reads the AST on every call, so child nodes
+        // removed by earlier deletions do not corrupt Babel path references.
+        const resolved = await this._resolveElementInCorrectFile(absolutePath, id as NodeRef);
 
-        const result = useNodeRef
-          ? this._resolveElement(ast, id, undefined, absolutePath)
-          : this._resolveElement(ast, undefined, id, absolutePath);
-
-        if (!result) {
+        if (!resolved) {
           // nosemgrep: unsafe-formatstring -- safe: only first 8 chars of id are logged
           console.log(
             `[AstService.deleteElements] Element ${id.substring(0, 8)} not found (may have been deleted as child)`,
@@ -427,23 +532,40 @@ export class AstService {
           continue;
         }
 
-        // Remove element
+        const { result, ast, resolvedPath } = resolved;
+
+        // Capture contentBefore for any new cross-file path before writing (once per path).
+        if (resolvedPath !== absolutePath && !contentBeforeByPath.has(resolvedPath)) {
+          try {
+            contentBeforeByPath.set(resolvedPath, await this._fileIO.readFile(resolvedPath));
+          } catch {
+            // Leave unset — AstBridge will skip undo snapshot for this path
+          }
+        }
+
+        // Remove element and write to the actual resolved file (may differ from
+        // absolutePath for cross-file nodeRefs, e.g. Tamagui child components).
         result.path.remove();
-
-        // Write back to file
-        await this._fileParser.writeAST(ast, absolutePath);
+        await this._fileParser.writeAST(ast, resolvedPath);
+        // Refresh node map immediately so subsequent iterations resolve against
+        // up-to-date coordinates (sibling line numbers shift after each deletion).
+        await this._updateNodeMap(resolvedPath);
         deletedCount++;
-      }
-
-      if (deletedCount > 0) {
-        await this._updateNodeMap(absolutePath);
       }
 
       if (deletedCount === 0) {
         return { success: false, error: 'No elements found with provided IDs' };
       }
 
-      return { success: true, data: { deletedCount } };
+      const allCrossFileSnapshots =
+        contentBeforeByPath.size > 0
+          ? Array.from(contentBeforeByPath.entries()).map(([rp, cb]) => ({ resolvedPath: rp, contentBefore: cb }))
+          : undefined;
+      return {
+        success: true,
+        data: { deletedCount },
+        allCrossFileSnapshots,
+      };
     } catch (error) {
       console.error('[AstService.deleteElements] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -454,27 +576,152 @@ export class AstService {
   async duplicateElement(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<DuplicateElementResult> {
     await this.ensureInitialized();
     try {
+      const effectiveNodeRef = nodeRef ?? elementId;
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
-        return { success: false, error: `Element not found in ${filePath}` };
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath: actualPath } = resolved;
 
       const { inserted } = duplicateElementInAST(result);
 
       if (!inserted) {
-        return { success: false, error: `Could not duplicate element (parent is not a JSX element)` };
+        return { success: false, error: `Could not duplicate element (parent is not a JSX element or fragment)` };
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, actualPath);
+      await this._updateNodeMap(actualPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.duplicateElement] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
+  }
+
+  /**
+   * Reorder a JSX element relative to a sibling in the same parent JSX element.
+   * Same-parent only: cross-parent reparenting is not supported.
+   */
+  async reorderElement(
+    filePath: string,
+    sourceId: string,
+    targetId: string,
+    position: 'before' | 'after',
+  ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+
+      const sourceResult = this._resolveElement(ast, sourceId as NodeRef, absolutePath);
+      if (!sourceResult) {
+        return { success: false, error: `Source element not found (nodeRef=${sourceId})` };
+      }
+
+      const targetResult = this._resolveElement(ast, targetId as NodeRef, absolutePath);
+      if (!targetResult) {
+        return { success: false, error: `Target element not found (nodeRef=${targetId})` };
+      }
+
+      const sourceParent = sourceResult.path.parent;
+      const targetParent = targetResult.path.parent;
+
+      if (!t.isJSXElement(sourceParent) || sourceParent !== targetParent) {
+        return { success: false, error: 'Elements must share a direct JSX parent (same-parent reorder only)' };
+      }
+
+      const children = sourceParent.children;
+      const sourceNode = sourceResult.element;
+      const targetNode = targetResult.element;
+
+      const srcIdx = children.indexOf(sourceNode);
+      const tgtIdx = children.indexOf(targetNode);
+
+      if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) {
+        return { success: false, error: 'Invalid reorder: elements not in parent children or same element' };
+      }
+
+      children.splice(srcIdx, 1);
+      const newTgtIdx = children.indexOf(targetNode);
+      if (newTgtIdx === -1) return { success: false, error: 'Target lost after source removal' };
+      children.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, sourceNode);
+
+      await this._fileParser.writeAST(ast, absolutePath);
+      await this._updateNodeMap(absolutePath);
+      return { success: true };
+    } catch (error) {
+      console.error('[AstService.reorderElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Extract the absolute file path from a source-location nodeRef ("fileName:line:col").
+   * Returns null if the nodeRef isn't a source-location ref or the file can't be resolved.
+   */
+  private _extractFileFromNodeRef(nodeRef: string): string | null {
+    const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+    if (!m) return null;
+    const fileName = m[1];
+    return resolveWorkspacePath(this._workspaceRoot, fileName);
+  }
+
+  /**
+   * Resolve an element and its AST, following the nodeRef to the correct source file when
+   * it differs from the hint `filePath` (the currently-displayed component).
+   *
+   * Tamagui (and similar) projects define components in child files (e.g. RecordScreen.tsx)
+   * that are rendered inside a shell like App.tsx.  The nodeRef carries the true source
+   * location ("src/screens/RecordScreen.tsx:10:5"), but `filePath` is the shell file.
+   * Without cross-file fallback, _resolveElement searches App.tsx's AST for a node that
+   * lives in RecordScreen.tsx → not found → write silently fails.
+   *
+   * Returns `{ result, ast, resolvedPath }` on success, `null` if the element cannot be found.
+   */
+  private async _resolveElementInCorrectFile(
+    absolutePath: string,
+    effectiveNodeRef: NodeRef | string,
+  ): Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null> {
+    dbg(`[AstService._resolveElementInCorrectFile] absolutePath=${absolutePath} effectiveNodeRef=${effectiveNodeRef}`);
+    const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+    const result = this._resolveElement(ast, effectiveNodeRef as NodeRef, absolutePath);
+    if (result) {
+      dbg(`[AstService._resolveElementInCorrectFile] resolved in primary file=${absolutePath}`);
+      return { result, ast, resolvedPath: absolutePath };
+    }
+
+    // Cross-file fallback: primary file miss.  Two ways to get the real source file:
+    // 1. Source-location nodeRef ("src/screens/Foo.tsx:10:5") — _extractFileFromNodeRef
+    // 2. Hash nodeRef ("abc123") — look up nodeMapEntry and read loc.fileName
+    let nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
+    if (!nodeRefFile) {
+      const entry = this._nodeMapService.resolveNodeRef(effectiveNodeRef as NodeRef);
+      if (entry?.loc?.fileName) {
+        nodeRefFile = resolveWorkspacePath(this._workspaceRoot, entry.loc.fileName);
+        dbg(
+          `[AstService._resolveElementInCorrectFile] nodeMap fallback: entry file=${entry.loc.fileName} → ${nodeRefFile}`,
+        );
+      }
+    }
+    dbg(`[AstService._resolveElementInCorrectFile] primary miss, nodeRefFile=${nodeRefFile}`);
+    if (nodeRefFile && nodeRefFile !== absolutePath) {
+      try {
+        const { ast: childAst } = await this._fileParser.readAndParseFile(nodeRefFile);
+        const childResult = this._resolveElement(childAst, effectiveNodeRef as NodeRef, nodeRefFile);
+        if (childResult) {
+          dbg(`[AstService._resolveElementInCorrectFile] resolved in child file=${nodeRefFile}`);
+          return { result: childResult, ast: childAst, resolvedPath: nodeRefFile };
+        }
+      } catch (e) {
+        dbg(`[AstService._resolveElementInCorrectFile] child file read failed: ${e}`);
+        // File unreadable — fall through to null
+      }
+    }
+
+    dbg(`[AstService._resolveElementInCorrectFile] NOT FOUND, returning null`);
+    return null;
   }
 
   /** Wrap element in a new container element. */
@@ -488,12 +735,13 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
-        return { success: false, error: `Element not found in ${filePath}` };
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath } = resolved;
 
       const { wrapped } = wrapElementInAST(result, wrapperType, wrapperProps);
 
@@ -501,8 +749,8 @@ export class AstService {
         return { success: false, error: 'Could not wrap element' };
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.wrapElement] Error:', error);
@@ -538,7 +786,7 @@ export class AstService {
         ...(entry ? { nodeRef: entry.nodeRef } : {}),
       };
     } catch (error) {
-      console.error('[AstService.findElementAtPosition] Error:', error);
+      console.warn('[AstService.findElementAtPosition] parse failed (expected for broken/partial files):', error);
       return null;
     }
   }
@@ -572,10 +820,11 @@ export class AstService {
   async getElementCode(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<string | null> {
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
       const sourceCode = await this._fileParser.readFileContent(absolutePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
+      const result = this._resolveElement(ast, effectiveNodeRef, absolutePath);
       if (!result) return null;
 
       return extractElementSource(sourceCode, result.element);
@@ -589,7 +838,7 @@ export class AstService {
   async getParentElementId(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string | null> {
     try {
       if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry?.parentRef) {
           return entry.parentRef;
         }
@@ -602,10 +851,10 @@ export class AstService {
   }
 
   /** Find direct child element nodeRefs (for Select Child). */
-  async getChildElementIds(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string[]> {
+  async getChildElementIds(nodeRef?: NodeRef): Promise<string[]> {
     try {
       if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry) {
           return [...entry.children];
         }
@@ -626,25 +875,14 @@ export class AstService {
   ): Promise<string | null> {
     try {
       if (nodeRef) {
-        // Normalize relative nodeRef to absolute (fiber sends relative, NodeMapService stores absolute)
-        const normalizedRef = this._normalizeNodeRef(nodeRef);
-        // Use resolveSourceLocation for fuzzy column matching (fiber vs AST column may differ)
-        const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
-        const entry = m
-          ? this._nodeMapService.resolveSourceLocation({
-              fileName: m[1],
-              line: Number.parseInt(m[2], 10),
-              column: Number.parseInt(m[3], 10),
-            })
-          : this._nodeMapService.resolveNodeRef(normalizedRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
           if (parent) {
             const siblings = parent.children;
-            // Find current index by exact match first, then by resolved location
-            let currentIndex = siblings.indexOf(normalizedRef);
+            let currentIndex = siblings.indexOf(entry.nodeRef);
             if (currentIndex === -1) {
-              // Fallback: match by file:line ignoring column
+              const normalizedRef = this._normalizeNodeRef(nodeRef);
               const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
               if (m) {
                 const [, file, line] = m;
@@ -697,7 +935,7 @@ export class AstService {
 
       // Insert after target element via nodeRef
       if (targetNodeRef) {
-        const result = this._resolveElement(ast, targetNodeRef, undefined, absolutePath);
+        const result = this._resolveElement(ast, targetNodeRef, absolutePath);
         if (result) {
           const parent = result.path.parent;
           if (t.isJSXElement(parent)) {
