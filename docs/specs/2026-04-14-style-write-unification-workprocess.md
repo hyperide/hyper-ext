@@ -4866,3 +4866,31 @@ Bridge bot page-callback hardening and full E2E restart,
     `log entries with stack traces are expandable` at `139/2209`.
   * Progress observed at `234/2209`; no `[test-errors]` or save dialogs.
 ```
+
+Explorer context-menu E2E isolation fix, 2026-04-22 18:59 CEST:
+
+```text
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: a75ce95 test(e2e): close explorer context menu after assertion
+- Trigger:
+  * Full E2E stopped at the first real failure:
+    `PI-4-11: click component opens preview`.
+  * The failing Playwright click saw the component button as visible/enabled,
+    but pointer events were intercepted by the page root.
+- Root cause:
+  * The screenshot artifact showed the Explorer context menu from the previous
+    test, `PI-4-10: right-click shows context menu`, still open above the
+    component list.
+  * This was test pollution, not a product click-routing regression.
+- Fix:
+  * Added `ExplorerPanel.dismissContextMenu()`, which presses Escape inside the
+    Explorer webview and verifies the menu is hidden.
+  * `PI-4-10` now dismisses the context menu after asserting that it appears.
+- Validation:
+  * Focused E2E passed 2/2 with `--retries=0 --workers=1`:
+    `PI-4-10|PI-4-11`.
+  * `git diff --check` passed for the two touched E2E files.
+- Next step:
+  * Restart full E2E with `--retries=0 --workers=1` and continue from the next
+    first-failure marker.
+```
