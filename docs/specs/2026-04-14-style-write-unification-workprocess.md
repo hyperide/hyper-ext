@@ -3581,3 +3581,37 @@ Actually — the real fix needed: the extension's `ensureComponent` is called AF
 4. settings: 3 race condition fixes — committed
 5. style-editing: dirty tab activation + 5→15s poll (Tamagui nested) — committed
 6. remix-cssmodules-spotify: PlayerBar added to `__canvas_preview__` registry — committed
+
+## 📍 2026-04-28 Run #22 Progress + New Fixes
+
+**Run #22:** `run-20260428-192727-26051` started 19:27 CEST. 3 containers still running at ~20:15.
+Progress: S1 139/769, S2 173/691, S3 224/729 (~25% overall).
+
+**Failures found so far:**
+
+| Test | Shards | Duration | Root cause |
+|------|--------|----------|-----------|
+| `component with error — error overlay appears` | S2 ×2 | 128s | poll 120→150s insufficient for Docker load |
+| `Tamagui: style written as prop, not className` | S3 ×4 | 23-26s | dirty-tab 5s one-shot too short for Tamagui prop write (10-15s) |
+| `styles applied correctly (element has non-zero dimensions)` | S3 ×2 | 27s | toBeVisible 20s too short for Tamagui NavigationContainer hydration |
+
+**Fixes committed (NOT in Run #22 containers, will be in Run #23):**
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `d1387ff` | ext-test-projects | error overlay poll 120→150s |
+| `97c690b` | ext-test-projects | style-as-prop: poll+dirty-tab loop (20s) |
+| `ff7b45d` | ext-test-projects | non-zero dimensions: boundingBox poll 30s |
+| `6df3069d` | hyper-canvas-draft | inspector: compact fontSize + isEditingTextRef guard |
+| `47068fc6` | hyper-canvas-draft | inspector: wire onNumericKeyDown to fontSize (arrow keys) |
+
+**Inspector fixes (unrelated to E2E, done in parallel):**
+- `6df3069d`: fontSize input compact style (bg-muted) + text content reset fix
+- `47068fc6`: arrow up/down now work in font size field
+
+**Decision:** Continue monitoring Run #22 for NEW failure categories. When Run #22 completes, evaluate whether to run Run #23 with all fixes or fix more first.
+
+**Working rules reminder:**
+- Фиксы без прерывания прогона (только глобальный баг = стоп)
+- Атомарные коммиты после каждого фикса
+- После каждого прогона: обновить этот файл, создать коммит
