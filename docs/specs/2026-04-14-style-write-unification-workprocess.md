@@ -1302,3 +1302,44 @@ server cold-compile slowness, not test logic).
    focus next round on remaining residuals (HYP-289 BoardView,
    remix cold-start). Otherwise dispatch focused agent on
    tamagui-whatsapp paint timing.
+
+## 2026-04-25 22:00 CEST: run `215839-3396` after second kill
+
+### Run `192210-48320` results before kill
+
+s1 fully completed: `956 passed / 2 failed / ~117 skipped`.
+The 2 fails were both retries of `hyper_duplicate_element — copy
+appears` on `react-vite-tw4-twitter` — fix `7d26a90` (poll bumped
+from 15s to 30s) was already pushed but wasn't in the running
+container.
+
+s2 stopped at `657/2211` (30%). Real unique 2+ fails:
+- `component with ternary` × 3 (tamagui-whatsapp + 1 retry)
+- `component rendered — clickable elements` × 3 (tamagui-whatsapp + 1)
+- `multiple components` × 2 (HYP-289 BoardView, deferred)
+- `HMR — edit file` × 2 (remix-tw4-twitter, real fail)
+- `empty component` × 2 (remix-tw4-twitter, notification toast match)
+- 5 more 2-counts on tamagui-whatsapp slow paint
+
+Pace was ~170 tests/hr — too slow due to ~50 cold-start 90s flakes.
+
+### Mid-run fixes pushed (8c1ff7f, 7d26a90)
+
+- `7d26a90`: bump duplicate_element poll 15s → 30s for tw4-twitter.
+- `8c1ff7f`: same for `component rendered` and `elements identifiable`
+  on tamagui-whatsapp slow paint.
+
+### Fresh run start
+
+Run `hyper-e2e-20260425-215839-3396` started 21:59 CEST with both
+fixes applied. Both shards launched. Same Monitor (`bx25kh4w3`)
+will pick up new container names.
+
+Expected residuals after this run:
+- `multiple components` on shadcn-linear (HYP-289, deferred — 1 unique)
+- `HMR — edit file` on remix-tw4-twitter (real fail, needs investigation)
+- `empty component` on remix-tw4-twitter (notification toast filter, needs investigation)
+
+If remaining fails ≤ 3, this is effectively the green
+state for this cycle; HYP-289 is a separate ticket and the two
+remix-tw4-twitter cases get focused agents in the next iteration.
