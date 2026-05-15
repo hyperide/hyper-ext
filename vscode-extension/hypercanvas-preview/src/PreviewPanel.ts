@@ -1415,7 +1415,13 @@ export class PreviewPanel {
         selectedIds[0],
       );
       if (parentId) {
-        this._stateHub.applyUpdate({ selectedIds: [parentId] });
+        const childItemIndex = this._stateHub.state.selectedItemIndices?.[selectedIds[0]] ?? null;
+        this._stateHub.applyUpdate({
+          selectedIds: [parentId],
+          selectedItemIndices: { [parentId]: childItemIndex },
+          hoveredId: null,
+          hoveredItemIndex: null,
+        });
         return;
       }
     }

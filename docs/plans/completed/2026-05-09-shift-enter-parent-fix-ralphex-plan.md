@@ -114,7 +114,10 @@ Fix:
 
 ### Task 8: Take E2E screenshot and send to Telegram
 
-- [ ] Find screenshot from E2E run showing single rect after Shift+Enter
-- [ ] Read screenshot with Read tool, verify it shows only 1 rect (not multiple)
-- [ ] Send to Telegram: `./send-tg-photo.sh <screenshot> "Shift+Enter parent fix: now highlights only 1 instance of repeated Section, not all"`
-- [ ] Commit remaining uncommitted changes
+- [x] Find screenshot from E2E run showing single rect after Shift+Enter
+  - NOTE: found in docker-artifacts/run-20260509-111951-66423/shard-1/screenshots/bulka-shift-enter-parent-{before,after}.png
+- [x] Read screenshot with Read tool, verify it shows only 1 rect (not multiple)
+  - NOTE: before shows child paragraph selected in row 2; after shows single parent rect — confirmed visually representative
+- [x] Send to Telegram: report + before/after photos via /Users/ultra/xp/codex-tg-bot/scripts/send-tg-{report,file}.sh
+- [x] Commit remaining uncommitted changes
+  - NOTE: git was clean (all previous task commits covered the code); only plan file updated here
