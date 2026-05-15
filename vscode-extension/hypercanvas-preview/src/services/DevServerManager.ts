@@ -379,11 +379,11 @@ export class DevServerManager {
   /**
    * Dispose resources
    */
-  // VS Code calls dispose() synchronously during deactivation and does not await
-  // the return value, so making this async would not improve cleanup reliability
   dispose(): void {
-    void this.stop();
-    this._outputChannel.dispose();
+    // Chain _outputChannel.dispose() after stop() so the async stop() path
+    // (process exit handler, stdout/stderr callbacks) doesn't call appendLine
+    // on an already-disposed channel.
+    void this.stop().finally(() => this._outputChannel.dispose());
   }
 
   /**
@@ -463,7 +463,7 @@ export class DevServerManager {
       lower.includes('hmr update') || // Vite "[vite] hmr update"
       lower.includes('page reload') || // Vite/Remix "[vite] page reload"
       lower.includes('rebuilt in') || // esbuild
-      (lower.includes('ready') && lower.includes('ms')) // Vite "ready in N ms" after restart
+      /ready in \d+\s*ms/i.test(text) // Vite "ready in N ms" after restart
     );
   }
 

@@ -316,7 +316,7 @@ describe('prototype pollution prevention', () => {
     });
 
     // No pollution on Object.prototype
-    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
     // The raw file content must not contain __proto__ as a written key
     const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
     expect(rawContent).not.toContain('"__proto__"');
@@ -339,7 +339,7 @@ describe('prototype pollution prevention', () => {
       fileIO,
     });
 
-    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
     const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
     expect(rawContent).not.toContain('"constructor"');
     const written = JSON.parse(rawContent) as Record<string, unknown>;
