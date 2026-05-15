@@ -6,9 +6,8 @@
  */
 
 import * as t from '@babel/types';
+import { containsCssModuleClassReference, getCssModuleImportLocalNames } from './css-module-references';
 import { getAttribute, setAttribute } from './mutator';
-
-const CSS_MODULE_EXT_RE = /\.module\.(css|scss|sass|less|styl)(?:\?.*)?$/;
 
 const LENGTH_STYLE_KEYS = new Set([
   'width',
@@ -71,25 +70,7 @@ const LENGTH_STYLE_KEYS = new Set([
   'flexBasis',
 ]);
 
-/**
- * Return local binding names imported from CSS Modules files.
- */
-export function getCssModuleImportLocalNames(ast: t.File): Set<string> {
-  const locals = new Set<string>();
-
-  for (const node of ast.program.body) {
-    if (!t.isImportDeclaration(node)) continue;
-    if (!CSS_MODULE_EXT_RE.test(node.source.value)) continue;
-
-    for (const specifier of node.specifiers) {
-      if (t.isImportDefaultSpecifier(specifier) || t.isImportNamespaceSpecifier(specifier)) {
-        locals.add(specifier.local.name);
-      }
-    }
-  }
-
-  return locals;
-}
+export { getCssModuleImportLocalNames };
 
 /**
  * True for className expressions that reference a CSS Modules import, e.g.
@@ -102,7 +83,7 @@ export function isCssModuleClassNameExpression(element: t.JSXElement, cssModuleL
   if (!attr || !t.isJSXExpressionContainer(attr)) return false;
   if (t.isJSXEmptyExpression(attr.expression)) return false;
 
-  return containsCssModuleMemberExpression(attr.expression, cssModuleLocals);
+  return containsCssModuleClassReference(attr.expression, cssModuleLocals);
 }
 
 /**
@@ -207,62 +188,4 @@ function isLengthStyleKey(key: string): boolean {
 
 function isUnitlessNumber(value: string): boolean {
   return /^-?\d+(?:\.\d+)?$/.test(value);
-}
-
-function containsCssModuleMemberExpression(node: unknown, cssModuleLocals: Set<string>): boolean {
-  if (!node || typeof node !== 'object') return false;
-
-  const maybeNode = node as t.Node;
-  if (
-    (t.isMemberExpression(maybeNode) || isOptionalMemberExpression(maybeNode)) &&
-    isCssModuleMember(maybeNode, cssModuleLocals)
-  ) {
-    return true;
-  }
-
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    if (
-      key === 'loc' ||
-      key === 'start' ||
-      key === 'end' ||
-      key === 'leadingComments' ||
-      key === 'innerComments' ||
-      key === 'trailingComments'
-    ) {
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      if (value.some((item) => containsCssModuleMemberExpression(item, cssModuleLocals))) {
-        return true;
-      }
-    } else if (value && typeof value === 'object' && containsCssModuleMemberExpression(value, cssModuleLocals)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function isCssModuleMember(
-  node: t.MemberExpression | t.OptionalMemberExpression,
-  cssModuleLocals: Set<string>,
-): boolean {
-  const rootName = getMemberRootIdentifierName(node);
-  return rootName !== null && cssModuleLocals.has(rootName);
-}
-
-function getMemberRootIdentifierName(node: t.Expression | t.Super | t.PrivateName): string | null {
-  let current: t.Expression | t.Super | t.PrivateName = node;
-
-  while (t.isMemberExpression(current) || isOptionalMemberExpression(current)) {
-    current = current.object;
-  }
-
-  if (t.isIdentifier(current)) return current.name;
-  return null;
-}
-
-function isOptionalMemberExpression(node: t.Node): node is t.OptionalMemberExpression {
-  return node.type === 'OptionalMemberExpression';
 }
