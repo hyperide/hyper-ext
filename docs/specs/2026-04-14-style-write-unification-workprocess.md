@@ -508,4 +508,53 @@ New failure in S3: `"elements identifiable via fiber-based selection" 725954ms �
 | `b58627c` | redo PI-6-32: undo at end to avoid 6-min teardown hang |
 | `ab568b5` | Tamagui poll 60→90s |
 | `3a7bb75` | webpack poll 720→900s, test.setTimeout 960→1080s |
+| `0ef6eb6` | resolveDefaultComponentFile: App.web.tsx before App.tsx for Expo/Tamagui |
+
+---
+
+## 📍 2026-04-29 17:20 CEST — Run #30 intermediate status (~3h in)
+
+### S2: DONE (1.9h)
+
+- **2 hard failures**:
+  1. `[dep:tamagui-banking] style-editing.spec.ts:294` — "Tamagui: style written as prop" 74045ms — **FIXED** by `ab568b5`
+  2. `[independent] project-switching-stale-preview.spec.ts:118` — "switching Twitter→Tamagui food delivery" — **NEW ISSUE, FIXED** by `0ef6eb6`
+- **1 flaky**: "component with error" (react-vite-tw3-kanban) → retry passed
+- 437 passed, 263 skipped
+
+**Project-switching hard fail root cause**: After workspace switch via `hypercanvas.openFolderPath`,
+VS Code file indexer lags. Search for "App.tsx" returns `src/stubs/AppContainer.tsx` first (fuzzy score).
+ALL 5 Tamagui projects have `src/stubs/AppContainer.tsx`. Root `App.tsx` is the wrong entry for web anyway —
+Vite's `resolve.extensions` puts `.web.tsx` first. Fix: `resolveDefaultComponentFile` now checks `App.web.tsx`
+before `App.tsx`, which has no naming conflict and is the correct Vite web entry.
+
+### S1: ~667 test-done (still running, ~3h in)
+
+- **0 hard failures**, 1 flaky ("hyper_duplicate_element — copy appears" 57010ms → retry 33144ms passed)
+
+### S3: ~307 test-done (still running, ~3h in)
+
+- **13 hard failures** (up from 9 at 15:43):
+  - 8 Tamagui (4 projects × 2 attempts: 73-84s) → **FIXED** by `ab568b5`
+  - 5 webpack-react-tw3-kanban (~726s): 2× "elements identifiable" + 2× "nested components" + 1× "ExportNamedDeclaration" → **FIXED** by `3a7bb75`
+- More webpack failures expected as S3 continues (all webpack-tw3-kanban at 726s, all covered by `3a7bb75`)
+
+### New fix committed this session
+
+| Commit | Fix | Covers |
+|--------|-----|--------|
+| `0ef6eb6` | resolveDefaultComponentFile: App.web.tsx before App.tsx | project-switching-stale-preview hard fail |
+
+### Commits ready for Run #31 (7 total, not in run #30)
+
+| Commit | Fix |
+|--------|-----|
+| `4d32dc2` | inspector typing annotation |
+| `5f17a48` | error-overlay 500ms editor focus settle |
+| `b6f88ab` | dev-server deactivation annotation |
+| `b58627c` | redo PI-6-32 teardown hang fix |
+| `ab568b5` | Tamagui poll 60→90s |
+| `3a7bb75` | webpack poll 720→900s |
+| `0ef6eb6` | App.web.tsx Tamagui entry fix |
+
 
