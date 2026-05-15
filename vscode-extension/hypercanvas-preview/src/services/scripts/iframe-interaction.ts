@@ -1288,19 +1288,28 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   getState: () => ({
     selectedIds: state.selectedIds,
     activeInstanceId,
+    selectedItemIndices: state.selectedItemIndices,
   }),
   getDocument: () => document,
   callbacks: {
-    onSelectElement: (id) =>
+    onSelectElement: (id, itemIndex) => {
+      console.debug(SHIFTPARENT_TAG, 'keyboard:onSelectElement', {
+        t: Math.round(performance.now()),
+        id,
+        itemIndex,
+        selectedItemIndices: state.selectedItemIndices,
+        selectedIds: state.selectedIds,
+      });
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
           type: 'hypercanvas:elementClick',
           elementId: id,
-          itemIndex: null,
+          itemIndex: itemIndex ?? null,
         },
         '*',
-      ),
+      );
+    },
     onSelectMultiple: (ids) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
@@ -1447,7 +1456,6 @@ let _dragCapturedTarget: HTMLElement | null = null;
 // selection while open).
 let _dragPrevBodyUserSelect: string | null = null;
 let _dragPrevBodyWebkitUserSelect: string | null = null;
-let _dragEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1540,13 +1548,6 @@ function _dragPointerMove(e: PointerEvent): void {
     const dy = e.clientY - _dragStartY;
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
-      _dragEscapeHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          _dragCleanup();
-        }
-      };
-      document.addEventListener('keydown', _dragEscapeHandler);
       if (_dragSourceEl) {
         const rect = _dragSourceEl.getBoundingClientRect();
         _dragOffsetX = _dragStartX - rect.left;
@@ -1566,29 +1567,6 @@ function _dragPointerMove(e: PointerEvent): void {
         ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
         document.body.appendChild(ghost);
         _dragGhostEl = ghost;
-
-        // Ensure ghost has a visible background — transparent elements become invisible ghosts.
-        // Walk up ancestors until a non-transparent background is found.
-        const srcEl = _dragSourceEl;
-        let ghostBg = getComputedStyle(srcEl).backgroundColor;
-        if (ghostBg === 'rgba(0, 0, 0, 0)' || ghostBg === 'transparent') {
-          let ancestor: HTMLElement | null = srcEl.parentElement;
-          while (ancestor && ancestor !== document.documentElement) {
-            const bg = getComputedStyle(ancestor).backgroundColor;
-            if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-              ghostBg = bg;
-              break;
-            }
-            ancestor = ancestor.parentElement;
-          }
-        }
-        if (ghostBg !== 'rgba(0, 0, 0, 0)' && ghostBg !== 'transparent') {
-          ghost.style.backgroundColor = ghostBg;
-        }
-        const srcStyle = getComputedStyle(srcEl);
-        ghost.style.color = srcStyle.color;
-        ghost.style.fontFamily = srcStyle.fontFamily;
-        ghost.style.fontSize = srcStyle.fontSize;
 
         const indicator = document.createElement('div');
         indicator.className = 'hyper-drop-indicator';
@@ -1614,9 +1592,6 @@ function _dragPointerMove(e: PointerEvent): void {
   }
 
   if (_dragState !== 'dragging') return;
-
-  needsOverlayUpdate = true;
-  scheduleOverlayLoopIfNeeded();
 
   if (_dragGhostEl) {
     _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
@@ -1649,7 +1624,7 @@ function _dragPointerMove(e: PointerEvent): void {
     if (dropSrc && dropEl && `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}` !== _dragSourceId) {
       const r = dropEl.getBoundingClientRect();
       const ind = _dragIndicatorEl;
-      if (_isHorizontalLayout(rawDropEl ?? dropEl)) {
+      if (_isHorizontalLayout(dropEl)) {
         ind.dataset.dir = 'v';
         const lineX = (e.clientX < r.left + r.width / 2 ? r.left : r.right) - 1;
         ind.style.left = `${lineX}px`;
@@ -1679,10 +1654,6 @@ function _dragCleanup(): void {
   _dragState = 'idle';
   _dragSourceId = null;
   _dragSourceFilePath = null;
-  if (_dragEscapeHandler !== null) {
-    document.removeEventListener('keydown', _dragEscapeHandler);
-    _dragEscapeHandler = null;
-  }
 
   if (_dragGhostEl) {
     _dragGhostEl.remove();
@@ -1815,7 +1786,6 @@ function _dragPointerUp(e: PointerEvent): void {
       window.parent.postMessage(
         {
           type: 'hypercanvas:writeOrders',
-          sourceId,
           breakpoint: orderPlan.breakpoint,
           entries: orderPlan.entries,
         },
@@ -2537,7 +2507,15 @@ window.addEventListener('message', (event: MessageEvent) => {
     }
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
-    if (msg.selectedItemIndices !== undefined) state.selectedItemIndices = msg.selectedItemIndices;
+    if (msg.selectedItemIndices !== undefined) {
+      console.debug(SHIFTPARENT_TAG, 'stateUpdate:selectedItemIndices', {
+        t: Math.round(performance.now()),
+        incoming: msg.selectedItemIndices,
+        prev: state.selectedItemIndices,
+        selectedIds: msg.selectedIds ?? state.selectedIds,
+      });
+      state.selectedItemIndices = msg.selectedItemIndices;
+    }
     if (msg.engineMode !== undefined) {
       state.engineMode = msg.engineMode;
       updateDesignStyles(state.engineMode);

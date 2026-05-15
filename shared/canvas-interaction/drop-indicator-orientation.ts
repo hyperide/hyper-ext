@@ -43,29 +43,12 @@ export interface OrientationDeps {
  * Walk `el`'s parent chain until the nearest flex or grid container, then
  * decide whether siblings are laid out horizontally or vertically inside it.
  *
- * Checks `el` itself first: when the cursor is over a container's padding
- * (not over a child), `dropEl` IS the container — we orient based on the
- * container's own flex/grid direction before walking to its parent.
- *
  * Defaults to `'vertical'` when no flex/grid ancestor exists — matches the
  * old fallback behaviour for plain block-stacked elements.
  */
 export function chooseIndicatorOrientation(el: HTMLElement, deps?: OrientationDeps): LayoutOrientation {
   const getStyle: (e: HTMLElement) => CSSStyleDeclaration =
     deps?.getComputedStyle ?? ((e) => globalThis.getComputedStyle(e));
-
-  const selfStyle = getStyle(el);
-  const selfDisplay = selfStyle.display;
-  if (selfDisplay === 'flex' || selfDisplay === 'inline-flex') {
-    const fd = selfStyle.flexDirection;
-    return fd === 'row' || fd === 'row-reverse' ? 'horizontal' : 'vertical';
-  }
-  if (selfDisplay === 'grid' || selfDisplay === 'inline-grid') {
-    const flow = selfStyle.gridAutoFlow ?? '';
-    if (flow.includes('column')) return 'horizontal';
-    return countGridTracks(selfStyle.gridTemplateColumns) > 1 ? 'horizontal' : 'vertical';
-  }
-
   let cur: HTMLElement | null = el.parentElement;
   // Walk the parent chain. Includes <body> (apps may set flex/grid on body
   // directly, e.g. `<body class="flex flex-row">`). Stops at <html> root.

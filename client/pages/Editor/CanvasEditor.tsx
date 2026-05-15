@@ -570,6 +570,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     isAddingComment,
     selectedCommentId,
     setSelectedCommentId,
+    selectedItemIndices,
   });
 
   // RAF loop for updating comment sticker positions during scroll/drag
