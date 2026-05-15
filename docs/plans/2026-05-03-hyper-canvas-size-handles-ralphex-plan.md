@@ -20,9 +20,9 @@ Current local finding before dispatch:
   handles.
 - `shared/canvas-interaction/overlay-rects.ts` computes only overlay rects and
   placeholder rects. It does not attach size metadata to selection rects.
-- [ ] SaaS calls the shared renderer through
+- [x] SaaS calls the shared renderer through
   `client/pages/Editor/components/hooks/useSelectionOverlays.ts`.
-- [ ] VS Code extension computes rects in
+- [x] VS Code extension computes rects in
   `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
   and posts `hypercanvas:overlayRects` to the webview.
 - Tailwind parsing and writing appear capable of handling `w-12` and `h-12`:
@@ -37,15 +37,15 @@ mutation bug where handles render but dragging cannot update `w-*` or `h-*`.
 ## Guardrails
 
 - Start with `git status --short`.
-- [ ] Do not revert edits made by other agents.
-- [ ] Do not touch `client/components/ui/color-combobox.tsx` or
+- [x] Do not revert edits made by other agents.
+- [x] Do not touch `client/components/ui/color-combobox.tsx` or
   `client/components/ui/color-combobox.test.tsx`.
 - Another ralphex may be running for drag; do not kill it.
-- [ ] Use `rg` for code search.
+- [x] Use `rg` for code search.
 - If fixing canvas interaction, selection, overlay, or rendering behavior, check
   both SaaS `client/` and VS Code extension paths. Shared logic belongs under
   `shared/`.
-- [ ] For VS Code extension E2E, first read
+- [x] For VS Code extension E2E, first read
   `/Users/ultra/work/ext-test-projects/CLAUDE.md` and use `launchVSCode()` /
   the existing E2E harness.
 
@@ -121,17 +121,17 @@ visible, unclipped, and correctly positioned at normal zoom and a zoomed view. (
 
 ### Task 6: Verify VS Code Extension Visually And With E2E
 
-[ ] Before extension debugging, read
+[x] Before extension debugging, read
 `/Users/ultra/work/ext-test-projects/CLAUDE.md`.
-[ ] Use the `/Users/ultra/work/ext-test-projects` E2E harness with
+[x] Use the `/Users/ultra/work/ext-test-projects` E2E harness with
 `launchVSCode()` and `setupPreviewWithDevServer()`; do not use regular browser
 Playwright tools for extension verification.
-[ ] Prefer the `react-vite-tw4-twitter` test project unless a closer existing
+[x] Prefer the `react-vite-tw4-twitter` test project unless a closer existing
 fixture already exists.
-[ ] Select the `w-12 h-12` fixture element, capture a screenshot, and inspect
+[x] Select the `w-12 h-12` fixture element, capture a screenshot, and inspect
 the nested iframe/webview DOM for visible resize handles.
-[ ] Run the targeted VS Code E2E spec or debug script that proves visible
-handles.
+[x] Run the targeted VS Code E2E spec or debug script that proves visible
+handles. (resize-handles.spec.ts: 1 passed 8s)
 
 ### Task 7: Final Checks And Report
 

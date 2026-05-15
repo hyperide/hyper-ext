@@ -1126,6 +1126,7 @@ function sendOverlayRects(): void {
     width: r.width,
     height: r.height,
     type: r.type,
+    ...(r.resizable && { resizable: r.resizable }),
   }));
 
   const { placeholderRects } = result;
