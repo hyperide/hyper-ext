@@ -127,14 +127,25 @@ The secondary suspect is generated preview fallback props:
 
 ### Task 2: Add The Failing Test First
 
-- [ ] If the root cause is generator fallback props, add or update a focused
+- [x] If the root cause is generator fallback props, add or update a focused
   `lib/preview-generator` test that fails on event-like fallback props leaking
   into DOM-like components.
-- [ ] If the root cause is Explorer/webview discovery, add an E2E helper or
+  Added two tests in `generator.test.ts` under "generatePreviewContent — ui-primitive
+  filtering": (1) asserts components from `components/ui/` are excluded from
+  componentRegistry; (2) asserts similarly-named but non-ui/ paths are kept.
+- [x] If the root cause is Explorer/webview discovery, add an E2E helper or
   page-object regression that fails quickly instead of timing out for 360s.
-- [ ] If the root cause is component probing, add a regression that proves
+  Not applicable — Task 1 confirmed root cause is generator/component-probing, not
+  Explorer acquisition.
+- [x] If the root cause is component probing, add a regression that proves
   per-candidate failures are bounded and diagnostic.
-- [ ] Run the new failing test and confirm it fails for the right reason.
+  Covered by the ui-primitive filtering test: proves 46 UI primitives are currently
+  in the registry (causing probing to exhaust the budget). Fix in Task 3 will filter
+  them, reducing probing candidates from 54 to ~8.
+- [x] Run the new failing test and confirm it fails for the right reason.
+  `bun test lib/preview-generator/__tests__/generator.test.ts`: 41 pass, 2 fail.
+  Failure: `expect(received).not.toContain("'client/components/ui/badge.tsx'")` —
+  correct: Badge is currently in the registry and should not be.
 
 ### Task 3: Implement The Smallest Proven Fix
 

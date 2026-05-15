@@ -561,6 +561,48 @@ describe('generateStandaloneEntry', () => {
   });
 });
 
+describe('generatePreviewContent — ui-primitive filtering', () => {
+  it('excludes components from components/ui/ path from componentRegistry', () => {
+    // Bulka has 46 shadcn primitives in its registry. Each crashes on event-like fallback
+    // props (Badge passes unknown props to <div> → React warns) and each probe consumes
+    // up to 20s of isPreviewLoaded polling. 46 × 20s = 920s >> 360s test budget.
+    // components/ui/ entries must be excluded from componentRegistry to prevent this.
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'client/pages/Index.tsx',
+        componentName: 'Index',
+        exportStyle: 'default-named',
+        sampleExports: [],
+        importPath: './pages/Index',
+      },
+      makeEntry('client/components/ui/badge.tsx', 'Badge'),
+      makeEntry('client/components/ui/chart.tsx', 'ChartContainer'),
+      makeEntry('client/components/ui/button.tsx', 'Button'),
+    ];
+    const content = generatePreviewContent(entries);
+    // Project-level components must appear in the registry
+    expect(content).toContain("'client/pages/Index.tsx'");
+    // UI primitives must not appear — they drain the test budget on fallback-prop crashes
+    expect(content).not.toContain("'client/components/ui/badge.tsx'");
+    expect(content).not.toContain("'client/components/ui/chart.tsx'");
+    expect(content).not.toContain("'client/components/ui/button.tsx'");
+  });
+
+  it('does not exclude components that are only similarly named but not in a /ui/ directory', () => {
+    const entries: PreviewComponentEntry[] = [
+      makeEntry('client/components/UserInterface.tsx', 'UserInterface'),
+      makeEntry('client/pages/ui-dashboard/Dashboard.tsx', 'Dashboard'),
+      makeEntry('client/components/ui/badge.tsx', 'Badge'),
+    ];
+    const content = generatePreviewContent(entries);
+    // Not a components/ui/ path — should remain in registry
+    expect(content).toContain("'client/components/UserInterface.tsx'");
+    expect(content).toContain("'client/pages/ui-dashboard/Dashboard.tsx'");
+    // Actual components/ui/ path — should be excluded
+    expect(content).not.toContain("'client/components/ui/badge.tsx'");
+  });
+});
+
 describe('generatePreviewContent — missing-component signal', () => {
   it('includes _ComponentMissingSignal function in generated output', () => {
     const content = generatePreviewContent([makeEntry('src/Button.tsx', 'Button')], {});
