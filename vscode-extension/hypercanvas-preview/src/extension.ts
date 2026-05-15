@@ -20,6 +20,7 @@ import {
   isUiPrimitive,
   PreviewFileManager,
   PreviewModeManager,
+  parseExistingPreview,
   type SSRMockConfig,
 } from '@lib/preview-generator';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
@@ -512,7 +513,22 @@ export function activate(context: vscode.ExtensionContext) {
       const capturedCurrentPath = stateHub?.state.currentComponent?.path;
       previewManager
         .ensureComponent([relPath])
-        .then(() => {
+        .then((content) => {
+          if (isUiPrimitive(relPath)) {
+            const normalizedRelPath = relPath.replace(/\\/g, '/');
+            const entries = parseExistingPreview(content);
+            const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
+            if (!inRegistry) {
+              // Primitive without SampleDefault will never be added to the registry.
+              // Don't call setComponentParam — the same-value React state bail-out would
+              // leave the preview stuck on "Loading…" indefinitely. Keep the retry count
+              // so repeated _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+              vscode.window.showInformationMessage(
+                `Hyper Canvas: "${relPath}" is a UI primitive without a SampleDefault export — preview not available.`,
+              );
+              return;
+            }
+          }
           componentMissingRetries.delete(componentPath);
           if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
             previewPanel?.setComponentParam(relPath);

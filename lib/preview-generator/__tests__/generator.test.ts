@@ -542,6 +542,18 @@ describe('generatePreviewContent — SSR mock (Remix)', () => {
     expect(content).not.toContain('RemixMockWrapper');
   });
 
+  it('ssrRouteSet not emitted when isSSRRoute entries exist but ssrMock option is absent', () => {
+    // Bug: buildCanvasPreviewBody used `ssrRoutes.size > 0` to decide whether to emit
+    // ssrRouteSet.has() and <RemixMockWrapper /> references, but those identifiers are only
+    // declared when needsRemixMock (ssrMock.framework === 'remix') is true. Passing ssrRoutes
+    // without needsRemixMock produced references to undeclared identifiers → compile error.
+    const ssrEntry = makeSSREntry('app/routes/_index.tsx', 'Index');
+    const content = generatePreviewContent([ssrEntry]); // no ssrMock option
+    expect(content).not.toContain('ssrRouteSet');
+    expect(content).not.toContain('RemixMockWrapper');
+    expect(content).not.toContain('react-router-dom');
+  });
+
   it('mixed entries: only SSR routes in ssrRouteSet', () => {
     const ssrEntry = makeSSREntry('app/routes/explore.tsx', 'Explore');
     const regularEntry = makeEntry('src/Button.tsx', 'Button');

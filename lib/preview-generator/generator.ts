@@ -166,7 +166,7 @@ function toIdentifierSegment(segment: string): string {
 // componentRegistry so the E2E probing loop only iterates actual project
 // components, keeping total probe time within the test budget.
 export function isUiPrimitive(componentPath: string): boolean {
-  return /(\/|\\|^)components[/\\]ui[/\\]/.test(componentPath);
+  return /(\/|\\|^)components[/\\]ui[/\\]/i.test(componentPath);
 }
 
 /** Generate the full __canvas_preview__.tsx content */
@@ -620,10 +620,15 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('');
 
   // 11. CanvasPreview component
+  // Only pass ssrRoutes when needsRemixMock is true — the body builders emit
+  // ssrRouteSet.has() and <RemixMockWrapper /> references that are only declared
+  // when needsRemixMock is true. Passing routes with needsRemixMock=false would
+  // generate references to undeclared identifiers (compile error).
+  const ssrRoutesForBody = needsRemixMock ? ssrRoutes : undefined;
   if (options?.isNextPagesRouter) {
-    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutes));
+    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutesForBody));
   } else {
-    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap, ssrRoutes));
+    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap, ssrRoutesForBody));
   }
 
   return `${lines.join('\n')}\n`;
