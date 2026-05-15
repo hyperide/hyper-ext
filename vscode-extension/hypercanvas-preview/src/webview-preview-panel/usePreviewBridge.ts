@@ -471,8 +471,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             }
             onStateUpdateRef.current(msg.patch);
           }
-          // Forward to iframe (platform state sync)
-          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          // Forward to iframe (platform state sync).
+          // Iframe handler expects `hypercanvas:stateUpdate` with fields directly on the message
+          // (not nested under `patch`). Forwarding raw `state:update` was silently ignored.
+          if (msg.patch) {
+            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.patch }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          }
           break;
 
         case 'state:init':
