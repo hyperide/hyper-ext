@@ -166,7 +166,10 @@ rect-overlay path's `getSourceKey` was not updated at the same time.
     selectedId, renderedComponentPath,
     steps: [{tag, ref}, …],            // every walked ancestor
     parentRef, parentTag,
-    parentLookupHits                    // findElementsByRef(parentRef).length
+    parentLookupStatus                  // 'indexed' when parent !== null, else null
+                                        // (walk-up's predicate already proved
+                                        // findElementsByRef.includes(parent) — no
+                                        // need to recall it just for the diagnostic)
   }
   ```
   Plus `getEntry missing-base` when `findElementsByRef(selectedId)` itself
