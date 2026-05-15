@@ -63,6 +63,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // Combobox state — only active when keys available and keyEditable
   const [keySearch, setKeySearch] = useState('');
   const [showKeyDropdown, setShowKeyDropdown] = useState(false);
+  const [optimisticKey, setOptimisticKey] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -152,6 +153,14 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     return () => document.removeEventListener('mousedown', handler);
   }, [showKeyDropdown]);
 
+  // Clear optimistic key once the binding prop catches up.
+  const realKey = i18nBinding.kind === 'i18n' ? i18nBinding.key : '';
+  useEffect(() => {
+    if (optimisticKey !== null && realKey === optimisticKey) {
+      setOptimisticKey(null);
+    }
+  }, [realKey, optimisticKey]);
+
   if (i18nBinding.kind === 'unsupported') {
     return (
       <div data-testid="i18n-unsupported-fallback" className="w-full px-4 py-2 text-[11px] text-muted-foreground">
@@ -160,7 +169,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     );
   }
 
-  const currentKey = i18nBinding.key;
+  const currentKey = optimisticKey ?? (i18nBinding.kind === 'i18n' ? i18nBinding.key : '');
   const showCombobox = canCreateKeys || (keyEditable && availableKeys !== undefined && availableKeys.length > 0);
   const trimmedSearch = keySearch.trim();
   const filteredKeys = showCombobox
@@ -179,6 +188,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
       setKeySearch('');
       return;
     }
+    setOptimisticKey(key);
     onKeyChange?.(key);
     setShowKeyDropdown(false);
     setKeySearch('');
