@@ -1463,8 +1463,10 @@ export class PreviewPanel {
     // (e.g. drag-resizing or multi-property updates). Only the last one fires.
     if (this._reEmitTimer) clearTimeout(this._reEmitTimer);
 
-    // 300ms delay: Vite HMR typically settles within 100-200ms, but we add
-    // headroom for slower machines and full-page reloads (native undo path).
+    // 2000ms delay: Vite HMR under Docker load takes 1-2s to rebuild the fiber
+    // tree. Re-emitting at 300ms (original) races the HMR settle — the selection
+    // update arrives before the iframe is ready, gets dropped, and the inspector
+    // loses element context (observed: inspector poll times out at 20s in run #23).
     this._reEmitTimer = setTimeout(() => {
       this._reEmitTimer = null;
       // Re-read state — selection may have been cleared by user action
@@ -1474,7 +1476,7 @@ export class PreviewPanel {
 
       console.log('[PreviewPanel] Re-emitting selection after HMR:', currentIds);
       this._stateHub.applyUpdate({ selectedIds: currentIds });
-    }, 300);
+    }, 2000);
   }
 
   /**
