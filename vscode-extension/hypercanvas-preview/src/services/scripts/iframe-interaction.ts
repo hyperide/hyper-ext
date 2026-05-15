@@ -8,6 +8,7 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
+import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1215,14 +1216,14 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
+// Delegates to the shared `isHorizontalLayout` (drop-indicator-orientation.ts),
+// which walks past wrapper divs and treats `grid-cols-N` (multi-track,
+// default `grid-auto-flow: row`) as a horizontal layout. The old inline
+// version checked only `dropEl.parentElement` and required
+// `gridAutoFlow.includes('column')` — that broke Tailwind grids and any
+// drop element wrapped in a transparent block container.
 function _isHorizontalLayout(el: HTMLElement): boolean {
-  const parent = el.parentElement;
-  if (!parent) return false;
-  const s = getComputedStyle(parent);
-  const d = s.display;
-  if (d === 'flex' || d === 'inline-flex') return s.flexDirection === 'row' || s.flexDirection === 'row-reverse';
-  if (d === 'grid' || d === 'inline-grid') return s.gridAutoFlow.includes('column');
-  return false;
+  return _isHorizontalLayoutShared(el);
 }
 
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
@@ -1237,6 +1238,14 @@ let _dragIndicatorEl: HTMLElement | null = null;
 let _dragBadgeEl: HTMLElement | null = null;
 let _dragOffsetX = 0;
 let _dragOffsetY = 0;
+// Pointer/selection guard state: when pending drag begins on a text container
+// (<p>, <h3>, <span> with text), native text-selection grabs the pointer and
+// pointermove never crosses DRAG_THRESHOLD_PX. We capture the pointer and
+// disable user-select on body for the duration of the drag, restoring on up.
+let _dragCapturedPointerId: number | null = null;
+let _dragCapturedTarget: HTMLElement | null = null;
+let _dragPrevBodyUserSelect = '';
+let _dragPrevBodyWebkitUserSelect = '';
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1277,6 +1286,34 @@ function _dragPointerDown(e: PointerEvent): void {
   _dragStartY = e.clientY;
   _dragState = 'pending';
   _dragSourceEl = dragEl;
+
+  // Suppress native text-selection that otherwise consumes pointermove on
+  // <p>/<h3>/<span> with text. Without this, the user's drag never crosses
+  // DRAG_THRESHOLD_PX because the browser is busy extending a text range
+  // instead of dispatching pointermove events with non-trivial deltas.
+  // preventDefault on pointerdown stops the compat-fired mousedown's default
+  // (selection start) in modern browsers; user-select:none on body blocks
+  // selection for the rest of the drag regardless.
+  e.preventDefault();
+  _dragPrevBodyUserSelect = document.body.style.userSelect;
+  _dragPrevBodyWebkitUserSelect = (
+    document.body.style as unknown as { webkitUserSelect?: string }
+  ).webkitUserSelect ?? '';
+  document.body.style.userSelect = 'none';
+  (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect = 'none';
+
+  // Capture the pointer on the original target so subsequent pointermove and
+  // pointerup events keep flowing to us even if the browser tries to redirect
+  // them to a selection range or a hover-target change.
+  if (typeof target.setPointerCapture === 'function') {
+    try {
+      target.setPointerCapture(e.pointerId);
+      _dragCapturedPointerId = e.pointerId;
+      _dragCapturedTarget = target;
+    } catch {
+      // setPointerCapture can throw if the target was detached; ignore.
+    }
+  }
 }
 
 function _dragPointerMove(e: PointerEvent): void {
@@ -1410,6 +1447,29 @@ function _dragPointerUp(e: PointerEvent): void {
   }
   _dragOffsetX = 0;
   _dragOffsetY = 0;
+
+  // Restore body's user-select and release the pointer capture set in
+  // _dragPointerDown. Always run, even when the gesture was a click that
+  // never crossed DRAG_THRESHOLD_PX, so we don't leave the document with
+  // user-select disabled.
+  document.body.style.userSelect = _dragPrevBodyUserSelect;
+  (document.body.style as unknown as { webkitUserSelect?: string }).webkitUserSelect =
+    _dragPrevBodyWebkitUserSelect;
+  _dragPrevBodyUserSelect = '';
+  _dragPrevBodyWebkitUserSelect = '';
+  if (
+    _dragCapturedTarget &&
+    _dragCapturedPointerId !== null &&
+    typeof _dragCapturedTarget.releasePointerCapture === 'function'
+  ) {
+    try {
+      _dragCapturedTarget.releasePointerCapture(_dragCapturedPointerId);
+    } catch {
+      // Capture may have been lost already; ignore.
+    }
+  }
+  _dragCapturedPointerId = null;
+  _dragCapturedTarget = null;
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 

@@ -88,24 +88,6 @@ export function createFileParser(io: FileIO) {
 
       return io.readFile(absolutePath);
     },
-
-    /**
-     * Drop any cached AST for `filePath`. Use after an external mutation
-     * (file watcher event, HMR rewrite) so the next `readAndParseFile` call
-     * re-reads from disk and re-parses. The content-equality check in
-     * `readAndParseFile` already self-heals when content differs, but
-     * explicit invalidation guarantees freshness regardless of cache
-     * implementation details.
-     */
-    invalidate(filePath: string): void {
-      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
-      astCache.delete(absolutePath);
-    },
-
-    /** Drop every cached AST. Use when a global state reset is needed. */
-    invalidateAll(): void {
-      astCache.clear();
-    },
   };
 }
 
