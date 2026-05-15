@@ -4146,3 +4146,14 @@ No new failure classes. Webpack not yet reached in any shard.
   - Remix tests continue passing: "inspector fill" 8s, "change padding" 10s.
 
 All failures remain pre-fix. No new failure classes. Docker containers healthy (Up ~71 min).
+
+## 📍 2026-04-29 Run #27 Checkpoint (07:16 CEST, ~78 min)
+
+**S1:** 402 done, 0 hard failures. Still on react-vite-tw4-twitter (independent tests, large batch).
+**S2:** 245 done, 1 hard failure (pre-fix). Now on react-vite-emotion-dashboard.
+  Projects covered: react-vite-cssmodules-spotify, react-vite-emotion-dashboard,
+  react-vite-styled-shopify, react-vite-tw3-kanban, react-vite-tw4-twitter,
+  remix-cssmodules-spotify, remix-tw4-twitter, tamagui-fitness/food-delivery/uber/whatsapp.
+**S3:** 301 done, 3 hard failures (all pre-fix Tamagui). Now on remix-cssmodules-spotify.
+
+Total: 2189 tests across 40 files. ~948 tests done (43%). Webpack not started on any shard.
