@@ -167,14 +167,21 @@ export function useCanvasInteraction(
       switch (msg.type) {
         case 'hypercanvas:elementClick': {
           const elementId = typeof msg.elementId === 'string' ? msg.elementId : sourceToElementId(msg.source);
-          if (!elementId) break;
-          const patch: Partial<SharedEditorState> & { source?: unknown } = {
-            selectedIds: [elementId],
-            insertTargetId: null,
-            selectedElementDomText: typeof msg.domTextContent === 'string' ? msg.domTextContent : null,
-          };
-          if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
-            patch.selectedItemIndices = { [elementId]: msg.itemIndex };
+          const patch: Partial<SharedEditorState> & { source?: unknown } = {};
+          if (msg.additive) {
+            // iframe already computed the toggled selection — use it directly.
+            patch.selectedIds = Array.isArray(msg.selectedIds) ? msg.selectedIds : [];
+            if (msg.selectedItemIndices && typeof msg.selectedItemIndices === 'object') {
+              patch.selectedItemIndices = msg.selectedItemIndices;
+            }
+          } else {
+            if (!elementId) break;
+            patch.selectedIds = [elementId];
+            patch.insertTargetId = null;
+            patch.selectedElementDomText = typeof msg.domTextContent === 'string' ? msg.domTextContent : null;
+            if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
+              patch.selectedItemIndices = { [elementId]: msg.itemIndex };
+            }
           }
           if (msg.source) {
             patch.source = msg.source;

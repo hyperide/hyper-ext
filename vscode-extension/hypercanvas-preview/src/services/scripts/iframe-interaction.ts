@@ -11,6 +11,7 @@ import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-pla
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
+import { toggleItemIndex, toggleNodeRefInSelection } from '@shared/canvas-interaction/selection-utils';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
@@ -842,10 +843,17 @@ document.addEventListener('click', _dragClickSuppressor, true);
 attachClickHandler(
   document,
   {
-    onElementClick: (nodeRef, el, _e, itemIndex, source) => {
-      // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
-      // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
-      if (nodeRef) {
+    onElementClick: (nodeRef, el, e, itemIndex, source) => {
+      const additive = e.metaKey || e.ctrlKey;
+
+      if (additive) {
+        const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
+        const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
+        state.selectedIds = nextIds;
+        state.selectedItemIndices = nextIndices;
+      } else if (nodeRef) {
+        // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
+        // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
         state.selectedIds = [nodeRef];
         if (itemIndex != null) state.selectedItemIndices = { [nodeRef]: itemIndex };
       }
@@ -855,8 +863,12 @@ attachClickHandler(
         {
           type: 'hypercanvas:elementClick',
           elementId: nodeRef,
+          // Send already-computed selection so parent doesn't need local state tracking.
+          selectedIds: state.selectedIds,
+          selectedItemIndices: state.selectedItemIndices,
           itemIndex,
           source,
+          additive,
           computedStyle: extractComputedStyle(el),
           computedStyleSeq: ++elementClickSeq,
           domTextContent: el.innerText?.trim() || undefined,
@@ -876,10 +888,12 @@ attachClickHandler(
         '*',
       );
     },
-    onEmptyClick: () => {
+    onEmptyClick: (emptyClickEvent) => {
       // Suppress empty-click while source maps are warming for the last click target.
       // retryPendingClick() will fire the real elementClick once maps resolve (codex P1).
       if (pendingClickElement) return;
+      // Cmd/Ctrl+click on empty space: keep existing selection (Figma behavior).
+      if (emptyClickEvent.metaKey || emptyClickEvent.ctrlKey) return;
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
     },
