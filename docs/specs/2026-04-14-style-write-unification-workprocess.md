@@ -4651,3 +4651,32 @@ Bridge bot pagination fix and full E2E restart, 2026-04-22 17:33 CEST:
     save dialogs, and system load. Stop immediately on error floods or runaway
     memory/CPU.
 ```
+
+E2E Hyper Logs filter leak fix, 2026-04-22 17:44 CEST:
+
+```text
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: a9bfb13 test(e2e): clear logs search between dev server checks
+- Trigger:
+  * Full E2E was stopped at the first real failure:
+    `Bun npm shim is forwarded correctly for package commands`.
+  * Failure screenshot showed Hyper Logs had entries (`0/8`) but the search
+    box still contained `error`, so visible entry count was zero.
+  * Root cause: `logs can be filtered by severity level` left the persistent
+    Hyper Logs search query behind for the next test.
+- Fix:
+  * Added `LogsPanel.clearSearch()`.
+  * Wrapped the filter test in `try/finally` so the query is cleared even when
+    the assertion fails.
+  * Cleared the search before the Bun npm shim test counts log rows.
+- Validation:
+  * Focused E2E passed 2/2 with `--retries=0 --workers=1`:
+    `logs can be filtered by severity level` and
+    `Bun npm shim is forwarded correctly for package commands`.
+  * `git diff --check` passed for the two touched E2E files.
+  * Verified no isolated `hvsc-*` VS Code or Playwright test process remained
+    after the focused run.
+- Next step:
+  * Restart full E2E with retries disabled and monitor VS Code windows,
+    Hyper Logs errors, save dialogs, process count, CPU, and memory.
+```
