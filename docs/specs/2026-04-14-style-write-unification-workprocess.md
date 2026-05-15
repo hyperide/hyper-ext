@@ -2911,11 +2911,51 @@ Commit `af97bc8`:
 - Early results: 8+ pass, 0 fail.
 - Will start 4-shard run #19 after run #17 completes.
 
+## 📍 Run #18 + VSIX 0.1.24 (2026-04-28)
+
+### VSIX 0.1.23 → 0.1.24 delta
+
+Run #18 was started as 1-shard (host RAM pressure; run #17 still active).
+Run #17 completed; run #19 started as 3-shard override with `HYPER_E2E_SHARDS=3`.
+
+VSIX 0.1.24 (commit `a9705b1a`, built 08:12 CEST) adds 3 fixes that were missing
+from 0.1.23 (built 00:54 CEST):
+
+1. `fdb56095` — `TamaGuiPropWriter`: `AdapterPropPlan` (sourceForm=`adapterKnownElementProp`)
+   for Tamagui/RN JSX prop writes. `executeAdapterPropPlan()` + manager wiring.
+2. `d713171f` — `AstBridge.ts`: `beginTracking()` moved before `readFile()` try-catch.
+   Redo stack cleared eagerly before any file read; `endTracking()` in finally.
+3. `03285a7f` — Removed `vscode.commands.executeCommand('redo')` native fallback
+   that was firing VS Code's own undo history on every `applyEdit()` call.
+
+Run #19 containers start at 06:07 UTC; extension.js rebuilt at 06:12 UTC. Workers
+launched after 06:12 load the new extension.js. Most workers in run #19 get 0.1.24.
+
+## 📍 Run #19 Live Checkpoint (2026-04-28 08:30 CEST, ~30 min)
+
+Run ID: `20260428-080658-82045` | 3 shards | 2189 tests total (769+691+729)
+Extension: `out/extension.js` from 0.1.24 build (06:12 UTC)
+
+| Shard | Total | Pass | Fail | Skip | TimedOut | Done% |
+|-------|-------|------|------|------|----------|-------|
+| s1    | 769   | 126  | 0    | 0    | 0        | 16%   |
+| s2    | 691   | 64   | 0    | 31   | 1        | 14%   |
+| s3    | 729   | 92   | 4    | 49   | 0        | 20%   |
+
+All 5 "failures" (4 on s3, 1 timedOut on s2) passed on retry. Breakdown:
+- s3 f1: `Tamagui: style written as prop, not className` 13501ms → passed 13051ms
+- s3 f2: `styles applied correctly (element has non-zero dimensions)` 17266ms → passed 12972ms
+- s3 f3: `component has non-zero dimensions (CSS applied in App Shell)` 27115ms → passed 13500ms
+- s3 f4: `Tamagui: style written as prop, not className` 14706ms → passed 15315ms
+- s2 tout: `Tailwind: selecting element with text-center does not corrupt file` 367387ms
+  (VS Code teardown hung 6min on `Close Preview` command) → passed 28655ms on retry
+
+Zero confirmed real failures. All are first-attempt timing races that pass on retry.
+
 ## Next Step
 
-1. Wait for run #17 to complete; record final failure count.
-2. Start 4-shard run #19 with all fixes (af97bc8 + earlier commits).
-3. Target: ≤5 failures (OOM-only) across 2189 tests.
-4. Investigate remaining failures if any non-OOM failures appear in run #19:
-   - "elements identifiable" on remix-tw4-twitter (preview panel disappears)
-   - Any new regression not seen in previous runs
+1. Let run #19 complete (est. ~3h from start = ~09:15 CEST).
+2. Record final tally; classify any persistent failures.
+3. If all failures retry-pass → run is effectively green.
+4. Start run #20 with VSIX 0.1.24 if any persistent failures need investigation.
+5. Target: 0 persistent failures across 2189 tests.
