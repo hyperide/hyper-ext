@@ -249,3 +249,74 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
     expect(plan?.entries).toEqual([{ elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'flex order-1' }]);
   });
 });
+
+describe('computeOrderWritePlan — default-order item gets correct visual slot (Task 1)', () => {
+  // Codex finding 1 repro: parent has `order-2`, no-order, `order-3`.
+  // CSS default `order` is 0 → no-order child must sort BEFORE `order-2`,
+  // not after. Current main treats missing as null → sorted last → bug.
+  const siblings: SiblingInfo[] = [
+    { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
+    { elementId: 'b:1:1', filePath: 'a.tsx', className: '', domIndex: 1 },
+    { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
+  ];
+
+  it('places no-order sibling first (treats missing class as order: 0)', () => {
+    // Correct visual: [B (0), A (2), C (3)]. Drop C before B → visual [C, B, A].
+    // Renumber: C=1, B=2, A=3.
+    const plan = computeOrderWritePlan(siblings, 'c:1:1', 'b:1:1', 'before', 500);
+    expect(plan).not.toBeNull();
+    expect(plan?.breakpoint).toBeUndefined();
+    expect(plan?.entries).toEqual([
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
+    ]);
+  });
+
+  it('treats `order-first` as the leftmost slot', () => {
+    const fixt: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-first', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
+    ];
+    // Visual: [B (-9999), A (2), C (3)]. Drop A after C → visual [B, C, A].
+    // Renumber: B=1, C=2, A=3. B was order-first → order-1 (changed).
+    const plan = computeOrderWritePlan(fixt, 'a:1:1', 'c:1:1', 'after', 500);
+    expect(plan).not.toBeNull();
+    expect(plan?.entries).toEqual([
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
+    ]);
+  });
+
+  it('treats `order-last` as the rightmost slot', () => {
+    const fixt: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-last', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
+    ];
+    // Visual: [B (2), C (3), A (9999)]. Drop B before A → visual [C, B, A].
+    // Renumber: C=1, B=2, A=3. B unchanged (order-2).
+    const plan = computeOrderWritePlan(fixt, 'b:1:1', 'a:1:1', 'before', 500);
+    expect(plan).not.toBeNull();
+    expect(plan?.entries).toEqual([
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
+    ]);
+  });
+
+  it('treats `order-none` as default 0', () => {
+    const fixt: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-none', domIndex: 1 },
+    ];
+    // Visual: [B (0), A (2)]. Drop A before B → visual [A, B]. Renumber: A=1, B=2.
+    const plan = computeOrderWritePlan(fixt, 'a:1:1', 'b:1:1', 'before', 500);
+    expect(plan).not.toBeNull();
+    expect(plan?.entries).toEqual([
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
+    ]);
+  });
+});
