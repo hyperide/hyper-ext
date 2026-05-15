@@ -430,11 +430,18 @@ export class AstService {
       }
       const { result, ast, resolvedPath } = resolved;
 
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
       updateElementChildren(result.element, text);
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
-      return { success: true };
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
