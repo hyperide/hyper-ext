@@ -2016,3 +2016,79 @@ s1/s2 failures (не gate):
 - "undo move/HMR" — undo functionality (отдельный баг)
 - "Setting change" — settings handler (отдельный баг)
 - "component with error" — 100-135s timeouts (другой race?)
+
+## 📍 2026-04-27 17:25 CEST: Run #6 результаты + Gate fix V2 + Run #7
+
+### Run #6 (163311-17692, VSIX 0.1.16) — прерван
+
+Финальный snapshot перед kill:
+
+| shard | pass | fail |
+|-------|------|------|
+| s1    | 113  | 0    |
+| s2    | 102  | 0    |
+| s3    | 70   | 2    |
+| s4    | 53   | 5    |
+
+s4 fails (5шт, все 89-91s timeout):
+- "wrap element — file content changes after wrap"
+- "HMR — edit file, preview updates without full reload"
+- "opacity set + HMR round-trip → canvas remains functional" (×2)
+- "nested components — multiple selectors found"
+
+Root cause run #6: gate fix V1 (adbb183b) убрал gate для ВСЕХ не-webpack.
+Для первого теста на fresh worker с remix-tw4-twitter: `ensurePreviewFiles()`
+пишет route files → `'ok-files-written'` → gate ДОЛЖЕН быть зарм. Без gate
+→ PreviewProxy ретраит 47s → Remix cold compile занимает ~90s → timeout.
+
+### Gate fix V2 (commit be02c4c6) + VSIX 0.1.17
+
+`preview-file-manager.ts`: `_writeIfSafe()` теперь возвращает `bool`.
+`ensurePreviewFiles()` возвращает `'ok-files-written'` при реальной записи.
+`preview-mode-manager.ts:onComponentSelected()`: gate армируется ТОЛЬКО когда
+`ensurePreviewFiles()` вернул `'ok-files-written'` (файлы были реально записаны).
+
+На 2-м+ тесте → файлы уже есть → `'ok'` → gate NOT armed → preview fast.
+На 1-м тесте → файлов нет → `'ok-files-written'` → gate arm → ждём Remix HMR.
+
+### Run #7 (170054-55705, VSIX 0.1.17) — in progress (~2h до конца)
+
+Snapshot at ~17:25 CEST (18% complete):
+
+| shard | pass | fail | skip |
+|-------|------|------|------|
+| s1    | 145  | 2    | 2    |
+| s2    | 115  | 0    | 1    |
+| s3    | 88   | 0    | 39   |
+| s4    | 35   | 8    | 9    |
+
+**s1 fails:** "concurrent start/stop race condition" (×2 включая retry).
+Root cause: `devServer.start()` блокировал на `waitForReady` когда `stop()`
+гонял сначала → никогда не резолвился → тест timeout.
+Fix (ext-test-projects commit f5ebf94): `start(false)` + poll-based webview assert.
+
+**s4 fails (8шт, все 89-102s):** ВСЕ на `remix-tw4-twitter`, ВСЕ first-worker.
+Gate arm на первом тесте → Remix cold compile ≈ 90s = test.slow() (3×30s) timeout.
+3 из 8 уже прошли retry и PASSED. Остальные пройдут retry позже.
+
+Root cause: base timeout 30s → test.slow() 90s → Remix compile ~90s = гонка.
+Fix (ext-test-projects commit f5ebf94): `timeout: 30_000 → 60_000`.
+test.slow() теперь 3×60s = 180s → Remix compile 90s укладывается с запасом.
+
+### Что сделано в этом цикле
+
+ext-test-projects:
+- `f5ebf94`: `timeout: 60_000` + fix concurrent start/stop (pushed to main)
+
+hyper-canvas-draft:
+- `be02c4c6`: Gate fix V2 — arm only when files freshly written
+- `6818addc`: Bump VSIX 0.1.16 → 0.1.17
+
+### Следующий шаг
+
+Run #7 завершится ~19:20 CEST. После него:
+- Если s1 "concurrent start/stop" всё ещё FAIL → уже пофикшен в f5ebf94
+- Если s4 remix failures всё ещё FAIL → уже пофикшен в f5ebf94 (timeout)
+- Запустить run #8 с теми же VSIX 0.1.17 (фикс из f5ebf94 подхватится автоматически)
+
+Ожидаемый результат run #8: s1=0 fail, s4=0 fail, итого 0 fails.
