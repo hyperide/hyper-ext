@@ -1,3 +1,11 @@
+/**
+ * @file StyleReadService tests for VS Code inspector source metadata
+ *
+ * Accessed via: bun test vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts
+ * Assumptions: NodeMapService source locations match Babel JSX element positions.
+ * Architecture: https://hyperide.github.io/reports/style-write-unification
+ */
+
 import { describe, expect, it } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
@@ -7,8 +15,13 @@ const SIMPLE_JSX = `const App = () => <div className="text-red"><span>hello</spa
 const DYNAMIC_JSX = `const App = ({ active }) => (
   <button className={\`px-4 py-2 \${active ? 'bg-blue' : 'bg-gray'}\`}>Click</button>
 );`;
+const INLINE_STYLE_JSX = `const App = () => <div style={{ color: 'red', paddingLeft: 4 }}>hello</div>;`;
+const CSS_MODULE_JSX = `import styles from './Card.module.css';
+
+const App = () => <article className={styles.card}>hello</article>;`;
 const WORKSPACE = '/workspace';
 const FILE_PATH = '/workspace/src/App.tsx';
+const CARD_FILE_PATH = '/workspace/src/Card.tsx';
 
 function makeFileIO(files: Record<string, string>): FileIO {
   return {
@@ -26,6 +39,20 @@ function makeFileIO(files: Record<string, string>): FileIO {
 
 function getSyntheticRef(relativePath: string, line: number, column: number): string {
   return `${relativePath}:${line}:${column}`;
+}
+
+async function captureWarnings<T>(run: () => Promise<T>): Promise<{ result: T; warnings: string[] }> {
+  const originalWarn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    return { result: await run(), warnings };
+  } finally {
+    console.warn = originalWarn;
+  }
 }
 
 describe('StyleReadService', () => {
@@ -47,6 +74,7 @@ describe('StyleReadService', () => {
 
     expect(result.className).toBe('text-red');
     expect(result.tagType).toBe('div');
+    expect(result.styleReadResult?.sourceTabs.map((tab) => tab.id)).toEqual(['computed', 'tailwind-v4:elementClass']);
   });
 
   it('uses NodeMapService entry when it has the file parsed', async () => {
@@ -98,10 +126,15 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', 'src/App.tsx:999:999');
+    const { result, warnings } = await captureWarnings(() =>
+      service.readElementClassName('e1', 'src/App.tsx', 'src/App.tsx:999:999'),
+    );
 
     expect(result.className).toBe('');
     expect(result.tagType).toBe('unknown');
+    expect(warnings).toEqual([
+      '[HyperCanvas] Selection lost after HMR — AST element not found at 999:999 for nodeRef: src/App.tsx:999:999',
+    ]);
   });
 
   it('extracts static parts from dynamic template literal className', async () => {
@@ -121,6 +154,59 @@ describe('StyleReadService', () => {
     expect(result.className).toContain('px-4');
     expect(result.className).toContain('py-2');
     expect(result.tagType).toBe('button');
+    expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
+      id: 'tailwind-v4:elementClass',
+      confidence: 'probable',
+    });
+  });
+
+  it('returns shared inline style source tab when the element has a style prop', async () => {
+    const nodeMap = new NodeMapService();
+
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(INLINE_STYLE_JSX, 'src/App.tsx');
+    const divEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', divEntry.loc.line, divEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: INLINE_STYLE_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+
+    expect(result.styleReadResult?.sourceTabs.map((tab) => tab.id)).toEqual(['computed', 'inline-style:style']);
+    expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
+      label: 'Inline',
+      cssSystem: 'inline-style',
+      sourceForm: 'scriptReactStyleRule',
+      confidence: 'exact',
+    });
+  });
+
+  it('returns CSS Modules source tab for className member expressions', async () => {
+    const nodeMap = new NodeMapService();
+
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(CSS_MODULE_JSX, 'src/Card.tsx');
+    const articleEntry = entries[0];
+
+    const syntheticRef = getSyntheticRef('src/Card.tsx', articleEntry.loc.line, articleEntry.loc.column);
+
+    const fileIO = makeFileIO({ [CARD_FILE_PATH]: CSS_MODULE_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('e1', 'src/Card.tsx', syntheticRef);
+
+    expect(result.styleReadResult?.sourceTabs.map((tab) => tab.id)).toEqual(['computed', 'css-modules:card']);
+    expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
+      label: '.card',
+      cssSystem: 'css-modules',
+      sourceForm: 'cssStyleRule',
+      filePath: '/workspace/src/Card.module.css',
+      selector: '.card',
+      classKey: 'card',
+      confidence: 'exact',
+    });
   });
 
   it('returns empty when nodeRef is an opaque UUID and NodeMapService is empty', async () => {
@@ -128,9 +214,14 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', 'some-uuid-that-doesnt-exist');
+    const { result, warnings } = await captureWarnings(() =>
+      service.readElementClassName('e1', 'src/App.tsx', 'some-uuid-that-doesnt-exist'),
+    );
 
     expect(result.className).toBe('');
     expect(result.tagType).toBe('unknown');
+    expect(warnings).toEqual([
+      '[HyperCanvas] Selection lost after HMR — element not found for nodeRef: some-uuid-that-doesnt-exist',
+    ]);
   });
 });
