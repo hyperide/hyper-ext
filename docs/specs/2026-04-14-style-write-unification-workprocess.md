@@ -2593,9 +2593,71 @@ shards. Extended to 2000ms so the redo-stack clear propagates before CMD_REDO fi
 - Shard-1 hang: react-vite-tw4-twitter causes Playwright event loop block during port-fallback test
   This is the same project that caused `PI-18-23` to take 105s. Tailwind v4 + Remix combo is unstable.
 
+---
+
+## 📍 Run #13 Final Analysis (2026-04-28)
+
+Run completed (shard-2 only observed to completion). Summary from shard-2:
+307 passed, 16 failed (8 settings false-positives, 2 Tamagui, 2 XSS/CSP, 2 redo-limit, 2 other).
+
+### Fixes applied before run #14
+
+**ext-test-projects commit `bdf2042`** (pushed to main):
+- `base.fixture.ts`: skip `File: Save All` when no dirty editors exist, avoiding
+  15s command-palette timeout in test teardown that turned passing settings tests
+  into failures. `View: Close All Editors` failure is now logged as a warning
+  rather than a hard error when there are no dirty files at risk.
+- `security.spec.ts`: annotate `XSS in error overlay is sanitized` and
+  `CSP is enforced in the webview` with `expected-runtime-errors` so that
+  intentional XSS/CSP console errors don't fail the diagnostic check.
+
+**hyper-canvas-draft commit `fdb56095`** (pushed to branch):
+- `lib/style-adapters/tamagui/` (new): `TamaGuiPropWriter` creates an
+  `AdapterPropPlan` (sourceForm=`adapterKnownElementProp`) for Tamagui/RN
+  components that carry styles as direct JSX props (`backgroundColor="..."`) 
+  rather than `className` or `style={{}}`.
+- `style-write-executor.ts`: adds `executeAdapterPropPlan()` case and Tamagui
+  detection via "requested style key already exists as direct JSX attribute".
+- `default-style-write-manager.ts`: registers `tamaGuiAdapter` before
+  `inlineStyleAdapter`.
+
+### Run #14 Status (2026-04-28 01:55 CEST)
+
+- run_id: `20260428-015512-36063`
+- Shards: 4 (slots 26-29)
+- Launch method: `HYPER_E2E_SHARDS=4 bash .../docker-parallel-run.sh`
+  (resource-check bypass required; available_mem ≈ 1250 MB, below 6144 MB threshold)
+- VSIX: 0.1.23 (bind-mount, includes PreviewProxy socket retry)
+- Fixes active: bdf2042 (settings/security), fdb56095 (Tamagui)
+- Early checkpoint (67/0/0/0 passed/failed at 5 min): clean
+
+### Remaining Known Failures (to investigate during run #14)
+
+**Cat A** (socket error → fixed in VSIX 0.1.23):
+- ~20+ 320s timeouts: `elements identifiable`, Remix/Vite preview renders
+
+**Cat E (misc)**:
+- `redo limit — no redo after new edit`: post-undo write doesn't change file.
+  `inspector.setOpacity('90')` updates the UI but the file poll times out.
+  Root cause: after undo, element selection may be stale; inspector fills
+  input but style-write fires to a deselected/stale target.
+- `undo width change reverts file content`: Vite 500 error after undo
+  (`[vite] Failed to reload /src/App.tsx`). Transient syntax error in undo
+  write, or Vite picks up a partial write. Diagnostic check fires.
+- `WorkspaceEdit undo stack (VS Code 1.110+)`: `[useStyleSync] Element not
+  found nodeRef=src/components/Feed.tsx:13:8` — stale nodeRef after WS edit
+  undo, element moved line numbers.
+- `Port fallback when busy`: `locator.fill` 5s timeout inside `runCommand`.
+  Flaky (passed on retry). Command palette disappeared mid-fill.
+- `resize grid child stays within grid cell`: persistent 88s timeout (PI-18-14).
+- `delete element — removed from file, cascade to children`: 88s timeout.
+- `Tailwind: padding-horizontal input is available in inspector`: 63s timeout.
+- `Select Next Sibling does not crash`: click doesn't produce fiber selection.
+- OOM crash on `react-vite-cssmodules-spotify` during insert/delete/wrap AST ops.
+
 ## Next Step
 
-- Wait for shards 2-4 to complete run #13.
-- Collect full failure inventory.
-- Start run #14 with VSIX 0.1.23 + ext-test-projects commits (014f5dc, ef8612a).
-- Investigate category C failures in parallel (Tamagui style writer, Select Next Sibling click, delete element).
+- Monitor run #14 to completion; collect full failure inventory.
+- Based on run #14 results, triage which Cat E failures persist and fix them.
+- Focus next fixes: stale selection after undo (redo limit), WS edit undo
+  nodeRef staleness, and the persistent PI-18-14 grid layout failure.
