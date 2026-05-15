@@ -1310,10 +1310,16 @@ function _dragPointerDown(e: PointerEvent): void {
   // span, aria-hidden wrapper) that may re-render mid-drag. dragEl is held
   // alive by `_dragSourceEl` and is the element receiving the opacity/pointer-
   // events styling during drag, so it's the stable choice.
+  // Track the pointer id regardless of capture success so the multi-touch
+  // guards in _dragPointerMove / _dragPointerUp still reject hijacks from a
+  // second pointer when setPointerCapture happens to throw (e.g. target
+  // detached mid-render). _dragCapturedTarget is only set on success so the
+  // cleanup path doesn't call releasePointerCapture on a target that never
+  // captured.
+  _dragCapturedPointerId = e.pointerId;
   if (typeof dragEl.setPointerCapture === 'function') {
     try {
       dragEl.setPointerCapture(e.pointerId);
-      _dragCapturedPointerId = e.pointerId;
       _dragCapturedTarget = dragEl;
     } catch {
       // setPointerCapture can throw if the target was detached; ignore.
@@ -1495,7 +1501,15 @@ function _dragPointerUp(e: PointerEvent): void {
   // the drop ultimately resolves to a valid target — without this, a drag that
   // ends over empty space / the same source / a non-source-bearing element
   // produces a click that re-selects whatever lands under the cursor.
+  // Failsafe: when threshold is crossed, browsers typically do NOT fire a
+  // compat click, and a pointerup outside the iframe never produces a click
+  // at all. Without this timeout the flag would leak and suppress an
+  // unrelated legitimate click made later. Synthetic click (if any) fires
+  // synchronously before this macrotask, so suppression still works.
   _dragSuppressNextClick = true;
+  setTimeout(() => {
+    _dragSuppressNextClick = false;
+  }, 0);
 
   const rawDropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (!rawDropEl) return;
