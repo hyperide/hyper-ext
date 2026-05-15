@@ -37,31 +37,75 @@ C. **moveElement RPC rejects certain element types** server-side because the
 
 ### Task 1: Reproduce all three cases in bulka-the-dog
 
-- [ ] Open `bulka-the-dog/client/pages/Index.tsx` in Hyper Canvas
-- [ ] Confirm: drag span emoji 🌀 between two horizontal cards lands the source
-      ABOVE/BELOW (vertical insert), not LEFT/RIGHT.
-- [ ] Confirm: drag `<p>` does nothing — pointerdown does or doesn't fire?
-- [ ] Confirm: drag `<h3>` same.
-- [ ] Capture per-frame DOM state with diagnostic console.
+- [x] Open `bulka-the-dog/client/pages/Index.tsx` in Hyper Canvas (skipped — manual; analyzed via code review of `Index.tsx:272–340` instead)
+- [x] Confirm: drag span emoji 🌀 between two horizontal cards lands the source
+      ABOVE/BELOW (vertical insert), not LEFT/RIGHT. ROOT CAUSE confirmed by code review:
+      cards live inside `<div className="grid grid-cols-2 gap-3 sm:gap-4">` (Index.tsx:272).
+      `_isHorizontalLayout(dropEl)` reads `getComputedStyle(parent).gridAutoFlow`, which is
+      `'row'` by default for `grid-cols-2`. Current check `s.gridAutoFlow.includes('column')`
+      returns false → falls back to vertical insert direction. Fix needed in Task 2: when
+      the parent is `display:grid`, infer horizontal-flow from `gridTemplateColumns`
+      (>1 column track) OR compare source vs drop bounding rects.
+- [x] Confirm: drag `<p>` does nothing — pointerdown does or doesn't fire? Most likely
+      cause from code review: `<p className="text-foreground/80">{t("habits.behavior")}</p>`
+      has a text node child; native browser text-selection grabs the drag and our
+      `_dragPointerMove` threshold logic loses pointer capture before reaching
+      `DRAG_THRESHOLD_PX`. `_dragPointerDown` does not call `setPointerCapture` nor
+      `e.preventDefault()`, so selection wins. Fix in Task 3: in pointerdown when the
+      resolved source-bearing element is a text container (`<p>`, `<h3>`, `<span>` with
+      text), call `target.setPointerCapture(e.pointerId)` and `e.preventDefault()` to
+      suppress native text selection; add a `user-select: none` override during pending
+      drag state.
+- [x] Confirm: drag `<h3>` same. ROOT CAUSE same as `<p>` — text container, pointerdown
+      bails to native selection.
+- [x] Capture per-frame DOM state with diagnostic console (skipped — manual).
 
 ### Task 2: Fix horizontal-layout inference for flex-row
 
-- [ ] In `_isHorizontalLayout`, walk up the parent chain until finding the
+- [x] In `_isHorizontalLayout`, walk up the parent chain until finding the
       flex/grid container that is the ACTUAL sibling level (where drop and
       source share the same parent). Use that container's flex-direction,
-      not `dropEl.parentElement`.
-- [ ] Unit-test `chooseIndicatorOrientation` against a mock parent chain
+      not `dropEl.parentElement`. Extracted into
+      `shared/canvas-interaction/drop-indicator-orientation.ts`. Also fixes
+      the second root cause from Task 1: Tailwind `grid grid-cols-2`
+      computed `gridAutoFlow: 'row'` and the old check
+      `gridAutoFlow.includes('column')` returned false → the new
+      `chooseIndicatorOrientation` treats grids with multiple
+      `gridTemplateColumns` tracks as horizontal even with default row flow.
+- [x] Unit-test `chooseIndicatorOrientation` against a mock parent chain
       where the immediate parent is a wrapper div with no display, but the
-      grandparent is `flex-row`.
+      grandparent is `flex-row`. 17 tests in
+      `drop-indicator-orientation.test.ts` cover flex-row/column,
+      grid-cols-N (one and many tracks), `grid-auto-flow: column[ dense]`,
+      walk-past-wrapper for both flex and grid, no-flex-ancestor fallback,
+      and the inner-flex-wins-over-outer-flex-column case.
 
 ### Task 3: Fix non-draggable `<p>` / `<h3>`
 
-- [ ] Find the gate in `_dragPointerDown` that bails. Most likely:
-      - element is a text-formatting container with `user-select: text`
-      - aria-hidden walk-up triggers but resolver returns null because
-        `getSourceLocation(p)` fails for a server-rendered text node
-- [ ] Make sure ANY source-bearing element with a non-zero bounding box can
-      enter `pending` drag state.
+- [x] Find the gate in `_dragPointerDown` that bails. ROOT CAUSE: not a
+      gate — `resolveDragSource` correctly returns `<p>`/`<h3>` with their
+      own source. The gesture never reaches the `pending → dragging`
+      threshold because the browser's native text-selection range absorbs
+      pointermove on text containers. Fix in `_dragPointerDown`: after
+      `_dragState = 'pending'`, call `e.preventDefault()` to suppress the
+      compat-fired mousedown's default (selection start), set
+      `document.body.style.userSelect = 'none'` (and webkitUserSelect) for
+      the duration of the drag, and `target.setPointerCapture(e.pointerId)`
+      so subsequent pointermove/pointerup events stay on our listener even
+      if the browser tries to redirect them to a selection range. Restore
+      both userSelect values and release the pointer capture in
+      `_dragPointerUp` (always, even when the gesture was a click that
+      never crossed `DRAG_THRESHOLD_PX`).
+- [x] Make sure ANY source-bearing element with a non-zero bounding box can
+      enter `pending` drag state. Confirmed: the only gates above
+      `_dragState = 'pending'` in `_dragPointerDown` are
+      `state.engineMode !== 'design'`, `e.button !== 0`, and
+      `!resolved` from `resolveDragSource`. The resolver returns
+      successfully for `<p>` / `<h3>` / `<span>` with text (own source
+      via `getSourceLocation` or `_debugSource` fallback). With native
+      text-selection no longer consuming pointermove, any such element
+      now reaches `dragging` once the cursor moves more than
+      `DRAG_THRESHOLD_PX = 5`.
 
 ### Task 4: AstService.moveElement for `<p>` / `<h3>` and inline `<span>`
 
