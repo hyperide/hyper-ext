@@ -2811,9 +2811,69 @@ Expected improvement: all 20 remaining failures resolved.
 - 7 Remix timeouts → fixed by 420s/600s extension
 - 2 redo limit → fixed by rebuilt extension.js
 
+## 📍 Run #16 Partial Results + Fix #4 (2026-04-28)
+
+Run #16 ID: `run-20260428-040917-4781`. Started 04:09 CEST, still running (~90 min in).
+2189 total tests across 4 shards.
+
+### Run #16 progress snapshot (~90 min in)
+
+| Shard | Tests | Passed | Failed | TimedOut | Skipped |
+|-------|-------|--------|--------|----------|---------|
+| 1 | 621 | 62 | 1 | 0 | 0 |
+| 2 | 482 | 24 | 6 | 1 | 0 |
+| 3 | 550 | 12 | 2 | 1 | 4 |
+| 4 | 536 | 14 | 5 | 1 | 5 |
+
+Settings tests and redo-limit tests NOT YET REACHED in shard-2.
+
+### New failure pattern: fake.html/offscreen webview
+
+Root cause: After `cmd.runCommand('Hyper: Refresh Preview')`, the command palette
+interaction shifts keyboard focus to Column 1 (editor). VS Code then considers
+Column 2 (preview panel) inactive and replaces the webview iframe content with
+`fake.html`. The 420s poll never succeeds because `isPreviewLoaded()` finds no app
+content — only the fake placeholder.
+
+Previous `getPreviewPanelContent()` offscreen recovery only triggered when it found
+iframes that were offscreen. When the iframe was completely absent from DOM (VS Code
+removed it for a background tab), recovery never ran.
+
+Affected tests: "dynamic className", "logs panel opens after dev server stop",
+"open component → preview iframe loaded, no white screen" — all in shard-4 on
+Remix project when a new worker starts after a prior worker finished.
+
+**Fix #4 — ext-test-projects commit `ffa30f6`**:
+
+1. `setup-preview.ts`: After `Hyper: Refresh Preview`, click the preview tab explicitly
+   to bring Column 2 to focus before starting the poll. Prevents the fake.html state.
+
+2. `WebviewFrame.getPreviewPanelContent`: When NO preview webview is found in the frame
+   list but the "Hyper Canvas" tab exists in the tab strip, call `activatePreviewTab()`
+   and retry (up to 3 attempts). Handles the case where VS Code removed the iframe
+   from DOM entirely.
+
+### Infrastructure: zombie containers
+
+Run #15 containers were still running after 2+ hours — stuck in the same fake.html
+loop. Stopped them at ~03:20 CEST to free ~3.4GB RAM and CPU cycles that were competing
+with run #16.
+
+### Run #16 remaining failures (so far, resource pressure)
+
+- VS Code "Target crashed" (OOM/kernel kill): 3 instances across shard-2, shard-3
+- "cursor in imported component" timedOut (479s) — both attempts > 360s test.slow()
+- "wrap element" timedOut (365s) — teardown "View: Close All Editors" hung 360s
+- Multiple fake.html failures in shard-4 — fixed for run #17 by fix #4
+
+### Fix #4 NOT applied to run #16 (new fix, next run)
+
+Run #17 will include all 4 fixes. Settings/redo tests will also be verified.
+
 ## Next Step
 
-- Monitor run #16 (ID: `run-20260428-040917-4781`).
-- Collect full failure inventory from run #16.
-- Fix any new persistent failures found.
-- Target: 0 failures across 2211 tests.
+- Monitor run #16 until settings tests and redo-limit tests run in shard-2.
+- Verify: settings tests (8 in run #15) pass with CommandPalette blur fix.
+- Verify: redo limit test passes with rebuilt extension.js + beginTracking fix.
+- Once verified (or run #16 completes), launch run #17 with fix #4 applied.
+- Target: 0 failures across 2189 tests.
