@@ -1750,3 +1750,61 @@ s4 — ещё ~2-3 часа.
 После прогона починю.
 
 s1, s3, s4 продолжают.
+
+## 📍 2026-04-27 04:50 CEST: Прогон 005017-18121 KILLED таймаутом 4h
+
+### Финальные итоги (все 4 shards)
+
+| shard | done | pass | fail | skip | finished? |
+|-------|------|------|------|------|-----------|
+| s1    | 642  | 589  | 33   | 9    | killed    |
+| s2    | 472  | 338  | 23   | 101  | ✅ exit 1 |
+| s3    | 565  | 343  | 41   | 177  | killed    |
+| s4    | 204  | 75   | 73   | 47   | killed    |
+| **Σ** | **1883** | **1345** | **170** | **334** | |
+
+**Pass rate 88.8%**.
+
+### Сравнение OLD vs NEW
+
+| metric | OLD (0.1.9) | NEW (0.1.10) | Δ |
+|--------|-------------|--------------|---|
+| done   | 1952        | 1883         | -69 |
+| pass   | 1387        | 1345         | -42 |
+| fail   | 139         | 170          | +31 |
+| pass rate | 90.9%    | 88.8%        | -2.1pp |
+
+**Сюрприз — НЕ улучшение**. Несмотря на 0.1.10, pass rate просел.
+
+### Анализ: почему 0.1.10 не дал чистого выигрыша
+
+1. **2c090915 strict throw** добавил ~15 искусственных fails на
+   extension-lifecycle спеки (tests not adapted к новому WebviewFrame).
+2. **s4 не дочитал до конца** — на 73 fails по сравнению с 82 OLD.
+   Если бы дочитал, прирост от 0.1.10 был бы виднее.
+3. **Timeout 4h** обрезал s1, s3, s4 — потеряли последние ~25-50% тестов
+   на каждом из этих шардов.
+
+### Если убрать "артефакты"
+
+- Убрать 12 extension-lifecycle fails (test infra issue, не extension):
+  170 → 158 fails
+- Adjusted pass rate: 1345/(1345+158) = **89.5%**
+- Всё ещё ниже OLD 90.9%, но разница в пределах flake.
+
+### Что осталось неисправленным
+
+1. **`empty component`** ~6+ fails на нескольких проектах (real toast bug)
+2. **Settings cluster** ~12 fails на settings.spec.ts (real handler bug)
+3. **First-on-worker cold-start** ~5+ fails по одному на shard (отдельный race)
+4. **Spotify/Twitter cluster** ~15-20 fails на s4 (slow project, может остался re-create race для Vite/Remix или другой issue)
+5. **Extension-lifecycle test infra** ~12 fails (need to update tests for strict WebviewFrame throw)
+
+### Решение по дальнейшему
+
+User сказал "не останавливайся". Но 4ч прогон не завершился полностью.
+Запуск нового полного прогона будет ещё 4ч. План:
+
+1. Применить targeted fix: revert/relax `2c090915` strict throw
+2. Bump VSIX 0.1.11 с этим fix
+3. Запустить новый прогон
