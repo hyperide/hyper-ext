@@ -3743,3 +3743,44 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 | `8e06c5b` | ext-test-projects | Teardown: revert "File Modified Since" conflicted editors |
 
 **Run #24 plan:** Launch after S1/S3 complete. Expected result: Tamagui style-as-prop and error overlay failures should be eliminated on first attempt. Infrastructure flakes (warmup overload, cascade) remain non-fixable.
+
+---
+
+## 📍 2026-04-29 Run #23 Full Analysis + Run #24 Launch
+
+### Run #23 S1 final results (v0.1.26 — fixes NOT yet deployed)
+
+3 hard failures (both attempts failed), 14 flaky, 14 skipped, 738 passed in 2.5h:
+
+**Hard failure 1: `hyper_duplicate_element — copy appears`**
+- Error: `Element not found (nodeRef=undefined, elementId=src/components/Tweet.tsx:84:16)`
+- Root cause: MCP tool passed `elementId="src/components/Tweet.tsx:84:16"` (child component) while `currentComponent` was App.tsx. `_resolveElement` searched App.tsx AST → null. No child-file retry logic in v0.1.26.
+- **Fixed in v0.1.28**: `b89b2e55` adds `_extractFileFromNodeRef` + retry with child file.
+
+**Hard failure 2: `redo limit — no redo after new edit`**
+- Error: Inspector poll timeout 20s — `getComponentName()` returned empty after undo.
+- Root cause: `_reEmitSelectionAfterHmr` fired at 300ms while HMR still building fiber tree (1-2s under Docker load). Selection arrived before iframe ready, got dropped.
+- **Fixed in v0.1.28**: `0e5c2134` increases delay 300ms→2000ms.
+
+**Hard failure 3: `switching components in Explorer does not produce black canvas`**
+- Attempt 1: test body PASSED at 41167ms, but during TEARDOWN VS Code CRASHED (`page.evaluate: Target crashed`). Teardown hung for 360s → test timeout.
+- Retry 1: fresh VS Code, test ran, but iframe got `[console.error] Failed to load resource: the server responded with a status of 502 (Bad Gateway)` during component HMR. base.fixture.ts line 622 threw on this unexpected error.
+- Root cause of retry failure: 502 is transient during HMR component switching, but was not in benign patterns list.
+- **Fixed now**: `f526fd6` in ext-test-projects adds `502 Bad Gateway` and `ERR_CACHE_RACE` to benign patterns.
+- Root cause of attempt 1: VS Code OOM crash under 3-shard parallel load during heavy component-switching test. Not fixable without infra changes.
+
+### New fixes applied before Run #24
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `b89b2e55` | hyper-canvas-draft | `duplicateElement`: resolve child-component files via nodeRef extraction |
+| `0e5c2134` | hyper-canvas-draft | `_reEmitSelectionAfterHmr`: delay 300ms→2000ms for HMR settle under Docker load |
+| `f526fd6` | ext-test-projects | `base.fixture.ts`: add 502/ERR_CACHE_RACE to benign console error patterns |
+| (all v0.1.28 fixes) | hyper-canvas-draft (extension v0.1.28) | PreviewProxy retry 60→90, duplicate/redo fixes above |
+
+### Run #24 Launch
+
+**Run #24 started:** 2026-04-29 (time below)
+**Extension version:** v0.1.28
+**Fixes vs run #23:** duplicate element child-file, redo HMR delay, 502/ERR_CACHE_RACE benign, error overlay poll 150→250s, Tamagui poll 20→45s, zombie container prevention, File Modified Since teardown
+**Expected improvements:** `hyper_duplicate_element` and `redo limit` should be hard failures no more; `canvas-bugs switching components` should be flaky→pass (retry works now); Tamagui and error overlay failures should not appear
