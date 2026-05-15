@@ -145,9 +145,23 @@ writes), not on adapter behavior.
 
 ### Task 3: Fix the adapter for the actual bulka layout
 
-- [ ] If the adapter has a path bug (e.g. expects flat keys but file has
+- [x] If the adapter has a path bug (e.g. expects flat keys but file has
       nested), fix it. Add a unit test against the real bulka translations.ts
       shape.
+      → No path bug. Task 2 already ruled out hypothesis C. TsMergedAdapter
+      handles nested objects correctly (recursively walks into `{ ru: {...},
+      rs: {...}, en: {...} }`, emits dot-path leaf keys like `hero.question`,
+      `faq.title`, `brand.name`, `nav.appearance`). `resolveText` returns the
+      correct value for `hero.question` in every locale. Unit tests against
+      the bulka shape already exist
+      (`vscode-extension/hypercanvas-preview/src/services/i18n/__tests__/TsMergedAdapter.test.ts`,
+      9 tests, 14 assertions, all green) and pin: factory selects
+      `TsMergedAdapter` for merged TS, `getAvailableKeys` returns non-empty
+      dot-path keys, parallel keysets across locales, fallback to first
+      locale, `resolveText` returns translated value for present keys, `null`
+      for missing keys / non-leaf paths. No code change needed in this task.
+      Real fix surface stays in Tasks 4 (decouple `editable` from `writable`)
+      and possibly a separate write-supporting change for merged TS.
 
 ### Task 4: Fix editable=true even when resolvedText is empty string
 
