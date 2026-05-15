@@ -301,16 +301,6 @@ export class PanelRouter {
         namespace?: string;
         activeLocale: string;
       };
-      if (!activeLocale || typeof activeLocale !== 'string') {
-        webview.postMessage({
-          type: 'styles:i18nKeysResponse',
-          requestId,
-          success: false,
-          keys: [],
-          error: 'activeLocale missing',
-        });
-        return true;
-      }
       try {
         const keys = await this._styleReadService.getAvailableKeys(namespace, activeLocale);
         webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: true, keys });

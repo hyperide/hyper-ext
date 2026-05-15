@@ -527,7 +527,8 @@ export class StyleReadService {
     // value (already known to render in the live DOM). When they differ, the panel is
     // asking for a switch — pass through whatever the dictionary lookup returns, even
     // if that is null (locale missing the key).
-    const resolvedText = resolved?.resolvedText ?? (targetLocale === domMatch.locale ? domMatch.resolvedText : null);
+    const resolvedText =
+      resolved?.resolvedText ?? (targetLocale === domMatch.locale ? domMatch.resolvedText : null);
 
     // resolveI18nResource's catch path produces availableLocales: [] — `??` would pass
     // it through, leaving the inspector with no locale buttons even though the DOM scan
