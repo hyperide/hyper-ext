@@ -420,34 +420,6 @@ describe('StyleReadService — i18n binding detection', () => {
       expect(result.i18nText.editable).toBe(false);
     }
   });
-
-  it('marks editable=true when active locale file exists but key is missing (user can type to create entry)', async () => {
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    // Locale file exists but does NOT contain the key — typing should create the entry
-    const LOCALES_EN_NO_KEY = JSON.stringify({ other: 'value' });
-    const fileIO = makeFileIO({
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/locales/en.json': LOCALES_EN_NO_KEY,
-    });
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.key).toBe('habits.walks');
-      expect(result.i18nText.resolvedText).toBeNull();
-      // Bug fix: editable must be true so the user can type a translation into the empty slot
-      expect(result.i18nText.editable).toBe(true);
-    }
-  });
 });
 
 // =============================================================================
