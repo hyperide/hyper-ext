@@ -485,6 +485,19 @@ quickly. New fix: 600→720s poll gives comfortable margin.
 
 **Fix**: Tamagui poll 60s → 90s (commit `ab568b5`, in run #31).
 
+### Intermediate status (15:43 CEST, ~1.5h in)
+
+- S1: 463 test-done, **0 failed**
+- S2: 509 test-done, 1 failed (component-with-error, FLAKY)
+- S3: 303 test-done, **9 failed** — 8 Tamagui hard fails + 1 webpack FLAKY
+
+New failure in S3: `"elements identifiable via fiber-based selection" 725954ms — failed`
+- Root cause: webpack pre-warm compiled with 1 error → partial cache → cold compile 726s (6s over 720s limit)
+- Attempt 2 (retry): 21677ms passed (warm cache)
+- This is FLAKY (not hard fail)
+
+**New fix committed**: `3a7bb75` — webpack poll 720→900s, test.setTimeout 960→1080s
+
 ### Commits ready for Run #31 (not in run #30)
 
 | Commit | Fix |
@@ -494,4 +507,5 @@ quickly. New fix: 600→720s poll gives comfortable margin.
 | `b6f88ab` | dev-server deactivation expected-runtime-errors annotation |
 | `b58627c` | redo PI-6-32: undo at end to avoid 6-min teardown hang |
 | `ab568b5` | Tamagui poll 60→90s |
+| `3a7bb75` | webpack poll 720→900s, test.setTimeout 960→1080s |
 
