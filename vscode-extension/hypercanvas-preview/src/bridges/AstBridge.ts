@@ -6,6 +6,7 @@
 
 import * as fsSync from 'node:fs';
 import path from 'node:path';
+import { discoverLayout } from '@shared/i18n-text/resolve-i18n-resource';
 import { writeI18nResource } from '@shared/i18n-text/write-i18n-resource';
 import type * as vscode from 'vscode';
 import type {
@@ -206,33 +207,38 @@ export class AstBridge {
       }
       const result = await this._astService.deleteElements(filePath, elementIds);
       if (result.success) {
-        // For cross-file deletes (element lives in a child component file), use resolvedPath
-        // and contentBeforeWrite — same pattern as _withUndoTracking.
-        const actualPath = result.resolvedPath ?? absolutePath;
-        let contentBeforeActual: string;
-        if (actualPath !== absolutePath) {
-          if (result.contentBeforeWrite === undefined) {
-            // contentBeforeWrite capture failed in AstService — skip undo rather than record empty diff.
-            console.warn(
-              `[AstBridge] deleteElements: contentBeforeWrite unavailable for cross-file delete to ${path.basename(actualPath)}, skipping undo snapshot`,
-            );
-            return result;
+        // Collect all file modifications into a single atomic undo entry so that
+        // one Cmd+Z restores every file that was changed by this delete operation.
+        const batchEdits: Array<{ filePath: string; contentBefore: string; contentAfter: string }> = [];
+
+        let mainAfter: string;
+        try {
+          mainAfter = await this._fileIO.readFileFromDisk(absolutePath);
+        } catch {
+          try {
+            mainAfter = await this._fileIO.readFile(absolutePath);
+          } catch {
+            mainAfter = contentBefore;
           }
-          contentBeforeActual = result.contentBeforeWrite;
-        } else {
-          contentBeforeActual = contentBefore;
+        }
+        if (contentBefore !== mainAfter) {
+          batchEdits.push({ filePath: absolutePath, contentBefore, contentAfter: mainAfter });
         }
 
-        let contentAfter: string;
-        try {
-          contentAfter = await this._fileIO.readFile(actualPath);
-        } catch {
-          contentAfter = contentBeforeActual;
+        for (const { resolvedPath: xPath, contentBefore: xBefore } of result.allCrossFileSnapshots ?? []) {
+          let xAfter: string;
+          try {
+            xAfter = await this._fileIO.readFile(xPath);
+          } catch {
+            xAfter = xBefore;
+          }
+          if (xBefore !== xAfter) {
+            batchEdits.push({ filePath: xPath, contentBefore: xBefore, contentAfter: xAfter });
+          }
         }
-        if (contentBeforeActual !== contentAfter) {
-          // Single undo entry for the entire delete operation (regardless of element count).
-          // Content snapshots capture the full before/after — no need for per-element entries.
-          this._undoRedoService.recordEdit(actualPath, contentBeforeActual, contentAfter);
+
+        if (batchEdits.length > 0) {
+          this._undoRedoService.recordBatchEdit(batchEdits);
         }
       }
       return result;
@@ -415,15 +421,37 @@ export class AstBridge {
   private async _handleWriteI18nResource(
     message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
   ): Promise<AstResponse> {
-    const writeResult = await writeI18nResource({
-      projectRoot: this._workspaceRoot,
-      library: message.library,
-      key: message.key,
-      namespace: message.namespace,
-      activeLocale: message.activeLocale,
-      newText: message.newText,
-      fileIO: this._fileIO,
-    });
+    // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
+    const SAFE_SEGMENT = /^[\w-]{1,64}$/;
+    if (!SAFE_SEGMENT.test(message.activeLocale)) {
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid activeLocale' };
+    }
+    if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
+      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
+    }
+
+    const localeLayout = await discoverLayout(
+      this._workspaceRoot,
+      message.namespace,
+      message.activeLocale,
+      this._fileIO,
+    ).catch(() => null);
+    const localeFilePath = localeLayout?.getLocaleFilePath(message.activeLocale) ?? null;
+
+    const doWrite = async (): Promise<AstOperationResult & { filePath: string | null }> => {
+      const r = await writeI18nResource({
+        projectRoot: this._workspaceRoot,
+        library: message.library,
+        key: message.key,
+        namespace: message.namespace,
+        activeLocale: message.activeLocale,
+        newText: message.newText,
+        fileIO: this._fileIO,
+      });
+      return { success: r.success, error: r.error, filePath: r.filePath };
+    };
+
+    const writeResult = localeFilePath ? await this._withUndoTracking(localeFilePath, doWrite) : await doWrite();
 
     if (!writeResult.success) {
       return {
@@ -438,7 +466,7 @@ export class AstBridge {
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      const newExpression = `{t("${message.key}")}`;
+      const newExpression = `{t(${JSON.stringify(message.key)})}`;
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );

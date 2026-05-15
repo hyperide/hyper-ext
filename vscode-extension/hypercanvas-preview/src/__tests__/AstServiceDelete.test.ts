@@ -42,6 +42,14 @@ describe('AstService deleteElements — i18n call-expression paragraphs', () => 
     expect(countOccurrences(fileIO.content(componentPath), 't("habits.walks")')).toBe(1);
   });
 
+  it('returns success: false when all provided IDs are not found', async () => {
+    const { service } = await createBulkaService();
+
+    const result = await service.deleteElements('client/pages/Index.tsx', ['nonexistent:99:99']);
+
+    expect(result.success).toBe(false);
+  });
+
   it('deletes both adjacent identical paragraphs in a single batch call (multi-id same-file)', async () => {
     const { service, fileIO, componentPath } = await createBulkaService();
 
