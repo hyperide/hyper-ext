@@ -1003,3 +1003,68 @@ cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMA
 ### ext v0.1.38 built and installed
 All fixes above included. Reload VS Code window to activate.
 
+---
+
+## 📍 2026-04-30 — Run #41: launched + results + root cause analysis
+
+Run ID: `run-20260430-123732-60926` — 3 shards, ext v0.1.38.
+
+### Run #40/#41 results
+
+| Shard | Passed | Failed | Flaky | Skipped | Status |
+|-------|--------|--------|-------|---------|--------|
+| S1    | 728    | 18     | 9     | 14      | Finished |
+| S2    | 437    | 1      | 2     | 263     | Finished |
+| S3    | —      | —      | —     | —       | Timed out (webpack 905s) |
+
+**Failures breakdown (S1):**
+- 17 undo-redo tests — all opacity-related (root cause: `_withUndoTracking` bug, see below)
+- 1 keybindings: "Cmd+S from iframe → forwarded to VS Code save"
+- 5 settings tests (autoStart, model override, baseURL, proxy backend, immediate effect)
+- 1 dev-server-lifecycle: "log entries display timestamps"
+- 1 explorer-ui: "PI-4-23: clearing search restores full component list"
+- 1 position-sync: "cursor in different component → component switch + highlight"
+- 1 smoke: "open preview command works"
+
+### Root cause: `_withUndoTracking` post-write read bug (`225658f4` regression)
+
+In `react-vite-tw4-twitter`, element `src/components/Feed.tsx:13:8` (the `<h1>`) resolves via
+`_resolveElementInCorrectFile` to `Feed.tsx` even when `filePath=src/App.tsx` is passed.
+This means `resolvedPath !== absolutePath` → `needsSnapshot=true`.
+
+**Bug**: `_withUndoTracking` tried to read `contentBeforeActual` AFTER `operation()` ran
+(line `contentBeforeActual = await this._fileIO.readFileFromDisk(actualPath)`), making
+`before == after` and recording **no undo entry**. Every opacity undo call became a no-op.
+
+**Fix (`67e42b12`)**: Read the target file in `AstService.updateStyles`/`updateProps` AFTER
+`_resolveElementInCorrectFile` but BEFORE the write. Return as `result.contentBeforeWrite`.
+`_withUndoTracking` now uses `result.contentBeforeWrite ?? ''` instead of post-write read.
+`AstOperationResult` gets optional `contentBeforeWrite?: string` field.
+
+**Also fixed (`9ee30f4` in ext-test-projects)**: Tests PI-6-2 and PI-6-12 hardcoded
+`readProjectFile('src/App.tsx')` but writes go to `Feed.tsx`. Added `readSrcSnapshot()` that
+reads all `.ts/.tsx` under `src/`. Changed both tests to use it.
+
+### Commits
+- `67e42b12`: fix(ast): read cross-file contentBeforeWrite before write for undo tracking (hyper-canvas-draft)
+- `9ee30f4` (ext-test-projects): fix(e2e): scan all src files for change detection in undo-redo tests
+
+### ext v0.1.41 built and installed
+
+---
+
+## 📍 2026-04-30 — Run #42 launched
+
+```bash
+cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+```
+
+**Fixes active in run #42** (all previous + new):
+- `67e42b12`: `contentBeforeWrite` fix — cross-file undo now records entry correctly
+- `9ee30f4` (ext-test-projects): `readSrcSnapshot()` — tests scan Feed.tsx, not only App.tsx
+
+**Expected**:
+- All 17 opacity undo-redo failures → PASS
+- PI-6-2 "redo style change re-applies property" → PASS (readSrcSnapshot)
+- PI-6-12 "redo limit" → PASS (readSrcSnapshot)
+
