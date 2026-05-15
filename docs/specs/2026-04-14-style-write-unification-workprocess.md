@@ -1478,3 +1478,22 @@ Subagent проклассифицировал 95 fail'ов на 6 кластер
 2. **Tamagui-uber RN-Web cluster (E)** — отдельное расследование в следующем цикле.
 3. **First-on-worker setupPreview hangs (B + некоторые в C/D)** — другая race, не 0.1.10. Нужно отдельно смотреть `editor:tab:wait` race vs extension activation.
 4. **`empty component` короткие fails** на notion/calendar — стоят на втором тесте воркера, скорее всего та же re-create race. Проверится после 0.1.10 прогона.
+
+## 📍 2026-04-26 23:50 CEST: live ~4h check
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 530  | 491  | 11   | 9    |
+| s2    | 395  | 288  | 16   | 77   |
+| s3    | 523  | 324  | 24   | 162  |
+| s4    | 242  | 106  | 64   | 59   |
+| **Σ** | 1690 | 1209 | 115  | 307  |
+
+77% сделано, pass rate 91.3%. Диск 34GB free. Все 4 shards активны
+(не зависли) — s3 на tamagui-whatsapp slow paint (65s setupPreview),
+s4 продолжает spotify cluster. Image bake auto-trigger готов на
+следующий запуск.
+
+`docker image prune -f`: 0B (нет dangling). Reclaimable 4.3GB на
+старых hypercanvas-e2e слоях, но не безопасно пока контейнеры
+работают.
