@@ -67,13 +67,13 @@ Acceptance: `getAvailableKeys` returns `['habits.walks', 'habits.runs', ...]` fo
 
 ### Task 2: Add `styles:fetchI18nKeys` Message Type
 
-- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts`.
-- [ ] Read `client/lib/platform/types.ts` — the `PlatformMessage` union.
-- [ ] Add `styles:fetchI18nKeys` to `PlatformMessage` in `client/lib/platform/types.ts`.
-- [ ] Add `styles:i18nKeysResponse` to the response types.
-- [ ] In `PanelRouter.ts`: handle `styles:fetchI18nKeys` → call `_styleReadService.getAvailableKeys(...)` → respond with `styles:i18nKeysResponse`.
-- [ ] Add PanelRouter integration test in `src/__tests__/PanelRouter.test.ts`: `styles:fetchI18nKeys` returns a response with `keys` array.
-- [ ] Run `bun test vscode-extension/hypercanvas-preview/src/__tests__/PanelRouter.test.ts`.
+- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts`.
+- [x] Read `client/lib/platform/types.ts` — the `PlatformMessage` union.
+- [x] Add `styles:fetchI18nKeys` to `PlatformMessage` in `client/lib/platform/types.ts`.
+- [x] Add `styles:i18nKeysResponse` to the response types.
+- [x] In `PanelRouter.ts`: handle `styles:fetchI18nKeys` → call `_styleReadService.getAvailableKeys(...)` → respond with `styles:i18nKeysResponse`.
+- [x] Add PanelRouter integration test in `src/__tests__/PanelRouter.test.ts`: `styles:fetchI18nKeys` returns a response with `keys` array.
+- [x] Run `bun test vscode-extension/hypercanvas-preview/src/__tests__/PanelRouter.test.ts`.
 
 Acceptance: PanelRouter routes the message and responds with `{ type: 'styles:i18nKeysResponse', requestId, success: true, keys: string[] }`.
 
