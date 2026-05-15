@@ -3724,4 +3724,22 @@ A SECOND `style written as prop` run (different Tamagui project) passed at 65268
 | S2 | 45 | 1 (error overlay) | **Killed (zombie)** |
 | S3 | 82 | 3 (all known) | Running |
 
-**Run #24 plan:** Launch after S1/S3 complete (or sufficient data gathered). Will include both `49bd580` and `fcd6387` fixes. Expected result: error overlay and Tamagui style-as-prop failures should be resolved.
+**Additional Tamagui failures (new in run #23 S3, all have passing retries):**
+
+| Test | Duration | Root cause | Status |
+|------|----------|-----------|--------|
+| `Tamagui: style written as prop, not className` | 14365ms | "File Modified Since" in teardown: extension wrote disk, WorkspaceEdit sync failed, VS Code auto-save conflicted → dirty editor not cleared by Save All | **Fixed in ext-test 8e06c5b (revert-on-conflict in teardown)** |
+| `Tamagui: style written as prop, not className` | 13360ms | Same root cause on different Tamagui project | **Fixed in ext-test 8e06c5b** |
+
+Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure also has passing retry at 65268ms (but root cause is separate — poll timeout under Docker load, fixed by 49bd580).
+
+**All fixes for Run #24:**
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `49bd580` | ext-test-projects | Tamagui style-as-prop: poll timeout 20s → 45s |
+| `fcd6387` | ext-test-projects | Error overlay poll timeout 150s → 250s |
+| `9222420` | ext-test-projects | Hard-kill Playwright after 3h (zombie container prevention) |
+| `8e06c5b` | ext-test-projects | Teardown: revert "File Modified Since" conflicted editors |
+
+**Run #24 plan:** Launch after S1/S3 complete. Expected result: Tamagui style-as-prop and error overlay failures should be eliminated on first attempt. Infrastructure flakes (warmup overload, cascade) remain non-fixable.
