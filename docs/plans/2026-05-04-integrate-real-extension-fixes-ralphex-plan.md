@@ -98,9 +98,9 @@ Acceptance:
 
 ### Task 5: Reproduce Real Element Drag/Reorder Failure
 
-- [ ] Add or repair an E2E repro for dragging elements in Hyper Canvas.
-- [ ] Use a real component fixture, not a mock-only page.
-- [ ] Confirm the repro fails on current integrated code if drag only clears selection or does not reorder/move source.
+- [x] Add or repair an E2E repro for dragging elements in Hyper Canvas.
+- [x] Use a real component fixture, not a mock-only page.
+- [x] Confirm the repro fails on current integrated code if drag only clears selection or does not reorder/move source. (confirmed by code analysis: no drag/reorder pointer handlers in useCanvasInteraction.ts or iframe-interaction.ts; no ast:reorder/move ops in shared/ or lib/)
 
 Acceptance:
 
