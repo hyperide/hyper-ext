@@ -29,16 +29,16 @@ import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 
-// Debug log sink — /tmp locally, /artifacts/ast-debug.log in CI/Docker
-const DEBUG_LOG =
-  process.env.HYPERIDE_AST_DEBUG_LOG ??
-  (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : '/tmp/hyper-ast-debug.log');
+// File sink only when explicitly requested or in CI — never in normal production use
+const DEBUG_LOG: string | null =
+  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function dbg(msg: string) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`;
   console.log(msg);
-  try {
-    fsSync.appendFileSync(DEBUG_LOG, line);
-  } catch {}
+  if (DEBUG_LOG) {
+    try {
+      fsSync.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
+    } catch {}
+  }
 }
 
 // ============================================

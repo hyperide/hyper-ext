@@ -18,15 +18,16 @@ import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
 
-const _BRIDGE_DEBUG_LOG =
-  process.env.HYPERIDE_AST_DEBUG_LOG ??
-  (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : '/tmp/hyper-ast-debug.log');
+// File sink only when explicitly requested or in CI — never in normal production use
+const _BRIDGE_DEBUG_LOG: string | null =
+  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function _dbgBridge(msg: string) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`;
   console.log(msg);
-  try {
-    fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, line);
-  } catch {}
+  if (_BRIDGE_DEBUG_LOG) {
+    try {
+      fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
+    } catch {}
+  }
 }
 
 export class AstBridge {
