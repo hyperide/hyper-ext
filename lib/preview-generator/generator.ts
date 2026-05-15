@@ -6,7 +6,7 @@
 import { basename, dirname } from 'node:path';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v7';
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v8';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -439,6 +439,11 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // 8. Fallback props for components without SampleDefault.
   // Extra props are harmless for React components that do not read them, and
   // they keep prop-required leaf components renderable in the preview.
+  // Stable stub caches: Proxy get traps must return the same function/array
+  // reference on every call so React hook dependency arrays don't trigger
+  // infinite re-renders when components use [store.setX] or [state.items] as deps.
+  lines.push('const _storeStubs: Record<string, unknown> = {};');
+  lines.push('const _stateStubs: Record<string, unknown> = {};');
   lines.push('const previewFallbackProps: Record<string, unknown> = {');
   lines.push('  ...callbackStubs,');
   lines.push('  activeNav: "dashboard",');
@@ -533,10 +538,10 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
   lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
-  lines.push('        return () => {};');
+  lines.push('        return (_storeStubs[prop] ??= () => {});');
   lines.push('      }');
   lines.push(
-    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return (_storeStubs[prop] ??= []);",
   );
   lines.push(
     "      if (prop === 'issuesByStatus') return { backlog: [], todo: [], in_progress: [], done: [], cancelled: [] };",
@@ -557,10 +562,10 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
   lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
-  lines.push('        return () => {};');
+  lines.push('        return (_stateStubs[prop] ??= () => {});');
   lines.push('      }');
   lines.push(
-    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return (_stateStubs[prop] ??= []);",
   );
   lines.push(
     "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
