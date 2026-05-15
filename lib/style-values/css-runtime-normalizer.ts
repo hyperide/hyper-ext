@@ -277,7 +277,15 @@ const ENUM_ONLY_PROPERTIES = new Set([
   'justify-items',
 ]);
 
-const UNITLESS_NUMBER_PROPERTIES = new Set(['opacity', 'z-index', 'flex-grow', 'flex-shrink', 'order', 'line-height']);
+const UNITLESS_NUMBER_PROPERTIES = new Set([
+  'opacity',
+  'z-index',
+  'flex-grow',
+  'flex-shrink',
+  'order',
+  'line-height',
+  'font-weight',
+]);
 
 const COLOR_PROPERTIES = new Set([
   'color',

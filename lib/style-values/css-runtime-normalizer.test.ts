@@ -148,6 +148,22 @@ describe('cssRuntimeNormalizer', () => {
     });
   });
 
+  describe('normalize — unitless numeric properties', () => {
+    it('preserves bare number for font-weight', () => {
+      expect(cssRuntimeNormalizer.normalize({ cssProperty: 'font-weight', value: '700' })).toEqual({
+        kind: 'value',
+        value: '700',
+      });
+    });
+
+    it('preserves bare number for flex-grow', () => {
+      expect(cssRuntimeNormalizer.normalize({ cssProperty: 'flex-grow', value: '2' })).toEqual({
+        kind: 'value',
+        value: '2',
+      });
+    });
+  });
+
   describe('normalize — enum/keyword properties', () => {
     it('accepts display flex', () => {
       expect(cssRuntimeNormalizer.normalize({ cssProperty: 'display', value: 'flex' })).toEqual({
