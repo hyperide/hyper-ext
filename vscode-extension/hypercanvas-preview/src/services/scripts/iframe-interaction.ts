@@ -1292,13 +1292,13 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
   }),
   getDocument: () => document,
   callbacks: {
-    onSelectElement: (id) =>
+    onSelectElement: (id, itemIndex) =>
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
           type: 'hypercanvas:elementClick',
           elementId: id,
-          itemIndex: null,
+          itemIndex: itemIndex ?? null,
         },
         '*',
       ),

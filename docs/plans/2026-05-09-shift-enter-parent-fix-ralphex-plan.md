@@ -82,16 +82,20 @@ Fix:
 
 ### Task 4: Update onSelectElement callback to pass itemIndex
 
-- [ ] In `shared/canvas-interaction/keyboard-handler.ts`: update `onSelectElement` callback type to accept `(ref: NodeRef, itemIndex?: number | null) => void`
-- [ ] At the Shift+Enter call site: `callbacks.onSelectElement(parentResult.ref, parentResult.itemIndex)`
-- [ ] Update `KeyboardHandlerCallbacks` type definition
+- [x] In `shared/canvas-interaction/keyboard-handler.ts`: update `onSelectElement` callback type to accept `(ref: NodeRef, itemIndex?: number | null) => void`
+- [x] At the Shift+Enter call site: `callbacks.onSelectElement(parentResult.ref, parentResult.itemIndex)`
+- [x] Update `KeyboardHandlerCallbacks` type definition
 
 ### Task 5: Update useCanvasInteraction.ts to propagate itemIndex
 
-- [ ] In `client/hooks/useCanvasInteraction.ts` `onSelectElement` handler:
-- [ ] Accept second param `itemIndex?: number | null`
-- [ ] When dispatching `selectedIds: [ref]`: also dispatch `selectedItemIndices: itemIndex != null ? { [ref]: itemIndex } : undefined`
-- [ ] For SaaS `engine.select` path in `useCanvasEngineContext.ts`: pass `itemIndex` in select call if engine.select accepts it
+- [x] In `client/hooks/useCanvasInteraction.ts` `onSelectElement` handler:
+  - NOTE: VS Code path fixed in `iframe-interaction.ts` — `onSelectElement: (id, itemIndex)` now passes `itemIndex ?? null` in postMessage instead of hardcoded `null`. `useCanvasInteraction.ts` already handles `msg.itemIndex` correctly (no changes needed there).
+- [x] Accept second param `itemIndex?: number | null`
+  - NOTE: `iframe-interaction.ts` callback now uses `(id, itemIndex)` signature; `useHotkeysSetup.ts` `onSelectElement` also updated to `(id, itemIndex)`
+- [x] When dispatching `selectedIds: [ref]`: also dispatch `selectedItemIndices: itemIndex != null ? { [ref]: itemIndex } : undefined`
+  - NOTE: In VS Code path, `useCanvasInteraction.ts` already does this from `msg.itemIndex`. For SaaS: `useHotkeysSetup.ts` `onSelectElement` now calls `engine.selectWithItemIndex(id, itemIndex)` when `itemIndex != null`, else `engine.select(id)`.
+- [x] For SaaS `engine.select` path in `useCanvasEngineContext.ts`: pass `itemIndex` in select call if engine.select accepts it
+  - NOTE: Fixed in `useHotkeysSetup.ts`: `getState()` now includes `selectedItemIndices: Object.fromEntries(selectedItemIndices)`, and `onSelectElement` calls `engine.selectWithItemIndex`. `CanvasEditor.tsx` now passes `selectedItemIndices` prop.
 
 ### Task 6: Run unit tests for keyboard-handler + overlay-rects
 
