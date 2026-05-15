@@ -78,7 +78,8 @@ Screenshot the RED failure and note the actual text vs. expected.
 
 ### Task 2 — Diagnose failure mode from Task 1 RED output
 
-- [ ] Read RED output and determine Case A (key updates eventually) or Case B (key never updates)
+- [x] Read RED output and determine Case A (key updates eventually) or Case B (key never updates)
+  - Case A confirmed (from Task 1 note): Expected "test.display-fix-test", Received "test.greeting", Timeout 2000ms — key updates eventually but with delay
 
 **Read the Task 1 failure message before writing any code.** The failure determines the fix:
 
