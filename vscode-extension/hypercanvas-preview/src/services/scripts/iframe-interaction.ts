@@ -850,39 +850,6 @@ const state = {
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
-
-// Diagnostic: log every state.selectedIds mutation with a stack trace.
-// Opt-in via `window.__HC_DEBUG_SELECTION = true` (set from devtools or E2E setup)
-// so production users do not get a console-noise tax.
-// Used to chase the i18n-key-change selection-flicker bug
-// (docs/plans/2026-05-06-selection-survives-i18n-write.md, Task 1).
-(() => {
-  const w = window as unknown as Record<string, unknown>;
-  let backing: string[] = state.selectedIds;
-  const desc: PropertyDescriptor = {
-    get(): string[] {
-      return backing;
-    },
-    set(next: string[]): void {
-      const prev = backing;
-      backing = next;
-      if (w.__HC_DEBUG_SELECTION) {
-        try {
-          const sameLen = prev.length === next.length && prev.every((v, i) => v === next[i]);
-          if (!sameLen) {
-            // eslint-disable-next-line no-console
-            console.warn('[HC selection]', { prev: [...prev], next: [...next] }, new Error('selection-trace').stack);
-          }
-        } catch {
-          /* never break runtime over diagnostics */
-        }
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  };
-  Object.defineProperty(state, 'selectedIds', desc);
-})();
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;

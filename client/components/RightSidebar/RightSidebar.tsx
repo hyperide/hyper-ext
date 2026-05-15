@@ -48,7 +48,14 @@ import {
 } from './sections';
 import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
+import {
+  computeNumericArrowValue,
+  cssToPosition,
+  findNodeById,
+  mapShadowSizeToValues,
+  parseHexWithAlpha,
+  positionToCss,
+} from './utils';
 
 // ============================================================================
 // Component quick-list (Inspector empty state, VS Code only)
@@ -454,49 +461,18 @@ export default function RightSidebar({
       styleKey?: string,
       defaultValue?: string,
     ) => {
-      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+      const newValue = computeNumericArrowValue({
+        key: e.key,
+        currentValue,
+        styleKey,
+        defaultValue,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+      });
+      if (newValue === null) {
         return;
       }
-
       e.preventDefault();
-
-      const isUnitless =
-        styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
-      const trimmed = currentValue.replace(' Auto', '').trim();
-      const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
-
-      if (!match) {
-        const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
-        const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
-        const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
-
-        const increment = e.key === 'ArrowUp' ? 1 : -1;
-        const step = e.shiftKey || e.altKey ? 10 : 1;
-        let newNum = baseNum + increment * step;
-
-        if (styleKey === 'opacity') {
-          newNum = Math.max(0, Math.min(100, newNum));
-        }
-
-        const unit = isUnitless ? '' : baseUnit || 'px';
-        const newValue = `${newNum}${unit}`;
-        setValue(newValue);
-        if (styleKey) syncStyleChange(styleKey, newValue);
-        return;
-      }
-
-      const num = Number.parseFloat(match[1]);
-      const unit = match[2] || (isUnitless ? '' : 'px');
-
-      const increment = e.key === 'ArrowUp' ? 1 : -1;
-      const step = e.shiftKey || e.altKey ? 10 : 1;
-      let newNum = num + increment * step;
-
-      if (styleKey === 'opacity') {
-        newNum = Math.max(0, Math.min(100, newNum));
-      }
-
-      const newValue = `${newNum}${unit}`;
       setValue(newValue);
       if (styleKey) syncStyleChange(styleKey, newValue);
     },
@@ -751,17 +727,6 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
-      // pollute prod consoles. Tracks the i18n-key-change flicker window
-      // (Task 1 of selection-survives-i18n-write).
-      const dbg = (label: string, extra?: unknown): void => {
-        const w = window as unknown as Record<string, unknown>;
-        if (!w.__HC_DEBUG_SELECTION) return;
-        // eslint-disable-next-line no-console
-        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
-      };
-      const t0 = performance.now();
-      dbg('start', { previousSelectedId, newKey, isNewKey });
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -775,21 +740,13 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
-          dbg('writeI18nResource resolved');
           // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
           // fiber tree, dropping the iframe's previous selection. Re-broadcast both
           // immediately and after a short delay to outrun the HMR window.
           if (i18nDispatch) {
             i18nDispatch({ selectedIds: [previousSelectedId] });
-            dbg('dispatch[0] sent', { selectedIds: [previousSelectedId] });
-            setTimeout(() => {
-              i18nDispatch({ selectedIds: [previousSelectedId] });
-              dbg('dispatch[1@250ms] sent');
-            }, 250);
-            setTimeout(() => {
-              i18nDispatch({ selectedIds: [previousSelectedId] });
-              dbg('dispatch[2@800ms] sent');
-            }, 800);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
           }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
