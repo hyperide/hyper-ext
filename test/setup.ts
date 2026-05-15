@@ -82,3 +82,21 @@ if (typeof beforeEach === 'function') {
     localStorage.clear();
   });
 }
+
+// Clean up @testing-library/react rendered DOM after each test.
+// bun:test does not auto-cleanup like Jest does; without this,
+// rendered components from one test file leak into subsequent files
+// and cause flaky failures (e.g. getAllByTestId matching stale DOM).
+let rtlCleanup: (() => void) | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  rtlCleanup = require('@testing-library/react').cleanup;
+} catch {
+  // @testing-library/react not available — skip
+}
+if (rtlCleanup && typeof afterEach === 'function') {
+  const cleanupFn = rtlCleanup;
+  afterEach(() => {
+    cleanupFn();
+  });
+}

@@ -11,9 +11,9 @@ import type { SourceLocation } from '@shared/element-tracing/types';
 // Extend the global vscode workspace mock with missing APIs used by SyncPositionService
 import * as vscode from 'vscode';
 
-(vscode.workspace as unknown as Record<string, unknown>).getConfiguration = mock(() => ({
-  get: <T>(_key: string, defaultValue: T) => defaultValue,
-}));
+// Use property assignment only for APIs not yet in mock-vscode.ts.
+// getConfiguration is already in mock-vscode.ts — do NOT reassign it here
+// (property replacement breaks mockClear and leaks into other test files).
 (vscode.workspace as unknown as Record<string, unknown>).onDidChangeConfiguration = mock(() => ({
   dispose: mock(),
 }));
