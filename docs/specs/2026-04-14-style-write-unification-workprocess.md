@@ -100,6 +100,38 @@ Follow-up:
   - ...
 ```
 
+Bridge bot page-callback spinner fix, 2026-04-22 18:52 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: ecc1aab fix: acknowledge Telegram page callbacks immediately
+- Trigger:
+  * User confirmed that pagination callbacks still showed an infinite Telegram
+    loading spinner even after the dedicated page callback handler was added.
+  * Runtime logs showed `page callback data=...`, but there were no success
+    markers for `answerCallbackQuery` or `editMessageText`, so the callback
+    acknowledgement path was still insufficiently observable.
+- Fix:
+  * Page callbacks are now acknowledged immediately on handler entry, before
+    loading the stored page payload or attempting to edit the message.
+  * Added a bounded `answerCallbackQuery` timeout log so future spinner issues
+    fail visibly instead of silently.
+  * Added a bounded `editText` timeout and explicit success log:
+    `edited paged message pageId=... page=N/M`.
+  * Expired or missing page payloads now send a normal chat notice after the
+    callback has already been acknowledged.
+- Validation:
+  * `bun test` passed 29/29.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; active PID observed:
+    81177.
+  * Sent a fresh 14-page regression report through `send-tg-report.sh`.
+  * Real Telegram button presses produced confirmed log pairs:
+    `answered page callback data=page:81a559770e71:N` and
+    `edited paged message pageId=81a559770e71 page=N/14`.
+```
+
 Review heading format:
 
 ```text
