@@ -36,9 +36,13 @@ html, body {
 }`);
   }
 
-  // Default cursor in design mode
+  // Default cursor in design mode — covers pseudo-elements so CSS-generated
+  // content (::before/::after) doesn't leak pointer/text cursors into the canvas.
   parts.push(`
-body.design-mode, body.design-mode * {
+body.design-mode,
+body.design-mode *,
+body.design-mode *::before,
+body.design-mode *::after {
   cursor: default !important;
 }
 

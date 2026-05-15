@@ -262,6 +262,12 @@
         "command": "hypercanvas.canvasEscape",
         "key": "escape",
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+      },
+      {
+        "command": "hypercanvas.canvasDuplicate",
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
       }
     ],
     "menus": {

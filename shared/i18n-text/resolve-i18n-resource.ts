@@ -24,7 +24,7 @@ export interface Layout {
 }
 
 // Well-known flat locale directory layouts, tried in priority order.
-const FLAT_LOCALE_DIRS = ['locales', 'src/i18n', 'messages'];
+const FLAT_LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'];
 
 export async function discoverLayout(
   projectRoot: string,
