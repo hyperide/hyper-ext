@@ -2870,10 +2870,52 @@ with run #16.
 
 Run #17 will include all 4 fixes. Settings/redo tests will also be verified.
 
+## 📍 2026-04-28 Session (continuation)
+
+### Run #17 results (run-20260428-062839-64526)
+
+Run #17 used all 4 previous fixes (PreviewPanel redo fix, error overlay timeout,
+CommandPalette blur, PI-5-MS-5 inspector wait). Results mid-run (still active):
+
+- S1: 166+ pass, 0 fail — excellent
+- S2: 128 pass, 12 fail — all pre-existing (settings 36s pattern + OOM)
+- S3: 118 pass, 1 fail — OOM on cssmodules-notion
+- S4: 45 pass, 7 fail — all Remix cold compile 424–451s (>420s poll cap)
+
+Total fails down from 43 (run #16) to ~17+ (run #17). Run still in progress.
+
+### Failure classification: run #17
+
+All remaining failures are pre-existing or infra:
+1. **Settings tests (36s pattern)**: pre-existing; each passes on 2nd project. Root cause:
+   restore settings writes settings.json → VS Code file watcher → CommandPalette blocked.
+2. **OOM crashes**: PI-5-MS-1, duplicate element — Electron killed by kernel. Infra issue.
+3. **Remix cold compile >420s**: shard-4 all tests fail at ~424–451s. Exceeds 420s poll cap.
+4. **redo limit**: persistent since run-20260427-212925. VS Code file watcher >2000ms under load.
+5. **elements identifiable on remix-tw4-twitter**: pre-existing; preview panel disappears.
+
+### New fixes applied (commits in ext-test-projects)
+
+Commit `af97bc8`:
+1. `setup-preview.ts`: Remix poll 420s → 520s; test.setTimeout 600s → 720s.
+   Covers observed Docker cold-compile times 424–451s.
+2. `base.fixture.ts`: 1s pause after restore-settings write. Gives VS Code file watcher
+   time to process settings.json change before next test's CommandPalette.open().
+3. `undo-redo.spec.ts`: redo-limit post-edit wait 2000ms → 4000ms. VS Code file watcher
+   under 4-shard Docker load fires up to ~3s after write.
+
+### Run #18 status
+
+- Started with 1 shard (script auto-reduced due to run #17 still active).
+- ID: run-20260428-073257-40337
+- Early results: 8+ pass, 0 fail.
+- Will start 4-shard run #19 after run #17 completes.
+
 ## Next Step
 
-- Monitor run #16 until settings tests and redo-limit tests run in shard-2.
-- Verify: settings tests (8 in run #15) pass with CommandPalette blur fix.
-- Verify: redo limit test passes with rebuilt extension.js + beginTracking fix.
-- Once verified (or run #16 completes), launch run #17 with fix #4 applied.
-- Target: 0 failures across 2189 tests.
+1. Wait for run #17 to complete; record final failure count.
+2. Start 4-shard run #19 with all fixes (af97bc8 + earlier commits).
+3. Target: ≤5 failures (OOM-only) across 2189 tests.
+4. Investigate remaining failures if any non-OOM failures appear in run #19:
+   - "elements identifiable" on remix-tw4-twitter (preview panel disappears)
+   - Any new regression not seen in previous runs
