@@ -176,7 +176,7 @@ export class StyleReadService {
       });
 
       const i18nText =
-        childrenType === 'expression' || childrenType === 'expression-complex'
+        childrenType === 'expression' || childrenType === 'expression-complex' || childrenType === 'jsx'
           ? await this._tryDetectI18n(element, filePath, content)
           : undefined;
 
@@ -212,6 +212,20 @@ export class StyleReadService {
         if (expr.loc) {
           exprLoc = { line: expr.loc.start.line, column: expr.loc.start.column };
           break;
+        }
+      }
+    }
+    // Also check for known i18n JSX component children (<FormattedMessage />, <Trans />)
+    if (!exprLoc) {
+      const JSX_I18N_NAMES = new Set(['FormattedMessage', 'Trans']);
+      for (const child of element.children) {
+        if (t.isJSXElement(child)) {
+          const openingName = child.openingElement.name;
+          const componentName = openingName.type === 'JSXIdentifier' ? openingName.name : null;
+          if (componentName && JSX_I18N_NAMES.has(componentName) && child.loc) {
+            exprLoc = { line: child.loc.start.line, column: child.loc.start.column };
+            break;
+          }
         }
       }
     }
@@ -253,6 +267,26 @@ export class StyleReadService {
       });
     } catch {
       resolved = { availableLocales: [], activeLocale: DEFAULT_LOCALE, resolvedText: null };
+    }
+
+    // If the project has no 'en' locale, retry with the first discovered locale so
+    // non-English-primary projects still show resolved text in the inspector.
+    if (
+      resolved.resolvedText === null &&
+      resolved.availableLocales.length > 0 &&
+      !resolved.availableLocales.includes(DEFAULT_LOCALE)
+    ) {
+      try {
+        resolved = await resolveI18nResource({
+          projectRoot: this._workspaceRoot,
+          library: detection.library,
+          key: detection.key,
+          activeLocale: resolved.availableLocales[0],
+          fileIO: this._fileIO,
+        });
+      } catch {
+        // keep original resolved
+      }
     }
 
     const binding: I18nTextBinding = {

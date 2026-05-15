@@ -254,6 +254,39 @@ describe('app/[locale]/messages layout — next-intl App Router', () => {
   });
 });
 
+describe('app/[locale]/messages layout — non-locale filename (e.g. messages.json)', () => {
+  const fileIO = new MemoryFileIO({
+    [`${ROOT}/app/en/messages/messages.json`]: JSON.stringify({ page: { title: 'Home' } }),
+    [`${ROOT}/app/de/messages/messages.json`]: JSON.stringify({ page: { title: 'Startseite' } }),
+  });
+
+  it('resolves key when filename differs from locale code', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'next-intl',
+      key: 'page.title',
+      activeLocale: 'en',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Home');
+  });
+
+  it('does not duplicate locales when multiple json files exist per locale', async () => {
+    const multiFileIO = new MemoryFileIO({
+      [`${ROOT}/app/en/messages/common.json`]: JSON.stringify({ greeting: 'Hello' }),
+      [`${ROOT}/app/en/messages/errors.json`]: JSON.stringify({ notFound: 'Not found' }),
+    });
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'next-intl',
+      key: 'greeting',
+      activeLocale: 'en',
+      fileIO: multiFileIO,
+    });
+    expect(result.availableLocales.filter((l) => l === 'en').length).toBe(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Namespace support: locales/en/common.json
 // ---------------------------------------------------------------------------

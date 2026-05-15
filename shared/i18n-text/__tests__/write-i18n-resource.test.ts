@@ -274,7 +274,7 @@ describe('read-only filesystem', () => {
   it('returns read-only error when writeFile throws', async () => {
     class ReadOnlyFileIO extends MemoryFileIO {
       override async writeFile(): Promise<void> {
-        throw new Error('EROFS: read-only file system');
+        throw Object.assign(new Error('EROFS: read-only file system'), { code: 'EROFS' });
       }
     }
 

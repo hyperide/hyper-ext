@@ -9,7 +9,7 @@ import type { FileIO } from '../../lib/ast/file-io';
 import { discoverLayout } from './resolve-i18n-resource';
 import type { I18nLibrary } from './types';
 
-export type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only';
+export type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only' | 'io-error';
 
 export interface WriteI18nResourceParams {
   projectRoot: string;
@@ -107,8 +107,10 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
   const updated = `${JSON.stringify(data, null, 2)}\n`;
   try {
     await fileIO.writeFile(filePath, updated);
-  } catch {
-    return { success: false, filePath: null, error: 'read-only' };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    const isPermission = code === 'EACCES' || code === 'EROFS' || code === 'EPERM';
+    return { success: false, filePath: null, error: isPermission ? 'read-only' : 'io-error' };
   }
 
   return { success: true, filePath };

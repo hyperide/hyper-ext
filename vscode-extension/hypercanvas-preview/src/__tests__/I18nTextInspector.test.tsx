@@ -71,6 +71,48 @@ describe('I18nTextInspector (VS Code webview)', () => {
     expect(onLocaleChange).toHaveBeenCalledWith('ru');
   });
 
+  it('fires onKeyChange when the key input is changed', () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        onLocaleChange={mock(() => {})}
+      />,
+    );
+    fireEvent.change(screen.getByDisplayValue('habits.walks'), { target: { value: 'habits.runs' } });
+    expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
+  });
+
+  it('fires onResolvedTextChange when the text input is changed', () => {
+    const onResolvedTextChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={mock(() => {})}
+        onResolvedTextChange={onResolvedTextChange}
+        onLocaleChange={mock(() => {})}
+      />,
+    );
+    fireEvent.change(screen.getByDisplayValue('Go for a walk'), { target: { value: 'Take a walk' } });
+    expect(onResolvedTextChange).toHaveBeenCalledWith('Take a walk');
+  });
+
+  it('renders text input as disabled when editable is false', () => {
+    const nonEditableBinding: I18nTextBinding = { ...supportedBinding, resolvedText: null, editable: false };
+    render(
+      <I18nTextInspector
+        i18nBinding={nonEditableBinding}
+        onKeyChange={mock(() => {})}
+        onResolvedTextChange={mock(() => {})}
+        onLocaleChange={mock(() => {})}
+      />,
+    );
+    const textInput = screen.getByDisplayValue('');
+    expect((textInput as HTMLInputElement).disabled).toBe(true);
+  });
+
   it('renders raw expression fallback for unsupported bindings and hides i18n controls', () => {
     render(
       <I18nTextInspector

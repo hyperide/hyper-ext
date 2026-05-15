@@ -120,23 +120,24 @@ export async function discoverLayout(
     }
   }
 
-  // App Router: app/{locale}/messages/{locale}.json
+  // App Router: app/{locale}/messages/*.json
   if (listFiles) {
     const appDir = `${projectRoot}/app`;
     const prefix = `${appDir}/`;
     const files = await listFiles(appDir, ['.json']);
-    const appLocales: string[] = [];
+    // Map locale → first discovered file path; Map deduplicates automatically.
+    const localeFileMap = new Map<string, string>();
     for (const f of files) {
       const rel = f.slice(prefix.length);
       const parts = rel.split('/');
       if (parts.length === 3 && parts[1] === 'messages' && parts[2].endsWith('.json')) {
-        appLocales.push(parts[0]);
+        if (!localeFileMap.has(parts[0])) localeFileMap.set(parts[0], f);
       }
     }
-    if (appLocales.length > 0) {
+    if (localeFileMap.size > 0) {
       return {
-        getLocaleFilePath: (locale) => `${appDir}/${locale}/messages/${locale}.json`,
-        availableLocales: appLocales,
+        getLocaleFilePath: (locale) => localeFileMap.get(locale) ?? `${appDir}/${locale}/messages/${locale}.json`,
+        availableLocales: Array.from(localeFileMap.keys()),
       };
     }
   }
