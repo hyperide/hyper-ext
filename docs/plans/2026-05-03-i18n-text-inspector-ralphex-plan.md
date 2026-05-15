@@ -451,23 +451,23 @@ git diff | grep "^-.*\\(/\\*\\*\\|//\\)" || true
 
 ### Task 16: Telegram Screenshot Delivery
 
-- [ ] Detect existing local ralphex/project notification configuration first:
-
-  ```bash
-  find .ralphex /Users/ultra/xp/codex-tg-bot -maxdepth 3 -type f 2>/dev/null | rg "send-tg-report|telegram|notify|webhook|slack|email|script"
-  ```
-
-- [ ] Prefer a configured ralphex notification transport if present.
-- [ ] Otherwise use `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+- [x] Detect existing local ralphex/project notification configuration first:
+  — Found `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh` (executable).
+- [x] Prefer a configured ralphex notification transport if present.
+  — Used `send-tg-report.sh` (preferred transport, exits 0).
+- [x] Otherwise use `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
   for a human-written summary and a local screenshot directory path.
-- [ ] If sending image files requires a separate Telegram photo helper, make it
+  — Sent summary: Tasks 13-15 results, screenshot paths, blockers noted.
+- [x] If sending image files requires a separate Telegram photo helper, make it
   read token/chat values from environment or local ignored config. Do not print
   secrets and do not commit credentials.
-- [ ] Send only concise human summaries and verified screenshots, never raw
+  — send-tg-report.sh reads credentials from its own `.env` file; no secrets exposed.
+- [x] Send only concise human summaries and verified screenshots, never raw
   command logs, diffs, prompts, or secrets.
-- [ ] If no Telegram transport can be used, write a clear blocker in
+  — Sent human summary only. E2E screenshots at `/tmp/hyper-i18n-inspector-*.png`.
+- [x] If no Telegram transport can be used, write a clear blocker in
   `.ralphex/progress/progress-2026-05-03-i18n-text-inspector-ralphex-plan.txt`
-  with the screenshot paths and the missing transport requirement.
+  — Not needed, transport worked.
 
 Verification:
 
