@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { parse } from '@babel/parser';
-import { buildContainerSampleJsxBody, buildSampleScaffold, normalizeSampleComponentName } from '../sample-scaffold';
+import { buildSampleScaffold, normalizeSampleComponentName } from '../sample-scaffold';
 
 const ALERT_SOURCE = `
 import * as React from "react";
@@ -115,41 +115,5 @@ export const Button = ({ children }: { children: React.ReactNode }) => <button>{
 describe('normalizeSampleComponentName', () => {
   it('normalizes path-like names to JSX-safe identifiers', () => {
     expect(normalizeSampleComponentName('components/user-card.tsx')).toBe('UserCard');
-  });
-});
-
-describe('buildContainerSampleJsxBody', () => {
-  it('returns a JSX body and the names it references for a compound module', () => {
-    const result = buildContainerSampleJsxBody({
-      sourceCode: ALERT_SOURCE,
-      componentName: 'Alert',
-    });
-
-    expect(result).not.toBeNull();
-    if (!result) return;
-
-    expect(result.body.startsWith('<Alert>')).toBe(true);
-    expect(result.body.endsWith('</Alert>')).toBe(true);
-    expect(result.body).toContain('<AlertTitle>');
-    expect(result.body).toContain('<AlertDescription>');
-    // Referenced names include the root and every subcomponent in source order
-    expect(result.referencedNames).toContain('Alert');
-    expect(result.referencedNames).toContain('AlertTitle');
-    expect(result.referencedNames).toContain('AlertDescription');
-    // The body must parse as valid JSX expression once wrapped in an arrow
-    expect(() =>
-      parse(`const X = () => (${result.body});`, { sourceType: 'module', plugins: ['typescript', 'jsx'] }),
-    ).not.toThrow();
-  });
-
-  it('returns null when there are no compound subcomponents', () => {
-    const result = buildContainerSampleJsxBody({
-      sourceCode: `
-import * as React from "react";
-export const Button = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />;
-`,
-      componentName: 'Button',
-    });
-    expect(result).toBeNull();
   });
 });

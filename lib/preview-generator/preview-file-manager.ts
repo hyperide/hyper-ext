@@ -22,7 +22,6 @@ import {
   getRouteFilePaths,
 } from './framework-routing';
 import {
-  entryHasRenderableSample,
   generatePreviewContent,
   isUiPrimitive,
   PREVIEW_GENERATOR_SCHEMA_MARKER,
@@ -30,7 +29,6 @@ import {
   type ProviderWrapConfig,
   type SSRMockConfig,
 } from './generator';
-import { buildContainerSampleJsxBody } from './sample-scaffold';
 import {
   detectExportStyle,
   detectRouterShell,
@@ -38,7 +36,6 @@ import {
   type ExportStyle,
   extractComponentName,
   hasComponentExport,
-  scanRenderableExportNames,
   scanSampleExports,
 } from './scanner';
 
@@ -190,24 +187,11 @@ export function parseExistingPreview(content: string): PreviewComponentEntry[] {
     if (varName === 'SampleDefaultMap' || varName === 'sampleRenderMap') {
       for (const prop of iterateObjectProperties(obj)) {
         const key = getStringValue(prop.key);
-        if (!key) continue;
         const value = getIdentName(prop.value);
-        if (value) {
-          // Authored: `'path': ButtonSampleDefault,` — captured as alias.
+        if (key && value) {
           sampleAliasToPath.set(value, key);
           if (!pathToName.has(key)) {
             pathToName.set(key, stripExtension(basename(key)));
-          }
-        } else {
-          // Synthesized: `'path': () => (<…>),` — no alias to track, but mark
-          // the path as renderable so the regen filter keeps it instead of
-          // dropping the UI primitive on the next regeneration cycle.
-          if (!pathToName.has(key)) {
-            pathToName.set(key, stripExtension(basename(key)));
-          }
-          const existing = pathToSamples.get(key);
-          if (!existing || !existing.includes('SampleDefault')) {
-            pathToSamples.set(key, [...(existing ?? []), 'SampleDefault']);
           }
         }
       }
@@ -508,10 +492,9 @@ export class PreviewFileManager {
       }
 
       // Stale entries found — regenerate excluding reserved files and ui-primitive paths.
-      // Keep UI primitives that have a renderable sample (authored SampleDefault or
-      // a synthesized compound scaffold).
+      // Keep UI primitives that have SampleDefault exports (explicitly previewable).
       const cleanPaths = existingEntries
-        .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)))
+        .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')))
         .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
@@ -532,7 +515,7 @@ export class PreviewFileManager {
         (e) =>
           !isFrameworkReserved(basename(e.componentPath)) &&
           !isPreviewIneligibleByName(basename(e.componentPath)) &&
-          (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)),
+          (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')),
       )
       .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
@@ -867,27 +850,6 @@ export class PreviewFileManager {
     // Compute import path relative to preview file
     const importPath = await this.computeImportPath(componentPath, previewDir);
 
-    // For compound shadcn-style modules without an authored SampleDefault,
-    // try to synthesize one from the named exports so the preview can render
-    // <Carousel><CarouselContent>…</CarouselContent></Carousel> instead of
-    // showing a blank "Loading…" forever (HYP — auto-sample for shadcn/ui).
-    let syntheticSampleDefault: PreviewComponentEntry['syntheticSampleDefault'];
-    let detectedExports: string[] | undefined;
-    if (!sampleExports.includes('SampleDefault')) {
-      try {
-        detectedExports = scanRenderableExportNames(sourceCode);
-      } catch {
-        detectedExports = undefined;
-      }
-      try {
-        const synthetic = buildContainerSampleJsxBody({ sourceCode, componentName });
-        if (synthetic) syntheticSampleDefault = synthetic;
-      } catch {
-        // Source has parse-recoverable artefacts that confuse the JSX scanner —
-        // skip synthesis silently rather than block the whole entry.
-      }
-    }
-
     return {
       componentPath,
       componentName,
@@ -895,8 +857,6 @@ export class PreviewFileManager {
       sampleExports,
       importPath,
       ...(isSSRRoute && { isSSRRoute: true }),
-      ...(syntheticSampleDefault && { syntheticSampleDefault }),
-      ...(detectedExports && detectedExports.length > 0 && { detectedExports }),
     };
   }
 
