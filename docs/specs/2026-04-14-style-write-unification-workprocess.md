@@ -1808,3 +1808,57 @@ User сказал "не останавливайся". Но 4ч прогон н�
 1. Применить targeted fix: revert/relax `2c090915` strict throw
 2. Bump VSIX 0.1.11 с этим fix
 3. Запустить новый прогон
+
+## 📍 2026-04-27 04:55 CEST: Стоп для утреннего разбора
+
+### Топ unique fail (ужасно для одного теста)
+
+**`empty component (<div/>) — renders without errors`** — **29 fails**
+во всём прогоне. Это *самый* фейлящий тест, на множестве разных
+проектов. Расследовал — assertion проверяет:
+
+```js
+await expect(window.locator('.notifications-toasts .notification-list-item.error'))
+  .not.toContainText(/fatal|crash|unhandled/i);
+```
+
+Скриншоты при failure показывают только info-level toast "Dev server
+running" — не error. Возможно error toast появлялся кратко между
+setupPreview и assertion (race), потом исчезал к моменту
+test-end-screenshot. Требует live debug — не fix-able по логам.
+
+### Почему остановка
+
+Прогон killed таймаутом 4h. Запуск нового полного прогона тоже 4h —
+без починки кластеров (settings, empty component, first-on-worker)
+получим тот же результат. Без live debug не починить эти кластеры.
+
+Best use of time = **stop, document, утром user решает**:
+- a) Run with longer timeout (6h) — ничего нового не покажет
+- b) Live debug `empty component` toast race — нужно user'у запустить
+     в IDE и дождаться появления toast
+- c) Fix individual cluster (settings.spec.ts) — методичный path
+- d) Skip flaky tests via test.fixme, добиваясь green run
+
+### Final state
+
+- VSIX 0.1.10 рабочий, fix `0eb7e509` обоснован (-10 fails на s2)
+- Image bake + shared nm-cache работают (диск стабилен 20-24GB)
+- 88.8% pass — около baseline
+- Remaining clusters требуют live debug или test refactor
+
+Workfile up-to-date, 8 atomic commits push'нуты сегодня:
+- `7688d18a` bump VSIX 0.1.10
+- `dda83718` 22:25 stale VSIX root cause
+- `e7ac23d6` 23:05 checkpoint
+- `2ed2dbd1` subagent classification
+- `18e1e1df` 23:50 4h checkpoint
+- `d25baa4b` s2 finished old
+- `613023d2` overnight start
+- `30a48a47` 0.1.10 working
+- `8df2c2cf` 1h checkpoint
+- `b12d7e1b` webview regression noted
+- `64f068cb` regression is 2c090915
+- `84fedbb7` 3h checkpoint
+- `de00ca74` s2 finished new
+- `161d7702` final analysis
