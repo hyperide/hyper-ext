@@ -103,16 +103,18 @@ Root cause of Test 4 RED: after Task 3, `showCombobox = canCreateKeys || ...` al
 
 ### Task 6: Build + install ext, run E2E → GREEN
 
-- [ ] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` in hyper-canvas-draft root
-- [ ] Wait for build to complete
-- [ ] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-key-bugs"`
-- [ ] All 4 tests must be GREEN
-- [ ] Screenshot artifacts in `docker-artifacts/run-*/shard-*/`
+- [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` in hyper-canvas-draft root
+- [x] Wait for build to complete
+- [x] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-key-bugs"`
+- [x] All 4 tests must be GREEN
+- [x] Screenshot artifacts in `docker-artifacts/run-20260509-125054-69374/shard-1/screenshots/`
+
+**Result:** 4 passed (35.9s, no flaky). Root cause of Test 4 was recast reformatting shifting line numbers after first write — fixed via position forwarding cache with fingerprint verification in `AstService.updateI18nKey` (commit e3e38a8a).
 
 ### Task 7: Take E2E screenshots and send to Telegram
 
-- [ ] Find screenshot artifacts from the E2E run
-- [ ] Read each screenshot with Read tool, visually verify it shows the bug is fixed
-- [ ] Send passing screenshots to Telegram: `cd /Users/ultra/work/hyper-canvas-draft && ./send-tg-photo.sh <screenshot> "i18n key bugs fixed: <description>"`
-- [ ] One screenshot per bug fixed (4 total)
-- [ ] Commit any remaining uncommitted changes with descriptive message
+- [x] Find screenshot artifacts from the E2E run
+- [x] Read each screenshot with Read tool, visually verify it shows the bug is fixed
+- [x] Send passing screenshots to Telegram (4 screenshots sent via send-tg-file.sh)
+- [x] One screenshot per bug fixed (4 total)
+- [x] Commit any remaining uncommitted changes with descriptive message
