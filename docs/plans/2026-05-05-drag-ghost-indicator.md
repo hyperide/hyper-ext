@@ -187,3 +187,48 @@ CSS transition `transform 0.12s ease` на `.hyper-drag-ghost` — ghost поя�
 4. Открыть любой компонент, потянуть элемент → видно ghost + indicator
 5. Дропнуть → элемент переместился, ghost и indicator исчезли
 6. Запустить тесты: `bun test shared/canvas-interaction/` — все зелёные
+
+## Tasks
+
+### Task 1: Add ghost and indicator CSS to style-injector
+
+- [ ] Read `shared/canvas-interaction/style-injector.ts` — find `buildDesignStylesCSS()`.
+- [ ] Add `.hyper-drag-ghost` CSS class (position:fixed, z-index max, pointer-events:none, scale(1.03), box-shadow, opacity 0.88).
+- [ ] Add `.hyper-drop-indicator` CSS class (position:fixed, 2px height, blue #3b82f6, ::before/::after circles).
+- [ ] Run `bun test shared/canvas-interaction/` — no regressions.
+
+### Task 2: Add ghost state variables to iframe-interaction.ts
+
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — find `_dragState`, `_dragPointerDown`, `_dragPointerMove`, `_dragPointerUp`.
+- [ ] Add variables: `_dragGhostEl`, `_dragIndicatorEl`, `_dragOffsetX`, `_dragOffsetY`, `_dragSourceEl`.
+- [ ] In `_dragPointerDown`: save `_dragSourceEl = e.target as HTMLElement`.
+- [ ] Run `bun run typecheck` in `vscode-extension/hypercanvas-preview/` — no errors.
+
+### Task 3: Create ghost on pending→dragging transition
+
+- [ ] In `_dragPointerMove`, when `_dragState` transitions `pending → dragging`:
+  - Compute `_dragOffsetX/Y` from source element's `getBoundingClientRect()`.
+  - Clone source element, set class to `hyper-drag-ghost`, set width/height/left/top.
+  - Remove `data-uniq-id` from clone. Append to `document.body`.
+  - Set source element `opacity = '0.35'`.
+  - Create indicator div with class `hyper-drop-indicator`, `display:none`, append to body.
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 4: Update ghost position and indicator on each pointermove
+
+- [ ] In `_dragPointerMove` when `_dragState === 'dragging'`:
+  - Move ghost: `left = e.clientX - _dragOffsetX`, `top = e.clientY - _dragOffsetY`.
+  - Get drop target via `document.elementFromPoint(e.clientX, e.clientY)`.
+  - If drop target has source and is not drag source: show indicator at top/bottom of target.
+  - Otherwise: hide indicator.
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 5: Cleanup on pointerup
+
+- [ ] In `_dragPointerUp`: remove ghost from DOM, remove indicator from DOM, restore source opacity.
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 6: Build extension and manual verify
+
+- [ ] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
+- [ ] Confirm ghost appears during drag and indicator shows drop position.
