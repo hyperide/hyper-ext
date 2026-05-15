@@ -34,12 +34,12 @@ doesn't exist). To change locale we need to:
 
 ### Task 1: Read locale detection in StyleReadService + PanelRouter, understand full flow
 
-- [ ] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `detectElementStyle` signature, `_tryDetectI18n`, how locale is used
-- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find `styles:read` handler, what message body fields it reads
-- [ ] Read `client/hooks/useElementStyleData.ts` — find how it triggers re-read, what params it sends
-- [ ] Read `client/components/RightSidebar/RightSidebar.tsx` — find `handleLocaleChange` (or absence), `styleRefreshKey`, state vars
-- [ ] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — `onLocaleChange` prop shape, `localeEditable` condition, locale buttons rendering
-- [ ] Document exact: what changes are needed, where `activeLocale` must be threaded
+- [x] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `detectElementStyle` signature, `_tryDetectI18n`, how locale is used
+- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find `styles:read` handler, what message body fields it reads
+- [x] Read `client/lib/platform/hooks/useElementStyleData.ts` — find how it triggers re-read, what params it sends
+- [x] Read `client/components/RightSidebar/RightSidebar.tsx` — find `handleLocaleChange` (or absence), `styleRefreshKey`, state vars
+- [x] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — `onLocaleChange` prop shape, `localeEditable` condition, locale buttons rendering
+- [x] Document exact: IMPLEMENTATION ALREADY COMPLETE in commit 20fe6ed6 (2026-05-05). handleI18nLocaleChange at RightSidebar.tsx:736, i18nActiveLocale state at :216, activeLocale passed to useElementStyleData at :242, PanelRouter extracts activeLocale from styles:readClassName at :264, StyleReadService.readElementClassName accepts activeLocale at :85. E2E test exists at ext-test-projects/e2e/tests/project-dependent/bulka-i18n-locale-switch.spec.ts. No code changes needed in Tasks 3-5.
 
 ### Task 2: RED — write failing E2E test: locale switch → text updates
 
