@@ -1964,3 +1964,55 @@ Run #3 был 86% (с 0.1.11 без harness fixes). Улучшение **+5pp**.
 1. Запустить run #5 с VSIX 0.1.13 + всеми harness fixes
 2. Если empty component cluster всё ещё валится — углубить debug (live trace)
 3. Settings cluster — только 1 real fail (autoStart) уже починен в `8724b0a`
+
+## 📍 2026-04-27 16:40 CEST: Recompile gate root cause found + fixed
+
+### Root cause анализ run #5 (140618-53076, 2.5h в процессе)
+
+Run #5 запущен с VSIX 0.1.14/0.1.15. Текущие счётчики:
+
+| shard | done | pass | fail | pass% |
+|-------|------|------|------|-------|
+| s1    | 425  | 400  | 4    | 94.1% |
+| s2    | 333  | 269  | 10   | 80.8% |
+| s3    | 279  | 193  | 4    | 69.2% |
+| s4    | 133  | 59   | 39   | 44.4% |
+| **Σ** | **1170** | **921** | **57** | **86%** |
+
+s4 — 39 failures, почти все 89-116s timeouts. Паттерн на s4:
+- "start dev server → preview loads" 92s
+- "dev server starts and preview loads" 91-101s
+- "multiple components — switch between them" 89-116s
+- "click element → Inspector shows correct styles" 90-92s
+- Все на remix-cssmodules-spotify, webpack-react-tw3-kanban, remix-tw4-twitter
+
+### Реальный root cause (commit `adbb183b`)
+
+`preview-mode-manager.ts:onComponentSelected()` вызывал
+`this._onBeforeWebpackEntryPatch?.()` БЕЗУСЛОВНО перед switch — для ВСЕХ
+фреймворков. На Next.js/Remix/Vite второй тест на том же проекте:
+`ensurePreviewFiles()` скипает запись (файлы уже есть с @hyperide-managed) →
+HMR не срабатывает → gate зармирован но НИКОГДА не освобождается →
+`awaitRecompile()` в extension.ts блокирует бесконечно → 90s test timeout.
+
+**FIX (`adbb183b`):** gate армируется ТОЛЬКО для webpack/parcel (которые
+ВСЕГДА перезаписывают entry файл → HMR → gate освобождается). Для
+Next.js/Remix/Vite — gate не нужен; PreviewProxy уже имеет 16 ретраев с
+экспоненциальным backoff (~47s) для `/test-preview` 404/503.
+
+### VSIX 0.1.16 готов
+
+Бамп `0.1.15 → 0.1.16` + build + package. VSIX в extension dir, будет
+подхвачен следующим docker-parallel-run автоматически (ls -t берёт последний).
+
+### Plan: Run #6 после завершения/timeout run #5
+
+Ожидаемые улучшения с 0.1.16:
+- s4 failures: ~39 → ~5-8 (recompile gate закрывает 80%+ s4 fails)
+- Общий pass rate: 86% → ~93-95%
+
+s1/s2 failures (не gate):
+- "concurrent start/stop race" — extension lifecycle test
+- "undo move/HMR" — undo functionality (отдельный баг)
+- "Setting change" — settings handler (отдельный баг)
+- "component with error" — 100-135s timeouts (другой race?)
