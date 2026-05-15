@@ -416,7 +416,7 @@ export class AstBridge {
     message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
   ): Promise<AstResponse> {
     const writeResult = await writeI18nResource({
-      projectRoot: message.projectRoot,
+      projectRoot: this._workspaceRoot,
       library: message.library,
       key: message.key,
       namespace: message.namespace,

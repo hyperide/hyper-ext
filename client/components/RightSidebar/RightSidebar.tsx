@@ -699,19 +699,15 @@ export default function RightSidebar({
   const handleI18nResolvedTextChange = useCallback(
     async (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
-      await authFetch('/api/write-i18n-resource', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          library: i18nText.library,
-          key: i18nText.key,
-          activeLocale: i18nText.activeLocale,
-          newText,
-        }),
+      await astOps.writeI18nResource({
+        library: i18nText.library,
+        key: i18nText.key,
+        activeLocale: i18nText.activeLocale,
+        newText,
       });
       setStyleRefreshKey((k) => k + 1);
     },
-    [i18nText],
+    [i18nText, astOps],
   );
 
   // ========================================================================

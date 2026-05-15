@@ -9,7 +9,7 @@
 import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
-import type { I18nBindingResult } from '../../../shared/i18n-text/types';
+import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -135,6 +135,15 @@ export type PlatformMessage =
       filePath: string;
       elementId: string;
       text: string;
+    }
+  | {
+      type: 'ast:writeI18nResource';
+      requestId: string;
+      library: I18nLibrary;
+      key: string;
+      namespace?: string;
+      activeLocale: string;
+      newText: string;
     }
   | {
       type: 'ast:response';
@@ -346,6 +355,15 @@ export interface AstOperations {
 
   /** Update text/expression children of a JSX element */
   updateText(params: { elementId: string; filePath: string; text: string }): Promise<void>;
+
+  /** Write a translated value for an i18n key in the active locale JSON file */
+  writeI18nResource(params: {
+    library: I18nLibrary;
+    key: string;
+    namespace?: string;
+    activeLocale: string;
+    newText: string;
+  }): Promise<void>;
 }
 
 // ============================================================================

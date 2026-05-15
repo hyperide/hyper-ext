@@ -167,7 +167,8 @@ export type AstMessage =
       /** Write a translated value for a given i18n key in the active locale resource file. */
       type: 'ast:writeI18nResource';
       requestId: string;
-      projectRoot: string;
+      /** Ignored — extension uses its own workspace root */
+      projectRoot?: string;
       library: I18nLibrary;
       key: string;
       namespace?: string;
