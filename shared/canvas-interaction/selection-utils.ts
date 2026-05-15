@@ -5,6 +5,23 @@
  * Assumptions: nodeRef strings are stable unique identifiers (fileName:line:col)
  */
 
+import type { SourceLocation } from '../element-tracing/types';
+
+/**
+ * Resolve the effective nodeRef for optimistic selection update.
+ *
+ * When nodeRef is null (server round-trip pending), synthesize a ref from source
+ * so state.selectedIds is populated immediately. The synthetic key matches the
+ * format produced by sourceToElementId() in the extension host, ensuring
+ * keyboard shortcuts (Cmd+D, Delete) can act on the selection without waiting.
+ *
+ * Only used in the non-additive (single-click) path — additive path handles
+ * null nodeRef separately via toggleNodeRefInSelection.
+ */
+export function computeEffectiveRef(nodeRef: string | null, source: SourceLocation): string {
+  return nodeRef ?? `${source.fileName}:${source.line}:${source.column}`;
+}
+
 /**
  * Toggle a nodeRef in the current selection array.
  * - If nodeRef is null → return empty array (replace with nothing).

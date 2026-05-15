@@ -5,7 +5,30 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import { toggleItemIndex, toggleNodeRefInSelection } from './selection-utils';
+import type { SourceLocation } from '../element-tracing/types';
+import { computeEffectiveRef, toggleItemIndex, toggleNodeRefInSelection } from './selection-utils';
+
+/* ─── computeEffectiveRef ──────────────────────────────────────────── */
+
+const SOURCE_DIV: SourceLocation = { fileName: '/src/App.tsx', line: 42, column: 6 };
+const SYNTHETIC_KEY = '/src/App.tsx:42:6';
+
+describe('computeEffectiveRef', () => {
+  it('returns nodeRef when nodeRef is not null', () => {
+    const ref = '/src/Other.tsx:10:2';
+    expect(computeEffectiveRef(ref, SOURCE_DIV)).toBe(ref);
+  });
+
+  it('synthesizes key from source when nodeRef is null (server round-trip pending)', () => {
+    expect(computeEffectiveRef(null, SOURCE_DIV)).toBe(SYNTHETIC_KEY);
+  });
+
+  it('synthetic key format matches sourceToElementId output (fileName:line:column)', () => {
+    const result = computeEffectiveRef(null, SOURCE_DIV);
+    expect(result).toMatch(/^.+:\d+:\d+$/);
+    expect(result).toBe(`${SOURCE_DIV.fileName}:${SOURCE_DIV.line}:${SOURCE_DIV.column}`);
+  });
+});
 
 /* ─── toggleNodeRefInSelection ─────────────────────────────────────── */
 
