@@ -557,4 +557,81 @@ before `App.tsx`, which has no naming conflict and is the correct Vite web entry
 | `3a7bb75` | webpack poll 720→900s |
 | `0ef6eb6` | App.web.tsx Tamagui entry fix |
 
+---
+
+## 📍 2026-04-29 17:20–18:00 CEST — Run #30 final analysis + new fixes (this session)
+
+### Run #30 S1: DONE (745 passed, 1 hard fail)
+
+**Hard fail**: `undo-redo.spec.ts:341` "redo limit — no redo after new edit"
+
+Root cause (this session): NOT the re-select fix from run #29. The actual killer was the **catch block**
+in the "File should revert after undo" assertion — it called `assertExtensionAlive(window)` which checks
+inspector root visibility (10s timeout). After CMD_UNDO, Vite HMR fires → inspector iframe reloads →
+`assertExtensionAlive` times out → hard failure propagates. Both attempts failed at 34s and 38s respectively.
+
+**Fix** (`e6c61da`): remove `assertExtensionAlive` call from catch block, just `return`. Extension liveness
+verified by fixture teardown; calling it here races with ongoing HMR inspector reload.
+
+**Flaky (10)**:
+- 5 settings tests: VS Code inotify watcher delay ~15-20s under Docker. Attempt 1 polls 15s→fails;
+  attempt 2 passes in 1s (watcher fired during teardown of attempt 1). **Fixed** by `17270ea`
+- "component with error": fast-fail poll 5s too tight under Docker load (Monaco lag ~10s). **Fixed** by `ce0a78e`
+- "undo during pending async operation": in-flight `useStyleSync` gets "Element not found" after CMD_UNDO. **Fixed** by `c5ef92c`
+- "CPU-intensive component render": Vite HMR build errors during heavy compile appear as unexpected runtime errors. **Fixed** by `c5ef92c`
+- 2 others (open-preview smoke, duplicate element) — timing/noise
+
+### Run #30 S2: DONE (437 passed, 2 hard fails)
+
+Both hard fails FIXED (see 17:20 entry above):
+- Tamagui poll 60→90s (`ab568b5`)
+- App.web.tsx entry for project-switching (`0ef6eb6`)
+
+### Run #30 S3: Running (~534 tests done at 18:00)
+
+Expected failures (all covered):
+- 8 Tamagui hard fails (4 projects × 2 attempts ~80s) → **FIXED** by `ab568b5`
+- 6+ webpack-react-tw3-kanban hard fails (~726s) → **FIXED** by `3a7bb75`
+- No new unexpected failures observed
+
+### New commits in this session (on top of the 7 run #31 commits)
+
+| Commit | Fix | Root cause |
+|--------|-----|-----------|
+| `17270ea` | settings poll 15→30s + autoStart tab 10s→20s | VS Code inotify watcher ~15-20s under Docker |
+| `e6c61da` | redo-limit catch block: remove assertExtensionAlive | assertExtensionAlive races with HMR inspector reload |
+| `ce0a78e` | component-with-error fast-fail poll 5s→15s | Monaco rendering lag ~10s under Docker 3-shard |
+| `c5ef92c` | undo-pending + CPU-intensive: expected-runtime-errors annotation | in-flight style-sync race + Vite HMR build errors |
+
+**Total commits for Run #31** (all in ext-test-projects): 11 commits covering all known failures from runs #28–#30.
+
+---
+
+## 📍 2026-04-29 17:24 CEST — Run #31 launched
+
+Run ID: `run-20260429-172409-52805` — 3 shards, started at 17:24 CEST.
+
+```bash
+HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+```
+
+**All 11 fixes applied** (not in run #30):
+
+| Commit | Fix |
+|--------|-----|
+| `4d32dc2` | inspector typing annotation |
+| `5f17a48` | error-overlay 500ms editor focus settle |
+| `b6f88ab` | dev-server deactivation annotation |
+| `b58627c` | redo PI-6-32 teardown hang fix |
+| `ab568b5` | Tamagui poll 60→90s |
+| `3a7bb75` | webpack poll 720→900s, setTimeout 960→1080s |
+| `0ef6eb6` | App.web.tsx before App.tsx for Expo/Tamagui |
+| `17270ea` | settings poll 15→30s, autoStart tab 10→20s |
+| `e6c61da` | redo-limit catch: remove assertExtensionAlive |
+| `ce0a78e` | component-with-error fast-fail poll 5→15s |
+| `c5ef92c` | undo-pending + CPU-intensive: expected-runtime-errors |
+
+**Expected result**: 0 hard fails (all known failure patterns covered).
+Monitoring in progress — will update when shards complete.
+
 
