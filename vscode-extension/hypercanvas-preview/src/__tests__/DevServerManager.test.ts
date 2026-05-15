@@ -104,6 +104,82 @@ describe('DevServerManager', () => {
 
       expect(events).toEqual(['proxy.stop', 'process.kill:SIGTERM']);
     });
+
+    it('does not let an old stop clear a replacement process', async () => {
+      let resolveOldExit: (() => void) | null = null;
+      const oldProxy = { stop: mock() };
+      const oldProc = {
+        killed: false,
+        kill: mock(() => {
+          oldProc.killed = true;
+          return true;
+        }),
+        once: mock((_event: string, callback: () => void) => {
+          resolveOldExit = callback;
+          return oldProc;
+        }),
+      };
+      Object.assign(manager, {
+        _previewProxy: oldProxy,
+        _process: oldProc,
+        _port: 5173,
+      });
+
+      const stopPromise = manager.stop();
+      await Promise.resolve();
+
+      const replacementProxy = { stop: mock() };
+      const replacementProc = {
+        killed: false,
+        kill: mock(() => true),
+        once: mock(() => replacementProc),
+      };
+      Object.assign(manager, {
+        _previewProxy: replacementProxy,
+        _process: replacementProc,
+        _port: 5174,
+      });
+
+      resolveOldExit?.();
+      await stopPromise;
+
+      expect(oldProxy.stop).toHaveBeenCalled();
+      expect(replacementProxy.stop).not.toHaveBeenCalled();
+      expect((manager as unknown as { _process: unknown })._process).toBe(replacementProc);
+      expect((manager as unknown as { _port: number })._port).toBe(5174);
+    });
+  });
+
+  describe('setProjectPath', () => {
+    it('stops the old server and clears project-scoped state', async () => {
+      const proxy = { stop: mock() };
+      const proc = {
+        killed: false,
+        kill: mock(() => {
+          proc.killed = true;
+          return true;
+        }),
+        once: mock((_event: string, callback: () => void) => {
+          queueMicrotask(callback);
+          return proc;
+        }),
+      };
+      Object.assign(manager, {
+        _previewProxy: proxy,
+        _process: proc,
+        _port: 5173,
+      });
+      manager.setRuntimeError({ message: 'old error' } as never);
+      (manager as unknown as { _appendLog(text: string): void })._appendLog('old log\n');
+
+      await manager.setProjectPath('/next-project');
+
+      expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(proxy.stop).toHaveBeenCalled();
+      expect(manager.runtimeError).toBeNull();
+      expect(manager.getLogs()).toEqual([]);
+      expect((manager as unknown as { _projectPath: string })._projectPath).toBe('/next-project');
+    });
   });
 
   describe('clearLogs', () => {

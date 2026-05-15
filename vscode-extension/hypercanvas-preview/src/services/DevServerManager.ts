@@ -132,6 +132,8 @@ export class DevServerManager {
    * Start the dev server
    */
   async start(): Promise<DevServerState> {
+    await this._syncProjectPathWithWorkspace();
+
     if (this._status === 'running') {
       return this.getState();
     }
@@ -197,7 +199,7 @@ export class DevServerManager {
 
       // Spawn process
       // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
-      this._process = spawn(command.cmd, command.args, {
+      const child = spawn(command.cmd, command.args, {
         cwd: this._projectPath,
         env: {
           ...process.env,
@@ -205,12 +207,17 @@ export class DevServerManager {
           // For Vite
           VITE_PORT: String(this._port),
         },
+        detached: process.platform !== 'win32',
         shell: true, // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      this._process = child;
+
+      const isCurrentProcess = () => this._process === child;
 
       // Handle stdout
-      this._process.stdout?.on('data', (data: Buffer) => {
+      child.stdout?.on('data', (data: Buffer) => {
+        if (!isCurrentProcess()) return;
         const text = data.toString();
         // Strip ANSI escape codes for message detection — Vite 8 (rolldown)
         // wraps output in color codes that can split keywords across chunks.
@@ -226,7 +233,8 @@ export class DevServerManager {
       });
 
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
-      this._process.stderr?.on('data', (data: Buffer) => {
+      child.stderr?.on('data', (data: Buffer) => {
+        if (!isCurrentProcess()) return;
         const text = data.toString();
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
         this._outputChannel.append(text);
@@ -239,7 +247,8 @@ export class DevServerManager {
       });
 
       // Handle process exit
-      this._process.on('exit', (code) => {
+      child.on('exit', (code) => {
+        if (!isCurrentProcess()) return;
         console.log(`[HyperIDE] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
         this._process = null;
@@ -249,7 +258,8 @@ export class DevServerManager {
       });
 
       // Handle process error
-      this._process.on('error', (error) => {
+      child.on('error', (error) => {
+        if (!isCurrentProcess()) return;
         console.error('[HyperIDE] DevServer process error:', error.message);
         this._outputChannel.appendLine(`[DevServer] Process error: ${error.message}`);
         this._updateStatus('error', error.message);
@@ -280,33 +290,36 @@ export class DevServerManager {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
     }
 
+    this._process = null;
+    this._port = null;
     this._stopProxy();
 
     if (proc) {
-      // Try graceful shutdown first
-      proc.kill('SIGTERM');
-
       // Wait for process to exit (with timeout)
       await new Promise<void>((resolve) => {
+        let exited = false;
         const timeout = setTimeout(() => {
           // Force kill if still running
-          if (!proc.killed) {
-            proc.kill('SIGKILL');
+          if (!exited) {
+            this._killProcessTree(proc, 'SIGKILL');
           }
           resolve();
         }, 5000);
 
         proc.once('exit', () => {
+          exited = true;
           clearTimeout(timeout);
           resolve();
         });
-      });
 
-      this._process = null;
-      this._port = null;
+        // Try graceful shutdown first
+        this._killProcessTree(proc, 'SIGTERM');
+      });
     }
 
-    this._updateStatus('stopped');
+    if (this._process === null) {
+      this._updateStatus('stopped');
+    }
   }
 
   /**
@@ -315,6 +328,23 @@ export class DevServerManager {
   async restart(): Promise<DevServerState> {
     await this.stop();
     return this.start();
+  }
+
+  /**
+   * Switch the managed project root.
+   *
+   * VS Code can reuse the same extension host when a different folder is opened
+   * in the current window. In that case the old dev server must not be reused
+   * for the new workspace.
+   */
+  async setProjectPath(projectPath: string): Promise<void> {
+    if (projectPath === this._projectPath) return;
+    await this.stop();
+    this._projectPath = projectPath;
+    this._logs = [];
+    this._hasErrors = false;
+    this.setRuntimeError(null);
+    for (const cb of this._onLogsUpdateListeners) cb(this._logs, this._hasErrors);
   }
 
   /**
@@ -339,6 +369,12 @@ export class DevServerManager {
    */
   setIsolatedMode(isolated: boolean): void {
     this._previewProxy?.setIsolatedMode(isolated);
+  }
+
+  private async _syncProjectPathWithWorkspace(): Promise<void> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot || workspaceRoot === this._projectPath) return;
+    await this.setProjectPath(workspaceRoot);
   }
 
   /**
@@ -399,6 +435,19 @@ export class DevServerManager {
       default:
         return { cmd: 'npm', args: ['run', script] };
     }
+  }
+
+  private _killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {
+    if (process.platform !== 'win32' && proc.pid) {
+      try {
+        process.kill(-proc.pid, signal);
+        return;
+      } catch {
+        // Fall back to killing the direct child below.
+      }
+    }
+
+    proc.kill(signal);
   }
 
   /**

@@ -12,6 +12,11 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import * as path from 'node:path';
+import {
+  getPreviewAssetContentType,
+  shouldRetryAssetResponse,
+  shouldReturnEmptyAssetResponse,
+} from './PreviewAssetResponses';
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
 const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
@@ -34,7 +39,6 @@ const HYPERCANVAS_SCRIPT_RESPONSES = new Map([
   ['/__hypercanvas/iframe-console-capture.js', consoleCaptureScriptContent],
   ['/__hypercanvas/chrome-detection.js', chromeDetectionScriptContent],
 ]);
-
 export class PreviewProxy {
   private _server: http.Server | null = null;
   private _proxyPort: number | null = null;
@@ -187,8 +191,25 @@ export class PreviewProxy {
         return;
       }
 
-      const contentType = proxyRes.headers['content-type'] || '';
+      const contentTypeHeader = proxyRes.headers['content-type'];
+      const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(';') : (contentTypeHeader ?? '');
       const isHtml = contentType.includes('text/html');
+      const assetContentType = getPreviewAssetContentType(proxyPath);
+      if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < 5) {
+        proxyRes.resume();
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
+        return;
+      }
+
+      if (assetContentType && shouldReturnEmptyAssetResponse(proxyRes.statusCode, isHtml)) {
+        proxyRes.resume();
+        clientRes.writeHead(204, {
+          'content-type': assetContentType,
+          'cache-control': 'no-cache, no-store, must-revalidate',
+        });
+        clientRes.end();
+        return;
+      }
 
       if (isHtml) {
         // Buffer HTML response to inject script
