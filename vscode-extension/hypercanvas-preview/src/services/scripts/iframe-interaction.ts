@@ -1688,7 +1688,12 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 
   if (msg.type === 'hypercanvas:stateUpdate') {
-    if (msg.selectedIds !== undefined) state.selectedIds = msg.selectedIds;
+    if (msg.selectedIds !== undefined) {
+      if (msg.selectedIds.length === 0 && state.writeInProgress !== null) {
+        console.warn('[HyperCanvas] Selection cleared during write — bug');
+      }
+      state.selectedIds = msg.selectedIds;
+    }
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
     if (msg.selectedItemIndices !== undefined) state.selectedItemIndices = msg.selectedItemIndices;

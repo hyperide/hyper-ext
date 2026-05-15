@@ -102,10 +102,15 @@ overlay state at every frame between 0ms and 1000ms.
 
 ### Task 4: Verify Path A actually re-selects
 
-- [ ] Add a console assertion in iframe-interaction: when `state.selectedIds`
+- [x] Add a console assertion in iframe-interaction: when `state.selectedIds`
       is reset to `[]` while `writeInProgress` is true, log "Selection
       cleared during write — bug". Run the e2e and ensure no such logs
       appear.
+      Done: console.warn added in hypercanvas:stateUpdate handler. E2E run
+      (run-20260508-230505-81952) confirmed iframeBlankCount=0,
+      overlayBlankCount=0, no "Selection cleared during write" messages.
+      Test passed (flaky only due to unrelated 504 source-map Gateway Timeout
+      errors from Vite HMR — not our fix).
 
 ### Task 5: Re-run E2E, pick the WORST screenshot to send
 
