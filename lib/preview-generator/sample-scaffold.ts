@@ -65,6 +65,45 @@ export function buildDeterministicContainerSampleScaffold({
   return buildScaffold(jsxComponentName, exportName, [], childLines);
 }
 
+/**
+ * JSX expression body (no `export const Sample = …` wrapper) plus the list of
+ * component identifiers it references. Used by the preview generator to embed
+ * a synthetic SampleDefault inline in the generated __canvas_preview__.tsx
+ * for compound shadcn-style modules that don't ship their own SampleDefault.
+ */
+export interface ContainerSampleJsxBody {
+  /** Multi-line JSX expression, e.g. "<Alert>\n  <AlertTitle>…</AlertTitle>\n</Alert>" */
+  body: string;
+  /** All component identifiers referenced in `body`, in source order. */
+  referencedNames: string[];
+}
+
+export function buildContainerSampleJsxBody({
+  sourceCode,
+  componentName,
+}: Omit<SampleScaffoldConfig, 'propEntries' | 'exportName'>): ContainerSampleJsxBody | null {
+  const jsxComponentName = normalizeSampleComponentName(componentName);
+  const childLines = buildCompoundChildLines(sourceCode, jsxComponentName);
+  if (childLines.length === 0) return null;
+
+  const lines = [`<${jsxComponentName}>`, ...childLines, `</${jsxComponentName}>`];
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const line of lines) {
+    const matches = line.match(/<\/?\s*([A-Z][\w]*)/g) ?? [];
+    for (const raw of matches) {
+      const name = raw.replace(/<\/?\s*/, '');
+      if (!seen.has(name)) {
+        seen.add(name);
+        ordered.push(name);
+      }
+    }
+  }
+
+  return { body: lines.join('\n'), referencedNames: ordered };
+}
+
 function buildScaffold(
   jsxComponentName: string,
   exportName: string,

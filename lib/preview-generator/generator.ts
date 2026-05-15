@@ -4,9 +4,10 @@
  */
 
 import { basename, dirname } from 'node:path';
+import type { ContainerSampleJsxBody } from './sample-scaffold';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v8';
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v9';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -20,6 +21,28 @@ export interface PreviewComponentEntry {
   importPath: string;
   /** True if component imports SSR data hooks (useLoaderData, useRouteLoaderData) that require router context */
   isSSRRoute?: boolean;
+  /**
+   * Auto-generated SampleDefault JSX for shadcn-style compound modules that
+   * don't ship their own `SampleDefault` export. Populated by `buildEntry`
+   * via `buildContainerSampleJsxBody`. When present, the generator emits an
+   * inline synthetic SampleDefault in the registry instead of skipping the
+   * component entirely.
+   */
+  syntheticSampleDefault?: ContainerSampleJsxBody;
+  /**
+   * Snapshot of renderable named exports detected in source — used by the
+   * runtime fallback UI to tell the user which exports were found when no
+   * sample could be synthesized.
+   */
+  detectedExports?: string[];
+}
+
+/**
+ * True if the entry has a renderable sample we can drop into the iframe —
+ * either an authored `SampleDefault` export or a synthetic compound scaffold.
+ */
+export function entryHasRenderableSample(entry: PreviewComponentEntry): boolean {
+  return entry.sampleExports.includes('SampleDefault') || entry.syntheticSampleDefault !== undefined;
 }
 
 /** Configuration for SSR framework mock wrapping in generated preview. */
@@ -171,11 +194,10 @@ export function isUiPrimitive(componentPath: string): boolean {
 
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
-  // Exclude UI primitives that have no SampleDefault — they crash on fallback-prop spread.
-  // Keep UI primitives that DO have SampleDefault (explicitly marked as previewable).
-  const registryEntries = entries.filter(
-    (e) => !isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault'),
-  );
+  // Exclude UI primitives that have no renderable sample — they crash on fallback-prop spread.
+  // Keep UI primitives that DO have a SampleDefault export OR a synthesized container
+  // scaffold (compound shadcn-style modules like Carousel/Alert).
+  const registryEntries = entries.filter((e) => !isUiPrimitive(e.componentPath) || entryHasRenderableSample(e));
   const uniqueNames = deriveUniquePrefix(
     registryEntries,
     extractImportedBindings(options?.providerWrap?.imports ?? []),
@@ -218,6 +240,14 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     lines.push(buildImportLine(entry, alias));
+    // Synthetic SampleDefault references multiple named exports from the same
+    // module (e.g. Carousel + CarouselContent + CarouselItem). Pull them in via
+    // a namespace import so the inline arrow can reference any subcomponent
+    // without bloating the named-import list with shadcn-only identifiers.
+    if (entry.syntheticSampleDefault) {
+      const safePath = entry.importPath.replace(/'/g, "\\'");
+      lines.push(`import * as ${alias}Module from '${safePath}';`);
+    }
   }
 
   lines.push('');
@@ -231,13 +261,29 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
-  // 4. sampleRenderMap (SampleDefault only)
+  // 4. sampleRenderMap (SampleDefault only — authored or synthesized)
   lines.push('const sampleRenderMap: Record<string, React.FC> = {');
   for (const entry of registryEntries) {
+    const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
+    const safeKey = entry.componentPath.replace(/'/g, "\\'");
     if (entry.sampleExports.includes('SampleDefault')) {
-      const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': ${alias}SampleDefault,`);
+      lines.push(`  '${safeKey}': ${alias}SampleDefault,`);
+    } else if (entry.syntheticSampleDefault) {
+      const inline = renderSyntheticSampleArrow(entry.syntheticSampleDefault, `${alias}Module`);
+      lines.push(`  '${safeKey}': ${inline},`);
     }
+  }
+  lines.push('};');
+  lines.push('');
+
+  // 4b. componentExportsMap — used by the runtime fallback UI to tell the user
+  //     which named exports were detected when no sample could be synthesized.
+  lines.push('const componentExportsMap: Record<string, string[]> = {');
+  for (const entry of registryEntries) {
+    if (!entry.detectedExports || entry.detectedExports.length === 0) continue;
+    const safeKey = entry.componentPath.replace(/'/g, "\\'");
+    const exportsList = entry.detectedExports.map((n) => JSON.stringify(n)).join(', ');
+    lines.push(`  '${safeKey}': [${exportsList}],`);
   }
   lines.push('};');
   lines.push('');
@@ -693,6 +739,29 @@ if (root) {
   return baseContent + bootstrap;
 }
 
+/**
+ * Render a synthetic SampleDefault as an inline arrow function. The body
+ * comes from `buildContainerSampleJsxBody`; we prefix every referenced
+ * component identifier with `${moduleAlias}.` so the JSX resolves through
+ * the namespace import added in step 2.
+ */
+function renderSyntheticSampleArrow(synthetic: ContainerSampleJsxBody, moduleAlias: string): string {
+  let body = synthetic.body;
+  for (const name of synthetic.referencedNames) {
+    // nosemgrep: detect-non-literal-regexp -- name comes from the source-code AST scanner
+    // (not user input) and is restricted to /^[A-Z][\w]*$/ by isValidJsxComponentName,
+    // so the resulting regex is safe to construct.
+    const re = new RegExp(`(<\\/?)\\s*${name}\\b`, 'g');
+    body = body.replace(re, `$1${moduleAlias}.${name}`);
+  }
+  // Indent body inside the arrow expression
+  const indented = body
+    .split('\n')
+    .map((line) => `      ${line}`)
+    .join('\n');
+  return `() => (\n${indented}\n    )`;
+}
+
 function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
 
@@ -901,10 +970,21 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     "  if (mode !== 'multi') {",
     '    const SampleDefault = sampleRenderMap[componentPath];',
     '    if (!SampleDefault && !Component) {',
+    '      // Component not yet in the registry. Emit the missing signal so',
+    "      // extension.ts's recovery path runs `previewManager.ensureComponent`",
+    '      // and re-renders. Show a structured fallback instead of a bare',
+    '      // "Loading…" so the user can see the path/exports that were detected.',
+    '      const detectedExports = componentExportsMap[componentPath] ?? [];',
     '      return (',
-    '        <div style={{ padding: 20, fontFamily: "sans-serif", color: "#888" }}>',
+    '        <div style={{ padding: 20, fontFamily: "sans-serif", color: "#666" }}>',
     '          <_ComponentMissingSignal componentPath={componentPath} />',
-    '          <p>Loading…</p>',
+    '          <h2 style={{ margin: 0, fontSize: 16, color: "#333" }}>No sample for this component</h2>',
+    '          <p style={{ marginTop: 8 }}>{componentPath}</p>',
+    '          {detectedExports.length > 0 ? (',
+    '            <p style={{ marginTop: 8 }}>Detected exports: {detectedExports.join(", ")}</p>',
+    '          ) : (',
+    '            <p style={{ marginTop: 8 }}>Generating sample…</p>',
+    '          )}',
     '        </div>',
     '      );',
     '    }',
