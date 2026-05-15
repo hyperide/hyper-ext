@@ -21,7 +21,7 @@ describe('mergeRuntimeStyle', () => {
     const merged = mergeRuntimeStyle(base, runtime, elementId);
     expect(merged.backgroundColor).toBeDefined();
     // Should be hex with alpha channel so Inspector can parse opacity
-    const { color, opacity } = parseHexWithAlpha(merged.backgroundColor!);
+    const { color, opacity } = parseHexWithAlpha(merged.backgroundColor as string);
     expect(color).toBe('#b8672e');
     // 0.15 * 255 = 38.25 → 38 / 255 * 100 = 14.9 → round → 15
     expect(opacity).toBe('15');

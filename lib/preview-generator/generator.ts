@@ -536,15 +536,14 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
-  // 9. SSR route set + RemixMockWrapper (emitted only for Remix projects with SSR route components)
-  lines.push('const ssrRouteSet = new Set<string>([');
-  for (const path of ssrRoutes) {
-    lines.push(`  '${path}',`);
-  }
-  lines.push(']);');
-  lines.push('');
-
+  // 9. SSR route set + RemixMockWrapper (only for Remix projects with SSR route components)
   if (needsRemixMock) {
+    lines.push('const ssrRouteSet = new Set<string>([');
+    for (const path of ssrRoutes) {
+      lines.push(`  '${path}',`);
+    }
+    lines.push(']);');
+    lines.push('');
     lines.push(...buildRemixMockWrapper());
     lines.push('');
   }

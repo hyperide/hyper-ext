@@ -120,6 +120,7 @@ export class PreviewPanel {
     // Clear shared StateHub state so _initializeComponent() re-derives from the
     // active editor instead of picking up the previous workspace's component.
     this._stateHub.applyUpdate({ currentComponent: null });
+    this._projectError = null;
     this.notifyDevServerStopped();
     const shouldRestartSync = Boolean(this._syncService);
     this._syncService?.dispose();

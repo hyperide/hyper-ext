@@ -457,11 +457,12 @@ describe('generatePreviewContent — SSR mock (Remix)', () => {
     expect(content).not.toContain('RemixMockWrapper');
   });
 
-  it('empty ssrRouteSet when no entries have isSSRRoute', () => {
+  it('ssrRouteSet not emitted when no entries have isSSRRoute', () => {
     const entry = makeEntry('src/Button.tsx', 'Button');
     const content = generatePreviewContent([entry], { ssrMock });
-    // ssrRouteSet should be present but empty
-    expect(content).toMatch(/const ssrRouteSet = new Set<string>\(\[\s*\]\)/);
+    // ssrRouteSet is only emitted when there are actual SSR routes (avoids noUnusedLocals error)
+    expect(content).not.toContain('ssrRouteSet');
+    expect(content).not.toContain('RemixMockWrapper');
   });
 
   it('mixed entries: only SSR routes in ssrRouteSet', () => {
