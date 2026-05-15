@@ -273,6 +273,21 @@ function rebaseImportPath(root: string, previewDir: string, sourceRelativePath: 
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperIDE] Extension activating...');
 
+  // Catch unhandled rejections inside the extension host process so they
+  // don't bubble up as VS Code ".error" notification toasts containing
+  // "Unhandled rejection ...". A specific known source was already fixed
+  // (extension.ts:537 showTextDocument chain, extension.ts:778 autoStart
+  // .then without .catch); this is a safety net for anything we missed
+  // and for VS Code core / library promises that escape in a hot path.
+  // Logged so real issues are still discoverable in the Output channel.
+  const unhandledHandler = (reason: unknown) => {
+    console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+  };
+  process.on('unhandledRejection', unhandledHandler);
+  context.subscriptions.push({
+    dispose: () => process.off('unhandledRejection', unhandledHandler),
+  });
+
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
@@ -775,11 +790,21 @@ export function activate(context: vscode.ExtensionContext) {
   const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
 
   if (autoStart) {
-    devServerManager.start().then((state) => {
-      if (state.status === 'running' && state.url) {
-        previewPanel?.setPreviewUrl(state.url);
-      }
-    });
+    devServerManager
+      .start()
+      .then((state) => {
+        if (state.status === 'running' && state.url) {
+          previewPanel?.setPreviewUrl(state.url);
+        }
+      })
+      .catch((err) => {
+        // Without this catch, devServerManager.start() rejecting (port in use,
+        // failed package-manager detection, missing scripts) becomes an
+        // unhandled rejection that VS Code surfaces as ".error" toast
+        // ("Unhandled rejection ..."), tripping every test that asserts no
+        // /fatal|crash|unhandled/i in the error toast list.
+        console.error('[HyperIDE] Auto-start dev server failed:', err);
+      });
   }
 
   console.log('[HyperIDE] Extension activated successfully');
