@@ -1173,7 +1173,12 @@ export class PreviewPanel {
    * Refresh preview
    */
   public refresh(): void {
-    this._panel?.webview.postMessage({ type: 'refresh' });
+    if (!this._panel) return;
+    // Re-push full state before reloading — guards against races where
+    // webview:ready fired before _pushFullStateToWebview had current state
+    // (e.g. openPreview called before devserver:statusChanged propagated).
+    this._pushFullStateToWebview();
+    this._panel.webview.postMessage({ type: 'refresh' });
   }
 
   /**
