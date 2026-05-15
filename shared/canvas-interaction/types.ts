@@ -28,8 +28,6 @@ export interface OverlayRendererOptions {
 
 export interface OverlayRect {
   key: string;
-  /** nodeRef (fileName:line:col) used for AST mutation — only set on selection rects */
-  elementId?: string;
   left: number;
   top: number;
   width: number;
