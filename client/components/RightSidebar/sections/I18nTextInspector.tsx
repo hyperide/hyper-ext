@@ -70,6 +70,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
       <div className="flex flex-col gap-1">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Key</span>
         <input
+          data-testid="i18n-key-input"
           type="text"
           value={i18nBinding.key}
           disabled={!keyEditable}
@@ -81,6 +82,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
       <div className="flex flex-col gap-1">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Text</span>
         <input
+          data-testid="i18n-text-input"
           ref={textInputRef}
           type="text"
           value={localText}
@@ -98,6 +100,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
           {i18nBinding.availableLocales.map((locale) => (
             <button
               key={locale}
+              data-testid={`i18n-locale-button-${locale}`}
               type="button"
               disabled={!localeEditable || locale === i18nBinding.activeLocale}
               onClick={() => onLocaleChange?.(locale)}
