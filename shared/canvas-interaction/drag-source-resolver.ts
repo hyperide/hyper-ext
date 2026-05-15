@@ -53,8 +53,9 @@ export function resolveDragSource(
   // Step 2: walk up to the nearest ancestor with a source (handles decorative children:
   // emoji spans, aria-hidden wrappers, expression-only text nodes).
   if (!source) {
+    const bodyEl = typeof document !== 'undefined' ? document.body : null;
     let cur = target.parentElement;
-    while (cur && cur !== document.body) {
+    while (cur && cur !== bodyEl) {
       const ancestorSrc = getSourceLocation(cur);
       if (ancestorSrc) {
         source = ancestorSrc;
@@ -113,8 +114,9 @@ function walkToMeaningfulDraggable(
     return findNearestSourceLocation(fiber) !== null;
   };
 
+  const bodyEl = typeof document !== 'undefined' ? document.body : null;
   let cur: HTMLElement = el;
-  while (cur.parentElement && cur.parentElement !== document.body) {
+  while (cur.parentElement && cur.parentElement !== bodyEl) {
     const rawChildren = cur.parentElement.children;
     // Guard: some test environments stub parentElement without children (e.g. bare BODY sentinels).
     if (!rawChildren) break;
