@@ -39,22 +39,20 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #34** (`run-20260429-211849-86173`) — IN PROGRESS (1 shard, ~55min elapsed, tests passing normally):
-  - S1: running, past Vite pre-warm, tests passing (recent: "concurrent edits" passed 5302ms)
-  - Extension v0.1.32 in container (does not include fc537973 — see below)
+- **Run #34** (`run-20260429-211849-86173`) — IN PROGRESS (1 shard, ~1.5h elapsed, ~390 tests, 0 hard fails):
+  - S1: running, currently in project-independent tests (component picker/inspector tests ~390)
+  - Extension: `out/extension.js` is bind-mounted from host → uses **compiled v0.1.33** (fc537973 IS active)
+    Note: workfile previously said "v0.1.32 in container" — incorrect. `out/` is bind-mounted, not baked
+    into Docker image. After `build-and-install.sh patch` ran and compiled v0.1.33, the container picked
+    up the new binary automatically. Confirmed: `out/extension.js` contains index.html check BEFORE src/.
 
-  **Fixes in v0.1.32 (committed before run #34):**
-  - `fix(preview)` `05bcff8d` — `getPreviewFilePath()` reads index.html `<script src="/client/main.tsx">` to detect frontend root; scanner adds `client/` to scan candidates
-  - `fix(extension)` `e819ea4d` — `PreviewPanel._initializeComponent` guards against recursive `stateHub.applyUpdate` causing double `showTextDocument`
-  - `fix(preview-generator)` `5cec585e` — `App.web.tsx` now previewable; platform-suffix disambiguation (`App→App`, `App.web.tsx→AppWeb`)
+  **All fixes active in run #34 container (via bind-mount):**
+  - `fix(preview)` `fc537973` — `getPreviewFilePath()` order: index.html BEFORE src/ — bulka-the-dog FIXED
+  - `fix(preview)` `05bcff8d` — `getPreviewFilePath()` reads index.html `<script src="/client/main.tsx">`
+  - `fix(extension)` `e819ea4d` — `PreviewPanel._initializeComponent` double `showTextDocument` guard
+  - `fix(preview-generator)` `5cec585e` — `App.web.tsx` previewable; platform-suffix disambiguation
   - `fix(ext)` `375e342f` — webpack recompile gate on 'compiled with errors/warnings'
-  - infra: `electron.launch` timeout 60s→180s, `firstWindow()→waitForEvent('window')`
-
-  **Additional fix after run #34 start:**
-  - `fix(preview)` `fc537973` — `getPreviewFilePath()` order: index.html check BEFORE src/ check.
-    Previously: src/ dir existence trumped index.html detection — bulka-the-dog has `src/` (server code)
-    but `client/main.tsx` as frontend. Now: non-`src` index.html script src wins. Confirmed via CDP
-    visual test: `client/__canvas_preview__.tsx` now created correctly. Not in run #34 — will be in run #35.
+  - ext-test-projects: Tamagui 150s polls, Monaco focus, App.tsx preference, HMR timeout 150s
 
 - **Run #29** (`run-20260429-110015-36155`) — PARTIAL RESULTS (S3 still running):
   - S1: **0 failed, 0 flaky** — clean
