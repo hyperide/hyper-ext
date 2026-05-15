@@ -32,8 +32,7 @@ function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
   dot.style.background = 'rgb(59, 130, 246)';
   dot.style.border = '2px solid white';
   dot.style.boxSizing = 'border-box';
-  dot.style.pointerEvents = 'auto';
-  dot.style.cursor = axis === 'width' ? 'ew-resize' : 'ns-resize';
+  dot.style.pointerEvents = 'none';
   if (axis === 'width') {
     dot.style.right = `${-HANDLE_SIZE / 2}px`;
     dot.style.top = '50%';
@@ -46,9 +45,9 @@ function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
   return dot;
 }
 
-function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect, enable: boolean): void {
-  const wantWidth = enable && rect.type === 'selection' && !!rect.resizable?.width;
-  const wantHeight = enable && rect.type === 'selection' && !!rect.resizable?.height;
+function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect): void {
+  const wantWidth = rect.type === 'selection' && !!rect.resizable?.width;
+  const wantHeight = rect.type === 'selection' && !!rect.resizable?.height;
   let hasWidth = false;
   let hasHeight = false;
   for (const child of overlay.children) {
@@ -76,9 +75,7 @@ export function renderOverlayRects(
   container: HTMLElement,
   rects: OverlayRect[],
   overlayElements: Map<string, HTMLDivElement>,
-  options?: { enableResizeHandles?: boolean },
 ): void {
-  const enableHandles = options?.enableResizeHandles ?? true;
   const currentKeys = new Set<string>();
 
   for (const rect of rects) {
@@ -95,17 +92,11 @@ export function renderOverlayRects(
       overlayElements.set(rect.key, element);
     }
 
-    if (rect.elementId) {
-      element.dataset.elementId = rect.elementId;
-    } else {
-      delete element.dataset.elementId;
-    }
-
     element.style.left = `${rect.left}px`;
     element.style.top = `${rect.top}px`;
     element.style.width = `${rect.width}px`;
     element.style.height = `${rect.height}px`;
-    syncResizeHandles(element, rect, enableHandles);
+    syncResizeHandles(element, rect);
   }
 
   // Remove unused overlays
@@ -315,7 +306,7 @@ export function createOverlayRenderer(
       );
 
       const transformedOverlay = transformRects(result.overlayRects, offsetX, offsetY, zoom);
-      renderOverlayRects(container, transformedOverlay, overlayElements, { enableResizeHandles: false });
+      renderOverlayRects(container, transformedOverlay, overlayElements);
 
       if (onPlaceholderClick && editorMode !== 'interact') {
         const transformedPlaceholders = transformRects(result.placeholderRects, offsetX, offsetY, zoom);

@@ -1121,7 +1121,6 @@ function sendOverlayRects(): void {
 
   const rects = result.overlayRects.map((r) => ({
     key: r.key,
-    ...(r.elementId && { elementId: r.elementId }),
     left: r.left,
     top: r.top,
     width: r.width,
