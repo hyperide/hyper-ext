@@ -169,6 +169,22 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const iframeElRef = useRef(iframeEl);
   iframeElRef.current = iframeEl;
 
+  // === Tree selection → canvas scroll ===
+  // When the user clicks an element in the Elements Tree, useElementSelection dispatches
+  // a local CustomEvent. We forward it to the iframe as hypercanvas:goToVisual so the
+  // canvas scrolls to the element. This is local-only (no round-trip through extension host).
+  useEffect(() => {
+    function handleTreeSelect(event: Event) {
+      const e = event as CustomEvent<{ elementId: string }>;
+      const elementId = e.detail?.elementId;
+      if (!elementId) return;
+      // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+      iframeElRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId }, '*');
+    }
+    window.addEventListener('hypercanvas:treeSelect', handleTreeSelect);
+    return () => window.removeEventListener('hypercanvas:treeSelect', handleTreeSelect);
+  }, []);
+
   // === Re-send current component after iframe (re)load ===
   // When Vite HMR triggers a full page reload inside the iframe, the postMessage-based
   // setComponent is lost (the old page is gone). After the new page loads, CanvasPreview
