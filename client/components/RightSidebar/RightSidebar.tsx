@@ -1173,7 +1173,12 @@ export default function RightSidebar({
 
           {/* i18n Text Inspector */}
           {i18nText?.kind === 'i18n' && (
-            <I18nTextInspector i18nBinding={i18nText} onResolvedTextChange={handleI18nResolvedTextChange} />
+            <I18nTextInspector
+              i18nBinding={i18nText}
+              onKeyChange={() => {}}
+              onResolvedTextChange={handleI18nResolvedTextChange}
+              onLocaleChange={() => {}}
+            />
           )}
 
           {/* Style Source Tabs */}
