@@ -43,13 +43,13 @@ doesn't exist). To change locale we need to:
 
 ### Task 2: RED — write failing E2E test: locale switch → text updates
 
-- [ ] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-locale-switch.spec.ts`
-- [ ] Open bulka-the-dog project → select i18n element with locale buttons visible
-- [ ] Assert initial locale (e.g. 'en') text is shown in TEXT field
-- [ ] Click 'IU' locale button → assert TEXT field updates to IU translation
-- [ ] Click 'EN' back → assert TEXT field returns to EN translation
-- [ ] Run test → confirm RED (locale switch does nothing currently)
-- [ ] Note: bulka-the-dog must have at least 2 locales in `locales/` directory; verify or add IU locale fixture if missing
+- [x] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-locale-switch.spec.ts` — test already exists at project-dependent/bulka-i18n-locale-switch.spec.ts (confirmed in Task 1); no duplicate needed
+- [x] Open bulka-the-dog project → select i18n element with locale buttons visible — covered by existing test (h1#hero-title selection with `canvas.waitForAnySelection`)
+- [x] Assert initial locale (e.g. 'en') text is shown in TEXT field — covered: dynamic initialLocale detection against HERO_TITLE_BY_LOCALE map
+- [x] Click 'IU' locale button → assert TEXT field updates to IU translation — covered: test cycles ru/rs/en locale buttons and asserts text matches dictionary value
+- [x] Click 'EN' back → assert TEXT field returns to EN translation — covered: final sanity cycle back to initialLocale
+- [x] Run test → confirm RED (locale switch does nothing currently) — skipped: implementation was already complete in commit 20fe6ed6 (discovered in Task 1); test goes GREEN directly
+- [x] Note: bulka-the-dog must have at least 2 locales in `locales/` directory; verify or add IU locale fixture if missing — bulka uses translations.ts (ru/rs/en) not a `locales/` dir; existing test already accounts for this
 
 ### Task 3: Add activeLocale state to RightSidebar, implement handleLocaleChange
 
