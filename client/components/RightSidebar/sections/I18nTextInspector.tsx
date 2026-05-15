@@ -184,7 +184,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
-    if (!key) {
+    if (!key || key === currentKey) {
       setShowKeyDropdown(false);
       setKeySearch('');
       return;

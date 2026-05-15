@@ -533,6 +533,23 @@ describe('I18nTextInspector', () => {
     expect(onKeyChange).toHaveBeenCalledWith('new.key');
   });
 
+  it('does not fire onKeyChange when selecting the current key in combobox', () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'habits.walks' }}
+        availableKeys={['habits.walks', 'habits.runs']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+        canCreateKeys
+      />,
+    );
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-habits.walks'));
+    expect(onKeyChange).not.toHaveBeenCalled();
+  });
+
   // Snap-back resilience after blur. The original isFocusedRef guard prevented
   // snap-back only while focus was held; if the user typed and then clicked
   // away before the server returned the new resolvedText, the input snapped
