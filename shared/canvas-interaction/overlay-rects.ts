@@ -118,6 +118,7 @@ export function computeOverlayRects(
       const key = itemIndex !== null ? `select-${id}-${itemIndex}` : `select-${id}-${i}`;
       const overlayRect: OverlayRect = {
         key,
+        elementId: id,
         left: rect.left,
         top: rect.top,
         width: rect.width,

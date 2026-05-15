@@ -799,6 +799,9 @@ const SPECIAL_CASE_PREFIXES: Record<string, string[]> = {
   boxShadow: ['shadow'],
   // Filter utilities (not standard CSS properties)
   blur: ['blur-', 'blur'],
+  // size-N sets both width and height — must be removed when either axis is resized
+  width: ['w-', 'size-'],
+  height: ['h-', 'size-'],
 };
 
 /**
