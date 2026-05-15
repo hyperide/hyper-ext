@@ -91,8 +91,11 @@ export interface SharedEditorState {
   previewScope?: 'full-app' | 'component-only';
   /** Computed style snapshot from the preview iframe for the currently selected element. */
   selectedElementRuntimeStyle?: SelectedElementRuntimeStyle | null;
-  /** Trimmed innerText of the selected DOM element — used for i18n DOM-text search. */
+  /** Trimmed innerText of the selected DOM element — used as i18n DOM-text search fallback. */
   selectedElementDomText?: string | null;
+  /** Active i18n write operation. Set by RightSidebar before writeI18nResource, cleared in finally.
+   * Stored in StateHub so it survives panel reloads and reaches the iframe via state:init. */
+  writeInProgress?: { writeId: string; startedAt: number } | null;
 }
 
 // ============================================================================

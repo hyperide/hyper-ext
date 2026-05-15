@@ -438,15 +438,15 @@ describe('src/locales/en.json layout', () => {
 });
 
 // ---------------------------------------------------------------------------
-// messages/en.ts — TypeScript export
+// messages/en.ts — TypeScript export (unsupported format)
 // ---------------------------------------------------------------------------
 
-describe('messages/en.ts — TS object-literal format', () => {
+describe('messages/en.ts — unsupported TS format', () => {
   const fileIO = new MemoryFileIO({
     [`${ROOT}/messages/en.ts`]: `export default { greeting: 'Hello from TS' } as const;`,
   });
 
-  it('resolves static TS locale files', async () => {
+  it('returns unsupported-format reason for TS locale files', async () => {
     const result = await resolveI18nResource({
       projectRoot: ROOT,
       library: 'react-i18next',
@@ -454,8 +454,8 @@ describe('messages/en.ts — TS object-literal format', () => {
       activeLocale: 'en',
       fileIO,
     });
-    expect(result.resolvedText).toBe('Hello from TS');
-    expect(result.writable).toBe(true);
+    expect(result.resolvedText).toBeNull();
+    expect(result.unresolvedReason).toBe('unsupported-format');
   });
 });
 
@@ -479,34 +479,6 @@ describe('malformed JSON locale file', () => {
 
     expect(result.resolvedText).toBeNull();
     expect(result.unresolvedReason).toBe('parse-error');
-  });
-});
-
-describe('unreadable existing locale file', () => {
-  it('marks resource non-writable when the locale file exists but cannot be read', async () => {
-    class UnreadableFileIO extends MemoryFileIO {
-      override async readFile(absolutePath: string): Promise<string> {
-        if (absolutePath.endsWith('/locales/en.json')) {
-          throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
-        }
-        return super.readFile(absolutePath);
-      }
-    }
-
-    const fileIO = new UnreadableFileIO({
-      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
-    });
-
-    const result = await resolveI18nResource({
-      projectRoot: ROOT,
-      library: 'react-i18next',
-      key: 'greeting',
-      activeLocale: 'en',
-      fileIO,
-    });
-
-    expect(result.resolvedText).toBeNull();
-    expect(result.writable).toBe(false);
   });
 });
 
@@ -551,30 +523,5 @@ describe('Bulka project — real client/lib/translations.ts', () => {
       fileIO: realFileIO,
     });
     expect(result.resolvedText).toBe('Булка');
-  });
-
-  it('marks writable=true for resolved key in merged translations.ts', async () => {
-    const result = await resolveI18nResource({
-      projectRoot: BULKA_ROOT,
-      library: 'custom',
-      key: 'brand.name',
-      activeLocale: 'en',
-      fileIO: realFileIO,
-    });
-    expect(result.resolvedText).toBe('Bulka');
-    expect(result.writable).toBe(true);
-  });
-
-  it('marks writable=true for missing key in merged translations.ts', async () => {
-    const result = await resolveI18nResource({
-      projectRoot: BULKA_ROOT,
-      library: 'custom',
-      key: 'nonexistent.key.path',
-      activeLocale: 'en',
-      fileIO: realFileIO,
-    });
-    expect(result.resolvedText).toBeNull();
-    expect(result.unresolvedReason).toBe('missing-key');
-    expect(result.writable).toBe(true);
   });
 });

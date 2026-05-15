@@ -1,16 +1,14 @@
 import { Badge } from '@/components/ui/badge';
-import { screenshotSrc } from '../screenshotSrc';
 
 const capabilities = [
-  'Live React canvas',
-  'Element tree',
-  'Visual selection',
-  'Inspector style controls',
-  'Context actions',
-  'Go to Code',
-  'AI edits with context',
-  'Undo/Redo history',
+  'Tailwind CSS support',
   'TypeScript-first',
+  'React DevTools integration',
+  'Undo/Redo history',
+  'Keyboard shortcuts',
+  'Multi-canvas boards',
+  'Component props editor',
+  'CSS state variants',
 ];
 
 export default function Demo() {
@@ -21,30 +19,13 @@ export default function Demo() {
           {/* Screenshot */}
           <div className="relative">
             <div className="absolute -inset-4 rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 blur-2xl" />
-            <div className="relative overflow-hidden rounded-xl border bg-muted p-3 shadow-xl sm:p-4">
-              <div className="grid gap-3 sm:gap-4">
-                <figure className="overflow-hidden rounded-lg border bg-background shadow-lg">
-                  <img
-                    src={screenshotSrc('/screenshots/demo-inspector-a.png')}
-                    alt="HyperIDE selecting the Jump button in the bulka-the-dog project with code, canvas, and Inspector visible"
-                    className="aspect-video w-full object-cover object-top"
-                    loading="eager"
-                  />
-                  <figcaption className="border-t bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Select the rendered button and inspect the exact JSX-backed element.
-                  </figcaption>
-                </figure>
-                <figure className="overflow-hidden rounded-lg border bg-background shadow-lg">
-                  <img
-                    src={screenshotSrc('/screenshots/demo-inspector-b.png')}
-                    alt="HyperIDE context menu opened on the selected Jump button with Go to Code visible"
-                    className="aspect-video w-full object-cover object-top"
-                    loading="eager"
-                  />
-                  <figcaption className="border-t bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Open context actions to go to code, duplicate, wrap, or ask AI.
-                  </figcaption>
-                </figure>
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-muted shadow-xl">
+              {/* Placeholder for demo screenshot */}
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <div className="text-4xl">📸</div>
+                  <p className="mt-2 text-sm">feature-visual.png</p>
+                </div>
               </div>
             </div>
           </div>
@@ -53,9 +34,8 @@ export default function Demo() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Built for developers who value their time</h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              HyperIDE keeps the edit loop inside one surface: select rendered React elements, inspect the generated JSX
-              and Tailwind controls, then open context actions such as Go to Code without rebuilding the page in your
-              head.
+              Stop switching between code and browser. HyperIDE brings the design experience to your development
+              workflow, without sacrificing code quality or control.
             </p>
 
             {/* Capabilities */}
@@ -70,16 +50,16 @@ export default function Demo() {
             {/* Stats */}
             <div className="mt-10 grid grid-cols-3 gap-4 border-t pt-10">
               <div>
-                <div className="text-2xl font-bold sm:text-3xl">Select</div>
-                <div className="text-sm text-muted-foreground">Rendered element</div>
+                <div className="text-3xl font-bold">5+</div>
+                <div className="text-sm text-muted-foreground">Supported frameworks</div>
               </div>
               <div>
-                <div className="text-2xl font-bold sm:text-3xl">Inspect</div>
-                <div className="text-sm text-muted-foreground">Styles and JSX</div>
+                <div className="text-3xl font-bold">50+</div>
+                <div className="text-sm text-muted-foreground">Keyboard shortcuts</div>
               </div>
               <div>
-                <div className="text-2xl font-bold sm:text-3xl">Act</div>
-                <div className="text-sm text-muted-foreground">Code or AI</div>
+                <div className="text-3xl font-bold">∞</div>
+                <div className="text-sm text-muted-foreground">Time saved</div>
               </div>
             </div>
           </div>
