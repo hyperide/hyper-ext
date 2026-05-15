@@ -304,6 +304,38 @@ Status:
 - not yet committed
 - documentation-only guardrails, no product behavior change
 
+## 📍 2026-04-28 Run #21 Prep
+
+### Fixes applied before Run #21
+
+**ext-test-projects (pushed to main, commit b525fba):**
+- `undo-redo.spec.ts`: replace `getOpacity()!=='80'` guard with
+  `getComponentName() truthy && opacity!=='80'&&!==''` — empty `selectedIds`
+  after full HMR page reload made the old guard trivially true, causing the
+  `fileAfter90` poll to time out. Root cause confirmed via Run #20 screenshot:
+  preview blank (X icon), full reload at 2:10:34 cleared the selection.
+- `preview-render.spec.ts`: bump bundler-error poll 45s→90s — Docker kanban+
+  spotify consistently hit 51s execution vs 45s timeout.
+- `Editor.ts`: increase exactRow visibility window 2s→5s, add clear+retype
+  retry — after project switch VS Code file indexer races quick-open; caused
+  `project-switching-stale-preview` to find `AppContainer.tsx` instead of
+  `App.tsx`.
+
+**hyper-canvas-draft (pushed, commit d86b7f9a):**
+- `AstService.ts`: demote `findElementAtPosition` parse failure from
+  `console.error` to `console.warn` — the E2E fixture treats all `console.error`
+  as unexpected test failures; SyntaxError during cursor lookup is expected
+  for files with syntax issues (5 position-sync tests failed in Run #20).
+
+**Previous fixes (committed before Run #20):**
+- `e2e`: extend `hyper_duplicate_element` waits (c56053e, 42b2a6a)
+- `AstService`: `updateText` nodeRef fallback (e36ad5ff)
+- `PreviewPanel`, `PanelRouter`, `DevServerManager`: preview shell stability (b0339a18)
+- Inspector sidebar width normalization (00274b67)
+
+Run #21 started at: (fill after start)
+Target: `HYPER_E2E_SHARDS=3` to cover more of the 2189-test matrix.
+
 ## Latest Verified Progress
 
 From the last completed targeted validations before switching to full-matrix mode:
