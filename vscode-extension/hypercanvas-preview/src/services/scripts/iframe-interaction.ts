@@ -8,10 +8,16 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
+import { liftToCommonSiblings } from '@shared/canvas-interaction/drop-target-lift';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
+import {
+  applySelectionFreeze,
+  clearSelectionFreezeCache,
+  createSelectionFreezeCache,
+} from '@shared/canvas-interaction/selection-freeze';
 import {
   computeEffectiveRef,
   toggleItemIndex,
@@ -845,10 +851,51 @@ const state = {
   hoveredItemIndex: null as number | null,
   selectedItemIndices: {} as Record<string, number | null>,
   engineMode: 'design' as string,
+  /**
+   * True between `hypercanvas:writeI18nResource` start/done events.
+   * While set, the overlay renderer paints the last-known selection rects
+   * (see frozenSelection* below) even if `selectedIds[0]` momentarily fails
+   * to match a DOM element — Path B in
+   * docs/plans/2026-05-06-selection-survives-i18n-write.md.
+   */
+  writeInProgress: false,
 };
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
+
+// Diagnostic: log every state.selectedIds mutation with a stack trace.
+// Opt-in via `window.__HC_DEBUG_SELECTION = true` (set from devtools or E2E setup)
+// so production users do not get a console-noise tax.
+// Used to chase the i18n-key-change selection-flicker bug
+// (docs/plans/2026-05-06-selection-survives-i18n-write.md, Task 1).
+(() => {
+  const w = window as unknown as Record<string, unknown>;
+  let backing: string[] = state.selectedIds;
+  const desc: PropertyDescriptor = {
+    get(): string[] {
+      return backing;
+    },
+    set(next: string[]): void {
+      const prev = backing;
+      backing = next;
+      if (w.__HC_DEBUG_SELECTION) {
+        try {
+          const sameLen = prev.length === next.length && prev.every((v, i) => v === next[i]);
+          if (!sameLen) {
+            // eslint-disable-next-line no-console
+            console.warn('[HC selection]', { prev: [...prev], next: [...next] }, new Error('selection-trace').stack);
+          }
+        } catch {
+          /* never break runtime over diagnostics */
+        }
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  };
+  Object.defineProperty(state, 'selectedIds', desc);
+})();
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -1134,13 +1181,20 @@ document.addEventListener('contextmenu', contextMenuHandler, true);
 // Maps elementId → original inline width/height so cancel can restore.
 const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 
-// === Element drag/move state machine ===
-// Tracks pointerdown → threshold → drag → drop to post hypercanvas:moveElement.
-// AstService.moveElement handles same-file, cross-file, cross-parent, and
-// cross-component moves — no JSX-parent constraint, so the iframe sends raw
-// source/target NodeRefs without lifting to a common DOM ancestor.
+// === Element drag/reorder state machine ===
+// Tracks pointerdown → threshold → drag → drop to post hypercanvas:reorderElement.
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
+
+function _dragEffectiveBg(el: HTMLElement): string {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    node = node.parentElement;
+  }
+  return '#ffffff';
+}
 
 function _isHorizontalLayout(el: HTMLElement): boolean {
   const parent = el.parentElement;
@@ -1159,12 +1213,9 @@ let _dragStartX = 0;
 let _dragStartY = 0;
 let _dragSuppressNextClick = false;
 let _dragSourceEl: HTMLElement | null = null;
-let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
 let _dragBadgeEl: HTMLElement | null = null;
 let _dragOrigStyleAttr = '';
-let _dragOffsetX = 0;
-let _dragOffsetY = 0;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1214,25 +1265,19 @@ function _dragPointerMove(e: PointerEvent): void {
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
       if (_dragSourceEl) {
-        const rect = _dragSourceEl.getBoundingClientRect();
-        _dragOffsetX = _dragStartX - rect.left;
-        _dragOffsetY = _dragStartY - rect.top;
-
-        // Fade the source element in place — shows "where it came from"
-        _dragSourceEl.style.opacity = '0.35';
-        _dragSourceEl.style.pointerEvents = 'none';
-
-        // Create ghost clone that follows the cursor
-        const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
-        ghost.className = 'hyper-drag-ghost';
-        ghost.removeAttribute('data-uniq-id');
-        ghost.style.width = `${rect.width}px`;
-        ghost.style.height = `${rect.height}px`;
-        ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
-        ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
-        document.body.appendChild(ghost);
-        _dragGhostEl = ghost;
-
+        _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
+        const s = _dragSourceEl.style;
+        const computedBg = getComputedStyle(_dragSourceEl).backgroundColor;
+        if (computedBg === 'rgba(0, 0, 0, 0)' || computedBg === 'transparent') {
+          s.backgroundColor = _dragEffectiveBg(_dragSourceEl);
+        }
+        s.transition = 'box-shadow 0.12s ease';
+        s.transform = 'scale(1.03)';
+        s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
+        s.opacity = '0.88';
+        s.position = 'relative';
+        s.zIndex = '2147483647';
+        s.pointerEvents = 'none';
         const indicator = document.createElement('div');
         indicator.className = 'hyper-drop-indicator';
         indicator.style.display = 'none';
@@ -1258,9 +1303,10 @@ function _dragPointerMove(e: PointerEvent): void {
 
   if (_dragState !== 'dragging') return;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
-    _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
+  const dx = e.clientX - _dragStartX;
+  const dy = e.clientY - _dragStartY;
+  if (_dragSourceEl) {
+    _dragSourceEl.style.transform = `scale(1.03) translate(${dx}px, ${dy}px)`;
   }
 
   if (_dragIndicatorEl) {
@@ -1299,9 +1345,9 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragSourceId = null;
   _dragSourceFilePath = null;
 
-  if (_dragGhostEl) {
-    _dragGhostEl.remove();
-    _dragGhostEl = null;
+  if (_dragSourceEl) {
+    _dragSourceEl.setAttribute('style', _dragOrigStyleAttr);
+    _dragSourceEl = null;
   }
   _dragOrigStyleAttr = '';
   if (_dragBadgeEl) {
@@ -1312,33 +1358,41 @@ function _dragPointerUp(e: PointerEvent): void {
     _dragIndicatorEl.remove();
     _dragIndicatorEl = null;
   }
-  if (_dragSourceEl) {
-    _dragSourceEl.style.opacity = '';
-    _dragSourceEl.style.pointerEvents = '';
-    _dragSourceEl = null;
-  }
-  _dragOffsetX = 0;
-  _dragOffsetY = 0;
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
   const rawDropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (!rawDropEl) return;
+  // Resolve drop side similarly to drag side: if cursor is over a decorative
+  // child (emoji span, aria-hidden) walk up to the nearest source-bearing
+  // ancestor. Otherwise dropping on the emoji of another card returns null
+  // and the reorder is silently swallowed.
+  const dropResolved = _resolveSourceWithFallback(rawDropEl);
+  if (!dropResolved) return;
 
-  // moveElement (Task 7+) accepts any source/target geometry — same parent,
-  // different parent, different component, different file, leaf target. The
-  // iframe no longer lifts to a common DOM ancestor and no longer walks up
-  // for a source-bearing fallback: send the raw NodeRef of whatever was
-  // actually dropped on. If the drop element has no source location at all
-  // (decorative aria-hidden node), bail silently — that is acceptable since
-  // the drop indicator only highlights source-bearing elements anyway.
-  const dropSrc = iframeResolver.getSourceLocation(rawDropEl);
-  if (!dropSrc) return;
-  const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
-  if (targetId === sourceId) return;
+  // Lift both source and drop target up to siblings of a common DOM ancestor.
+  // This is essential because AstService.reorderElement requires source and
+  // target to share a direct JSX parent — without lifting, a drop on Card B
+  // while dragging an inner div inside Card A would fail with "Elements must
+  // share a direct JSX parent". By promoting both to children of their nearest
+  // common DOM ancestor (which usually maps to the JSX list container), the
+  // reorder lands at the card-vs-card level the user actually expects.
+  const dragEl = _dragSourceEl ?? rawDropEl;
+  const lifted = liftToCommonSiblings(dragEl, dropResolved.el);
+  const finalSourceEl = lifted.source ?? dragEl;
+  const finalDropEl = lifted.drop ?? dropResolved.el;
+  // Source location must be readable on the lifted element; fall back to the
+  // pre-lift element if the parent layer has no own source.
+  const finalSourceSrc =
+    _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
+  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  if (!finalSourceSrc || !finalDropSrc) return;
+  const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
+  const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
+  if (targetId === finalSourceId) return;
 
-  const rect = rawDropEl.getBoundingClientRect();
-  const position: 'before' | 'after' = _isHorizontalLayout(rawDropEl)
+  const rect = finalDropEl.getBoundingClientRect();
+  const position: 'before' | 'after' = _isHorizontalLayout(finalDropEl)
     ? e.clientX < rect.left + rect.width / 2
       ? 'before'
       : 'after'
@@ -1350,14 +1404,38 @@ function _dragPointerUp(e: PointerEvent): void {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:moveElement',
-      sourceId,
+      type: 'hypercanvas:reorderElement',
+      sourceId: finalSourceId,
       targetId,
-      filePath: sourceFilePath,
+      filePath: finalSourceSrc.fileName,
       position,
     },
     '*',
   );
+}
+
+// Drop-target lift logic lives in shared/canvas-interaction/drop-target-lift.ts
+// and is unit-tested separately. Re-imported below at the top of this module.
+
+/**
+ * Resolve source location for a DOM element. Falls back to the nearest
+ * source-bearing ancestor when the element itself is decorative (e.g. an
+ * aria-hidden emoji span). Returns the element used as the resolution anchor
+ * along with its source location.
+ */
+function _resolveSourceWithFallback(
+  el: HTMLElement,
+): { el: HTMLElement; source: { fileName: string; line: number; column: number } } | null {
+  const direct = iframeResolver.getSourceLocation(el);
+  if (direct) return { el, source: direct };
+  const bodyEl = typeof document !== 'undefined' ? document.body : null;
+  let cur: HTMLElement | null = el.parentElement;
+  while (cur && cur !== bodyEl) {
+    const s = iframeResolver.getSourceLocation(cur);
+    if (s) return { el: cur, source: s };
+    cur = cur.parentElement;
+  }
+  return null;
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {
@@ -1393,6 +1471,16 @@ let prevRectsJSON = '';
 let needsOverlayUpdate = true;
 let overlayRafScheduled = false;
 
+// === Selection-rect freeze for HMR window during i18n writes (Path B) ===
+// While `state.writeInProgress` is true, retain the last-known selection rects
+// even if `selectedIds[0]` momentarily fails to match a DOM element. Without
+// this safety net, the HMR re-render gap (DOM gone + fiber-source-index
+// rebuilding async) flashes the selection outline off until the new fiber
+// settles. Scoped to the cached selectedId so a selection change mid-write
+// never restores a stale rect over the new target. Logic lives in
+// shared/canvas-interaction/selection-freeze.ts so it has its own unit tests.
+const selectionFreezeCache = createSelectionFreezeCache();
+
 function scheduleOverlayLoopIfNeeded(): void {
   if (!overlayRafScheduled) {
     overlayRafScheduled = true;
@@ -1419,6 +1507,17 @@ function sendOverlayRects(): void {
     },
     iframeElementResolver,
   );
+
+  // Freeze logic — cache the latest known selection geometry (scoped by id),
+  // and during a write window restore it when the live resolver returns nothing
+  // for the current selectedIds[0]. Hover/placeholder rects are intentionally
+  // not frozen — only the selection outline. See selection-freeze.ts.
+  applySelectionFreeze({
+    overlayRects: result.overlayRects,
+    currentSelectionId: state.selectedIds[0] ?? null,
+    writeInProgress: state.writeInProgress,
+    cache: selectionFreezeCache,
+  });
 
   const rects = result.overlayRects.map((r) => ({
     key: r.key,
@@ -1687,6 +1786,21 @@ window.addEventListener('message', (event: MessageEvent) => {
   if (msg.type === 'hypercanvas:scrollToElement') {
     const el = findElementsByRef(msg.elementId, 0)[0];
     if (el) scrollIntoViewCenterSmooth(el);
+    return;
+  }
+
+  // i18n write window — flip the selection-freeze flag so the overlay can
+  // retain its last-known rect during the HMR re-render gap (Path B in
+  // docs/plans/2026-05-06-selection-survives-i18n-write.md).
+  if (msg.type === 'hypercanvas:writeI18nResource') {
+    state.writeInProgress = msg.phase === 'start';
+    if (msg.phase === 'done') {
+      // Drop the cache once the write completes — a stale rect should not
+      // outlive the write window even if the next HMR cycle is briefly idle.
+      clearSelectionFreezeCache(selectionFreezeCache);
+    }
+    needsOverlayUpdate = true;
+    scheduleOverlayLoopIfNeeded();
     return;
   }
 

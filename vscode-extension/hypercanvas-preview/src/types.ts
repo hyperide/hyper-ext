@@ -174,23 +174,6 @@ export type AstMessage =
       position: 'before' | 'after';
     }
   | {
-      /**
-       * Move a JSX element from any place to any place.
-       * Unlike `ast:reorderElement` (which requires a shared JSX parent), this
-       * operation always succeeds — same-file, cross-file, cross-component, or
-       * leaf-target. See `AstService.moveElement` / `MoveResult` for the contract.
-       */
-      type: 'ast:moveElement';
-      requestId: string;
-      /** Hint for resolving sourceId — typically the source's file. */
-      filePath: string;
-      /** nodeRef of element to move */
-      sourceId: string;
-      /** nodeRef of element to move relative to (may live in a different file) */
-      targetId: string;
-      position: 'before' | 'after';
-    }
-  | {
       /** Write a translated value for a given i18n key in the active locale resource file. */
       type: 'ast:writeI18nResource';
       requestId: string;
