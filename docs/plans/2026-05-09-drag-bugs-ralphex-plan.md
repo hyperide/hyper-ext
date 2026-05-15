@@ -109,18 +109,18 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 
 ### Task 6: Fix ghost background for transparent elements
 
-- [ ] In `iframe-interaction.ts` ghost creation code: after cloning element, walk up `el.parentElement` chain with `getComputedStyle(ancestor).backgroundColor`
-- [ ] Stop when `backgroundColor` is not `'rgba(0, 0, 0, 0)'` and not `'transparent'`
-- [ ] Apply found background to `ghost.style.backgroundColor`
-- [ ] Also copy `color`, `fontFamily`, `fontSize` from dragged element to ghost
+- [x] In `iframe-interaction.ts` ghost creation code: after cloning element, walk up `el.parentElement` chain with `getComputedStyle(ancestor).backgroundColor`
+- [x] Stop when `backgroundColor` is not `'rgba(0, 0, 0, 0)'` and not `'transparent'`
+- [x] Apply found background to `ghost.style.backgroundColor`
+- [x] Also copy `color`, `fontFamily`, `fontSize` from dragged element to ghost
 
 ### Task 7: Fix drop indicator direction in flex-col
 
-- [ ] In `shared/canvas-interaction/drop-indicator-orientation.ts` `chooseIndicatorOrientation(el)`:
-- [ ] Before walking to `el.parentElement`: check `getComputedStyle(el).display` for `flex` or `grid`
-- [ ] If `el` itself is `flex` or `inline-flex`: check `flexDirection` — if `column` or `column-reverse`, orientation is `horizontal` (items stack vertically so separator is horizontal)
-- [ ] If `el` itself is `grid`: orientation is determined by grid direction (default horizontal)
-- [ ] Only walk to `el.parentElement` if `el` is NOT a flex/grid container
+- [x] In `shared/canvas-interaction/drop-indicator-orientation.ts` `chooseIndicatorOrientation(el)`:
+- [x] Before walking to `el.parentElement`: check `getComputedStyle(el).display` for `flex` or `grid`
+- [x] If `el` itself is `flex` or `inline-flex`: check `flexDirection` — if `column` or `column-reverse`, orientation is `horizontal` (items stack vertically so separator is horizontal)
+- [x] If `el` itself is `grid`: orientation is determined by grid direction (default horizontal)
+- [x] Only walk to `el.parentElement` if `el` is NOT a flex/grid container
 
 ### Task 8: Build + install ext, run E2E → GREEN
 
