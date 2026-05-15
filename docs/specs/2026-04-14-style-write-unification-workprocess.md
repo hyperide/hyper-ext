@@ -88,24 +88,17 @@
 
 ## Known Open Issues (to fix)
 
-### 1. Tamagui FLAKY — stale element cache on warm VS Code
+### 1. ✅ Tamagui "style written as prop" — FIXED (1522602)
 
-**Root cause**: warm VS Code reuses VS Code process across tests in same project group.
-Extension element tree is cached from previous test's navigation state. After
-`setupPreviewWithDevServer` refreshes the iframe, the extension doesn't re-scan
-the elements tree. `setupWithElementSelected` clicks `treeItems.first()` which
-may be a nested navigation screen (RecordScreen/HomeScreen/DriverMatchScreen)
-instead of App.tsx's root element.
+**Root cause**: `getActiveEditorContent()` threw when canvas is frontmost (no text
+editor visible). `expect.poll()` doesn't retry on throw — fails immediately.
+`setColor` may write to RecordScreen.tsx via `workspace.fs.writeFile` (disk-only,
+no dirty tab), so dirty tab wait also needed longer timeout.
 
-**Symptom**: "Tamagui: style written as prop, not className" fails on first attempt
-(wrong file edited, different element type), passes on retry (fresh VS Code).
+**Fix (1522602)**: Wrap `getActiveEditorContent()` in `.catch(() => '')` in the poll;
+increase dirty tab `isVisible` timeout 500ms → 2000ms.
 
-**Fix plan**: In `setupWithElementSelected` (`style-editing.spec.ts`), after
-clicking first tree item, verify inspector has fill color control. If not
-visible within timeout, pick next tree item. This ensures a styleable Tamagui
-element is selected regardless of navigation state.
-
-**Files**: `ext-test-projects/e2e/tests/project-dependent/style-editing.spec.ts`
+**Commit**: `ext-test-projects:1522602`
 
 ### 2. "component with error" 607s timeout — Vite watcher degradation
 
@@ -113,19 +106,23 @@ element is selected regardless of navigation state.
 `editor.save()` writes to disk but Vite never detects the change.
 `expect.poll({timeout: 600_000})` runs the full 600s budget.
 
-**Symptom**: test times out at 607s on first attempt, passes on retry (fresh VS Code).
+**Symptom**: test times out at 607s on both attempts (FAILED, not FLAKY).
 
-**Fix plan**: After `editor.save()` in `preview-render.spec.ts`, add fast-fail:
-```typescript
-await expect.poll(
-  () => editor.getActiveEditorContent(),
-  { timeout: 5_000, message: 'Editor should contain __BREAK__ after save' }
-).toContain('__BREAK__');
-```
-This catches type/save failures in <5s. Vite watcher degradation still hits
-600s timeout, but that's an extension-side issue (DevServerManager lifecycle).
+**Fast-fail added (df8a5d1)**: After `editor.save()`, 5s poll asserts `__BREAK__` in
+editor content. Catches type/save failures fast. But watcher degradation still eats 600s.
+
+**Remaining fix**: DevServerManager lifecycle FSM (NEEDS LINEAR). For now: test is a
+known intermittent failure tied to long-lived VS Code process.
 
 **Files**: `ext-test-projects/e2e/tests/project-dependent/preview-render.spec.ts`
+
+### 3. SSR Mock Adapter — Remix route components in preview
+
+**Implemented (b3bf206e)**: `detectSSRHooks()` + `RemixMockWrapper` + `ssrRouteSet`.
+Remix routes using `useLoaderData()`/`useRouteLoaderData()` now get wrapped in
+`createMemoryRouter` so the preview doesn't crash.
+
+**Status**: shipped and tested (883 pass, 0 fail in unit tests).
 
 ---
 
@@ -137,9 +134,20 @@ This catches type/save failures in <5s. Vite watcher degradation still hits
 
 ---
 
-## 📍 2026-04-29 Run #28 in progress
+## 📍 2026-04-29 09:35 CEST — Run #28 in progress (2h+ running)
 
 Run started: 07:57 CEST | Shards: 3 | Mode: `--retries=1`
-Progress as of 08:55 CEST: S1=246, S2=198, S3=203 steps done
-No hard failures confirmed yet.
-Fixes to implement while run completes: issues #1 and #2 above.
+
+Progress as of 09:35 CEST:
+- S1: 526/769 done (68%) — 0 hard failures
+- S2: 455/691 done (66%) — 2 hard failures ("component with error" 607s ×2)
+- S3: 356/729 done (49%) — stuck on webpack build, 6 test-done marked failed:
+  - 4× "Tamagui: style written as prop" (all proj) — FIXED by 1522602
+  - 1× "elements identifiable via fiber-based selection" — 606s timeout, FLAKY (retry passed)
+  - 1× "component with error" — needs investigation
+
+Commits since run #28 start (not in this run):
+- `b3bf206e` (hyper-canvas-draft): SSR mock adapter for Remix route components
+- `1522602` (ext-test-projects): Tamagui poll resilience + dirty tab timeout
+
+Next: start run #29 when #28 completes.
