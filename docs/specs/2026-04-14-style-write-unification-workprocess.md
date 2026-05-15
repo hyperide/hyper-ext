@@ -909,7 +909,28 @@ Note: `f85f4d3` + `aeb693c` don't help when write never reaches disk. They only 
    Previously: plain `import(...)` (no-op for ViteReactSSG router — shows 404).
    Affects: bulka-the-dog and any ViteReactSSG project in App Shell mode.
 
-2. **PENDING**: `AstService._resolveElement` fix — when `elementId` file doesn't match `filePath`,
-   resolve the correct file from `elementId` path and parse that file instead.
-   Affects: all 4 Tamagui projects (fitness/food-delivery/uber/whatsapp).
+2. `b53e1331`: `AstService._resolveElement` cross-file fix — added `locMatchesAst` check; added
+   `_resolveElementInCorrectFile` helper; `updateProps`/`updateStyles`/`updateText`/`duplicateElement`
+   all use the new helper. When `elementId` belongs to a different file, parses correct file AST.
+   212/212 extension tests pass. Affects: all 4 Tamagui projects (fitness/food-delivery/uber/whatsapp).
+
+---
+
+## 📍 2026-04-30 10:27 CEST — Run #39 launched
+
+Run ID: `run-20260430-102713-33653` — 3 shards, started 10:27 CEST.
+
+```bash
+cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
+```
+
+**Fixes active in run #39** (all previous + new):
+- `3e39f08e`: ViteReactSSG fallback renders component (bulka-the-dog 404 fix)
+- `b53e1331`: AstService cross-file element resolution (Tamagui style write fix)
+- `f85f4d3` + `aeb693c` + `4909041` + all prior fixes
+
+**Expected**:
+- "Tamagui: style written as prop" → PASS (cross-file element resolution fixed)
+- bulka-the-dog preview → PASS (ViteReactSSG renders component on /test-preview)
+- "redo limit" → PASS (75s budget, unchanged)
 
