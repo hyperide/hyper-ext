@@ -137,14 +137,7 @@ export type PlatformMessage =
       text: string;
     }
   | {
-      /**
-       * Move a JSX element from any place to any place. Source and target need
-       * NOT share a JSX parent — same-file, cross-file, cross-component, and
-       * leaf-target moves are all supported by the extension's
-       * `AstService.moveElement`. SaaS has no handler yet (Task 7 wires the
-       * extension only); type lives here for `CanvasAdapter.sendEvent` typing.
-       */
-      type: 'ast:moveElement';
+      type: 'ast:reorderElement';
       requestId: string;
       filePath: string;
       sourceId: string;
@@ -398,7 +391,7 @@ export interface AstOperations {
   /** Update text/expression children of a JSX element */
   updateText(params: { elementId: string; filePath: string; text: string }): Promise<void>;
 
-  /** Write a translated value for an i18n key in the active locale dictionary */
+  /** Write a translated value for an i18n key in the active locale JSON file */
   writeI18nResource(params: {
     library: I18nLibrary;
     key: string;
@@ -411,7 +404,7 @@ export interface AstOperations {
     filePath?: string;
     /** Element nodeRef — required when previousKey is provided for JSX update. */
     elementId?: string;
-    /** Skip writing to the locale dictionary; only update the JSX expression. */
+    /** Skip writing to the locale JSON file; only update the JSX expression. */
     skipResourceWrite?: boolean;
   }): Promise<void>;
 }
