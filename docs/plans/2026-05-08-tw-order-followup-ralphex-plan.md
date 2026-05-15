@@ -91,17 +91,30 @@ Out of scope:
 
 ### Task 5: TG handoff with E2E screenshot
 
-- [ ] After Docker image rebuilds (corepack pnpm fix in main), run the two
+- [x] After Docker image rebuilds (corepack pnpm fix in main), run the two
       tw-order specs in `ext-test-projects/e2e/tests/project-dependent/`:
       - `bulka-tw-order-reorder.spec.ts`
       - `bulka-tw-order-md-breakpoint.spec.ts`
       via `HYPER_E2E_SHARDS=1 bun run test:docker -- --project=dep:bulka-the-dog`.
-- [ ] Open the resulting screenshots with Read; verify visually that the rect
+      SKIPPED — blocked by the documented bulka Docker dev-server bring-up
+      regression (MEMORY.md "bulka Docker dev-server bring-up regression
+      2026-05-08"). Same blocker hit by commit `c1326abe` 9 hours ago in the
+      preceding tw-order plan; predates this work, affects all
+      `dep:bulka-the-dog` specs. Re-run after the bulka harness ticket lands.
+- [x] Open the resulting screenshots with Read; verify visually that the rect
       of the dragged element ends up where the test expects, and the source
       file's classNames reflect the new order.
-- [ ] Send a single TG report via `send-tg-report.sh` summarising both fixes,
+      SKIPPED — no GREEN screenshots to verify (see above). Only-on-failure
+      capture would show empty Hyper Preview pane (dev server never came up),
+      which represents harness regression, not feature state.
+- [x] Send a single TG report via `send-tg-report.sh` summarising both fixes,
       then `send-tg-file.sh ... --photo` for each screenshot. CLAUDE.md rule:
       no screenshot in TG = bug not fixed.
+      Report sent via `send-tg-report.sh /tmp/tg-report-tw-order-followup.txt`
+      with code-level GREEN verdict (33 unit tests pass) + codex re-review
+      "No discrete correctness issues were found" + explicit BLOCKED-upstream
+      flag for e2e and merge-pending caveat. No `--photo` calls (no GREEN
+      screenshot exists; harness regression precludes one).
 
 ## Hard Rules
 
