@@ -444,16 +444,29 @@ quickly. New fix: 600→720s poll gives comfortable margin.
 | fallback saves undo | expected-runtime-errors annotation for in-flight style-sync race |
 | tamagui style write | poll 45→60s + 2s pre-poll delay for cold Docker AST parse |
 
+| tamagui element selection | 600ms stability guard in setupWithElementSelected after hasFill check |
+| inspector typing | expected-runtime-errors annotation (partial input → parse errors) |
+| error-overlay focus | 500ms focus settle after editor.click before keyboard.type |
+| dev-server deactivation | expected-runtime-errors annotation for 404 after dev server stops |
+| redo test cleanup | undo redo at end of PI-6-32 to avoid 6-min File:Save All hang in teardown |
+
 ---
 
 ## 📍 2026-04-29 15:00 CEST — Run #30 launched (run-20260429-141431-63665)
 
-- Launched with all 9 fixes from this session
+- Launched at 14:14 CEST with 9 fixes (3 newest fixes committed after container start)
 - **HYPER_E2E_BUILD_IMAGE=0** — reuses existing Docker image
-- Expected improvements:
+- Fixes IN run #30:
   - redo-limit hard fail → FIXED (re-select after HMR)
   - webpack 604s boundary → FIXED (720s poll)
   - settings flakies → FIXED (+500ms file watcher wait)
   - smoke/activation flaky → FIXED (waitForExtensionActivation gate)
   - tamagui style write 50% flaky → FIXED (60s poll)
-- Still watching: "Tamagui: style written as prop, not className" (was 3/6 fails), "Typing in inspector input → canvas remains functional" (SyntaxError flaky from S1)
+  - keybindings/drag/lifecycle timeouts
+  - bootDesignMode readiness poll
+- NOT in run #30 (committed after container start):
+  - inspector typing annotation
+  - error-overlay editor focus wait
+  - dev-server deactivation annotation
+  - redo test cleanup (Cmd+Shift+Z teardown hang)
+- Still watching: "Tamagui: style written as prop, not className" (reduced from 3/6 fails with 60s poll)
