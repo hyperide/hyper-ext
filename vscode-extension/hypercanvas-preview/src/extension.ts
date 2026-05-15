@@ -506,11 +506,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Self-healing: when the generated preview doesn't have the requested component,
     // re-run ensureComponent so the preview file is regenerated with the missing entry.
     // Retry guard prevents an infinite loop if ensureComponent keeps failing.
-    // Do NOT skip UI primitives here: those with SampleDefault — or with a synthesized
-    // compound scaffold (Task 2 / Task 3) — must be addable via this path. The
-    // diff-before-write check in _initPreviewFile prevents HMR when the generated content
-    // is unchanged. Primitives that have neither authored nor synthetic SampleDefault
-    // remain filtered out by entryHasRenderableSample and surface the "no sample" toast.
+    // Do NOT skip UI primitives here: those with SampleDefault must be addable via this path
+    // (preview-file-manager filters out primitives without SampleDefault, and the diff-before-write
+    // check in _initPreviewFile prevents HMR when the generated content is unchanged).
     previewPanel.onComponentMissing((componentPath) => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
@@ -529,14 +527,12 @@ export function activate(context: vscode.ExtensionContext) {
             const entries = parseExistingPreview(content);
             const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
             if (!inRegistry) {
-              // Primitive that has neither an authored SampleDefault nor a synthesizable
-              // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
-              // returned false, so it stays filtered out of the registry. Don't call
-              // setComponentParam — the same-value React state bail-out would leave the
-              // preview stuck on "Loading…" indefinitely. Keep the retry count so repeated
-              // _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+              // Primitive without SampleDefault will never be added to the registry.
+              // Don't call setComponentParam — the same-value React state bail-out would
+              // leave the preview stuck on "Loading…" indefinitely. Keep the retry count
+              // so repeated _ComponentMissingSignal fires are blocked by the count >= 2 guard.
               vscode.window.showInformationMessage(
-                `Hyper Canvas: "${relPath}" has no SampleDefault and its exports don't form a renderable compound — preview not available.`,
+                `Hyper Canvas: "${relPath}" is a UI primitive without a SampleDefault export — preview not available.`,
               );
               return;
             }
@@ -740,19 +736,14 @@ export function activate(context: vscode.ExtensionContext) {
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relativePath = relative(currentWorkspaceRoot, absComponentPath);
 
-      // UI primitives (shadcn-style ui/<name>.tsx) must NOT have SampleDefault written
-      // into their source — keeping the file pristine matters for users who track shadcn
-      // updates, and writing a deterministic scaffold into Carousel/Tabs/etc. would lose
-      // exports that don't match the suffix allow-list. Instead, preview-file-manager
-      // synthesizes a SampleDefault inline inside __canvas_preview__.tsx via
-      // syntheticSampleDefault (Task 2). We still need to register the primitive in the
-      // registry so the iframe can find it — call ensureComponent below, but skip the
-      // ensureSample / ensureDefaultSampleForNoProps mutations.
-      //
-      // No unit test covers the !isPrimitive split here — extension.ts is hard to harness
-      // in isolation. The behavior is covered by the project-dependent E2E spec
-      // `component-load.spec.ts` (sibling repo `ext-test-projects/e2e/`).
-      const isPrimitive = isUiPrimitive(relativePath);
+      // UI primitives without SampleDefault are excluded from __canvas_preview__.tsx.
+      // Skipping ensureComponent here avoids triggering HMR on every Explorer click for
+      // the ~46 shadcn primitives that don't have SampleDefault. If a UI primitive WITH
+      // SampleDefault is missing from the registry, onComponentMissing below handles recovery.
+      if (isUiPrimitive(relativePath)) {
+        previewPanel?.setComponentParam(relativePath);
+        return;
+      }
 
       // Skip source-file mutation entirely when the harness disables it.
       // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
@@ -764,31 +755,24 @@ export function activate(context: vscode.ExtensionContext) {
         .getConfiguration('hypercanvas.preview')
         .get<boolean>('autoSampleGeneration', true);
 
-      const ensureSamplePromise =
-        autoSampleEnabled && !isPrimitive
-          ? ensureSample({
-              io: vsCodeIO,
-              absolutePath: absComponentPath,
-              componentName: sampleComponentName,
-              sampleName: 'SampleDefault',
-              generate: sampleGenerator,
-            })
-          : Promise.resolve({ generated: false, exists: false });
+      const ensureSamplePromise = autoSampleEnabled
+        ? ensureSample({
+            io: vsCodeIO,
+            absolutePath: absComponentPath,
+            componentName: sampleComponentName,
+            sampleName: 'SampleDefault',
+            generate: sampleGenerator,
+          })
+        : Promise.resolve({ generated: false, exists: false });
 
       ensureSamplePromise
         .then(async (sampleResult) => {
           if (ac.signal.aborted) return;
-          // Skip ensureDefaultSampleForNoProps for UI primitives — same rationale as the
-          // ensureSample skip above: don't mutate shadcn source files. The synthetic scaffold
-          // generated by preview-file-manager.buildEntry covers the no-SampleDefault case.
-          if (!isPrimitive) {
-            const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
-            if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
-              await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
-            }
+          const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
+          if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
+            await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
           }
-          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
-          // For UI primitives this is what bakes the syntheticSampleDefault into the registry.
+          // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {

@@ -164,19 +164,12 @@ export type AstMessage =
       wrapperProps?: Record<string, unknown>;
     }
   | {
-      /**
-       * Move a JSX element from any place to any place.
-       * Source and target need NOT share a JSX parent — same-file, cross-file,
-       * cross-component, or leaf-target moves are all supported.
-       * See `AstService.moveElement` / `MoveResult` for the contract.
-       */
-      type: 'ast:moveElement';
+      type: 'ast:reorderElement';
       requestId: string;
-      /** Hint for resolving sourceId — typically the source's file. */
       filePath: string;
       /** nodeRef of element to move */
       sourceId: string;
-      /** nodeRef of element to move relative to (may live in a different file) */
+      /** nodeRef of element to move relative to */
       targetId: string;
       position: 'before' | 'after';
     }

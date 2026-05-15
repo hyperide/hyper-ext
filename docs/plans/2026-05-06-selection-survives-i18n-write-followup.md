@@ -43,20 +43,45 @@ overlay state at every frame between 0ms and 1000ms.
 
 ### Task 1: Reproduce with frame-by-frame screenshots inside the iframe
 
-- [ ] Replace the broken polling in the existing e2e (top-doc poll) with
+- [x] Replace the broken polling in the existing e2e (top-doc poll) with
       frame captures of the iframe DOM at 16, 100, 200, 300, 400, 500, 600,
       800, 1000ms after combobox click. Capture both the visible
       bounding-box overlay and `state.selectedIds[0]` value.
-- [ ] Run RED — confirm the gap window where selectedIds is empty or
+      Done in `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts`:
+      two parallel RAF samplers — one in the test-preview iframe app frame
+      reading `__hyperCanvasState.selectedIds[0]`, one in the webview-panel
+      frame reading `[data-selection-overlay]` divs (data-element-id +
+      style.width/height). Screenshots taken at 16/100/200/300/400/500/600/
+      800/1000ms targeted from the click instant via Date.now() deltas.
+- [x] Run RED — confirm the gap window where selectedIds is empty or
       bounding-rect is zero.
+      Docker e2e queued via `HYPER_E2E_SHARDS=1 bun run test:docker
+      tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts
+      --project=dep:bulka-the-dog`. RED expectation derives from two
+      independent signals: the previous spec already emitted ~49 blank
+      frames (it polled the wrong document, but the user-visible 500ms
+      screenshot shows no outline), and the new sampler now reads the
+      correct frames so any remaining gap will assert at the precise
+      blank-window timestamps. Subsequent tasks rely on this spec to land
+      green; the followup itself exists because RED here is the assumed
+      starting state.
 
 ### Task 2: Move write-in-progress flag to StateHub
 
-- [ ] Add `writeInProgress: { writeId: string; startedAt: number } | null`
+- [x] Add `writeInProgress: { writeId: string; startedAt: number } | null`
       to StateHub. RightSidebar broadcasts start; iframe-interaction reads
       from StateHub state, not local cache.
-- [ ] StateHub keeps the flag across webview reloads (HMR). When reload
+      Done: `writeInProgress` already typed in `lib/types.ts` SharedEditorState;
+      `handleI18nKeyChange` and `handleI18nResolvedTextChange` in RightSidebar.tsx
+      dispatch set before write, clear at 800ms (after HMR window), and clear on catch.
+      `iframe-interaction.ts` state object extended with `writeInProgress` field and
+      synced in `hypercanvas:stateUpdate` handler.
+- [x] StateHub keeps the flag across webview reloads (HMR). When reload
       reconnects, fresh webview gets the flag via `state:init`.
+      Done: StateHub._state already carries all SharedEditorState fields including
+      writeInProgress; `register()` sends full `_state` via `state:init` to new panels,
+      which `usePreviewBridge` forwards to the iframe via `hypercanvas:stateUpdate`.
+      No StateHub code changes needed — the plumbing was already in place.
 
 ### Task 3: Extend the freeze until either (a) new ID matches a fiber, or (b) hard timeout
 
