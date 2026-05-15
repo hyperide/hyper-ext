@@ -16,12 +16,6 @@ export interface I18nTextInspectorProps {
   onLocaleChange?: (locale: string) => void;
   /** Whether the key field is editable. False until onKeyChange is wired server-side. */
   keyEditable?: boolean;
-  /**
-   * Whether the user is allowed to create new keys (requires a writable locale file format).
-   * Independent of keyEditable: read-only TS/JS layouts can still switch JSX to an
-   * already-existing key (JSX-only rewrite, no resource write), but cannot create new ones.
-   */
-  canCreateKeys?: boolean;
   /** Whether locale switching is active. False until onLocaleChange is wired server-side. */
   localeEditable?: boolean;
   /** All available keys from the locale file. When provided + keyEditable, shows a combobox. */
@@ -37,7 +31,6 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   onResolvedTextChange,
   onLocaleChange,
   keyEditable = false,
-  canCreateKeys = false,
   localeEditable = false,
   availableKeys,
   rollbackKey,
@@ -146,9 +139,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     ? (availableKeys ?? []).filter((k) => k.toLowerCase().includes(trimmedSearch.toLowerCase()))
     : [];
   const isExactMatch = trimmedSearch.length > 0 && (availableKeys ?? []).includes(trimmedSearch);
-  // Create affordance gated on canCreateKeys: read-only TS/JS layouts can switch
-  // to an existing key (JSX-only rewrite) but cannot add a new translation entry.
-  const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
+  const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch;
 
   const commitKey = (key: string) => {
     if (!key || key === currentKey) {
