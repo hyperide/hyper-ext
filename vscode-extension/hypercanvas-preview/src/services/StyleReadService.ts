@@ -225,6 +225,7 @@ export class StyleReadService {
         availableLocales: [],
         resolvedText: null,
         editable: false,
+        writable: false,
         sourceLocation: { filePath: '', line: 0, column: 0 },
       };
       const adapter = await new AdapterFactory(this._workspaceRoot, this._fileIO).forBinding(stub, activeLocale);
