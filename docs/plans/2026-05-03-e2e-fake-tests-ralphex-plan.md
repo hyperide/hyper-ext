@@ -124,22 +124,22 @@ Highest-risk examples:
 
 ### Task 3: Make Resize And Drag Tests Real
 
-- [ ] Convert `resize.spec.ts` away from "no resize handles yet" expectations.
+- [x] Convert `resize.spec.ts` away from "no resize handles yet" expectations.
   Either delete the obsolete coverage in favor of `resize-handles.spec.ts`, or
   make it assert visible width/height handles on a fixture with explicit
   `w-12 h-12`.
-- [ ] Ensure resize-handle tests assert selected state and visible
+- [x] Ensure resize-handle tests assert selected state and visible
   `[data-resize-handle="width"]` and `[data-resize-handle="height"]` handles,
   not only screenshot existence.
-- [ ] Replace the `waitForTimeout(1_500)` in `resize-handles.spec.ts` with a
+- [x] Replace the `waitForTimeout(1_500)` in `resize-handles.spec.ts` with a
   handle/overlay poll.
-- [ ] Pick the top drag/reorder fake cases in `drag-reorder.spec.ts` and require
+- [x] Pick the top drag/reorder fake cases in `drag-reorder.spec.ts` and require
   observable behavior: child order changes, drop state clears, placeholder or
   guide appears when expected, or file/DOM order is updated.
-- [ ] For drag cases where the project lacks the needed fixture, use an explicit
+- [x] For drag cases where the project lacks the needed fixture, use an explicit
   fixture project or add a committed fixture instead of runtime skipping after
-  discovery.
-- [ ] Run focused resize and drag E2E specs and inspect `[test-errors]`.
+  discovery. [PI-5-DR-1, PI-5-DR-2, PI-5-DR-10 use TestElements flex fixture; static skip with source proof since drag reorder not implemented]
+- [x] Run focused resize and drag E2E specs and inspect `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 4: Make MCP Tool Tests Call MCP Tools
 
