@@ -147,6 +147,28 @@ async function detectPreviewProviders(
       }
     }
 
+    // Detect GalleryProvider — local/aliased gallery context (e.g. @/components/Gallery).
+    // GalleryLightbox is placed after children inside GalleryProvider, as App.tsx uses it.
+    if (appContent.includes('GalleryProvider')) {
+      const galleryImportLine = contextFiles
+        .flatMap((f) => f.content.split('\n'))
+        .find((line) => line.includes('GalleryProvider') && line.trimStart().startsWith('import'));
+      if (galleryImportLine) {
+        const pathMatch = galleryImportLine.match(/from\s+['"]([^'"]+)['"]/);
+        if (pathMatch) {
+          const galleryPath = pathMatch[1];
+          const hasLightbox = appContent.includes('GalleryLightbox');
+          if (hasLightbox) {
+            pushImport(`import { GalleryProvider, GalleryLightbox } from '${galleryPath}';`);
+            appendWrapper('<GalleryProvider>', '<GalleryLightbox /></GalleryProvider>');
+          } else {
+            pushImport(`import { GalleryProvider } from '${galleryPath}';`);
+            appendWrapper('<GalleryProvider>', '</GalleryProvider>');
+          }
+        }
+      }
+    }
+
     if (imports.length === 0) return undefined;
     return { imports, wrapOpen, wrapClose };
   } catch {
@@ -175,30 +197,44 @@ interface ThemeImport {
   defaultImport: boolean;
 }
 
+async function detectFrontendRoot(root: string): Promise<string> {
+  try {
+    const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
+    const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+    if (match && match[1] !== 'src') return match[1];
+  } catch {
+    /* no index.html */
+  }
+  return 'src';
+}
+
 async function getPreviewDir(root: string): Promise<string> {
   try {
     await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
     return join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
   } catch {
-    return join(root, 'src'); // nosemgrep: path-join-resolve-traversal
+    const frontendRoot = await detectFrontendRoot(root);
+    return join(root, frontendRoot); // nosemgrep: path-join-resolve-traversal
   }
 }
 
 async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
   const result: ProviderContextFile[] = [];
+  const frontendRoot = await detectFrontendRoot(root);
+  const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+  const fileNames = ['main.tsx', 'main.ts', 'App.web.tsx', 'App.tsx', 'app.tsx'];
   const candidates = [
-    'src/main.tsx',
-    'src/main.ts',
-    'main.tsx',
-    'main.ts',
+    ...rootPrefixes.flatMap((r) => fileNames.map((f) => `${r}/${f}`)),
     'App.web.tsx',
     'App.tsx',
-    'src/App.web.tsx',
-    'src/App.tsx',
-    'src/app.tsx',
+    'main.tsx',
+    'main.ts',
   ];
 
+  const seen = new Set<string>();
   for (const relativePath of candidates) {
+    if (seen.has(relativePath)) continue;
+    seen.add(relativePath);
     try {
       const content = await readFile(join(root, relativePath), 'utf-8'); // nosemgrep: path-join-resolve-traversal
       result.push({ relativePath, content });
