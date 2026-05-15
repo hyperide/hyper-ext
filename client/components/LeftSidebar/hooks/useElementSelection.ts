@@ -172,7 +172,12 @@ export function useElementSelection(
           // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
-        dispatch?.({ selectedIds: [dispatchId] });
+        if (dispatch) {
+          dispatch({ selectedIds: [dispatchId] });
+          // Notify preview panel to scroll canvas to this element.
+          // Custom DOM event stays local to the webview — no round-trip through extension host.
+          window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
+        }
       }
     },
     [engine, dispatch, elementsTree],
