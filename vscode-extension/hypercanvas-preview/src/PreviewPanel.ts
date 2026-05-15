@@ -1150,14 +1150,42 @@ export class PreviewPanel {
   /**
    * Select children of selected element (called from VS Code keybinding command).
    */
-  public selectChildren(): void {
+  public async selectChildren(): Promise<void> {
+    const selectedIds = await this._waitForSelectedIds();
+    const componentPath = this._currentComponent;
+    if (componentPath && selectedIds.length > 0) {
+      const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(
+        componentPath,
+        selectedIds[0],
+        selectedIds[0],
+      );
+      if (childIds.length > 0) {
+        this._stateHub.applyUpdate({ selectedIds: childIds });
+        return;
+      }
+    }
+
     this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: false });
   }
 
   /**
    * Select parent of selected element (called from VS Code keybinding command).
    */
-  public selectParent(): void {
+  public async selectParent(): Promise<void> {
+    const selectedIds = await this._waitForSelectedIds();
+    const componentPath = this._currentComponent;
+    if (componentPath && selectedIds.length > 0) {
+      const parentId = await this._panelRouter.astBridge.astService.getParentElementId(
+        componentPath,
+        selectedIds[0],
+        selectedIds[0],
+      );
+      if (parentId) {
+        this._stateHub.applyUpdate({ selectedIds: [parentId] });
+        return;
+      }
+    }
+
     this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: true });
   }
 

@@ -25,7 +25,7 @@ import { findElementAtPosition } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import type { FindElementResult } from '@lib/types';
-import type { NodeRef } from '@shared/element-tracing/types';
+import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 
 // ============================================
@@ -78,6 +78,24 @@ export class AstService {
     if (filePath.startsWith('/')) return nodeRef;
     const path = require('node:path');
     return `${path.join(this._workspaceRoot, filePath)}:${line}:${col}`;
+  }
+
+  private _resolveNodeMapEntry(nodeRef: NodeRef): NodeMapEntry | null {
+    const normalizedRef = this._normalizeNodeRef(nodeRef);
+    const sourceRef = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
+    if (sourceRef) {
+      // Fiber source refs can be relative and can report columns that differ from Babel's node map.
+      const entry = this._nodeMapService.resolveSourceLocation({
+        fileName: sourceRef[1],
+        line: Number.parseInt(sourceRef[2], 10),
+        column: Number.parseInt(sourceRef[3], 10),
+      });
+      if (entry) {
+        return entry;
+      }
+    }
+
+    return this._nodeMapService.resolveNodeRef(normalizedRef) ?? this._nodeMapService.resolveNodeRef(nodeRef);
   }
 
   private _initPromise: Promise<void>;
@@ -589,7 +607,7 @@ export class AstService {
   async getParentElementId(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string | null> {
     try {
       if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry?.parentRef) {
           return entry.parentRef;
         }
@@ -605,7 +623,7 @@ export class AstService {
   async getChildElementIds(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string[]> {
     try {
       if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry) {
           return [...entry.children];
         }
@@ -626,25 +644,14 @@ export class AstService {
   ): Promise<string | null> {
     try {
       if (nodeRef) {
-        // Normalize relative nodeRef to absolute (fiber sends relative, NodeMapService stores absolute)
-        const normalizedRef = this._normalizeNodeRef(nodeRef);
-        // Use resolveSourceLocation for fuzzy column matching (fiber vs AST column may differ)
-        const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
-        const entry = m
-          ? this._nodeMapService.resolveSourceLocation({
-              fileName: m[1],
-              line: Number.parseInt(m[2], 10),
-              column: Number.parseInt(m[3], 10),
-            })
-          : this._nodeMapService.resolveNodeRef(normalizedRef);
+        const entry = this._resolveNodeMapEntry(nodeRef);
         if (entry?.parentRef) {
           const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
           if (parent) {
             const siblings = parent.children;
-            // Find current index by exact match first, then by resolved location
-            let currentIndex = siblings.indexOf(normalizedRef);
+            let currentIndex = siblings.indexOf(entry.nodeRef);
             if (currentIndex === -1) {
-              // Fallback: match by file:line ignoring column
+              const normalizedRef = this._normalizeNodeRef(nodeRef);
               const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
               if (m) {
                 const [, file, line] = m;
