@@ -6,7 +6,7 @@
 import { basename, dirname } from 'node:path';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v7';
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v8';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -43,11 +43,6 @@ export interface GeneratePreviewOptions {
   providerWrap?: ProviderWrapConfig;
   /** When set, SSR route components are wrapped in a mock router instead of rendered directly */
   ssrMock?: SSRMockConfig;
-  /**
-   * Component paths that bypass the isUiPrimitive filter even if they live under components/ui/.
-   * Use when a component was explicitly requested by the user (not auto-scanned).
-   */
-  exemptFromUiFilter?: ReadonlySet<string>;
 }
 
 /** Convert 'SampleDefault' → 'default', 'SamplePrimary' → 'primary' */
@@ -170,14 +165,16 @@ function toIdentifierSegment(segment: string): string {
 // consume up to 20 s of isPreviewLoaded polling. Exclude them from the
 // componentRegistry so the E2E probing loop only iterates actual project
 // components, keeping total probe time within the test budget.
-function isUiPrimitive(componentPath: string): boolean {
-  return /(\/|^)components\/ui\//.test(componentPath);
+export function isUiPrimitive(componentPath: string): boolean {
+  return /(\/|\\|^)components[/\\]ui[/\\]/i.test(componentPath);
 }
 
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
+  // Exclude UI primitives that have no SampleDefault — they crash on fallback-prop spread.
+  // Keep UI primitives that DO have SampleDefault (explicitly marked as previewable).
   const registryEntries = entries.filter(
-    (e) => !isUiPrimitive(e.componentPath) || (options?.exemptFromUiFilter?.has(e.componentPath) ?? false),
+    (e) => !isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault'),
   );
   const uniqueNames = deriveUniquePrefix(
     registryEntries,
@@ -229,7 +226,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const componentRegistry: Record<string, PreviewComponent> = {');
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    lines.push(`  '${entry.componentPath}': toPreviewComponent(${alias}),`);
+    lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': toPreviewComponent(${alias}),`);
   }
   lines.push('};');
   lines.push('');
@@ -239,7 +236,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     if (entry.sampleExports.includes('SampleDefault')) {
       const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-      lines.push(`  '${entry.componentPath}': ${alias}SampleDefault,`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': ${alias}SampleDefault,`);
     }
   }
   lines.push('};');
@@ -250,13 +247,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     if (entry.sampleExports.length > 0) {
-      lines.push(`  '${entry.componentPath}': {`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {`);
       for (const exp of entry.sampleExports) {
         lines.push(`    '${sampleExportToKey(exp)}': ${alias}${exp},`);
       }
       lines.push('  },');
     } else {
-      lines.push(`  '${entry.componentPath}': {},`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {},`);
     }
   }
   lines.push('};');
@@ -442,6 +439,11 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // 8. Fallback props for components without SampleDefault.
   // Extra props are harmless for React components that do not read them, and
   // they keep prop-required leaf components renderable in the preview.
+  // Stable stub caches: Proxy get traps must return the same function/array
+  // reference on every call so React hook dependency arrays don't trigger
+  // infinite re-renders when components use [store.setX] or [state.items] as deps.
+  lines.push('const _storeStubs: Record<string, unknown> = {};');
+  lines.push('const _stateStubs: Record<string, unknown> = {};');
   lines.push('const previewFallbackProps: Record<string, unknown> = {');
   lines.push('  ...callbackStubs,');
   lines.push('  activeNav: "dashboard",');
@@ -535,13 +537,11 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  store: new Proxy({}, {');
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
-  lines.push(
-    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close')) {",
-  );
-  lines.push('        return () => {};');
+  lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
+  lines.push('        return (_storeStubs[prop] ??= () => {});');
   lines.push('      }');
   lines.push(
-    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return (_storeStubs[prop] ??= []);",
   );
   lines.push(
     "      if (prop === 'issuesByStatus') return { backlog: [], todo: [], in_progress: [], done: [], cancelled: [] };",
@@ -561,13 +561,14 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  state: new Proxy({}, {');
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
-  lines.push(
-    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close')) {",
-  );
-  lines.push('        return () => {};');
+  lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
+  lines.push('        return (_stateStubs[prop] ??= () => {});');
   lines.push('      }');
   lines.push(
-    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return (_stateStubs[prop] ??= []);",
+  );
+  lines.push(
+    "      if (prop === 'issuesByStatus') return { backlog: [], todo: [], in_progress: [], done: [], cancelled: [] };",
   );
   lines.push(
     "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
@@ -619,10 +620,15 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('');
 
   // 11. CanvasPreview component
+  // Only pass ssrRoutes when needsRemixMock is true — the body builders emit
+  // ssrRouteSet.has() and <RemixMockWrapper /> references that are only declared
+  // when needsRemixMock is true. Passing routes with needsRemixMock=false would
+  // generate references to undeclared identifiers (compile error).
+  const ssrRoutesForBody = needsRemixMock ? ssrRoutes : undefined;
   if (options?.isNextPagesRouter) {
-    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutes));
+    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutesForBody));
   } else {
-    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap, ssrRoutes));
+    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap, ssrRoutesForBody));
   }
 
   return `${lines.join('\n')}\n`;
@@ -690,17 +696,18 @@ if (root) {
 function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
 
+  const safePath = entry.importPath.replace(/'/g, "\\'");
   if (entry.exportStyle === 'default-named' || entry.exportStyle === 'default-anonymous') {
     if (sampleImports.length > 0) {
-      return `import ${alias}, { ${sampleImports.join(', ')} } from '${entry.importPath}';`;
+      return `import ${alias}, { ${sampleImports.join(', ')} } from '${safePath}';`;
     }
-    return `import ${alias} from '${entry.importPath}';`;
+    return `import ${alias} from '${safePath}';`;
   }
 
   // Named export — if alias differs from actual export name, rename it
   const componentImport = alias !== entry.componentName ? `${entry.componentName} as ${alias}` : alias;
   const allImports = [componentImport, ...sampleImports];
-  return `import { ${allImports.join(', ')} } from '${entry.importPath}';`;
+  return `import { ${allImports.join(', ')} } from '${safePath}';`;
 }
 
 function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
@@ -942,6 +949,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '          </div>',
     '        );',
     '      })}',
+    '      <_ComponentSuccessSignal componentPath={componentPath} />',
     '    </div>',
     `    </ComponentErrorBoundary>${wc}`,
     '  );',

@@ -96,6 +96,10 @@ export class AstBridge {
           response = await this._handleWrapElement(message);
           break;
 
+        case 'ast:reorderElement':
+          response = await this._handleReorderElement(message);
+          break;
+
         case 'ast:writeI18nResource':
           response = await this._handleWriteI18nResource(message);
           break;
@@ -428,6 +432,23 @@ export class AstBridge {
   }
 
   /**
+   * Handle reorderElement message — moves a JSX sibling before/after another sibling.
+   */
+  private async _handleReorderElement(
+    message: Extract<AstMessage, { type: 'ast:reorderElement' }>,
+  ): Promise<AstResponse> {
+    const result = await this._withUndoTracking(message.filePath, () =>
+      this._astService.reorderElement(message.filePath, message.sourceId, message.targetId, message.position),
+    );
+    return {
+      type: 'ast:response',
+      requestId: message.requestId,
+      success: result.success,
+      error: result.error,
+    };
+  }
+
+  /**
    * Handle writeI18nResource message.
    * Writes a translated value for the given key in the active locale JSON file.
    * If the key itself changes (previousKey provided), also updates the JSX child expression.
@@ -438,14 +459,22 @@ export class AstBridge {
     // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
     // Key validation prevents JSX injection when key is interpolated into {t("...")} expressions.
     const SAFE_SEGMENT = /^[\w-]{1,64}$/;
-    const SAFE_KEY = /^[\w.\-:]{1,256}$/;
     if (!SAFE_SEGMENT.test(message.activeLocale)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid activeLocale' };
     }
     if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
     }
-    if (!SAFE_KEY.test(message.key)) {
+    // Allow any printable chars in keys; reject only control chars (newline, null, etc.)
+    // that would break JSON parsing. Keys pass through JSON.stringify for JSX embedding.
+    const keyLen = message.key.length;
+    if (
+      keyLen === 0 ||
+      keyLen > 256 ||
+      message.key.includes('\n') ||
+      message.key.includes('\r') ||
+      message.key.includes('\0')
+    ) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }
 

@@ -430,11 +430,18 @@ export class AstService {
       }
       const { result, ast, resolvedPath } = resolved;
 
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
       updateElementChildren(result.element, text);
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
-      return { success: true };
+      return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -589,6 +596,63 @@ export class AstService {
       return { success: true };
     } catch (error) {
       console.error('[AstService.duplicateElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Reorder a JSX element relative to a sibling in the same parent JSX element.
+   * Same-parent only: cross-parent reparenting is not supported.
+   */
+  async reorderElement(
+    filePath: string,
+    sourceId: string,
+    targetId: string,
+    position: 'before' | 'after',
+  ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+
+      const sourceResult = this._resolveElement(ast, sourceId as NodeRef, absolutePath);
+      if (!sourceResult) {
+        return { success: false, error: `Source element not found (nodeRef=${sourceId})` };
+      }
+
+      const targetResult = this._resolveElement(ast, targetId as NodeRef, absolutePath);
+      if (!targetResult) {
+        return { success: false, error: `Target element not found (nodeRef=${targetId})` };
+      }
+
+      const sourceParent = sourceResult.path.parent;
+      const targetParent = targetResult.path.parent;
+
+      if (!t.isJSXElement(sourceParent) || sourceParent !== targetParent) {
+        return { success: false, error: 'Elements must share a direct JSX parent (same-parent reorder only)' };
+      }
+
+      const children = sourceParent.children;
+      const sourceNode = sourceResult.element;
+      const targetNode = targetResult.element;
+
+      const srcIdx = children.indexOf(sourceNode);
+      const tgtIdx = children.indexOf(targetNode);
+
+      if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) {
+        return { success: false, error: 'Invalid reorder: elements not in parent children or same element' };
+      }
+
+      children.splice(srcIdx, 1);
+      const newTgtIdx = children.indexOf(targetNode);
+      if (newTgtIdx === -1) return { success: false, error: 'Target lost after source removal' };
+      children.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, sourceNode);
+
+      await this._fileParser.writeAST(ast, absolutePath);
+      await this._updateNodeMap(absolutePath);
+      return { success: true };
+    } catch (error) {
+      console.error('[AstService.reorderElement] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }

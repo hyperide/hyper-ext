@@ -34,35 +34,37 @@ export async function discoverLayout(
 ): Promise<Layout | null> {
   const listFiles = fileIO.listFiles?.bind(fileIO);
 
-  // Namespaced: locales/{locale}/{namespace}.json
+  // Namespaced: {dir}/{locale}/{namespace}.json — same directory candidates as flat layout
   if (namespace) {
-    const localesDir = `${projectRoot}/locales`;
-    if (listFiles) {
-      const files = await listFiles(localesDir, ['.json']);
-      const prefix = `${localesDir}/`;
-      const suffix = `/${namespace}.json`;
-      const locales: string[] = [];
-      for (const f of files) {
-        if (f.startsWith(prefix) && f.endsWith(suffix)) {
-          const middle = f.slice(prefix.length, f.length - suffix.length);
-          if (!middle.includes('/')) locales.push(middle);
+    for (const relDir of FLAT_LOCALE_DIRS) {
+      const localesDir = `${projectRoot}/${relDir}`;
+      if (listFiles) {
+        const files = await listFiles(localesDir, ['.json']);
+        const prefix = `${localesDir}/`;
+        const suffix = `/${namespace}.json`;
+        const locales: string[] = [];
+        for (const f of files) {
+          if (f.startsWith(prefix) && f.endsWith(suffix)) {
+            const middle = f.slice(prefix.length, f.length - suffix.length);
+            if (!middle.includes('/')) locales.push(middle);
+          }
         }
-      }
-      if (locales.length > 0) {
-        return {
-          getLocaleFilePath: (locale) => `${localesDir}/${locale}/${namespace}.json`,
-          availableLocales: locales,
-        };
-      }
-    } else {
-      try {
-        await fileIO.access(`${localesDir}/${activeLocale}/${namespace}.json`);
-        return {
-          getLocaleFilePath: (locale) => `${localesDir}/${locale}/${namespace}.json`,
-          availableLocales: [activeLocale],
-        };
-      } catch {
-        // namespace layout not found, fall through
+        if (locales.length > 0) {
+          return {
+            getLocaleFilePath: (locale) => `${localesDir}/${locale}/${namespace}.json`,
+            availableLocales: locales,
+          };
+        }
+      } else {
+        try {
+          await fileIO.access(`${localesDir}/${activeLocale}/${namespace}.json`);
+          return {
+            getLocaleFilePath: (locale) => `${localesDir}/${locale}/${namespace}.json`,
+            availableLocales: [activeLocale],
+          };
+        } catch {
+          // try next directory
+        }
       }
     }
   }
@@ -135,8 +137,13 @@ export async function discoverLayout(
       }
     }
     if (localeFileMap.size > 0) {
+      // Derive the JSON filename (e.g. "messages.json") from discovered entries so the
+      // fallback path for unknown locales matches the project's actual convention.
+      const firstDiscoveredPath = localeFileMap.values().next().value as string;
+      const discoveredFilename = firstDiscoveredPath.slice(firstDiscoveredPath.lastIndexOf('/') + 1);
       return {
-        getLocaleFilePath: (locale) => localeFileMap.get(locale) ?? `${appDir}/${locale}/messages/${locale}.json`,
+        getLocaleFilePath: (locale) =>
+          localeFileMap.get(locale) ?? `${appDir}/${locale}/messages/${discoveredFilename}`,
         availableLocales: Array.from(localeFileMap.keys()),
       };
     }

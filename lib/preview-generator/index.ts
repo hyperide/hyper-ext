@@ -3,6 +3,7 @@ export {
   type GeneratePreviewOptions,
   generatePreviewContent,
   generateStandaloneEntry,
+  isUiPrimitive,
   type PreviewComponentEntry,
   type ProviderWrapConfig,
   type SSRMockConfig,

@@ -130,7 +130,10 @@ export class PreviewProxy {
         }
         resolve();
       });
-      this._server?.on('error', reject);
+      this._server?.on('error', (err) => {
+        this._server = null;
+        reject(err);
+      });
     });
   }
 
@@ -230,7 +233,9 @@ export class PreviewProxy {
       const assetRetryLimit = proxyRes.statusCode === 403 ? 30 : 5;
       if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < assetRetryLimit) {
         proxyRes.resume();
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
+        if (!clientReq.destroyed && !clientRes.headersSent) {
+          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
+        }
         return;
       }
 

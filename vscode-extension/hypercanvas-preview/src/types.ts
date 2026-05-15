@@ -164,6 +164,16 @@ export type AstMessage =
       wrapperProps?: Record<string, unknown>;
     }
   | {
+      type: 'ast:reorderElement';
+      requestId: string;
+      filePath: string;
+      /** nodeRef of element to move */
+      sourceId: string;
+      /** nodeRef of element to move relative to */
+      targetId: string;
+      position: 'before' | 'after';
+    }
+  | {
       /** Write a translated value for a given i18n key in the active locale resource file. */
       type: 'ast:writeI18nResource';
       requestId: string;

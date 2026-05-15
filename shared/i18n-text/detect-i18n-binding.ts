@@ -9,10 +9,91 @@ import _traverse, { type NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
 import type { DetectI18nBindingParams, I18nBindingDetected, I18nBindingDetectionResult, I18nLibrary } from './types';
 
+export interface CalleeOrigin {
+  kind: 'import' | 'hook-destructure' | 'local-declaration' | 'unknown';
+  /** Module specifier when kind === 'import'. */
+  importFrom?: string;
+  /** Hook function name when kind === 'hook-destructure'. */
+  hookName?: string;
+}
+
+/**
+ * Walk the AST import chain to determine where `calleeName` is defined.
+ * Priority: import > hook-destructure > local-declaration > unknown.
+ */
+export function resolveCalleeOrigin(source: string, calleeName: string): CalleeOrigin {
+  let ast: t.File;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    }) as t.File;
+  } catch {
+    return { kind: 'unknown' };
+  }
+
+  let importResult: CalleeOrigin | null = null;
+  let hookResult: CalleeOrigin | null = null;
+  let localResult: CalleeOrigin | null = null;
+
+  try {
+    traverse(ast, {
+      ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
+        if (importResult) return;
+        for (const spec of path.node.specifiers) {
+          if (spec.type === 'ImportSpecifier' && spec.local.name === calleeName) {
+            importResult = { kind: 'import', importFrom: path.node.source.value };
+            return;
+          }
+        }
+      },
+
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+        const { id, init } = path.node;
+
+        // Hook destructure: const { calleeName } = someHook() or const { key: calleeName } = someHook()
+        if (!hookResult && id.type === 'ObjectPattern' && init?.type === 'CallExpression') {
+          const hookCallee = init.callee;
+          const hookName = hookCallee.type === 'Identifier' ? hookCallee.name : null;
+          if (hookName) {
+            for (const prop of id.properties) {
+              if (prop.type === 'ObjectProperty') {
+                const localName = prop.value.type === 'Identifier' ? (prop.value as t.Identifier).name : null;
+                if (localName === calleeName) {
+                  hookResult = { kind: 'hook-destructure', hookName };
+                  return;
+                }
+              }
+            }
+          }
+        }
+
+        // Local declaration: const calleeName = ...
+        if (!localResult && id.type === 'Identifier' && (id as t.Identifier).name === calleeName) {
+          localResult = { kind: 'local-declaration' };
+        }
+      },
+
+      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+        if (!localResult && path.node.id?.name === calleeName) {
+          localResult = { kind: 'local-declaration' };
+        }
+      },
+    });
+  } catch {
+    // Ignore traverse errors (e.g. duplicate declarations in malformed source)
+  }
+
+  return importResult ?? hookResult ?? localResult ?? { kind: 'unknown' };
+}
+
 // @ts-expect-error - babel/traverse ESM/CJS interop
 const traverse = _traverse.default || _traverse;
 
+// Names accepted for any recognized library (including react-intl's formatMessage).
 const KNOWN_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n', 'formatMessage']);
+// Names accepted for 'custom' library detection: generic wrappers only, not library-specific ones.
+const CUSTOM_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n']);
 
 const JSX_COMPONENT_LIBRARY: Partial<Record<string, I18nLibrary>> = {
   FormattedMessage: 'react-intl',
@@ -47,7 +128,8 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       const calleeName = extractCalleeName(path.node.callee);
-      if (!calleeName || !KNOWN_CALL_NAMES.has(calleeName)) {
+      const acceptedNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      if (!calleeName || !acceptedNames.has(calleeName)) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;
       }
@@ -71,7 +153,17 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       if (firstArg.type === 'StringLiteral') {
-        found = makeDetected(library, firstArg.value, nodeLoc.start);
+        const secondArg = path.node.arguments[1];
+        if (secondArg !== undefined && secondArg.type !== 'ObjectExpression') {
+          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          return;
+        }
+        const namespace = secondArg !== undefined ? extractNsFromObject(secondArg as t.ObjectExpression) : undefined;
+        if (namespace === null) {
+          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          return;
+        }
+        found = makeDetected(library, firstArg.value, nodeLoc.start, namespace);
         return;
       }
 
@@ -89,7 +181,8 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       const tagName = path.node.tag.type === 'Identifier' ? path.node.tag.name : null;
-      if (!tagName || !KNOWN_CALL_NAMES.has(tagName)) {
+      const acceptedTagNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      if (!tagName || !acceptedTagNames.has(tagName)) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;
       }
@@ -118,19 +211,37 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
         return;
       }
 
+      // Library-specific JSX components are not custom wrappers — reject them when library is 'custom'.
+      if (library === 'custom' && JSX_COMPONENT_LIBRARY[componentName] !== undefined) {
+        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        return;
+      }
+
       const componentLibrary = JSX_COMPONENT_LIBRARY[componentName] ?? null;
-      const resolvedLibrary = library ?? componentLibrary;
+      const resolvedLibrary = componentLibrary;
       if (!resolvedLibrary) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;
       }
 
-      const idAttr = path.node.openingElement.attributes.find(
-        (a): a is t.JSXAttribute =>
-          a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'id',
-      );
+      const attrs = path.node.openingElement.attributes;
+      let lastIdAttrIndex = -1;
+      let idAttr: t.JSXAttribute | null = null;
+      for (let i = 0; i < attrs.length; i++) {
+        const a = attrs[i];
+        if (a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'id') {
+          lastIdAttrIndex = i;
+          idAttr = a;
+        }
+      }
 
       if (!idAttr || !idAttr.value) {
+        found = { kind: 'unsupported', reason: 'non-string-id' };
+        return;
+      }
+
+      // A spread attribute after the last id could override it — treat as non-string-id.
+      if (attrs.slice(lastIdAttrIndex + 1).some((a) => a.type === 'JSXSpreadAttribute')) {
         found = { kind: 'unsupported', reason: 'non-string-id' };
         return;
       }
@@ -147,8 +258,53 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
   return found ?? { kind: 'unsupported', reason: 'unknown-wrapper' };
 }
 
-function makeDetected(library: I18nLibrary, key: string, start: { line: number; column: number }): I18nBindingDetected {
-  return { kind: 'i18n', library, key, sourceLocation: { line: start.line, column: start.column } };
+function makeDetected(
+  library: I18nLibrary,
+  key: string,
+  start: { line: number; column: number },
+  namespace?: string,
+): I18nBindingDetected {
+  return { kind: 'i18n', library, key, namespace, sourceLocation: { line: start.line, column: start.column } };
+}
+
+/** Returns namespace string for static ns prop, null for dynamic ns prop, undefined when no ns prop. */
+function extractNsFromObject(obj: t.ObjectExpression): string | null | undefined {
+  const properties = obj.properties;
+
+  // Find the last static ns property and its index (last-property-wins for duplicates).
+  let lastNsIndex = -1;
+  let lastNsProp: t.ObjectProperty | null = null;
+  for (let i = 0; i < properties.length; i++) {
+    const p = properties[i];
+    if (
+      p.type === 'ObjectProperty' &&
+      !p.computed &&
+      ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'ns') ||
+        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'ns'))
+    ) {
+      lastNsIndex = i;
+      lastNsProp = p as t.ObjectProperty;
+    }
+  }
+
+  if (lastNsProp === null) {
+    // No static ns property — a spread or computed key might still supply one, treat as dynamic.
+    return properties.some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+      ? null
+      : undefined;
+  }
+
+  // A spread or computed property after the last ns could override it at runtime — treat as dynamic.
+  if (
+    properties
+      .slice(lastNsIndex + 1)
+      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+  )
+    return null;
+
+  // The last ns property wins and is not overridden by any later spread.
+  if (lastNsProp.value.type !== 'StringLiteral') return null;
+  return lastNsProp.value.value;
 }
 
 function extractCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): string | null {
@@ -161,13 +317,73 @@ function extractCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): stri
 
 /** Returns key string on success, false for dynamic key, null for missing/non-string id prop. */
 function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
-  const idProp = obj.properties.find(
-    (p): p is t.ObjectProperty =>
+  const properties = obj.properties;
+
+  // Find the last static id property (last-property-wins for duplicates).
+  let lastIdIndex = -1;
+  let lastIdProp: t.ObjectProperty | null = null;
+  for (let i = 0; i < properties.length; i++) {
+    const p = properties[i];
+    if (
       p.type === 'ObjectProperty' &&
+      !p.computed &&
       ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'id') ||
-        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'id')),
-  );
-  if (!idProp) return null;
-  if (idProp.value.type === 'StringLiteral') return idProp.value.value;
-  return false;
+        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'id'))
+    ) {
+      lastIdIndex = i;
+      lastIdProp = p as t.ObjectProperty;
+    }
+  }
+
+  if (lastIdProp === null) return null;
+
+  // A spread or computed property after the last id could override it at runtime — treat as dynamic.
+  if (
+    properties
+      .slice(lastIdIndex + 1)
+      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+  )
+    return false;
+
+  if (lastIdProp.value.type !== 'StringLiteral') return false;
+  return lastIdProp.value.value;
+}
+
+/**
+ * Extract the callee name from the call expression at the given source location,
+ * then walk the import chain to determine where it's defined.
+ * Returns null when the location doesn't match a call expression.
+ */
+export function resolveCalleeOriginAtLocation(
+  source: string,
+  location: { line: number; column: number },
+): { calleeName: string; origin: CalleeOrigin } | null {
+  let ast: t.File;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    }) as t.File;
+  } catch {
+    return null;
+  }
+
+  let calleeName: string | null = null;
+  try {
+    traverse(ast, {
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (calleeName) return;
+        const nodeLoc = path.node.loc;
+        if (!nodeLoc || nodeLoc.start.line !== location.line || nodeLoc.start.column !== location.column) return;
+        const name = extractCalleeName(path.node.callee);
+        if (name) calleeName = name;
+      },
+    });
+  } catch {
+    // ignore traverse errors
+  }
+
+  if (!calleeName) return null;
+  const origin = resolveCalleeOrigin(source, calleeName);
+  return { calleeName, origin };
 }

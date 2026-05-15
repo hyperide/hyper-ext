@@ -294,6 +294,58 @@ describe('read-only filesystem', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('read-only');
   });
+
+  it('returns io-error when writeFile throws a non-permission error', async () => {
+    class BrokenFileIO extends MemoryFileIO {
+      override async writeFile(): Promise<void> {
+        throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+      }
+    }
+
+    const fileIO = new BrokenFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'greeting',
+      activeLocale: 'en',
+      newText: 'Hi',
+      fileIO,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('io-error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Non-object collision — setKey bail-out to avoid corrupting locale file
+// ---------------------------------------------------------------------------
+
+describe('non-object collision in dot-path', () => {
+  it('returns unsupported-format when an intermediate segment is a string, not an object', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ nav: 'Home' }),
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'nav.title',
+      activeLocale: 'en',
+      newText: 'Navigation',
+      fileIO,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('unsupported-format');
+    // Original file must be untouched
+    const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
+    const written = JSON.parse(rawContent) as Record<string, unknown>;
+    expect(written.nav).toBe('Home');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -306,7 +358,7 @@ describe('prototype pollution prevention', () => {
       [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
     });
 
-    await writeI18nResource({
+    const result = await writeI18nResource({
       projectRoot: ROOT,
       library: 'react-i18next',
       key: '__proto__.polluted',
@@ -315,8 +367,10 @@ describe('prototype pollution prevention', () => {
       fileIO,
     });
 
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('unsupported-format');
     // No pollution on Object.prototype
-    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
     // The raw file content must not contain __proto__ as a written key
     const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
     expect(rawContent).not.toContain('"__proto__"');
@@ -330,7 +384,7 @@ describe('prototype pollution prevention', () => {
       [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
     });
 
-    await writeI18nResource({
+    const result = await writeI18nResource({
       projectRoot: ROOT,
       library: 'react-i18next',
       key: 'constructor.prototype.polluted',
@@ -339,7 +393,9 @@ describe('prototype pollution prevention', () => {
       fileIO,
     });
 
-    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('unsupported-format');
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
     const rawContent = fileIO.getFile(`${ROOT}/locales/en.json`) ?? '{}';
     expect(rawContent).not.toContain('"constructor"');
     const written = JSON.parse(rawContent) as Record<string, unknown>;

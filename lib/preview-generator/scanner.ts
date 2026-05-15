@@ -206,8 +206,8 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     }
   }
 
-  // 4. Filename fallback
-  return fileName.replace(/\.[^.]+$/, '');
+  // 4. Filename fallback — strip all extensions so App.web.tsx → App, not App.web
+  return fileName.replace(/(\.[^.]+)+$/, '');
 }
 
 type VariableDeclarationNode = ReturnType<typeof parseSource>['program']['body'][number];

@@ -23,6 +23,7 @@ import {
 } from './framework-routing';
 import {
   generatePreviewContent,
+  isUiPrimitive,
   PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
   type ProviderWrapConfig,
@@ -490,9 +491,10 @@ export class PreviewFileManager {
         return existingContent;
       }
 
-      // Stale entries found — regenerate excluding reserved files
+      // Stale entries found — regenerate excluding reserved files and ui-primitive paths.
+      // Keep UI primitives that have SampleDefault exports (explicitly previewable).
       const cleanPaths = existingEntries
-        .filter((e) => !isStale(e))
+        .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')))
         .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
@@ -510,7 +512,10 @@ export class PreviewFileManager {
     const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
     const existingPaths = existingEntries
       .filter(
-        (e) => !isFrameworkReserved(basename(e.componentPath)) && !isPreviewIneligibleByName(basename(e.componentPath)),
+        (e) =>
+          !isFrameworkReserved(basename(e.componentPath)) &&
+          !isPreviewIneligibleByName(basename(e.componentPath)) &&
+          (!isUiPrimitive(e.componentPath) || e.sampleExports.includes('SampleDefault')),
       )
       .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
@@ -594,7 +599,6 @@ export class PreviewFileManager {
       isNextPagesRouter: this.isNextPagesRouter,
       providerWrap: this.providerWrap,
       ssrMock: this.ssrMock,
-      exemptFromUiFilter: new Set(canonicalRequestedPaths),
     });
 
     const valid = await isValidTypeScript(content);
