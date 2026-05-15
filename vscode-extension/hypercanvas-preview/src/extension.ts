@@ -868,6 +868,17 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
+      // Sync current dev-server state into the just-created panel. The
+      // hypercanvas.startDevServer command path calls setPreviewUrl(state.url)
+      // when the dev server starts, but if the user opens the preview AFTER
+      // the dev server is already running (e.g. e2e test order:
+      // start dev server → Hyper: Open Preview), that initial setPreviewUrl
+      // happened while previewPanel was null and was lost. Pull current state
+      // here so the panel's iframe gets a URL on first paint.
+      const state = devServerManager?.getState();
+      if (state?.status === 'running' && state.url) {
+        previewPanel?.setPreviewUrl(state.url);
+      }
     }),
   );
 
