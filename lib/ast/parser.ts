@@ -39,13 +39,13 @@ export function parseCode(sourceCode: string): t.File {
 
 /**
  * Print AST back to source code
- * Preserves original formatting using recast (don't pass options!)
+ * Preserves original formatting for existing nodes; new string literals use single quotes
+ * to match project style (biome quoteStyle: 'single').
  * @param ast - AST to print
  * @returns Generated source code
  */
 export function printAST(ast: t.File): string {
-  // Don't pass any options - recast will preserve original formatting
-  return recastPrint(ast).code;
+  return recastPrint(ast, { quote: 'single' }).code;
 }
 
 /**
