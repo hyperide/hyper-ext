@@ -45,6 +45,10 @@ Do **not** touch:
 
 ### Task 1 — RED e2e: key display updates immediately after Create
 
+- [x] Add PI-7-I18N-10 test block in `i18n-inspector.spec.ts` with beforeEach/afterEach snapshots
+- [x] Run `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-10"` and confirm RED at step 5 (2s assertion)
+  - RED confirmed: Expected "test.display-fix-test", Received "test.greeting", Timeout 2000ms — Case A (key updates eventually, visible delay)
+
 Add a new test in `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`
 inside a new `describe` block (tag `@i18n @inspector @regression`):
 
@@ -74,6 +78,8 @@ Screenshot the RED failure and note the actual text vs. expected.
 
 ### Task 2 — Diagnose failure mode from Task 1 RED output
 
+- [ ] Read RED output and determine Case A (key updates eventually) or Case B (key never updates)
+
 **Read the Task 1 failure message before writing any code.** The failure determines the fix:
 
 **Case A — "delay" (key updates eventually):**
@@ -99,6 +105,12 @@ it's Case A. If it also fails, it's Case B. Implement whichever task below match
 ---
 
 ### Task 2A — (Case A) Optimistic key update in I18nTextInspector
+
+- [ ] Add `optimisticKey` state to `I18nTextInspector`
+- [ ] Change `currentKey` derivation to use `optimisticKey ?? i18nBinding.key`
+- [ ] Set `optimisticKey` in `commitKey` before calling `onKeyChange`
+- [ ] Add `useEffect` to clear `optimisticKey` once `i18nBinding.key` matches
+- [ ] Run `bun run tsc --noEmit` — no new errors
 
 Only do this if Task 1 RED shows the key eventually appears (Case A).
 
@@ -145,6 +157,10 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 
 ### Task 2B — (Case B) Fix stuck read pipeline
 
+- [ ] Investigate AstService/NodeMapService/StyleReadService chain for broken link
+- [ ] Implement fix for the broken read pipeline step
+- [ ] Run `bun run tsc --noEmit` — no new errors
+
 Only do this if Task 1 RED shows the key never appears (Case B).
 
 Investigate the chain:
@@ -162,6 +178,11 @@ Investigate the chain:
 Fix whichever link in the chain is broken. Minimal change — no big refactors.
 
 ### Task 3 — Rebuild extension + GREEN e2e
+
+- [ ] Build and install extension (`bun run build:ext && bun run install:ext`)
+- [ ] Re-run PI-7-I18N-10 docker test, confirm GREEN
+- [ ] Open screenshot artifact with Read tool and verify it shows new key
+- [ ] Send TG report + screenshot via `send-tg-report.sh` and `send-tg-file.sh`
 
 1. Build and install extension:
    ```bash
@@ -184,6 +205,8 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
 
 ### Task 4 — Unit test (optional, do after Tasks 1–3 are green)
 
+- [ ] Add unit test 'displays optimistic key immediately after commitKey' in `I18nTextInspector.test.tsx`, or skip with note if test-infra is complex
+
 In `client/components/RightSidebar/__tests__/I18nTextInspector.test.tsx` add:
 
 ```
@@ -202,6 +225,8 @@ If the unit test cannot be written cleanly without significant test-infra work, 
 note in the TG report.
 
 ### Task 5 — Commit
+
+- [ ] Run `/commit` — full checklist (knip, self-review, codex review, commit, post-commit)
 
 Run `/commit` — full checklist (knip, self-review, codex review, commit, post-commit).
 
