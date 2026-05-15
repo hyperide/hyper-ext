@@ -65,9 +65,9 @@ doesn't exist). To change locale we need to:
 
 ### Task 5: Thread activeLocale into StyleReadService._tryDetectI18n
 
-- [ ] In `StyleReadService.ts`: update `detectElementStyle` signature to accept optional `activeLocale: string`
-- [ ] In `_tryDetectI18n` (or wherever locale is resolved): use `activeLocale` if provided, otherwise default to `'en'` or project default
-- [ ] Ensure translated text returned matches the requested locale
+- [x] In `StyleReadService.ts`: update `detectElementStyle` signature to accept optional `activeLocale: string` — already done: `readElementClassName` accepts `activeLocale?: string` at :85 (commit 20fe6ed6)
+- [x] In `_tryDetectI18n` (or wherever locale is resolved): use `activeLocale` if provided, otherwise default to `'en'` or project default — already done: `_tryDetectI18n` accepts `activeLocale?: string` at :252; uses `const requestedLocale = activeLocale ?? 'en'` at :357 (custom) and `activeLocale ?? DEFAULT_LOCALE` at :433 (non-custom)
+- [x] Ensure translated text returned matches the requested locale — already done: `requestedLocale` is passed to `resolveI18nResource` as `activeLocale` in both code paths
 
 ### Task 6: Build + install ext, run E2E → GREEN
 
