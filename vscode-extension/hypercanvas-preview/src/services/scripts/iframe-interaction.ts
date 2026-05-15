@@ -1316,13 +1316,26 @@ function _dragPointerUp(e: PointerEvent): void {
 
   const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (!dropEl) return;
-  const dropSrc = iframeResolver.getSourceLocation(dropEl);
-  if (!dropSrc) return;
-  const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
-  if (targetId === sourceId) return;
 
-  const rect = dropEl.getBoundingClientRect();
-  const position: 'before' | 'after' = _isHorizontalLayout(dropEl)
+  // Lift both source and drop target up to siblings of a common DOM ancestor.
+  // This is essential because AstService.reorderElement requires source and
+  // target to share a direct JSX parent — without lifting, a drop on Card B
+  // while dragging an inner div inside Card A would fail with "Elements must
+  // share a direct JSX parent". By promoting both to children of their nearest
+  // common DOM ancestor (which usually maps to the JSX list container), the
+  // reorder lands at the card-vs-card level the user actually expects.
+  const lifted = liftToCommonSiblings(_dragSourceEl ?? dropEl, dropEl);
+  const finalSourceEl = lifted.source ?? _dragSourceEl ?? dropEl;
+  const finalDropEl = lifted.drop ?? dropEl;
+  const finalSourceSrc = iframeResolver.getSourceLocation(finalSourceEl);
+  const finalDropSrc = iframeResolver.getSourceLocation(finalDropEl);
+  if (!finalSourceSrc || !finalDropSrc) return;
+  const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
+  const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
+  if (targetId === finalSourceId) return;
+
+  const rect = finalDropEl.getBoundingClientRect();
+  const position: 'before' | 'after' = _isHorizontalLayout(finalDropEl)
     ? e.clientX < rect.left + rect.width / 2
       ? 'before'
       : 'after'
@@ -1333,9 +1346,53 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragSuppressNextClick = true;
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
-    { type: 'hypercanvas:reorderElement', sourceId, targetId, filePath: sourceFilePath, position },
+    {
+      type: 'hypercanvas:reorderElement',
+      sourceId: finalSourceId,
+      targetId,
+      filePath: finalSourceSrc.fileName,
+      position,
+    },
     '*',
   );
+}
+
+/**
+ * Lift `source` and `drop` to their respective children of the nearest DOM
+ * ancestor that contains both — i.e. produce a pair of DOM siblings that the
+ * reorder operation can act on.
+ *
+ * Returns null for either side if it could not be lifted (e.g. the original
+ * element already sits at the right level, or no common ancestor exists).
+ */
+function liftToCommonSiblings(
+  source: HTMLElement,
+  drop: HTMLElement,
+): { source: HTMLElement | null; drop: HTMLElement | null } {
+  if (source === drop) return { source: null, drop: null };
+  // Build the source ancestor chain so we can find the lowest common ancestor.
+  const sourceAncestors: HTMLElement[] = [];
+  for (let c: HTMLElement | null = source; c; c = c.parentElement) sourceAncestors.push(c);
+  let common: HTMLElement | null = null;
+  for (let c: HTMLElement | null = drop; c; c = c.parentElement) {
+    if (sourceAncestors.includes(c)) {
+      common = c;
+      break;
+    }
+  }
+  if (!common) return { source: null, drop: null };
+  // Walk up from each side until the parent is the common ancestor; that's the
+  // sibling-of-common element we want.
+  const liftedSource = walkUpToChildOf(source, common);
+  const liftedDrop = walkUpToChildOf(drop, common);
+  return { source: liftedSource, drop: liftedDrop };
+}
+
+function walkUpToChildOf(start: HTMLElement, ancestor: HTMLElement): HTMLElement | null {
+  if (start === ancestor) return null;
+  let cur: HTMLElement | null = start;
+  while (cur && cur.parentElement && cur.parentElement !== ancestor) cur = cur.parentElement;
+  return cur && cur.parentElement === ancestor ? cur : null;
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {

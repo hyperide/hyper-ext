@@ -71,11 +71,17 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedText, rollbackKey]);
 
-  // Auto-focus search when popover opens
+  // Auto-focus search when popover opens. No select() — leave the cursor at the
+  // end so the user can keep typing immediately without their first keystroke
+  // overwriting selected text.
   useEffect(() => {
     if (showKeyDropdown) {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
+      // requestAnimationFrame avoids a race where the popover renders inside the
+      // VS Code WebviewView before the input is reachable for focus.
+      const id = requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [showKeyDropdown]);
 

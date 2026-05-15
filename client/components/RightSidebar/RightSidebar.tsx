@@ -746,6 +746,11 @@ export default function RightSidebar({
       if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
       const previousSelectedId = selectedId;
+      // If the user typed a key that doesn't yet exist in the locale, treat this
+      // as "create new key" — also write the JSON resource so the next re-read
+      // returns editable=true and the user can immediately type the translation.
+      // Otherwise (existing key) skip the JSON write and only retarget JSX.
+      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -757,13 +762,15 @@ export default function RightSidebar({
             previousKey: i18nText.key,
             filePath: i18nText.sourceLocation.filePath,
             elementId: selectedId,
-            skipResourceWrite: true,
+            skipResourceWrite: !isNewKey,
           });
           // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
-          // fiber tree, dropping the iframe's previous selection. Re-broadcast it so
-          // the inspector stays open on the same element.
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
           if (i18nDispatch) {
             i18nDispatch({ selectedIds: [previousSelectedId] });
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
           }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
@@ -772,7 +779,7 @@ export default function RightSidebar({
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, i18nDispatch],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
   );
 
   const handleI18nResolvedTextChange = useCallback(
