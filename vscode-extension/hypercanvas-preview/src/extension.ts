@@ -24,6 +24,7 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
+import { isForeignExtensionError } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -326,8 +327,12 @@ export function activate(context: vscode.ExtensionContext) {
   // .then without .catch); this is a safety net for anything we missed
   // and for VS Code core / library promises that escape in a hot path.
   // Logged so real issues are still discoverable in the Output channel.
+  // Foreign extension rejections are filtered out — they must not be
+  // logged as [HyperIDE] when the stack points to another extension dir.
   const unhandledHandler = (reason: unknown) => {
-    console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+    if (!isForeignExtensionError(reason)) {
+      console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+    }
   };
   process.on('unhandledRejection', unhandledHandler);
   context.subscriptions.push({
