@@ -408,6 +408,69 @@ describe('computeOrderWritePlan — default-order item gets correct visual slot 
   });
 });
 
+describe('computeOrderWritePlan — base fallback at responsive breakpoint (codex Task 4)', () => {
+  // Codex Task-4 finding: when the active breakpoint is responsive (e.g. md) and
+  // some siblings only carry a base `order-*` (no `md:order-*`), the base value
+  // still applies at md viewport per CSS cascade. Treating those siblings as 0
+  // builds the wrong current visual order and writes wrong dense md:order-* values.
+  it('uses base order-N as the effective md value when md:order-* is absent on a sibling', () => {
+    // 4 siblings — A only has base order-3; B/C/D have explicit md:order-N.
+    // Without the cascade fix, A gets treated as 0 at md and the renumber
+    // shoves it to the leftmost slot, mangling everyone else.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-3 flex', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1 flex', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2 flex', domIndex: 2 },
+      { elementId: 'd:1:1', filePath: 'a.tsx', className: 'md:order-4 flex', domIndex: 3 },
+    ];
+    // Correct visual at md: [B(1), C(2), A(3), D(4)] — A's base order-3 still applies.
+    // Drag D BEFORE B → visual [D, B, C, A]. Renumber dense:
+    // D=md:order-1, B=md:order-2, C=md:order-3, A=md:order-4 (added).
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'd:1:1',
+      target: 'b:1:1',
+      position: 'before',
+      viewportWidth: 1440,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan?.breakpoint).toBe('md');
+    expect(plan?.entries).toEqual([
+      { elementId: 'd:1:1', filePath: 'a.tsx', newClassName: 'md:order-1 flex' },
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'md:order-2 flex' },
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'md:order-3 flex' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3 flex md:order-4' },
+    ]);
+  });
+
+  it('cascades from active bp through smaller bps to base (sm:order applies at md viewport)', () => {
+    // Same shape as the test above but A's only token is sm:order-3 instead of base.
+    // At md viewport sm: still applies (768 > 640) → A's effective md order is 3,
+    // not 0. The cascade must walk md → sm → base and pick the first match.
+    const siblings: SiblingInfo[] = [
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'sm:order-3 flex', domIndex: 0 },
+      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1 flex', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2 flex', domIndex: 2 },
+      { elementId: 'd:1:1', filePath: 'a.tsx', className: 'md:order-4 flex', domIndex: 3 },
+    ];
+    const plan = computeOrderWritePlan({
+      siblings,
+      source: 'd:1:1',
+      target: 'b:1:1',
+      position: 'before',
+      viewportWidth: 1440,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan?.breakpoint).toBe('md');
+    expect(plan?.entries).toEqual([
+      { elementId: 'd:1:1', filePath: 'a.tsx', newClassName: 'md:order-1 flex' },
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'md:order-2 flex' },
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'md:order-3 flex' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'sm:order-3 flex md:order-4' },
+    ]);
+  });
+});
+
 describe('computeOrderWritePlan — cursor-derived position (Task 3)', () => {
   // Codex finding 2 repro: the iframe knows where the cursor lifted (left/right
   // half of target). That position must drive insertion, NOT source-vs-drop

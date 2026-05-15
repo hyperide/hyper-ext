@@ -75,8 +75,19 @@ Out of scope:
 
 ### Task 4: codex review pass — confirm no remaining findings
 
-- [ ] Run `codex exec review --uncommitted` on the diff.
-- [ ] Address any new findings.
+- [x] Run `codex exec review --uncommitted` on the diff.
+- [x] Address any new findings.
+      First pass surfaced a P2 in `order-drag-detect.ts:183-184`: at a
+      responsive activeBp (e.g. md), siblings carrying only base or smaller-bp
+      `order-*` were treated as 0 because `readOrderSortValueForBp` only
+      checked the requested variant. CSS cascade still applies the smaller
+      variant at the larger viewport. Fixed in `order-class-utils.ts` —
+      `readOrderSortValueForBp` now walks `activeBp → sm-chain → base` and
+      returns the first defined token. Added two RED-then-GREEN tests in
+      `order-drag-detect.test.ts` (`base fallback at responsive breakpoint`
+      describe block) covering base-only and `sm:`-only siblings at md
+      viewport. Re-run of `codex exec review --uncommitted`: "No discrete
+      correctness issues were found." 258 unit tests pass.
 
 ### Task 5: TG handoff with E2E screenshot
 
