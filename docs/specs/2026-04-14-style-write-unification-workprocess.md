@@ -1343,3 +1343,76 @@ Expected residuals after this run:
 If remaining fails ≤ 3, this is effectively the green
 state for this cycle; HYP-289 is a separate ticket and the two
 remix-tw4-twitter cases get focused agents in the next iteration.
+
+## 📍 2026-04-26 22:15 CEST: live checkpoint run `200339-88217` at ~2h12m
+
+4 параллельных шарда поднялись 20:03, диск стабилен 36 GB free
+(работает `9f36a21` shared nm-cache).
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 348  | 321  | 5    | 9    |
+| s2    | 229  | 187  | 10   | 23   |
+| s3    | 421  | 275  | 9    | 128  |
+| s4    | 173  | 87   | 35   | 43   |
+| **Σ** | 1171 | 870  | 59   | 203  |
+
+Pass rate (excl. skip): 870/(870+59) = **93.6 %**.
+
+### s4 — выпавший shard
+
+s4 жуёт `remix-cssmodules-spotify` (21 fail) — каждый тест
+таймаутит на ~88–187 s. Probe-снимок `setupPreview`:
+`{rootChildren:0, rootText:"", errorHeading:null}` — то есть
+страница вернула 200 OK с валидным HTML, но `#root` найден и
+содержит 0 children. Это та же история что и `remix-tw4-twitter`
+из прошлого цикла: Remix `<Outlet />` рендерит в корневой `<div>`,
+не в `#root`. `a3230b4` исправил `isPreviewLoaded()` через
+`body > *` fallback, но `setupPreview` debug-snapshot всё ещё
+смотрит на `#root` — это на саму гейтинг-логику не влияет, но
+маскирует диагностику. Реальная причина 21 fall'а на spotify —
+скорее всего dev-server cold start (вебпак Remix компилирует
+~60 s) ИЛИ DevServerManager FSM не дожидается ready-after-patch
+для Remix-конфига. Запланирован focused agent после прогона.
+
+### Не убиваю прогон
+
+Прошлый цикл показал что killing+restart медленнее, чем дать
+прогону доехать. Текущий кэш warm, `9f36a21` исправил диск,
+DevServerManager FSM (`d585a745`+`cd3094d8`) и Zustand stub
+(`233327bc`) уже в build. Бейк-имидж — после прогона на ночь.
+
+## 📍 2026-04-26 22:25 CEST: КОРЕНЬ найден — старый VSIX в контейнере
+
+Subagent расследование показало: **первый тест на воркере проходит,
+последующие после `Hyper: Close Preview` падают** — iframe не
+пере-навигируется на dev-server URL. В `dumpPreviewFrames` упавших
+тестов нет `localhost:N/test-preview` фрейма вообще.
+
+### Корень
+
+VSIX в контейнере — `hypercanvas-preview-0.1.9.vsix` от **Apr 24
+16:46**. Fix `0eb7e509 fix(extension): preserve currentComponent
+across panel dispose+recreate (HYP-363)` — Apr 26 19:54. Не в VSIX.
+
+`launchVSCode()` вызывает `getVsixPath()` с `ls -t *.vsix` → берёт
+самый новый. Сейчас это 0.1.9 без fix'а. Поэтому в docker'е extension
+действительно старый.
+
+### Действие (commit `7688d18a`)
+
+1. Bump version `0.1.9 → 0.1.10`.
+2. `bun run package` собрал `hypercanvas-preview-0.1.10.vsix` с fix'ом
+   (`_pushFullStateToWebview`, 3 occurrences в minified).
+3. Push на ветку.
+
+Текущий прогон **не получит** 0.1.10 (workers уже подняли VS Code и
+extension загружен). Следующий прогон автоматически возьмёт newest
+VSIX через mount `-v $EXTENSION_REPO:$CONTAINER_EXTENSION_REPO:ro`.
+
+### План на ночь
+
+1. Дать `200339-88217` доехать (~1ч до конца, диск стабилен).
+2. Бейк нового docker image с VSIX 0.1.10 и текущим e2e репо.
+3. Запустить ночной прогон — ожидать сильного снижения spotify
+   кластера (21 fail сейчас) и аналогичных Remix re-create фейлов.
