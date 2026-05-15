@@ -133,8 +133,14 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
     });
   });
 
-  describe('different JSX parents in the same file', () => {
-    it('sibling → cousin: <a className="nav-a"> from <nav> into <main>', async () => {
+  // Different-parent moves use server-side liftToCommonJsxParent (Task 4 of
+  // the move-any-intermittent plan). The user dragging an inner element of
+  // one card onto an inner element of another card expects the OUTER cards
+  // to swap — not for the source to be rehomed inside the target's parent.
+  // The old "nest into target's parent" semantic from move-any-to-any
+  // Task 2 is replaced by lift in every case where parents differ.
+  describe('different JSX parents in the same file (lift to common ancestor)', () => {
+    it('sibling → cousin: lifts <header> next to <main> at root level', async () => {
       const { service, fileIO, absPath, relPath } = await makeAppService();
       const sourceRef = refByClass(service, absPath, relPath, 'a', 'nav-a', APP_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'p', 'content', APP_FIXTURE);
@@ -144,26 +150,21 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <a className="nav-a"> must now live inside <main>, after <p className="content">.
-      const navAIdx = content.indexOf('"nav-a"');
-      const contentIdx = content.indexOf('"content"');
-      const mainCloseIdx = content.indexOf('</main>');
-      expect(contentIdx).toBeLessThan(navAIdx);
-      expect(navAIdx).toBeLessThan(mainCloseIdx);
+      // Lift: source ancestor at root level = <header>, target ancestor at
+      // root level = <main>. Move <header> AFTER <main> — header subtree
+      // ends up second among root's children.
+      const headerOpenIdx = content.indexOf('<header');
+      const mainOpenIdx = content.indexOf('<main');
+      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
 
-      // <a className="nav-b"> stays inside <nav> with its parent unchanged.
-      const navBIdx = content.indexOf('"nav-b"');
-      const navOpenIdx = content.indexOf('"nav"');
-      const navCloseIdx = content.indexOf('</nav>');
-      expect(navOpenIdx).toBeLessThan(navBIdx);
-      expect(navBIdx).toBeLessThan(navCloseIdx);
-
-      // <a className="nav-a"> no longer inside <nav>.
-      const insideNav = content.slice(navOpenIdx, navCloseIdx);
-      expect(insideNav.includes('"nav-a"')).toBe(false);
+      // The <a nav-a> source itself was NOT extracted — it still lives
+      // inside the (now reordered) header subtree.
+      const headerCloseIdx = content.indexOf('</header>');
+      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
+      expect(insideHeader.includes('"nav-a"')).toBe(true);
     });
 
-    it('deep → root: <a className="nav-a"> moves to before <header> at top level', async () => {
+    it('deep → root (target ancestor of source): extracts source out next to <header>', async () => {
       const { service, fileIO, absPath, relPath } = await makeAppService();
       const sourceRef = refByClass(service, absPath, relPath, 'a', 'nav-a', APP_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'header', 'hdr', APP_FIXTURE);
@@ -173,21 +174,26 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // Order check: <a className="nav-a"> must appear before <header className="hdr">.
-      expect(content.indexOf('"nav-a"')).toBeLessThan(content.indexOf('"hdr"'));
+      // Target is an ancestor of source. Lift extracts source to be a sibling
+      // of target inside <div className="root">. Source's lifted node = <a nav-a>
+      // climbed up through <nav> → <header>, becomes a direct child of root.
+      // Position 'before': <a nav-a> precedes <header>.
+      const navAOpenIdx = content.indexOf('<a className="nav-a"');
+      const headerOpenIdx = content.indexOf('<header');
+      expect(navAOpenIdx).toBeLessThan(headerOpenIdx);
 
-      // And it must be a child of <div className="root"> — i.e. between
-      // the opening `<div className="root">` and the `<header`.
-      const rootOpenIdx = content.indexOf('"root"');
-      expect(rootOpenIdx).toBeLessThan(content.indexOf('"nav-a"'));
-
-      // Original site emptied: searching inside the surviving <nav> tag should not find nav-a.
-      const navOpen = content.indexOf('"nav"');
+      // <a nav-a> is no longer inside <nav>.
+      const navOpen = content.indexOf('<nav className="nav"');
       const navClose = content.indexOf('</nav>');
-      expect(content.slice(navOpen, navClose).includes('"nav-a"')).toBe(false);
+      const insideNav = content.slice(navOpen, navClose);
+      expect(insideNav.includes('"nav-a"')).toBe(false);
     });
 
-    it('root → deep: <main> moves to before <a className="nav-b"> deep inside <nav>', async () => {
+    it('root → deep: lifts <header> before <main> at root level', async () => {
+      // Reverse direction: source <main> (root child), target <a nav-b> deep
+      // in nav. Source-chain = [main, root]. Target-chain = [a-nav-b, nav,
+      // header, root]. Common = root. Lifted source = <main>, lifted target
+      // = <header>. Moving main BEFORE header reorders root's children.
       const { service, fileIO, absPath, relPath } = await makeAppService();
       const sourceRef = refByClass(service, absPath, relPath, 'main', 'main', APP_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'a', 'nav-b', APP_FIXTURE);
@@ -197,22 +203,86 @@ describe('AstService.moveElement — same-file moves (Task 2)', () => {
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <main> must now live INSIDE <nav>, immediately before <a className="nav-b">.
+      const mainOpenIdx = content.indexOf('<main');
+      const headerOpenIdx = content.indexOf('<header');
+      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
+
+      // Source <main> still at top level (NOT nested inside <nav>).
       const navOpen = content.indexOf('<nav className="nav"');
       const navClose = content.indexOf('</nav>');
-      const inside = content.slice(navOpen, navClose);
-      expect(inside.includes('<main')).toBe(true);
-      expect(inside.indexOf('<main')).toBeLessThan(inside.indexOf('"nav-b"'));
+      expect(content.slice(navOpen, navClose).includes('<main')).toBe(false);
+    });
+  });
 
-      // <main> no longer at top level — i.e. there is no `<main` between
-      // `</header>` and `</div>` at the outermost level.
-      const headerCloseIdx = content.indexOf('</header>');
-      const rootCloseIdx = content.lastIndexOf('</div>');
-      const topLevelTail = content.slice(headerCloseIdx, rootCloseIdx);
-      // The only <main> tags allowed in this slice are the closing ones from
-      // the moved subtree; an open `<main` followed by `className="main"` at
-      // top level would mean the move did not happen.
-      expect(/\<main\s+className="main"/.test(topLevelTail.replace(inside, ''))).toBe(false);
+  // Task 4 of the move-any-intermittent plan: explicit grid-of-cards fixture
+  // matching the failing PI-5-DR-17 E2E. Source is an inner <p> inside one
+  // card, target is an inner <h3> inside another card. Lift must reorder the
+  // outer cards (the grid's direct children) — not nest <p> into card2.
+  describe('Task 4: lift inline elements to common grid container', () => {
+    const GRID_FIXTURE = `export default function Grid() {
+  return (
+    <div className="grid">
+      <div className="card1">
+        <h3 className="t1">Title One</h3>
+        <p className="b1">Body One</p>
+      </div>
+      <div className="card2">
+        <h3 className="t2">Title Two</h3>
+        <p className="b2">Body Two</p>
+      </div>
+    </div>
+  );
+}
+`;
+
+    async function makeGridService() {
+      const relPath = 'src/Grid.tsx';
+      const absPath = `/workspace/${relPath}`;
+      const fileIO = new InMemoryFileIO({ [absPath]: GRID_FIXTURE });
+      const service = new AstService('/workspace', fileIO);
+      await service.ensureInitialized();
+      return { service, fileIO, absPath, relPath };
+    }
+
+    it('drag <p> in card1 onto <h3> in card2 swaps the outer cards', async () => {
+      const { service, fileIO, absPath, relPath } = await makeGridService();
+      const sourceRef = refByClass(service, absPath, relPath, 'p', 'b1', GRID_FIXTURE);
+      const targetRef = refByClass(service, absPath, relPath, 'h3', 't2', GRID_FIXTURE);
+
+      const result = await service.moveElement(relPath, sourceRef, targetRef, 'after');
+
+      expect(result.success).toBe(true);
+      const content = fileIO.content(absPath);
+
+      // Outer cards swapped: card2 now precedes card1 in the grid.
+      const card2Idx = content.indexOf('"card2"');
+      const card1Idx = content.indexOf('"card1"');
+      expect(card2Idx).toBeLessThan(card1Idx);
+
+      // The inner <p className="b1"> was NOT extracted — it still lives
+      // inside the (now relocated) card1 subtree, intact.
+      expect(content).toContain('<p className="b1">Body One</p>');
+      // And card1 still has its title alongside its body.
+      const card1OpenIdx = content.indexOf('"card1"');
+      const card1CloseIdx = content.indexOf('</div>', card1OpenIdx);
+      const insideCard1 = content.slice(card1OpenIdx, card1CloseIdx);
+      expect(insideCard1).toContain('"t1"');
+      expect(insideCard1).toContain('"b1"');
+    });
+
+    it('drag <h3> in card1 BEFORE <p> in card2 places card1 before card2 (already true → swaps NOT)', async () => {
+      // card1 is already before card2; dragging an inner element of card1
+      // BEFORE an inner element of card2 should leave the order unchanged.
+      const { service, fileIO, absPath, relPath } = await makeGridService();
+      const sourceRef = refByClass(service, absPath, relPath, 'h3', 't1', GRID_FIXTURE);
+      const targetRef = refByClass(service, absPath, relPath, 'p', 'b2', GRID_FIXTURE);
+
+      const result = await service.moveElement(relPath, sourceRef, targetRef, 'before');
+
+      expect(result.success).toBe(true);
+      const content = fileIO.content(absPath);
+      // Order preserved.
+      expect(content.indexOf('"card1"')).toBeLessThan(content.indexOf('"card2"'));
     });
   });
 

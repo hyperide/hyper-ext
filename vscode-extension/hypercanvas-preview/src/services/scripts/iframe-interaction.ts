@@ -30,12 +30,7 @@ import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tra
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
-import {
-  applySelectionGraceCache,
-  hydrateSelectionGraceCache,
-  makeSelectionGraceCacheState,
-  serializeSelectionGraceCache,
-} from './selection-grace-cache';
+import { applySelectionGraceCache, makeSelectionGraceCacheState } from './selection-grace-cache';
 
 // ============================================
 // Composition helpers (combine shared fiber primitives for IIFE-specific use)
@@ -782,44 +777,25 @@ function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLEleme
   if (source === null) return [];
 
   let live = getSourceIndex().findDOMElements(source);
-  let matchIsExact = live.length > 0;
   if (live.length === 0) {
-    // Same fileName + line, column drift only — same JSX site, itemIndex still meaningful.
     live = getSourceIndex().findClosestLineDOMElements(source);
-    if (live.length > 0) matchIsExact = true;
   }
-
-  // Last-resort fallback: same fileName, closest source by (line, column) within a bounded
-  // line distance. After HMR the requested line/column may shift slightly (e.g. the user
-  // edited an i18n key; surrounding lines re-numbered) before the parent rebroadcasts the
-  // new selectedId. Picking the closest entry keeps the overlay anchored across the gap;
-  // the bound prevents a heavy refactor from re-anchoring the selection 200 lines away.
-  //
-  // Path-format-relaxed matching also covers tree-driven selection that dispatches an
-  // absolute path ("/workspace/src/Foo.tsx" or Windows "C:\\workspace\\src\\Foo.tsx")
-  // while FiberSourceIndex stores Vite-relative paths ("src/Foo.tsx"). The relaxed
-  // mode is a strict superset of exact-path matching (pathsMatchAcrossFormats(x, x) is
-  // always true), so a single call covers both HMR line-shift and cross-format cases.
+  // Fallback: filename-agnostic line:col search.
+  // Needed when tree→canvas dispatch uses an absolute filesystem path but the
+  // FiberSourceIndex stores Vite-relative paths (e.g. "src/Foo.tsx" vs "/abs/Foo.tsx").
   if (live.length === 0 && source.fileName) {
-    const closest = getSourceIndex().findClosestSourceDOMElements(source, { matchPathAcrossFormats: true });
-    if (closest !== null && closest.elements.length > 0) {
-      live = closest.elements;
-      const matched = closest.matchedSource;
-      const matchedKey = `${matched.fileName}:${matched.line}:${matched.column}`;
-      const exactPath = matched.fileName === source.fileName;
-      logSelsurvClosestSourceFallback(exactPath ? nodeRef : `${nodeRef}#xfmt`, matchedKey, live.length);
-      // matchIsExact stays false: a different (line, column) means a different JSX call
-      // site whose `.map()` cardinality may differ. Applying the original itemIndex
-      // could target a sibling element's row instead of the intended one.
+    for (const entry of getSourceIndex().getLiveEntries()) {
+      if (entry.source.line === source.line && entry.source.column === source.column) {
+        const liveEls = entry.elements.filter((el) => document.contains(el));
+        if (liveEls.length > 0) {
+          live = liveEls;
+          break;
+        }
+      }
     }
   }
 
   if (itemIndex !== null) {
-    // For an inexact match (different (line, column) — possibly a sibling JSX site),
-    // the matched element's `.map()` cardinality may differ. Slicing by itemIndex
-    // could point at the wrong row, so we let the grace cache replay the prior rect
-    // instead of guessing.
-    if (!matchIsExact) return [];
     return live[itemIndex] ? [live[itemIndex]] : [];
   }
   return live;
@@ -942,52 +918,6 @@ function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: bool
     selectedId,
     domElementFound,
     rectVisible,
-  });
-}
-// Task 1 of selection-flicker-some-elements: surface grace-cache pruning so we
-// can tell whether the overlay disappears because the deadline expired (HMR
-// took longer than SELECTION_GRACE_PERIOD_MS) or because selectedIds dropped
-// the entry.
-function logSelsurvCachePrune(elementId: string, reason: 'deselected' | 'expired'): void {
-  console.debug(SELSURV_TAG, 'grace-cache prune', {
-    t: Math.round(performance.now()),
-    elementId,
-    reason,
-  });
-}
-// Task 1: log HMR-related lifecycle events (Vite + full-document reload) so the
-// timeline can be aligned with selection-loss moments. Vite client emits these
-// events on the Window via a custom EventEmitter; we additionally listen to
-// `beforeunload`/`load` to detect a true full reload (hypothesis B).
-function logSelsurvLifecycle(event: string, extra?: Record<string, unknown>): void {
-  console.debug(SELSURV_TAG, 'lifecycle', {
-    t: Math.round(performance.now()),
-    event,
-    readyState: typeof document !== 'undefined' ? document.readyState : 'n/a',
-    ...(extra ?? {}),
-  });
-}
-let lastFindMissLogKey = '';
-function logSelsurvFindMiss(selectedId: string, itemIndex: number | null): void {
-  const key = `${selectedId}|${itemIndex ?? ''}`;
-  if (key === lastFindMissLogKey) return;
-  lastFindMissLogKey = key;
-  console.debug(SELSURV_TAG, 'findElements miss', {
-    t: Math.round(performance.now()),
-    selectedId,
-    itemIndex,
-  });
-}
-let lastClosestSourceLogKey = '';
-function logSelsurvClosestSourceFallback(requestedRef: string, matchedKey: string, count: number): void {
-  const key = `${requestedRef}->${matchedKey}|${count}`;
-  if (key === lastClosestSourceLogKey) return;
-  lastClosestSourceLogKey = key;
-  console.debug(SELSURV_TAG, 'closest-source fallback', {
-    t: Math.round(performance.now()),
-    requested: requestedRef,
-    matched: matchedKey,
-    count,
   });
 }
 // Always null until VS Code extension supports component instances (SaaS-only for now).
@@ -1126,11 +1056,10 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     const source = parseSourceRef(nodeRef);
     if (source === null) return null;
 
-    // Use findElementsByRef so the cross-format closest-source fallback applies.
-    // Without this, tree-clicked elements (absolute path nodeRef, possibly Windows
-    // backslashes) fail the exact and closest-line lookups (both compare fileName),
-    // so getEntry returns null and Shift+Enter clears selection instead of
-    // navigating to parent.
+    // Use findElementsByRef so the filename-agnostic line:col fallback applies.
+    // Without this, tree-clicked elements (absolute path nodeRef) fail the exact
+    // and closest-line lookups (both compare fileName), so getEntry returns null
+    // and Shift+Enter clears selection instead of navigating to parent.
     const el = findElementsByRef(nodeRef, 0)[0];
     if (!el) return null;
 
@@ -1547,6 +1476,43 @@ function _dragClickSuppressor(e: MouseEvent): void {
   e.preventDefault();
 }
 
+// Block native HTML5 drag-and-drop in design mode. Browsers default
+// `<img>` and `<a>` to draggable=true; once Chromium establishes a native
+// drag candidate at pointerdown, subsequent pointer events are consumed
+// by the drag tracker before our document-capture listener sees them,
+// so img-source drags silently fail (PI-5-DR-EK-IMG repro:
+// 0 pointerdowns / 8 stale pointerups in run-20260507-130145).
+//
+// Two-layer fix: (1) CSS `-webkit-user-drag: none` in design mode (see
+// style-injector.ts) prevents Chromium from establishing the drag
+// candidate. (2) Walk every img/a/[draggable] node and explicitly set
+// `draggable = false` — belt and braces for elements where the CSS
+// property isn't enough (some Chromium versions still establish a drag
+// candidate when `el.draggable === true`, regardless of CSS).
+// (3) Keep the dragstart preventDefault as a final guard for any element
+// that slipped past (1) and (2) — e.g. user code calling el.draggable=true
+// after our walk.
+const _nativeDragSuppressor = (e: DragEvent): void => {
+  if (state.engineMode !== 'design') return;
+  e.preventDefault();
+};
+document.addEventListener('dragstart', _nativeDragSuppressor, true);
+
+function _disableNativeDraggableIn(root: ParentNode): void {
+  // Disable native drag on every element that can default to draggable=true.
+  // Includes elements with an explicit `draggable="true"` attribute set by
+  // user code (e.g. custom drag-and-drop libraries) — they would otherwise
+  // re-establish the drag candidate on pointerdown.
+  const candidates = root.querySelectorAll('img, a, [draggable="true"], [draggable=""]');
+  for (const el of candidates) {
+    if (el instanceof HTMLElement) el.draggable = false;
+  }
+  // The root itself may match if it was just inserted as a single img/a node.
+  if (root instanceof HTMLElement && (root.tagName === 'IMG' || root.tagName === 'A')) {
+    root.draggable = false;
+  }
+}
+
 document.addEventListener('pointerdown', _dragPointerDown, true);
 document.addEventListener('pointermove', _dragPointerMove, true);
 document.addEventListener('pointerup', _dragPointerUp, true);
@@ -1578,100 +1544,10 @@ let overlayRafScheduled = false;
 // the source location (and therefore the element identity) has not changed.
 // Without this cache, the overlay disappears for ~500ms — confirmed by user
 // screenshot before this fix landed. Pure logic + tests live in selection-grace-cache.ts.
-//
-// Task 2 of selection-flicker-some-elements: TTL bumped from 800 → 2500 ms because
-// HMR full-document reload (Vite emits `vite:beforeFullReload` rather than fast
-// refresh) takes longer than 800 ms on heavier projects, and the cache must outlast
-// the entire reload + bundle eval + first paint cycle. The cache is also persisted
-// to sessionStorage so it survives the document teardown that wipes module state.
-const SELECTION_GRACE_PERIOD_MS = 2500;
+const SELECTION_GRACE_PERIOD_MS = 800;
 const SELECTION_GRACE_RETRY_MS = 50;
-/** sessionStorage key under which the cache snapshot is persisted across reloads. */
-const SELECTION_GRACE_PERSIST_KEY = '__hypercanvas_selsurv_grace_cache__';
-/** Snapshots older than this are discarded (e.g. user closed and reopened the tab). */
-const SELECTION_GRACE_PERSIST_MAX_AGE_MS = 10_000;
 const selectionGraceCache = makeSelectionGraceCacheState();
 let selectionGraceRetryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-/**
- * Element IDs hydrated from sessionStorage on iframe boot. Used as a stand-in for
- * `state.selectedIds` until the parent webview confirms the post-reload selection
- * via `hypercanvas:stateUpdate`. Without this stand-in the very first overlay
- * paint (which runs with `state.selectedIds=[]`) would prune the hydrated entries
- * as 'deselected', defeating the persistence.
- *
- * Cleared on the first `stateUpdate` carrying `selectedIds`.
- */
-let pendingHydratedSelectedIds: string[] = [];
-/**
- * `.map()` item indices restored from sessionStorage on iframe boot. Used as a
- * stand-in for `state.selectedItemIndices` until the parent rebroadcasts the
- * post-reload selection. Without this, the very first paint after a full reload
- * would call `findElements(id, null)` which returns ALL instances at that source
- * — briefly highlighting every `.map()` row instead of the one the user selected.
- */
-let pendingHydratedItemIndices: Record<string, number | null> = {};
-
-// Throttle for the per-paint persist call. Lifecycle hooks (beforeunload,
-// vite:beforeFullReload, vite:beforePrune) call persistSelectionGraceCache(true)
-// to bypass the throttle for the actual teardown flush.
-const SELECTION_GRACE_PERSIST_THROTTLE_MS = 250;
-let lastPersistAtMs = 0;
-
-function persistSelectionGraceCache(force = false): void {
-  try {
-    if (typeof sessionStorage === 'undefined') return;
-    // Cache emptied (e.g. user deselected). Always wipe sessionStorage immediately —
-    // never throttle this branch. Otherwise a fast reload within the throttle window
-    // would hydrate stale rects and ghost the deselected element.
-    if (selectionGraceCache.rectsByElementId.size === 0) {
-      sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
-      lastPersistAtMs = performance.now();
-      return;
-    }
-    // performance.now() is monotonic; Date.now() can jump backward (NTP/DST) and
-    // briefly disable the throttle. Wall-clock time is still needed for the
-    // serialized payload so the next document can compute age vs Date.now().
-    const monotonicMs = performance.now();
-    if (!force && monotonicMs - lastPersistAtMs < SELECTION_GRACE_PERSIST_THROTTLE_MS) return;
-    lastPersistAtMs = monotonicMs;
-    const payload = serializeSelectionGraceCache(selectionGraceCache, Date.now());
-    sessionStorage.setItem(SELECTION_GRACE_PERSIST_KEY, JSON.stringify(payload));
-  } catch {
-    // sessionStorage may throw (private mode, quota exceeded, sandboxed iframe).
-    // Persistence is best-effort — failure just degrades to in-memory-only behaviour.
-  }
-}
-
-function tryHydrateSelectionGraceCache(): void {
-  try {
-    if (typeof sessionStorage === 'undefined') return;
-    const raw = sessionStorage.getItem(SELECTION_GRACE_PERSIST_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as unknown;
-    const { hydratedIds, hydratedItemIndices } = hydrateSelectionGraceCache({
-      state: selectionGraceCache,
-      serialized: parsed,
-      now: performance.now(),
-      wallClockNow: Date.now(),
-      gracePeriodMs: SELECTION_GRACE_PERIOD_MS,
-      maxAgeMs: SELECTION_GRACE_PERSIST_MAX_AGE_MS,
-    });
-    if (hydratedIds.length > 0) {
-      pendingHydratedSelectedIds = hydratedIds;
-      pendingHydratedItemIndices = hydratedItemIndices;
-      logSelsurvLifecycle('graceCache:hydrated', { count: hydratedIds.length });
-    } else {
-      sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
-    }
-  } catch {
-    // Malformed payload or storage error — nothing to recover, drop it.
-    try {
-      sessionStorage?.removeItem(SELECTION_GRACE_PERSIST_KEY);
-    } catch {
-      // ignore
-    }
-  }
-}
 
 function scheduleSelectionGraceRetry(): void {
   if (selectionGraceRetryTimeoutId !== null) return;
@@ -1698,24 +1574,12 @@ function sendOverlayRects(): void {
   }
   needsOverlayUpdate = false;
 
-  // After an iframe full-reload, parent has not yet broadcast the post-reload
-  // selectedIds, so `state.selectedIds` is empty even though the user has a live
-  // selection in the parent webview. Use the IDs hydrated from sessionStorage so
-  // the very first paints replay the cached rect. Cleared on first real stateUpdate.
-  const usingHydratedStandIn = state.selectedIds.length === 0 && pendingHydratedSelectedIds.length > 0;
-  const effectiveSelectedIds = usingHydratedStandIn ? pendingHydratedSelectedIds : state.selectedIds;
-  // Without restoring the hydrated `.map()` indices, `findElements(id, null)` returns
-  // every instance at that source location — flashing the selection rect across all
-  // rows of a `.map()` for the boot window. The hydrated indices target the exact
-  // instance the user had selected before the reload.
-  const effectiveSelectedItemIndices = usingHydratedStandIn ? pendingHydratedItemIndices : state.selectedItemIndices;
-
   const result = computeOverlayRects(
     {
-      selectedIds: effectiveSelectedIds,
+      selectedIds: state.selectedIds,
       hoveredId: state.hoveredId,
       hoveredItemIndex: state.hoveredItemIndex,
-      selectedItemIndices: effectiveSelectedItemIndices,
+      selectedItemIndices: state.selectedItemIndices,
       engineMode: state.engineMode,
     },
     iframeElementResolver,
@@ -1725,22 +1589,16 @@ function sendOverlayRects(): void {
   // (typically during the post-HMR window before FiberSourceIndex rebuild). See
   // selection-grace-cache.ts for the full strategy.
   const graced = applySelectionGraceCache({
-    selectedIds: effectiveSelectedIds,
+    selectedIds: state.selectedIds,
     computedRects: result.overlayRects,
     cache: selectionGraceCache,
     now: performance.now(),
     gracePeriodMs: SELECTION_GRACE_PERIOD_MS,
-    onPrune: logSelsurvCachePrune,
-    selectedItemIndices: effectiveSelectedItemIndices,
   });
   result.overlayRects = graced.rects;
   if (graced.inGracePeriod) {
     scheduleSelectionGraceRetry();
   }
-  // Persist on paint as a backstop in case Vite's beforeFullReload / beforePrune
-  // and beforeunload all fail to fire (sudden navigation, sandboxed teardown).
-  // Throttled to 250 ms so scroll/hover paints don't hammer sessionStorage.
-  persistSelectionGraceCache();
 
   const rects = result.overlayRects.map((r) => ({
     key: r.key,
@@ -1756,23 +1614,15 @@ function sendOverlayRects(): void {
   // Diagnostic: did this paint find a DOM element for the current selection,
   // and is its rect non-empty? See Task 2 of selection-survive-text-change plan.
   // Tag: [selsurv]. Only logs when (selectedId, found, visible) tuple changes.
-  // Read effectiveSelectedIds — during boot-mode (post-hydrate, pre-stateUpdate)
-  // state.selectedIds is empty even though we are painting from the stand-in.
   {
-    const sel0 = effectiveSelectedIds[0] ?? null;
+    const sel0 = state.selectedIds[0] ?? null;
     if (sel0 !== null) {
-      const itemIdx = effectiveSelectedItemIndices[sel0] ?? null;
+      const itemIdx = state.selectedItemIndices[sel0] ?? null;
       const elements = iframeElementResolver.findElements(sel0, itemIdx);
       const domElementFound = elements.length > 0;
       const selectionRect = result.overlayRects.find((r) => r.type === 'selection' && r.elementId === sel0);
       const rectVisible = !!selectionRect && selectionRect.width > 0 && selectionRect.height > 0;
       logSelsurvOverlayPaint(sel0, domElementFound, rectVisible);
-      // Task 1 of selection-flicker-some-elements: explicitly surface findElements
-      // misses so we can tell post-HMR fiber-resolution gaps apart from genuine
-      // deselection. Coalesced inside the helper.
-      if (!domElementFound) {
-        logSelsurvFindMiss(sel0, itemIdx);
-      }
     } else {
       logSelsurvOverlayPaint(null, false, false);
     }
@@ -1815,14 +1665,26 @@ function scheduleThrottledOverlayUpdate(): void {
 // Mark overlays dirty when DOM/layout changes
 const overlayMutationObserver =
   typeof MutationObserver !== 'undefined'
-    ? new MutationObserver(() => {
+    ? new MutationObserver((mutations) => {
         invalidateSourceCache();
         scheduleThrottledOverlayUpdate();
+        // Disable native drag on freshly-added img/a nodes. Bounded scan: only
+        // walks the subtrees that just changed, not the whole document.
+        for (const m of mutations) {
+          if (m.type !== 'childList') continue;
+          for (const node of m.addedNodes) {
+            if (node instanceof HTMLElement) _disableNativeDraggableIn(node);
+          }
+        }
       })
     : null;
 
 function setupBodyObservers(): void {
   if (!document.body) return;
+  // One-time initial sweep so existing img/a nodes have draggable=false
+  // before the user can interact with them. Subsequent additions are
+  // handled by the mutation observer above.
+  _disableNativeDraggableIn(document.body);
   if (overlayMutationObserver) {
     overlayMutationObserver.observe(document.body, {
       attributes: true,
@@ -1869,41 +1731,6 @@ const overlayResizeHandler = () => {
 window.addEventListener('scroll', overlayScrollHandler, true);
 window.addEventListener('resize', overlayResizeHandler);
 
-// Task 1 of selection-flicker-some-elements: surface HMR + full-reload timing.
-// `vite:beforeUpdate` / `vite:afterUpdate` are emitted on `window` by Vite's
-// hot-runtime client; webpack-dev-server fires `webpackHotUpdate` similarly.
-// `beforeunload` + readystatechange let us tell a fast-refresh apart from a
-// full-document reload (hypothesis B).
-const VITE_LIFECYCLE_EVENTS = [
-  'vite:beforeUpdate',
-  'vite:afterUpdate',
-  'vite:beforeFullReload',
-  'vite:beforePrune',
-  'vite:invalidate',
-  'vite:error',
-];
-for (const evt of VITE_LIFECYCLE_EVENTS) {
-  window.addEventListener(evt, () => {
-    logSelsurvLifecycle(evt);
-    // Vite full reload typically fires before any further paint runs — flush the
-    // grace cache to sessionStorage now so the post-reload IIFE can hydrate it.
-    if (evt === 'vite:beforeFullReload' || evt === 'vite:beforePrune') {
-      persistSelectionGraceCache(true);
-    }
-  });
-}
-window.addEventListener('beforeunload', () => {
-  logSelsurvLifecycle('beforeunload');
-  persistSelectionGraceCache(true);
-});
-document.addEventListener('readystatechange', () => {
-  logSelsurvLifecycle('readystatechange');
-});
-
-// Restore the grace cache from sessionStorage. Must run before the first paint so
-// the cached rect is replayed across an iframe full-reload (hypothesis B).
-tryHydrateSelectionGraceCache();
-
 // Start the loop
 scheduleOverlayLoopIfNeeded();
 
@@ -1917,6 +1744,7 @@ window.addEventListener('unload', () => {
   document.removeEventListener('keydown', keydownForwardingHandler, true);
   document.removeEventListener('contextmenu', contextMenuHandler, true);
   document.removeEventListener('mousedown', mousedownHandler, true);
+  document.removeEventListener('dragstart', _nativeDragSuppressor, true);
   document.removeEventListener('pointerdown', _dragPointerDown, true);
   document.removeEventListener('pointermove', _dragPointerMove, true);
   document.removeEventListener('pointerup', _dragPointerUp, true);
@@ -1939,6 +1767,9 @@ function updateDesignStyles(mode: string): void {
 
   if (mode !== 'interact') {
     document.documentElement.classList.add('design-mode');
+    // Mode flip → re-sweep. The CSS rule covers most cases; the JS sweep
+    // handles elements where the browser ignores `-webkit-user-drag`.
+    if (document.body) _disableNativeDraggableIn(document.body);
   } else {
     document.documentElement.classList.remove('design-mode');
   }
@@ -2007,10 +1838,6 @@ window.addEventListener('message', (event: MessageEvent) => {
     if (msg.selectedIds !== undefined) {
       logSelsurvSelectedIdsAssign('msg:stateUpdate', state.selectedIds, msg.selectedIds);
       state.selectedIds = msg.selectedIds;
-      // Parent has authoritative selection now — drop the post-reload stand-in
-      // so subsequent paints follow normal pruning rules.
-      pendingHydratedSelectedIds = [];
-      pendingHydratedItemIndices = {};
     }
     if (msg.hoveredId !== undefined) state.hoveredId = msg.hoveredId;
     if (msg.hoveredItemIndex !== undefined) state.hoveredItemIndex = msg.hoveredItemIndex;
