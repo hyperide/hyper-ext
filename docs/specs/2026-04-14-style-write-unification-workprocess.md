@@ -3471,3 +3471,31 @@ Full E2E diagnostic stop:
 - Decision: do not change product code for this non-reproduced signal; restart
   the full E2E run cleanly with no parallel E2E jobs.
 ```
+
+Bridge bot process discovery hardening:
+
+```text
+- Bot repo /Users/ultra/xp/codex-tg-bot:
+  Commit 504c267 fix: tighten Codex app-server process discovery.
+  Reason: discovery already supported auto-binding the only live current Codex
+  app-server thread and showing Telegram inline choices when several live
+  threads exist, but the process scanner used broad text matching and could
+  misclassify shell/rg commands that merely contained the text
+  "codex app-server".
+  Change: parse ps rows as argv-like tokens and require the executable basename
+  to be "codex" with immediate subcommand "app-server". Added a regression
+  test for a shell command that only mentions the text.
+  Validation: regression test failed before the fix and passed after it;
+  bun test passed (13 tests); bunx tsc --noEmit --pretty false passed;
+  bunx biome check src/current-session.ts src/current-session.test.ts passed;
+  git diff --check passed. Runtime discovery now lists only real app-server
+  processes: the explicit ws://127.0.0.1:9120 process, the VS Code extension
+  app-server, and Codex.app app-server.
+  Bot runtime: old process 19611 was stopped; launchd restarted the bot on the
+  new code, PID observed as 25728. A manual extra start was attempted, but
+  exited due Telegram getUpdates 409 conflict; only one bot process remained.
+- Full E2E run 20260421k remains active with --workers=1 and --retries=0.
+  At this entry it had reached approximately 130/2209 with no failed-test,
+  timeout, assertion, save-conflict, unhandled-error, invalid-layout, or
+  [test-errors] grep matches.
+```
