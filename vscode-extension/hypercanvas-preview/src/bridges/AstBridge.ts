@@ -650,6 +650,12 @@ export class AstBridge {
     let newElementId: string | undefined;
     _dbgBridge(`[writeI18nResource] key=${message.key} previousKey=${previousKey} filePath=${i18nFilePath} elementId=${i18nElementId} skipResourceWrite=${message.skipResourceWrite}`);
     if (i18nFilePath && i18nElementId && previousKey) {
+      try {
+        const preContent = await this._fileIO.readFile(i18nFilePath);
+        const lines = preContent.split('\n');
+        const snippet = lines.slice(109, 145).map((l, i) => `L${i + 110}:${l}`).join(' | ').substring(0, 2000);
+        _dbgBridge(`[pre-updateI18nKey] lines 110-145: ${snippet}`);
+      } catch {}
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
       );

@@ -29,15 +29,16 @@ import {
 } from '@lib/ast/operations';
 import { createFileParser } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
-import { findElementAtPosition } from '@lib/ast/traverser';
+import { findElementAtPosition, traverseJSXElements } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
 
-// File sink only when explicitly requested via env var — never in normal production use
-const DEBUG_LOG: string | null = process.env.HYPERIDE_AST_DEBUG_LOG ?? null;
+// File sink only when explicitly requested or in CI — never in normal production use
+const DEBUG_LOG: string | null =
+  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function dbg(msg: string) {
   if (!DEBUG_LOG) return;
   console.log(msg);
@@ -350,6 +351,12 @@ export class AstService {
   private _nodeMapService = new NodeMapService();
   private _fileIO: FileIO;
   private _initialized = false;
+  // Maps "absolutePath:oldLine:oldCol" → new position + fingerprint after recast reformatting.
+  // fingerprint guards against stale entries when the file is restored between writes.
+  private readonly _positionForwardingCache = new Map<
+    string,
+    { line: number; column: number; fingerprint: string }
+  >();
 
   /** Convert relative nodeRef (src/foo.tsx:10:5) to absolute (/workspace/src/foo.tsx:10:5) */
   private _normalizeNodeRef(nodeRef: string): string {
@@ -501,6 +508,28 @@ export class AstService {
     await this._updateNodeMap(absolutePath);
   }
 
+  /** Stable identity string for a JSX element based on tag name and sorted attribute list. */
+  private _getElementFingerprint(element: t.JSXElement): string {
+    const opening = element.openingElement;
+    const tagName = t.isJSXIdentifier(opening.name) ? opening.name.name : 'unknown';
+    const attrs = opening.attributes
+      .filter((a): a is t.JSXAttribute => t.isJSXAttribute(a))
+      .map((a) => {
+        const name = t.isJSXIdentifier(a.name) ? a.name.name : '?';
+        const val = !a.value
+          ? 'true'
+          : t.isStringLiteral(a.value)
+            ? a.value.value
+            : t.isJSXExpressionContainer(a.value)
+              ? 'expr'
+              : '?';
+        return `${name}=${val}`;
+      })
+      .sort()
+      .join(',');
+    return `${tagName}[${attrs}]`;
+  }
+
   /**
    * Resolve an element by nodeRef via NodeMapService + position lookup.
    * Returns the AST element result or null if not found.
@@ -573,6 +602,25 @@ export class AstService {
         const fileMatches =
           filePath && (filePath.endsWith(`/${fileName}`) || filePath.endsWith(fileName) || fileName === filePath);
         if (fileMatches) {
+          // Check forwarding cache first — handles stale elementId when recast reformats
+          // the file after a prior write and shifts all line numbers.
+          const fwdKey = `${filePath}:${line}:${column}`;
+          const forwarded = this._positionForwardingCache.get(fwdKey);
+          if (forwarded) {
+            const fwdResult = findElementByPosition(ast, forwarded.line, forwarded.column);
+            if (fwdResult) {
+              // Verify fingerprint: if the file was restored externally (e.g. HMR or
+              // test reset), the forwarded position may point to a completely different
+              // element. Drop the stale entry and fall through to a fresh direct lookup.
+              const currentFp = this._getElementFingerprint(fwdResult.element);
+              if (!forwarded.fingerprint || currentFp === forwarded.fingerprint) {
+                dbg(`[AstService] Position forwarded: ${nodeRef} ${line}:${column} → ${forwarded.line}:${forwarded.column}`);
+                return fwdResult;
+              }
+              dbg(`[AstService] Position forwarding stale (fp mismatch), discarding: ${fwdKey}`);
+              this._positionForwardingCache.delete(fwdKey);
+            }
+          }
           const result = findElementByPosition(ast, line, column);
           if (result) {
             dbg(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
@@ -760,6 +808,12 @@ export class AstService {
       }
       const { result, ast, resolvedPath } = resolved;
 
+      // Capture element identity before write so we can forward the stale position
+      // to the new position if recast reformats the file.
+      const oldLine = result.element.loc?.start.line;
+      const oldCol = result.element.loc?.start.column;
+      const elementFingerprint = oldLine != null ? this._getElementFingerprint(result.element) : null;
+
       let contentBeforeWrite: string | undefined;
       if (resolvedPath !== absolutePath) {
         try {
@@ -776,11 +830,14 @@ export class AstService {
         // Client may have stale previousKey (e.g. after HMR, i18nText is preserved from
         // prior read via ?? fallback). Fall back: replace first StringLiteral in first
         // JSXExpressionContainer with nextKey so the write succeeds regardless.
+        dbg(`[updateI18nKey] fallback: element type=${result.element.type} children=${result.element.children.length} childTypes=${result.element.children.map((c) => c.type).join(',')}`);
         for (const child of result.element.children) {
           if (!t.isJSXExpressionContainer(child)) continue;
           const expr = child.expression;
+          dbg(`[updateI18nKey] fallback: expr.type=${expr.type} isCall=${t.isCallExpression(expr)} isStr=${t.isStringLiteral(expr)}`);
           if (t.isCallExpression(expr) && expr.arguments.length > 0) {
             const firstArg = expr.arguments[0];
+            dbg(`[updateI18nKey] fallback: firstArg.type=${firstArg.type} isStringLiteral=${t.isStringLiteral(firstArg)}`);
             if (t.isStringLiteral(firstArg)) {
               firstArg.value = nextKey;
               changed = true;
@@ -797,6 +854,41 @@ export class AstService {
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
+
+      // After recast write, the file may have been reformatted and element positions
+      // shifted. Store old→new position forwarding so subsequent writes with the
+      // same stale elementId resolve to the correct (moved) element.
+      if (oldLine != null && oldCol != null && elementFingerprint != null) {
+        try {
+          const { ast: newAst } = await this._fileParser.readAndParseFile(resolvedPath);
+          let newPos: { line: number; column: number } | null = null;
+          const fp = elementFingerprint;
+          const getFingerprint = this._getElementFingerprint.bind(this);
+          traverseJSXElements(newAst, (elem) => {
+            if (elem.loc && getFingerprint(elem) === fp) {
+              newPos = { line: elem.loc.start.line, column: elem.loc.start.column };
+              return true; // stop traversal
+            }
+          });
+          if (newPos) {
+            const pos = newPos as { line: number; column: number };
+            // Compute fingerprint of element at new position for stale-cache detection.
+            // When the file is restored externally (HMR, test reset), the forwarded position
+            // will point to a different element — fingerprint mismatch drops the stale entry.
+            let newFingerprint = '';
+            traverseJSXElements(newAst, (elem) => {
+              if (elem.loc && elem.loc.start.line === pos.line && elem.loc.start.column === pos.column) {
+                newFingerprint = getFingerprint(elem);
+                return true;
+              }
+            });
+            const fwdKey = `${resolvedPath}:${oldLine}:${oldCol}`;
+            this._positionForwardingCache.set(fwdKey, { ...pos, fingerprint: newFingerprint });
+            dbg(`[updateI18nKey] pos forward: ${fwdKey} → ${pos.line}:${pos.column}`);
+          }
+        } catch {}
+      }
+
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateI18nKey] Error:', error);
