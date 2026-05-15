@@ -97,10 +97,19 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
     return { success: false, filePath: null, error: 'parse-error' };
   }
 
+  // Locale files must be plain objects — arrays and primitives cannot hold translation keys
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return { success: false, filePath: null, error: 'parse-error' };
+  }
+
   setKey(data, key, newText);
 
   const updated = `${JSON.stringify(data, null, 2)}\n`;
-  await fileIO.writeFile(filePath, updated);
+  try {
+    await fileIO.writeFile(filePath, updated);
+  } catch {
+    return { success: false, filePath: null, error: 'read-only' };
+  }
 
   return { success: true, filePath };
 }

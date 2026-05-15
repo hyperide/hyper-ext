@@ -131,7 +131,7 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       );
 
       if (!idAttr || !idAttr.value) {
-        found = { kind: 'unsupported', reason: 'missing-source-location' };
+        found = { kind: 'unsupported', reason: 'non-string-id' };
         return;
       }
 
