@@ -33,13 +33,6 @@ export interface I18nTextBinding {
    * False for read-only/external dictionaries that cannot be safely rewritten.
    */
   editable: boolean;
-  /**
-   * Mirrors `editable` from the `ResolveI18nResourceResult.writable` signal — the
-   * locale-file format supports programmatic writes (JSON / static-TS object literal).
-   * Optional because some unsupported / placeholder bindings omit it; new code should
-   * set it whenever it sets `editable`.
-   */
-  writable?: boolean;
   sourceLocation: { filePath: string; line: number; column: number };
   /** How the i18n helper was identified. Higher confidence = more reliable detection. */
   confidence?: 'import-chain' | 'package-json' | 'locale-heuristic';
