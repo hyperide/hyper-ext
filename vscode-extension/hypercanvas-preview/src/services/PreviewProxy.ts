@@ -167,13 +167,21 @@ export class PreviewProxy {
       return;
     }
 
+    // Strip origin/referer before forwarding: Vite 5.4+ rejects requests with
+    // non-localhost origins (DNS-rebinding protection). The VS Code webview sends
+    // Origin: vscode-webview://... which Vite blocks with 403. The proxy is a
+    // localhost-to-localhost bridge so origin semantics don't apply here.
+    const forwardHeaders = { ...clientReq.headers };
+    delete forwardHeaders['origin'];
+    delete forwardHeaders['referer'];
+
     const options: http.RequestOptions = {
       hostname: 'localhost',
       port: this._targetPort,
       path: proxyPath,
       method: clientReq.method,
       headers: {
-        ...clientReq.headers,
+        ...forwardHeaders,
         host: `127.0.0.1:${this._targetPort}`,
         // Prevent compressed responses so we can inject script
         'accept-encoding': 'identity',
