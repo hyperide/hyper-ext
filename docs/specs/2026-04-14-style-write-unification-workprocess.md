@@ -2092,3 +2092,66 @@ Run #7 завершится ~19:20 CEST. После него:
 - Запустить run #8 с теми же VSIX 0.1.17 (фикс из f5ebf94 подхватится автоматически)
 
 Ожидаемый результат run #8: s1=0 fail, s4=0 fail, итого 0 fails.
+
+## 📍 2026-04-27 18:05 CEST: Run #7 partial analysis + дополнительные фиксы + Run #8 старт
+
+### Run #7 (170054-55705) — прерван на 48 мин (shard-4 16% complete)
+
+Финальный snapshot при kill:
+
+| shard | pass | fail/timedOut | skip | total |
+|-------|------|----------------|------|-------|
+| s1    | 176  | 8              | -    | ~240  |
+| s2    | 171  | 2              | -    | ~240  |
+| s3    | 201  | 3              | -    | ~250  |
+| s4    | 88   | 16             | -    | 553   |
+
+**Новые failure классы обнаружены в run #7:**
+
+#### Класс A: 90s gate timeouts (ВСЕ = test.slow() × 30s = 90s)
+Все `remix-tw4-twitter` тесты с `ensurePreviewFiles()` → gate arm → Remix compile ~90s.
+**Fix:** `timeout: 60_000` (f5ebf94) → test.slow() = 180s → достаточно.
+Примеры: "elements identifiable", "inline styles", "HMR", "delete element" (102s), "duplicate element" (114s).
+
+#### Класс B: editor:tab:wait 5s timeout (НОВЫЙ)
+`setup-preview.ts` line 205: `toBeVisible({ timeout: 5_000 })`.
+"PI-18-8" и "component with && conditional rendering" — first-test-on-worker.
+VS Code рендерит editor tab медленнее при свежем запуске (3-10s в Docker).
+**Fix (c17ffaa):** 5s → 15s.
+
+#### Класс C: test.setTimeout(45_000) слишком мало для canvasRedo (НОВЫЙ)
+"hypercanvas.canvasRedo" — 54853ms timedOut + 47391ms timedOut (оба failed).
+`setupPreviewWithDevServer` занимает 20-35s, на 45s бюджет не хватает.
+**Fix (c17ffaa):** `test.setTimeout(45_000)` → `test.slow()` (= 180s с новым base).
+
+#### Класс D: drag tests без test.slow() (НОВЫЙ)
+"PI-5-DR-10" (79s + 56s timedOut) и "PI-18-10" (87s timedOut).
+Без `test.slow()` лимит 30s; реальная операция bootDesignMode+drag занимает 45-60s.
+**Fix (c17ffaa):** добавлен `test.slow()` в оба теста.
+
+#### Класс E: flaky tests (проходят на retry)
+- "undo after refresh preserves inspector" s2: 39s failed → 25s PASSED retry
+- "undo in preview panel context only" s2: 70s timedOut → 17s PASSED retry
+- "preview refresh command" s3: 28s failed → 49s PASSED retry
+- "component with error" s3: 77s failed → (retry pending)
+Не требуют фикса в коде.
+
+#### Класс F: "nested components" OOM crash on retry
+"nested components — children render": 106s failed → 32s "Target crashed" (Docker OOM).
+**Fix:** `timeout: 60_000` → first attempt 180s → PASSES → no retry → no OOM.
+
+### Что сделано в этом цикле (2-й раунд)
+
+ext-test-projects:
+- `f5ebf94`: `timeout: 60_000` + fix concurrent start/stop (pushed)
+- `c17ffaa`: editor:tab:wait 15s, canvasRedo test.slow(), PI-5-DR-10/PI-18-10 test.slow() (pushed)
+
+### Run #8 (175247-22144, VSIX 0.1.17) — стартован 17:52 CEST
+
+Все 4 шарда запущены. Активные фиксы:
+- gate fix V2: `be02c4c6` (ext build at 16:57)
+- timeout: 60s: `f5ebf94` (ext-test-projects)
+- editor:tab:wait/canvasRedo/drag timeouts: `c17ffaa` (ext-test-projects)
+- concurrent start/stop: `f5ebf94` (ext-test-projects)
+
+Ожидаемый результат: 0 failures (или < 5 flaky).
