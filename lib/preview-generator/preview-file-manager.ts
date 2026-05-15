@@ -369,6 +369,7 @@ export class PreviewFileManager {
   private providerWrap?: ProviderWrapConfig;
   private ssrMock?: SSRMockConfig;
   private _providerWrapPromise: Promise<void> | null = null;
+  private _ssrMockPromise: Promise<void> | null = null;
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
@@ -394,18 +395,14 @@ export class PreviewFileManager {
    * Awaited alongside provider wrap before any content generation.
    */
   setSSRMockAsync(promise: Promise<SSRMockConfig | null | undefined>): void {
-    const ssrPromise = promise.then((cfg) => {
+    this._ssrMockPromise = promise.then((cfg) => {
       if (cfg) this.ssrMock = cfg;
     });
-    // Chain onto existing provider promise so both are awaited together
-    this._providerWrapPromise = this._providerWrapPromise
-      ? Promise.all([this._providerWrapPromise, ssrPromise]).then(() => undefined)
-      : ssrPromise;
   }
 
-  /** Block until provider detection completes (no-op if none pending). */
+  /** Block until provider detection and SSR mock detection complete (no-op if none pending). */
   private async _awaitProviders(): Promise<void> {
-    if (this._providerWrapPromise) await this._providerWrapPromise;
+    await Promise.all([this._providerWrapPromise, this._ssrMockPromise]);
   }
 
   /** Determine the preview file path based on project structure */

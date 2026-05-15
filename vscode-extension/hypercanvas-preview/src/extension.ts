@@ -495,6 +495,7 @@ export function activate(context: vscode.ExtensionContext) {
       previewManager
         .ensureComponent([relPath])
         .then(() => {
+          componentMissingRetries.delete(componentPath);
           panelRef.refresh();
         })
         .catch((err) => {
@@ -577,6 +578,16 @@ export function activate(context: vscode.ExtensionContext) {
     dispose: () => modeManager.stopWatching(),
   });
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
+
+  previewPanel.onSampleCreated(async (componentPath) => {
+    const currentWorkspaceRoot = syncWorkspaceRuntime();
+    const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+    const relativePath = relative(currentWorkspaceRoot, absComponentPath);
+    await previewManager.ensureComponent([relativePath]);
+    await devServerManager?.awaitRecompile();
+    previewPanel?.setComponentParam(relativePath);
+    previewPanel?.refresh();
+  });
 
   // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
   previewPanel.setScopeChangeHandler(async (scope) => {

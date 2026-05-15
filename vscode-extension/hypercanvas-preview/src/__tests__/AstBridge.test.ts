@@ -55,8 +55,9 @@ function createMockWebview() {
  */
 function setupFileSnapshotsForPath(filePath: string, before: string, after: string): void {
   let callCount = 0;
-  const mockDoc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt'> = {
+  const mockDoc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt' | 'isDirty'> = {
     uri: vscode.Uri.file(filePath),
+    isDirty: true,
     getText: () => {
       callCount++;
       return callCount <= 1 ? before : after;

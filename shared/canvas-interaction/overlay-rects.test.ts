@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { computeOverlayRects } from './overlay-rects';
+import { computeOverlayRects, detectTailwindExplicitSize } from './overlay-rects';
 import type { OverlayElementResolver } from './types';
 
 /**
@@ -7,10 +7,11 @@ import type { OverlayElementResolver } from './types';
  * shared between SaaS and VS Code extension.
  */
 
-function mockElement(rect: { left: number; top: number; width: number; height: number }): HTMLElement {
+function mockElement(rect: { left: number; top: number; width: number; height: number }, className = ''): HTMLElement {
   return {
     getBoundingClientRect: () => rect,
     childNodes: [],
+    className,
   } as unknown as HTMLElement;
 }
 
@@ -231,5 +232,104 @@ describe('computeOverlayRects', () => {
 
     expect(result.overlayRects).toHaveLength(0);
     expect(result.placeholderRects).toHaveLength(0);
+  });
+
+  it('sets resizable on selection rect for element with w-12 h-12 className', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-12 h-12');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+  });
+
+  it('sets resizable for full fixture class shrink-0 w-12 h-12 rounded-xl', () => {
+    const el = mockElement(
+      { left: 0, top: 0, width: 48, height: 48 },
+      'shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary',
+    );
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+  });
+
+  it('sets resizable for arbitrary value classes w-[48px] h-[3rem]', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-[48px] h-[3rem]');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+  });
+
+  it('does not set resizable for class list without explicit size', () => {
+    const el = mockElement({ left: 0, top: 0, width: 100, height: 50 }, 'flex items-center');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toBeUndefined();
+  });
+
+  it('does not set resizable on hover rect even for element with explicit size', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-12 h-12');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: [], hoveredId: 'ref-1' }, resolver);
+
+    expect(result.overlayRects[0].type).toBe('hover');
+    expect(result.overlayRects[0].resizable).toBeUndefined();
+  });
+});
+
+describe('detectTailwindExplicitSize', () => {
+  it('detects w-12 h-12 as explicit width and height', () => {
+    expect(detectTailwindExplicitSize('w-12 h-12')).toEqual({ width: true, height: true });
+  });
+
+  it('detects full fixture class shrink-0 w-12 h-12 rounded-xl', () => {
+    expect(
+      detectTailwindExplicitSize(
+        'shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary',
+      ),
+    ).toEqual({ width: true, height: true });
+  });
+
+  it('detects arbitrary value classes w-[48px] h-[3rem]', () => {
+    expect(detectTailwindExplicitSize('w-[48px] h-[3rem]')).toEqual({ width: true, height: true });
+  });
+
+  it('returns false for both axes when class list has no explicit size', () => {
+    expect(detectTailwindExplicitSize('flex items-center')).toEqual({ width: false, height: false });
+  });
+
+  it('returns false for keyword size classes like w-full w-auto', () => {
+    expect(detectTailwindExplicitSize('w-full h-auto')).toEqual({ width: false, height: false });
+  });
+
+  it('detects only width when only w-* is present', () => {
+    expect(detectTailwindExplicitSize('w-24 flex')).toEqual({ width: true, height: false });
+  });
+
+  it('detects only height when only h-* is present', () => {
+    expect(detectTailwindExplicitSize('h-8 text-sm')).toEqual({ width: false, height: true });
+  });
+
+  it('detects w-px and h-px as explicit sizes', () => {
+    expect(detectTailwindExplicitSize('w-px h-px')).toEqual({ width: true, height: true });
+  });
+
+  it('detects responsive-prefixed size classes like md:w-12', () => {
+    expect(detectTailwindExplicitSize('md:w-12 lg:h-8')).toEqual({ width: true, height: true });
+  });
+
+  it('returns false/false for undefined', () => {
+    expect(detectTailwindExplicitSize(undefined)).toEqual({ width: false, height: false });
+  });
+
+  it('returns false/false for empty string', () => {
+    expect(detectTailwindExplicitSize('')).toEqual({ width: false, height: false });
   });
 });

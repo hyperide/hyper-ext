@@ -210,6 +210,7 @@ export class PreviewProxy {
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
+        clientReq.method === 'GET' &&
         retryCount < 90
       ) {
         proxyRes.resume(); // drain response
@@ -243,7 +244,7 @@ export class PreviewProxy {
         return;
       }
 
-      if (assetContentType && shouldSwallowStaleBundleResponse(proxyPath, proxyRes.statusCode, isHtml)) {
+      if (assetContentType && shouldSwallowStaleBundleResponse(proxyPath, proxyRes.statusCode)) {
         proxyRes.resume();
         clientRes.writeHead(204, {
           'content-type': assetContentType,

@@ -279,11 +279,7 @@ export class AstService {
         if (locEntry) {
           const locFile = locEntry.loc.fileName;
           const locMatchesAst =
-            !filePath ||
-            locFile === filePath ||
-            filePath.endsWith(`/${locFile}`) ||
-            locFile.endsWith(`/${filePath}`) ||
-            locFile === filePath;
+            !filePath || locFile === filePath || filePath.endsWith(`/${locFile}`) || locFile.endsWith(`/${filePath}`);
           if (locMatchesAst) {
             return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
           }

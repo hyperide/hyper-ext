@@ -175,7 +175,7 @@ export function useElementSelection(
         dispatch?.({ selectedIds: [dispatchId] });
       }
     },
-    [engine, dispatch, elementsTree],
+    [engine, dispatch, elementsTree, currentComponent],
   );
 
   const handleHover = useCallback(
