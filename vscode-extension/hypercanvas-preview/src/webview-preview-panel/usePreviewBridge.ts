@@ -52,7 +52,7 @@ export function buildComponentPreviewUrl(devServerUrl: string, component: string
   return `${devServerUrl.replace(/\/$/, '')}/test-preview?component=${encodeURIComponent(component)}`;
 }
 
-export function hasNavigatedPreviewSource(src: string | null | undefined): boolean {
+export function hasNavigatedPreviewSource(src: string | null | undefined): src is string {
   return Boolean(src && src !== 'about:blank');
 }
 
@@ -68,6 +68,26 @@ export function getComponentFromPreviewUrl(src: string | null | undefined): stri
 export function shouldNavigateFrameToComponent(src: string | null | undefined, nextComponent: string): boolean {
   const currentComponent = getComponentFromPreviewUrl(src);
   return currentComponent !== nextComponent;
+}
+
+export function canUpdatePreviewComponentInPlace(
+  currentSrc: string | null | undefined,
+  nextSrc: string | null | undefined,
+): boolean {
+  if (!hasNavigatedPreviewSource(currentSrc) || !hasNavigatedPreviewSource(nextSrc)) return false;
+
+  try {
+    const currentUrl = new URL(currentSrc);
+    const nextUrl = new URL(nextSrc);
+    return (
+      currentUrl.origin === nextUrl.origin &&
+      currentUrl.pathname === nextUrl.pathname &&
+      currentUrl.searchParams.has('component') &&
+      nextUrl.searchParams.has('component')
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
@@ -130,6 +150,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       }
 
       const frameHref = getFrameHref(frame);
+      const baseUrl = devServerUrlRef.current;
+      const nextUrl = baseUrl ? buildComponentPreviewUrl(baseUrl, component) : null;
+      if (nextUrl && !canUpdatePreviewComponentInPlace(frameHref, nextUrl)) {
+        return navigateToComponent(component, baseUrl);
+      }
+
       const currentComponent = getComponentFromPreviewUrl(frameHref);
       if (!currentComponent) {
         return navigateToComponent(component);
@@ -349,18 +375,15 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             // to avoid iframe navigation flash
             try {
               const component = new URL(url).searchParams.get('component');
-              const currentComponent = getComponentFromPreviewUrl(getFrameHref(frame));
-              if (component && currentComponent) {
+              if (component && canUpdatePreviewComponentInPlace(getFrameHref(frame), url)) {
                 frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
                 break;
               }
             } catch {
               /* invalid URL — fall through to full navigation */
             }
-            frame.src = url;
-          } else {
-            setStoredPreviewUrl(url);
           }
+          setStoredPreviewUrl(url);
           break;
         }
 

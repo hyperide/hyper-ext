@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildComponentPreviewUrl,
+  canUpdatePreviewComponentInPlace,
   getComponentFromPreviewUrl,
   hasNavigatedPreviewSource,
   shouldNavigateFrameToComponent,
@@ -44,6 +45,27 @@ describe('preview bridge URL helpers', () => {
     ).toBe(true);
     expect(
       shouldNavigateFrameToComponent('http://localhost:5173/test-preview?component=src%2FApp.tsx', 'src/App.tsx'),
+    ).toBe(false);
+  });
+
+  it('only updates component in place inside the same preview server route', () => {
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+        'http://localhost:5173/test-preview?component=src%2FOther.tsx',
+      ),
+    ).toBe(true);
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+        'http://localhost:5174/test-preview?component=src%2FApp.tsx',
+      ),
+    ).toBe(false);
+    expect(
+      canUpdatePreviewComponentInPlace(
+        'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+        'http://localhost:5173/other-preview?component=src%2FApp.tsx',
+      ),
     ).toBe(false);
   });
 });
