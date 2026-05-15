@@ -1,5 +1,7 @@
 # delete element regression — file unchanged after delete + CSS Modules hang
 
+<!-- commission: wc-20260513-6772420c | decision: dec-20260513-class-e-delete-element-regression -->
+
 ## Context
 
 ### Failures observed

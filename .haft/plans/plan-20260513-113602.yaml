@@ -1,0 +1,15 @@
+id: plan-20260513-113602
+revision: p1
+title: Harness run plan-20260513-113602
+repo_ref: local:hyper-canvas-draft
+base_sha: b2ec0103fae9879f5b90575ce104b89b400736e4
+target_branch: main
+projection_policy: local_only
+delivery_policy: workspace_patch_manual
+valid_for: 168h
+defaults:
+    allowed_actions:
+        - edit_files
+        - run_tests
+decisions:
+    - ref: dec-20260513-class-c-mcp-test-params

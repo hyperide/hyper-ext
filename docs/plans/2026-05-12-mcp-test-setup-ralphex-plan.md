@@ -1,5 +1,7 @@
 # MCP test failures — API mismatches + selection timeout
 
+<!-- commission: wc-20260513-507415ec | decision: dec-20260513-class-c-mcp-test-params -->
+
 ## Context
 
 ### Failures observed (S1, run-20260512-084158-98150)

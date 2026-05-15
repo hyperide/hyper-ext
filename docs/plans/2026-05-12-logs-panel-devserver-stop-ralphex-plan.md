@@ -1,5 +1,7 @@
 # logs panel — dev server stop corrupts shared VS Code worker
 
+<!-- commission: wc-20260513-dfad493a | decision: dec-20260513-class-d-logs-panel-teardown -->
+
 ## Context
 
 ### The test

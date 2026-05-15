@@ -1,5 +1,7 @@
 # ET-17: tree item click doesn't scroll canvas (partial fix from v0.1.45)
 
+<!-- commission: wc-20260513-3d8c0793 | decision: dec-20260513-class-f-et17-tree-scroll -->
+
 ## Context
 
 ### Failure observed
