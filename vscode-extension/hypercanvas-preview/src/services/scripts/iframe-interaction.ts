@@ -10,10 +10,6 @@ import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
-import {
-  findTraceableParent as findTraceableParentIndexAware,
-  type TraceableParentStep,
-} from '@shared/canvas-interaction/find-traceable-parent';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
@@ -38,6 +34,7 @@ import html2canvas from 'html2canvas';
 import {
   applySelectionGraceCache,
   hydrateSelectionGraceCache,
+  invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
 } from './selection-grace-cache';
@@ -1032,6 +1029,18 @@ attachClickHandler(
           logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
+          // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
+          // Mark the overlay loop dirty NOW so a fresh paint runs against the
+          // optimistic selection without waiting for the parent stateUpdate
+          // round-trip. Symptom (1) repro: after a drag the RAF loop bailed
+          // (needsOverlayUpdate=false; computedRects last paint was empty due
+          // to grace-cache invalidation), and an HMR-stalled round-trip kept
+          // it dormant — the user's post-drag click set selectedIds locally
+          // but no paint ever ran, so the rect never appeared. Dirtying here
+          // is safe: the round-trip stateUpdate later re-dirties the loop
+          // anyway, and a same-frame double paint dedupes via prevRectsJSON.
+          needsOverlayUpdate = true;
+          scheduleOverlayLoopIfNeeded();
         }
       }
 
@@ -1093,60 +1102,15 @@ function getSourceKey(el: HTMLElement): string | null {
   return `${loc.fileName}:${loc.line}:${loc.column}`;
 }
 
-// Diagnostic tag for Shift+Enter / parent-walk regression (Task 2 of
-// docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md). Filter DevTools
-// console with `[shiftparent]`. Goal: capture for each parent-walk
-//   1. the selectedId Shift+Enter started from,
-//   2. each DOM ancestor walked + its getSourceKey result,
-//   3. the chosen parentRef,
-//   4. whether findElementsByRef(parentRef) immediately finds a DOM element.
-// Combined with the existing [selsurv] `findElements miss` log on the overlay
-// path, this pinpoints whether the rect vanishes because (a) parentRef itself
-// is malformed/missing, (b) parentRef is well-formed but FiberSourceIndex was
-// indexed under a deduplicated key, or (c) the OUTERMOST host fiber whose key
-// equals parentRef has been unmounted by HMR mid-walk.
-const SHIFTPARENT_TAG = '[shiftparent]';
-function logShiftParentWalk(
-  selectedId: string,
-  steps: TraceableParentStep[],
-  parent: { tag: string; ref: string } | null,
-  parentLookupStatus: 'indexed' | null,
-): void {
-  console.debug(SHIFTPARENT_TAG, 'parent-walk', {
-    t: Math.round(performance.now()),
-    selectedId,
-    renderedComponentPath,
-    steps,
-    parentRef: parent?.ref ?? null,
-    parentTag: parent?.tag ?? null,
-    parentLookupStatus,
-  });
-}
-
-/**
- * Find the nearest ancestor DOM element with a traceable fiber source whose
- * key resolves back to itself in the FiberSourceIndex.
- *
- * Index-aware to keep the inspector path and rect-overlay path in sync after
- * Shift+Enter parent navigation (regression fix from
- * docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md, Task 3).
- *
- * Calls `findElementsByRef(ref, null)` (full set, not itemIndex 0) so that
- * walked-up `.map()`-row siblings register as members of the indexed entry.
- */
-function findTraceableParent(
-  el: HTMLElement,
-  trace?: TraceableParentStep[],
-): { element: HTMLElement; ref: string } | null {
-  return findTraceableParentIndexAware(
-    el,
-    {
-      getSourceKey,
-      findElementsByRef: (ref) => findElementsByRef(ref, null),
-      stopAt: document.body,
-    },
-    trace,
-  );
+/** Find the nearest ancestor DOM element that has a traceable fiber source. */
+function findTraceableParent(el: HTMLElement): { element: HTMLElement; ref: string } | null {
+  let current = el.parentElement;
+  while (current && current !== document.body) {
+    const ref = getSourceKey(current);
+    if (ref) return { element: current, ref };
+    current = current.parentElement;
+  }
+  return null;
 }
 
 /** Find direct child DOM elements that have traceable fiber sources. */
@@ -1186,63 +1150,10 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     // backslashes) fail the exact and closest-line lookups (both compare fileName),
     // so getEntry returns null and Shift+Enter clears selection instead of
     // navigating to parent.
-    //
-    // Start the walk-up from the user's actually-selected instance, not always
-    // from instance 0. The win this buys is correctness of ref *derivation* in
-    // dedup/HMR-mid-walk cases (covered by `find-traceable-parent.test.ts` —
-    // sibling-outer skip and unmounted-outer skip): starting from the wrong
-    // base element lets the walk pick an ancestor whose `getSourceKey` hashes
-    // to a deduped sibling host, so the returned `parentRef` no longer
-    // resolves back to anything in the index → rect overlay vanishes. By
-    // starting from row N's element, the predicate
-    // `findElementsByRef(ref).includes(parent)` evaluates against the right
-    // chain.
-    //
-    // Known pre-existing limitation (NOT introduced or resolved by this fix):
-    // when the parent itself is a repeated-instance host (e.g. bulka's
-    // `Section` wrapper `<div>` rendered once per Section invocation), all
-    // instances share the SAME source ref. The walk now correctly identifies
-    // row N's parent DOM element internally, but `onSelectElement(parentRef)`
-    // (keyboard-handler.ts:181) emits id-only with `itemIndex: null` and
-    // `useCanvasInteraction.ts:211` only updates `selectedItemIndices` when
-    // `msg.itemIndex` is non-null. Result: `overlay-rects.ts:113` calls
-    // `findElements(parentRef, null)` and highlights every parent instance.
-    // Fixing the visible rect-pinning requires plumbing parent itemIndex
-    // through the keyboard-handler callback API + SaaS engine.select; that
-    // refactor is out of the plan's scope (docs/plans/
-    // 2026-05-08-shift-enter-rect-ralphex-plan.md → "Out of scope:
-    // Refactoring the keyboard shortcut state machine").
-    //
-    // Falls back to `0` when no entry exists for nodeRef (chained navigation
-    // after a Shift+Enter selects a parent and selectedItemIndices wasn't
-    // patched for the new id — see useCanvasInteraction.ts:211 contract).
-    const startIdx = state.selectedItemIndices[nodeRef] ?? 0;
-    const el = findElementsByRef(nodeRef, startIdx)[0] ?? findElementsByRef(nodeRef, 0)[0];
-    if (!el) {
-      // Diagnostic: parent-walk asked about a nodeRef the rect path also can't
-      // resolve. Emitting from the keyboard-side too lets us cross-reference
-      // against the [selsurv] `findElements miss` log timestamp.
-      console.debug(SHIFTPARENT_TAG, 'getEntry missing-base', {
-        t: Math.round(performance.now()),
-        nodeRef,
-        renderedComponentPath,
-      });
-      return null;
-    }
+    const el = findElementsByRef(nodeRef, 0)[0];
+    if (!el) return null;
 
-    const trace: TraceableParentStep[] = [];
-    const parent = findTraceableParent(el, trace);
-    // The walk-up's index-aware predicate (`findElementsByRef(ref).includes(parent)`)
-    // already proved the parent is in the indexed set, so when `parent !== null`
-    // we know hits >= 1. We don't recall `findElementsByRef` here just for the
-    // diagnostic — that doubled the per-keypress cost without adding signal.
-    // Distinguish only the resolvable-vs-unresolvable case in the log.
-    logShiftParentWalk(
-      nodeRef,
-      trace,
-      parent ? { tag: parent.element.tagName.toLowerCase(), ref: parent.ref } : null,
-      parent ? 'indexed' : null,
-    );
+    const parent = findTraceableParent(el);
     const children = findTraceableChildren(el);
 
     return {
@@ -1753,6 +1664,28 @@ function _dragPointerUp(e: PointerEvent): void {
     },
     '*',
   );
+
+  // Drag-end regression fix (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md):
+  // The AST mutation about to land will renumber line/column for elements in
+  // the source file. The grace cache (designed for i18n text changes where
+  // line/col stay stable) would otherwise replay the previously-selected
+  // element's OLD bbox for up to SELECTION_GRACE_PERIOD_MS — that is the
+  // user-reported "stale rect lingers at old position" symptom (#2).
+  //
+  // Drop every cached rect for the mutated file *before* the next paint runs,
+  // so the next miss returns no replay rather than the stale geometry. Also
+  // invalidate target file for cross-file moves; here we only know the source
+  // file from the iframe side, but the dropTargetEl's source location was
+  // resolved into `dropSrc` above — drop its file too if different.
+  invalidateSelectionGraceCacheForFile(selectionGraceCache, sourceFilePath);
+  if (dropSrc.fileName && dropSrc.fileName !== sourceFilePath) {
+    invalidateSelectionGraceCacheForFile(selectionGraceCache, dropSrc.fileName);
+  }
+  // Mark overlays dirty so the next RAF tick re-runs the lookup; without this
+  // the loop may have just bailed (needsOverlayUpdate=false) and would not
+  // rediscover the empty cache state until the next MutationObserver hit.
+  needsOverlayUpdate = true;
+  scheduleOverlayLoopIfNeeded();
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {
