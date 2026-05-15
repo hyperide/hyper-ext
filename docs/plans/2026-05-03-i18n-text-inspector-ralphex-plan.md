@@ -153,11 +153,11 @@ Expected first failure: missing module or assertion that no provider is detected
 
 ### Task 3: Implement Package Detection Minimally
 
-- [ ] Implement a pure package detector that accepts parsed package JSON data.
-- [ ] Reuse existing package read patterns from preview-generator/server/extension
+- [x] Implement a pure package detector that accepts parsed package JSON data.
+- [x] Reuse existing package read patterns from preview-generator/server/extension
   code; do not duplicate host-specific parsing in the UI.
-- [ ] Keep library identifiers typed as a union, not `string`.
-- [ ] Add no new `any` or lazy `Record<string, unknown>` escape types.
+- [x] Keep library identifiers typed as a union, not `string`.
+- [x] Add no new `any` or lazy `Record<string, unknown>` escape types.
 
 Verification:
 
@@ -167,11 +167,11 @@ bun test shared/i18n-text/__tests__/detect-i18n-package.test.ts
 
 ### Task 4: Add AST Binding Detection Tests First
 
-- [ ] Add failing tests for production AST analysis:
+- [x] Add failing tests for production AST analysis:
   `shared/i18n-text/__tests__/detect-i18n-binding.test.ts`.
-- [ ] Use Babel parser production helpers already used in `lib/ast` or
+- [x] Use Babel parser production helpers already used in `lib/ast` or
   `lib/services`, not copied AST logic inside the test.
-- [ ] Include this failing-test-first fixture shape without permanently editing
+- [x] Include this failing-test-first fixture shape without permanently editing
   Bulka:
 
   ```tsx
@@ -181,13 +181,13 @@ bun test shared/i18n-text/__tests__/detect-i18n-package.test.ts
   }
   ```
 
-- [ ] Add variants for:
+- [x] Add variants for:
   `formatMessage({ id: "habits.walks" })`,
   `t({ id: "habits.walks" })`,
   `t\`habits.walks\``,
   `<FormattedMessage id="habits.walks" />`,
   and `<Trans id="habits.walks" />`.
-- [ ] Confirm failure is semantic: the selected JSX expression is not recognized
+- [x] Confirm failure is semantic: the selected JSX expression is not recognized
   as an i18n binding.
 
 Verification:
@@ -198,14 +198,14 @@ bun test shared/i18n-text/__tests__/detect-i18n-binding.test.ts
 
 ### Task 5: Implement AST Binding Detection Minimally
 
-- [ ] Implement shared AST detection that accepts source text, file path, and
+- [x] Implement shared AST detection that accepts source text, file path, and
   source location or element result.
-- [ ] Resolve the selected JSX child from AST/source location, not DOM text.
-- [ ] Recognize direct calls, hook-bound aliases, member calls, template tags,
+- [x] Resolve the selected JSX child from AST/source location, not DOM text.
+- [x] Recognize direct calls, hook-bound aliases, member calls, template tags,
   and JSX i18n components listed in the detection contract.
-- [ ] For custom/self-written i18n, return `library: 'custom'` only when the call
+- [x] For custom/self-written i18n, return `library: 'custom'` only when the call
   has a static key and package/resource scan supports an i18n-like project.
-- [ ] Return structured unsupported reasons for dynamic keys, non-string ids,
+- [x] Return structured unsupported reasons for dynamic keys, non-string ids,
   unknown wrappers, and missing source location.
 
 Verification:
