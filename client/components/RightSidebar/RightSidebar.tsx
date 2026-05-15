@@ -48,14 +48,7 @@ import {
 } from './sections';
 import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import {
-  computeNumericArrowValue,
-  cssToPosition,
-  findNodeById,
-  mapShadowSizeToValues,
-  parseHexWithAlpha,
-  positionToCss,
-} from './utils';
+import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
 
 // ============================================================================
 // Component quick-list (Inspector empty state, VS Code only)
@@ -461,18 +454,49 @@ export default function RightSidebar({
       styleKey?: string,
       defaultValue?: string,
     ) => {
-      const newValue = computeNumericArrowValue({
-        key: e.key,
-        currentValue,
-        styleKey,
-        defaultValue,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-      });
-      if (newValue === null) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
         return;
       }
+
       e.preventDefault();
+
+      const isUnitless =
+        styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
+      const trimmed = currentValue.replace(' Auto', '').trim();
+      const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+
+      if (!match) {
+        const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+        const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
+        const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
+
+        const increment = e.key === 'ArrowUp' ? 1 : -1;
+        const step = e.shiftKey || e.altKey ? 10 : 1;
+        let newNum = baseNum + increment * step;
+
+        if (styleKey === 'opacity') {
+          newNum = Math.max(0, Math.min(100, newNum));
+        }
+
+        const unit = isUnitless ? '' : baseUnit || 'px';
+        const newValue = `${newNum}${unit}`;
+        setValue(newValue);
+        if (styleKey) syncStyleChange(styleKey, newValue);
+        return;
+      }
+
+      const num = Number.parseFloat(match[1]);
+      const unit = match[2] || (isUnitless ? '' : 'px');
+
+      const increment = e.key === 'ArrowUp' ? 1 : -1;
+      const step = e.shiftKey || e.altKey ? 10 : 1;
+      let newNum = num + increment * step;
+
+      if (styleKey === 'opacity') {
+        newNum = Math.max(0, Math.min(100, newNum));
+      }
+
+      const newValue = `${newNum}${unit}`;
       setValue(newValue);
       if (styleKey) syncStyleChange(styleKey, newValue);
     },

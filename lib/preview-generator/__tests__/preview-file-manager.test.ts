@@ -1984,7 +1984,7 @@ export function cn(...classes: string[]) {
 `;
 
 describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern', () => {
-  it('excludes components/ui/* without SampleDefault from registry even when explicitly requested', async () => {
+  it('synthesizes SampleDefault for components/ui/* compound shadcn modules so they preview without fallback-prop crashes', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/index.html',
@@ -1994,9 +1994,15 @@ describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern'
     io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    // Sheet has no SampleDefault — excluded from registry to prevent fallback-prop crashes
+    // Sheet has no authored SampleDefault but it does export the compound
+    // SheetTrigger sibling — Task 4 broadens the suffix allow-list so this
+    // file gets a synthetic SampleDefault and stays in the registry. The
+    // crash-prevention invariant still holds: rendering goes through the
+    // synthesized sample arrow, never the bare fallback-prop spread.
     const content = await manager.ensureComponent(['client/components/ui/sheet.tsx']);
-    expect(content).not.toContain("'client/components/ui/sheet.tsx'");
+    expect(content).toContain("'client/components/ui/sheet.tsx'");
+    expect(content).toContain('SheetModule.Sheet');
+    expect(content).toContain('SheetModule.SheetTrigger');
   });
 
   it('excludes components/ui/* with non-default samples but no SampleDefault', async () => {
