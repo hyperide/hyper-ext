@@ -3135,3 +3135,34 @@ All fixes applied:
 - `8dfc896` socket benign errors + Editor.openFile aria-label ranking
 
 Expected: 0 persistent failures across all 2189 tests.
+
+## 📍 Disk crisis + Docker recovery (2026-04-28 10:49 CEST)
+
+### Problem
+
+Docker I/O errors blocked Run #20 image build. Root cause: host disk 100% full
+(`/dev/disk3s5: 415Gi used / 1.9Gi free`). Docker Desktop VM filesystem ran out
+of write space → all writes to `io.containerd.content.v1.content/ingest` failed
+with `input/output error`.
+
+### Recovery steps
+
+1. Killed Run #19 containers (S1r2 and S3 — both stopped, data in artifacts).
+2. Restarted Docker Desktop (`pkill -SIGTERM "Docker Desktop"` + `open -a "Docker Desktop"`).
+3. `docker builder prune -f` → freed **20.12GB** build cache.
+4. `docker container prune -f` → freed **656MB** stopped containers.
+5. `docker volume rm` (3 workspace slots) → freed ~1.6GB volumes.
+6. `docker rmi hypercanvas-e2e:latest` → freed **18.7GB** image layers.
+7. Host disk after: **22Gi free** (was 1.9Gi). Docker VM recovered.
+
+### Run #19 final state (stopped mid-run)
+
+- S2: **COMPLETE** — 420 passed / 3 failed / 6 flaky / 262 skipped
+- S1r2: killed at ~376/769 tests — 0 failures, clean
+- S3: killed at ~215/729 tests — Remix cold-compile timeouts (all retry-pass, closed by pre-warm)
+- **Run #19 conclusion**: 0 persistent failures on completed S2; S1r2 and S3 stopped early due to disk crisis
+
+### Run #20 restarted (2026-04-28 10:49 CEST)
+
+Image building from scratch (old image deleted). ETA: ~20 min for image, then containers.
+All fixes: e097090 vite pre-warm + 0882fef optimizeDeps + 50511a5 poll 600s + 8dfc896 socket benign+Editor fix.
