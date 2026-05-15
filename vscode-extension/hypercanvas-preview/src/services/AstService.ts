@@ -59,6 +59,64 @@ export interface UpdateStylesResult extends AstOperationResult {
   className?: string;
 }
 
+// ============================================
+// moveElement contract — spec for Task 2+ in
+// docs/plans/2026-05-06-move-any-to-any-no-shared-parent.md
+// ============================================
+//
+// Semantics (the "any element to any place" promise):
+//
+// 1. moveElement(source, target, position) ALWAYS succeeds from the user's
+//    standpoint. There is no "must share JSX parent" / "rejected" branch —
+//    if the move would otherwise be ambiguous, the implementation does its
+//    best (auto-import what it can, inline what it cannot) and returns a
+//    list of `adjustments` describing what it had to do.
+//
+// 2. Cases the implementation MUST handle:
+//    a) Same JSX parent — sibling reorder (current reorderElement logic).
+//    b) Different JSX parents in the same file — cut-and-splice across
+//       subtrees of one module.
+//    c) Different files in the same component graph — cut from source file,
+//       paste into target file. Auto-add imports that the moved subtree
+//       references; auto-remove imports orphaned in the source file.
+//    d) Cross-component (e.g. drag from <Sidebar> into <Hero>) — same as
+//       (c). If the moved subtree references symbols bound only in the
+//       source component scope, surface them as new props on the target
+//       (or inline the resolved value when trivially safe).
+//    e) Drop into a non-container leaf (e.g. <img>) — insert as a sibling
+//       at `position`, never split the leaf.
+//
+// 3. The `position` parameter is the visual direction the user dragged
+//    toward — 'before' means "land just before target in document order",
+//    'after' means "land just after target". It is always defined; callers
+//    compute it from pointer geometry.
+//
+// 4. NodeRef inputs are raw — no client-side "lift to common parent"
+//    pre-processing. Both `source` and `target` may sit anywhere in the
+//    workspace. The shared/canvas-interaction/drop-target-lift module is
+//    deleted as part of Task 8.
+//
+// MoveResult shape:
+//   { success: true }                                 // clean move, no adjustments
+//   { success: true; adjustments: string[] }          // best-effort move
+//
+// Note: there is intentionally no `success: false` variant. Internal
+// failures (file I/O, parse errors) propagate as exceptions; the bridge
+// layer surfaces them as toasts but the contract from the iframe's
+// standpoint is "moveElement always returns success".
+
+export interface MoveResult {
+  success: true;
+  /** Human-readable list of best-effort adjustments (e.g. "added import: Foo from './Foo'", "inlined prop value `theme.primary`"). Omitted when the move was clean. */
+  adjustments?: string[];
+  /** Absolute path of the file that received the moved subtree (may differ from the source file for cross-file moves). */
+  resolvedPath?: string;
+  /** Pre-write content of the target file (for undo tracking). */
+  contentBeforeWrite?: string;
+  /** Pre-write content of every file mutated (source file + target file for cross-file moves). */
+  allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
+}
+
 export interface InsertElementResult extends AstOperationResult {
   newId?: string;
   index?: number;
