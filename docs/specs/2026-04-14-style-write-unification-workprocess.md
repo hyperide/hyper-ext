@@ -3282,3 +3282,27 @@ auto-reduced; override with `HYPER_E2E_SHARDS=N` next time if needed).
 - "send message with send button click" 735ms — passed
 
 Run is active. Will monitor until completion.
+
+## 📍 Run #20 Checkpoint 1 (2026-04-28 ~14:50 CEST, ~58 min)
+
+Container: `hyper-e2e-20260428-135231-70548-s1`
+Log: `e2e/docker-artifacts/run-20260428-135231-70548/shard-1/docker.log`
+
+| Shard | Total | Pass | Fail | Skip | Done% |
+|-------|-------|------|------|------|-------|
+| s1    | 2189  | 161  | 0    | 4    | 7.5%  |
+
+**0 failures confirmed.** 4 skipped = PI-5-DR drag tests (expected, feature incomplete).
+
+Current position: passing through PI-5-DR / PI-18 drag suite.
+Pace: ~4.2 tests/min → ETA ~21:30 CEST.
+
+### 2 additional product fixes committed during this window
+
+- `bc5a5703` — fix(extension): require PascalCase in normalizeSampleComponentName (scaffolds `<Page />` not `<page />`)
+- `dfc5231f` — fix(extension): use AST default export name in SampleDefault scaffold (scaffolds `<Home />` from `page.tsx` with `export default function Home`)
+- `4f4b5f07` — fix(inspector): text-xs on font-size input in FillSection
+
+These are product fixes only; Run #20 containers run unaffected extension code (bound from source dir).
+
+### No action needed until first failure appears or run completes.
