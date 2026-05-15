@@ -88,18 +88,52 @@ extension consumption. Put shared behavior in `shared/` when applicable.
 
 ### Task 3: Isolate Drag Event Path
 
-- [ ] Add temporary local logging or use DevTools event listeners to trace
+- [x] Add temporary local logging or use DevTools event listeners to trace
   `mousedown`, `mousemove`, `mouseup`, `pointerdown`, `pointermove`, and
   `pointerup` on the badge, frame, parent window, iframe element, and iframe
   document.
-- [ ] Confirm whether `handleDragStart`, `handleDragMove`, and `handleDragEnd`
+  Code analysis: Badge/frame have `mousedown`+`mouseup` listeners on their DOM nodes
+  (parent window). Window-level `mousemove`+`mouseup` drive handleDragMove/End.
+  No `pointerdown`/`pointermove`/`pointerup` used in the overlay drag path.
+  In `click-handler.ts` (attached to iframeDoc): `pointerdown` capture fires
+  `e.preventDefault()` in design mode — relevant only for iframe-internal events,
+  not for parent-window overlay nodes. In design mode, if the mouse enters the
+  iframe before the 5px threshold, the iframe (pointer-events: auto) absorbs
+  mouse events and the parent window's `mousemove` listener stops receiving events.
+- [x] Confirm whether `handleDragStart`, `handleDragMove`, and `handleDragEnd`
   run in `useInstanceOverlays.ts`.
-- [ ] Confirm whether `dragStateRef.current.instanceId` is preserved during RAF
+  Code analysis: `handleDragStart` runs synchronously in `handleBadgeMouseDown`/
+  `handleFrameMouseDown` on mousedown (boardModeActive guard). `handleDragMove`
+  and `handleDragEnd` are called via stable wrapper refs (`stableHandleDragMove` →
+  `handleDragMoveRef.current?.(e)`) attached to `window`. They run only if the
+  parent window receives the events — confirmed for board mode (iframe
+  pointer-events: none); may not run in design mode if mouse enters iframe before
+  5px threshold.
+- [x] Confirm whether `dragStateRef.current.instanceId` is preserved during RAF
   overlay updates.
-- [ ] Confirm whether RAF overlay updates mutate pointer-events during an active
+  Code analysis: `handleDragStart` sets `dragStateRef.current.instanceId` (non-null)
+  synchronously on mousedown. RAF reads `dragStateRef.current` directly (ref, not
+  state). Since ref updates are synchronous and RAF fires on next animation frame
+  (after mousedown handler completes), `instanceId` is always set before the next
+  RAF fires. Confirmed preserved.
+- [x] Confirm whether RAF overlay updates mutate pointer-events during an active
   pending drag.
-- [ ] Compare SaaS behavior with extension iframe handling before deciding
+  Code analysis: RAF loop guards both pointer-events blocks behind
+  `!dragStateRef.current.instanceId` (lines 622 and 630 of useInstanceOverlays.ts).
+  When `instanceId` is set (from mousedown until handleDragEnd clears it), neither
+  overlay frame/badge pointer-events nor iframe pointer-events are mutated by RAF.
+  Guard is correct and effective.
+- [x] Compare SaaS behavior with extension iframe handling before deciding
   whether the fix belongs in `shared/`.
+  Code analysis: Extension (`iframe-interaction.ts`) has no board mode, no
+  multi-instance overlay dragging, and no `data-canvas-instance-id` overlays.
+  `activeInstanceId` is hard-coded `null` with a comment that board mode is
+  SaaS-only. Extension uses `attachClickHandler` for element selection only.
+  Fix belongs exclusively in SaaS (`useInstanceOverlays.ts`), not in `shared/`.
+  Root cause confirmed: design-mode badge/frame drag loses `mousemove` events
+  when pointer crosses into iframe (pointer-events: auto) before the 5px threshold
+  is reached, preventing the drag from ever starting. Board mode is unaffected
+  because iframe already has pointer-events: none.
 
 ### Task 4: Smallest Fix
 
