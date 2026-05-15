@@ -42,6 +42,7 @@ import type { SourceLocation } from '@shared/element-tracing/types';
 import html2canvas from 'html2canvas';
 import {
   applySelectionGraceCache,
+  clearGraceCacheForElement,
   hydrateSelectionGraceCache,
   invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
@@ -2530,6 +2531,19 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.engineMode = 'design';
     keydownHandler(syntheticEvent);
     state.engineMode = prevMode;
+    return;
+  }
+
+  if (msg.type === 'hypercanvas:clearGraceCache') {
+    const elementId = typeof msg.elementId === 'string' ? msg.elementId : null;
+    if (elementId) {
+      clearGraceCacheForElement(selectionGraceCache, elementId);
+    } else {
+      selectionGraceCache.rectsByElementId.clear();
+      selectionGraceCache.deadlineByElementId.clear();
+    }
+    needsOverlayUpdate = true;
+    scheduleOverlayLoopIfNeeded();
     return;
   }
 

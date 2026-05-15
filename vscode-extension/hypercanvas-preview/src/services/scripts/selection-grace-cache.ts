@@ -89,6 +89,18 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
 }
 
 /**
+ * Remove a single element's cached rect so the next overlay paint forces a fresh
+ * DOM lookup instead of replaying stale geometry. Call after an i18n key write
+ * completes — the JSX text mutation may shift line/col for the same logical node,
+ * so the cached rect's position is stale even though the element ID is stable.
+ */
+export function clearGraceCacheForElement(state: SelectionGraceCacheState, elementId: string): void {
+  if (!elementId) return;
+  state.rectsByElementId.delete(elementId);
+  state.deadlineByElementId.delete(elementId);
+}
+
+/**
  * Drop every cached rect whose elementId references the given file path.
  *
  * Element IDs follow the format `<fileName>:<line>:<column>`. After an AST

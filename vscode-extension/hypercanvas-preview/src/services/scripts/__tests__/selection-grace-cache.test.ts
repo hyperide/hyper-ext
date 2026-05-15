@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { OverlayRect } from '@shared/canvas-interaction/types';
 import {
   applySelectionGraceCache,
+  clearGraceCacheForElement,
   hydrateSelectionGraceCache,
   invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
@@ -739,6 +740,69 @@ describe('invalidateSelectionGraceCacheForFile', () => {
   test('no-op when cache is empty', () => {
     const cache = makeSelectionGraceCacheState();
     expect(() => invalidateSelectionGraceCacheForFile(cache, 'src/Foo.tsx')).not.toThrow();
+    expect(cache.rectsByElementId.size).toBe(0);
+  });
+});
+
+describe('clearGraceCacheForElement', () => {
+  test('removes only the specified element, leaving others intact', () => {
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: [ID_A, ID_B],
+      computedRects: [selectionRect(ID_A), selectionRect(ID_B)],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+    expect(cache.rectsByElementId.size).toBe(2);
+
+    clearGraceCacheForElement(cache, ID_A);
+
+    expect(cache.rectsByElementId.has(ID_A)).toBe(false);
+    expect(cache.deadlineByElementId.has(ID_A)).toBe(false);
+    expect(cache.rectsByElementId.has(ID_B)).toBe(true);
+    expect(cache.deadlineByElementId.has(ID_B)).toBe(true);
+  });
+
+  test('forces fresh DOM lookup after i18n key write — no stale replay within grace window', () => {
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: [ID_A],
+      computedRects: [selectionRect(ID_A)],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+
+    clearGraceCacheForElement(cache, ID_A);
+
+    const result = applySelectionGraceCache({
+      selectedIds: [ID_A],
+      computedRects: [],
+      cache,
+      now: 1100,
+      gracePeriodMs: 2500,
+    });
+    expect(result.inGracePeriod).toBe(false);
+    expect(result.rects).toEqual([]);
+  });
+
+  test('no-op for empty element id (defensive)', () => {
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: [ID_A],
+      computedRects: [selectionRect(ID_A)],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+    clearGraceCacheForElement(cache, '');
+    expect(cache.rectsByElementId.size).toBe(1);
+  });
+
+  test('no-op when cache is empty', () => {
+    const cache = makeSelectionGraceCacheState();
+    expect(() => clearGraceCacheForElement(cache, ID_A)).not.toThrow();
     expect(cache.rectsByElementId.size).toBe(0);
   });
 });

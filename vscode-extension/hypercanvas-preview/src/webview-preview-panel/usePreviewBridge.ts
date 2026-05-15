@@ -528,6 +528,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           }
           break;
 
+        case 'iframe:clearGraceCache':
+          // Drop stale selection-rect cache entry after i18n write; forces fresh DOM lookup
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:clearGraceCache', elementId: msg.elementId }, '*');
+          break;
+
         case 'iframe:scrollToElement':
           // Scroll canvas (iframe) to the specified element without changing selection
           // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
