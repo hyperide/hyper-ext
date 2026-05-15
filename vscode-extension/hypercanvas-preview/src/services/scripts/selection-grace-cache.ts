@@ -45,6 +45,15 @@ export interface ApplyGraceCacheOptions {
   now: number;
   /** How long to keep replaying a cached rect after the last successful paint. */
   gracePeriodMs: number;
+  /**
+   * Optional diagnostic callback invoked once per element when its cache entry is
+   * evicted. Reasons:
+   *   - 'deselected': caller no longer reports the ID as selected
+   *   - 'expired':    the grace deadline elapsed before a fresh paint arrived
+   * Used by iframe-interaction.ts to surface the moment the overlay disappears
+   * (Task 1 of selection-flicker-some-elements).
+   */
+  onPrune?: (elementId: string, reason: 'deselected' | 'expired') => void;
 }
 
 export interface ApplyGraceCacheResult {
@@ -71,13 +80,16 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
  * grace deadline expires.
  */
 export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGraceCacheResult {
-  const { selectedIds, computedRects, cache, now, gracePeriodMs } = opts;
+  const { selectedIds, computedRects, cache, now, gracePeriodMs, onPrune } = opts;
 
   // 1. Drop entries for IDs no longer selected so we never paint a stale rect for a deselected element.
   if (cache.rectsByElementId.size > 0 || cache.deadlineByElementId.size > 0) {
     const active = new Set(selectedIds);
     for (const id of cache.rectsByElementId.keys()) {
-      if (!active.has(id)) cache.rectsByElementId.delete(id);
+      if (!active.has(id)) {
+        cache.rectsByElementId.delete(id);
+        onPrune?.(id, 'deselected');
+      }
     }
     for (const id of cache.deadlineByElementId.keys()) {
       if (!active.has(id)) cache.deadlineByElementId.delete(id);
@@ -116,6 +128,7 @@ export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGra
     if (now > deadline) {
       cache.rectsByElementId.delete(id);
       cache.deadlineByElementId.delete(id);
+      onPrune?.(id, 'expired');
       continue;
     }
     rects.push({
