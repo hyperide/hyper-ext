@@ -470,3 +470,28 @@ quickly. New fix: 600→720s poll gives comfortable margin.
   - dev-server deactivation annotation
   - redo test cleanup (Cmd+Shift+Z teardown hang)
 - Still watching: "Tamagui: style written as prop, not className" (reduced from 3/6 fails with 60s poll)
+
+### Intermediate status (15:00 CEST, ~46min in)
+
+- S1: 86 test-done, **0 failed**
+- S2: 62 test-done, 1 failed ("component with error" attempt 1 — 12573ms fast-fail, attempt 2 PASSED → FLAKY)
+- S3: 38 test-done, 2 failed (Tamagui x2 — both attempts HARD FAIL: 73471ms + 83615ms)
+
+### Confirmed Hard Fail (not in run #30 fix)
+
+`Tamagui: style written as prop, not className` — both attempts failed:
+- Attempt 1: 73471ms (setup ~5s + 2s pre-poll + 60s poll → total ~67s, but actual 73s with iteration overhead)
+- Attempt 2: 83615ms (similar)
+
+**Fix**: Tamagui poll 60s → 90s (commit `ab568b5`, in run #31).
+
+### Commits ready for Run #31 (not in run #30)
+
+| Commit | Fix |
+|--------|-----|
+| `4d32dc2` | inspector typing annotation (expected parse errors) |
+| `5f17a48` | error-overlay 500ms editor focus settle |
+| `b6f88ab` | dev-server deactivation expected-runtime-errors annotation |
+| `b58627c` | redo PI-6-32: undo at end to avoid 6-min teardown hang |
+| `ab568b5` | Tamagui poll 60→90s |
+
