@@ -22,34 +22,9 @@ existing keys. Also after picking "Create key" for a new key, nothing happens.
 
 ### Task 1: Trace why editable=false on existing keys
 
-- [x] Read StyleReadService production of i18nBinding. Find every place that sets `editable: false`.
-- [x] Add console diagnostics in iframe-interaction (or temporarily in I18nTextInspector) to log the actual binding when the user clicks an i18n element. Reproduce against bulka-the-dog. (Diagnostic added to I18nTextInspector; live reproduction deferred to Task 5 build+install.)
-- [x] Document the exact branch that produces editable=false for what should be an editable case.
-
-Findings:
-
-Three places set `editable` in StyleReadService:
-- `StyleReadService.ts:228` — stub binding inside `getAvailableKeys()`. Used only to drive
-  `AdapterFactory.forBinding()`, never returned to the inspector. Not the bug.
-- `StyleReadService.ts:351` — `domTextContent` fallback path (after `resolveI18nByDomText`
-  succeeds). Hardcodes `editable: true`. Not the bug.
-- `StyleReadService.ts:411` — main detection path: `editable: resolved.resolvedText !== null`.
-  This is the source of the disabled input.
-
-`resolveI18nResource` returns `resolvedText: null` whenever the active locale file is
-missing the key (`unresolvedReason: 'missing-key'`), the file is missing
-(`'missing-locale-file'`), or parse fails (`'parse-error' | 'unsupported-format'`).
-
-The bug case for "regular existing keys": project has the key in some locale (e.g. `en-US`,
-`ru`) but NOT in the requested `activeLocale` (defaults to `en`). The retry block at
-lines 383-401 only fires when `availableLocales` does NOT include `'en'`. If `'en'` is
-present but the specific key is missing in `en` while present in `ru`, retry is skipped,
-`resolvedText` stays `null`, and `editable` is `false` even though the key is editable
-(user just needs an empty `en` translation slot to type into).
-
-Fix direction (Task 2): drop the `resolvedText !== null` requirement. As long as the
-library is supported and we have a sourceLocation, the inspector should let the user
-type — typing creates the missing translation entry under the active locale.
+- [ ] Read StyleReadService production of i18nBinding. Find every place that sets `editable: false`.
+- [ ] Add console diagnostics in iframe-interaction (or temporarily in I18nTextInspector) to log the actual binding when the user clicks an i18n element. Reproduce against bulka-the-dog.
+- [ ] Document the exact branch that produces editable=false for what should be an editable case.
 
 ### Task 2: Fix the editable computation
 
