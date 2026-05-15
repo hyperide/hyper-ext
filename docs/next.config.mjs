@@ -6,7 +6,7 @@ const withNextra = nextra({
 
 export default withNextra({
   reactStrictMode: true,
-  // Static export for docs.hyperi.de
+  // Static export for docs.hyperide.ai
   output: 'export',
   // Fix for Turbopack + MDX (Next.js 15+)
   turbopack: {

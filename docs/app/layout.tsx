@@ -4,15 +4,26 @@ import { Footer, Layout, Navbar } from 'nextra-theme-docs';
 import 'nextra-theme-docs/style.css';
 
 export const metadata = {
+  metadataBase: new URL('https://docs.hyperide.ai'),
   title: {
     default: 'HyperIDE Documentation',
     template: '%s | HyperIDE Docs',
   },
   description: 'Visual React component editor with AI assistant. Edit components like Figma, generate code with AI.',
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     title: 'HyperIDE Documentation',
     description: 'Visual React component editor with AI assistant',
     siteName: 'HyperIDE Docs',
+    url: 'https://docs.hyperide.ai',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'HyperIDE Documentation',
+    description: 'Visual React component editor with AI assistant',
+    domain: 'docs.hyperide.ai',
   },
 };
 
