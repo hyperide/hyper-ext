@@ -23,12 +23,11 @@ import { VSCodeFileIO } from '../vscode-file-io';
 const _BRIDGE_DEBUG_LOG: string | null =
   process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
 function _dbgBridge(msg: string) {
+  if (!_BRIDGE_DEBUG_LOG) return;
   console.log(msg);
-  if (_BRIDGE_DEBUG_LOG) {
-    try {
-      fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
-    } catch {}
-  }
+  try {
+    fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
 }
 
 export class AstBridge {

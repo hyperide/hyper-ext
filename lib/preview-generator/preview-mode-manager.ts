@@ -256,8 +256,11 @@ export class PreviewModeManager {
   private async _detectFrontendRoot(): Promise<string> {
     try {
       const html = await this._io.readFile(join(this._projectRoot, 'index.html'));
-      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
-      if (match && match[1] !== 'src') return match[1];
+      for (const tag of html.matchAll(/<script\b[^>]*>/g)) {
+        if (!/\btype=["']module["']/.test(tag[0])) continue;
+        const src = tag[0].match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/)?.[1];
+        if (src && src !== 'src') return src;
+      }
     } catch {
       /* no index.html */
     }
