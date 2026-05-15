@@ -4680,3 +4680,56 @@ E2E Hyper Logs filter leak fix, 2026-04-22 17:44 CEST:
   * Restart full E2E with retries disabled and monitor VS Code windows,
     Hyper Logs errors, save dialogs, process count, CPU, and memory.
 ```
+
+Bridge bot current-session discovery and E2E disk-save cleanup,
+2026-04-22 18:10 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: d06303f fix: avoid bot-owned app-server during current-session discovery
+- Scope:
+  * Current-session discovery no longer calls `ensureConnected()` before
+    looking for live Codex app-server processes. This prevents ordinary
+    inbound bridge messages from starting the bot-owned `codex app-server`
+    on port 9120 and polluting discovery.
+  * Removed the hard 5-minute current-session turn timeout. The bridge now
+    waits for the app-server turn completion event after `turn/start`
+    succeeds.
+  * `/project` sessions now collect reasoning deltas and send them through
+    the same escaped, paginated Telegram HTML path as current-session
+    responses.
+  * Reasoning-only output no longer gets a fake `Done.` answer page.
+- Validation:
+  * `bun test` passed 27/27.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed before commit.
+  * launchd service `com.ultra.codex-tg-bot` restarted; new PID observed:
+    39637.
+  * The old bot-owned 9120 app-server process was gone after restart; only
+    the Codex.app app-server and bot process remained.
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: 81bec84 test(e2e): clean up expected disk save errors
+- Trigger:
+  * Full E2E with `--retries=0 --workers=1` was stopped at the first
+    fail-marker around `239/2209`.
+  * Failing test:
+    `disk write error surfaces as notification, not silent failure`.
+  * The test intentionally opened `/etc/hosts`, typed text, and saved to
+    trigger permission-denied diagnostics. The fixture then tried
+    `File: Save All` during teardown, hit the expected save error again,
+    left a dirty `hosts` editor, and reported `[test-errors]`.
+- Fix:
+  * Annotated the permission-denied diagnostics as
+    `expected-runtime-errors`.
+  * Explicitly ran `File: Revert File` and closed editors before fixture
+    teardown, so the expected diagnostic is still visible but no dirty
+    external editor leaks into cleanup.
+- Validation:
+  * Focused E2E passed 1/1 with `--retries=0 --workers=1`:
+    `error-handling.spec.ts -g "disk write error surfaces as notification"`.
+  * `git diff --check` passed for the touched file.
+- Notes:
+  * Claude review was not run before these commits because the current local
+    time is inside the documented 15:00-21:00 no-Claude interval.
+  * Full E2E has not yet been restarted after commit 81bec84.
+```
