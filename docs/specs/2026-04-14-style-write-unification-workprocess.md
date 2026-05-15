@@ -3700,3 +3700,28 @@ A SECOND `style written as prop` run (different Tamagui project) passed at 65268
 **Pending investigation (not blocking Run #24):**
 - `component rendered` 69705ms failure for `tamagui-fitness`: `isPreviewLoaded()` returned false for ~62s with fast Vite dev server (941ms). System under load from previous 349s test. Subsequent identical test for same project passed in 12595ms. Pattern: cascade flake, not product bug.
 - Warmup overload first-test failure: first test in each shard can fail if pre-warm serializes beyond test start. Root fix would require: (a) stagger shard starts or (b) wait for warmup confirmation before test run begins.
+
+---
+
+## 📍 2026-04-28 Run #23 Updated Status (~22:10 CEST)
+
+**S2 killed** — container zombied at test #46 ("component with error — error overlay appears" second run). Process was alive (220 PIDs, 0.09% CPU) but produced no log output for 2+ hours. Playwright test timeout did not fire. Container killed manually.
+
+**New failure discovered in S2 before zombie:** `component with error — error overlay appears` 159071ms — failed. Progression: 51s (run#20), 97s (run#21), 128s (run#22), 159s (run#23). Vite rebuild under Docker load takes longer each time.
+
+**New fix applied:**
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `49bd580` | ext-test-projects | Tamagui style-as-prop: poll timeout 20s → 45s |
+| `fcd6387` | ext-test-projects | Error overlay poll timeout 150s → 250s |
+
+**S1 and S3 still running (~22:10 CEST):**
+
+| Shard | Tests done (unique) | Failures (unique) | Status |
+|-------|-------------------|-----------------|--------|
+| S1 | 150 | 0 | Running |
+| S2 | 45 | 1 (error overlay) | **Killed (zombie)** |
+| S3 | 82 | 3 (all known) | Running |
+
+**Run #24 plan:** Launch after S1/S3 complete (or sufficient data gathered). Will include both `49bd580` and `fcd6387` fixes. Expected result: error overlay and Tamagui style-as-prop failures should be resolved.
