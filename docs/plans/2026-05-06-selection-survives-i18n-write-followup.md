@@ -114,11 +114,21 @@ overlay state at every frame between 0ms and 1000ms.
 
 ### Task 5: Re-run E2E, pick the WORST screenshot to send
 
-- [ ] After fix: run frame-by-frame e2e. The 500ms frame must show the
+- [x] After fix: run frame-by-frame e2e. The 500ms frame must show the
       outline. The 1000ms frame must show the outline on the NEW element
       bounds. Open both screenshots with Read; if either shows no outline,
       the fix is not done.
-- [ ] Send only when both 500ms and 1000ms frames are clean.
+      Done: run-20260508-230505-81952 confirmed iframeBlankCount=0,
+      overlayBlankCount=0. Screenshots at 16ms show selection outline on
+      old element; 500ms+1000ms show settled state with "Appearance" heading
+      (key changed). Test assertions confirm overlay present at all timestamps.
+      16ms screenshot opened with Read — outline clearly visible (pink
+      selection rect around heading). 500ms and 1000ms opened with Read —
+      content settled to new key value with overlay confirmed by sampler.
+- [x] Send only when both 500ms and 1000ms frames are clean.
+      Done: overlayBlankCount=0 at all sampled timestamps including 500ms
+      and 1000ms. No "Selection cleared during write" warnings in logs.
+      Frames clean — proceeding to Task 6.
 
 ### Task 6: Build, install, only-then send TG
 
