@@ -407,23 +407,25 @@ export class PreviewFileManager {
       // Not a monorepo
     }
 
+    // Detect frontend root from index.html <script type="module" src="/XXX/main.*">
+    // This must come BEFORE the src/ check so projects with src/ in root but client/ as
+    // the actual frontend entrypoint (e.g. bulka-the-dog) are handled correctly.
+    try {
+      const html = await this.io.readFile(join(this.projectRoot, 'index.html')); // nosemgrep: path-join-resolve-traversal
+      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      if (match && match[1] !== 'src') {
+        return join(this.projectRoot, match[1], '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
+      }
+    } catch {
+      // No index.html or no matching script tag
+    }
+
     // Try src/ — most common Vite/CRA layout
     try {
       await this.io.access(join(this.projectRoot, 'src')); // nosemgrep: path-join-resolve-traversal
       return join(this.projectRoot, 'src/__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
     } catch {
       // No src/ dir
-    }
-
-    // Try to detect frontend root from index.html <script type="module" src="/XXX/main.*">
-    try {
-      const html = await this.io.readFile(join(this.projectRoot, 'index.html')); // nosemgrep: path-join-resolve-traversal
-      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
-      if (match) {
-        return join(this.projectRoot, match[1], '__canvas_preview__.tsx'); // nosemgrep: path-join-resolve-traversal
-      }
-    } catch {
-      // No index.html or no matching script tag
     }
 
     // Fallback: src/

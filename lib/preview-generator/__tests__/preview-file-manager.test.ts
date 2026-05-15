@@ -114,13 +114,23 @@ describe('PreviewFileManager', () => {
       expect(path).toBe('/project/client/__canvas_preview__.tsx');
     });
 
-    it('should prefer src/ over index.html when src/ directory exists', async () => {
+    it('should prefer client/ from index.html even when src/ directory exists (bulka-the-dog pattern)', async () => {
+      // Projects like bulka-the-dog have a src/ dir at root (server code etc.)
+      // but the frontend entry is client/main.tsx — index.html must win over src/ presence.
       const io = new InMemoryFileIO();
-      io.files.set('/project/src/main.tsx', 'export {}');
+      io.files.set('/project/src/server.ts', 'export {}'); // src/ exists but is NOT the frontend
       io.files.set(
         '/project/index.html',
         `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
       );
+      const manager = createManager(io);
+      const path = await manager.getPreviewFilePath();
+      expect(path).toBe('/project/client/__canvas_preview__.tsx');
+    });
+
+    it('should use src/ when no index.html exists', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/main.tsx', 'export {}');
       const manager = createManager(io);
       const path = await manager.getPreviewFilePath();
       expect(path).toBe('/project/src/__canvas_preview__.tsx');
