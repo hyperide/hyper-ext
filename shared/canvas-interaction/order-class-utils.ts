@@ -68,6 +68,40 @@ export function readOrderForBp(className: string | undefined, breakpoint: string
 }
 
 /**
+ * Resolve a sibling's effective CSS `order` value for sort purposes at the given breakpoint.
+ *
+ * Unlike `readOrderForBp` (which returns null for absent / named tokens), this helper
+ * mirrors the CSS spec: missing → `0`, `order-none` → `0`, `order-first` → very-low (-9999),
+ * `order-last` → very-high (9999). Numeric `order-N` and arbitrary `order-[<int>]` are
+ * parsed to their integer value.
+ *
+ * Used by `computeOrderWritePlan` to build the current visual order before applying the
+ * drop. Without CSS-correct semantics, default-ordered siblings get sorted *after*
+ * numeric ones, producing wrong renumber sequences when the parent mixes explicit
+ * `order-N` with default / named children (codex finding from tw-order review).
+ *
+ * Tokens of the form `order-[<not-an-int>]` (true arbitrary CSS) fall through to `0` —
+ * we don't know how to safely renumber them anyway, and this matches the "ignore unknown"
+ * policy used elsewhere.
+ */
+export function readOrderSortValueForBp(className: string | undefined, breakpoint: string | undefined): number {
+  const tokens = (className ?? '').split(/\s+/).filter(Boolean);
+  for (const token of tokens) {
+    if (!isOrderClassAtBreakpoint(token, breakpoint)) continue;
+    const bare = breakpoint === undefined ? token : token.slice(breakpoint.length + 1);
+    const numeric = bare.match(/^order-(\d+)$/);
+    if (numeric) return Number.parseInt(numeric[1], 10);
+    if (bare === 'order-first') return -9999;
+    if (bare === 'order-last') return 9999;
+    if (bare === 'order-none') return 0;
+    const arbitrary = bare.match(/^order-\[(-?\d+)\]$/);
+    if (arbitrary) return Number.parseInt(arbitrary[1], 10);
+    return 0;
+  }
+  return 0;
+}
+
+/**
  * Compute the new className after writing/removing `order` at the given breakpoint.
  *
  * In-place replacement when an existing order token at the targeted breakpoint is found —

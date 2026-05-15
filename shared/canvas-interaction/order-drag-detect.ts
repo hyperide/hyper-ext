@@ -14,7 +14,7 @@
  *     so they can be unit-tested without jsdom.
  */
 
-import { applyOrderClassChange, readOrderForBp } from './order-class-utils';
+import { applyOrderClassChange, readOrderSortValueForBp } from './order-class-utils';
 
 /**
  * Tailwind v3 default breakpoint thresholds in CSS pixels. Sorted ascending so
@@ -159,14 +159,15 @@ export function computeOrderWritePlan(
   if (activeBp === null) return null;
 
   // 3. Build the current visual order.
-  //    Sort by readOrderForBp(activeBp) ascending; ties / nulls fall back to DOM index.
-  //    Note: `Array.prototype.sort` is stable in modern JS, but we're explicit here.
+  //    Sort by CSS-resolved `order` value ascending; ties fall back to DOM index.
+  //    `readOrderSortValueForBp` mirrors the CSS spec: missing / `order-none` → 0,
+  //    `order-first` → -9999, `order-last` → 9999, numeric → integer. Required so
+  //    parents that mix explicit `order-N` with default-ordered siblings produce
+  //    a CSS-correct starting visual order before the drop.
   const visual = [...siblings].sort((a, b) => {
-    const oa = readOrderForBp(a.className, activeBp);
-    const ob = readOrderForBp(b.className, activeBp);
-    if (oa !== null && ob !== null && oa !== ob) return oa - ob;
-    if (oa !== null && ob === null) return -1;
-    if (oa === null && ob !== null) return 1;
+    const oa = readOrderSortValueForBp(a.className, activeBp);
+    const ob = readOrderSortValueForBp(b.className, activeBp);
+    if (oa !== ob) return oa - ob;
     return a.domIndex - b.domIndex;
   });
 

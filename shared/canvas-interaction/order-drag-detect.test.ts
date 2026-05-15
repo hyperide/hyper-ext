@@ -238,15 +238,20 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
     expect(computeOrderWritePlan(siblings, 'card:10:5', 'card:10:5', 'after', 500)).toBeNull();
   });
 
-  it('treats siblings without order tokens as ordered after numeric ones (DOM-index tiebreaker)', () => {
+  it('uses DOM index as tiebreaker when two siblings share the same effective order value', () => {
     const siblings: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'flex', domIndex: 0 },
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'flex', domIndex: 1 },
+      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 2 },
     ];
-    // Visual at base: a (order=2) sorts before b (no order).
-    // Drag b before a → visual [b, a]. Renumber: b=1, a=2 (a unchanged).
-    const plan = computeOrderWritePlan(siblings, 'b:1:1', 'a:1:1', 'before', 500);
-    expect(plan?.entries).toEqual([{ elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'flex order-1' }]);
+    // Visual at base: a (0, dom 0), b (0, dom 1), c (2). DOM index breaks the a/b tie.
+    // Drag c before a → visual [c, a, b]. Renumber: c=1, a=2, b=3.
+    const plan = computeOrderWritePlan(siblings, 'c:1:1', 'a:1:1', 'before', 500);
+    expect(plan?.entries).toEqual([
+      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
+      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'flex order-2' },
+      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'flex order-3' },
+    ]);
   });
 });
 
