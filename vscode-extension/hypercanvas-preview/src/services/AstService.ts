@@ -772,6 +772,27 @@ export class AstService {
         if (!t.isJSXExpressionContainer(child)) continue;
         changed = replaceStringLiteralValue(child.expression, previousKey, nextKey) || changed;
       }
+      if (!changed) {
+        // Client may have stale previousKey (e.g. after HMR, i18nText is preserved from
+        // prior read via ?? fallback). Fall back: replace first StringLiteral in first
+        // JSXExpressionContainer with nextKey so the write succeeds regardless.
+        for (const child of result.element.children) {
+          if (!t.isJSXExpressionContainer(child)) continue;
+          const expr = child.expression;
+          if (t.isCallExpression(expr) && expr.arguments.length > 0) {
+            const firstArg = expr.arguments[0];
+            if (t.isStringLiteral(firstArg)) {
+              firstArg.value = nextKey;
+              changed = true;
+              break;
+            }
+          } else if (t.isStringLiteral(expr)) {
+            expr.value = nextKey;
+            changed = true;
+            break;
+          }
+        }
+      }
       if (!changed) return { success: false, error: 'i18n key literal not found in selected element' };
 
       await this._fileParser.writeAST(ast, resolvedPath);

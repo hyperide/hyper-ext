@@ -747,7 +747,7 @@ export default function RightSidebar({
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
+      if (!i18nText || i18nText.kind !== 'i18n') return;
       if (!selectedId || !componentPath) return;
       const previousSelectedId = selectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this

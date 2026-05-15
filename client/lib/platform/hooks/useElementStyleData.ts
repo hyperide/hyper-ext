@@ -430,7 +430,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
       const fullStyles = classNameToStyles(response.className || '');
 
-      setData(() => ({
+      setData((prev) => ({
         parsedStyles: fullStyles,
         childrenType: response.childrenType,
         textContent: response.textContent || '',
@@ -438,7 +438,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         loading: false,
         childrenLocation: response.childrenLocation,
         styleReadResult: response.styleReadResult,
-        i18nText: response.i18nText,
+        i18nText: response.i18nText ?? prev.i18nText,
       }));
     });
 
