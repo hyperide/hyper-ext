@@ -58,3 +58,46 @@ New i18n key creation is also unimplemented.
 - Keep backwards compatibility: existing tests (PI-7-I18N-1 through PI-7-I18N-5) must not regress
 - `AstService.updateText` may need extension to accept JSX attribute path, not just text node content
 - Bulka-the-dog format uses `{ ru: { "key": "value" }, en: { "key": "value" } }` — TsMergedAdapter must handle this
+
+## Tasks
+
+### Task 1: Define I18nAdapter interface
+
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `getAvailableKeys` and i18n-related code.
+- [ ] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — find `onKeyChange`.
+- [ ] Create `vscode-extension/hypercanvas-preview/src/services/i18n/I18nAdapter.ts` with interface:
+  - `getAvailableKeys(locale: string): Promise<string[]>`
+  - `resolveText(key: string, locale: string): Promise<string | null>`
+- [ ] Run `bun run typecheck` — confirm no errors for new interface.
+
+### Task 2: Implement ReactI18nextAdapter and CustomJsonAdapter
+
+- [ ] Extract react-i18next path from `getAvailableKeys` into `ReactI18nextAdapter`.
+- [ ] Extract custom JSON path into `CustomJsonAdapter`.
+- [ ] Create `AdapterFactory.forBinding(binding): I18nAdapter`.
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 3: Implement TsMergedAdapter (bulka-the-dog format)
+
+- [ ] Extract TS merged translations path (`{ ru: {...}, en: {...} }`) into `TsMergedAdapter`.
+- [ ] Wire `AdapterFactory` to detect TS merged format (check `layout.mergedData`).
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 4: Refactor StyleReadService to use AdapterFactory
+
+- [ ] Replace all conditional branches in `getAvailableKeys` with `AdapterFactory.forBinding(binding).getAvailableKeys(locale)`.
+- [ ] Run existing e2e tests (PI-7-I18N-1 through PI-7-I18N-5) — all pass (do NOT run yet, just verify TypeScript compiles).
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 5: Wire onKeyChange in I18nTextInspector
+
+- [ ] Read how `AstService.updateText` works in `server/services/AstService.ts`.
+- [ ] Add `writeKey(elementId: string, newKey: string): Promise<void>` to `I18nAdapter` interface.
+- [ ] Implement `writeKey` in each adapter — calls the extension's `ast:updateText` RPC with the new key.
+- [ ] In `I18nTextInspector.tsx`, wire `onKeyChange` to call adapter's `writeKey`.
+- [ ] Run `bun run typecheck` — no errors.
+
+### Task 6: Build extension and verify existing tests pass
+
+- [ ] Run `npm run package` in `vscode-extension/hypercanvas-preview/`.
+- [ ] Confirm PI-7-I18N-1 through PI-7-I18N-5 tests still green (run in Docker: `HYPER_E2E_SHARDS=1 bun run test:docker`).
