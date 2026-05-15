@@ -14,10 +14,11 @@
  *
  * IMPORTANT: we DO NOT walk further up "to a meaningful draggable / outer card".
  * Doing so makes drag-handle behaviour confusing — when the user drags an inner
- * <div>{t('...')}</div> they expect that div to move, not its outer card.
- * AstService.moveElement handles arbitrary source/target combinations (same
- * parent, cross-parent, cross-file, cross-component); the resolver's job is to
- * faithfully report the dragged element, not silently override it.
+ * <div>{t('...')}</div> they expect that div to move, not its outer card. If a
+ * subsequent reorder fails because source and drop target don't share a JSX
+ * parent, that's a problem for AstService.reorderElement to handle (or for the
+ * user to resolve with a more appropriate drop target), not for the resolver
+ * to silently override.
  */
 
 import { findNearestSourceLocation, getFiberFromDOM } from '../element-tracing/fiber-internals';
