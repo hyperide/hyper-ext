@@ -9,6 +9,84 @@ import _traverse, { type NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
 import type { DetectI18nBindingParams, I18nBindingDetected, I18nBindingDetectionResult, I18nLibrary } from './types';
 
+export interface CalleeOrigin {
+  kind: 'import' | 'hook-destructure' | 'local-declaration' | 'unknown';
+  /** Module specifier when kind === 'import'. */
+  importFrom?: string;
+  /** Hook function name when kind === 'hook-destructure'. */
+  hookName?: string;
+}
+
+/**
+ * Walk the AST import chain to determine where `calleeName` is defined.
+ * Priority: import > hook-destructure > local-declaration > unknown.
+ */
+export function resolveCalleeOrigin(source: string, calleeName: string): CalleeOrigin {
+  let ast: t.File;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    }) as t.File;
+  } catch {
+    return { kind: 'unknown' };
+  }
+
+  let importResult: CalleeOrigin | null = null;
+  let hookResult: CalleeOrigin | null = null;
+  let localResult: CalleeOrigin | null = null;
+
+  try {
+    traverse(ast, {
+      ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
+        if (importResult) return;
+        for (const spec of path.node.specifiers) {
+          if (spec.type === 'ImportSpecifier' && spec.local.name === calleeName) {
+            importResult = { kind: 'import', importFrom: path.node.source.value };
+            return;
+          }
+        }
+      },
+
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+        const { id, init } = path.node;
+
+        // Hook destructure: const { calleeName } = someHook() or const { key: calleeName } = someHook()
+        if (!hookResult && id.type === 'ObjectPattern' && init?.type === 'CallExpression') {
+          const hookCallee = init.callee;
+          const hookName = hookCallee.type === 'Identifier' ? hookCallee.name : null;
+          if (hookName) {
+            for (const prop of id.properties) {
+              if (prop.type === 'ObjectProperty') {
+                const localName = prop.value.type === 'Identifier' ? (prop.value as t.Identifier).name : null;
+                if (localName === calleeName) {
+                  hookResult = { kind: 'hook-destructure', hookName };
+                  return;
+                }
+              }
+            }
+          }
+        }
+
+        // Local declaration: const calleeName = ...
+        if (!localResult && id.type === 'Identifier' && (id as t.Identifier).name === calleeName) {
+          localResult = { kind: 'local-declaration' };
+        }
+      },
+
+      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+        if (!localResult && path.node.id?.name === calleeName) {
+          localResult = { kind: 'local-declaration' };
+        }
+      },
+    });
+  } catch {
+    // Ignore traverse errors (e.g. duplicate declarations in malformed source)
+  }
+
+  return importResult ?? hookResult ?? localResult ?? { kind: 'unknown' };
+}
+
 // @ts-expect-error - babel/traverse ESM/CJS interop
 const traverse = _traverse.default || _traverse;
 
@@ -269,4 +347,43 @@ function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
 
   if (lastIdProp.value.type !== 'StringLiteral') return false;
   return lastIdProp.value.value;
+}
+
+/**
+ * Extract the callee name from the call expression at the given source location,
+ * then walk the import chain to determine where it's defined.
+ * Returns null when the location doesn't match a call expression.
+ */
+export function resolveCalleeOriginAtLocation(
+  source: string,
+  location: { line: number; column: number },
+): { calleeName: string; origin: CalleeOrigin } | null {
+  let ast: t.File;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    }) as t.File;
+  } catch {
+    return null;
+  }
+
+  let calleeName: string | null = null;
+  try {
+    traverse(ast, {
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (calleeName) return;
+        const nodeLoc = path.node.loc;
+        if (!nodeLoc || nodeLoc.start.line !== location.line || nodeLoc.start.column !== location.column) return;
+        const name = extractCalleeName(path.node.callee);
+        if (name) calleeName = name;
+      },
+    });
+  } catch {
+    // ignore traverse errors
+  }
+
+  if (!calleeName) return null;
+  const origin = resolveCalleeOrigin(source, calleeName);
+  return { calleeName, origin };
 }

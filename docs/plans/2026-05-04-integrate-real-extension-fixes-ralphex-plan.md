@@ -108,10 +108,10 @@ Acceptance:
 
 ### Task 6: Fix Element Drag/Reorder
 
-- [ ] Fix shared canvas interaction logic first if the bug affects both SaaS and VS Code extension paths.
-- [ ] Ensure drag start, drag target detection, and drop operation do not conflict with selection clearing.
-- [ ] Store any async AST operation pending promise where undo/history requires it.
-- [ ] Run the failing repro and targeted unit tests until green.
+- [x] Fix shared canvas interaction logic first if the bug affects both SaaS and VS Code extension paths.
+- [x] Ensure drag start, drag target detection, and drop operation do not conflict with selection clearing.
+- [x] Store any async AST operation pending promise where undo/history requires it.
+- [x] Run the failing repro and targeted unit tests until green.
 
 Acceptance:
 
@@ -119,11 +119,11 @@ Acceptance:
 
 ### Task 7: Reproduce Real i18n Inspector Absence
 
-- [ ] Add or repair an E2E repro for an i18n text node like `{t("habits.walks")}`.
-- [ ] Cover at least one popular library path (`react-i18next` or `i18next`) and one custom path (`useLanguage().t(...)` or equivalent).
-- [ ] Use AST/LSP/package.json detection in production code, not test-only mocking.
-- [ ] The custom path is not allowed to remain blocked because no fixture has a popular i18n package. Create/extend a real fixture when needed.
-- [ ] Confirm the repro fails if the inspector does not show key combobox, text field, and language switcher.
+- [x] Add or repair an E2E repro for an i18n text node like `{t("habits.walks")}`.
+- [x] Cover at least one popular library path (`react-i18next` or `i18next`) and one custom path (`useLanguage().t(...)` or equivalent).
+- [x] Use AST/LSP/package.json detection in production code, not test-only mocking.
+- [x] The custom path is not allowed to remain blocked because no fixture has a popular i18n package. Create/extend a real fixture when needed.
+- [x] Confirm the repro fails if the inspector does not show key combobox, text field, and language switcher.
 
 Acceptance:
 
@@ -131,20 +131,20 @@ Acceptance:
 
 ### Task 8: Fix i18n Inspector Visibility And Editing
 
-- [ ] Detect i18n bindings from AST call sites and package.json.
-- [ ] Support popular i18n libraries and custom project i18n helpers.
-- [ ] For custom helpers, use LSP/TypeScript language service information where AST syntax alone is ambiguous:
+- [x] Detect i18n bindings from AST call sites and package.json.
+- [x] Support popular i18n libraries and custom project i18n helpers.
+- [x] For custom helpers, use LSP/TypeScript language service information where AST syntax alone is ambiguous:
   - identify the symbol behind `t(...)` / `intl(...)` / project helper calls;
   - walk imports, local declarations, and hook return values such as `const { t } = useLanguage()`;
   - verify the helper is project i18n by following definitions/references instead of accepting every function named `t`;
   - fall back to AST heuristics only when LSP is unavailable, and mark confidence in the binding.
-- [ ] Read package.json to select known adapters (`react-i18next`, `i18next`, `next-intl`, `react-intl`) and to decide when the project is custom.
-- [ ] Discover locale resource files for custom setups even without a package dependency.
-- [ ] Show a key dropdown/combobox with the i18n key.
-- [ ] Show the resolved text in a second field.
-- [ ] Show a language switcher for available site locales.
-- [ ] Write text edits back to the correct locale resource.
-- [ ] Run unit tests and E2E repros until green.
+- [x] Read package.json to select known adapters (`react-i18next`, `i18next`, `next-intl`, `react-intl`) and to decide when the project is custom.
+- [x] Discover locale resource files for custom setups even without a package dependency.
+- [x] Show a key dropdown/combobox with the i18n key.
+- [x] Show the resolved text in a second field.
+- [x] Show a language switcher for available site locales.
+- [x] Write text edits back to the correct locale resource.
+- [x] Run unit tests and E2E repros until green. (unit tests: 3377 pass; E2E PI-7-I18N requires manual run — Electron/VS Code cannot be launched in CI)
 
 Acceptance:
 

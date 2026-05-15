@@ -27,7 +27,7 @@ import type {
   StyleReadManager,
 } from '@lib/style-read/types';
 import type { NodeRef } from '@shared/element-tracing/types';
-import { detectI18nBinding } from '@shared/i18n-text/detect-i18n-binding';
+import { detectI18nBinding, resolveCalleeOriginAtLocation } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
@@ -246,12 +246,25 @@ export class StyleReadService {
       this._i18nLibraryResolved = true;
     }
     let library: I18nLibrary | null = this._cachedI18nLibrary ?? null;
+    let confidence: I18nTextBinding['confidence'] = library !== null ? 'package-json' : undefined;
+
+    // Import-chain analysis: walk imports/destructures to identify custom i18n helpers.
+    // Runs before locale-file heuristics so hook patterns (useLanguage, useTranslation) are
+    // recognised even when locale files are absent or haven't been discovered yet.
+    if (library === null) {
+      const calleeResult = resolveCalleeOriginAtLocation(content, exprLoc);
+      if (calleeResult && calleeResult.origin.kind !== 'unknown') {
+        library = 'custom';
+        confidence = 'import-chain';
+      }
+    }
 
     // When no known library found, check if locale files exist — if so treat as custom i18n
     if (library === null) {
       const layout = await discoverLayout(this._workspaceRoot, undefined, 'en', this._fileIO).catch(() => null);
       if (layout && layout.availableLocales.length > 0) {
         library = 'custom';
+        confidence = 'locale-heuristic';
       }
     }
 
@@ -265,7 +278,10 @@ export class StyleReadService {
         const rel = f.slice(prefix.length);
         return rel.split('/').length === 2;
       });
-      if (hasNamespacedFiles) library = 'custom';
+      if (hasNamespacedFiles) {
+        library = 'custom';
+        confidence = confidence ?? 'locale-heuristic';
+      }
     }
 
     // AST detection: is the expression a known i18n call?
@@ -332,6 +348,7 @@ export class StyleReadService {
         line: detection.sourceLocation.line,
         column: detection.sourceLocation.column,
       },
+      confidence,
     };
     return binding;
   }

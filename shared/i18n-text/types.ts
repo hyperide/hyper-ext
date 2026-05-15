@@ -30,6 +30,8 @@ export interface I18nTextBinding {
   resolvedText: string | null;
   editable: boolean;
   sourceLocation: { filePath: string; line: number; column: number };
+  /** How the i18n helper was identified. Higher confidence = more reliable detection. */
+  confidence?: 'import-chain' | 'package-json' | 'locale-heuristic';
 }
 
 /**
