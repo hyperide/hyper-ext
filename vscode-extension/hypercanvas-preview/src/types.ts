@@ -201,6 +201,11 @@ export interface FileResponse {
   error?: string;
 }
 
+// VS Code command execution (webview -> extension)
+export type CommandMessage =
+  | { type: 'command:execute'; command: string; args?: string[] }
+  | { type: 'command:fixUnsupportedProject' };
+
 // Dev server operations
 export type DevServerMessage =
   | { type: 'devServer:start'; requestId: string }
@@ -380,6 +385,7 @@ export type PlatformMessage =
   | AstMessage
   | ComponentMessage
   | FileMessage
+  | CommandMessage
   | DevServerMessage
   | AIMessage
   | CompositionMessage

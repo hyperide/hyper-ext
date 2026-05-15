@@ -221,6 +221,12 @@
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' || focusedView == 'hypercanvas.inspectorView' || focusedView == 'hypercanvas.explorerView'"
       },
       {
+        "command": "workbench.action.files.saveAll",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
         "command": "hypercanvas.canvasDelete",
         "key": "backspace",
         "mac": "backspace",

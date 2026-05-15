@@ -45,6 +45,19 @@ function getIframeOrigin(frame: HTMLIFrameElement): string | null {
   return null;
 }
 
+function isSaveShortcut(event: {
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  code?: string;
+  key?: string;
+}): boolean {
+  const isMod = event.metaKey || event.ctrlKey;
+  const isS = event.code === 'KeyS' || event.key?.toLowerCase() === 's';
+  return Boolean(isMod && isS && !event.shiftKey && !event.altKey);
+}
+
 export function useCanvasInteraction(
   iframeEl: HTMLIFrameElement | null,
   overlayEl: HTMLDivElement | null,
@@ -74,6 +87,13 @@ export function useCanvasInteraction(
         type: 'state:update',
         patch: { selectedIds: [elementId], insertTargetId: elementId },
       } as never);
+    }
+
+    function saveOpenEditors() {
+      canvas.sendEvent({
+        type: 'command:execute',
+        command: 'workbench.action.files.saveAll',
+      });
     }
 
     function handleMessage(event: MessageEvent) {
@@ -174,6 +194,11 @@ export function useCanvasInteraction(
           if (isMod && isZ) {
             const eventType = msg.shiftKey ? 'canvas:redo' : 'canvas:undo';
             canvas.sendEvent({ type: eventType });
+            break;
+          }
+
+          if (isSaveShortcut(msg)) {
+            saveOpenEditors();
             break;
           }
 

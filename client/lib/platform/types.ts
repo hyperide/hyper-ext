@@ -212,7 +212,8 @@ export type PlatformMessage =
   | { type: 'webview:ready' }
 
   // VS Code commands triggered from preview webview
-  | { type: 'command:fixUnsupportedProject' };
+  | { type: 'command:fixUnsupportedProject' }
+  | { type: 'command:execute'; command: string; args?: string[] };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;
