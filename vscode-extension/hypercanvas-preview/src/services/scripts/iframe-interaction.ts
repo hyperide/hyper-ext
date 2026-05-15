@@ -1136,14 +1136,29 @@ let _dragOrigStyleAttr = '';
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
   const target = e.target as HTMLElement;
-  const src = iframeResolver.getSourceLocation(target);
+  let src = iframeResolver.getSourceLocation(target);
+  let dragEl: HTMLElement = target;
+  if (!src) {
+    // Decorative/untraceable elements (aria-hidden spans, emoji, etc.) have no source mapping.
+    // Walk up to the nearest ancestor that does — that's the logical drag unit.
+    let cur = target.parentElement;
+    while (cur && cur !== document.body) {
+      const ancestorSrc = iframeResolver.getSourceLocation(cur);
+      if (ancestorSrc) {
+        src = ancestorSrc;
+        dragEl = cur;
+        break;
+      }
+      cur = cur.parentElement;
+    }
+  }
   if (!src) return;
   _dragSourceId = `${src.fileName}:${src.line}:${src.column}`;
   _dragSourceFilePath = src.fileName;
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
   _dragState = 'pending';
-  _dragSourceEl = target;
+  _dragSourceEl = dragEl;
 }
 
 function _dragPointerMove(e: PointerEvent): void {
@@ -1395,9 +1410,10 @@ if (document.body) {
   document.addEventListener('DOMContentLoaded', setupBodyObservers, { once: true });
 }
 
-// Also mark dirty on scroll and window resize
+// Scroll must update overlays on every frame — skip the throttle to avoid 50 ms lag.
 const overlayScrollHandler = () => {
-  scheduleThrottledOverlayUpdate();
+  needsOverlayUpdate = true;
+  scheduleOverlayLoopIfNeeded();
 };
 const overlayResizeHandler = () => {
   scheduleThrottledOverlayUpdate();
