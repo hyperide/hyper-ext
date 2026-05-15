@@ -91,6 +91,13 @@ class TabInputText {
   constructor(public readonly uri: MockUri) {}
 }
 
+class MockRelativePattern {
+  constructor(
+    public readonly base: unknown,
+    public readonly pattern: string,
+  ) {}
+}
+
 /* ---------- namespace: window ---------- */
 
 const window = {
@@ -142,6 +149,12 @@ const workspace = {
   ),
   applyEdit: mock(() => Promise.resolve(true)),
   textDocuments: [] as Array<{ uri: MockUri; getText: () => string }>,
+  createFileSystemWatcher: mock(() => ({
+    onDidChange: mock(() => ({ dispose: mock() })),
+    onDidCreate: mock(() => ({ dispose: mock() })),
+    onDidDelete: mock(() => ({ dispose: mock() })),
+    dispose: mock(),
+  })),
   fs: {
     readFile: mock(() => Promise.resolve(new Uint8Array())),
     writeFile: mock(() => Promise.resolve()),
@@ -168,6 +181,7 @@ mock.module('vscode', () => ({
   Selection: MockSelection,
   EventEmitter: MockEventEmitter,
   WorkspaceEdit: MockWorkspaceEdit,
+  RelativePattern: MockRelativePattern,
   ViewColumn,
   TextEditorRevealType,
   FileType,

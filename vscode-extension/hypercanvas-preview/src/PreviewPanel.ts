@@ -14,6 +14,7 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
@@ -540,10 +541,6 @@ export class PreviewPanel {
     const exportName = sampleName || 'SampleDefault';
     const revealInEditor = options?.revealInEditor ?? true;
 
-    // Extract component name from file path (e.g. 'src/components/Button.tsx' → 'Button')
-    const fileName = path.basename(absPath, path.extname(absPath));
-    const componentName = options?.componentName || fileName.charAt(0).toUpperCase() + fileName.slice(1);
-
     // Read the file to check if this sample name already exists
     let sourceCode: string;
     try {
@@ -554,6 +551,11 @@ export class PreviewPanel {
       void vscode.window.showErrorMessage(`Could not read component file: ${componentPath}`);
       return false;
     }
+
+    // Extract component name from the AST default export (e.g. `export default function Home` → 'Home').
+    // Falls back to filename PascalCase if the file has no named default export.
+    const fileName = path.basename(absPath, path.extname(absPath));
+    const componentName = options?.componentName ?? extractComponentName(sourceCode, fileName);
 
     // Check if sample with this name already exists — update it in place
     const existingRegex = new RegExp(`export\\s+const\\s+${exportName}\\s*=`);

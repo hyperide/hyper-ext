@@ -257,4 +257,39 @@ describe('PreviewPanel component selection', () => {
     expect(scaffold).toContain('<Sidebar');
     expect(scaffold).not.toContain('<components/Sidebar.tsx');
   });
+
+  it('uses the real default export name (Home) instead of the filename (page) for Next.js page.tsx', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const pageSource = `
+export default function Home() {
+  return <div>Hello</div>;
+}
+`.trim();
+
+    // Override readFile to return our page source
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(pageSource)));
+    // Override writeFile so the test doesn't fail on the actual write
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    await (
+      panel as PreviewPanel & {
+        _handleCreateSampleFromError: (
+          componentPath: string | undefined,
+          propValues?: Record<string, unknown>,
+          sampleName?: string,
+          options?: { componentName?: string; revealInEditor?: boolean },
+        ) => Promise<boolean>;
+      }
+    )._handleCreateSampleFromError('app/page.tsx', undefined, 'SampleDefault', { revealInEditor: false });
+
+    // writeFile must have been called with scaffold containing <Home />, not <Page /> or <page />
+    const writeCalls = vscode.workspace.fs.writeFile.mock.calls;
+    expect(writeCalls.length).toBeGreaterThan(0);
+    const writtenContent = Buffer.from(writeCalls[0][1] as Uint8Array).toString('utf-8');
+    expect(writtenContent).toContain('<Home');
+    expect(writtenContent).not.toContain('<Page');
+    expect(writtenContent).not.toContain('<page');
+  });
 });
