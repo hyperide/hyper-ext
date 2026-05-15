@@ -850,6 +850,22 @@ export class AstService {
           }
         }
       }
+      if (!changed) {
+        // Element position was stale (forwarding cache miss + position shift after recast write).
+        // Search all JSXExpressionContainers in the file for t(previousKey) and replace the first match.
+        traverseJSXElements(ast, (elem) => {
+          for (const child of elem.children) {
+            if (!t.isJSXExpressionContainer(child)) continue;
+            if (replaceStringLiteralValue(child.expression, previousKey, nextKey)) {
+              changed = true;
+              return true; // stop traversal
+            }
+          }
+        });
+        if (changed) {
+          dbg(`[updateI18nKey] file-wide JSX fallback: replaced t('${previousKey}') → t('${nextKey}')`);
+        }
+      }
       if (!changed) return { success: false, error: 'i18n key literal not found in selected element' };
 
       await this._fileParser.writeAST(ast, resolvedPath);
@@ -865,7 +881,9 @@ export class AstService {
           const fp = elementFingerprint;
           const getFingerprint = this._getElementFingerprint.bind(this);
           traverseJSXElements(newAst, (elem) => {
-            if (elem.loc && getFingerprint(elem) === fp) {
+            const elemFp = getFingerprint(elem);
+            dbg(`[updateI18nKey] fwd-traverse ${elem.loc?.start.line}:${elem.loc?.start.column} fp=${elemFp} expected=${fp} match=${elemFp === fp}`);
+            if (elem.loc && elemFp === fp) {
               newPos = { line: elem.loc.start.line, column: elem.loc.start.column };
               return true; // stop traversal
             }

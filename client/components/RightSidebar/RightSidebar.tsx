@@ -277,11 +277,12 @@ export default function RightSidebar({
     }
   }, [sourceTabs, selectedSourceTabId]);
 
-  // Reset i18n locale selection when the selected element changes.
-  // This prevents a stale locale from carrying over to a different element's binding.
+  // Reset i18n locale selection and last-written key when the selected element changes.
+  // This prevents a stale locale or stale previousKey from carrying over to a different element.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
   useEffect(() => {
     setI18nActiveLocale(undefined);
+    lastWrittenI18nKeyRef.current = null;
   }, [selectedId]);
 
   // Apply state filter to parsedStyles
@@ -446,6 +447,9 @@ export default function RightSidebar({
   // handleI18nKeyChange: HMR transiently clears selectedIds, but we still need to send the
   // second write to the correct element if the inspector panel is still showing (via ?? prev.i18nText).
   const lastI18nElementRef = useRef<{ elementId: string; path: string | null } | null>(null);
+  // Tracks the last successfully written i18n key. Prevents stale previousKey when a second
+  // key change arrives before the useElementStyleData re-fetch returns the new i18nText.
+  const lastWrittenI18nKeyRef = useRef<string | null>(null);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -790,11 +794,14 @@ export default function RightSidebar({
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
             newText: i18nText.resolvedText ?? '',
-            previousKey: i18nText.key,
+            // Use lastWrittenI18nKeyRef when available: i18nText.key may be stale if a
+            // second key change arrives before the useElementStyleData re-fetch completes.
+            previousKey: lastWrittenI18nKeyRef.current ?? i18nText.key,
             filePath: i18nText.sourceLocation.filePath,
             elementId: effectiveSelectedId,
             skipResourceWrite: !isNewKey,
           });
+          lastWrittenI18nKeyRef.current = newKey;
           dbg('writeI18nResource resolved', writeResult);
           // Path A: bridge returns post-write canonical ID, single dispatch re-attaches
           // selection without timeout chains. Falls back to previousSelectedId.
