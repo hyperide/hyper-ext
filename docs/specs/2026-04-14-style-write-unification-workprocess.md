@@ -3252,6 +3252,24 @@ Both commits pushed to `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in
 Extension rebuilt with `npm run build` (vscode-extension/hypercanvas-preview).
 No VSIX bump needed — these changes don't require a new Docker test run (product polish only).
 
+**`dfc5231f` — fix(extension): use AST default export name in SampleDefault scaffold**
+
+Follow-up to `bc5a5703`. The earlier fix (`/^[A-Z]/.test` guard) converted `page` →
+`Page` via `toPascalIdentifier` — still wrong because the actual exported function is
+`Home`. The real fix: call `extractComponentName(sourceCode, fileName)` (already in
+`scanner.ts`) AFTER reading the file, so the scaffold generates `<Home />` from
+`export default function Home()`.
+
+Changes:
+- `PreviewPanel.ts`: import `extractComponentName`; move `componentName` derivation
+  after file read; use `?? extractComponentName(sourceCode, fileName)` instead of
+  `|| fileName.charAt(0).toUpperCase() + fileName.slice(1)`.
+- `PreviewPanel.test.ts`: new test "uses the real default export name (Home) instead
+  of the filename (page) for Next.js page.tsx".
+
+Verification: 12 pass, 0 fail. Pre-commit hooks (lint + typecheck) passed.
+Pushed to branch.
+
 ### Run #20 status at 14:05 CEST
 
 Docker image rebuilt and containers launched after 4-project Vite pre-warm.
