@@ -2155,3 +2155,42 @@ ext-test-projects:
 - concurrent start/stop: `f5ebf94` (ext-test-projects)
 
 Ожидаемый результат: 0 failures (или < 5 flaky).
+
+### Run #8 (175247-22144) — прерван на 10 мин (shard-1: 103/~550, shard-4: 38/553)
+
+Результаты: shard-1=0 fail, shard-2=0 fail (отличный прогресс!).
+
+Новые failure классы:
+
+#### Класс G: preview:poll-loaded 90s < Remix compile 95s (НОВЫЙ)
+"elements identifiable via fiber-based selection" shard-4: 95377ms — failed.
+Log: `frame urls: ...fake.html...` — iframe не покинул placeholder.
+Root cause: `preview:poll-loaded` timeout 90s < Remix cold compile ~95s.
+При gate fix V2: `setComponentParam()` вызывается только ПОСЛЕ Remix HMR (95s).
+Poll стартует за 3.7s, ждёт 90s = таймаут при 93.7s, не дожидается 95s.
+Retry: 7432ms PASSED (файлы уже есть, нет гейта).
+**Fix (17d503a):** `preview:poll-loaded`: 90_000 → 150_000.
+
+#### Класс H: sharedVSCode cleanup hang после devServer.stop() (НОВЫЙ)
+"logs panel opens after dev server stop" shard-3: 184470ms — timedOut.
+Test body: ~5s (setupPreviewWithDevServer + stop + openLogs).
+Teardown: "sharedVSCode editor cleanup END" через 3 минуты после test body.
+Teardown blocking = dev server остановлен, VS Code extension в cleanup state.
+**Fix (17d503a):** `test.setTimeout(300_000)` — даёт teardown 5 минут.
+
+### Что сделано в этом цикле (3-й раунд)
+
+ext-test-projects:
+- `c17ffaa`: editor:tab:wait 15s, canvasRedo/drag test.slow() (pushed)
+- `17d503a`: preview:poll-loaded 150s, logs-panel 300s timeout (pushed)
+
+### Run #9 (180420-36290) — стартован 18:04 CEST
+
+Все 4 шарда запущены. Активные фиксы:
+- gate fix V2: `be02c4c6`
+- timeout 60s base: `f5ebf94`
+- editor:tab:wait 15s, canvasRedo/drag test.slow(): `c17ffaa`
+- preview:poll-loaded 150s, logs-panel 300s: `17d503a`
+- concurrent start/stop fix: `f5ebf94`
+
+Ожидаемый результат: 0 failures.
