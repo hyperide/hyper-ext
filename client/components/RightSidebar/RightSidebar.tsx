@@ -701,14 +701,20 @@ export default function RightSidebar({
     (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = setTimeout(async () => {
-        await astOps.writeI18nResource({
-          library: i18nText.library,
-          key: i18nText.key,
-          activeLocale: i18nText.activeLocale,
-          newText,
-        });
-        setStyleRefreshKey((k) => k + 1);
+      debouncedI18nWriteRef.current = setTimeout(() => {
+        void (async () => {
+          try {
+            await astOps.writeI18nResource({
+              library: i18nText.library,
+              key: i18nText.key,
+              activeLocale: i18nText.activeLocale,
+              newText,
+            });
+            setStyleRefreshKey((k) => k + 1);
+          } catch (err) {
+            console.error('[i18n] writeI18nResource failed:', err);
+          }
+        })();
       }, 300);
     },
     [i18nText, astOps],
@@ -970,6 +976,12 @@ export default function RightSidebar({
       if (syncToastTimerRef.current) {
         clearTimeout(syncToastTimerRef.current);
       }
+      if (debouncedI18nWriteRef.current) {
+        clearTimeout(debouncedI18nWriteRef.current);
+      }
+      if (editingTextResetRef.current) {
+        clearTimeout(editingTextResetRef.current);
+      }
     };
   }, []);
 
@@ -1173,12 +1185,7 @@ export default function RightSidebar({
 
           {/* i18n Text Inspector */}
           {i18nText?.kind === 'i18n' && (
-            <I18nTextInspector
-              i18nBinding={i18nText}
-              onKeyChange={() => {}}
-              onResolvedTextChange={handleI18nResolvedTextChange}
-              onLocaleChange={() => {}}
-            />
+            <I18nTextInspector i18nBinding={i18nText} onResolvedTextChange={handleI18nResolvedTextChange} />
           )}
 
           {/* Style Source Tabs */}
