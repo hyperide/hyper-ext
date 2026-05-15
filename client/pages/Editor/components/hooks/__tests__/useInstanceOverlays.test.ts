@@ -148,6 +148,42 @@ describe('useInstanceOverlays — drag-start iframe hit-testing', () => {
     unmount();
   });
 
+  it('immediately sets iframe pointer-events to none on mousedown before any mousemove (HYP-363)', async () => {
+    const { unmount } = renderHook(() =>
+      useInstanceOverlays({
+        boardModeActive: true,
+        activeInstanceId: null,
+        selectedInstancesInBoard: [],
+        mode: 'design',
+        overlayContainerRef: containerRef,
+        iframeLoadedCounter: 0,
+        projectId: 'proj-1',
+        componentPath: 'src/App.tsx',
+        onDoubleClick: () => {},
+        viewport: VIEWPORT,
+      }),
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const frame = container.querySelector('[data-instance-frame="instance-1"]');
+    if (!frame) throw new Error('frame overlay not found');
+
+    // Reset to 'auto' to simulate the state before RAF has set it
+    // (race window: mousedown fires before first RAF tick in board mode)
+    mockIframe.style.pointerEvents = 'auto';
+
+    // Fire mousedown — handleDragStart must set pointer-events synchronously
+    frame.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100, bubbles: true }));
+
+    // Must be 'none' immediately after mousedown, before any mousemove or RAF
+    expect(mockIframe.style.pointerEvents).toBe('none');
+
+    unmount();
+  });
+
   it('does not set pointer-events:none for right-click (non-left button)', async () => {
     const { unmount } = renderHook(() =>
       useInstanceOverlays({

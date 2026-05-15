@@ -14,6 +14,8 @@ Types and utilities shared across all parts of the monorepo
 - `types/annotations.ts` — annotation types, type guards, ID generation
 - `canvas-interaction/` — DOM handlers for canvas interaction
   (click, keyboard, overlay, styles)
+- `i18n-text/` — i18n package detection, AST binding detection, and locale resource
+  resolution (react-i18next, i18next, react-intl, next-intl, lingui)
 - `ai-agent.ts`, `ai-agent-core.ts`, `ai-agent-tools.ts` — AI agent types and tools
 
 ## Testing

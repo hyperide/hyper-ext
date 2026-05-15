@@ -216,6 +216,13 @@ export function useInstanceOverlays({
         initialY: currentY,
       };
 
+      // Immediately disable iframe hit-testing so the parent window receives
+      // all mousemove/mouseup events even if the cursor enters the iframe
+      // before the 5px drag threshold is reached (HYP-363).
+      if (iframeRef.current) {
+        iframeRef.current.style.pointerEvents = 'none';
+      }
+
       // Note: window listeners are already attached globally in separate useEffect
     };
 

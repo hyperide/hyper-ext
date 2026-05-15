@@ -15,7 +15,7 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { buildSampleScaffold, normalizeSampleComponentName } from '../../../lib/preview-generator/sample-scaffold';
-import { extractComponentName } from '../../../lib/preview-generator/scanner';
+import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
@@ -566,7 +566,7 @@ export class PreviewPanel {
     const componentName = options?.componentName ?? extractComponentName(sourceCode, fileName);
 
     // Check if sample with this name already exists — update it in place
-    const existingRegex = new RegExp(`export\\s+const\\s+${exportName}\\s*=`);
+    const existingRegex = new RegExp(`export\\s+const\\s+${escapeRegex(exportName)}\\s*=`);
     if (existingRegex.test(sourceCode)) {
       // Find and replace the existing sample block
       const sampleStart = sourceCode.indexOf(`export const ${exportName}`);

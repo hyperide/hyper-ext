@@ -1089,18 +1089,18 @@ export class PreviewFileManager {
    * Returns true if the file was written (new or updated), false if skipped.
    */
   private async _writeIfSafe(filePath: string, content: string): Promise<boolean> {
+    let existing: string | undefined;
     try {
-      const existing = await this.io.readFile(filePath);
+      existing = await this.io.readFile(filePath);
+    } catch {
+      // File doesn't exist — safe to write
+    }
+    if (existing !== undefined) {
       if (!existing.includes('@hyperide-managed')) {
         console.warn(`[PreviewFileManager] Skipping ${filePath} — exists without @hyperide-managed marker`);
         return false;
       }
       if (existing === content) return false;
-      await this.io.mkdir?.(dirname(filePath));
-      await this.io.writeFile(filePath, content);
-      return true;
-    } catch {
-      // File doesn't exist — safe to write
     }
     await this.io.mkdir?.(dirname(filePath));
     await this.io.writeFile(filePath, content);

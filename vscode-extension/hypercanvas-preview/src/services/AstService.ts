@@ -32,12 +32,11 @@ import { resolveWorkspacePath } from './workspace-path';
 // File sink only when explicitly requested via env var — never in normal production use
 const DEBUG_LOG: string | null = process.env.HYPERIDE_AST_DEBUG_LOG ?? null;
 function dbg(msg: string) {
+  if (!DEBUG_LOG) return;
   console.log(msg);
-  if (DEBUG_LOG) {
-    try {
-      fsSync.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
-    } catch {}
-  }
+  try {
+    fsSync.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
 }
 
 // ============================================

@@ -574,8 +574,8 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // 9. SSR route set + RemixMockWrapper (only for Remix projects with SSR route components)
   if (needsRemixMock) {
     lines.push('const ssrRouteSet = new Set<string>([');
-    for (const path of ssrRoutes) {
-      lines.push(`  '${path}',`);
+    for (const routePath of ssrRoutes) {
+      lines.push(`  '${routePath.replace(/'/g, "\\'")}',`);
     }
     lines.push(']);');
     lines.push('');
