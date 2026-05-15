@@ -116,7 +116,7 @@ async function main() {
     sourcesContent: false,
     platform: 'node',
     outfile: 'out/extension.js',
-    external: ['vscode'],
+    external: ['vscode', '@anthropic-ai/sdk'],
     logLevel: 'info',
     plugins: [createResolveAliasesPlugin()],
   });

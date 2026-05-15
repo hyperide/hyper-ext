@@ -31,32 +31,36 @@ export class PanelRouter {
   private _componentService: ComponentService;
   private _styleReadService: StyleReadService;
   private _workspaceRoot: string;
+  private _context: vscode.ExtensionContext;
   private _onOpenAIChat?: (prompt: string) => void;
   private _onElementTracingMessage?: (msg: TracingClientMessage) => void;
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
     this._stateHub = config.stateHub;
-    this._componentService = new ComponentService(config.workspaceRoot, () =>
-      Promise.resolve(config.context.secrets.get('hypercanvas.ai.apiKey')),
-    );
-    this._styleReadService = new StyleReadService(
-      config.workspaceRoot,
-      new VSCodeFileIO(),
-      this._astBridge.astService.nodeMapService,
-    );
+    this._context = config.context;
+    this._componentService = this._createComponentService(config.workspaceRoot);
+    this._styleReadService = this._createStyleReadService(config.workspaceRoot);
     this._workspaceRoot = config.workspaceRoot;
   }
 
   get astBridge(): AstBridge {
+    this._ensureCurrentWorkspace();
     return this._astBridge;
   }
 
   get componentService(): ComponentService {
+    this._ensureCurrentWorkspace();
     return this._componentService;
   }
 
+  get workspaceRoot(): string {
+    this._ensureCurrentWorkspace();
+    return this._workspaceRoot;
+  }
+
   getComponentGroups() {
+    this._ensureCurrentWorkspace();
     return this._componentService.scanComponentGroups();
   }
 
@@ -70,6 +74,7 @@ export class PanelRouter {
    * Returns true if the message was handled.
    */
   async routeMessage(message: unknown, webview: vscode.Webview): Promise<boolean> {
+    this._ensureCurrentWorkspace();
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;
@@ -276,5 +281,24 @@ export class PanelRouter {
 
   dispose(): void {
     // Nothing to dispose currently
+  }
+
+  private _createComponentService(workspaceRoot: string): ComponentService {
+    return new ComponentService(workspaceRoot, () =>
+      Promise.resolve(this._context.secrets.get('hypercanvas.ai.apiKey')),
+    );
+  }
+
+  private _createStyleReadService(workspaceRoot: string): StyleReadService {
+    return new StyleReadService(workspaceRoot, new VSCodeFileIO(), this._astBridge.astService.nodeMapService);
+  }
+
+  private _ensureCurrentWorkspace(): void {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot || workspaceRoot === this._workspaceRoot) return;
+    this._workspaceRoot = workspaceRoot;
+    this._astBridge = new AstBridge(workspaceRoot);
+    this._componentService = this._createComponentService(workspaceRoot);
+    this._styleReadService = this._createStyleReadService(workspaceRoot);
   }
 }

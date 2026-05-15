@@ -9,7 +9,7 @@
 import { describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
 import type { PanelRouter } from '../PanelRouter';
-import { PreviewPanel } from '../PreviewPanel';
+import { normalizeSampleComponentName, PreviewPanel } from '../PreviewPanel';
 import type { StateHub } from '../StateHub';
 
 interface MockStateHubState {
@@ -33,6 +33,9 @@ function createStateHub(initial: MockStateHubState['currentComponent'] = null) {
 }
 
 function createPanel(stateHub: ReturnType<typeof createStateHub>) {
+  Object.assign(vscode.workspace, {
+    workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+  });
   const panel = new PreviewPanel(
     vscode.Uri.file('/extension'),
     '/workspace',
@@ -58,6 +61,12 @@ function createEditor(path: string): vscode.TextEditor {
 }
 
 describe('PreviewPanel component selection', () => {
+  it('normalizes path-like sample component names to JSX-safe identifiers', () => {
+    expect(normalizeSampleComponentName('components/Sidebar.tsx')).toBe('Sidebar');
+    expect(normalizeSampleComponentName('src/components/user-card.tsx')).toBe('UserCard');
+    expect(normalizeSampleComponentName('App')).toBe('App');
+  });
+
   it('does not navigate the iframe before preview generation completes', () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
@@ -123,6 +132,22 @@ describe('PreviewPanel component selection', () => {
     });
   });
 
+  it('resolves components against the current VS Code workspace after project switch', () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [{ uri: vscode.Uri.file('/next-workspace'), name: 'next', index: 0 }],
+    });
+
+    (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
+      createEditor('/next-workspace/App.tsx'),
+    );
+
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      currentComponent: { name: 'App', path: 'App.tsx' },
+    });
+  });
+
   it('clears shared selection when disposing the preview panel', () => {
     const stateHub = createStateHub();
     stateHub.state.selectedIds = ['src/components/Feed.tsx:13:8'];
@@ -136,5 +161,23 @@ describe('PreviewPanel component selection', () => {
       selectedIds: [],
     });
     expect(dispose).toHaveBeenCalled();
+  });
+
+  it('uses a valid JSX component name when sample scaffold receives a path-like name', () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    const scaffold = (
+      panel as PreviewPanel & {
+        _buildSampleScaffold: (
+          componentName: string,
+          exportName: string,
+          propEntries: Array<[string, unknown]>,
+        ) => string;
+      }
+    )._buildSampleScaffold('components/Sidebar.tsx', 'SampleDefault', []);
+
+    expect(scaffold).toContain('<Sidebar');
+    expect(scaffold).not.toContain('<components/Sidebar.tsx');
   });
 });

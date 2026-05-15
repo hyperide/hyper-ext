@@ -27,7 +27,7 @@ import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
-import { PreviewPanel } from './PreviewPanel';
+import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
 import { detectBrowserForPlaywright } from './playwright-chrome';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
@@ -425,36 +425,62 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Deterministic preview file manager (no AI, no network)
   const vsCodeIO = new VSCodeFileIO();
-  const providerWrapPromise = detectPreviewProviders(workspaceRoot);
-  const previewManager = new PreviewFileManager({
-    projectRoot: workspaceRoot,
-    io: vsCodeIO,
-  });
-  // Provider detection runs async; ensureComponent/rebuild will await it before generating
-  previewManager.setProviderWrapAsync(providerWrapPromise);
 
-  // Mode manager: orchestrates App Shell ↔ Isolated transitions via FSWatch
-  const modeManager = new PreviewModeManager({
-    projectRoot: workspaceRoot,
-    io: vsCodeIO,
-    onModeChange: (isolated) => {
-      devServerManager?.setIsolatedMode(isolated);
-      previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
-      // Force iframe reload on every mode change.
-      // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
-      // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
-      // the iframe fetches fresh content from the proxy in its new mode.
-      previewPanel?.refresh();
-    },
-  });
+  const createPreviewFileManager = (projectRoot: string): PreviewFileManager => {
+    const manager = new PreviewFileManager({
+      projectRoot,
+      io: vsCodeIO,
+    });
+    // Provider detection runs async; ensureComponent/rebuild will await it before generating
+    manager.setProviderWrapAsync(detectPreviewProviders(projectRoot));
+    return manager;
+  };
+
+  const createPreviewModeManager = (projectRoot: string): PreviewModeManager =>
+    new PreviewModeManager({
+      projectRoot,
+      io: vsCodeIO,
+      onModeChange: (isolated) => {
+        devServerManager?.setIsolatedMode(isolated);
+        previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
+        // Force iframe reload on every mode change.
+        // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
+        // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
+        // the iframe fetches fresh content from the proxy in its new mode.
+        previewPanel?.refresh();
+      },
+    });
+
+  let activeWorkspaceRoot = workspaceRoot;
+  let previewManager = createPreviewFileManager(activeWorkspaceRoot);
+  let modeManager = createPreviewModeManager(activeWorkspaceRoot);
   modeManager.startWatching();
-  context.subscriptions.push({ dispose: () => modeManager.stopWatching() });
+
+  const syncWorkspaceRuntime = (): string => {
+    const currentRoot = getWorkspaceRoot() ?? activeWorkspaceRoot;
+    if (currentRoot === activeWorkspaceRoot) return activeWorkspaceRoot;
+
+    modeManager.stopWatching();
+    activeWorkspaceRoot = currentRoot;
+    previewManager = createPreviewFileManager(activeWorkspaceRoot);
+    modeManager = createPreviewModeManager(activeWorkspaceRoot);
+    modeManager.startWatching();
+
+    previewPanel?.setWorkspaceRoot(activeWorkspaceRoot);
+    void devServerManager?.setProjectPath(activeWorkspaceRoot);
+    return activeWorkspaceRoot;
+  };
+
+  context.subscriptions.push({
+    dispose: () => modeManager.stopWatching(),
+  });
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
 
   // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
   previewPanel.setScopeChangeHandler(async (scope) => {
-    const wrapperPath = join(workspaceRoot, '.hyperide/preview.tsx');
+    const currentWorkspaceRoot = syncWorkspaceRuntime();
+    const wrapperPath = join(currentWorkspaceRoot, '.hyperide/preview.tsx');
     if (scope === 'component-only') {
       // Check if wrapper already exists (user may have written it manually)
       const exists = await vsCodeIO
@@ -462,9 +488,9 @@ export function activate(context: vscode.ExtensionContext) {
         .then(() => true)
         .catch(() => false);
       if (!exists) {
-        const content = await generatePreviewWrapper(workspaceRoot, context);
+        const content = await generatePreviewWrapper(currentWorkspaceRoot, context);
         if (content) {
-          await writePreviewWrapper(workspaceRoot, content);
+          await writePreviewWrapper(currentWorkspaceRoot, content);
           // FSWatch picks up the file and calls modeManager.onWrapperCreated() → setIsolatedMode(true)
         } else {
           void vscode.window.showInformationMessage(
@@ -490,8 +516,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
       const componentPath = patch.currentComponent.path;
       const componentName = patch.currentComponent.name;
+      const sampleComponentName = normalizeSampleComponentName(componentName);
 
       // Auto-open Preview Panel if not already visible
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
@@ -499,7 +527,7 @@ export function activate(context: vscode.ExtensionContext) {
       // Open the component file in the left editor group (ViewColumn.One)
       // so the user can see the code alongside the preview.
       // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
-      const absPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
+      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       vscode.workspace.openTextDocument(vscode.Uri.file(absPath)).then(
         (doc) =>
           vscode.window.showTextDocument(doc, {
@@ -526,7 +554,7 @@ export function activate(context: vscode.ExtensionContext) {
       previewAbortController = ac;
 
       // Normalize: currentComponent.path may be relative or absolute
-      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
+      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
 
       // Skip source-file mutation entirely when the harness disables it.
       // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
@@ -542,7 +570,7 @@ export function activate(context: vscode.ExtensionContext) {
         ? ensureSample({
             io: vsCodeIO,
             absolutePath: absComponentPath,
-            componentName,
+            componentName: sampleComponentName,
             sampleName: 'SampleDefault',
             generate: sampleGenerator,
           })
@@ -553,10 +581,10 @@ export function activate(context: vscode.ExtensionContext) {
           if (ac.signal.aborted) return;
           const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
           if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
-            await previewPanel.ensureDefaultSampleForNoProps(componentPath, componentName);
+            await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
           }
           // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
-          const relativePath = relative(workspaceRoot, absComponentPath);
+          const relativePath = relative(currentWorkspaceRoot, absComponentPath);
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {
@@ -592,7 +620,7 @@ export function activate(context: vscode.ExtensionContext) {
         .then((result) => {
           if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
           // 4. Update iframe component URL param — no hard reload needed
-          const relativePath = relative(workspaceRoot, absComponentPath);
+          const relativePath = relative(currentWorkspaceRoot, absComponentPath);
           previewPanel?.setComponentParam(relativePath);
         })
         .catch((err) => {
@@ -793,6 +821,18 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
+    }),
+  );
+
+  // Test/project-switch helper: open a folder in the current VS Code window
+  // without relying on the external `code --reuse-window` process targeting the
+  // correct Extension Development Host.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.openFolderPath', async (folderPath: string) => {
+      if (typeof folderPath !== 'string' || folderPath.length === 0) return;
+      await devServerManager?.stop();
+      previewPanel?.dispose();
+      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(folderPath), false);
     }),
   );
 

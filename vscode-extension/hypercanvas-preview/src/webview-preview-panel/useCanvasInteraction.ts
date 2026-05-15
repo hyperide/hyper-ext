@@ -30,6 +30,26 @@ interface UseCanvasInteractionResult {
   updateState: (patch: Record<string, unknown>) => void;
 }
 
+interface SourceLocationLike {
+  fileName: string;
+  line: number;
+  column: number;
+}
+
+export function sourceToElementId(source: unknown): string | null {
+  if (
+    typeof source === 'object' &&
+    source !== null &&
+    typeof (source as SourceLocationLike).fileName === 'string' &&
+    typeof (source as SourceLocationLike).line === 'number' &&
+    typeof (source as SourceLocationLike).column === 'number'
+  ) {
+    const loc = source as SourceLocationLike;
+    return `${loc.fileName}:${loc.line}:${loc.column}`;
+  }
+  return null;
+}
+
 /** Derive the origin from an iframe's src attribute, or null if unknown. */
 function getIframeOrigin(frame: HTMLIFrameElement): string | null {
   try {
@@ -116,12 +136,14 @@ export function useCanvasInteraction(
 
       switch (msg.type) {
         case 'hypercanvas:elementClick': {
+          const elementId = typeof msg.elementId === 'string' ? msg.elementId : sourceToElementId(msg.source);
+          if (!elementId) break;
           const patch: Partial<SharedEditorState> & { source?: unknown } = {
-            selectedIds: [msg.elementId],
+            selectedIds: [elementId],
             insertTargetId: null,
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
-            patch.selectedItemIndices = { [msg.elementId]: msg.itemIndex };
+            patch.selectedItemIndices = { [elementId]: msg.itemIndex };
           }
           if (msg.source) {
             patch.source = msg.source;
@@ -131,15 +153,17 @@ export function useCanvasInteraction(
           break;
         }
 
-        case 'hypercanvas:elementHover':
+        case 'hypercanvas:elementHover': {
+          const elementId = typeof msg.elementId === 'string' ? msg.elementId : sourceToElementId(msg.source);
           canvas.sendEvent({
             type: 'state:update',
             patch: {
-              hoveredId: msg.elementId,
+              hoveredId: elementId,
               hoveredItemIndex: msg.itemIndex,
             },
           });
           break;
+        }
 
         case 'hypercanvas:emptyClick': {
           const emptyPatch: Partial<SharedEditorState> = {

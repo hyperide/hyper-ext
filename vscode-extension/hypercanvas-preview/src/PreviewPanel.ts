@@ -20,6 +20,32 @@ import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
 import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 
+function isValidJsxComponentName(value: string): boolean {
+  return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value);
+}
+
+function toPascalIdentifier(value: string): string {
+  const words = value
+    .replace(/\.[jt]sx?$/i, '')
+    .split(/[^A-Za-z0-9_$]+/)
+    .filter(Boolean);
+  const identifier = words
+    .map((word) => {
+      const first = word.charAt(0);
+      return `${first.toUpperCase()}${word.slice(1)}`;
+    })
+    .join('');
+  if (!identifier) return 'Component';
+  return /^[A-Za-z_$]/.test(identifier) ? identifier : `Component${identifier}`;
+}
+
+export function normalizeSampleComponentName(componentName: string): string {
+  if (isValidJsxComponentName(componentName)) return componentName;
+  const fileName = componentName.split(/[\\/]/).pop() ?? componentName;
+  const candidate = toPascalIdentifier(fileName);
+  return isValidJsxComponentName(candidate) ? candidate : 'Component';
+}
+
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
   private static readonly PANEL_ID = 'preview';
@@ -67,13 +93,37 @@ export class PreviewPanel {
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private readonly _workspaceRoot: string,
+    private _workspaceRoot: string,
     stateHub: StateHub,
     panelRouter: PanelRouter,
     private readonly _context: vscode.ExtensionContext,
   ) {
     this._stateHub = stateHub;
     this._panelRouter = panelRouter;
+  }
+
+  /** Update path resolution after VS Code reuses the window for another workspace. */
+  public setWorkspaceRoot(workspaceRoot: string): void {
+    if (workspaceRoot === this._workspaceRoot) return;
+    this.clearSelection();
+    this._workspaceRoot = workspaceRoot;
+    this._currentComponent = undefined;
+    this._defaultComponent = undefined;
+    this._devServerRunning = false;
+    this._previewBaseUrl = 'http://localhost:3000';
+    this.notifyDevServerStopped();
+    const shouldRestartSync = Boolean(this._syncService);
+    this._syncService?.dispose();
+    this._syncService = undefined;
+    if (this._panel) {
+      if (shouldRestartSync) this._startSyncService();
+      this._initializeComponent();
+    }
+  }
+
+  private _syncWorkspaceRootFromVSCode(): void {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (workspaceRoot) this.setWorkspaceRoot(workspaceRoot);
   }
 
   /** Register a callback invoked when the user toggles preview scope via the toolbar. */
@@ -92,6 +142,7 @@ export class PreviewPanel {
    * Always pins the panel so it cannot be accidentally closed.
    */
   public createOrShow(column?: vscode.ViewColumn): void {
+    this._syncWorkspaceRootFromVSCode();
     const activeEditor = this._resolveComponentEditor();
 
     if (this._panel) {
@@ -221,16 +272,7 @@ export class PreviewPanel {
     });
     this._disposables.push({ dispose: unsubState });
 
-    // Bidirectional code/preview position sync
-    this._syncService = new SyncPositionService(
-      this._panelRouter.astBridge.astService,
-      this._stateHub,
-      this._workspaceRoot,
-      (elementId) => this.sendGoToVisual(elementId),
-      () => this._currentComponent,
-    );
-    this._syncService.start();
-    this._disposables.push(this._syncService);
+    this._startSyncService();
 
     // Cleanup on dispose
     panel.onDidDispose(() => {
@@ -244,6 +286,18 @@ export class PreviewPanel {
 
     // Initialize component
     this._initializeComponent(activeEditor);
+  }
+
+  private _startSyncService(): void {
+    this._syncService = new SyncPositionService(
+      this._panelRouter.astBridge.astService,
+      this._stateHub,
+      this._workspaceRoot,
+      (elementId) => this.sendGoToVisual(elementId),
+      () => this._currentComponent,
+    );
+    this._syncService.start();
+    this._disposables.push(this._syncService);
   }
 
   /**
@@ -651,6 +705,7 @@ export class PreviewPanel {
     exportName: string,
     propEntries: Array<[string, unknown]>,
   ): string {
+    const jsxComponentName = normalizeSampleComponentName(componentName);
     const propLines =
       propEntries.length > 0
         ? propEntries.map(([key, value]) => {
@@ -664,7 +719,7 @@ export class PreviewPanel {
       '',
       `// Sample component — add required props below`,
       `export const ${exportName} = () => (`,
-      `  <${componentName}`,
+      `  <${jsxComponentName}`,
       ...propLines,
       `  />`,
       ');',
@@ -910,6 +965,7 @@ export class PreviewPanel {
    * Initialize component from active editor
    */
   private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
+    this._syncWorkspaceRootFromVSCode();
     const component = this._resolveComponentPath(activeEditor);
     if (component) {
       this._setCurrentComponent(component);
@@ -979,6 +1035,7 @@ export class PreviewPanel {
     // Ignore focus loss (e.g. clicking on preview tab or output panel).
     // Keep the last selected component instead of resetting.
     if (!editor) return;
+    this._syncWorkspaceRootFromVSCode();
 
     const component = this._extractComponentFromEditor(editor);
     if (

@@ -14,7 +14,6 @@ import { type ComponentNode, type ParseContext, parseJSXElement } from '@lib/ser
 import { convertComponentNodesToTreeNodes } from '@lib/services/tree-adapter';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
 import * as vscode from 'vscode';
-import { analyzeWithAI, resolveAnalyzerConfig } from '../../../../lib/component-scanner/ai-analyzer';
 import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
 import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
@@ -115,6 +114,7 @@ export class ComponentService {
       const backend = config.get<string>('backend');
 
       if (apiKey && model) {
+        const { analyzeWithAI, resolveAnalyzerConfig } = await import('../../../../lib/component-scanner/ai-analyzer');
         const resolved = resolveAnalyzerConfig({
           provider: provider as string,
           apiKey,
