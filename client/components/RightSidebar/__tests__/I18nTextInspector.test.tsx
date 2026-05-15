@@ -21,7 +21,6 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
-  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -249,7 +248,48 @@ describe('I18nTextInspector', () => {
     expect(onKeyChange).toHaveBeenCalledWith('onboarding.step1');
   });
 
-  // Regression: read-only TS/JS layouts (writable=false) must still allow switching
+  it('allows creating a key when the available key list is empty', async () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+        canCreateKeys
+      />,
+    );
+    const trigger = screen.getByTestId('i18n-key-input');
+    expect(trigger.tagName.toLowerCase()).toBe('button');
+    fireEvent.click(trigger);
+    const searchInput = screen.getByPlaceholderText('Search or create key...');
+    fireEvent.change(searchInput, { target: { value: 'brand.first.key' } });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+    expect(onKeyChange).toHaveBeenCalledWith('brand.first.key');
+  });
+
+  it('allows creating a key before the available key list has loaded', async () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+        canCreateKeys
+      />,
+    );
+    const trigger = screen.getByTestId('i18n-key-input');
+    expect(trigger.tagName.toLowerCase()).toBe('button');
+    fireEvent.click(trigger);
+    const searchInput = screen.getByPlaceholderText('Search or create key...');
+    fireEvent.change(searchInput, { target: { value: 'brand.loading.key' } });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+    expect(onKeyChange).toHaveBeenCalledWith('brand.loading.key');
+  });
+
+  // Regression: non-editable layouts must still allow switching
   // JSX to an already-existing key. AstBridge handles that path with skipResourceWrite=true,
   // so no locale-file write happens and the format restriction does not apply.
   // Only the Create affordance is gated on canCreateKeys.
@@ -292,7 +332,7 @@ describe('I18nTextInspector', () => {
     });
   });
 
-  it('falls back to plain input when keyEditable is true but no availableKeys provided', () => {
+  it('falls back to plain input when keyEditable is true but no creation path is available', () => {
     render(
       <I18nTextInspector
         i18nBinding={supportedBinding}

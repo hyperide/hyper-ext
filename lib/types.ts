@@ -91,7 +91,7 @@ export interface SharedEditorState {
   previewScope?: 'full-app' | 'component-only';
   /** Computed style snapshot from the preview iframe for the currently selected element. */
   selectedElementRuntimeStyle?: SelectedElementRuntimeStyle | null;
-  /** Trimmed innerText of the selected DOM element — used as i18n DOM-text search fallback. */
+  /** Trimmed innerText of the selected DOM element — used for i18n DOM-text search. */
   selectedElementDomText?: string | null;
 }
 

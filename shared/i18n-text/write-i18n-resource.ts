@@ -7,6 +7,7 @@
 
 import type { FileIO } from '../../lib/ast/file-io';
 import { discoverLayout } from './resolve-i18n-resource';
+import { writeTsLocaleValue } from './ts-locale-ast';
 import type { I18nLibrary } from './types';
 
 export type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only' | 'io-error';
@@ -94,9 +95,23 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
 
   const filePath = layout.getLocaleFilePath(activeLocale);
 
-  // TS/JS locale files are read-only — we cannot safely eval or mutate them
   if (filePath.endsWith('.ts') || filePath.endsWith('.js')) {
-    return { success: false, filePath: null, error: 'unsupported-format' };
+    let content: string;
+    try {
+      content = await fileIO.readFile(filePath);
+    } catch {
+      return { success: false, filePath: null, error: 'missing-locale-file' };
+    }
+    const updated = writeTsLocaleValue(content, activeLocale, key, newText);
+    if (updated === null) return { success: false, filePath: null, error: 'unsupported-format' };
+    try {
+      await fileIO.writeFile(filePath, `${updated}\n`);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      const isPermission = code === 'EACCES' || code === 'EROFS' || code === 'EPERM';
+      return { success: false, filePath: null, error: isPermission ? 'read-only' : 'io-error' };
+    }
+    return { success: true, filePath };
   }
 
   // Read the active locale file
@@ -104,7 +119,12 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
   try {
     content = await fileIO.readFile(filePath);
   } catch {
-    return { success: false, filePath: null, error: 'missing-locale-file' };
+    try {
+      await fileIO.access(filePath);
+      return { success: false, filePath: null, error: 'io-error' };
+    } catch {
+      return { success: false, filePath: null, error: 'missing-locale-file' };
+    }
   }
 
   // Parse JSON — do not corrupt the file on parse failure
