@@ -8,7 +8,6 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
-import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1216,14 +1215,14 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
-// Delegates to the shared `isHorizontalLayout` (drop-indicator-orientation.ts),
-// which walks past wrapper divs and treats `grid-cols-N` (multi-track,
-// default `grid-auto-flow: row`) as a horizontal layout. The old inline
-// version checked only `dropEl.parentElement` and required
-// `gridAutoFlow.includes('column')` — that broke Tailwind grids and any
-// drop element wrapped in a transparent block container.
 function _isHorizontalLayout(el: HTMLElement): boolean {
-  return _isHorizontalLayoutShared(el);
+  const parent = el.parentElement;
+  if (!parent) return false;
+  const s = getComputedStyle(parent);
+  const d = s.display;
+  if (d === 'flex' || d === 'inline-flex') return s.flexDirection === 'row' || s.flexDirection === 'row-reverse';
+  if (d === 'grid' || d === 'inline-grid') return s.gridAutoFlow.includes('column');
+  return false;
 }
 
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
