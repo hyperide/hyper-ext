@@ -988,7 +988,7 @@ export default function Projects() {
                     packageManager: continueProject.packageManager,
                     name: continueProject.name,
                   }
-                : restoredCreationProject ?? undefined
+                : (restoredCreationProject ?? undefined)
             }
           />
         </div>

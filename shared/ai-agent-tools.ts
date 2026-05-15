@@ -879,7 +879,33 @@ export const GET_DIAGNOSTICS: ToolDefinition = {
   },
 };
 
-export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_DIAGNOSTICS];
+export const ADD_DEPENDENCY: ToolDefinition = {
+  name: 'add_dependency',
+  description:
+    'Install one or more npm packages into the project. ' +
+    'Use this instead of bash_exec for adding dependencies — it streams installation progress ' +
+    'to the user in real time and automatically detects the package manager (npm/yarn/pnpm/bun). ' +
+    'Do NOT use bash_exec to run npm/yarn/pnpm/bun install — use this tool instead.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      packages: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Package names to install, e.g. ["react-query", "axios@1.6.0", "@tanstack/react-table"]. ' +
+          'Include version specifiers like @1.2.3 or @^2.0 if needed.',
+      },
+      dev: {
+        type: 'boolean',
+        description: 'Install as devDependency (--save-dev / -D). Default: false.',
+      },
+    },
+    required: ['packages'],
+  },
+};
+
+export const SERVER_TOOLS: ToolDefinition[] = [RESTART_DEV_SERVER, GET_DIAGNOSTICS, ADD_DEPENDENCY];
 
 // ============================================
 // Web Tools
