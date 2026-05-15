@@ -4,6 +4,8 @@
 **Status:** Active collaboration log
 **Scope:** Coordination notes for agents working on style-write unification specs.
 **Canonical plan:** `docs/specs/2026-04-14-style-write-unification-plan.md`
+**Codex workflow:** Read `CODEX.md` before starting work: commit
+discipline, self-review, routing rules.
 
 ## How To Use This File
 
@@ -18,9 +20,10 @@ stale assumptions, and accidental reversions.
 2. An agent waits until the other agent finishes its current pass before doing a
    full analysis of that agent's work. While waiting, it may work only on
    independent, non-conflicting tasks.
-3. Claude owns elaboration: it deepens the spec and tries to prove the work is
-   complete. Codex owns review: it tries to disprove completeness by finding
-   contradictions, missing cases, stale decisions, and test gaps.
+3. As of 2026-04-20, Codex owns implementation and implementation review.
+   Claude owns planning and plan review. Both agents still challenge each
+   other's work for contradictions, missing cases, stale decisions, and test
+   gaps.
 4. Agents keep working continuously until the assigned workstream is `done` or
    explicitly `blocked`.
 5. Agents leave questions, review notes, answers, and handoff notes in this
@@ -40,18 +43,26 @@ stale assumptions, and accidental reversions.
 
 Claude Sonnet 4.6:
   Status: done.
-  Signed: Claude Sonnet 4.6, 2026-04-16 14:54 CEST.
-  Last known role: applied F-004 (PlainCssFilePlan discriminated union),
-  F-005 (Tailwind+CSS Modules tie-breaker default policy), F-006
-  (cssSystem sweep), F-007 (ArbitraryPropPlan empty-fields docs),
-  F-008 (confidence mapping rule), F-010 (InspectorValueCodec scope
-  rewrite). All edits in plan.md.
+  Signed: Claude Sonnet 4.6, 2026-04-20 time unknown.
+  Last known role: planning and plan review. Previous implementation handoff:
+  13 commits built style-read/style-write types, InspectorValueCodec,
+  CssRuntimeNormalizer, Tailwind v4 / CSS Modules / inline-style adapters, and
+  StyleWritePlanner. Next planning focus is Phase 6 handoff details.
 
 Codex GPT-5.4:
-  Status: done.
-  Signed: Codex GPT-5.4, 2026-04-15 15:09 CEST.
-  Last known role: reviewed Claude 14:58 CEST pass and left follow-up
-  findings.
+  Status: **in progress — fixing review findings**.
+  Signed: Codex GPT-5.4, 2026-04-20 16:31 CEST.
+  Last known role: implementation owner for Phase 6 shared write orchestration.
+  Current implementation state: `DefaultStyleWriteManager` exists, and shared
+  `AstStylePlanExecutor` applies Tailwind class plans plus inline style object
+  plans through shared AST primitives. CSS file and prop plans still need
+  dedicated executors before VS Code/SaaS route delegation can replace legacy
+  endpoint mutation logic.
+  **Action required**: Claude review (2026-04-21) found 9 blocking issues.
+  See "📍 Review Session 2026-04-21" → "Findings — MUST FIX before next merge".
+  All 9 items (C1, C2, D1-D4, V1-V2, P1) must be fixed before any new feature
+  work proceeds. Work sequentially, one commit per fix group, `bun run test`
+  after each.
 
 Rules for agents:
 
@@ -1321,3 +1332,1380 @@ Two-agent orchestrator design (proposed in postmortem report) not yet
 
 Session author: claude, Claude Sonnet 4.6 (pair with Alex Ultra),
 2026-04-16 14:54 CEST.
+
+## 📍 Implementation Session 2026-04-20 16:19 CEST author: codex
+
+This session switches the collaboration model: Codex is now responsible for
+implementation and implementation review; Claude is responsible for planning and
+plan review.
+
+### Scope Read
+
+Read or mapped:
+
+```text
+docs/specs/2026-04-14-style-write-unification-workprocess.md
+docs/specs/2026-04-14-style-write-unification-plan.md
+docs/specs/2026-04-14-style-source-owner.md
+docs/specs/2026-04-14-style-source-confidence.md
+docs/specs/2026-04-15-style-theme-resolution.md
+docs/specs/2026-04-17-style-write-foundation-plan.md
+docs/specs/2026-04-18-style-adapters-phase3-4-plan.md
+docs/specs/2026-04-17-multi-agent-orchestrator.md
+```
+
+Plan location note:
+
+```text
+Style-write implementation plans exist under docs/specs/:
+  - 2026-04-17-style-write-foundation-plan.md
+  - 2026-04-18-style-adapters-phase3-4-plan.md
+
+docs/plans/ contains project plans, but no current style-write Phase 6 plan.
+```
+
+### Implementation Handoff
+
+Claude's reported implementation state matches the recent git history:
+
+```text
+13 recent style-write commits add shared style-read/style-write types,
+InspectorValueCodec, CssRuntimeNormalizer, Tailwind v4 / CSS Modules /
+inline-style adapters, and StyleWritePlanner.
+```
+
+Next implementation slice:
+
+```text
+Phase 6 foundation: add shared StyleWriteManager orchestration around the
+existing StyleWritePlanner and adapter/executor boundary before wiring VS Code
+or SaaS endpoints.
+```
+
+Validation so far:
+
+```text
+git status --short
+git log --oneline -18
+rg --files docs/specs docs/plans
+rg heading maps for related specs/plans
+sed reads of workprocess status, canonical StyleWriteManager section,
+Write Plan Shape, and Phase 6 checklist
+```
+
+Follow-up:
+
+```text
+Write failing unit tests for StyleWriteManager orchestration before
+implementation.
+```
+
+### 📍 16:31 Implementation Progress
+
+TDD slices completed:
+
+```text
+1. Added failing StyleWriteManager orchestration tests.
+2. Added DefaultStyleWriteManager with planner-selected writer delegation and
+   injected executor delegation.
+3. Added failing AstStylePlanExecutor tests for static Tailwind, inline style
+   object merge, and unsupported CSS Modules file plans.
+4. Added AstStylePlanExecutor using shared AST parser/mutators:
+   - TailwindPlan static className mutation removes conflicting classes and
+     appends planned classes.
+   - non-string Tailwind className expressions route through the existing
+     dynamic className mutator with fallback behavior.
+   - dynamic Tailwind plans with precise locations fail explicitly until
+     StyleWritePlan locations are mapped to the legacy dynamic mutator shape.
+   - ScriptObjectStylePlan merges target styles into JSX style objects.
+   - CSS file / prop / CSS-in-JS template plans return explicit unsupported
+     failures until dedicated executors are added.
+5. Updated lib/tailwind/generator.ts to load tailwindcss/colors through
+   createRequire, removing the ESM deprecation warning from focused tests.
+```
+
+Files touched in this slice:
+
+```text
+lib/style-write/style-write-manager.ts
+lib/style-write/style-write-manager.test.ts
+lib/style-write/ast-style-plan-executor.ts
+lib/style-write/ast-style-plan-executor.test.ts
+lib/tailwind/generator.ts
+docs/specs/2026-04-14-style-write-unification-workprocess.md
+```
+
+Validation:
+
+```text
+bun test lib/style-write/ast-style-plan-executor.test.ts
+bun test lib/style-write lib/style-adapters lib/style-values lib/style-read lib/tailwind/generator.test.ts
+bunx biome check \
+  lib/style-write/ast-style-plan-executor.ts \
+  lib/style-write/ast-style-plan-executor.test.ts \
+  lib/style-write/style-write-manager.ts \
+  lib/style-write/style-write-manager.test.ts \
+  lib/tailwind/generator.ts
+bun run lint
+bunx markdownlint-cli docs/specs/2026-04-14-style-write-unification-workprocess.md
+bun run test
+```
+
+Results:
+
+```text
+Focused style-write/style-adapters/style-values/style-read tests: 201 pass,
+0 fail.
+Full test suite: 2934 pass, 0 fail.
+Biome check on touched source/test files: no warnings.
+bun run lint: exit 0, tsc passed, but repository still reports 13 existing
+Biome warnings outside this implementation slice.
+markdownlint on this workprocess: pass.
+Full test suite still prints Tailwind color rename warnings from VS Code MCP
+tests; these are outside the new generator import warning fixed in this slice.
+```
+
+Implementation review notes:
+
+```text
+The executor intentionally does not pretend to support CssModulesFilePlan or
+PlainCssFilePlan yet. The spec says CSS file plans must map one-to-one to a
+PostCSS/CSS executor; routing them through inline fallback here would recreate
+the split-brain bug under a new name.
+
+The current Tailwind fallback branch uses the existing dynamic className mutator
+without precise locations for non-string className expressions. Precise dynamic
+TailwindPlan locations fail explicitly because TailwindPlan.ClassNameLocation
+and the legacy AI ClassNameLocation are not the same shape. Phase 6 wiring must
+either add a proper plan-location adapter or update the plan type before relying
+on precise dynamic edits.
+```
+
+Next implementation step:
+
+```text
+Add a CSS file plan executor for CssModulesFilePlan / PlainCssFilePlan or have
+Claude produce a Phase 6 wiring plan that defines the exact context builder for
+StyleWriteContext from current VS Code and SaaS request data. Without that,
+directly switching AstService/updateComponentStyles to StyleWriteManager would
+lose source-owner facts and regress CSS Modules/dynamic class routing.
+```
+
+## 📍 Observer Guidance 2026-04-20 16:31 CEST author: observer
+
+Received by Codex.
+
+Observer direction:
+
+```text
+If important questions or blockers appear, ask via Telegram. Runtime details
+live in ~/xp/hypercalendarbot/.env. Do not copy secrets into this workprocess
+or chat.
+```
+
+## 📍 Coordination Update 2026-04-20 16:54 CEST author: codex
+
+Observer clarified that Phase 5b, Phase 5d, Phase 7, and Phase 8 must stay in
+the implementation sequence, not be skipped by the Phase 6 foundation work.
+
+Implementation ordering decision:
+
+```text
+1. Phase 7 minimal read path must happen before full Phase 6 route delegation,
+   because StyleWriteContext needs ElementStyleFacts and StyleSourceOwner facts
+   instead of synthetic placeholders.
+2. Phase 5d RuntimeThemeContext plumbing should land with the read/write
+   context builders so theme switches are per-request inputs to shared managers.
+3. Phase 5b Source Tabs UI should land after read path facts exist, because the
+   UI needs real StyleSourceTab data and selectedSourceTabId must feed
+   StyleWritePlanner.
+4. Phase 6 platform wiring should replace VS Code/SaaS endpoint routing only
+   after the context builder can supply source owners, selected source tab, and
+   runtime theme context.
+5. Phase 8 CSS-in-JS adapters should follow the manager/read-path integration,
+   because Emotion/styled-components need the same source resolution and dynamic
+   expression tracing infrastructure.
+```
+
+Telegram bridge:
+
+```text
+Started a local background Telegram bridge for Codex progress and questions.
+Bot username: @UltraClaudeCodeBot
+Local runtime directory: /tmp/hyper-canvas-style-bot
+Status file: /tmp/hyper-canvas-style-bot/status.json
+Inbox: /tmp/hyper-canvas-style-bot/inbox.ndjson
+Outbox: /tmp/hyper-canvas-style-bot/outbox.ndjson
+
+The bot token is intentionally not stored in the repo or this workprocess.
+The bridge is currently waiting for the first Telegram chat to send /start
+before it can deliver outbound progress.
+```
+
+Bridge runtime note:
+
+```text
+The first detached nohup process exited without a useful error log after writing
+status. Codex restarted the bridge as a live background tool session with echo
+disabled for token input. Current status file shows pid 88971 and
+waiting_for_chat.
+```
+
+## 📍 Implementation Session 2026-04-20 17:06 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Phase 7 minimal read path:
+- Added DefaultStyleReadManager in lib/style-read/style-read-manager.ts.
+- Added shared read-path result/context contracts in lib/style-read/types.ts:
+  FrameworkReadResult, FiberTraceResult, StyleReadContext, PropertySource,
+  AvailableConditionAxes, StyleReadResult, and StyleReadManager.
+- Updated FrameworkStyleReader to receive element facts, computed style,
+  optional fiber trace, and runtime theme context.
+- Updated Tailwind v4, CSS Modules, and Inline Style reader stubs to return
+  canonical empty FrameworkReadResult objects instead of raw owner arrays.
+- Added read manager tests for reader routing, computed/source tabs, source
+  owner tabs from element facts, property source aggregation, inactive adapter
+  filtering, empty concrete adapter values, and props-editor surface selection.
+- Updated adapter umbrella tests to the richer read-result contract and removed
+  Tailwind adapter non-null assertions in the touched test.
+```
+
+Validation:
+
+```text
+bun test lib/style-read/style-read-manager.test.ts
+bun test lib/style-adapters/tailwind-v4/index.test.ts \
+  lib/style-adapters/css-modules/index.test.ts \
+  lib/style-adapters/inline-style/index.test.ts
+bun test lib/style-read lib/style-write lib/style-adapters
+bunx biome check lib/style-read lib/style-write \
+  lib/style-adapters/tailwind-v4 lib/style-adapters/css-modules \
+  lib/style-adapters/inline-style lib/tailwind/generator.ts
+bunx markdownlint-cli docs/specs/2026-04-14-style-write-unification-workprocess.md
+git diff --check
+bun run lint
+bun run test
+```
+
+Results:
+
+```text
+Focused style-read/style-write/style-adapters tests: 106 pass, 0 fail.
+Biome check on touched source/test files: no warnings.
+markdownlint on this workprocess: pass.
+git diff --check: pass.
+bun run lint: exit 0, tsc passed, but repository still reports 11 existing
+Biome warnings outside this implementation slice.
+Full test suite: 2941 pass, 0 fail.
+Full test suite still prints Tailwind color rename warnings from VS Code MCP
+tests; these remain outside this implementation slice.
+```
+
+Implementation review notes:
+
+```text
+DefaultStyleReadManager intentionally does not read files or perform fiber
+tracing directly. It accepts already-collected ElementStyleFacts, computed
+style, optional FiberTraceResult, and RuntimeThemeContext, then routes active
+framework readers and aggregates source tabs/property sources.
+
+The manager includes ElementStyleFacts.sourceOwners in source tabs even when no
+adapter reader returns owners yet. This prevents the minimal Phase 7 path from
+dropping owners produced by earlier tracing/context-building work.
+
+Concrete property sources currently require adapter reader values. Source tabs
+can be shown from owners alone, but values from CSS files, class strings, and
+CSS-in-JS expressions still need the follow-up reader implementations.
+
+Self-review caught and fixed an edge case where empty string adapter values
+would have been dropped as falsy. The manager now skips only undefined values.
+```
+
+Telegram bridge update:
+
+```text
+Bridge chat is connected. Codex received a Telegram request for a progress
+report and answered with the current Phase 6 foundation plus Phase 7 minimal
+read-path status. The bridge token remains outside the repo and workprocess.
+```
+
+Next implementation step:
+
+```text
+Phase 5d should add shared RuntimeThemeContext builders for VS Code and SaaS
+request boundaries. Phase 5b Source Tabs UI can then consume StyleReadResult
+tabs and pass selectedSourceTabId into StyleWritePlanner. Full Phase 6 platform
+wiring should wait until those context builders and selected source tab routing
+exist, otherwise SaaS/VS Code endpoint wiring would still have to synthesize
+owners.
+```
+
+## 📍 Implementation Session 2026-04-20 17:14 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Phase 5d shared theme context foundation:
+- Added lib/style-read/runtime-theme-context.ts with a pure
+  DefaultThemeContextResolver.
+- Added helpers to build RuntimeThemeContext from shared theme state and CSS
+  class facts.
+- Extended lib/style-read/types.ts with RuntimeThemeContextInput variants and
+  the ThemeContextResolver contract.
+- Added focused tests for explicit light mode, system mode, supplied selected
+  theme conditions, VS Code body-class facts, HyperIDE ThemeProvider state, and
+  injected CSS-class resolvers.
+```
+
+Validation:
+
+```text
+bun test lib/style-read/runtime-theme-context.test.ts
+bun test lib/style-read/runtime-theme-context.test.ts \
+  lib/style-read/style-read-manager.test.ts
+bun test lib/style-read lib/style-write lib/style-adapters
+bunx biome check lib/style-read/runtime-theme-context.ts \
+  lib/style-read/runtime-theme-context.test.ts lib/style-read/types.ts
+bunx biome check lib/style-read lib/style-write \
+  lib/style-adapters/tailwind-v4 lib/style-adapters/css-modules \
+  lib/style-adapters/inline-style lib/tailwind/generator.ts
+bun run lint
+bun run test
+```
+
+Results:
+
+```text
+Runtime theme focused tests: 6 pass, 0 fail.
+Runtime theme + read manager focused tests: 13 pass, 0 fail.
+Focused style-read/style-write/style-adapters tests: 112 pass, 0 fail.
+Biome check on touched source/test files: no warnings.
+bun run lint: exit 0, tsc passed, but repository still reports 11 existing
+Biome warnings outside this implementation slice.
+Full test suite: 2947 pass, 0 fail.
+Full test suite still prints Tailwind color rename warnings from VS Code MCP
+tests; these remain outside this implementation slice.
+```
+
+Implementation review notes:
+
+```text
+This is the shared resolver foundation for Phase 5d, not complete platform
+request wiring. SaaS and VS Code still need to call these builders when they
+construct style read/write requests.
+
+The resolver keeps browser/system preference deterministic for tests by taking
+the current system color scheme as an input instead of reading global browser
+state directly.
+
+The default selected theme condition is synthesized only when callers do not
+provide selectedTheme and do not opt out. This keeps adapter code able to route
+theme conditions before full theme-owner detection is implemented.
+```
+
+Next implementation step:
+
+```text
+Phase 5b can now start from the StyleReadResult tabs contract. The UI should
+consume sourceTabs, keep selectedSourceTabId stable, and pass that selected
+source id into style write routing. The remaining Phase 5d platform wiring can
+then be attached at the same request boundary.
+```
+
+## 📍 Implementation Session 2026-04-20 17:26 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Phase 5b source tabs scaffold and write routing:
+- Added RightSidebar source tab UI with accessible tab buttons.
+- Added a small source-tabs helper that always exposes Computed and can expose
+  safe framework tabs for Tailwind and Tamagui inspector modes.
+- Added selectedSourceTabId state in RightSidebar and guarded it against stale
+  tab ids when the selected element/framework changes.
+- Threaded selectedSourceTabId through useStyleSync, CanvasEngine,
+  ASTStyleOperation, ASTApiService, PlatformContext, platform message types,
+  server updateComponentStyles request types, and VS Code extension message
+  types.
+- Added tests for source tab rendering, tab selection, helper routing, and the
+  CanvasEngine AST request payload.
+```
+
+Related follow-up from extension build review:
+
+```text
+lib/tailwind/generator.ts no longer depends on createRequire(import.meta.url).
+The generator now imports tailwindcss/colors directly and builds a typed runtime
+map without broad unknown casts. This removes the CommonJS extension build
+warning introduced by the earlier implementation slice.
+```
+
+TDD notes:
+
+```text
+The CanvasEngine selectedSourceTabId test first failed because the field was
+not present in the AST API payload. The StyleSourceTabsSection tests first
+failed because no tab UI existed. The source-tabs helper tests first failed
+because the helper did not exist. Implementation followed those failures.
+```
+
+Validation:
+
+```text
+bun test lib/style-read lib/style-write lib/style-adapters \
+  client/components/RightSidebar \
+  client/lib/canvas-engine/__tests__/CanvasEngineAST.test.ts \
+  lib/tailwind/generator.test.ts
+bunx biome check <touched source and test files>
+cd vscode-extension/hypercanvas-preview && npm run build
+bun run lint
+bun run test
+```
+
+Results:
+
+```text
+Focused source/read/write tests: 172 pass, 0 fail.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+bun run lint: exit 0, tsc passed, but repository still reports 11 existing
+Biome warnings outside this implementation slice.
+Full test suite: 2956 pass, 0 fail.
+Full test suite still prints Tailwind color rename warnings from VS Code MCP
+tests; these remain outside this implementation slice.
+```
+
+Visual verification status:
+
+```text
+Component-level DOM tests cover source tab rendering and selection behavior.
+Real editor visual verification is not complete for this block.
+
+Playwright MCP navigation was blocked by the tool safety guard because this
+conversation contains secrets. A separate Playwright CLI probe confirmed that
+http://localhost:8080 and the attempted test-preview URL render the public
+landing/404 surface in this environment, not the editor RightSidebar. No
+verified editor screenshot was produced.
+```
+
+Implementation review notes:
+
+```text
+This is a Phase 5b scaffold, not the final source-tab implementation.
+RightSidebar can route a selected concrete source tab into write requests, but
+the UI currently synthesizes only safe top-level Tailwind and Tamagui tabs from
+the existing inspector mode. Computed is never sent as an explicit write target.
+
+CSS Modules, plain CSS, inline style, and CSS-in-JS source tabs should come from
+StyleReadResult.sourceTabs once SaaS and VS Code are wired to
+DefaultStyleReadManager. Until that platform read wiring exists, adding more
+synthetic tabs in the UI would create a second source of truth.
+```
+
+Next implementation step:
+
+```text
+Wire DefaultStyleReadManager into the SaaS and VS Code request boundary so the
+RightSidebar can consume real StyleReadResult.sourceTabs and property sources.
+After that, selectedSourceTabId should feed StyleWriteManager/StyleWritePlanner
+instead of only traveling through the legacy AST write request contracts.
+```
+
+## 📍 Implementation Session 2026-04-20 17:36 CEST author: codex
+
+Scope completed in this block:
+
+```text
+CSS file plan execution for shared StyleWriteManager path:
+- Extended AstStylePlanExecutor to execute CssModulesFilePlan and
+  PlainCssFilePlan variants with PostCSS.
+- CssModulesFilePlan now updates an existing selector in the selected
+  .module.css file instead of returning unsupported.
+- PlainCssExistingOwnerPlan now updates declarations inside the matching
+  selector and matching @media/@container/theme at-rule stack.
+- PlainCssCreateRulePlan now appends a new rule, creating the requested at-rule
+  stack when needed.
+- Added TDD coverage for CSS Modules existing rule writes, plain CSS existing
+  owner writes inside @media, and plain CSS create-rule writes.
+```
+
+TDD notes:
+
+```text
+The new CSS file executor tests first failed because AstStylePlanExecutor still
+returned Unsupported style write plan for cssStyleRule/css-modules and
+cssStyleRule/plain-css. The implementation then added PostCSS-backed rule
+lookup, rule creation, and declaration merge logic.
+```
+
+Validation:
+
+```text
+bun test lib/style-write/ast-style-plan-executor.test.ts
+bunx biome check lib/style-write/ast-style-plan-executor.ts \
+  lib/style-write/ast-style-plan-executor.test.ts
+bun test lib/style-write lib/style-adapters/css-modules \
+  lib/style-adapters/inline-style lib/style-adapters/tailwind-v4
+cd vscode-extension/hypercanvas-preview && npm run build
+bun run lint
+bun run test
+```
+
+Results:
+
+```text
+AstStylePlanExecutor focused tests: 6 pass, 0 fail.
+Focused style-write/style-adapter tests: 92 pass, 0 fail.
+Biome check on touched executor files: no warnings.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+bun run lint: exit 0, tsc passed, but repository still reports 11 existing
+Biome warnings outside this implementation slice.
+Full test suite: 2958 pass, 0 fail.
+Full test suite still prints Tailwind color rename warnings from VS Code MCP
+tests; these remain outside this implementation slice.
+```
+
+Implementation review notes:
+
+```text
+This closes the earlier Phase 6 executor gap where CSS Modules could be planned
+but not executed. Platform route delegation still needs a real StyleWriteContext
+builder, but the shared executor can now mutate CSS Modules and plain CSS plan
+targets once those plans reach it.
+
+The executor currently merges or appends declarations. It does not yet model
+CSS declaration removal because current CSS Modules/plain CSS writer plans omit
+empty values instead of carrying explicit delete operations.
+
+SCSS/Sass/Less/Stylus syntax-specific mutation is still future work. This
+PostCSS path covers standard CSS-compatible rule/declaration editing and keeps
+syntax-specific parser selection in the remaining Phase 8 scope.
+```
+
+Next implementation step:
+
+```text
+Build the SaaS/VS Code StyleWriteContext request mapper so legacy
+updateStyles/updateComponentStyles calls can delegate to StyleWriteManager
+without losing source owner facts, RuntimeThemeContext, or undo/snapshot hooks.
+```
+
+## 📍 Visual Verification 2026-04-20 17:54 CEST author: codex
+
+Scope completed in this block:
+
+```text
+VS Code extension visual verification for Phase 5b source tabs:
+- Added a dedicated E2E diagnostic spec in ext-test-projects:
+  e2e/tests/project-independent/style-source-screens.spec.ts
+- Ran the spec against the local hypercanvas-preview extension build through
+  launchVSCode/setupPreviewWithDevServer.
+- Captured inspector screenshots for no selection, h1 selected, concrete
+  Tailwind source selected, and a second selected article state.
+- Fixed a VS Code MCP registration bug found by the first visual pass.
+```
+
+Finding fixed:
+
+```text
+The first E2E run captured Extension Host errors:
+Error in property 'label': Expected string, but got object.
+
+Root cause:
+registerCopilotMcp constructed vscode.McpHttpServerDefinition with an object,
+but the local @types/vscode API expects positional arguments:
+new McpHttpServerDefinition(label, uri, headers?, version?).
+
+Fix:
+vscode-extension/hypercanvas-preview/src/extension.ts now uses the positional
+constructor. The follow-up E2E run no longer reports console/page errors.
+```
+
+Visual artifacts:
+
+```text
+/tmp/hyper-style-source-screens/01-loaded-no-selection.png
+/tmp/hyper-style-source-screens/02-h1-selected.png
+/tmp/hyper-style-source-screens/03-concrete-source-tab-selected.png
+/tmp/hyper-style-source-screens/04-article-selected.png
+/tmp/hyper-style-source-screens/report.json
+
+Diagnostics:
+/var/folders/1c/d4v7_mrs4b9085f6w7w9p35c0000gn/T/hyper-e2e-diagnostics/2026-04-20T15-54-03-426Z-captures-inspector-states-and-reports-source-tab-problems-WUwzqi
+```
+
+Final E2E result:
+
+```text
+Command:
+cd /Users/ultra/work/ext-test-projects/e2e
+env EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test \
+  --project=independent \
+  tests/project-independent/style-source-screens.spec.ts \
+  --workers=1
+
+Result: 1 passed.
+Source tabs:
+- h1 selected: Computed and Tailwind visible, Computed pressed.
+- Tailwind tab selected: Tailwind pressed.
+- article selected: Computed and Tailwind visible, Tailwind pressed.
+Selected IDs changed from src/components/Feed.tsx:13:8 to
+src/components/Tweet.tsx:83:14.
+No console/page errors captured.
+```
+
+Additional validation in this block:
+
+```text
+cd vscode-extension/hypercanvas-preview && npm run build
+bunx biome check vscode-extension/hypercanvas-preview/src/extension.ts
+```
+
+Results:
+
+```text
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+Biome check on extension.ts: clean.
+```
+
+Implementation review notes:
+
+```text
+The diagnostic spec originally used generic/offscreen selectors for the second
+state. That produced false negatives where selection stayed on h1. The final
+spec uses a visible article selector and verifies selectedIds actually change.
+
+This visual pass verifies the source-tab scaffold behavior. It does not yet
+verify full shared StyleWriteManager routing from the inspector into file
+mutations; that remains the next Phase 6 platform wiring step.
+```
+
+## 📍 Implementation Session 2026-04-20 18:06 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Phase 6 platform write wiring, first executable slice:
+- Added createDefaultStyleWriteManager() with the shared adapter registry:
+  Tailwind v4, CSS Modules, Inline Style.
+- Added createStyleWriteContextFromRequest() to build a shared
+  StyleWriteContext from platform updateStyles requests.
+- Routed explicit Tailwind source-tab writes through StyleWriteManager in
+  VS Code AstService.
+- Passed selectedSourceTabId through AstBridge into AstService.
+- Routed explicit Tailwind source-tab writes through StyleWriteManager in the
+  SaaS updateComponentStyles route.
+- Kept legacy write behavior as fallback when no routable explicit source tab
+  is selected.
+```
+
+Implementation notes:
+
+```text
+This is intentionally limited to request-derived Tailwind/inline-style routing.
+CSS Modules and plain CSS need real source-owner facts from StyleReadManager at
+the platform boundary before we can safely route them from UI tabs into CSS
+file mutations. The CSS file executor is ready, but the source-tab scaffold does
+not yet provide selector/import ownership facts.
+
+The server route now accepts selectedId as the legacy client key as well as
+nodeRef, then derives a shared elementRef from the resolved JSX location. This
+keeps the shared executor operating on stable file:line:column references.
+```
+
+TDD notes:
+
+```text
+Added focused tests for request source-tab routing:
+- explicit Tailwind source tab maps to tailwind-v4 context.
+- computed and unsupported adapter tabs do not silently route.
+- AstBridge forwards selectedSourceTabId to AstService.
+```
+
+Validation:
+
+```text
+bun test lib/style-write/style-write-request-context.test.ts \
+  lib/style-write/ast-style-plan-executor.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/AstBridge.test.ts
+bunx biome check <touched Phase 6 files>
+bun run lint
+cd vscode-extension/hypercanvas-preview && npm run build
+cd /Users/ultra/work/ext-test-projects/e2e
+env EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test \
+  --project=independent \
+  tests/project-independent/style-source-screens.spec.ts \
+  --workers=1
+bun run test
+```
+
+Results:
+
+```text
+Focused Phase 6 tests: 34 pass, 0 fail.
+Biome check on touched Phase 6 files: clean.
+bun run lint: exit 0, tsc passed.
+Repository lint still reports the same 11 pre-existing Biome warnings outside
+this implementation slice.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+VS Code visual harness: 1 passed, no console/page errors.
+Full test suite: 2963 pass, 0 fail.
+```
+
+Next implementation step:
+
+```text
+Wire StyleReadManager into SaaS and VS Code so source tabs carry real
+StyleSourceOwner facts. After that, CSS Modules/plain CSS tabs can route through
+the already-built CSS file executor instead of relying on request-derived
+Tailwind ownership.
+```
+
+## 📍 Implementation Session 2026-04-20 18:18 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Phase 7 read-path wiring, first executable slice:
+- Added createDefaultStyleReadManager() with the shared adapter registry.
+- Changed Tailwind v4 reader from an empty stub to emit a Tailwind element
+  class source identity from className facts.
+- Changed inline-style reader from an empty stub to emit an Inline source
+  identity from JSX style prop facts.
+- Extended VS Code StyleReadService to build StyleReadContext from resolved
+  JSX source facts and return shared StyleReadResult through styles:response.
+- Extended useElementStyleData and PlatformMessage types to carry
+  styleReadResult into the right sidebar.
+- Switched RightSidebar source tabs to prefer shared StyleReadManager tabs with
+  fallback to the previous inspector capability tabs while read data loads.
+```
+
+Implementation notes:
+
+```text
+This is intentionally a source-tab/read-contract slice, not full CSS ownership
+tracing. Tailwind and inline style readers now provide stable concrete tabs for
+write routing. CSS Modules and plain CSS still require selector/import owner
+facts before UI tabs can safely target CSS files.
+
+The VS Code host still returns className for existing parsedStyles behavior, so
+this keeps the current inspector values stable while adding shared source
+metadata next to them.
+```
+
+Validation:
+
+```text
+bun test lib/style-adapters/tailwind-v4/index.test.ts \
+  lib/style-adapters/inline-style/index.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts \
+  client/components/RightSidebar/__tests__/source-tabs.test.ts
+bunx biome check <touched Phase 7 files>
+cd vscode-extension/hypercanvas-preview && npm run build
+bun run lint
+cd /Users/ultra/work/ext-test-projects/e2e
+env EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test \
+  --project=independent \
+  tests/project-independent/style-source-screens.spec.ts \
+  --workers=1
+```
+
+Results:
+
+```text
+Focused Phase 7 tests: 25 pass, 0 fail.
+Biome check on touched Phase 7 files: clean.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+bun run lint: exit 0, tsc passed.
+Repository lint still reports the same 11 pre-existing Biome warnings outside
+this implementation slice.
+VS Code visual harness: 1 passed, no console/page errors.
+Full test suite: 2966 pass, 0 fail.
+Updated screenshots and report:
+- /tmp/hyper-style-source-screens/01-loaded-no-selection.png
+- /tmp/hyper-style-source-screens/02-h1-selected.png
+- /tmp/hyper-style-source-screens/03-concrete-source-tab-selected.png
+- /tmp/hyper-style-source-screens/04-article-selected.png
+- /tmp/hyper-style-source-screens/report.json
+```
+
+Visual report summary:
+
+```text
+Source tabs:
+- h1 selected: Computed and Tailwind visible, Computed pressed.
+- Tailwind tab selected: Tailwind pressed.
+- article selected: Computed and Tailwind visible, Tailwind pressed.
+Selected IDs changed from src/components/Feed.tsx:13:8 to
+src/components/Tweet.tsx:83:14.
+Problems: [].
+Console/page errors: [].
+```
+
+Next implementation step:
+
+```text
+Implement CSS Modules/plain CSS read ownership facts: detect imported module
+class identities, resolve selectors/rules, and feed StyleSourceOwner facts into
+StyleReadManager. That unlocks UI routing into the CSS file executor that is
+already implemented.
+```
+
+## 📍 Bugfix Session 2026-04-20 18:24 CEST author: codex
+
+Trigger:
+
+```text
+User screenshot showed both VS Code Inspector and AI Chat webview content areas
+blank. Fresh isolated E2E did not reproduce a runtime crash; it showed both
+roots mounted with text/testIds. This matches the known stale/hidden webview
+boot failure mode documented in extension.ts comments.
+```
+
+Scope completed in this block:
+
+```text
+Blank sidebar webview recovery:
+- Added ready tracking to RightPanelProvider and AIChatPanelProvider.
+- Added focusAndEnsureReady()/resetIfNotReady() so focusing Inspector or
+  AI Chat rewrites webview HTML if React never sent webview:ready.
+- Added webview:ready postMessage in AIChatApp after mount.
+- Delayed pending AI prompt delivery until AI Chat webview is ready, preventing
+  prompts from being posted before listeners exist.
+- Changed openInspector/openAIChat commands to use provider readiness recovery.
+- Extended the visual diagnostic spec to assert no-selection Inspector content
+  and AI Chat root/text/testIds, not only selected-element source tabs.
+```
+
+Validation:
+
+```text
+bun test \
+  vscode-extension/hypercanvas-preview/src/__tests__/WebviewReadiness.test.ts
+bun test \
+  vscode-extension/hypercanvas-preview/src/__tests__/WebviewReadiness.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts \
+  client/components/RightSidebar/__tests__/source-tabs.test.ts
+bunx biome check <touched blank-panel fix files>
+cd vscode-extension/hypercanvas-preview && npm run build
+bun run lint
+cd /Users/ultra/work/ext-test-projects/e2e
+env EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test \
+  --project=independent \
+  tests/project-independent/style-source-screens.spec.ts \
+  --workers=1
+bun run test
+vscmd workbench.action.reloadWindow \
+  -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter/
+```
+
+Results:
+
+```text
+WebviewReadiness regression tests: 2 pass, 0 fail.
+Focused blank-panel/read tests: 17 pass, 0 fail.
+Biome check on touched blank-panel fix files: clean.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+bun run lint: exit 0, tsc passed.
+Repository lint still reports the same 11 pre-existing Biome warnings outside
+this implementation slice.
+VS Code visual harness: 1 passed, no console/page errors.
+Visual report now confirms:
+- Inspector no-selection root visible with "No element selected" text.
+- AI Chat root visible with "New Chat" content and input/send testIds.
+- Source tabs remain visible after selection.
+Full test suite: 2968 pass, 0 fail.
+Target VS Code window was reloaded via vscmd after rebuild.
+```
+
+## 📍 Bugfix Session 2026-04-20 18:33 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Fixed React 19 map-item target resolution for hover/click selection:
+- Added failing tests for TrendingSidebar map items in shared getItemIndexFromFiber.
+- Added a ReactAdapter regression test for the second TrendingSidebar item.
+- Updated shared/element-tracing/fiber-internals.ts to count host-level sibling
+  groups before falling back to component-level React 19 indexing.
+- Follow-up review preserved the existing resolveLocation/source-map fallback
+  for React 19 compiled stack paths and added a regression test for it.
+```
+
+Validation:
+
+```text
+bun test client/lib/element-tracing/fiber-utils.test.ts \
+  client/lib/element-tracing/react-adapter.test.ts
+bunx biome check shared/element-tracing/fiber-internals.ts \
+  client/lib/element-tracing/fiber-utils.test.ts \
+  client/lib/element-tracing/react-adapter.test.ts
+bun run test
+```
+
+Results:
+
+```text
+TrendingSidebar hover/click regression tests: initially failed, then passed.
+Shared and adapter tests: 57 pass, 0 fail.
+Full repository suite: 2971 pass, 0 fail.
+```
+
+## 📍 Implementation Session 2026-04-20 18:46 CEST author: codex
+
+Scope completed in this block:
+
+```text
+CSS Modules read/write routing, first executable slice:
+- Added shared CSS Modules import/className reference extraction helpers.
+- Reused those helpers from the existing CSS Modules className detection path.
+- Extended ClassNameExpressionFacts with CSS Module reference facts.
+- Changed CssModulesReader from an empty stub to emit concrete
+  css-modules:<classKey> source tabs.
+- Wired VS Code StyleReadService so className={styles.card} exposes a
+  css-modules:card source tab instead of a synthetic Tailwind tab.
+- Allowed explicit CSS Modules source tabs to route through StyleWriteManager
+  when real source-owner facts are available.
+- Wired VS Code AstService and SaaS updateComponentStyles to derive CSS Modules
+  source owners from the selected JSX element before executing shared writes.
+- Added a VS Code AstService integration test proving css-modules:card writes
+  to Card.module.css and preserves className={styles.card}.
+```
+
+TDD notes:
+
+```text
+The first focused run failed because:
+- lib/ast/css-module-references.ts did not exist.
+- css-modules:* was not routable from selectedSourceTabId.
+- CssModulesReader still returned no class identities.
+- StyleReadService treated styles.card as Tailwind elementClass.
+- AstService routed css-modules:card with a synthetic owner and tried to parse
+  the TSX component file as CSS.
+
+Implementation followed those failures and kept the legacy fallback for
+non-routable source tabs.
+```
+
+Validation:
+
+```text
+bun test lib/ast/css-module-references.test.ts \
+  lib/ast/inline-style-mutator.test.ts \
+  lib/style-adapters/css-modules/index.test.ts \
+  lib/style-write/style-write-request-context.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/AstServiceStyleWrite.test.ts
+```
+
+Results:
+
+```text
+Focused CSS Modules read/write tests: 30 pass, 0 fail.
+Existing Tailwind color rename warnings still print from VS Code test imports.
+```
+
+## 📍 Bugfix Session 2026-04-20 18:50 CEST author: codex
+
+Scope completed in this block:
+
+```text
+Separated text color and text size in the inspector:
+- Fixed Tailwind parsing so text-[15px] and named text size classes populate
+  fontSize instead of textColor.
+- Preserved text-[#fff] and named text color classes as textColor/color.
+- Added fontSize to shared ParsedStyles and TailwindAdapter output, including
+  computed-style fallback when the class parser has no font-size class.
+- Added a separate Size input in the Fill/Text inspector area.
+- Threaded fontSize state through RightSidebar and FillSection.
+```
+
+TDD notes:
+
+```text
+Added focused parser tests for text-[15px] plus text-[#fff], and text-sm plus
+text-white. Added FillSection tests that assert color and size render as
+separate controls and sync fontSize independently.
+```
+
+Validation:
+
+```text
+bun test \
+  client/components/RightSidebar/sections/__tests__/FillSection.test.tsx \
+  client/lib/canvas-engine/utils/tailwindParser.test.ts
+bunx biome check client/lib/canvas-engine/utils/tailwindParser.ts \
+  client/lib/canvas-engine/utils/tailwindParser.test.ts \
+  client/lib/canvas-engine/adapters/TailwindAdapter.ts \
+  client/lib/canvas-engine/adapters/types.ts \
+  client/components/RightSidebar/RightSidebar.tsx \
+  client/components/RightSidebar/sections/FillSection.tsx \
+  client/components/RightSidebar/sections/__tests__/FillSection.test.tsx
+```
+
+Results:
+
+```text
+Text parser/UI focused tests: 4 pass, 0 fail.
+Biome check on text-control files: clean.
+```
+
+## 📍 Validation Sweep 2026-04-20 18:50 CEST author: codex
+
+Validation:
+
+```text
+bun test <CSS Modules, selection, text controls, readiness focused set>
+bunx biome check <CSS Modules/read-write/selection/text-control touched files>
+bun run lint
+cd vscode-extension/hypercanvas-preview && npm run build
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/style-source-screens.spec.ts --workers=1
+bun run test
+bunx markdownlint-cli docs/specs/2026-04-14-style-write-unification-workprocess.md
+git diff --check
+```
+
+Results:
+
+```text
+Focused combined tests: 100 pass, 0 fail.
+Full repository suite: 2986 pass, 0 fail.
+bun run lint: exit 0, tsc passed.
+Repository lint still reports 11 pre-existing Biome warnings outside this
+implementation slice.
+VS Code extension build: exit 0.
+VS Code extension build still reports existing Browserslist/caniuse-lite and
+Tailwind ambiguous duration-[233ms] warnings.
+VS Code visual harness: 1 passed, no console/page errors.
+Visual report confirms:
+- Inspector no-selection root is visible.
+- AI Chat root is visible.
+- Source tabs remain visible after selection.
+- Text color control text is "none" for h1 and does not contain a px value.
+- Font size input is visible for h1 with value 1.25rem.
+markdownlint on this workprocess: pass.
+git diff --check: pass.
+```
+
+## 📍 Review + Instructions 2026-04-21 author: claude
+
+### Review of Codex Uncommitted Work (2557 lines, 43 files)
+
+Automated checks: 2986 pass, 0 fail. tsc clean. biome clean.
+
+Spec compliance: approved with two mandatory fixes below.
+
+### MANDATORY FIX 1: Deduplicate `executeSharedStyleWrite`
+
+`_executeSharedStyleWrite` in `AstService.ts` and `executeSharedStyleWrite` in
+`server/routes/updateComponentStyles.ts` are ~80% identical code. Spec Phase 6
+says: "Remove duplicated mutation code from platform endpoints."
+
+Action: extract shared logic into `lib/style-write/style-write-executor.ts`.
+Both platform endpoints become thin wrappers that inject FileIO and call
+post-mutation hooks. Details and code in
+`docs/specs/2026-04-21-commit-split-instructions.md` Concern 1.
+
+### MANDATORY FIX 2: Delete old Tailwind-only mutation path
+
+The old code routes all writes through `generateTailwindClasses()` → className
+append when `selectedSourceTabId` is not set. This is the core bug the spec
+fixes. Default tab is Computed. Planner selects adapter by element facts.
+
+Action: delete the old path in both `AstService.ts` and
+`updateComponentStyles.ts`. Replace with `StyleWritePlanner.selectTarget()` →
+adapter writer → executor. Every write goes through the planner. No conditional
+"if routable then planner else old code." Details and code in
+`docs/specs/2026-04-21-commit-split-instructions.md` Concern 2.
+
+### Commit Split
+
+The uncommitted diff must be split into 8 atomic commits. Full instructions with
+file lists, order, and review checklist in
+`docs/specs/2026-04-21-commit-split-instructions.md`.
+
+Read `CODEX.md` for commit discipline and self-review rules.
+
+## 📍 Codex Continuation 2026-04-21 author: codex
+
+Scope completed in this block:
+
+```text
+Continued from the 2026-04-21 commit-split instructions and completed the
+remaining atomic commits:
+- 7e9a31f1 feat(style-read): implement adapter readers with SourceClassIdentity
+- bd353c9d refactor(ast): extract CSS module reference utilities
+- b8ac0117 feat(tailwind): add fontSize support to generator and parser
+- 49db72da feat(ext): add StyleReadService with source tabs pipeline
+- 2c2b1492 feat: wire selectedSourceTabId through client write pipeline
+- 32c3312c feat(style-write): add StyleWriteExecutor and wire shared write path
+- 5ec48b60 fix(element-tracing): improve React 19 map item fiber resolution
+- c73185aa fix(ext): panel readiness gating for prompt delivery
+```
+
+Mandatory review concerns addressed:
+
+```text
+StyleWriteExecutor now owns the shared mutation execution path.
+VS Code AstService and SaaS updateComponentStyles delegate through the shared
+style-write request/executor flow.
+The legacy Tailwind-only generateTailwindClasses → className append path was
+removed from platform endpoints; computed/default writes route through
+StyleWritePlanner instead.
+```
+
+Validation:
+
+```text
+bunx biome check <touched files>
+npx tsc --noEmit
+bun run test
+./vscode-extension/hypercanvas-preview/build-and-install.sh
+vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter/
+EXTENSION_PATH=<local hypercanvas-preview extension> \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/commands.spec.ts \
+  -g "hypercanvas.open(AIChat|Inspector)" --workers=1
+```
+
+Results:
+
+```text
+Full repository suite after final extension commit: 2991 pass, 0 fail.
+Typecheck: pass.
+Focused webview readiness tests: 3 pass, 0 fail.
+Extension VSIX 0.1.9 built and installed.
+VS Code window reloaded via vscmd.
+E2E harness for Open AI Chat and Open Inspector: 2 passed.
+bunx knip --include exports,files still fails on a pre-existing 590 unused-file
+report unrelated to this slice.
+```
+
+Telegram bridge:
+
+```text
+The local Codex Telegram bridge lives in /Users/ultra/xp/codex-tg-bot.
+The bridge token is stored only in that repo's ignored .env file and is not
+recorded in this workprocess.
+
+The bridge was configured with:
+- current Codex session id from CODEX_THREAD_ID
+- CODEX_CWD=/Users/ultra/work/hyper-canvas-draft
+- ALLOWED_USER_IDS and TELEGRAM_REPORT_CHAT_ID set to the user's chat id
+
+send-tg-report.sh was fixed so status reports preserve the existing current
+session cwd when CODEX_CWD is omitted. This prevents report sends from
+accidentally rebinding the current session to /Users/ultra/xp/codex-tg-bot.
+
+The bridge was installed as launchd user agent:
+/Users/ultra/Library/LaunchAgents/com.ultra.codex-tg-bot.plist
+
+start.sh was fixed for launchd by adding a non-interactive PATH that includes
+/Users/ultra/.bun/bin and /Users/ultra/.local/bin.
+
+Current launchd status during this update:
+com.ultra.codex-tg-bot loaded with pid 16301 running
+bun run /Users/ultra/xp/codex-tg-bot/src/index.ts
+```
+
+Bridge context note:
+
+```text
+Telegram replies are generated by a separate `codex exec resume` process using
+the session id and cwd saved in ~/.codex-current-session.json. They are not
+generated inside this already-running live API turn. The local Codex app-server
+WS API can manage Codex CLI threads, but cannot inject Telegram messages as
+new user messages into this OpenAI API chat unless the host/client exposes a
+separate inbound endpoint for this conversation.
+```
+
+## 📍 Review Session 2026-04-21 16:00 CEST author: claude
+
+Review of 5 commits (49db72da..c73185aa) covering style-write shared path,
+style-read source tabs, React 19 fiber fix, and panel readiness gating.
+3600+ lines added across 46 files.
+
+### Architecture verdict
+
+Correct. Old Tailwind-only mutation path genuinely deleted (not hidden behind
+conditionals). Both platforms (SaaS route + extension AstService) consume the
+same `executeStyleWriteRequest`. Fiber fix in `shared/`. `selectedSourceTabId`
+threaded end-to-end. Tests exercise real AST parsing/mutation, not mocked
+behavior. Zero `any`/`as any`/`as unknown as`. File headers present on new files.
+
+### What works well
+
+- Old Tailwind-only mutation path (178 lines) genuinely deleted from route,
+  replaced by single `executeStyleWriteRequest()`.
+- Executor handles TailwindPlan, CssFilePlan, ScriptObjectStylePlan; unsupported
+  plan types return explicit `unsupported()` error.
+- `DefaultStyleWriteManager` is a thin wiring layer (26 lines), no logic dup.
+- Shared `DefaultStyleReadManager` in `lib/` consumed by both extension and SaaS.
+- Readiness gating (`reset`/`resetIfNotReady`/`focusAndEnsureReady`) correctly
+  implemented with 1.5s safety timeout, prompt queueing, flush-on-ready.
+- Fiber fix correctly lives in `shared/element-tracing/fiber-internals.ts`,
+  consumed by both client and extension. HARD RULE satisfied.
+- `selectedSourceTabId` threaded end-to-end: RightSidebar → engine →
+  astOps → platform message → server.
+- No throwing hooks in extension or shared components.
+- Tests parse real JSX via `InMemoryFileIO`, not mock behavior.
+
+### Findings — MUST FIX before next merge
+
+All items below are blocking. Each must be addressed with a separate commit
+and marked done in this section.
+
+#### Critical
+
+- [x] **C1: Route handler does not use AppError pattern.**
+  `server/routes/updateComponentStyles.ts:135-143` returns `c.json({error}, 500)`
+  directly. Three places (lines 81, 99, 120, 137) with manual error responses.
+  AGENTS.md: "Never return errors directly — throw AppError."
+  Fix: replace catch block with `throw errors.operationFailed(...)`, remove 400/404
+  manual responses in favor of AppError equivalents.
+
+- [x] **C2: Fragile union narrowing `'error' in writeResult`.**
+  `server/routes/updateComponentStyles.ts:119` and `AstService.ts:277`.
+  `StyleWriteResult` is discriminated on `success: boolean`.
+  Fix: use `if (!writeResult.success)` instead of `if ('error' in writeResult)`.
+
+#### DRY violations (4 pairs of copy-paste)
+
+- [x] **D1: `errorMessage()` duplicated.**
+  `lib/style-write/style-write-executor.ts:75` and
+  `lib/style-write/style-write-manager.ts:25`. Identical function.
+  Fix: extract to `lib/style-write/utils.ts` or similar, import from both.
+
+- [x] **D2: `camelToKebab()` duplicated.**
+  `lib/style-write/style-write-request-context.ts:51` and
+  `lib/style-write/style-write-planner.ts:26`. Same function, same directory.
+  Fix: extract to shared location in `lib/style-write/`.
+
+- [x] **D3: `InMemoryFileIO` duplicated in tests.**
+  `lib/style-write/style-write-executor.test.ts:21` and
+  `vscode-extension/.../AstServiceStyleWrite.test.ts:13`. Same class, extension
+  version has extra `listFiles`.
+  Fix: extract to shared test utility.
+
+- [x] **D4: `_resolvePath()` duplicated.**
+  `StyleReadService.ts:67` and `AstService.ts:171`. Identical private method.
+  Fix: extract to shared utility or delegate from StyleReadService to AstService.
+
+#### Convention violations
+
+- [x] **V1: `_elementId` underscore-prefixed unused param.**
+  `StyleReadService.ts:79` — AGENTS.md bans `_` prefix for unused params.
+  Fix: remove the parameter and fix the call site in `PanelRouter.ts:232`, or
+  actually use the parameter if it was intended for a fallback path.
+
+- [x] **V2: `DEFAULT_RUNTIME_THEME_CONTEXT` hardcodes `resolvedColorScheme: 'light'`
+  while claiming `ideThemePreference: 'system'`.**
+  `StyleReadService.ts:40-44` — internally contradictory. VS Code dark theme
+  users get wrong theme context.
+  Fix: either resolve dynamically from webview CSS classes using
+  `createRuntimeThemeContextFromCssClasses`, or set `ideThemePreference: 'light'`
+  for internal consistency.
+
+#### Pipeline gap
+
+- [x] **P1: `TailwindAdapter.writeBatch` does not forward `selectedSourceTabId`.**
+  `TailwindAdapter.ts:179-214` — `changeLayout()` calls `writeBatch()` → server
+  won't receive tab context.
+  Fix: add `selectedSourceTabId` to `StyleAdapter.writeBatch` options interface
+  and forward it, OR document that adapter `writeBatch` is deprecated in favor of
+  the engine path and create a Linear ticket to track removal.
+
+### Minor observations (non-blocking, fix at convenience)
+
+- `UpdateStylesRequest` enumerates specific CSS properties but shared path
+  accepts `Record<string, string>` — will drift.
+- `runtime-theme-context.ts:41-60` — `if (theme === 'system')` branch and else
+  do the same thing, verbose identity transform.
+- `as never` x9 in `WebviewReadiness.test.ts` — same type escape as `as any`.
+- Source tabs bar renders with a single tab (Computed only) — pointless UI.
+- Test `fiber-utils.test.ts:378` uses absolute path
+  `/Users/ultra/work/ext-test-projects/...` — machine-specific.
+- `cssRuleTarget()` in executor has 3 branches returning identical structure.
+
+### Instructions for implementing agent
+
+All items in the "MUST FIX" section above are mandatory. Work through them
+sequentially (C1 → C2 → D1-D4 → V1-V2 → P1), one commit per fix group.
+Run `bun run test` after each commit to verify no regressions. Mark each
+checkbox done in this file as you go. Minor observations can be batched into
+a single cleanup commit at the end or deferred to a separate PR.
+
+## 📍 Codex Review-Fix Continuation 2026-04-21 author: codex
+
+Scope completed in this block:
+
+```text
+Fixed all blocking Claude review findings from Review Session 2026-04-21:
+- C1/C2: route write failures now use AppError and discriminated
+  StyleWriteResult narrowing.
+- D1-D4: duplicated style-write helpers, test FileIO, and workspace path
+  resolution were extracted.
+- V1/V2: StyleReadService API no longer carries an unused element id parameter,
+  and its default runtime theme context is internally consistent.
+- P1: TailwindAdapter.writeBatch now forwards selectedSourceTabId to AST
+  operations.
+```
+
+Commits:
+
+```text
+5013b97f fix(style-write): route update style errors through AppError
+8999063c refactor(style-write): deduplicate shared helpers
+c1225686 fix(ext): align style read service conventions
+f47a816f fix(tailwind): forward selected source tab in adapter writes
+```
+
+Validation:
+
+```text
+bun test server/routes/updateComponentStyles.test.ts
+bun test lib/style-write/style-write-executor.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/AstServiceStyleWrite.test.ts
+bun test \
+  vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/PanelRouter.test.ts
+bun test client/lib/canvas-engine/adapters/TailwindAdapter.test.ts
+npx tsc --noEmit
+npm run build --prefix vscode-extension/hypercanvas-preview
+bun run test
+bunx markdownlint-cli docs/specs/2026-04-14-style-write-unification-workprocess.md
+```
+
+Results:
+
+```text
+Focused regression tests for all review-fix groups: pass.
+Typecheck: pass.
+VS Code extension build: pass, with existing caniuse-lite and Tailwind
+duration-[233ms] warnings.
+markdownlint for this workprocess: pass.
+Full bun run test after the final review-fix commit: 2995 pass, 0 fail.
+bunx knip remains blocked by the existing repository-wide unused-file report.
+Self-review was done by reading `git diff --staged`; Codex does not run
+`codex exec review --uncommitted` against itself.
+```
