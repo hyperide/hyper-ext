@@ -623,9 +623,14 @@ export function activate(context: vscode.ExtensionContext) {
           }
           return result;
         })
-        .then((result) => {
+        .then(async (result) => {
           if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
-          // 4. Update iframe component URL param — no hard reload needed
+          // 4. If webpack armed the recompile gate (via onBeforeWebpackEntryPatch),
+          // wait for the post-patch `compiled successfully` so the iframe doesn't
+          // race a half-built bundle. No-op for vite/remix/next.
+          await devServerManager?.awaitRecompile();
+          if (ac.signal.aborted) return;
+          // 5. Update iframe component URL param — no hard reload needed
           const relativePath = relative(currentWorkspaceRoot, absComponentPath);
           previewPanel?.setComponentParam(relativePath);
         })
