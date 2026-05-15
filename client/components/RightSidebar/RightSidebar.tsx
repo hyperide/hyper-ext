@@ -450,6 +450,9 @@ export default function RightSidebar({
   // Tracks the last successfully written i18n key. Prevents stale previousKey when a second
   // key change arrives before the useElementStyleData re-fetch returns the new i18nText.
   const lastWrittenI18nKeyRef = useRef<string | null>(null);
+  // Tracks pending key after commitKey — stays set until i18nText.key catches up or element changes.
+  // Prevents handleI18nResolvedTextChange from writing to the stale key during the RPC round-trip.
+  const pendingTextKeyRef = useRef<{ key: string; elementId: string } | null>(null);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -758,12 +761,23 @@ export default function RightSidebar({
   if (i18nText && selectedId) {
     lastI18nElementRef.current = { elementId: selectedId, path: componentPath };
   }
+  // Clear pendingTextKeyRef when element changes or when i18nText.key has caught up.
+  if (pendingTextKeyRef.current !== null) {
+    if (pendingTextKeyRef.current.elementId !== selectedId) {
+      pendingTextKeyRef.current = null;
+    } else if (i18nText?.kind === 'i18n' && i18nText.key === pendingTextKeyRef.current.key) {
+      pendingTextKeyRef.current = null;
+    }
+  }
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
       const effectiveSelectedId = selectedId ?? lastI18nElementRef.current?.elementId ?? null;
       if (!effectiveSelectedId) return;
+      // Set before the async IIFE so debounced text writes use the new key
+      // during the RPC round-trip window (i18nText.key still stale until re-read).
+      pendingTextKeyRef.current = { key: newKey, elementId: effectiveSelectedId };
       const previousSelectedId = effectiveSelectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
       // as "create new key" — also write the JSON resource so the next re-read
@@ -815,6 +829,7 @@ export default function RightSidebar({
           if (i18nDispatch) {
             i18nDispatch({ selectedIds: [previousSelectedId] });
           }
+          pendingTextKeyRef.current = null;
         } finally {
           // Always release the freeze, even on throw.
           canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
@@ -869,7 +884,10 @@ export default function RightSidebar({
           try {
             await astOps.writeI18nResource({
               library: i18nText.library,
-              key: i18nText.key,
+              key:
+                pendingTextKeyRef.current?.elementId === previousSelectedId
+                  ? pendingTextKeyRef.current.key
+                  : i18nText.key,
               namespace: i18nText.namespace,
               activeLocale: i18nText.activeLocale,
               newText,
