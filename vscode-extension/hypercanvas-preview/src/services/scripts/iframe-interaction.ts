@@ -1771,7 +1771,7 @@ function _dragPointerUp(e: PointerEvent): void {
   // mismatch (cross-parent, no order classes, dynamic `className={cn(...)}`,
   // adapter not implemented). See plan 2026-05-08-tw-order-drag-ralphex-plan.md.
   if (sourceEl) {
-    const orderPlan = _resolveOrderWritePlan(sourceEl, dropEl, position);
+    const orderPlan = _resolveOrderWritePlan(sourceEl, dropEl);
     if (orderPlan) {
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
@@ -1862,17 +1862,14 @@ function _findReorderSiblings(
  * the parent's children, asks `computeOrderWritePlan` (pure function) for the
  * concrete write entries.
  *
- * Position semantic: cursor-derived (`'before' | 'after' | 'inside'`) — passed in
- * from `_dragPointerUp`, which has the actual cursor coordinate at drop. Earlier
- * iterations re-derived position from source-vs-drop centres here; that ignored
- * the user's intent when the cursor landed on the LEFT half of a target whose
- * source center was already left of drop.
+ * Position semantic: derived from source-vs-drop center along the dominant axis
+ * (NOT cursor coordinate). Dropping at exact target center is ambiguous when
+ * cursor-based; for an order-driven swap we always want "the side opposite where
+ * source currently is". This matches the user's intent — the drag direction
+ * decides which side of the target the source ends up on, regardless of where
+ * the cursor lands inside the target rect.
  */
-function _resolveOrderWritePlan(
-  sourceEl: HTMLElement,
-  dropEl: HTMLElement,
-  position: 'before' | 'after' | 'inside',
-): OrderWritePlan | null {
+function _resolveOrderWritePlan(sourceEl: HTMLElement, dropEl: HTMLElement): OrderWritePlan | null {
   const lca = _findReorderSiblings(sourceEl, dropEl);
   if (!lca) return null;
   const { parent, sourceSibling, dropSibling } = lca;
@@ -1910,13 +1907,19 @@ function _resolveOrderWritePlan(
   if (!siblings.some((s) => s.elementId === sourceBranchId)) return null;
   if (!siblings.some((s) => s.elementId === dropBranchId)) return null;
 
-  return computeOrderWritePlan({
-    siblings,
-    source: sourceBranchId,
-    target: dropBranchId,
-    position,
-    viewportWidth: window.innerWidth,
-  });
+  // Derive position from source-vs-drop geometry on the dominant axis.
+  // _isHorizontalLayout(parent) reads computed style on the parent so we
+  // pick X for grid/flex-row, Y for column / default block flow.
+  const horizontal = _isHorizontalLayout(parent);
+  const sourceRect = sourceSibling.getBoundingClientRect();
+  const dropRect = dropSibling.getBoundingClientRect();
+  const sourceCenter = horizontal ? sourceRect.left + sourceRect.width / 2 : sourceRect.top + sourceRect.height / 2;
+  const dropCenter = horizontal ? dropRect.left + dropRect.width / 2 : dropRect.top + dropRect.height / 2;
+  // Source visually before drop → user wants source AFTER drop (swap).
+  // Source visually after drop  → user wants source BEFORE drop.
+  const position: 'before' | 'after' = sourceCenter < dropCenter ? 'after' : 'before';
+
+  return computeOrderWritePlan(siblings, sourceBranchId, dropBranchId, position, window.innerWidth);
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {

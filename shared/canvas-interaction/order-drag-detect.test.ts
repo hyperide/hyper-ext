@@ -80,13 +80,13 @@ describe('computeOrderWritePlan — bulka hero (base viewport, Task 1)', () => {
   ];
 
   it('swaps base order-N when active breakpoint is base', () => {
-    const plan = computeOrderWritePlan({
+    const plan = computeOrderWritePlan(
       siblings,
-      source: 'pages/Index.tsx:533:5',
-      target: 'pages/Index.tsx:540:5',
-      position: 'after',
-      viewportWidth: 375, // narrow viewport — md not active
-    });
+      'pages/Index.tsx:533:5',
+      'pages/Index.tsx:540:5',
+      'after',
+      375, // narrow viewport — md not active
+    );
 
     expect(plan).not.toBeNull();
     expect(plan?.breakpoint).toBeUndefined();
@@ -106,13 +106,7 @@ describe('computeOrderWritePlan — bulka hero (base viewport, Task 1)', () => {
   });
 
   it('preserves md: variants when writing base', () => {
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'pages/Index.tsx:533:5',
-      target: 'pages/Index.tsx:540:5',
-      position: 'after',
-      viewportWidth: 375,
-    });
+    const plan = computeOrderWritePlan(siblings, 'pages/Index.tsx:533:5', 'pages/Index.tsx:540:5', 'after', 375);
     // md:order-2 / md:order-1 must survive in both entries.
     expect(plan?.entries[0].newClassName).toContain('md:order-1');
     expect(plan?.entries[1].newClassName).toContain('md:order-2');
@@ -138,13 +132,7 @@ describe('computeOrderWritePlan — bulka hero (md viewport, Task 2)', () => {
   ];
 
   it('swaps md:order when active breakpoint is md', () => {
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'pages/Index.tsx:533:5',
-      target: 'pages/Index.tsx:540:5',
-      position: 'before',
-      viewportWidth: 1440,
-    });
+    const plan = computeOrderWritePlan(siblings, 'pages/Index.tsx:533:5', 'pages/Index.tsx:540:5', 'before', 1440);
 
     expect(plan).not.toBeNull();
     expect(plan?.breakpoint).toBe('md');
@@ -165,13 +153,7 @@ describe('computeOrderWritePlan — bulka hero (md viewport, Task 2)', () => {
   });
 
   it('does not touch base order-* when writing md', () => {
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'pages/Index.tsx:533:5',
-      target: 'pages/Index.tsx:540:5',
-      position: 'before',
-      viewportWidth: 1440,
-    });
+    const plan = computeOrderWritePlan(siblings, 'pages/Index.tsx:533:5', 'pages/Index.tsx:540:5', 'before', 1440);
     // Base order-1 / order-2 must survive in both entries.
     expect(plan?.entries[0].newClassName.startsWith('order-1 ')).toBe(true);
     expect(plan?.entries[1].newClassName.startsWith('order-2 ')).toBe(true);
@@ -184,16 +166,12 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
       { elementId: 'a:1:1', filePath: 'a.tsx', className: 'flex p-4', domIndex: 0 },
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'grid gap-4', domIndex: 1 },
     ];
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'b:1:1', position: 'after', viewportWidth: 1440 }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'b:1:1', 'after', 1440)).toBeNull();
   });
 
   it('returns null when only one sibling exists', () => {
     const siblings: SiblingInfo[] = [{ elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-1', domIndex: 0 }];
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'a:1:1', position: 'after', viewportWidth: 1440 }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'a:1:1', 'after', 1440)).toBeNull();
   });
 
   it('returns null when source is not in siblings (cross-parent drag)', () => {
@@ -201,15 +179,7 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
       { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-1', domIndex: 0 },
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
     ];
-    expect(
-      computeOrderWritePlan({
-        siblings,
-        source: 'foreign:1:1',
-        target: 'a:1:1',
-        position: 'after',
-        viewportWidth: 1440,
-      }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'foreign:1:1', 'a:1:1', 'after', 1440)).toBeNull();
   });
 
   it('returns null when only md:order-* exists but md viewport not active', () => {
@@ -218,9 +188,7 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-2 flex', domIndex: 1 },
     ];
     // Narrow viewport → md not active, no base order in use → null.
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'b:1:1', position: 'after', viewportWidth: 500 }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'b:1:1', 'after', 500)).toBeNull();
   });
 
   it('returns null on no-op drop (move source to its current visual slot)', () => {
@@ -230,9 +198,7 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
     ];
     // Drop a "before" b — but a is already before b at the active base breakpoint.
     // After the move and renumber, classNames would be: a → order-1, b → order-2 (unchanged).
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'b:1:1', position: 'before', viewportWidth: 500 }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'b:1:1', 'before', 500)).toBeNull();
   });
 
   it('renumbers densely 1..N for three siblings, only writing the changed entries', () => {
@@ -243,13 +209,7 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
     ];
     // Move a to after b → visual [b, a, c]. Renumber: b=1, a=2, c=3.
     // a was 1 → 2 (changed); b was 2 → 1 (changed); c was 3 → 3 (no change, skip).
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'a:1:1',
-      target: 'b:1:1',
-      position: 'after',
-      viewportWidth: 500,
-    });
+    const plan = computeOrderWritePlan(siblings, 'a:1:1', 'b:1:1', 'after', 500);
     expect(plan?.breakpoint).toBeUndefined();
     expect(plan?.entries).toEqual([
       { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
@@ -262,12 +222,8 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
       { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-1', domIndex: 0 },
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
     ];
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'a:1:1', position: 'after', viewportWidth: 500 }),
-    ).toBeNull();
-    expect(
-      computeOrderWritePlan({ siblings, source: 'a:1:1', target: 'a:1:1', position: 'before', viewportWidth: 500 }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'a:1:1', 'after', 500)).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'a:1:1', 'a:1:1', 'before', 500)).toBeNull();
   });
 
   it('returns null when sibling list contains duplicate elementIds (e.g. .map() rows)', () => {
@@ -279,279 +235,17 @@ describe('computeOrderWritePlan — fallthrough cases', () => {
       { elementId: 'card:10:5', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
       { elementId: 'card:10:5', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
     ];
-    expect(
-      computeOrderWritePlan({
-        siblings,
-        source: 'card:10:5',
-        target: 'card:10:5',
-        position: 'after',
-        viewportWidth: 500,
-      }),
-    ).toBeNull();
+    expect(computeOrderWritePlan(siblings, 'card:10:5', 'card:10:5', 'after', 500)).toBeNull();
   });
 
-  it('uses DOM index as tiebreaker when two siblings share the same effective order value', () => {
+  it('treats siblings without order tokens as ordered after numeric ones (DOM-index tiebreaker)', () => {
     const siblings: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'flex', domIndex: 0 },
+      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
       { elementId: 'b:1:1', filePath: 'a.tsx', className: 'flex', domIndex: 1 },
-      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 2 },
     ];
-    // Visual at base: a (0, dom 0), b (0, dom 1), c (2). DOM index breaks the a/b tie.
-    // Drag c before a → visual [c, a, b]. Renumber: c=1, a=2, b=3.
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'c:1:1',
-      target: 'a:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    expect(plan?.entries).toEqual([
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'flex order-2' },
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'flex order-3' },
-    ]);
-  });
-});
-
-describe('computeOrderWritePlan — default-order item gets correct visual slot (Task 1)', () => {
-  // Codex finding 1 repro: parent has `order-2`, no-order, `order-3`.
-  // CSS default `order` is 0 → no-order child must sort BEFORE `order-2`,
-  // not after. Current main treats missing as null → sorted last → bug.
-  const siblings: SiblingInfo[] = [
-    { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
-    { elementId: 'b:1:1', filePath: 'a.tsx', className: '', domIndex: 1 },
-    { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
-  ];
-
-  it('places no-order sibling first (treats missing class as order: 0)', () => {
-    // Correct visual: [B (0), A (2), C (3)]. Drop C before B → visual [C, B, A].
-    // Renumber: C=1, B=2, A=3.
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'c:1:1',
-      target: 'b:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.breakpoint).toBeUndefined();
-    expect(plan?.entries).toEqual([
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
-    ]);
-  });
-
-  it('treats `order-first` as the leftmost slot', () => {
-    const fixt: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
-      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-first', domIndex: 1 },
-      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
-    ];
-    // Visual: [B (-9999), A (2), C (3)]. Drop A after C → visual [B, C, A].
-    // Renumber: B=1, C=2, A=3. B was order-first → order-1 (changed).
-    const plan = computeOrderWritePlan({
-      siblings: fixt,
-      source: 'a:1:1',
-      target: 'c:1:1',
-      position: 'after',
-      viewportWidth: 500,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.entries).toEqual([
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
-    ]);
-  });
-
-  it('treats `order-last` as the rightmost slot', () => {
-    const fixt: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-last', domIndex: 0 },
-      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
-      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
-    ];
-    // Visual: [B (2), C (3), A (9999)]. Drop B before A → visual [C, B, A].
-    // Renumber: C=1, B=2, A=3. B unchanged (order-2).
-    const plan = computeOrderWritePlan({
-      siblings: fixt,
-      source: 'b:1:1',
-      target: 'a:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.entries).toEqual([
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
-    ]);
-  });
-
-  it('treats `order-none` as default 0', () => {
-    const fixt: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 0 },
-      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-none', domIndex: 1 },
-    ];
-    // Visual: [B (0), A (2)]. Drop A before B → visual [A, B]. Renumber: A=1, B=2.
-    const plan = computeOrderWritePlan({
-      siblings: fixt,
-      source: 'a:1:1',
-      target: 'b:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.entries).toEqual([
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
-    ]);
-  });
-});
-
-describe('computeOrderWritePlan — base fallback at responsive breakpoint (codex Task 4)', () => {
-  // Codex Task-4 finding: when the active breakpoint is responsive (e.g. md) and
-  // some siblings only carry a base `order-*` (no `md:order-*`), the base value
-  // still applies at md viewport per CSS cascade. Treating those siblings as 0
-  // builds the wrong current visual order and writes wrong dense md:order-* values.
-  it('uses base order-N as the effective md value when md:order-* is absent on a sibling', () => {
-    // 4 siblings — A only has base order-3; B/C/D have explicit md:order-N.
-    // Without the cascade fix, A gets treated as 0 at md and the renumber
-    // shoves it to the leftmost slot, mangling everyone else.
-    const siblings: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-3 flex', domIndex: 0 },
-      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1 flex', domIndex: 1 },
-      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2 flex', domIndex: 2 },
-      { elementId: 'd:1:1', filePath: 'a.tsx', className: 'md:order-4 flex', domIndex: 3 },
-    ];
-    // Correct visual at md: [B(1), C(2), A(3), D(4)] — A's base order-3 still applies.
-    // Drag D BEFORE B → visual [D, B, C, A]. Renumber dense:
-    // D=md:order-1, B=md:order-2, C=md:order-3, A=md:order-4 (added).
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'd:1:1',
-      target: 'b:1:1',
-      position: 'before',
-      viewportWidth: 1440,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.breakpoint).toBe('md');
-    expect(plan?.entries).toEqual([
-      { elementId: 'd:1:1', filePath: 'a.tsx', newClassName: 'md:order-1 flex' },
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'md:order-2 flex' },
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'md:order-3 flex' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3 flex md:order-4' },
-    ]);
-  });
-
-  it('cascades from active bp through smaller bps to base (sm:order applies at md viewport)', () => {
-    // Same shape as the test above but A's only token is sm:order-3 instead of base.
-    // At md viewport sm: still applies (768 > 640) → A's effective md order is 3,
-    // not 0. The cascade must walk md → sm → base and pick the first match.
-    const siblings: SiblingInfo[] = [
-      { elementId: 'a:1:1', filePath: 'a.tsx', className: 'sm:order-3 flex', domIndex: 0 },
-      { elementId: 'b:1:1', filePath: 'a.tsx', className: 'md:order-1 flex', domIndex: 1 },
-      { elementId: 'c:1:1', filePath: 'a.tsx', className: 'md:order-2 flex', domIndex: 2 },
-      { elementId: 'd:1:1', filePath: 'a.tsx', className: 'md:order-4 flex', domIndex: 3 },
-    ];
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'd:1:1',
-      target: 'b:1:1',
-      position: 'before',
-      viewportWidth: 1440,
-    });
-    expect(plan).not.toBeNull();
-    expect(plan?.breakpoint).toBe('md');
-    expect(plan?.entries).toEqual([
-      { elementId: 'd:1:1', filePath: 'a.tsx', newClassName: 'md:order-1 flex' },
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'md:order-2 flex' },
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'md:order-3 flex' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'sm:order-3 flex md:order-4' },
-    ]);
-  });
-});
-
-describe('computeOrderWritePlan — cursor-derived position (Task 3)', () => {
-  // Codex finding 2 repro: the iframe knows where the cursor lifted (left/right
-  // half of target). That position must drive insertion, NOT source-vs-drop
-  // centre geometry. With three siblings ordered 1, 2, 3 visually, dropping
-  // source `a` (order-1, leftmost) on the LEFT half of `c` (order-3, rightmost)
-  // means "land before c"; on the RIGHT half means "land after c". Same source
-  // and target; different cursor → different result.
-  const siblings: SiblingInfo[] = [
-    { elementId: 'a:1:1', filePath: 'a.tsx', className: 'order-1', domIndex: 0 },
-    { elementId: 'b:1:1', filePath: 'a.tsx', className: 'order-2', domIndex: 1 },
-    { elementId: 'c:1:1', filePath: 'a.tsx', className: 'order-3', domIndex: 2 },
-  ];
-
-  it('position: before places source at target visual index, target shifts after', () => {
-    // Visual [a, b, c]. Move a before c → visual [b, a, c]. Renumber: b=1, a=2, c=3.
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'a:1:1',
-      target: 'c:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    expect(plan?.entries).toEqual([
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
-    ]);
-  });
-
-  it('position: after places source at target visual index + 1', () => {
-    // Visual [a, b, c]. Move a after c → visual [b, c, a]. Renumber: b=1, c=2, a=3.
-    const plan = computeOrderWritePlan({
-      siblings,
-      source: 'a:1:1',
-      target: 'c:1:1',
-      position: 'after',
-      viewportWidth: 500,
-    });
-    expect(plan?.entries).toEqual([
-      { elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'order-1' },
-      { elementId: 'c:1:1', filePath: 'a.tsx', newClassName: 'order-2' },
-      { elementId: 'a:1:1', filePath: 'a.tsx', newClassName: 'order-3' },
-    ]);
-  });
-
-  it('position: inside returns null (caller falls back to AST insert path)', () => {
-    // The order-N path can only model "before / after a sibling". Cursor-into-the-
-    // middle-of-target means the user is dropping INTO target as a child — only
-    // expressible via JSX restructuring, not a className mutation.
-    expect(
-      computeOrderWritePlan({
-        siblings,
-        source: 'a:1:1',
-        target: 'c:1:1',
-        position: 'inside',
-        viewportWidth: 500,
-      }),
-    ).toBeNull();
-  });
-
-  it('cursor flips outcome: same source/target, opposite halves of target', () => {
-    // This is the bug being fixed: prior code derived position from source-vs-drop
-    // centres, so dragging `a` onto `c` always picked one side regardless of cursor.
-    // Now both branches are reachable from the same fixture.
-    const planBefore = computeOrderWritePlan({
-      siblings,
-      source: 'a:1:1',
-      target: 'c:1:1',
-      position: 'before',
-      viewportWidth: 500,
-    });
-    const planAfter = computeOrderWritePlan({
-      siblings,
-      source: 'a:1:1',
-      target: 'c:1:1',
-      position: 'after',
-      viewportWidth: 500,
-    });
-    // Distinct entry sets: before puts a at slot 2, after puts a at slot 3.
-    const aEntryBefore = planBefore?.entries.find((e) => e.elementId === 'a:1:1');
-    const aEntryAfter = planAfter?.entries.find((e) => e.elementId === 'a:1:1');
-    expect(aEntryBefore?.newClassName).toBe('order-2');
-    expect(aEntryAfter?.newClassName).toBe('order-3');
+    // Visual at base: a (order=2) sorts before b (no order).
+    // Drag b before a → visual [b, a]. Renumber: b=1, a=2 (a unchanged).
+    const plan = computeOrderWritePlan(siblings, 'b:1:1', 'a:1:1', 'before', 500);
+    expect(plan?.entries).toEqual([{ elementId: 'b:1:1', filePath: 'a.tsx', newClassName: 'flex order-1' }]);
   });
 });

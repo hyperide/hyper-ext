@@ -68,65 +68,6 @@ export function readOrderForBp(className: string | undefined, breakpoint: string
 }
 
 /**
- * Resolve a sibling's effective CSS `order` value for sort purposes at the given breakpoint.
- *
- * Unlike `readOrderForBp` (which returns null for absent / named tokens), this helper
- * mirrors the CSS spec: missing → `0`, `order-none` → `0`, `order-first` → very-low (-9999),
- * `order-last` → very-high (9999). Numeric `order-N` and arbitrary `order-[<int>]` are
- * parsed to their integer value.
- *
- * Used by `computeOrderWritePlan` to build the current visual order before applying the
- * drop. Without CSS-correct semantics, default-ordered siblings get sorted *after*
- * numeric ones, producing wrong renumber sequences when the parent mixes explicit
- * `order-N` with default / named children (codex finding from tw-order review).
- *
- * Tailwind responsive cascade: when `breakpoint` is a known variant (sm/md/lg/xl/2xl),
- * walk that bp → smaller bps → base, returning the first defined token. Mirrors CSS
- * min-width media-query stacking — at an md viewport, an `order-3` (base) or `sm:order-3`
- * still applies if the sibling has no `md:order-*` override. Without this, a parent that
- * mixes `order-2` and `md:order-1` renumbers the base-only sibling as 0 at md and writes
- * wrong dense md:order-* values (codex Task-4 follow-up review finding).
- *
- * Tokens of the form `order-[<not-an-int>]` (true arbitrary CSS) fall through to `0` —
- * we don't know how to safely renumber them anyway, and this matches the "ignore unknown"
- * policy used elsewhere.
- */
-const RESPONSIVE_BP_CHAIN: ReadonlyArray<string> = ['sm', 'md', 'lg', 'xl', '2xl'];
-
-function parseOrderSortValueForBp(tokens: readonly string[], breakpoint: string | undefined): number | null {
-  for (const token of tokens) {
-    if (!isOrderClassAtBreakpoint(token, breakpoint)) continue;
-    const bare = breakpoint === undefined ? token : token.slice(breakpoint.length + 1);
-    const numeric = bare.match(/^order-(\d+)$/);
-    if (numeric) return Number.parseInt(numeric[1], 10);
-    if (bare === 'order-first') return -9999;
-    if (bare === 'order-last') return 9999;
-    if (bare === 'order-none') return 0;
-    const arbitrary = bare.match(/^order-\[(-?\d+)\]$/);
-    if (arbitrary) return Number.parseInt(arbitrary[1], 10);
-    return 0;
-  }
-  return null;
-}
-
-export function readOrderSortValueForBp(className: string | undefined, breakpoint: string | undefined): number {
-  const tokens = (className ?? '').split(/\s+/).filter(Boolean);
-  if (breakpoint === undefined) {
-    return parseOrderSortValueForBp(tokens, undefined) ?? 0;
-  }
-  const idx = RESPONSIVE_BP_CHAIN.indexOf(breakpoint);
-  if (idx < 0) {
-    // Unknown variant (project-custom prefix): try it directly, then base.
-    return parseOrderSortValueForBp(tokens, breakpoint) ?? parseOrderSortValueForBp(tokens, undefined) ?? 0;
-  }
-  for (let i = idx; i >= 0; i--) {
-    const value = parseOrderSortValueForBp(tokens, RESPONSIVE_BP_CHAIN[i]);
-    if (value !== null) return value;
-  }
-  return parseOrderSortValueForBp(tokens, undefined) ?? 0;
-}
-
-/**
  * Compute the new className after writing/removing `order` at the given breakpoint.
  *
  * In-place replacement when an existing order token at the targeted breakpoint is found —
