@@ -89,6 +89,43 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
 }
 
 /**
+ * Drop every cached rect whose elementId references the given file path.
+ *
+ * Element IDs follow the format `<fileName>:<line>:<column>`. After an AST
+ * mutation in `<fileName>` (drag-end → move, insert, delete) the line/column
+ * positions of *other* elements in the same file may shift, so the cached
+ * rect's geometry no longer corresponds to the JSX node it was captured for.
+ * Replaying that cached rect during the post-mutation HMR window is exactly
+ * what users see as the "stale rect lingers at old position" lag — fixed by
+ * invalidating the matching entries before the next paint runs.
+ *
+ * Conservative match: drops every entry whose ID starts with `<filePath>:`.
+ * The colon delimiter prevents accidentally dropping IDs in sibling files
+ * that share a common prefix (e.g. `src/Foo.tsx` vs `src/FooBar.tsx`).
+ *
+ * Cross-file moves should call this for both the source and target paths.
+ */
+export function invalidateSelectionGraceCacheForFile(
+  state: SelectionGraceCacheState,
+  filePath: string,
+): void {
+  if (!filePath) return;
+  const prefix = `${filePath}:`;
+  for (const id of Array.from(state.rectsByElementId.keys())) {
+    if (id.startsWith(prefix)) {
+      state.rectsByElementId.delete(id);
+      state.deadlineByElementId.delete(id);
+    }
+  }
+  // Some entries may carry only a deadline (legacy paths), drop those too.
+  for (const id of Array.from(state.deadlineByElementId.keys())) {
+    if (id.startsWith(prefix)) {
+      state.deadlineByElementId.delete(id);
+    }
+  }
+}
+
+/**
  * Wire-format payload used to persist the cache across a full iframe document reload
  * (Task 2 of selection-flicker-some-elements). Stored by iframe-interaction.ts in
  * sessionStorage so that a Vite full-reload — which destroys the in-memory cache —
