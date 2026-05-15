@@ -484,9 +484,16 @@ export function activate(context: vscode.ExtensionContext) {
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relPath = relative(currentWorkspaceRoot, absPath);
-      previewManager.ensureComponent([relPath]).catch((err) => {
-        console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
-      });
+      const panelRef = previewPanel;
+      if (!panelRef) return;
+      previewManager
+        .ensureComponent([relPath])
+        .then(() => {
+          panelRef.refresh();
+        })
+        .catch((err) => {
+          console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
+        });
     });
   }
 

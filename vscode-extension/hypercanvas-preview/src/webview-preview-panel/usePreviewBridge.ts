@@ -396,6 +396,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
               const component = new URL(url).searchParams.get('component');
               if (component && canUpdatePreviewComponentInPlace(getFrameHref(frame), url)) {
                 frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+                canvas.sendEvent({ type: 'state:update', patch: { selectedElementRuntimeStyle: null } });
                 break;
               }
             } catch {

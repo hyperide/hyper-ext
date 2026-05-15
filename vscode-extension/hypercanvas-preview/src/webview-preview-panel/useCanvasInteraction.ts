@@ -289,7 +289,7 @@ export function useCanvasInteraction(
           // Only show context menu when an element is targeted
           if (!msg.elementId) break;
 
-          // Select the element first
+          // Select the element and capture runtime style (mirrors elementClick path)
           const selectPatch: Partial<SharedEditorState> = {
             selectedIds: [msg.elementId],
           };
@@ -297,6 +297,22 @@ export function useCanvasInteraction(
             selectPatch.selectedItemIndices = {
               [msg.elementId]: msg.itemIndex,
             };
+          }
+          if (msg.computedStyle && typeof msg.computedStyle === 'object') {
+            const refMatch = typeof msg.elementId === 'string' ? msg.elementId.match(/^(.+):\d+:\d+$/) : null;
+            selectPatch.selectedElementRuntimeStyle = {
+              componentPath: refMatch ? refMatch[1] : null,
+              elementId: msg.elementId,
+              itemIndex: msg.itemIndex ?? null,
+              seq: typeof msg.computedStyleSeq === 'number' ? msg.computedStyleSeq : Date.now(),
+              computedStyle: msg.computedStyle as Record<string, string>,
+            } satisfies SelectedElementRuntimeStyle;
+          } else {
+            frame.contentWindow?.postMessage(
+              // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+              { type: 'hypercanvas:requestComputedStyle', elementId: msg.elementId, itemIndex: msg.itemIndex ?? null },
+              '*',
+            );
           }
           canvas.sendEvent({ type: 'state:update', patch: selectPatch });
 

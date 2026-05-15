@@ -1064,6 +1064,8 @@ const contextMenuHandler = (e: MouseEvent) => {
       source,
       x: e.clientX,
       y: e.clientY,
+      computedStyle: elementId ? extractComputedStyle(target) : undefined,
+      computedStyleSeq: elementId ? ++elementClickSeq : undefined,
     },
     '*',
   );

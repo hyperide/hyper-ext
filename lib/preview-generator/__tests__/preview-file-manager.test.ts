@@ -762,6 +762,44 @@ export default function CanvasPreview() { return null; }
     expect(isValidTypeScript(content)).toBe(true);
   });
 
+  it('skips Storybook story files (Button.stories.tsx) even when they export PascalCase names', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', `export function Button() { return <button/>; }`);
+    io.files.set(
+      '/project/src/components/Button.stories.tsx',
+      `import { Button } from './Button';\nexport const Primary = () => <Button/>;\nexport const Secondary = () => <Button/>;`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Button.stories.tsx']);
+    expect(content).toContain("from './components/Button'");
+    expect(content).not.toContain('Button.stories');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('skips test files (Button.test.tsx, Button.spec.tsx)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', `export function Button() { return <button/>; }`);
+    io.files.set(
+      '/project/src/components/Button.test.tsx',
+      `import { render } from '@testing-library/react';\nexport const TestSuite = () => null;`,
+    );
+    io.files.set('/project/src/components/Button.spec.tsx', `export const SpecCase = () => null;`);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/Button.tsx',
+      'src/components/Button.test.tsx',
+      'src/components/Button.spec.tsx',
+    ]);
+    expect(content).toContain("from './components/Button'");
+    expect(content).not.toContain('Button.test');
+    expect(content).not.toContain('Button.spec');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
   it('keeps App.web.tsx (web entry) and assigns AppWeb alias to avoid collision with App.tsx', async () => {
     // .web suffix must NOT be treated as a platform-exclusion suffix (unlike .native/.ios/.android).
     // App.web.tsx is the web entry for Expo/Tamagui projects and must appear in componentRegistry.

@@ -102,7 +102,8 @@ function isPreviewIneligibleByName(fileName: string): boolean {
   // previewable. Alias collision with App.tsx is resolved in deriveUniquePrefix.
   const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android']);
   const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
-  return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg));
+  const TEST_SUFFIXES = new Set(['test', 'spec', 'stories']);
+  return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg));
 }
 
 export interface PreviewFileManagerConfig {
