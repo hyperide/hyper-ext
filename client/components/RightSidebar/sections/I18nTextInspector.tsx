@@ -29,6 +29,13 @@ export interface I18nTextInspectorProps {
   /** Increments ONLY on write failure. Forces localText rollback when write fails and resolvedText stays unchanged.
    * Must NOT increment on success — doing so snaps localText to stale resolvedText before the RPC re-read returns. */
   rollbackKey?: number;
+  /**
+   * When true, the key combobox trigger is disabled.
+   * Set by the parent while a write is in flight or while the style re-read is loading.
+   * Prevents a second key change from firing before the inspector remounts with the
+   * updated key (which would cause commitKey to abort via `key === currentKey`).
+   */
+  keyBusy?: boolean;
 }
 
 export const I18nTextInspector = memo(function I18nTextInspector({
@@ -41,6 +48,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   localeEditable = false,
   availableKeys,
   rollbackKey,
+  keyBusy = false,
 }: I18nTextInspectorProps) {
   // Local draft prevents snap-back to stale resolvedText during the debounce window.
   const [localText, setLocalText] = useState(i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '');
@@ -187,11 +195,12 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               ref={triggerRef}
               data-testid="i18n-key-input"
               type="button"
+              disabled={keyBusy}
               onClick={() => {
                 setKeySearch('');
                 setShowKeyDropdown((s) => !s);
               }}
-              className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 text-left focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 text-left focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {currentKey}
             </button>

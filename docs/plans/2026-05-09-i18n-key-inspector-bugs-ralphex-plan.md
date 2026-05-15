@@ -78,25 +78,28 @@ Tests use bulka-the-dog project (has i18n with react-i18next, locales/en.json).
 
 ### Task 3: Fix canCreateKey — separate from keyEditable
 
-- [ ] In `I18nTextInspector.tsx`: add `canCreateKey` prop (boolean)
-- [ ] `canCreateKey` = true when i18n layout exists and is writable, regardless of available keys count
-- [ ] Pass `canCreateKey` from `RightSidebar.tsx` — derive from `styleData.i18nText?.layout?.writable ?? false`
-- [ ] In combobox: show "Create" option when `canCreateKey && inputValue && !availableI18nKeys.includes(inputValue)`
-- [ ] Run typecheck: `bun run typecheck` (or equivalent)
+- [x] In `I18nTextInspector.tsx`: add `canCreateKey` prop (boolean)
+- [x] `canCreateKey` = true when i18n layout exists and is writable, regardless of available keys count
+- [x] Pass `canCreateKey` from `RightSidebar.tsx` — derive from `styleData.i18nText?.layout?.writable ?? false`
+- [x] In combobox: show "Create" option when `canCreateKey && inputValue && !availableI18nKeys.includes(inputValue)`
+- [x] Run typecheck: `bun run typecheck` (or equivalent)
 
 ### Task 4: Fix grace cache invalidation on write
 
-- [ ] In `selection-grace-cache.ts`: add `clearGraceCacheForElement(elementId: string)` export (or clear all if per-id not feasible)
-- [ ] In `RightSidebar.tsx` success path of `handleI18nKeyChange`: call `clearGraceCacheForElement(elementId)` before `restoreIfCurrent()`
-- [ ] This forces fresh DOM lookup after HMR instead of replaying stale rects
-- [ ] Message `clearGraceCacheForElement` to iframe via postMessage if grace cache lives in iframe context
+- [x] In `selection-grace-cache.ts`: add `clearGraceCacheForElement(elementId: string)` export (or clear all if per-id not feasible)
+- [x] In `RightSidebar.tsx` success path of `handleI18nKeyChange`: call `clearGraceCacheForElement(elementId)` before `restoreIfCurrent()`
+- [x] This forces fresh DOM lookup after HMR instead of replaying stale rects
+- [x] Message `clearGraceCacheForElement` to iframe via postMessage if grace cache lives in iframe context
 
 ### Task 5: Fix writeInProgress not clearing + repeated write guard
 
-- [ ] Trace what happens when `writeInProgress` fails to clear: find the guard that blocks second write
-- [ ] Ensure `writeInProgress: null` dispatch fires unconditionally at end of success path (not gated on `navigationAway` check)
-- [ ] If guard uses `if (state.writeInProgress)` flat check: change to `if (state.writeInProgress && state.writeInProgress.writeId === currentWriteId)`
-- [ ] Ensure `needsOverlayUpdate=true` is sent to iframe after write completes
+- [x] Trace what happens when `writeInProgress` fails to clear: find the guard that blocks second write
+- [x] Ensure `writeInProgress: null` dispatch fires unconditionally at end of success path (not gated on `navigationAway` check)
+- [x] If guard uses `if (state.writeInProgress)` flat check: change to `if (state.writeInProgress && state.writeInProgress.writeId === currentWriteId)`
+- [x] Ensure `needsOverlayUpdate=true` is sent to iframe after write completes
+
+**Findings:**
+Root cause of Test 4 RED: after Task 3, `showCombobox = canCreateKeys || ...` always true → key trigger is a `<button>` never disabled. Test's `not.toBeDisabled()` passes immediately after first write, before re-read completes. Second write fires with stale `currentKey` still old value → `commitKey` aborts via `key === currentKey`. Fix: add `keyBusy` prop to `I18nTextInspector`, set `disabled={keyBusy}` on trigger button. Pass `keyBusy={loading}` from RightSidebar — `loading=true` during re-read, which ensures the button is disabled until `i18nText.key` is updated and the component remounts. Items 2/3/4 verified: `writeInProgress: null` already clears without `navigationAway` gate; guard already uses writeId comparison (not flat check); `needsOverlayUpdate=true` already set by Task 4's `clearGraceCache` handler.
 
 ### Task 6: Build + install ext, run E2E → GREEN
 

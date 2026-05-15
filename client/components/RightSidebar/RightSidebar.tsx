@@ -1394,6 +1394,7 @@ export default function RightSidebar({
                   availableKeys={availableI18nKeys}
                   keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                   canCreateKeys={i18nText.writable}
+                  keyBusy={loading}
                 />
               );
             })()}
