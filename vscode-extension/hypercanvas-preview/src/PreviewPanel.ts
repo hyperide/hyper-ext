@@ -453,6 +453,18 @@ export class PreviewPanel {
       return;
     }
 
+    // === Keyboard-driven duplicate (from iframe keyboard handler) ===
+    if (msg.type === 'keyboard:duplicate') {
+      const elementId = msg.elementId as string | undefined;
+      const componentPath = this._currentComponent;
+      if (!componentPath || !elementId) return;
+      const result = await this._panelRouter.astBridge.duplicateElement(componentPath, elementId);
+      if (result.success && result.newId) {
+        this._stateHub.applyUpdate({ selectedIds: [result.newId] });
+      }
+      return;
+    }
+
     // === Context menu actions ===
     if (msg.type === 'contextMenu:goToCode') {
       await this._handleContextMenuGoToCode(msg, webview);

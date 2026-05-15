@@ -1008,6 +1008,15 @@ const { handler: keydownHandler } = createDesignKeydownHandler({
         },
         '*',
       ),
+    onDuplicateElement: (id) =>
+      // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage(
+        {
+          type: 'keyboard:duplicate',
+          elementId: id,
+        },
+        '*',
+      ),
   },
   isDesignMode: () => state.engineMode === 'design',
   // DOM-based lookup — builds parent/children from live DOM + fiber source resolution.
