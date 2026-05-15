@@ -350,6 +350,13 @@ function tryRegisterViteHmrHooks(): boolean {
     requestServerSourceMaps();
     needsOverlayUpdate = true;
     scheduleOverlayLoopIfNeeded();
+    // React Fast Refresh schedules its DOM commit via the scheduler (MessageChannel),
+    // which may fire AFTER the first RAF above. A second pass at SELECTION_GRACE_RETRY_MS
+    // captures the settled post-commit dimensions when the first pass measured a stale rect.
+    setTimeout(() => {
+      needsOverlayUpdate = true;
+      scheduleOverlayLoopIfNeeded();
+    }, SELECTION_GRACE_RETRY_MS);
   });
   return true;
 }
