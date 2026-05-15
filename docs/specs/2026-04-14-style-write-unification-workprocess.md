@@ -5236,8 +5236,7 @@ Claude review follow-up after 21:00 reminder, 2026-04-22 21:54 CEST:
 - Claude findings:
   * `.serena/memories/vscode-extension.md` lost useful function names while I
     fixed markdown line length.
-  * The member-expression bug note for `findElementWithUuidAtPosition` was
-    lost.
+  * The member-expression handling note for the AST traverser was lost.
   * MCP tools and AI bridge descriptions became less precise than before.
   * Retry policy wording was too broad; it needed to distinguish focused
     debugging from full-suite CI policy.
@@ -5267,4 +5266,35 @@ Claude review follow-up after 21:00 reminder, 2026-04-22 21:54 CEST:
 - Remaining risk:
   * The 2209-test full suite still needs a final verification run after the
     focused checkpoints are clean. It must not be used as the next debugger.
+```
+
+Requested Claude review follow-up, 2026-04-22 22:10 CEST:
+
+```text
+- Trigger:
+  * User explicitly asked to run Claude review and write it to the workfile.
+  * Full E2E was already running and had passed the visible startup region, so
+    it was left running while this review executed.
+- Claude review:
+  * First raw-diff Claude run hung without stdout and was terminated.
+  * A minimal scoped Claude run completed.
+- Finding:
+  * Blocker in `.serena/memories/vscode-extension.md`: the memory restored
+    non-existent symbol `findElementWithUuidAtPosition`.
+  * Actual AST traverser export is `findElementAtPosition`.
+  * The previous wording "fixes the member expression lookup bug" was too
+    historical and implied a specific recent patch. The code currently handles
+    `JSXMemberExpression` through `resolveJSXName`.
+- Fix:
+  * Replaced the memory entry with `findElementAtPosition`.
+  * Reworded the helper note to:
+    `handles JSXMemberExpression via resolveJSXName`.
+- Residual risks from Claude:
+  * MCP tool count in memory may be stale: memory says 20 tools and component
+    discovery 3, while Claude's quick scan reported 19 registrations with
+    component tools at 2. This appears pre-existing and needs a dedicated
+    verification/update pass.
+  * `bunx knip` still has the existing repo-wide 582 unused-files report.
+  * Restoring symbol names in memory must be verified against current code, not
+    only against earlier memory text or a diff.
 ```
