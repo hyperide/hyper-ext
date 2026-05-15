@@ -73,9 +73,12 @@ Fix:
 
 ### Task 3: Update findParentNodeRef to return { ref, itemIndex } shape
 
-- [ ] In `shared/canvas-interaction/node-map-lookup.ts`: change `findParentNodeRef` return type from `NodeRef | null` to `{ ref: NodeRef; itemIndex: number | null } | null`
-- [ ] The parent's `itemIndex` = current child's `selectedItemIndices[childRef]` (same `.map()` row)
-- [ ] Update callers of `findParentNodeRef` to destructure `{ ref, itemIndex }`
+- [x] In `shared/canvas-interaction/node-map-lookup.ts`: change `findParentNodeRef` return type from `NodeRef | null` to `{ ref: NodeRef; itemIndex: number | null } | null`
+  - NOTE per Task 1: node-map-lookup.ts does not exist; findParentNodeRef stays as-is (returns string|null). Instead, extended DesignKeydownConfig.getState() to include optional `selectedItemIndices?: Record<string, number | null>` in keyboard-handler.ts.
+- [x] The parent's `itemIndex` = current child's `selectedItemIndices[childRef]` (same `.map()` row)
+  - NOTE: informational — actual reading in Task 4 Shift+Enter handler
+- [x] Update callers of `findParentNodeRef` to destructure `{ ref, itemIndex }`
+  - NOTE per Task 1: not applicable; callers updated in Tasks 4–5 when callback signature changes
 
 ### Task 4: Update onSelectElement callback to pass itemIndex
 

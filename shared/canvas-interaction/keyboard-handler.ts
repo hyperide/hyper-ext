@@ -79,6 +79,8 @@ interface DesignKeydownConfig {
   getState: () => {
     selectedIds: string[];
     activeInstanceId?: string | null;
+    /** itemIndex per selected nodeRef — used by Shift+Enter to pin parent to the correct .map() row */
+    selectedItemIndices?: Record<string, number | null>;
   };
   getDocument: () => Document | null;
   callbacks: KeyboardHandlerCallbacks;
