@@ -314,20 +314,10 @@ export class PreviewPanel {
     if (msg.type === 'webview:ready') {
       // Send initial state
       this._stateHub.sendInit(PreviewPanel.PANEL_ID);
-      // Send current devserver status
-      webview.postMessage({
-        type: 'devserver:statusChanged',
-        running: this._devServerRunning,
-        url: this._devServerRunning ? this._previewBaseUrl : null,
-      });
-      // Send unsupported project error if already detected
-      if (this._projectError) {
-        webview.postMessage({ type: 'projectError', error: this._projectError });
-      }
-      // If dev server is running, send current preview URL
-      if (this._devServerRunning) {
-        this._updatePreviewUrl();
-      }
+      // Push consolidated extension-side state (devserver, project error, URL,
+      // current component) so a re-attached panel rehydrates without losing
+      // the component selection that survived dispose+createOrShow.
+      this._pushFullStateToWebview();
       return;
     }
 
@@ -962,9 +952,22 @@ export class PreviewPanel {
   }
 
   /**
-   * Initialize component from active editor
+   * Initialize component from active editor.
+   *
+   * If `_currentComponent` is already set (panel was disposed and re-created
+   * while the extension host kept its in-memory state — e.g. user closed the
+   * Hyper Canvas tab and reopened it via createOrShow), we do NOT re-derive
+   * from the editor. The editor's active document at that moment may not be
+   * the component the user was previewing, so re-deriving overwrites a valid
+   * selection. Instead we push the existing state into the webview and rely
+   * on the `webview:ready` handler to do the same when the React app loads.
    */
   private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
+    if (this._currentComponent) {
+      this._pushFullStateToWebview();
+      return;
+    }
+
     this._syncWorkspaceRootFromVSCode();
     const component = this._resolveComponentPath(activeEditor);
     if (component) {
@@ -977,6 +980,38 @@ export class PreviewPanel {
       if (stateComponent?.path) {
         this._currentComponent = stateComponent.path;
       }
+    }
+  }
+
+  /**
+   * Push consolidated extension-side state into the webview in one shot.
+   * Called from `webview:ready` (initial load) and `_initializeComponent`
+   * (re-attach after panel dispose) so the React app rehydrates devserver
+   * status, project error, iframe URL, and the current component without
+   * relying on incidental ordering of subsequent setX() calls.
+   *
+   * Idempotent — safe to call repeatedly. No-op if no panel is attached.
+   */
+  private _pushFullStateToWebview(): void {
+    const webview = this._panel?.webview;
+    if (!webview) return;
+
+    webview.postMessage({
+      type: 'devserver:statusChanged',
+      running: this._devServerRunning,
+      url: this._devServerRunning ? this._previewBaseUrl : null,
+    });
+
+    if (this._projectError) {
+      webview.postMessage({ type: 'projectError', error: this._projectError });
+    }
+
+    if (this._currentComponent) {
+      webview.postMessage({ type: 'setComponent', component: this._currentComponent });
+    }
+
+    if (this._devServerRunning) {
+      this._updatePreviewUrl();
     }
   }
 

@@ -163,6 +163,83 @@ describe('PreviewPanel component selection', () => {
     expect(dispose).toHaveBeenCalled();
   });
 
+  it('does not overwrite an already-set currentComponent when re-attaching panel', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+
+    // Simulate a panel that was previously initialized with a component:
+    // user picked "src/components/Feed.tsx", then closed and reopened the tab.
+    // The active editor at reopen is unrelated to the previewed component.
+    Object.assign(panel as PreviewPanel & { _currentComponent: string }, {
+      _currentComponent: 'src/components/Feed.tsx',
+    });
+
+    (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
+      createEditor('/workspace/src/App.tsx'),
+    );
+
+    // Component must NOT be re-derived from editor — preserved from previous session.
+    expect((panel as PreviewPanel & { _currentComponent?: string })._currentComponent).toBe('src/components/Feed.tsx');
+    expect(stateHub.applyUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ currentComponent: { name: 'App', path: 'src/App.tsx' } }),
+    );
+    // State pushed to webview includes setComponent with the preserved value.
+    expect(postMessage).toHaveBeenCalledWith({ type: 'setComponent', component: 'src/components/Feed.tsx' });
+  });
+
+  it('_pushFullStateToWebview emits devserver/projectError/setComponent/url', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _projectError: unknown }, {
+      _currentComponent: 'src/App.tsx',
+      _projectError: { kind: 'react-native', detail: 'no react-native-web' },
+      _previewBaseUrl: 'http://localhost:5173',
+    });
+
+    (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'devserver:statusChanged',
+      running: true,
+      url: 'http://localhost:5173',
+    });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'projectError',
+      error: { kind: 'react-native', detail: 'no react-native-web' },
+    });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'setComponent',
+      component: 'src/App.tsx',
+    });
+    // _updatePreviewUrl posts updateUrl when devServerRunning
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'updateUrl',
+      url: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+    });
+  });
+
+  it('does not post setComponent or updateUrl when state is empty (idempotent on first load)', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+
+    Object.assign(panel as PreviewPanel & { _devServerRunning: boolean }, { _devServerRunning: false });
+
+    (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
+
+    // Always emits devserver status (even when stopped) so React app reaches a known state.
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'devserver:statusChanged',
+      running: false,
+      url: null,
+    });
+    // No component, no error, no URL: those messages must NOT be sent.
+    const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
+    expect(calls).not.toContain('setComponent');
+    expect(calls).not.toContain('projectError');
+    expect(calls).not.toContain('updateUrl');
+  });
+
   it('uses a valid JSX component name when sample scaffold receives a path-like name', () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
