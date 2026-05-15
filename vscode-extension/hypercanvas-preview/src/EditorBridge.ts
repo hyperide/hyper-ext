@@ -29,6 +29,24 @@ export type EditorMessage =
   | { type: 'editor:getActiveFile'; requestId: string };
 
 /**
+ * Path patterns for bundler-generated artifacts that are NOT user source files.
+ * Source map resolution can leave these as the raw fileName when no map is
+ * available (e.g. bun's hashed `_bun/client/<hash>.js` chunks). Opening them
+ * fails with `cannot open file:///.../_bun/client/index-<hash>.js` because
+ * the hash rotates on every rebuild and the path is gone before the click
+ * lands. Filter early so we don't surface a misleading error to the user.
+ */
+const BUNDLE_PATH_PATTERNS: readonly RegExp[] = [
+  /(?:^|\/)_bun\/client\//,
+  /(?:^|\/)_next\/static\/chunks\//,
+  /(?:^|\/)node_modules\//,
+];
+
+export function isBundleArtifactPath(filePath: string): boolean {
+  return BUNDLE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
+}
+
+/**
  * Handle editor-related messages from webview
  */
 export async function handleEditorMessage(message: EditorMessage, webview: vscode.Webview): Promise<void> {
@@ -55,6 +73,10 @@ export async function handleEditorMessage(message: EditorMessage, webview: vscod
  * Open a file in the editor, optionally at a specific line/column
  */
 async function openFile(filePath: string, line?: number, column?: number): Promise<void> {
+  if (isBundleArtifactPath(filePath)) {
+    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    return;
+  }
   try {
     // Resolve path relative to workspace
     const uri = resolveFilePath(filePath);
@@ -92,6 +114,10 @@ export async function goToCode(
   column: number,
   options?: { preserveFocus?: boolean },
 ): Promise<void> {
+  if (isBundleArtifactPath(filePath)) {
+    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    return;
+  }
   try {
     const uri = resolveFilePath(filePath);
     const position = new vscode.Position(line - 1, column - 1);

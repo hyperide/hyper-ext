@@ -11,6 +11,7 @@ import {
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
+  shouldSwallowStaleBundleResponse,
 } from '../PreviewAssetResponses';
 
 describe('PreviewAssetResponses', () => {
@@ -38,5 +39,21 @@ describe('PreviewAssetResponses', () => {
     expect(shouldReturnEmptyAssetResponse(404, true)).toBe(false);
     expect(shouldReturnEmptyAssetResponse(503, false)).toBe(false);
     expect(shouldReturnEmptyAssetResponse(200, false)).toBe(false);
+  });
+
+  it('swallows stale hashed bundle 403/404 to keep iframe console quiet across rebuilds', () => {
+    // Bun's hashed _bun/client/<hash>.js rotates on every rebuild — old hash → 403/404.
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 403, false)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 404, false)).toBe(true);
+    // Next.js static chunks rotate similarly on rebuild.
+    expect(shouldSwallowStaleBundleResponse('/_next/static/chunks/main-abc.js', 403, false)).toBe(true);
+    // Other 4xx, HTML responses, and non-bundle paths must NOT be swallowed.
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 500, false)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 200, false)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 403, true)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/src/App.tsx', 403, false)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/api/projects', 403, false)).toBe(false);
+    // Query params don't matter — pathname-only check.
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc.js?t=123', 403, false)).toBe(true);
   });
 });

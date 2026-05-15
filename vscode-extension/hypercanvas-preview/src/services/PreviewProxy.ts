@@ -16,6 +16,7 @@ import {
   getPreviewAssetContentType,
   shouldRetryAssetResponse,
   shouldReturnEmptyAssetResponse,
+  shouldSwallowStaleBundleResponse,
 } from './PreviewAssetResponses';
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
@@ -202,6 +203,16 @@ export class PreviewProxy {
       }
 
       if (assetContentType && shouldReturnEmptyAssetResponse(proxyRes.statusCode, isHtml)) {
+        proxyRes.resume();
+        clientRes.writeHead(204, {
+          'content-type': assetContentType,
+          'cache-control': 'no-cache, no-store, must-revalidate',
+        });
+        clientRes.end();
+        return;
+      }
+
+      if (assetContentType && shouldSwallowStaleBundleResponse(proxyPath, proxyRes.statusCode, isHtml)) {
         proxyRes.resume();
         clientRes.writeHead(204, {
           'content-type': assetContentType,
