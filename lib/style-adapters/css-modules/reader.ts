@@ -1,16 +1,39 @@
 /**
- * @file CssModulesReader stub — returns empty source owners for CSS Modules elements
+ * @file CssModulesReader derives CSS Modules source identities from className facts
  *
  * Accessed via: CssModulesAdapter umbrella delegates read() calls here
- * Assumptions: full CSS Modules reading will be implemented when the read pipeline is built;
- *   this stub satisfies the FrameworkStyleReader interface contract
+ * Assumptions: CSS file declaration ownership tracing is a later Phase 7 slice;
+ *   this reader exposes class selector tabs from imported module class facts.
  */
-import type { ElementStyleFacts, StyleCondition, StyleSourceOwner } from '@lib/style-read/types';
+import type { FrameworkReadResult, SourceClassIdentity } from '@lib/style-read/types';
 import type { FrameworkStyleReader } from '@lib/style-write/types';
 
 export class CssModulesReader implements FrameworkStyleReader {
-  read(input: { elementFacts: ElementStyleFacts; condition: StyleCondition }): StyleSourceOwner[] {
-    void input;
-    return [];
+  read(input: Parameters<FrameworkStyleReader['read']>[0]): FrameworkReadResult {
+    const references = input.elementFacts.classNameExpression?.cssModuleReferences ?? [];
+    const classIdentities: SourceClassIdentity[] = references.map((reference) => ({
+      sourceTabId: `css-modules:${reference.classKey}`,
+      cssSystem: 'css-modules',
+      sourceForm: 'cssStyleRule',
+      label: reference.selector,
+      filePath: reference.cssFilePath,
+      cssSyntax: reference.cssSyntax,
+      selector: reference.selector,
+      classKey: reference.classKey,
+      sourceRef: {
+        importLocalName: reference.importLocalName,
+        importSource: reference.importSource,
+        expressionPath: reference.expressionPath,
+      },
+      condition: { state: 'base' },
+      confidence: 'exact',
+    }));
+
+    return {
+      sourceOwners: [],
+      values: {},
+      classIdentities,
+      conditions: classIdentities.map((identity) => identity.condition),
+    };
   }
 }

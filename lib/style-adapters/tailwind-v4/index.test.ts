@@ -21,21 +21,48 @@ describe('TailwindV4Adapter', () => {
     expect(tailwindV4Adapter.reader).toBeDefined();
   });
 
-  it('reader returns empty array (stub)', () => {
-    const owners = tailwindV4Adapter.reader!.read({
+  it('reader returns element class identity when className facts are available', async () => {
+    if (!tailwindV4Adapter.reader) throw new Error('reader is undefined');
+    const result = await tailwindV4Adapter.reader.read({
       elementFacts: {
         elementCssSystems: ['tailwind-v4'],
         elementUiKits: [],
         elementPropMappers: [],
         sourceOwners: [],
+        classNameExpression: {
+          kind: 'literal',
+          staticClasses: ['px-4', 'text-red-500'],
+          dynamic: false,
+        },
       },
-      condition: { state: 'base' },
+      computedStyle: {},
+      runtimeThemeContext: {
+        ideThemePreference: 'light',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
     });
-    expect(owners).toEqual([]);
+    expect(result).toEqual({
+      sourceOwners: [],
+      values: {},
+      classIdentities: [
+        {
+          sourceTabId: 'tailwind-v4:elementClass',
+          cssSystem: 'tailwind-v4',
+          sourceForm: 'elementClass',
+          label: 'Tailwind',
+          cssClass: 'px-4 text-red-500',
+          condition: { state: 'base' },
+          confidence: 'exact',
+        },
+      ],
+      conditions: [{ state: 'base' }],
+    });
   });
 
   it('writer produces TailwindPlan', () => {
-    const plan = tailwindV4Adapter.writer!.createPlan({
+    if (!tailwindV4Adapter.writer) throw new Error('writer is undefined');
+    const plan = tailwindV4Adapter.writer.createPlan({
       context: {
         projectCapabilities: {
           projectCssSystems: ['tailwind-v4'],

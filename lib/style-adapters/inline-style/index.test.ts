@@ -21,18 +21,41 @@ describe('InlineStyleAdapter', () => {
     expect(inlineStyleAdapter.reader).toBeDefined();
   });
 
-  it('reader returns empty array (stub)', () => {
+  it('reader returns inline style identity when style attribute facts are available', async () => {
     if (!inlineStyleAdapter.reader) throw new Error('reader is undefined');
-    const owners = inlineStyleAdapter.reader.read({
+    const result = await inlineStyleAdapter.reader.read({
       elementFacts: {
         elementCssSystems: ['inline-style'],
         elementUiKits: [],
         elementPropMappers: [],
         sourceOwners: [],
+        styleAttribute: {
+          kind: 'object-literal',
+          hasSpread: false,
+        },
       },
-      condition: { state: 'base' },
+      computedStyle: {},
+      runtimeThemeContext: {
+        ideThemePreference: 'light',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
     });
-    expect(owners).toEqual([]);
+    expect(result).toEqual({
+      sourceOwners: [],
+      values: {},
+      classIdentities: [
+        {
+          sourceTabId: 'inline-style:style',
+          cssSystem: 'inline-style',
+          sourceForm: 'scriptReactStyleRule',
+          label: 'Inline',
+          condition: { state: 'base' },
+          confidence: 'exact',
+        },
+      ],
+      conditions: [{ state: 'base' }],
+    });
   });
 
   it('writer produces ScriptObjectStylePlan', () => {

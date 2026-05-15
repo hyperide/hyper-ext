@@ -21,18 +21,62 @@ describe('CssModulesAdapter', () => {
     expect(cssModulesAdapter.reader).toBeDefined();
   });
 
-  it('reader returns empty array (stub)', () => {
+  it('reader exposes CSS Module class identities from className facts', async () => {
     if (!cssModulesAdapter.reader) throw new Error('reader is undefined');
-    const owners = cssModulesAdapter.reader.read({
+    const result = await cssModulesAdapter.reader.read({
       elementFacts: {
         elementCssSystems: ['css-modules'],
         elementUiKits: [],
         elementPropMappers: [],
         sourceOwners: [],
+        classNameExpression: {
+          kind: 'member-expression',
+          staticClasses: [],
+          dynamic: true,
+          cssModuleReferences: [
+            {
+              importLocalName: 'styles',
+              importSource: './Card.module.css',
+              cssFilePath: 'src/Card.module.css',
+              cssSyntax: 'css',
+              classKey: 'card',
+              selector: '.card',
+              expressionPath: 'styles.card',
+            },
+          ],
+        },
       },
-      condition: { state: 'base' },
+      computedStyle: {},
+      runtimeThemeContext: {
+        ideThemePreference: 'light',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
     });
-    expect(owners).toEqual([]);
+    expect(result).toEqual({
+      sourceOwners: [],
+      values: {},
+      classIdentities: [
+        {
+          sourceTabId: 'css-modules:card',
+          cssSystem: 'css-modules',
+          sourceForm: 'cssStyleRule',
+          label: '.card',
+          filePath: 'src/Card.module.css',
+          cssSyntax: 'css',
+          selector: '.card',
+          classKey: 'card',
+          sourceRef: {
+            importLocalName: 'styles',
+            importSource: './Card.module.css',
+            expressionPath: 'styles.card',
+          },
+          condition: { state: 'base' },
+          confidence: 'exact',
+        },
+      ],
+      conditions: [{ state: 'base' }],
+    });
   });
 
   it('writer produces CssModulesFilePlan', () => {

@@ -10,6 +10,8 @@ import type {
   CssSyntaxId,
   CssSystemId,
   ElementStyleFacts,
+  FiberTraceResult,
+  FrameworkReadResult,
   ProjectStyleCapabilities,
   RuntimeThemeContext,
   SourceForm,
@@ -240,7 +242,12 @@ export type StyleWriteResult =
 // --- Framework Adapter Interfaces ---
 
 export interface FrameworkStyleReader {
-  read(input: { elementFacts: ElementStyleFacts; condition: StyleCondition }): StyleSourceOwner[];
+  read(input: {
+    elementFacts: ElementStyleFacts;
+    computedStyle: Record<string, string>;
+    fiberTrace?: FiberTraceResult;
+    runtimeThemeContext: RuntimeThemeContext;
+  }): FrameworkReadResult | Promise<FrameworkReadResult>;
 }
 
 export interface FrameworkStyleWriter {

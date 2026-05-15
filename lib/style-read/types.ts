@@ -215,9 +215,62 @@ export interface StyleSourceTab {
   cssSyntax?: CssSyntaxId;
   filePath?: string;
   selector?: string;
+  cssClass?: string;
+  classKey?: string;
+  sourceRef?: {
+    importLocalName?: string;
+    importSource?: string;
+    expressionPath?: string;
+  };
   condition: StyleCondition;
   cascadeContext?: CascadeContext;
   confidence: SourceConfidence;
+  isDefault?: boolean;
+}
+
+export interface SourceClassIdentity {
+  sourceTabId?: string;
+  cssSystem: CssSystemId;
+  sourceForm: SourceForm;
+  label: string;
+  filePath?: string;
+  cssSyntax?: CssSyntaxId;
+  cssClass?: string;
+  classKey?: string;
+  selector?: string;
+  sourceRef?: {
+    importLocalName?: string;
+    importSource?: string;
+    expressionPath?: string;
+  };
+  condition: StyleCondition;
+  confidence: SourceConfidence;
+}
+
+export interface CssModuleClassReference {
+  importLocalName: string;
+  importSource: string;
+  cssFilePath: string;
+  cssSyntax: CssSyntaxId;
+  classKey: string;
+  selector: string;
+  expressionPath: string;
+}
+
+export interface FrameworkReadResult {
+  sourceOwners: StyleSourceOwner[];
+  values: Record<string, string>;
+  classIdentities: SourceClassIdentity[];
+  conditions: StyleCondition[];
+}
+
+export interface FiberTraceResult {
+  sourceLocation?: {
+    filePath: string;
+    line: number;
+    column: number;
+  };
+  runtimeClasses?: string[];
 }
 
 // --- Runtime Theme Context ---
@@ -231,6 +284,36 @@ export interface RuntimeThemeContext {
   resolvedColorScheme: ResolvedColorScheme;
   source: RuntimeThemeSource;
   selectedTheme?: ThemeCondition[];
+}
+
+interface RuntimeThemeContextInputBase {
+  source: RuntimeThemeSource;
+  selectedTheme?: ThemeCondition[];
+  includeColorSchemeCondition?: boolean;
+}
+
+export type RuntimeThemeContextInput =
+  | (RuntimeThemeContextInputBase & {
+      ideThemePreference: 'light' | 'dark';
+      systemColorScheme?: ResolvedColorScheme;
+    })
+  | (RuntimeThemeContextInputBase & {
+      ideThemePreference: 'system';
+      systemColorScheme: ResolvedColorScheme;
+    });
+
+export interface ThemeStateRuntimeThemeContextInput extends RuntimeThemeContextInputBase {
+  theme: IdeThemePreference;
+  resolvedTheme: ResolvedColorScheme;
+}
+
+export interface CssClassRuntimeThemeContextInput extends RuntimeThemeContextInputBase {
+  classNames: string[];
+  systemColorScheme: ResolvedColorScheme;
+}
+
+export interface ThemeContextResolver {
+  resolve(input: RuntimeThemeContextInput): RuntimeThemeContext;
 }
 
 // --- Theme Capabilities ---
@@ -328,6 +411,7 @@ export interface ClassNameExpressionFacts {
   kind: 'literal' | 'template' | 'call-expression' | 'member-expression' | 'unknown';
   staticClasses: string[];
   dynamic: boolean;
+  cssModuleReferences?: CssModuleClassReference[];
 }
 
 export interface StyleAttributeFacts {
@@ -398,6 +482,47 @@ export interface InspectorSurfaceDecision {
     | 'props-schema-available'
     | 'no-standard-style-surface'
   >;
+}
+
+export interface StyleReadContext {
+  projectCapabilities: ProjectStyleCapabilities;
+  elementFacts: ElementStyleFacts;
+  runtimeThemeContext: RuntimeThemeContext;
+  computedStyle: Record<string, string>;
+  fiberTrace?: FiberTraceResult;
+}
+
+export interface PropertySource {
+  property: string;
+  value: string;
+  sourceTabId: string;
+  specificity?: number;
+  active: boolean;
+}
+
+export interface AvailableConditionAxes {
+  states: StylePseudoState[];
+  viewportKeys: StyleBreakpointKey[];
+  themeAxes: ThemeAxisId[];
+  containerKeys: StyleBreakpointKey[];
+}
+
+export interface StyleReadDiagnostic {
+  level: 'info' | 'warning';
+  message: string;
+}
+
+export interface StyleReadResult {
+  sourceTabs: StyleSourceTab[];
+  properties: PropertySource[];
+  surfaceDecision: InspectorSurfaceDecision;
+  activeConditions: StyleCondition;
+  availableConditionAxes: AvailableConditionAxes;
+  diagnostics: StyleReadDiagnostic[];
+}
+
+export interface StyleReadManager {
+  read(context: StyleReadContext): Promise<StyleReadResult>;
 }
 
 // --- Component Prop Mapper ---
