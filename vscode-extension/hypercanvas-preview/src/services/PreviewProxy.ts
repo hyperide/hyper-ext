@@ -172,8 +172,8 @@ export class PreviewProxy {
     // Origin: vscode-webview://... which Vite blocks with 403. The proxy is a
     // localhost-to-localhost bridge so origin semantics don't apply here.
     const forwardHeaders = { ...clientReq.headers };
-    delete forwardHeaders['origin'];
-    delete forwardHeaders['referer'];
+    delete forwardHeaders.origin;
+    delete forwardHeaders.referer;
 
     const options: http.RequestOptions = {
       hostname: 'localhost',
