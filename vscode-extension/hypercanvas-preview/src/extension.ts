@@ -331,10 +331,6 @@ function rebaseImportPath(root: string, previewDir: string, sourceRelativePath: 
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperIDE] Extension activating...');
 
-  // Initialize right-panel input-focus guard to false so the keybinding
-  // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
-  void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
-
   // Catch unhandled rejections inside the extension host process so they
   // don't bubble up as VS Code ".error" notification toasts containing
   // "Unhandled rejection ...". A specific known source was already fixed

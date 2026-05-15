@@ -234,15 +234,7 @@ export type PlatformMessage =
 
   // VS Code commands triggered from preview webview
   | { type: 'command:fixUnsupportedProject' }
-  | { type: 'command:execute'; command: string; args?: string[] }
-
-  // Scroll iframe to element (tree click → canvas scroll, no selection change)
-  | { type: 'iframe:scrollToElement'; elementId: string }
-
-  // Right panel input focus guard (sidebar webview → extension host)
-  // Used to set `hypercanvas.rightPanelInputFocused` context variable so
-  // canvas keybindings don't fire while the user types in inspector fields.
-  | { type: 'panel:inputFocus'; active: boolean };
+  | { type: 'command:execute'; command: string; args?: string[] };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;

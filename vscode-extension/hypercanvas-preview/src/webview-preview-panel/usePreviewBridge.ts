@@ -471,12 +471,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             }
             onStateUpdateRef.current(msg.patch);
           }
-          // Forward to iframe (platform state sync).
-          // Iframe handler expects `hypercanvas:stateUpdate` with fields directly on the message
-          // (not nested under `patch`). Forwarding raw `state:update` was silently ignored.
-          if (msg.patch) {
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.patch }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          }
+          // Forward to iframe (platform state sync)
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'state:init':
@@ -491,15 +487,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
               syncComponentToFrame(component.path);
             }
             onStateUpdateRef.current(msg.state);
-            // Forward to iframe as stateUpdate — same pattern as state:update above.
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.state }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           }
-          break;
-
-        case 'iframe:scrollToElement':
-          // Scroll canvas (iframe) to the specified element without changing selection
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
+          // Forward to iframe
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'ast:response':

@@ -67,8 +67,6 @@ export interface UseElementStyleDataOptions {
   runtimeStyle?: SelectedElementRuntimeStyle | null;
   /** Trimmed innerText from the selected DOM element — used as i18n DOM-text search fallback. */
   domTextContent?: string;
-  /** When set, resolve i18n text for this locale (VS Code only). Triggers a re-read when changed. */
-  activeLocale?: string;
 }
 
 // ============================================================================
@@ -262,7 +260,6 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     refreshKey,
     runtimeStyle,
     domTextContent,
-    activeLocale,
   } = options;
 
   // Base style data from className RPC or engine — runtime merge applied via useMemo below
@@ -271,17 +268,11 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
 
-  // Track the elementId of the last initiated request. Used in the RPC path to detect
-  // element switches so we can eagerly clear i18nText before the response arrives.
-  // Prevents leaked i18nText from element A appearing on element B while B's RPC is in-flight.
-  const prevElementIdRef = useRef<string | null>(null);
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is an intentional trigger to force style re-read after external changes
   useEffect(() => {
     if (!elementId) {
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
-      prevElementIdRef.current = null;
       return;
     }
 
@@ -367,7 +358,6 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     if (!canvas) {
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
-      prevElementIdRef.current = null;
       return;
     }
 
@@ -382,24 +372,12 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     if (!effectiveComponentPath) {
       setData(EMPTY_DATA);
       latestRequestRef.current = null;
-      prevElementIdRef.current = null;
       return;
     }
 
     const requestId = crypto.randomUUID();
     latestRequestRef.current = requestId;
-
-    // When element changes, eagerly clear i18nText so the previous element's binding
-    // doesn't leak through while the new element's RPC is in-flight. For same-element
-    // re-reads (locale change, refreshKey bump, debounced write re-read) we keep prev.i18nText
-    // so the I18nTextInspector stays mounted and localText isn't reset mid-typing.
-    const isElementChange = prevElementIdRef.current !== elementId;
-    prevElementIdRef.current = elementId;
-    setData((prev) => ({
-      ...prev,
-      loading: true,
-      ...(isElementChange ? { i18nText: undefined } : {}),
-    }));
+    setData((prev) => ({ ...prev, loading: true }));
 
     const unsub = canvas.onEvent('styles:response', (msg) => {
       const response = msg as MessageOfType<'styles:response'>;
@@ -423,11 +401,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
       const fullStyles = classNameToStyles(response.className || '');
 
-      // Preserve previous i18nText when the response omits it but the element hasn't changed.
-      // This prevents the I18nTextInspector from unmounting (and resetting localText) during the
-      // brief window between a debounced write and the subsequent re-read — the file may not have
-      // flushed yet, so StyleReadService returns undefined i18nText for one cycle.
-      setData((prev) => ({
+      setData({
         parsedStyles: fullStyles,
         childrenType: response.childrenType,
         textContent: response.textContent || '',
@@ -435,8 +409,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         loading: false,
         childrenLocation: response.childrenLocation,
         styleReadResult: response.styleReadResult,
-        i18nText: response.i18nText ?? prev.i18nText,
-      }));
+        i18nText: response.i18nText,
+      });
     });
 
     canvas.sendEvent({
@@ -445,7 +419,6 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       elementId,
       componentPath: effectiveComponentPath,
       domTextContent: domTextContent || undefined,
-      activeLocale: activeLocale || undefined,
     });
 
     const timer = setTimeout(() => {
@@ -459,18 +432,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
       clearTimeout(timer);
     };
-  }, [
-    elementId,
-    componentPath,
-    canvas,
-    engine,
-    styleAdapter,
-    activeInstanceId,
-    itemIndex,
-    refreshKey,
-    domTextContent,
-    activeLocale,
-  ]);
+  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey, domTextContent]);
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.

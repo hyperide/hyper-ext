@@ -7,16 +7,10 @@
  */
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
-import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
-import {
-  computeEffectiveRef,
-  toggleItemIndex,
-  toggleNodeRefInSelection,
-} from '@shared/canvas-interaction/selection-utils';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
@@ -740,20 +734,6 @@ function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLEleme
   if (live.length === 0) {
     live = getSourceIndex().findClosestLineDOMElements(source);
   }
-  // Fallback: filename-agnostic line:col search.
-  // Needed when tree→canvas dispatch uses an absolute filesystem path but the
-  // FiberSourceIndex stores Vite-relative paths (e.g. "src/Foo.tsx" vs "/abs/Foo.tsx").
-  if (live.length === 0 && source.fileName) {
-    for (const entry of getSourceIndex().getLiveEntries()) {
-      if (entry.source.line === source.line && entry.source.column === source.column) {
-        const liveEls = entry.elements.filter((el) => document.contains(el));
-        if (liveEls.length > 0) {
-          live = liveEls;
-          break;
-        }
-      }
-    }
-  }
 
   if (itemIndex !== null) {
     return live[itemIndex] ? [live[itemIndex]] : [];
@@ -862,24 +842,12 @@ document.addEventListener('click', _dragClickSuppressor, true);
 attachClickHandler(
   document,
   {
-    onElementClick: (nodeRef, el, e, itemIndex, source) => {
-      const additive = e.metaKey || e.ctrlKey;
-
-      if (additive) {
-        const nextIds = toggleNodeRefInSelection(state.selectedIds, nodeRef);
-        const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
-        state.selectedIds = nextIds;
-        state.selectedItemIndices = nextIndices;
-      } else {
-        // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
-        // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
-        // When nodeRef is null (server round-trip pending), synthesize a ref from source so
-        // state.selectedIds is populated — matches sourceToElementId() in the extension host.
-        const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
-        if (effectiveRef) {
-          state.selectedIds = [effectiveRef];
-          if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
-        }
+    onElementClick: (nodeRef, el, _e, itemIndex, source) => {
+      // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
+      // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
+      if (nodeRef) {
+        state.selectedIds = [nodeRef];
+        if (itemIndex != null) state.selectedItemIndices = { [nodeRef]: itemIndex };
       }
 
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -887,12 +855,8 @@ attachClickHandler(
         {
           type: 'hypercanvas:elementClick',
           elementId: nodeRef,
-          // Send already-computed selection so parent doesn't need local state tracking.
-          selectedIds: state.selectedIds,
-          selectedItemIndices: state.selectedItemIndices,
           itemIndex,
           source,
-          additive,
           computedStyle: extractComputedStyle(el),
           computedStyleSeq: ++elementClickSeq,
           domTextContent: el.innerText?.trim() || undefined,
@@ -912,12 +876,10 @@ attachClickHandler(
         '*',
       );
     },
-    onEmptyClick: (emptyClickEvent) => {
+    onEmptyClick: () => {
       // Suppress empty-click while source maps are warming for the last click target.
       // retryPendingClick() will fire the real elementClick once maps resolve (codex P1).
       if (pendingClickElement) return;
-      // Cmd/Ctrl+click on empty space: keep existing selection (Figma behavior).
-      if (emptyClickEvent.metaKey || emptyClickEvent.ctrlKey) return;
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
     },
@@ -932,7 +894,9 @@ attachClickHandler(
 function getSourceKey(el: HTMLElement): string | null {
   const fiber = getFiberFromDOM(el);
   if (!fiber) return null;
-  let loc = resolveSourceIndexFiberSource(fiber);
+  let loc = findNearestSourceLocation(fiber);
+  const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
+  if (smLoc) loc = smLoc;
   if (!loc) return null;
   if (renderedComponentPath) {
     loc = resolveCallSiteSource(loc, fiber, renderedComponentPath);
@@ -983,11 +947,11 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     const source = parseSourceRef(nodeRef);
     if (source === null) return null;
 
-    // Use findElementsByRef so the filename-agnostic line:col fallback applies.
-    // Without this, tree-clicked elements (absolute path nodeRef) fail the exact
-    // and closest-line lookups (both compare fileName), so getEntry returns null
-    // and Shift+Enter clears selection instead of navigating to parent.
-    const el = findElementsByRef(nodeRef, 0)[0];
+    let elements = getSourceIndex().findDOMElements(source);
+    if (elements.length === 0) {
+      elements = getSourceIndex().findClosestLineDOMElements(source);
+    }
+    const el = elements[0];
     if (!el) return null;
 
     const parent = findTraceableParent(el);
@@ -1139,16 +1103,6 @@ const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
-function _dragEffectiveBg(el: HTMLElement): string {
-  let node: HTMLElement | null = el;
-  while (node) {
-    const bg = getComputedStyle(node).backgroundColor;
-    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-    node = node.parentElement;
-  }
-  return '#ffffff';
-}
-
 function _isHorizontalLayout(el: HTMLElement): boolean {
   const parent = el.parentElement;
   if (!parent) return false;
@@ -1166,23 +1120,37 @@ let _dragStartX = 0;
 let _dragStartY = 0;
 let _dragSuppressNextClick = false;
 let _dragSourceEl: HTMLElement | null = null;
+let _dragGhostEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
-let _dragBadgeEl: HTMLElement | null = null;
-let _dragOrigStyleAttr = '';
+let _dragOffsetX = 0;
+let _dragOffsetY = 0;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
   const target = e.target as HTMLElement;
-  // resolveDragSource: walks up for decorative children (emoji, aria-hidden),
-  // then falls back to _debugSource when source maps are cold (React 18 Vite/Babel).
-  const resolved = resolveDragSource(target, (el) => iframeResolver.getSourceLocation(el), renderedComponentPath);
-  if (!resolved) return;
-  _dragSourceId = `${resolved.source.fileName}:${resolved.source.line}:${resolved.source.column}`;
-  _dragSourceFilePath = resolved.source.fileName;
+  let src = iframeResolver.getSourceLocation(target);
+  let dragEl: HTMLElement = target;
+  if (!src) {
+    // Decorative/untraceable elements (aria-hidden spans, emoji, etc.) have no source mapping.
+    // Walk up to the nearest ancestor that does — that's the logical drag unit.
+    let cur = target.parentElement;
+    while (cur && cur !== document.body) {
+      const ancestorSrc = iframeResolver.getSourceLocation(cur);
+      if (ancestorSrc) {
+        src = ancestorSrc;
+        dragEl = cur;
+        break;
+      }
+      cur = cur.parentElement;
+    }
+  }
+  if (!src) return;
+  _dragSourceId = `${src.fileName}:${src.line}:${src.column}`;
+  _dragSourceFilePath = src.fileName;
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
   _dragState = 'pending';
-  _dragSourceEl = resolved.el;
+  _dragSourceEl = dragEl;
 }
 
 function _dragPointerMove(e: PointerEvent): void {
@@ -1192,37 +1160,30 @@ function _dragPointerMove(e: PointerEvent): void {
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
       if (_dragSourceEl) {
-        _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
-        const s = _dragSourceEl.style;
-        const computedBg = getComputedStyle(_dragSourceEl).backgroundColor;
-        if (computedBg === 'rgba(0, 0, 0, 0)' || computedBg === 'transparent') {
-          s.backgroundColor = _dragEffectiveBg(_dragSourceEl);
-        }
-        s.transition = 'box-shadow 0.12s ease';
-        s.transform = 'scale(1.03)';
-        s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
-        s.opacity = '0.88';
-        s.position = 'relative';
-        s.zIndex = '2147483647';
-        s.pointerEvents = 'none';
+        const rect = _dragSourceEl.getBoundingClientRect();
+        _dragOffsetX = _dragStartX - rect.left;
+        _dragOffsetY = _dragStartY - rect.top;
+
+        // Fade the source element in place — shows "where it came from"
+        _dragSourceEl.style.opacity = '0.35';
+        _dragSourceEl.style.pointerEvents = 'none';
+
+        // Create ghost clone that follows the cursor
+        const ghost = _dragSourceEl.cloneNode(true) as HTMLElement;
+        ghost.className = 'hyper-drag-ghost';
+        ghost.removeAttribute('data-uniq-id');
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.height = `${rect.height}px`;
+        ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
+        ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
+        document.body.appendChild(ghost);
+        _dragGhostEl = ghost;
+
         const indicator = document.createElement('div');
         indicator.className = 'hyper-drop-indicator';
         indicator.style.display = 'none';
         document.body.appendChild(indicator);
         _dragIndicatorEl = indicator;
-
-        // Multi-select badge: show count when multiple elements are selected
-        if (state.selectedIds.length > 1) {
-          const badge = document.createElement('div');
-          badge.style.cssText =
-            'position:absolute;top:-8px;right:-8px;background:#3b82f6;color:white;' +
-            'border-radius:50%;width:20px;height:20px;display:flex;align-items:center;' +
-            'justify-content:center;font-size:11px;font-weight:bold;pointer-events:none;' +
-            'z-index:2147483647;';
-          badge.textContent = String(state.selectedIds.length);
-          _dragSourceEl.appendChild(badge);
-          _dragBadgeEl = badge;
-        }
       }
     }
     return;
@@ -1230,10 +1191,9 @@ function _dragPointerMove(e: PointerEvent): void {
 
   if (_dragState !== 'dragging') return;
 
-  const dx = e.clientX - _dragStartX;
-  const dy = e.clientY - _dragStartY;
-  if (_dragSourceEl) {
-    _dragSourceEl.style.transform = `scale(1.03) translate(${dx}px, ${dy}px)`;
+  if (_dragGhostEl) {
+    _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
+    _dragGhostEl.style.top = `${e.clientY - _dragOffsetY}px`;
   }
 
   if (_dragIndicatorEl) {
@@ -1272,19 +1232,21 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragSourceId = null;
   _dragSourceFilePath = null;
 
-  if (_dragSourceEl) {
-    _dragSourceEl.setAttribute('style', _dragOrigStyleAttr);
-    _dragSourceEl = null;
-  }
-  _dragOrigStyleAttr = '';
-  if (_dragBadgeEl) {
-    _dragBadgeEl.remove();
-    _dragBadgeEl = null;
+  if (_dragGhostEl) {
+    _dragGhostEl.remove();
+    _dragGhostEl = null;
   }
   if (_dragIndicatorEl) {
     _dragIndicatorEl.remove();
     _dragIndicatorEl = null;
   }
+  if (_dragSourceEl) {
+    _dragSourceEl.style.opacity = '';
+    _dragSourceEl.style.pointerEvents = '';
+    _dragSourceEl = null;
+  }
+  _dragOffsetX = 0;
+  _dragOffsetY = 0;
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
@@ -1388,13 +1350,8 @@ function sendOverlayRects(): void {
   const payload = JSON.stringify({ rects, placeholderRects });
   if (payload !== prevRectsJSON) {
     prevRectsJSON = payload;
-    // Include window.scrollY so the webview can use it as the baseline for scroll
-    // compensation — see hypercanvas:overlayScroll handling in useCanvasInteraction.ts.
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage(
-      { type: 'hypercanvas:overlayRects', rects, placeholderRects, scrollY: window.scrollY },
-      '*',
-    );
+    window.parent.postMessage({ type: 'hypercanvas:overlayRects', rects, placeholderRects }, '*');
   }
 
   // Only continue the overlay loop while updates are needed or overlays are active.
@@ -1457,14 +1414,7 @@ if (document.body) {
 }
 
 // Scroll must update overlays on every frame — skip the throttle to avoid 50 ms lag.
-// Additionally, post an immediate overlayScroll message so the webview can apply a
-// CSS transform compensation before the RAF-computed rects arrive (~1 frame later).
-// Always use window.scrollY — both here and in sendOverlayRects (baseline) — so the
-// two values are in the same coordinate space and compensation arithmetic is exact.
-// Nested-container scrollTop lives in a different space and must not be mixed in.
 const overlayScrollHandler = () => {
-  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-  window.parent.postMessage({ type: 'hypercanvas:overlayScroll', scrollY: window.scrollY }, '*');
   needsOverlayUpdate = true;
   scheduleOverlayLoopIfNeeded();
 };
@@ -1632,13 +1582,6 @@ window.addEventListener('message', (event: MessageEvent) => {
         '*',
       );
     }
-    return;
-  }
-
-  // Scroll to element without changing selection (tree row click → canvas scroll)
-  if (msg.type === 'hypercanvas:scrollToElement') {
-    const el = findElementsByRef(msg.elementId, 0)[0];
-    if (el) scrollIntoViewCenterSmooth(el);
     return;
   }
 

@@ -97,12 +97,6 @@ export class PanelRouter {
       return true;
     }
 
-    // Canvas scroll — echo back to the sending panel so usePreviewBridge can forward to iframe
-    if (type === 'iframe:scrollToElement') {
-      webview.postMessage(message);
-      return true;
-    }
-
     // Editor operations
     if (type.startsWith('editor:')) {
       await handleEditorMessage(message as EditorMessage, webview);
@@ -230,32 +224,19 @@ export class PanelRouter {
       return true;
     }
 
-    // Right panel input focus — update context variable so keybindings don't fire in inputs
-    if (type === 'panel:inputFocus') {
-      const { active } = message as { active: boolean };
-      vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', active);
-      return true;
-    }
-
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
-      const { requestId, elementId, componentPath, domTextContent, activeLocale } = message as {
+      const { requestId, elementId, componentPath, domTextContent } = message as {
         requestId: string;
         elementId: string;
         componentPath: string;
         domTextContent?: string;
-        activeLocale?: string;
       };
       try {
         // Ensure NodeMapService is populated before reading styles
         // (same race condition as HYP-268 for writes).
         await this._astBridge.astService.ensureInitialized();
-        const result = await this._styleReadService.readElementClassName(
-          componentPath,
-          elementId,
-          domTextContent,
-          activeLocale,
-        );
+        const result = await this._styleReadService.readElementClassName(componentPath, elementId, domTextContent);
         webview.postMessage({
           type: 'styles:response',
           requestId,
