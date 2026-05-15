@@ -247,6 +247,11 @@ export default function RightSidebar({
       }),
     [inspectorUIKit, componentPath, canInspectStyles, styleReadResult],
   );
+  // Only show the tab row when there's more than one real CSS approach to choose from.
+  const visibleSourceTabs = useMemo(() => {
+    const nonComputed = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
+    return nonComputed.length <= 1 ? [] : sourceTabs;
+  }, [sourceTabs]);
   const explicitSourceTabId = useMemo(() => {
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       return undefined;
@@ -257,6 +262,13 @@ export default function RightSidebar({
   useEffect(() => {
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       setSelectedSourceTabId('computed');
+      return;
+    }
+    // When the project has exactly one concrete CSS approach, auto-select it so the user
+    // doesn't have to manually switch away from "Computed" every time.
+    const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
+    if (nonComputedTabs.length === 1 && selectedSourceTabId === 'computed') {
+      setSelectedSourceTabId(nonComputedTabs[0].id);
     }
   }, [sourceTabs, selectedSourceTabId]);
 
@@ -1214,7 +1226,7 @@ export default function RightSidebar({
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection
-              tabs={sourceTabs}
+              tabs={visibleSourceTabs}
               selectedTabId={selectedSourceTabId}
               onSourceTabChange={setSelectedSourceTabId}
             />
