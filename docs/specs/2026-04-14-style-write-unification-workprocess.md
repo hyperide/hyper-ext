@@ -5340,3 +5340,48 @@ Unexpected active full E2E run stopped, 2026-04-22 22:50 CEST:
   * If ET-11 passes focused, run the surrounding elements-tree-selection spec
     before moving to the later MCP failures.
 ```
+
+Focused elements-tree verification after active run stop, 2026-04-22 22:58 CEST:
+
+```text
+- Follow-up to the stopped full run:
+  * At about 22:53 CEST, a separate `mcp-tools.spec.ts` run appeared under the
+    same `codex app-server` parent while the focused ET-11 path was being
+    prepared.
+  * Observed process:
+    PID `81564`, parent `46417`,
+    `node ./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts`
+    `--retries=0 --workers=1 --reporter=line`.
+  * That run was not the next planned first-failure repro and had no durable
+    log, so it was stopped as well.
+- Focused repro:
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/elements-tree-selection.spec.ts`
+    `-g "ET-11" --retries=0 --workers=1 --reporter=line`.
+  * Result: 1/1 passed in 9.3s.
+- Surrounding shard:
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/elements-tree-selection.spec.ts`
+    `--retries=0 --workers=1 --reporter=line`.
+  * Result: 15/15 passed in 1.1m.
+- Interpretation:
+  * The first full-run artifact, `ET-11`, is not currently reproducible in
+    focused mode or in its surrounding spec.
+  * Treat it as stale/environmental full-run state unless it reappears in a
+    later focused or final verification run.
+- Resource/process state:
+  * After the shard, load was about `5.86 5.04 4.81`.
+  * `vm_stat` still showed `Pages throttled: 0`.
+  * Free pages were about `274173`.
+  * No persistent `playwright test`, `hvsc-*`, or Vite dev-server process was
+    left from the focused run.
+- Next target:
+  * Move to the next observed failure family: `mcp-setup` / `mcp-tools`.
+  * Start focused, with a durable log or foreground tool session, not a full
+    suite restart.
+```
