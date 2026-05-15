@@ -339,6 +339,50 @@ Containers: `hyper-e2e-20260428-172708-72773-s{1,2,3}`
 Target: `HYPER_E2E_SHARDS=3` to cover more of the 2189-test matrix.
 Log: `/tmp/hyper-e2e-run21.log`
 
+## 📍 2026-04-28 Run #21 Analysis + Run #22 Start
+
+### Run #21 results (stopped 19:27 CEST — stale, fixes committed after run start)
+
+**S2 completed**: 424 passed, 3 failed, 2 flaky, 262 skipped
+  - `dev-server.spec: logs panel opens after dev server stop` (×2 projects) —
+    proxy error benign pattern mismatch (`%c`-formatted EH console output) +
+    `ERR_CONNECTION_REFUSED` not in benign list after intentional stop.
+  - `project-switching: switching from Twitter to Tamagui food delivery` —
+    `Editor.openFile` found `AppContainer.tsx` instead of `App.tsx` (stale VS
+    Code file indexer after project switch, only 1 retry with 500ms was too short).
+
+**S1 partial (killed at ~2h)**: 2 failures
+  - `hyper_duplicate_element — copy appears` (×2 workers) — `waitForAnySelection
+    (15_000)` timed out at ~26-27s. Fiber resolution on tw4-twitter under 3-shard
+    Docker load takes >15s. Extended to 25s.
+
+**S3 partial (killed at ~2h)**: 11 failures
+  - 5× Remix `remix-cssmodules-spotify` tests timed out at 604s — `PlayerBar.tsx`
+    missing from `__canvas_preview__` registry (rsync happened before fix landed).
+  - 2× `styles applied correctly (element has non-zero dimensions)` — Tamagui fix
+    not yet in container.
+  - 2× `component has non-zero dimensions` — same.
+  - 2× `Tamagui: style written as prop, not className` — same.
+
+### Fixes applied AFTER Run #21 start (will be in Run #22):
+
+**ext-test-projects commits (all pushed):**
+- `b9b9f84`: `remix-cssmodules-spotify/__canvas_preview__` — add PlayerBar import
+  and registry entry (fixes 5 Remix 604s timeouts in S3).
+- `ab96c1f`: `base.fixture.ts` — broaden proxy error benign pattern + add
+  `ERR_CONNECTION_REFUSED` (fixes 2 dev-server S2 failures).
+- `f09e4b7`: `Editor.ts` — retry exactRow lookup up to 3 times with 1s gap
+  (fixes project-switching S2 failure).
+- `de1d464`: `mcp-tools.spec.ts` — `waitForAnySelection` 15s → 25s (fixes
+  `hyper_duplicate_element` S1 failures).
+
+**Run #22 started**: 2026-04-28 19:27 CEST
+Run ID: `run-20260428-192727-26051`
+Containers: `hyper-e2e-20260428-192727-26051-s{1,2,3}`
+
+Note: `de1d464` (waitForAnySelection 25s) committed at 19:34 — after Run #22
+start. If `hyper_duplicate_element` fails again, needs Run #23.
+
 ## Latest Verified Progress
 
 From the last completed targeted validations before switching to full-matrix mode:
