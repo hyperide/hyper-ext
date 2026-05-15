@@ -55,10 +55,19 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 
 ### Task 1: Read relevant files, understand current data flow
 
-- [ ] Read `iframe-interaction.ts` sections: `_dragPointerMove` (find where needsOverlayUpdate set), `_dragCleanup`, ghost creation (find background setting), `_dragPointerUp` (find post-drop re-broadcast)
-- [ ] Read `shared/canvas-interaction/drop-indicator-orientation.ts` — `chooseIndicatorOrientation` full implementation
-- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — `writeOrders` and `moveElement` handlers, what they postMessage back after write
-- [ ] Document exact line numbers for each fix location
+- [x] Read `iframe-interaction.ts` sections: `_dragPointerMove` (find where needsOverlayUpdate set), `_dragCleanup`, ghost creation (find background setting), `_dragPointerUp` (find post-drop re-broadcast)
+- [x] Read `shared/canvas-interaction/drop-indicator-orientation.ts` — `chooseIndicatorOrientation` full implementation
+- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — `writeOrders` and `moveElement` handlers, what they postMessage back after write
+- [x] Document exact line numbers for each fix location
+
+<!-- Fix locations:
+  Bug 1 (overlay rects): iframe-interaction.ts:1585 — add `needsOverlayUpdate = true` right after `if (_dragState !== 'dragging') return`
+  Bug 2 (selection after drop): useCanvasInteraction.ts:337 (moveElement), :356 (writeOrders) — add canvas.sendEvent state:update with selectedIds after write; usePreviewBridge.ts:305 handleLoad — add re-broadcast of lastSelectedIds after iframe reload
+  Bug 3 (Escape cancel): iframe-interaction.ts:1541 (drag start transition) — add document.addEventListener keydown; :1644 _dragCleanup — remove listener
+  Bug 4 (ghost background): iframe-interaction.ts:1559 after ghost appended — walk ancestors for non-transparent backgroundColor
+  Bug 5 (indicator direction): drop-indicator-orientation.ts:49 chooseIndicatorOrientation — check el itself before walking to parentElement; currently starts at `el.parentElement` (line 52)
+  Note: actual drag message handlers are in useCanvasInteraction.ts, NOT PanelRouter.ts
+-->
 
 ### Task 2: RED — write 5 failing E2E tests
 
