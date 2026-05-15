@@ -137,13 +137,18 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
     async ({ filePath, elementId }) => {
       const resolved = resolveFilePath(stateHub, filePath);
       if (!resolved) {
+        console.log(
+          `[hyper_duplicate_element] no active component — filePath=${filePath}, elementId=${elementId}, stateHub.currentComponent=${stateHub.state.currentComponent?.path}`,
+        );
         return {
           content: [{ type: 'text' as const, text: 'Error: no filePath provided and no active component' }],
           isError: true,
         };
       }
+      console.log(`[hyper_duplicate_element] resolved=${resolved}, elementId=${elementId}`);
       const result = await astService.duplicateElement(resolved, elementId);
       if (!result.success) {
+        console.log(`[hyper_duplicate_element] error: ${result.error}`);
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
       return { content: [{ type: 'text' as const, text: JSON.stringify({ duplicated: true }) }] };

@@ -472,10 +472,27 @@ export class AstService {
   async duplicateElement(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<DuplicateElementResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? elementId;
+      let absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      let { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const result = this._resolveElement(ast, nodeRef ?? elementId, elementId, absolutePath);
+      let result = this._resolveElement(ast, effectiveNodeRef, elementId, absolutePath);
+
+      // If resolution failed with the hint filePath, the nodeRef may point to a child
+      // component file (e.g. clicking a button defined in Sidebar.tsx while App.tsx is
+      // the active component). Extract the file from the nodeRef and retry.
+      if (!result) {
+        const nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
+        if (nodeRefFile && nodeRefFile !== absolutePath) {
+          const { ast: childAst } = await this._fileParser.readAndParseFile(nodeRefFile);
+          result = this._resolveElement(childAst, effectiveNodeRef, elementId, nodeRefFile);
+          if (result) {
+            absolutePath = nodeRefFile;
+            ast = childAst;
+          }
+        }
+      }
+
       if (!result) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
@@ -483,7 +500,7 @@ export class AstService {
       const { inserted } = duplicateElementInAST(result);
 
       if (!inserted) {
-        return { success: false, error: `Could not duplicate element (parent is not a JSX element)` };
+        return { success: false, error: `Could not duplicate element (parent is not a JSX element or fragment)` };
       }
 
       await this._fileParser.writeAST(ast, absolutePath);
@@ -493,6 +510,17 @@ export class AstService {
       console.error('[AstService.duplicateElement] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
+  }
+
+  /**
+   * Extract the absolute file path from a source-location nodeRef ("fileName:line:col").
+   * Returns null if the nodeRef isn't a source-location ref or the file can't be resolved.
+   */
+  private _extractFileFromNodeRef(nodeRef: string): string | null {
+    const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
+    if (!m) return null;
+    const fileName = m[1];
+    return resolveWorkspacePath(this._workspaceRoot, fileName);
   }
 
   /** Wrap element in a new container element. */

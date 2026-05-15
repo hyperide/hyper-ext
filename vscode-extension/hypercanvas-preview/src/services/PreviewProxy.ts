@@ -196,12 +196,16 @@ export class PreviewProxy {
       // compilation: dev server reports "ready" quickly but returns 403 while SSR
       // routes are still compiling (~90-155s cold start).
       // Exponential backoff: 200ms × 1.7^N caps at 4000ms per retry.
-      // 60 retries ≈ 222s total budget: 16 geometric + 44 × 4s = 46 + 176s.
-      // Covers Remix cold compile (90-155s) with margin for poll-loaded timeout (250s).
+      // 90 retries ≈ 342s total budget: 16 geometric + 74 × 4s = 46 + 296s.
+      // Extended from 60 (222s) to cover webpack second-compile gap: after
+      // patchEntryFile() writes __canvas_preview__.tsx, webpack triggers a second
+      // full compile (20-40s under Docker load), during which /test-preview returns
+      // 404. The first "compiled successfully" already fired, so DevServerManager
+      // declared ready, but the proxy was still hitting the pre-patch bundle.
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
-        retryCount < 60
+        retryCount < 90
       ) {
         proxyRes.resume(); // drain response
         const delay = Math.min(200 * 1.7 ** retryCount, 4000);
