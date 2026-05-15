@@ -4060,3 +4060,32 @@ S1 final: ~690+ tests, **0 hard failures**.
 - Project-switching to Tamagui food delivery: should pass (5s indexer wait in retry)
 - Tamagui File Modified Since: still FLAKY (retry-pass, no fix needed)
 - MCP/settings tests: still FLAKY (retry-pass, no fix needed)
+
+## 📍 2026-04-29 Run #27 In-Progress (06:28 CEST)
+
+### Status at 06:28 CEST (30 min in)
+
+- S1: 100 tests done, 0 failures
+- S2: 64 tests done, 1 FLAKY
+- S3: 51 tests done, 0 failures (recovered from OOM crash at test 24)
+
+**S3 OOM event:** VS Code process killed by Docker cgroup OOM killer during
+"Tamagui: style written as prop, not className" at 04:14:34. Container did NOT
+exit (entrypoint survived), but Playwright worker was stuck. Test timed out at
+360s (04:14:34+360s=04:20:34), Playwright forcibly killed VS Code and restarted
+it for the retry. Retry passed in 18.8s at 04:26:38. S3 fully recovered.
+OOM cause: likely tamagui-fitness dev server + Vite compilation peak under
+3-shard concurrent load.
+
+**S2 FLAKY:** "component with error — error overlay appears" on react-vite-tw3-kanban.
+First attempt: 457043ms (timed out at 450s poll limit at 04:26:31).
+Retry: 11366ms — passed.
+Root: 450s poll still insufficient for react-vite-tw3-kanban under 3-shard load.
+
+**Fix applied during run:** `4ca1bfc` (pushed to ext-test-projects main):
+- error overlay poll: 450_000 → 600_000
+- test.setTimeout: 600_000 → 720_000
+- Observed data point: >450s on react-vite-tw3-kanban (run-20260429-055849)
+
+**Run is still active.** Webpack and Remix tests not yet reached in any shard.
+Next check scheduled in ~4 min.
