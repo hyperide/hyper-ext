@@ -1620,16 +1620,20 @@ let lastPersistAtMs = 0;
 function persistSelectionGraceCache(force = false): void {
   try {
     if (typeof sessionStorage === 'undefined') return;
+    // Cache emptied (e.g. user deselected). Always wipe sessionStorage immediately —
+    // never throttle this branch. Otherwise a fast reload within the throttle window
+    // would hydrate stale rects and ghost the deselected element.
+    if (selectionGraceCache.rectsByElementId.size === 0) {
+      sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
+      lastPersistAtMs = performance.now();
+      return;
+    }
     // performance.now() is monotonic; Date.now() can jump backward (NTP/DST) and
     // briefly disable the throttle. Wall-clock time is still needed for the
     // serialized payload so the next document can compute age vs Date.now().
     const monotonicMs = performance.now();
     if (!force && monotonicMs - lastPersistAtMs < SELECTION_GRACE_PERSIST_THROTTLE_MS) return;
     lastPersistAtMs = monotonicMs;
-    if (selectionGraceCache.rectsByElementId.size === 0) {
-      sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
-      return;
-    }
     const payload = serializeSelectionGraceCache(selectionGraceCache, Date.now());
     sessionStorage.setItem(SELECTION_GRACE_PERSIST_KEY, JSON.stringify(payload));
   } catch {
