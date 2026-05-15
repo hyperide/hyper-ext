@@ -535,9 +535,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  store: new Proxy({}, {');
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
-  lines.push(
-    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close')) {",
-  );
+  lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
   lines.push('        return () => {};');
   lines.push('      }');
   lines.push(
@@ -561,9 +559,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  state: new Proxy({}, {');
   lines.push('    get: (_target, prop) => {');
   lines.push("      if (typeof prop !== 'string') return undefined;");
-  lines.push(
-    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close')) {",
-  );
+  lines.push('      if (/^(?:set|toggle|on|add|remove|update|clear|reset|open|close)[A-Z]/.test(prop)) {');
   lines.push('        return () => {};');
   lines.push('      }');
   lines.push(
