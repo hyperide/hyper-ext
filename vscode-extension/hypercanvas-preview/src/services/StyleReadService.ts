@@ -395,6 +395,7 @@ export class StyleReadService {
         availableLocales: resolved.availableLocales,
         resolvedText: resolved.resolvedText,
         editable: resolved.writable,
+        writable: resolved.writable,
         sourceLocation: {
           filePath,
           line: detection.sourceLocation.line,
@@ -486,6 +487,7 @@ export class StyleReadService {
       availableLocales: resolved.availableLocales,
       resolvedText: resolved.resolvedText,
       editable: resolved.writable,
+      writable: resolved.writable,
       sourceLocation: {
         filePath,
         line: detection.sourceLocation.line,
