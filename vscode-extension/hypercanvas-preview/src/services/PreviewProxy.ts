@@ -190,7 +190,14 @@ export class PreviewProxy {
       method: clientReq.method,
       headers: {
         ...forwardHeaders,
-        host: `127.0.0.1:${this._targetPort}`,
+        // Use 'localhost' (not '127.0.0.1') to satisfy Vite's allowedHosts
+        // DNS-rebinding protection. Many vite.config.ts files declare
+        // `server.allowedHosts: ['localhost', ...]` (e.g. bulka-the-dog), and
+        // Vite matches the literal hostname — '127.0.0.1' doesn't satisfy
+        // 'localhost' and the request gets dropped (manifests as 504 in
+        // browser console for /client/main.tsx). Both forms are equivalent
+        // on the wire because /etc/hosts maps localhost → 127.0.0.1.
+        host: `localhost:${this._targetPort}`,
         // Prevent compressed responses so we can inject script
         'accept-encoding': 'identity',
       },

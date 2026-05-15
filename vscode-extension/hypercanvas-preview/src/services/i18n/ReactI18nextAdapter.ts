@@ -1,14 +1,15 @@
 /**
- * @file ReactI18nextAdapter — i18n adapter for react-i18next JSON locale files.
+ * @file ReactI18nextAdapter — i18n adapter for react-i18next locale files.
  *
  * Accessed via: AdapterFactory.forBinding when binding.library === 'react-i18next'
- * Assumptions: locale files are JSON; layout discovered via discoverLayout (shared)
+ * Assumptions: locale files are JSON or static TS/JS object literals; layout discovered via discoverLayout (shared)
  */
 
 import type { FileIO } from '@lib/ast/file-io';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
-import type { I18nAdapter } from './I18nAdapter';
+import { parseTsLocaleObject } from '@shared/i18n-text/ts-locale-ast';
 import { extractLeafKeys } from './extract-leaf-keys';
+import type { I18nAdapter } from './I18nAdapter';
 
 type AdapterFileIO = Pick<FileIO, 'readFile' | 'access'> & { listFiles?: FileIO['listFiles'] };
 
@@ -24,8 +25,8 @@ export class ReactI18nextAdapter implements I18nAdapter {
       const layout = await discoverLayout(this.workspaceRoot, this.namespace, locale, this.fileIO);
       if (!layout || layout.mergedData) return [];
 
-      const filePath = layout.getLocaleFilePath(locale);
-      if (filePath.endsWith('.ts') || filePath.endsWith('.js')) return [];
+      let effectiveLocale = locale;
+      let filePath = layout.getLocaleFilePath(effectiveLocale);
 
       let content: string;
       try {
@@ -33,11 +34,20 @@ export class ReactI18nextAdapter implements I18nAdapter {
       } catch {
         const fallback = layout.availableLocales[0];
         if (!fallback || fallback === locale) return [];
+        effectiveLocale = fallback;
+        filePath = layout.getLocaleFilePath(effectiveLocale);
         try {
-          content = await this.fileIO.readFile(layout.getLocaleFilePath(fallback));
+          content = await this.fileIO.readFile(filePath);
         } catch {
           return [];
         }
+      }
+
+      if (filePath.endsWith('.ts') || filePath.endsWith('.js')) {
+        const parsed = parseTsLocaleObject(content, effectiveLocale);
+        if (!parsed) return [];
+        const data = parsed.kind === 'merged' ? parsed.data[effectiveLocale] : parsed.data;
+        return extractLeafKeys(data);
       }
 
       let data: unknown;
@@ -67,9 +77,5 @@ export class ReactI18nextAdapter implements I18nAdapter {
     } catch {
       return null;
     }
-  }
-
-  async writeKey(_elementId: string, _newKey: string): Promise<void> {
-    throw new Error('ReactI18nextAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)');
   }
 }
