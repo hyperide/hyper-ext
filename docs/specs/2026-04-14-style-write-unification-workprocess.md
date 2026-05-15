@@ -4115,3 +4115,22 @@ Webpack (webpack-react-tw3-kanban, webpack-react-cssmodules-spotify, webpack-rea
 and Remix (remix-tw4-twitter, remix-cssmodules-spotify) not yet reached in any shard.
 
 Docker containers still healthy (Up ~51 min, 3/3 active).
+
+## 📍 2026-04-29 Run #27 Checkpoint (07:00 CEST, ~62 min)
+
+**S1:** 285 tests done, 0 hard failures. On react-vite-tw4-twitter.
+**S2:** 173 tests done, 1 hard failure (pre-fix). Cycled: tw3-kanban, tw4-twitter, cssmodules-spotify, styled-shopify.
+**S3:** 210 tests done, 3 hard failures (all pre-fix File Modified Since on Tamagui). **Now on remix-tw4-twitter.**
+
+### S3 Remix-tw4-twitter: PASSING 🟢
+
+Vite pre-warm (commit `e097090`) is working. Remix tests completing in 5–73s vs 300–524s before:
+- "elements identifiable via fiber-based selection" — 73s → PASSED (first attempt)
+- "nested components — multiple selectors found" — 5s → PASSED
+- "ExportNamedDeclaration — correct traversal order" — 9s × 2 → PASSED
+- "duplicate element preserves file integrity" — 21/24s → PASSED
+- "insert element command runs without crash" — 18/20s → PASSED
+- "duplicate element — file content grows" — 22/25s → PASSED
+- "wrap element — file content changes" — 12/9s → PASSED
+
+No new failure classes. Webpack not yet reached in any shard.
