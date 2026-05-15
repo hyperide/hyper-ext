@@ -4015,7 +4015,48 @@ retries passed → FLAKY (inherent File Modified Since stale model, no fix neede
 
 **S1**: 0 hard failures.
 
-### Commits during Run #26 (will be in Run #27)
+### Additional failures discovered as Run #26 progressed (05:30-06:00 CEST)
+
+All S3 additional failures (~13 total) were webpack 480s setup timeouts:
+- "nested components — multiple selectors found" 2× (484s, ast-operations.spec)
+- "ExportNamedDeclaration — correct traversal order" 1× (485s, ast-operations.spec)
+- "open component → preview iframe loaded, no white screen" 2× (482/484s, preview-render.spec)
+- "duplicate element preserves file integrity" 1× first-attempt (484s, retry-pass)
+All covered by `227c6ea` (600s poll, 840s timeout).
+
+S2 final summary (1.8h): **1 failed, 3 flaky, 261 skipped, 426 passed**
+- HARD FAILURE (1): `[independent] project-switching-stale-preview.spec.ts` —
+  "switching from Twitter to Tamagui food delivery"
+  - Error: `Editor.openFile('App.tsx')` returned "AppContainer.tsx src/stubs" as
+    first quick-open result (both attempts); `exactRow [aria-label^="App.tsx"]`
+    never visible in VS Code virtual list after project switch
+  - Root: VS Code file indexer after `openProjectInCurrentWindow` returns
+    partial results (AppContainer.tsx from src/stubs/ indexed before App.tsx
+    at root). Old 300ms retry delay insufficient; indexer needs 5+ seconds.
+  - Fix: `6495da9` — Editor.openFile retry delay 300ms→5s
+
+S1 final: ~690+ tests, **0 hard failures**.
+
+### Commits during Run #26 (all in Run #27)
 
 - `4bae85a`: error overlay poll 300s→450s + 600s timeout
 - `227c6ea`: webpack poll 480s→600s, setTimeout 600s→840s
+- `6495da9`: Editor.openFile retry delay 300ms→5s (project-switch indexer wait)
+
+## 📍 2026-04-29 Run #27 Launch (05:58 CEST)
+
+**Run #27 started:** 2026-04-29 05:58 CEST
+**Run ID:** `run-20260429-055849-86649`
+**Extension version:** v0.1.28 (unchanged)
+**Containers:** `hyper-e2e-20260429-055849-86649-s{1,2,3}`
+**Commits in this run vs run #26:**
+- `4bae85a`: error overlay poll 300s→450s
+- `227c6ea`: webpack poll 480s→600s
+- `6495da9`: Editor.openFile retry delay 300ms→5s
+
+**Expected improvements:**
+- Error overlay: should pass (450s poll vs old 300s)
+- Webpack tests: should pass (600s poll vs old 480s, enough for 2-compile cycle)
+- Project-switching to Tamagui food delivery: should pass (5s indexer wait in retry)
+- Tamagui File Modified Since: still FLAKY (retry-pass, no fix needed)
+- MCP/settings tests: still FLAKY (retry-pass, no fix needed)
