@@ -11,6 +11,11 @@ commands. Skip `codex exec review` (can't self-invoke) — do self-review via
 
 **Building extension:** `./vscode-extension/hypercanvas-preview/build-and-install.sh`
 
+**Telegram reports:** never pipe raw tool output, logs, diffs, transcripts, or
+model context into `send-tg-report.sh`. Write a short human summary manually and
+link the local log/workfile path for details. Pagination is for normal long
+answers, not a license to send megabytes of uncurated text.
+
 **Pre-commit checklist (minimum):**
 
 ```bash

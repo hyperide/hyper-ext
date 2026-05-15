@@ -5783,3 +5783,43 @@ Commit Log 2026-04-23 00:04 CEST:
   * `git diff --check` passed for the main repo and for the intended ext-test
     files.
 ```
+
+Telegram report incident analysis, 2026-04-23 02:42 CEST:
+
+```text
+- Trigger:
+  * User reported that a Telegram update arrived as roughly 700+ pages and
+    asked not to add a hard cap, but to understand the cause and improve
+    instructions.
+- Finding:
+  * Stored paged message `2a30667ddd01` in
+    `/var/folders/1c/d4v7_mrs4b9085f6w7w9p35c0000gn/T/codex-tg-bot-pages/`
+    contains 796 pages and about 2.86 MB of text.
+  * The first page starts with a normal status sentence, then continues with
+    live-turn/task context. The payload was not a curated report.
+  * `scripts/send-tg-report.sh` accepts stdin/argv and forwards the whole
+    message to `src/send-report.ts`; `send-report.ts` stores all pages produced
+    by `buildTelegramHtmlPages`. The bot behaved according to its pagination
+    design; the bad input was the issue.
+- Decision:
+  * Do not add a runtime cap in this pass because the user explicitly rejected
+    that direction.
+  * Treat external reports as manual summaries only. Do not pipe command output,
+    logs, diffs, review transcripts, model context, or raw test reports into
+    Telegram.
+  * For large evidence, send only a short summary with local log/workfile paths,
+    test count, first failure, and next action.
+- Instruction updates:
+  * Added a Telegram report quick rule to `CODEX.md`.
+  * Added the same external-report rule to `AGENTS.md` under Codex-specific
+    workflow.
+- Review:
+  * Claude docs-only review accepted the root-cause analysis and `CODEX.md`
+    entry.
+  * Claude flagged that the `AGENTS.md` wording sounded global while living in
+    the Codex-specific section; changed the heading/text to `Codex Telegram
+    progress reports` and removed extra pagination explanation.
+- Next:
+  * Continue E2E verification with bounded local logs. Do not send Telegram
+    updates unless they are explicitly short manual summaries.
+```
