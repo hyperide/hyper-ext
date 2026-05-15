@@ -37,76 +37,18 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
 
 ### Task 1: Locate the padding decrement logic
 
-- [x] Find the input that handles padding-vertical down-arrow. Is it a
+- [ ] Find the input that handles padding-vertical down-arrow. Is it a
       shared `LengthInput` or per-section?
-
-      Findings: NOT a shared `LengthInput`. Each section composes a raw
-      `<Input>` from `client/components/ui/input.tsx` and wires its
-      `onKeyDown` to a shared keyboard handler `handleNumericKeyDown` in
-      `client/components/RightSidebar/RightSidebar.tsx:449-504`. The handler
-      is passed down to sections as the `onNumericKeyDown` prop.
-      The vertical-padding input lives in
-      `client/components/RightSidebar/sections/LayoutSection.tsx:602-613`
-      (and again at the expanded variants on lines 1029-1037 and
-      1163-1171), where each call site does
-      `onNumericKeyDown(e, paddingTop, (v) => handleVerticalPaddingChange(v), 'paddingTop')`.
-      The input renders `value={paddingTop || paddingBottom}` and
-      writes via `handleVerticalPaddingChange` which fans out to both
-      `paddingTop` and `paddingBottom` through `onPaddingChange` +
-      `syncStyleChange`.
-
-- [x] Identify the parser that turns `'2px'` into a number, and the formatter
+- [ ] Identify the parser that turns `'2px'` into a number, and the formatter
       that writes back. Find where the empty branch leaks through.
-
-      Parser: `trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/)` at
-      `RightSidebar.tsx:466`. Number = `Number.parseFloat(match[1])`,
-      unit = `match[2] || (isUnitless ? '' : 'px')`. Formatter:
-      `` `${newNum}${unit}` `` at line 499.
-
-      Empty-branch leak (the `if (!match)` block, lines 468-486):
-      hit when `currentValue` is `''`, whitespace, or a non-numeric
-      string. There is no clamp; for ArrowDown it produces
-      `newNum = 0 + (-1)*1 = -1`, formatted as `'-1px'`.
-
-      No clamp anywhere in the handler — only `opacity` is clamped to
-      [0, 100] (lines 477-479 and 495-497). Padding can therefore go
-      negative; CSS rejects negative padding, so the round-trip through
-      `syncStyleChange` writes nothing back, the parsed style becomes
-      missing, and `setPaddingTop('')` is invoked at line 879 with
-      `ep.paddingTop || ''`. On the next ArrowDown, `currentValue` is
-      `''` and we fall through the empty-leak branch again. The
-      bare-`px` rendering reported in the memory note is reachable
-      because nothing in this code path enforces `newNum >= 0` for
-      length properties (paddings, margins-on-some-engines, gaps,
-      border-radius, font-size, dimensions).
 
 ### Task 2: Add a unit test for the decrement
 
-- [x] Create `client/components/RightSidebar/sections/__tests__/length-input-decrement.test.tsx`
+- [ ] Create `client/components/RightSidebar/sections/__tests__/length-input-decrement.test.tsx`
       (or extend an existing test).
-
-      Done. Tests target a new pure helper `computeNumericArrowValue` in
-      `client/components/RightSidebar/utils.ts`, extracted (behaviour-
-      preserving) from the inline closure inside
-      `handleNumericKeyDown` (RightSidebar.tsx:449-504). `handleNumericKeyDown`
-      now delegates to this helper; the closure keeps the DOM concerns
-      (`e.preventDefault`, `setValue`, `syncStyleChange`).
-
-- [x] Cases: `2px` → down → `1px`; `1px` → down → `0px`; `0px` → down →
+- [ ] Cases: `2px` → down → `1px`; `1px` → down → `0px`; `0px` → down →
       `0px` (stays); `''` → down → `0px`.
-
-      Done. Plus regression guards for: ArrowUp from `0px` → `1px`;
-      shift+ArrowDown step=10 path on `20px` → `10px`; shift+ArrowDown
-      clamp at 0 when start is `5px`; opacity stays clamped to [0,100];
-      non-arrow key returns null.
-
-- [x] Run RED before fix, GREEN after.
-
-      RED state confirmed (Task 2 deliverable). 6 pass / 3 fail in the
-      new file: the three "must clamp at 0" cases (`0px`→down,
-      ``→down, `5px`+shift→down) all currently produce `-1px` /
-      `-5px`. Pre-existing StrokeSection.test.tsx failures (2) exist on
-      main and are unrelated. GREEN flip lands in Task 3.
+- [ ] Run RED before fix, GREEN after.
 
 ### Task 3: Fix the decrement
 
