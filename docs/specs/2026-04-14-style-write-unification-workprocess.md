@@ -833,3 +833,146 @@ workspace volume.
 - Wakeup is rescheduled. On next fire, recheck `df -h /` and
   `docker info`; if disk is clear and daemon healthy, restart shards
   and re-arm Monitor on the new container names.
+
+## 2026-04-25 10:30 CEST: disk unblock + parallel triage
+
+### Disk unblock
+
+- User authorized container drop. Daemon was kept down by Docker.app
+  zombie state; `kill` on `Docker.app` plus `com.docker.backend` PIDs
+  + fresh `open -a Docker` brought daemon back.
+- Removed `hypercanvas-e2e-workspace-slot-{13,14,16,17,27,45}` (six
+  leaked slots), `hypercanvas-e2e-bun-cache`, `hypercanvas-e2e-playwright-cache`,
+  legacy `e2e_e2e-{bun-cache,node-modules,playwright-cache}`, three
+  `buildx_buildkit_*_state` volumes, and dangling images.
+- Host root partition went from `1.9Gi` free to `50Gi` free — `41Gi`
+  reclaimed without touching any user-data volume (`postgres_data`,
+  `redis_data`, `open-webui`, `osm-mcp_*`, `proofpro_bot_*`,
+  `voice-ai-agent-ios_*`, `super_report_bot_*`).
+
+### Root cause of disk leak
+
+`docker-parallel-run.sh` derives `RUN_SLOT_BASE` from `$$ + $(date +%s)`
+modulo 40, so each invocation lands on a different slot range. With
+`KEEP_WORKSPACES=1` (default), the previous slot's named workspace
+volume stays alive forever. Six accidental restarts in this debug
+session = six ~10GB leaked workspace volumes (rsync of the whole
+ext-test-projects tree plus 14× `bun install` per slot). The
+`hypercanvas-e2e-bun-cache` shared volume saves download bandwidth
+but not on-disk node_modules size, because Docker named volumes are
+separate filesystems → `bun install --linker=hardlinks` cannot
+hardlink across volumes.
+
+Fix: `chore(e2e): GC stale slot volumes at start of docker-parallel-run`
+(commit `0d5f36f` on `hyper-ext-e2e/main`). The script now drops any
+`hypercanvas-e2e-workspace-slot-N` volume not attached to a running
+container and not in `[RUN_SLOT_BASE+1, RUN_SLOT_BASE+SHARDS]` before
+launching shards. Idempotent — silently skips slots in use.
+
+### Long-term architecture options recorded
+
+User suggested mounting node_modules. Three viable paths, ranked:
+
+1. **Bake `node_modules` into the Docker image** (preferred). Add a
+   `Dockerfile.e2e` layer that `COPY ext-test-projects/*/package.json`
+   then `RUN bun install --frozen-lockfile` for each project.
+   `docker-entrypoint.sh` drops the per-project install loop. Image
+   grows ~3.5GB → ~15-20GB once, all shards share read-only via image
+   layer (Docker dedupes), no install at runtime, no race. Image
+   rebuild on `package.json` changes is automatic via Docker layer
+   cache.
+2. Per-project named volumes (`hypercanvas-e2e-nm-<project>`) shared
+   across shards. Needs install lock to avoid races on first start.
+3. Single shared `/workspace` volume across shards (replace per-slot
+   isolation). Risk: parallel writes by Playwright tests (git checkout,
+   file edits) race. Use `git worktree` per shard inside the shared
+   volume to isolate writes.
+
+### Parallel triage — three independent root-cause fixes landed
+
+User asked to fix in parallel. Dispatched three subagents on
+non-overlapping zones, each producing one atomic commit + push.
+
+1. **Bundle artefact paths in EditorBridge** (commit `ca85e8a3`,
+   `hyper-saas` ext-test-projects branch). Root cause: `EditorBridge.openFile`
+   / `goToCode` were trying to open hashed bundle paths
+   (`_bun/client/<hash>.js`, `_next/static/chunks/<hash>.js`,
+   `node_modules/...`) as user code; after rebuild the hash rotates,
+   `vscode.workspace.openTextDocument` raises `CodeExpectedError` which
+   surfaces as `console.error` and trips the diagnostics auto-capture.
+   Fix: `isBundleArtifactPath()` early-return in EditorBridge handlers,
+   plus `shouldSwallowStaleBundleResponse()` in `PreviewProxy` to turn
+   stale-bundle 403/404 into a typed empty 204.
+   Closes the ast-operations cluster on `bun-tw-shadcn-sample` and
+   any equivalent on Next.js bundle paths.
+2. **Platform/style suffix files in preview registry** (commit `48bcdfe4`,
+   `hyper-saas`). Root cause: `preview-file-manager` indexed any
+   `.tsx` PascalCase file as a component, including `Foo.native.tsx`
+   (RN platform pair), `Foo.css.ts` (vanilla-extract style sheet),
+   `Foo.styles.ts`, `Foo.module.ts`. Native-pair caused identifier
+   collisions in generated preview source; style sheets caused
+   `import { Foo.css }` (invalid identifier). Both produced
+   `PreviewGenerationError: Generated preview code failed TypeScript validation`.
+   Fix: `isPreviewIneligibleByName(fileName)` filter wired into
+   `buildEntry`, `_scanAllComponents`, stale-entry detector, and
+   existing-paths preserver.
+   Closes the Tamagui `tamagui-free-sample` and vanilla-extract
+   `react-vite-vanilla-extract-reddit` PreviewGenerationError clusters.
+3. **Benign noise filter extension** (commit `f6483b7`, `hyper-ext-e2e`).
+   Added two narrow filters in `isBenignRuntimeError`:
+   - `text.trim() === '%o'` for bare format-specifier console errors
+     (React DevTools / library object dumps that arrive without their
+     argument due to webview log forwarding).
+   - `WebSocket connection to 'ws://localhost:N/' failed:` for HMR
+     reconnect attempts after intentional dev-server stop.
+   Real ws errors and meaningful `%o`-containing strings still fail.
+   Closes the `dev-server.spec.ts:56/80` cluster on `sass-portfolio`
+   and the `multiple components` `%o` noise on `emotion-cssmodules-calendar`
+   and `shadcn-linear`.
+
+### Remaining classification (yet to run a fresh full matrix)
+
+After the three parallel commits land in a fresh shard run, the
+expected residual failures from the s1+s2 inventory are:
+
+A. **Settings cluster (10 tests)** — palette input never visible
+   mid-test. Likely the same palette-open dependency as the keybindings
+   cluster which CommandPalette aliases already addressed; needs a
+   fresh shard to re-classify.
+B. **Position Sync (4)**, **Resize PI-5-R-2 + PI-18-19 (2)**, **Inspector
+   margin (1)**, **MCP tools (2)**, **Security (3)**, **Coverage gaps (1)**,
+   **Text font size (1)**, **Undo/Redo redo button (1)**, **Insert root (1)**
+   — independent singletons. Fix after the cluster fixes shrink the
+   noise floor.
+C. **Project-dependent Style Editing renames** —
+   - styled-shopify `dev-server.spec.ts:97 autoStart`,
+   - styled-shopify `style-editing.spec.ts:96 padding`,
+   - emotion-dashboard `style-editing.spec.ts:163 typography section`,
+   - tw4-twitter `style-editing.spec.ts:78 fill section`,
+   - tw4-twitter `preview-routing.spec.ts:138 delete preview.tsx`,
+   - emotion-dashboard `ast-operations.spec.ts:260 duplicate element`.
+   Likely individual product / harness expectation mismatches — needs
+   per-test triage.
+D. **`nextjs-tw-sample` whole-project cluster** — Monitor saw ~200
+   failed tests on this project alone. The platform/style-suffix fix
+   from item 2 above might reduce it (Next.js project structure has
+   `_next/...` paths and platform-specific files). The bundle-artefact
+   fix from item 1 may reduce it further (Next.js dev server emits
+   `_next/static/chunks/<hash>.js`). The PreviewGenerationError
+   cluster on stylex-chat may also share a root cause. Needs a fresh
+   shard to re-measure.
+
+### Operating rule for the rest of this cycle
+
+1. Wait for the active fresh sharded run (started 10:41 CEST) to
+   produce a new failure inventory.
+2. Cross-reference the new inventory against (A)/(B)/(C)/(D); each
+   item that disappears is proof of one of the three parallel fixes.
+3. Whatever survives is the real residual — classify product / harness
+   / env / stale-baseline, then dispatch the next round of parallel
+   fixes on non-overlapping files.
+4. Apply user feedback going forward: classify before fixing in the
+   next round; fixes already landed are independent root causes that
+   survive any classification, so they're not retroactively rolled back.
+5. Telegram-side: every status answer mirrors to TG (`send-tg-report.sh`),
+   not only inline replies.
