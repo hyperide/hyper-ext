@@ -2194,3 +2194,54 @@ ext-test-projects:
 - concurrent start/stop fix: `f5ebf94`
 
 Ожидаемый результат: 0 failures.
+
+## 📍 2026-04-27 18:45 CEST: Сессия-продолжение — фиксы при работающем Run #9
+
+### 3 новых коммита применены к ext-test-projects (ПОСЛЕ старта Run #9)
+
+Run #9 стартовал 18:04, коммиты ниже — **после** этого времени. Run #9 их не получит.
+Ожидаемый эффект — в Run #10.
+
+| Коммит | Время | Что закрывает |
+|--------|-------|---------------|
+| `2c80445` | 18:21 | Class I: test.setTimeout(45s/60s) → test.slow() на всех 26 файлах |
+| `84826fa` | 18:37 | Class J: zombie dev server pkill + globalTimeout; Class K: concurrent start/stop 45s poll + test.slow() |
+| `2b1dd12` | 18:43 | Class B': editor:tab:wait 15s → 30s; Class G: poll-loaded 150s → 250s для Remix cold compile |
+
+### Failure inventory Run #9 (20% complete, 449 tests)
+
+| Shard | pass | fail | Классификация |
+|-------|------|------|---------------|
+| s1    | 172  | 3    | Class I + Class K |
+| s2    | 134  | 2    | Class I |
+| s3    | 69   | 0    | — |
+| s4    | 63   | 6    | Class G (155s) + Class B' (21s) |
+
+**Все 11 failures уже пофикшены в коммитах выше.**
+
+Детали:
+- s1: `canvasSelectParent` 47s (I), `concurrent start/stop` ×2 (K)
+- s2: `Cmd+A selects all elements` 70s (I), `Dev server defaultPort respected` 60s (I)
+- s4: 5× poll-loaded 153-155s (G, Remix cold compile > 150s), 1× editor:tab:wait 21s (B')
+
+### Класс I — подтверждение
+
+test.setTimeout(45_000/60_000) УМЕНЬШАЕТ бюджет ниже базового 60s.
+`canvasSelectParent` имеет `test.slow()` в текущем коде (2c80445),
+но контейнер Run #9 содержит старый код без этого фикса.
+
+### Class G — корень: poll-loaded 150s < Remix compile 155s
+
+Первый тест на воркере: `ensurePreviewFiles()` пишет route файлы → gate arm.
+Remix cold compile занял ~155s. Poll стартовал через +4.4s и получил timeout
+через 150s (в 154.4s total). Исправлено: 150s → 250s в `2b1dd12`.
+
+### Class B' — editor:tab:wait 15s недостаточно на stressed container
+
+`inspector typography section` на worker 27 (стартовал через ~40 мин работы
+контейнера): VS Code взял >15s на показ editor tab. Исправлено: 15s → 30s.
+
+### Следующий шаг
+
+После завершения Run #9 (или сбора достаточной выборки) — старт Run #10
+с `2b1dd12` HEAD. Все 4 класса failures из Run #9 закрыты.
