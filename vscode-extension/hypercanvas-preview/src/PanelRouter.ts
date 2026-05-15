@@ -97,6 +97,12 @@ export class PanelRouter {
       return true;
     }
 
+    // Canvas scroll — echo back to the sending panel so usePreviewBridge can forward to iframe
+    if (type === 'iframe:scrollToElement') {
+      webview.postMessage(message);
+      return true;
+    }
+
     // Editor operations
     if (type.startsWith('editor:')) {
       await handleEditorMessage(message as EditorMessage, webview);

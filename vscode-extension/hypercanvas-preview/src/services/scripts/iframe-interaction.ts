@@ -740,6 +740,20 @@ function findElementsByRef(nodeRef: string, itemIndex: number | null): HTMLEleme
   if (live.length === 0) {
     live = getSourceIndex().findClosestLineDOMElements(source);
   }
+  // Fallback: filename-agnostic line:col search.
+  // Needed when tree→canvas dispatch uses an absolute filesystem path but the
+  // FiberSourceIndex stores Vite-relative paths (e.g. "src/Foo.tsx" vs "/abs/Foo.tsx").
+  if (live.length === 0 && source.fileName) {
+    for (const entry of getSourceIndex().getLiveEntries()) {
+      if (entry.source.line === source.line && entry.source.column === source.column) {
+        const liveEls = entry.elements.filter((el) => document.contains(el));
+        if (liveEls.length > 0) {
+          live = liveEls;
+          break;
+        }
+      }
+    }
+  }
 
   if (itemIndex !== null) {
     return live[itemIndex] ? [live[itemIndex]] : [];
