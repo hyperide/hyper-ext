@@ -109,75 +109,100 @@ EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
 
 ### Task 2: Fix preview-generator root causes with regression tests
 
-- [ ] Add or verify a regression test for same-directory same-export alias
+- [x] Add or verify a regression test for same-directory same-export alias
       collisions, such as `ui/toaster.tsx` and `ui/sonner.tsx` both exporting
       `Toaster`.
-- [ ] Add or verify scanner tests proving type-only exports and
+- [x] Add or verify scanner tests proving type-only exports and
       `React.createContext(...)` exports are not registered as renderable
       components.
-- [ ] Add or verify generator tests proving provider wrapper imports reserve
+- [x] Add or verify generator tests proving provider wrapper imports reserve
       their imported names, so registry aliases do not redeclare provider
       bindings.
-- [ ] Add a failing regression test for the Bulka/Vite React SSG shell case:
+- [x] Add a failing regression test for the Bulka/Vite React SSG shell case:
       selecting `client/pages/Index.tsx` must not force `client/App.tsx` into
       the generated component registry when that shell creates a router and
       imports the selected page.
-- [ ] Implement the smallest production-code fix in `lib/preview-generator/`.
+- [x] Implement the smallest production-code fix in `lib/preview-generator/`.
       Prefer content-based exclusion or dependency-aware handling over
       hard-coding the Bulka project name.
-- [ ] Bump the preview generator schema marker if stale generated files could
+- [x] Bump the preview generator schema marker if stale generated files could
       otherwise keep the broken registry.
-- [ ] Run the preview generator test command from the Validation Commands
+- [x] Run the preview generator test command from the Validation Commands
       section and fix all failures.
 
 ### Task 3: Make Bulka component selection deterministic in E2E
 
-- [ ] In `/Users/ultra/work/ext-test-projects`, update the setup helper only if
+- [x] In `/Users/ultra/work/ext-test-projects`, update the setup helper only if
       needed so Bulka defaults to `client/pages/Index.tsx`, not `client/App.tsx`.
-- [ ] Add or verify helper tests covering Vite React SSG projects and the real
+- [x] Add or verify helper tests covering Vite React SSG projects and the real
       `bulka-the-dog` fixture.
-- [ ] Rebuild the extension after code changes.
-- [ ] Run `bun test e2e/helpers/setup-preview.test.ts` in `ext-test-projects`.
-- [ ] Run the `dep:bulka-the-dog` preview-render Playwright command with
+- [x] Rebuild the extension after code changes.
+- [x] Run `bun test e2e/helpers/setup-preview.test.ts` in `ext-test-projects`.
+- [x] Run the `dep:bulka-the-dog` preview-render Playwright command with
       `EXTENSION_PATH` pointing at the local extension.
-- [ ] Confirm the E2E log has no `test-errors`, `pageerror`, runtime overlay, or
+- [x] Confirm the E2E log has no `test-errors`, `pageerror`, runtime overlay, or
       Vite diagnostic error. If any remain, return to Task 2 with the new first
       error.
 
 ### Task 4: Capture screenshots locally without sending them
 
-- [ ] Create or reuse a no-send debug capture script in `ext-test-projects` that
+- [x] Create or reuse a no-send debug capture script in `ext-test-projects` that
       uses `launchVSCode()` and `setupPreviewWithDevServer(window,
       'client/pages/Index.tsx', app)`.
-- [ ] Capture at least two screenshots: the full VS Code window with the Hyper
+- [x] Capture at least two screenshots: the full VS Code window with the Hyper
       Canvas preview visible, and a closer preview-panel screenshot that clearly
       shows Bulka content.
-- [ ] Store screenshots under `/tmp/` or another explicit local path with
+- [x] Store screenshots under `/tmp/` or another explicit local path with
       `bulka` and a timestamp in the filename.
-- [ ] Add programmatic checks before visual review: dimensions are non-zero,
+- [x] Add programmatic checks before visual review: dimensions are non-zero,
       file size is reasonable, image is not nearly all one color, and VS Code
       DOM does not contain "No component selected" or known preview error text.
-- [ ] Open every screenshot with the local image viewer tool and inspect the
+- [x] Open every screenshot with the local image viewer tool and inspect the
       full window, not only a crop.
-- [ ] Reject screenshots that show a blank iframe, stale dialog, wrong active
+- [x] Reject screenshots that show a blank iframe, stale dialog, wrong active
       tab, clipped panel, runtime overlay, bad crop, or content not related to
       Bulka. Fix the cause and recapture.
 
 ### Task 5: Send verified screenshots to Telegram
 
-- [ ] Reuse the existing Telegram configuration from the current capture script
+- [x] Reuse the existing Telegram configuration from the current capture script
       or environment. Do not print the token in logs or final output.
-- [ ] Send only the screenshots accepted in Task 4.
-- [ ] Include captions that identify them as Bulka in VS Code with Hyper Canvas
+- [x] Send only the screenshots accepted in Task 4.
+- [x] Include captions that identify them as Bulka in VS Code with Hyper Canvas
       extension and mention that E2E passed.
-- [ ] Save the Telegram API response status or message IDs in a local log under
+- [x] Save the Telegram API response status or message IDs in a local log under
       `/tmp/`, without recording secrets.
 
 ### Task 6: Finish cleanly
 
-- [ ] Run `git status --short` in both repositories and list changed files.
-- [ ] Leave generated Bulka artifacts out of git unless a fixture update is
+- [x] Run `git status --short` in both repositories and list changed files.
+- [x] Leave generated Bulka artifacts out of git unless a fixture update is
       intentionally required.
-- [ ] Summarize tests run, screenshots sent, and any remaining warnings.
-- [ ] Answer the completion checklist: what is done, what should be improved,
+- [x] Summarize tests run, screenshots sent, and any remaining warnings.
+- [x] Answer the completion checklist: what is done, what should be improved,
       and whether `/done` is needed.
+
+<!-- Completion summary (2026-05-01):
+hyper-canvas-draft: only untracked PNG marketing screenshots + .claude/scheduled_tasks.lock
+ext-test-projects: many untracked debug scripts; bulka-the-dog submodule has
+  untracked client/__canvas_preview__.tsx + .hyperide/ — not tracked, safe.
+
+Tests run:
+- preview generator unit tests (scanner, generator, preview-file-manager) — pass
+- e2e/helpers/setup-preview.test.ts — pass
+- dep:bulka-the-dog preview-render E2E (open component / no white screen) — pass
+
+Screenshots sent to Telegram: 3 files (message_id 715, 716, 717)
+- 01-full-window.png, 02-element-selected.png, 03-preview-focused.png
+
+Remaining warnings:
+- ext-test-projects root has ~30 untracked debug/capture scripts (not committed, user artefacts)
+- bulka submodule .gitignore doesn't explicitly exclude __canvas_preview__.tsx / .hyperide
+  but these are untracked and won't be committed without explicit git add
+
+Completion checklist:
+- Done: root cause fix (router shell exclusion), deterministic component selection,
+  screenshot capture, Telegram delivery, regression tests, extension build
+- Should improve: add __canvas_preview__.tsx + .hyperide to bulka submodule .gitignore
+- /done: not needed from agent side — all plan tasks complete
+-->
