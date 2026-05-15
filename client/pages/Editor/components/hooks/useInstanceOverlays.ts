@@ -171,7 +171,7 @@ export function useInstanceOverlays({
             return;
           }
           const data = await response.json();
-          console.log('[DragDrop] Position saved:', { instanceId, x, y });
+
           if (data.commentsUpdated > 0) {
             window.dispatchEvent(new CustomEvent('canvas:comments-updated'));
           }
@@ -336,7 +336,7 @@ export function useInstanceOverlays({
           overlay.badge.style.cursor = 'grab';
         }
         // Don't restore pointer-events here - RAF loop will do it on next frame
-        // when isDragging is false
+        // when instanceId is null (cleared above)
       }
 
       // Always clear drag state (even if drag didn't start)
@@ -637,6 +637,28 @@ export function useInstanceOverlays({
       cancelAnimationFrame(rafId);
 
       // Note: window listeners are managed by separate useEffect with empty deps
+
+      // Clear pending single-click timer to avoid stale callback after unmount/re-render
+      if (doubleClickStateRef.current.singleClickTimer) {
+        clearTimeout(doubleClickStateRef.current.singleClickTimer);
+        doubleClickStateRef.current.singleClickTimer = null;
+      }
+
+      // If a drag was pending (mousedown fired but effect re-ran before mouseup),
+      // restore iframe hit-testing and clear stale drag state.
+      // handleDragStart sets pointer-events='none' immediately on mousedown, so
+      // without this the iframe stays blind until the next component mount.
+      if (dragStateRef.current.instanceId && iframeRef.current) {
+        iframeRef.current.style.pointerEvents = '';
+      }
+      dragStateRef.current = {
+        isDragging: false,
+        instanceId: null,
+        startX: 0,
+        startY: 0,
+        initialX: 0,
+        initialY: 0,
+      };
 
       // Reset cursor and user-select
       document.body.style.cursor = '';
