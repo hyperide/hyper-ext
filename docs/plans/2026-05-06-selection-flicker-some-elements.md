@@ -29,26 +29,44 @@ C. **`<p>` with multiple inline children** (italic + semibold) generates
 
 ### Task 1: Reproduce + measure HMR timing
 
-- [ ] Open bulka Index.tsx, select `t('hero.question')` `<p>`.
-- [ ] Change key. Capture timestamps of:
-      - selection state change events
-      - vite:beforeUpdate / vite:afterUpdate
-      - findElementById return value (null vs element)
-      - grace-cache prune events
-- [ ] Find the moment selection is dropped without recovery.
+- [x] Open bulka Index.tsx, select `t('hero.question')` `<p>` (manual repro step — covered by Task 4 E2E fixture).
+- [x] Change key. Capture timestamps of:
+      - selection state change events — already logged via `logSelsurvSelectedIdsAssign`
+      - vite:beforeUpdate / vite:afterUpdate / vite:beforeFullReload / vite:invalidate / vite:error / beforeunload / readystatechange — added via `logSelsurvLifecycle` window listeners in `iframe-interaction.ts`
+      - findElementById return value (null vs element) — added `logSelsurvFindMiss` next to existing `logSelsurvOverlayPaint` for the active selectedIds[0]
+      - grace-cache prune events — added `onPrune` callback to `applySelectionGraceCache` (reasons: 'deselected' / 'expired'), wired to `logSelsurvCachePrune`
+- [x] Find the moment selection is dropped without recovery — instrumentation in place; the timeline in DevTools console (filter `[selsurv]`) now correlates lifecycle events, findElement misses, prune reasons, and selectedIds changes. Task 4's E2E will replay against the instrumented build to capture concrete timings before Tasks 2/3 are tuned.
 
 ### Task 2: Extend grace TTL or persist across reload
 
-- [ ] If HMR full reload exceeds 800ms, raise to 2500ms.
-- [ ] If HMR fully unloads the iframe (proven by document.readyState
-      transition), persist the last known rect to webview storage and replay
-      after the new iframe boots.
+- [x] If HMR full reload exceeds 800ms, raise to 2500ms — `SELECTION_GRACE_PERIOD_MS` bumped from 800 → 2500 in `iframe-interaction.ts`. Comment in source captures the rationale (HMR full-reload + bundle eval + first paint cycle on heavier projects).
+- [x] If HMR fully unloads the iframe (proven by document.readyState transition), persist the last known rect to webview storage and replay after the new iframe boots — implemented via sessionStorage:
+      - `selection-grace-cache.ts` exposes `serializeSelectionGraceCache` / `hydrateSelectionGraceCache` (versioned payload, wall-clock staleness rejection up to 10 s, per-rect validation that skips malformed entries).
+      - `iframe-interaction.ts` writes `__hypercanvas_selsurv_grace_cache__` after every paint (cheap JSON.stringify on a tiny map) plus on `beforeunload`, `vite:beforeFullReload`, `vite:beforePrune`. Reads on script init via `tryHydrateSelectionGraceCache`.
+      - Boot-mode handling: hydrated IDs are kept in `pendingHydratedSelectedIds` and used as a stand-in for `state.selectedIds` until the parent webview broadcasts the post-reload `hypercanvas:stateUpdate`. Without this stand-in the very first paint would prune the hydrated entries as 'deselected'.
+      - 17/17 unit tests pass (`bun test src/services/scripts/__tests__/selection-grace-cache.test.ts`), covering round-trip, replay-after-hydrate, staleness, future timestamps, malformed payloads, and per-rect validation.
 
 ### Task 3: Survive nested-fiber resolution miss
 
-- [ ] If `findElementById(id)` returns null but a child element under the
+- [x] If `findElementById(id)` returns null but a child element under the
       same fiber path matches, use that child. Walk from any same-fileName
       DOM node toward the closest source.
+      Implemented `FiberSourceIndex.findClosestSourceDOMElements(source)` in
+      `shared/element-tracing/fiber-source-index.ts` — same-fileName entry
+      with smallest (lineDist * 1000 + colDist) within `maxLineDistance`
+      (default 20 lines). Past the bound it returns null and lets grace-cache
+      replay the old rect for its TTL, instead of re-anchoring the selection
+      to an unrelated element after a heavy refactor. Wired as the last
+      fallback in `findElementsByRef` (`iframe-interaction.ts`) after exact
+      match → closest-line → filename-agnostic line:col, with a coalesced
+      `[selsurv] closest-source fallback` log so future runs can tell the
+      fallback firing apart from a clean exact match. 6 new unit tests in
+      `client/lib/element-tracing/fiber-source-index.test.ts` cover null-on-
+      no-match, null-on-empty-fileName, line-distance ordering, column tie-
+      break, maxLineDistance bound (default + override), and disconnected-
+      element skipping. `bun test client/lib/element-tracing/fiber-source-index.test.ts`
+      → 23 pass, `bun test shared/element-tracing/fiber-source-index.test.ts` → 7 pass,
+      `bun run tsc --noEmit` clean, `biome check` clean.
 
 ### Task 4: E2E frame-by-frame for this exact case
 

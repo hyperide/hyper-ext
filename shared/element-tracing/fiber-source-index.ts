@@ -139,6 +139,48 @@ export class FiberSourceIndex {
     return best;
   }
 
+  // Last-resort fallback: same fileName, line may have shifted (e.g. blank lines
+  // added above). Pick the entry whose source is closest by (line, column). Capped
+  // at MAX_LINE_DISTANCE to avoid highlighting an unrelated element after a heavy
+  // refactor — past the cap, return [] and let grace-cache replay the old rect.
+  findClosestSourceDOMElements(
+    source: SourceLocation,
+    options: { maxLineDistance?: number } = {},
+  ): { elements: HTMLElement[]; matchedSource: SourceLocation } | null {
+    const maxLineDistance = options.maxLineDistance ?? FiberSourceIndex.DEFAULT_MAX_LINE_DISTANCE;
+    this.ensureBuilt();
+    if (this.index === null) return null;
+    if (!source.fileName) return null;
+
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestElements: HTMLElement[] = [];
+    let bestSource: SourceLocation | null = null;
+
+    for (const [key, elements] of this.index) {
+      const candidateSource = parseSourceKey(key);
+      if (candidateSource === null || candidateSource.fileName !== source.fileName) continue;
+
+      const lineDist = Math.abs(candidateSource.line - source.line);
+      if (lineDist > maxLineDistance) continue;
+
+      const live = elements.filter((el) => this.doc.contains(el));
+      if (live.length === 0) continue;
+
+      // Line proximity dominates; column breaks ties on the same line.
+      const distance = lineDist * 1000 + Math.abs(candidateSource.column - source.column);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestElements = live;
+        bestSource = candidateSource;
+      }
+    }
+
+    if (bestSource === null) return null;
+    return { elements: bestElements, matchedSource: bestSource };
+  }
+
+  static readonly DEFAULT_MAX_LINE_DISTANCE = 20;
+
   getLiveEntries(): Array<{ key: string; source: SourceLocation; elements: HTMLElement[] }> {
     this.ensureBuilt();
     if (this.index === null) return [];
