@@ -18,7 +18,7 @@ export interface ResolveI18nResourceParams {
   fileIO: Pick<FileIO, 'readFile' | 'access'> & { listFiles?: FileIO['listFiles'] };
 }
 
-interface Layout {
+export interface Layout {
   getLocaleFilePath: (locale: string) => string;
   availableLocales: string[];
 }
@@ -26,7 +26,7 @@ interface Layout {
 // Well-known flat locale directory layouts, tried in priority order.
 const FLAT_LOCALE_DIRS = ['locales', 'src/i18n', 'messages'];
 
-async function discoverLayout(
+export async function discoverLayout(
   projectRoot: string,
   namespace: string | undefined,
   activeLocale: string,

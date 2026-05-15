@@ -3,6 +3,8 @@
  * Defines messages, project types, and shared interfaces
  */
 
+import type { I18nLibrary } from '../../../shared/i18n-text/types';
+
 // ============================================
 // Project Detection
 // ============================================
@@ -160,6 +162,24 @@ export type AstMessage =
       elementId: string;
       wrapperType: string;
       wrapperProps?: Record<string, unknown>;
+    }
+  | {
+      /** Write a translated value for a given i18n key in the active locale resource file. */
+      type: 'ast:writeI18nResource';
+      requestId: string;
+      projectRoot: string;
+      library: I18nLibrary;
+      key: string;
+      namespace?: string;
+      activeLocale: string;
+      newText: string;
+      /**
+       * When the key itself changes (user picks a different key from the dropdown),
+       * provide the source file + element so the JSX child expression can be updated.
+       */
+      filePath?: string;
+      elementId?: string;
+      previousKey?: string;
     };
 
 // AST response

@@ -1,13 +1,12 @@
 /**
  * @file Locale resource write path for i18n text editing.
  *
- * Accessed via: SaaS inspector write route and VS Code extension (AstBridge)
+ * Accessed via: SaaS /api/write-i18n-resource route and VS Code extension (AstBridge)
  * Assumptions: pure logic, host I/O injected via FileIO adapter
- *
- * NOT IMPLEMENTED — stub for type correctness. Task 12 adds the implementation.
  */
 
 import type { FileIO } from '../../lib/ast/file-io';
+import { discoverLayout } from './resolve-i18n-resource';
 import type { I18nLibrary } from './types';
 
 export type I18nWriteError = 'missing-locale-file' | 'parse-error' | 'unsupported-format' | 'read-only';
@@ -29,7 +28,79 @@ export interface WriteI18nResourceResult {
   error?: I18nWriteError;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function writeI18nResource(_params: WriteI18nResourceParams): Promise<WriteI18nResourceResult> {
-  throw new Error('writeI18nResource is not implemented — Task 12');
+/**
+ * Set a translation value at key inside an in-memory JSON object.
+ * Tries literal key first (for flat keys with dots), then checks if the file
+ * uses flat-key convention (any top-level key contains a dot), then falls back
+ * to dot-path traversal with intermediate object creation.
+ */
+function setKey(data: unknown, key: string, value: string): void {
+  if (typeof data !== 'object' || data === null) return;
+  const obj = data as Record<string, unknown>;
+
+  // Literal key first — handles flat keys containing dots (e.g. "habits.walks")
+  if (Object.hasOwn(obj, key)) {
+    obj[key] = value;
+    return;
+  }
+
+  // If any top-level key already contains dots, the file uses flat-key convention.
+  // Write new keys as flat literals to match the existing format.
+  const hasFlatDotKeys = Object.keys(obj).some((k) => k.includes('.'));
+  if (hasFlatDotKeys) {
+    obj[key] = value;
+    return;
+  }
+
+  // Dot-path traversal with intermediate object creation
+  const parts = key.split('.');
+  let current: Record<string, unknown> = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (typeof current[part] !== 'object' || current[part] === null) {
+      current[part] = {};
+    }
+    current = current[part] as Record<string, unknown>;
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+export async function writeI18nResource(params: WriteI18nResourceParams): Promise<WriteI18nResourceResult> {
+  const { projectRoot, key, namespace, activeLocale, newText, fileIO } = params;
+
+  const layout = await discoverLayout(projectRoot, namespace, activeLocale, fileIO);
+
+  if (!layout) {
+    return { success: false, filePath: null, error: 'missing-locale-file' };
+  }
+
+  const filePath = layout.getLocaleFilePath(activeLocale);
+
+  // TS/JS locale files are read-only — we cannot safely eval or mutate them
+  if (filePath.endsWith('.ts') || filePath.endsWith('.js')) {
+    return { success: false, filePath: null, error: 'unsupported-format' };
+  }
+
+  // Read the active locale file
+  let content: string;
+  try {
+    content = await fileIO.readFile(filePath);
+  } catch {
+    return { success: false, filePath: null, error: 'missing-locale-file' };
+  }
+
+  // Parse JSON — do not corrupt the file on parse failure
+  let data: unknown;
+  try {
+    data = JSON.parse(content);
+  } catch {
+    return { success: false, filePath: null, error: 'parse-error' };
+  }
+
+  setKey(data, key, newText);
+
+  const updated = `${JSON.stringify(data, null, 2)}\n`;
+  await fileIO.writeFile(filePath, updated);
+
+  return { success: true, filePath };
 }
