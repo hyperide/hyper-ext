@@ -39,9 +39,12 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **IN PROGRESS** (1 shard, memory-constrained: avail_mb≈4.4GB vs 6GB/shard). Validates fix `3287880` (Tamagui disk fallback). Image pre-built (`BUILD_IMAGE=0`), tests rsync'd from host.
-  - 02:43 CEST checkpoint: 220 tests done, currently on `react-vite-tw4-twitter`, 0 hard fails so far. All skipped tests are drag/resize (expected). No bulka-the-dog tests reached yet.
-  - **bulka-the-dog observation**: `patchEntryFile()` fails silently for ViteReactSSG pattern in `client/main.tsx` (no `.render()` call). Awaiting `dep:bulka-the-dog` test results to confirm if `PD-PR-1`/`PD-PR-2` fail.
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards). Active fixes: `3287880` (Tamagui disk fallback), `4909041` (redo-limit 75s+45s).
+
+- **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **KILLED** (timeout after 927/2211 tests, exit code 124). Reached `react-vite-cssmodules-spotify` (project #3), never reached bulka-the-dog (#23).
+  - **1 HARD FAIL**: "redo limit — no redo after new edit" — both attempts timed out at ~48-52s. Root cause: `isPreviewLoaded(45s)` exhausted in 1-shard low-memory Docker (avail≈4.4GB). Fixed in `4909041` (75s).
+  - All other "failed" tests were FLAKY (all retry-passed): settings×5, open-preview, hyper_duplicate, rapid-edit-undo, Event listeners disposed.
+  - **Tamagui NOT tested** (shards killed before Tamagui projects). Fix `3287880` not yet validated by a complete run.
 
 - **Run #35** (`run-20260430-003332-21049`) — COMPLETE: "Tamagui: style written as prop" HARD FAIL (×6: 3 projects × 2 attempts). Root cause confirmed from screenshot: `editor.getActiveEditorContent()` reads `.view-lines` DOM which returns `''` when Hyper Canvas preview webview is frontmost. The write to App.tsx DID happen (file dirty in teardown), but poll never matched. Fixed in `3287880` (disk-based fallback: `readFileSync(App.tsx)` when DOM returns empty).
 
@@ -810,5 +813,28 @@ HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.
 - `db75f80`: hyper_duplicate_element poll 30s→60s
 - `d5507ea`: redo-limit isPreviewLoaded 15s→45s, inspector 15s→30s
 
-**Expected**: 0 hard fails. The one remaining hard fail (redo-limit) is now covered.
+**Run #35 actual results** (partial — all 3 shards completed but tests short):
+- S1: 274 tests, 0 hard fails
+- S2: 290 tests, 0 hard fails (component-with-error FLAKY: 24s fail → retry pass)
+- S3: 197 tests, hard fails — "Tamagui: style written as prop" at 163-178s (5+ entries) → 150s poll insufficient. FIXED by `3287880` (disk fallback).
+
+---
+
+## 📍 2026-04-30 06:07 CEST — Run #37 launched
+
+Run ID: `run-20260430-060719-86089` — 3 shards.
+
+```bash
+HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 HYPER_E2E_IGNORE_HOST_RUNS=1 bash e2e/scripts/docker-parallel-run.sh
+```
+
+**Fixes active** (all from previous sessions + new):
+- All 11 fixes from run #31 cycle + all run #34-36 fixes
+- `3287880`: Tamagui disk fallback for style-write assertion (run #36 first, partial validation)
+- `4909041`: redo-limit isPreviewLoaded 45s→75s, inspector 30s→45s (new, not yet validated)
+
+**Expected**:
+- "Tamagui: style written as prop" → PASS (disk fallback, no poll timeout dependency)
+- "redo limit" → PASS (75s budget covers 45-50s Docker inotify lag)
+- bulka-the-dog tests → first time with `3287880` active in a shard that covers project #23
 
