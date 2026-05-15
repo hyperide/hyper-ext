@@ -1925,3 +1925,42 @@ Worker teardown 30s exceeded — Electron crashed renderer, app.close
 - Settings handler bug (12 fails) — отдельный кластер
 - Renderer OOM на tamagui — нужен memory tuning или скип heavy projects
 - spotify React-not-mounting — отдельный race, архитектурный
+
+## 📍 2026-04-27 12:10 CEST: Run #4 100009-47074 + 8 fixes applied
+
+Run #4 идёт ~2h10m, Σ 1294 done, 968 pass, 93 fail = **91.2% pass**.
+
+### 8 atomic commits в этом цикле (после run #3)
+
+**hyper-canvas-draft:**
+- `2e02e5f2` arm recompile gate ВСЕГДА (не webpack-only) + broaden marker matching (compiled successfully/in/client, hmr update, page reload, rebuilt in, ready in N ms)
+- `68dfca77` catch showTextDocument rejection (extension.ts:537 был `.then(onA, onB)` который ловил reject только от openTextDocument)
+- `73840421` defensive process.on('unhandledRejection') в activate() + .catch() для autoStart devServerManager.start() (extension.ts:778)
+
+**ext-test-projects:**
+- `6c2b1c6` adapt extension-lifecycle 8+ tests to previewTabLocator (2c090915 strict throw broke them)
+- `430f676` 3s timeout на app.evaluate/app.close в closeVSCode (worker teardown 30s exceeded)
+- `e463dbf` dismiss-and-settle error toasts перед empty-component assert
+- `8724b0a` autoStart-false test waits for tab not iframe
+- `b3fbdee` commands.spec PI-1-1/PI-1-2 same fix
+- `9a3cd2b` CSP test → setupPreviewWithDevServer
+- `155cb20` empty-component filters Electron infrastructure crash toasts
+
+VSIX: 0.1.10 → 0.1.11 → 0.1.12 → 0.1.13 (последняя с unhandledRejection handler).
+
+### Реальный эффект
+
+Run #4 (с 0.1.12 + harness fixes):
+- Σ 1294 done, 91.2% pass
+- s1: 97% (best), s4: 60% (worst, на heavy projects)
+
+Run #3 был 86% (с 0.1.11 без harness fixes). Улучшение **+5pp**.
+
+`empty component` всё ещё фейлит на notion/calendar — corespond к Electron OOM crashes на heavy Vite dep prebundle, не к extension code. 0.1.13 + 155cb20 фикс ОЖИДАЕТСЯ полностью закроет (не получили — workers активны со старым extension/test).
+
+### Что ещё в очереди
+
+После завершения run #4 (1-2h до timeout):
+1. Запустить run #5 с VSIX 0.1.13 + всеми harness fixes
+2. Если empty component cluster всё ещё валится — углубить debug (live trace)
+3. Settings cluster — только 1 real fail (autoStart) уже починен в `8724b0a`
