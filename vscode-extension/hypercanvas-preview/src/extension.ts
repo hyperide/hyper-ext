@@ -1150,6 +1150,14 @@ export async function deactivate() {
   }
 
   // Reset diagnostic capture state so re-activation in the same process starts clean.
+  // Also restore the env var to avoid a stale sink path surviving deactivation.
+  if (_diagnosticCaptureActive) {
+    if (_prevDiagnosticSinkPath !== undefined) {
+      process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = _prevDiagnosticSinkPath;
+    } else {
+      delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+    }
+  }
   _diagnosticCaptureActive = false;
   _prevDiagnosticSinkPath = undefined;
   diagnosticsChannel = null;
