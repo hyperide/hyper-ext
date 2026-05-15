@@ -1612,3 +1612,46 @@ fail на одном сценарии. Сравни старый прогон: s
    vs stale toast race.
 2. First-on-worker cold-start race — отдельная проблема, не закрыта 0.1.10.
 3. Тесты с retry pattern (×2) — flaky, можно пометить retries=2.
+
+## 📍 2026-04-27 02:20 CEST: 2h checkpoint + регрессия webview lifecycle
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 312  | 286  | 13   | 9    |
+| s2    | 235  | 198  | 10   | 25   |
+| s3    | 228  | 154  | 10   | 63   |
+| s4    | 128  | 67   | 28   | 27   |
+| **Σ** | 903  | 705  | 61   | 124  |
+
+**Pass rate 92.0%** — слегка ниже чем у 200339-88217 в эту же точку.
+
+### ⚠️ REGRESSION: webview lifecycle cluster (5 unique fails on s1)
+
+В предыдущем прогоне (200339-88217 с stale `out/`):
+- ✅ Webview providers registered 25s passed
+- ✅ Webview restoration on tab switch 9s passed
+- ✅ state:init re-sent on webview:ready 11s passed
+- ✅ Multiple webview instances 3s passed
+
+В новом прогоне (005017-18121 с `out/` от 22:31 включающим 0eb7e509):
+- ❌ Webview providers registered 2.3s failed
+- ❌ Webview restoration on tab switch 1.8s failed
+- ❌ state:init re-sent on webview:ready 1.8s failed
+- ❌ Multiple webview instances 2.1s failed
+
+Скриншот фейла "Multiple webview instances": Hyper Canvas tab открыт но
+**webview body полностью пустой** (React app не загружен). Tab visible,
+но iframe с preview не рендерится.
+
+Гипотеза: `0eb7e509` фикс ввёл регрессию в `_setupPanel` или
+`_initializeComponent` для случая когда `_currentComponent` не установлен.
+Тесты вызывают `Hyper: Open Preview` без открытого editor → ничего не
+рендерится. Но `_pushFullStateToWebview` теперь не вызывается в этом
+сценарии — фикс делает early-return только когда currentComponent был
+сохранён.
+
+### Не бросаюсь чинить сейчас
+
+Прогон продолжается. Чинить означает пересборка `out/extension.js`,
+что не повлияет на уже работающие воркеры (extension загружен в
+память). Зафиксирую регрессию, после прогона починю.
