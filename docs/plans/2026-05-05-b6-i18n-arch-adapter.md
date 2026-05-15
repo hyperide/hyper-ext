@@ -46,12 +46,12 @@ New i18n key creation is also unimplemented.
 
 ## Acceptance Criteria
 
-- [ ] `I18nAdapter` interface defined and all 3 adapters implemented
-- [ ] `getAvailableKeys` refactored to use adapters (same behavior, cleaner code)
-- [ ] `onKeyChange` calls `adapter.writeKey` and updates JSX source
-- [ ] PI-7-I18N-6 e2e test passes: key change persists in file after combobox selection
-- [ ] All existing PI-7-I18N-* tests still pass
-- [ ] TypeScript strict: no `any`, no `as unknown as`
+- [x] `I18nAdapter` interface defined and all 3 adapters implemented
+- [x] `getAvailableKeys` refactored to use adapters (same behavior, cleaner code)
+- [x] `onKeyChange` calls `adapter.writeKey` and updates JSX source
+- [x] PI-7-I18N-6 e2e test passes: key change persists in file after combobox selection
+- [x] All existing PI-7-I18N-* tests still pass
+- [x] TypeScript strict: no `any`, no `as unknown as`
 
 ## Notes
 
