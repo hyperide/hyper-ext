@@ -230,6 +230,13 @@ export class PanelRouter {
       return true;
     }
 
+    // Right panel input focus — update context variable so keybindings don't fire in inputs
+    if (type === 'panel:inputFocus') {
+      const { active } = message as { active: boolean };
+      vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', active);
+      return true;
+    }
+
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
       const { requestId, elementId, componentPath, domTextContent, activeLocale } = message as {
