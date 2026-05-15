@@ -14,14 +14,4 @@ export interface I18nAdapter {
 
   /** Resolve the translated text for a key+locale. Returns null when not found. */
   resolveText(key: string, locale: string): Promise<string | null>;
-
-  /**
-   * Update the JSX element to reference a different i18n key.
-   * elementId is the element's nodeRef. The adapter updates the source expression
-   * (e.g. t("old.key") → t("new.key")) without touching the locale dictionary.
-   * In practice, key changes are routed through the writeI18nResource RPC channel
-   * (which handles JSX update via AstBridge). Implementations that are not wired
-   * to an AstService instance should throw.
-   */
-  writeKey(elementId: string, newKey: string): Promise<void>;
 }

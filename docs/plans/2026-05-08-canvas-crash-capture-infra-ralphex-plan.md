@@ -26,51 +26,51 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ### Task 1: Add `unhandledRejection` capture to extension `activate()`
 
-- [x] In `vscode-extension/hypercanvas-preview/src/extension.ts` `activate()`,
+- [ ] In `vscode-extension/hypercanvas-preview/src/extension.ts` `activate()`,
       register `process.on('unhandledRejection', (reason) => { ... })`.
-- [x] Reason is typed `unknown` — log:
+- [ ] Reason is typed `unknown` — log:
       - reason if instanceof Error: `{ name, message, stack }`
       - reason as string otherwise: `JSON.stringify(reason)`
-- [x] Always write to `OutputChannel('HyperIDE Diagnostics')`. If the env var
+- [ ] Always write to `OutputChannel('HyperIDE Diagnostics')`. If the env var
       `HYPERIDE_DIAGNOSTIC_ERROR_SINK` is set (a file path), also append-write
       `JSON.stringify({ ts, kind: 'unhandledRejection', reason: serialized })`
       followed by `\n`.
-- [x] Mirror the same for `process.on('uncaughtException', ...)`.
-- [x] Remove handler on `deactivate()`.
-- [x] Unit test the serializer with a few Error/object/primitive cases in
+- [ ] Mirror the same for `process.on('uncaughtException', ...)`.
+- [ ] Remove handler on `deactivate()`.
+- [ ] Unit test the serializer with a few Error/object/primitive cases in
       `vscode-extension/.../src/__tests__/`.
 
 ### Task 2: Add user-facing capture command
 
-- [x] Add a command `hypercanvas.startDiagnosticCapture` that:
+- [ ] Add a command `hypercanvas.startDiagnosticCapture` that:
       - asks for an output file path (default `~/.hyperide-diagnostics-<ts>.log`)
       - sets `HYPERIDE_DIAGNOSTIC_ERROR_SINK=<path>` for the current session
         (via `process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = path`)
       - shows an information notification "Diagnostic capture active. Reproduce
         the bug, then run 'Stop Diagnostic Capture' to finish."
-- [x] Add a `hypercanvas.stopDiagnosticCapture` command that clears the env
+- [ ] Add a `hypercanvas.stopDiagnosticCapture` command that clears the env
       var, opens the resulting log in a new editor tab, and shows summary
       stats (count of unhandled rejections, count of exceptions).
-- [x] Wire both to package.json `contributes.commands` + Command Palette.
-- [x] Document in README/AGENTS the manual repro path: start capture →
+- [ ] Wire both to package.json `contributes.commands` + Command Palette.
+- [ ] Document in README/AGENTS the manual repro path: start capture →
       open Hyper Canvas on bulka → discard changes via SCM → stop capture →
       paste the log into a follow-up plan.
 
 ### Task 3: Make the e2e harness use the same capture sink
 
-- [x] In `ext-test-projects/e2e/fixtures/base.fixture.ts` (or the Docker
+- [ ] In `ext-test-projects/e2e/fixtures/base.fixture.ts` (or the Docker
       entrypoint), set `HYPERIDE_DIAGNOSTIC_ERROR_SINK` to a per-test path
       under the test artifacts directory.
-- [x] Update `bulka-canvas-discard-no-crash.spec.ts` (already merged) to read
+- [ ] Update `bulka-canvas-discard-no-crash.spec.ts` (already merged) to read
       that file at the end of the test and assert it's empty (or contains no
       rejections beyond a known-allowlist).
-- [x] If the spec's diagnostic-error pipeline already exists (it does — see
+- [ ] If the spec's diagnostic-error pipeline already exists (it does — see
       `extension-diagnostic-errors.log` in artifacts), reuse it; just thread
       the new `unhandledRejection` events through.
 
 ### Task 4: Propose canvas-discard reproduction strategy
 
-- [x] Manual repro is the only known path until Linux+Docker reproduces. Open
+- [ ] Manual repro is the only known path until Linux+Docker reproduces. Open
       a follow-up plan describing two angles:
       1. User runs the capture command on macOS, attaches the log to a TG
          message and a follow-up `2026-05-08-canvas-crash-fix-from-stack.md`
@@ -81,14 +81,12 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ### Task 5: Telegram handoff (FILES, not paths)
 
-- [x] TG report via `send-tg-report.sh` summarising what landed.
-- [x] Send the new plan FILE itself via `send-tg-file.sh` (NOT a path string —
+- [ ] TG report via `send-tg-report.sh` summarising what landed.
+- [ ] Send the new plan FILE itself via `send-tg-file.sh` (NOT a path string —
       CLAUDE.md rule). Same for the merged commit summary log if useful.
-- [x] If e2e capture proves a clean baseline (no spurious rejections), send
+- [ ] If e2e capture proves a clean baseline (no spurious rejections), send
       that artifact via `send-tg-file.sh ... --photo` if it's a screenshot, or
-      `send-tg-file.sh` for the log file. [skipped — bulka Docker dev-server
-      bring-up regression blocks running the discard spec in CI; see NEEDS LINEAR
-      ticket in MEMORY.md]
+      `send-tg-file.sh` for the log file.
 
 ## Hard Rules
 
