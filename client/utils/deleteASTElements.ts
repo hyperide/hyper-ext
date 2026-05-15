@@ -9,7 +9,7 @@ export async function deleteASTElements(elementIds: string[], filePath: string):
     const response = await authFetch('/api/delete-elements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeRefs: elementIds, filePath }),
+      body: JSON.stringify({ elementIds, filePath }),
     });
 
     const result = await response.json();

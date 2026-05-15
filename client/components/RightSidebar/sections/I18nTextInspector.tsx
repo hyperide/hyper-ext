@@ -11,9 +11,9 @@ import { memo } from 'react';
 
 export interface I18nTextInspectorProps {
   i18nBinding: I18nBindingResult;
-  onKeyChange?: (key: string) => void;
+  onKeyChange: (key: string) => void;
   onResolvedTextChange: (text: string) => void;
-  onLocaleChange?: (locale: string) => void;
+  onLocaleChange: (locale: string) => void;
 }
 
 export const I18nTextInspector = memo(function I18nTextInspector({
@@ -37,9 +37,8 @@ export const I18nTextInspector = memo(function I18nTextInspector({
         <input
           type="text"
           value={i18nBinding.key}
-          readOnly={!onKeyChange}
-          onChange={(e) => onKeyChange?.(e.target.value)}
-          className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+          onChange={(e) => onKeyChange(e.target.value)}
+          className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
 
@@ -60,8 +59,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             <button
               key={locale}
               type="button"
-              disabled={!onLocaleChange}
-              onClick={() => onLocaleChange?.(locale)}
+              onClick={() => onLocaleChange(locale)}
               className={cn(
                 'h-5 px-1.5 rounded text-[10px] font-medium transition-colors',
                 locale === i18nBinding.activeLocale
