@@ -434,6 +434,29 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push(
     '  row: { id: "preview-row", name: "Preview row", status: "Done", priority: "Medium", date: "2026-01-01" },',
   );
+  // Generic Zustand-style store stub. Components that destructure `store.xxx`
+  // for setters (setCommandPaletteOpen, toggleX, addY, …) get no-op functions;
+  // collection-like reads (issues, items, rows, tags, users, comments,
+  // messages, notifications) get empty arrays; everything else is undefined.
+  // This keeps BoardView-shaped components rendering instead of throwing on
+  // destructure when no real store is supplied.
+  lines.push('  store: new Proxy({}, {');
+  lines.push('    get: (_target, prop) => {');
+  lines.push("      if (typeof prop !== 'string') return undefined;");
+  lines.push(
+    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close') || prop.startsWith('select')) {",
+  );
+  lines.push('        return () => {};');
+  lines.push('      }');
+  lines.push(
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+  );
+  lines.push(
+    "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
+  );
+  lines.push('      return undefined;');
+  lines.push('    },');
+  lines.push('  }),');
   lines.push('};');
   lines.push('');
 
