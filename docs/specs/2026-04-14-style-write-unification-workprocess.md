@@ -3887,3 +3887,74 @@ Classification: ALL ENVIRONMENT FLAKES — no fix needed. These are the same MCP
 - webpack-react-tw3-kanban tests: should pass with 480s poll and 280s refresh interval
 - Error overlay: should pass with 300s timeout
 - MCP/settings flakes: still expected to appear but all retry-pass
+
+## 📍 2026-04-29 Run #25 Global Blocker + Run #26 Launch (~03:31 CEST)
+
+### Run #25 Global Blocker: ReferenceError at setup-preview.ts:243
+
+**Symptom**: ALL project-dependent tests failed in ~6-7 seconds. Pattern:
+`preview:poll-loaded:start` logged, then 1.5s later teardown starts. No
+`dumpPreviewFrames` output. No error messages in docker.log.
+
+**Root cause**: Commit `e3fc60d` (added `isWebpackProject` constant at line 243)
+used `projectDir` outside its block scope:
+
+```typescript
+// Line 191 — projectDir was declared INSIDE this if block:
+if (componentFile === DEFAULT_COMPONENT_FILE_SENTINEL) {
+  const projectDir = getCurrentProjectDir();  // block-scoped!
+  ...
+}
+// ...
+// Line 243 — outside the if block → ReferenceError at runtime:
+const isWebpackProject = (projectDir ?? '').startsWith('webpack-');
+```
+
+JavaScript/TypeScript `const` is block-scoped, so `projectDir` was inaccessible
+outside the `if` block — throwing `ReferenceError: projectDir is not defined`
+immediately after `preview:poll-loaded:start` on EVERY test.
+
+**Why `.catch()` handler never ran**: The error was thrown BETWEEN the
+`log('preview:poll-loaded:start')` call and the `await expect.poll(...)` 
+expression. The `.catch()` is chained on `expect.poll().toBe(true)` — but since
+the error occurred before `expect.poll()` was evaluated, that promise chain was
+never created, and `.catch()` never ran.
+
+**Discovery method**: docker.log had no error text because `CI=true` makes
+Playwright use `github` reporter, which formats errors as GitHub Actions
+`::error::` annotations (invisible in docker.log). Actual error found by:
+1. `docker exec` to copy trace.zip from container `/workspace/test-results/`
+2. Unzip and parse `test.trace` JSONL for `{"type": "error", ...}` entries
+3. Found: `ReferenceError: projectDir is not defined` at setup-preview.ts:243
+
+**Fix (commit `ead694e` in ext-test-projects, pushed to main):**
+
+```typescript
+// BEFORE: const projectDir inside if block (block-scoped)
+// AFTER: hoisted to function scope, one line before the if block:
+const projectDir = getCurrentProjectDir();  // function scope — accessible throughout
+let resolvedComponentFile = componentFile;
+if (componentFile === DEFAULT_COMPONENT_FILE_SENTINEL) {
+  if (projectDir) {  // inner if: only enter if projectDir exists
+    ...
+  }
+}
+```
+
+**Action**: Run #25 killed immediately (global blocker). Run #26 started.
+
+### Run #26 Launch
+
+**Run #26 started:** 2026-04-29 03:31 CEST
+**Run ID:** `run-20260429-033105-29918`
+**Extension version:** v0.1.28 (unchanged)
+**Containers:** `hyper-e2e-20260429-033105-29918-s{1,2,3}`
+**Commits in this run vs run #25:** `ead694e` (ReferenceError fix)
+**All fixes so far:** `17e6554` + `e3fc60d` + `ead694e`
+
+**Expected improvements:**
+- ALL project-dependent tests: should no longer crash at `preview:poll-loaded:start`
+  (ReferenceError from `e3fc60d` fixed by `ead694e`)
+- All `e3fc60d` improvements (webpack 480s poll, 280s refresh interval) now
+  actually reachable since `projectDir` is accessible
+- Tamagui/error-overlay/webpack fixes from `17e6554` + `e3fc60d` remain active
