@@ -164,21 +164,19 @@ You'll likely find that the rect path uses one of the old/non-uniform key deriva
       implementation where the bug lives). 6 tests, all GREEN: happy path,
       orphan element, no-key skip, two regression scenarios (sibling-outer
       dedup + HMR-unmounted-outer), sanity case.]
-- [x] Re-run the Task 1 e2e through Docker (`HYPER_E2E_SHARDS=1 bun run test:docker`).
+- [ ] Re-run the Task 1 e2e through Docker (`HYPER_E2E_SHARDS=1 bun run test:docker`).
       Confirm GREEN.
-      [Run-id `20260508-012655-73119`: blocked by pre-existing bulka Docker
-      dev-server bring-up regression (MEMORY.md `bulka Docker dev-server
-      bring-up regression 2026-05-08`). `setupPreviewWithDevServer` fails in
-      the window-reload-recovery branch with `[HyperIDE] Dev server failed:
-      Server failed to start` on retry — never reaches the Shift+Enter
-      assertion that this fix targets. Verification source: 6/6 unit tests
-      in `find-traceable-parent.test.ts` directly exercise the regression
-      class at the index-aware-walk-up boundary, and the diagnostic
-      `[shiftparent]` console logs (added in Task 2) are now in the built
-      `out/iframe-interaction.js` (`grep "not-indexed\|no-ref"` confirms),
-      so any live preview can produce the cross-tag dump for visual
-      confirmation. E2E re-run is gated on the harness regression, NOT on
-      this fix — separate Linear ticket.]
+      [BLOCKED — see "Blocked on" section at the end. Run-id
+      `20260508-012655-73119` failed with `setupPreviewWithDevServer
+      [HyperIDE] Dev server failed: Server failed to start` on the
+      window-reload-recovery branch — never reached the Shift+Enter
+      assertion. Pre-existing bulka Docker dev-server bring-up regression
+      (MEMORY.md `bulka Docker dev-server bring-up regression 2026-05-08`),
+      not caused by this fix. **Per CLAUDE.md hard rule, this branch is NOT
+      shippable until the Docker run yields a representative GREEN frame.**
+      Unit-test coverage in `find-traceable-parent.test.ts` (6/6 GREEN)
+      pins the regression class at the index-aware-walk-up boundary but
+      does NOT substitute for the e2e screenshot CLAUDE.md requires.]
 - [x] If the cause is missing `_debugSource` on the host element (the React 19
       `_debugStack` finding from `project_ext_click_debug.md`), fall back to `_debugStack`
       for that lookup the same way `06913a91` aligned the inspector path.
@@ -203,22 +201,32 @@ You'll likely find that the rect path uses one of the old/non-uniform key deriva
       blocked by pre-existing bulka Docker dev-server bring-up regression
       (`pnpm: not found` in container) — separate Linear-tracked harness issue,
       not this fix.]
-- [x] E2E before/after screenshots from Task 1, **manually inspected** before sending.
+- [ ] E2E before/after screenshots from Task 1, **manually inspected** before sending.
       The AFTER screenshot must show the rect on the inner element, not nothing.
-      [Skipped — not automatable in this iteration. Only artifact from Task 3 docker
-      run is the harness-failure capture (Hyper Preview placeholder + "pnpm: not
-      found" in HYPER LOGS); test never reached Shift+Enter, so no representative
-      AFTER frame exists. Per CLAUDE.md "нерепрезентативные скриншоты — НЕ
-      отправлять", I attached this single artifact to TG explicitly labelled as
-      "harness blocker, NOT after-fix proof" rather than fake proof of the fix.
-      Real before/after capture deferred until bulka Docker harness regression
-      lands fix or e2e is retargeted to a non-bulka project with similar
-      nested-component pattern.]
+      [BLOCKED. Only artifact from Task 3 docker run is the harness-failure
+      capture (Hyper Preview placeholder + "pnpm: not found" in HYPER LOGS);
+      test never reached Shift+Enter, so no representative AFTER frame
+      exists. Sent the harness-failure artifact to TG explicitly labelled as
+      "harness blocker, NOT after-fix proof". Real before/after capture
+      deferred until the harness regression lands a fix OR the e2e is
+      retargeted to a non-bulka project with a similar nested-component
+      pattern. **Until then this branch fails CLAUDE.md's TG-screenshot
+      rule and is NOT shippable as "fixed".**]
 - [x] CLAUDE.md rule: no screenshot in TG = bug not fixed.
-      [Acknowledged in TG body verbatim: report frames the deliverable as
-      "fix ready and proven by unit tests on the regression class, e2e GREEN
-      deferred until harness fix" — not as "fixed/done/✅". User decides next
-      step (repair harness vs retarget e2e).]
+      [Acknowledged. Branch state: fix ready at the regression-class boundary,
+      6/6 unit tests GREEN, e2e GREEN-confirmation deferred until harness
+      regression lands. Branch must NOT be merged to main as "fixed" until
+      a representative AFTER screenshot is produced and sent to TG per
+      CLAUDE.md.]
+
+## Blocked on
+
+- bulka Docker dev-server bring-up regression (MEMORY.md, `bulka Docker dev-server
+  bring-up regression 2026-05-08`) — `setupPreviewWithDevServer` fails on retry,
+  test never reaches Shift+Enter. Until the harness is fixed OR this e2e is
+  retargeted at a non-bulka project with a comparable nested-component pattern,
+  the fix on this branch lacks the representative AFTER screenshot CLAUDE.md
+  requires. Treat this branch as `READY FOR REVIEW`, not `READY TO MERGE`.
 
 ## Hard Rules
 

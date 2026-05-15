@@ -1110,7 +1110,7 @@ function logShiftParentWalk(
   selectedId: string,
   steps: TraceableParentStep[],
   parent: { tag: string; ref: string } | null,
-  parentLookupHits: number | null,
+  parentLookupStatus: 'indexed' | null,
 ): void {
   console.debug(SHIFTPARENT_TAG, 'parent-walk', {
     t: Math.round(performance.now()),
@@ -1119,7 +1119,7 @@ function logShiftParentWalk(
     steps,
     parentRef: parent?.ref ?? null,
     parentTag: parent?.tag ?? null,
-    parentLookupHits,
+    parentLookupStatus,
   });
 }
 
@@ -1201,16 +1201,16 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
 
     const trace: TraceableParentStep[] = [];
     const parent = findTraceableParent(el, trace);
-    // Use full-set lookup (itemIndex null) to mirror what the rect overlay
-    // does when computing rects for keyboard-driven selection. Slicing by 0
-    // would underreport hits when the indexed entry holds multiple sibling
-    // hosts (e.g. a `.map()` row).
-    const parentLookupHits = parent ? findElementsByRef(parent.ref, null).length : null;
+    // The walk-up's index-aware predicate (`findElementsByRef(ref).includes(parent)`)
+    // already proved the parent is in the indexed set, so when `parent !== null`
+    // we know hits >= 1. We don't recall `findElementsByRef` here just for the
+    // diagnostic — that doubled the per-keypress cost without adding signal.
+    // Distinguish only the resolvable-vs-unresolvable case in the log.
     logShiftParentWalk(
       nodeRef,
       trace,
       parent ? { tag: parent.element.tagName.toLowerCase(), ref: parent.ref } : null,
-      parentLookupHits,
+      parent ? 'indexed' : null,
     );
     const children = findTraceableChildren(el);
 

@@ -2,6 +2,11 @@
  * @file Index-aware DOM walk-up for keyboard-driven parent navigation.
  *
  * Accessed via: vscode-extension iframe-interaction.ts (Shift+Enter handler).
+ *   SaaS canvas (`client/`) does NOT currently consume this — its keyboard
+ *   navigation goes through `useElementSelection` → `resolveIdsToUuids` and
+ *   never hits a DOM walk-up, so the divergence cannot manifest there. If a
+ *   future SaaS feature introduces a DOM walk-up, route it through this
+ *   function (AGENTS.md: "Parent walk-up MUST be index-aware").
  *
  * Assumptions:
  * - `getSourceKey` returns the per-element mappedSource (no dedup awareness).
@@ -10,9 +15,14 @@
  *   mappedSource, so an intermediate host's per-element key may resolve to a
  *   different DOM element (the deduped outer host) or to nothing (if that
  *   outer host has been unmounted by HMR mid-walk).
+ * - DOM `parentElement` chain cannot cycle (real DOM invariant); the walk
+ *   has no max-depth guard. Custom non-DOM trees passed here will hang.
  *
- * Background — Shift+Enter selection-rect regression
- * (docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md):
+ * Background — Shift+Enter selection-rect regression:
+ *   Plan: docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md
+ *   Diagnosis: docs/notes/2026-05-08-shift-enter-divergence.md
+ *     (architecture map, key-derivation symmetry, dedup asymmetry,
+ *     React 19 _debugStack note)
  *
  * Two consumers of `parentRef` after Shift+Enter:
  *   1. Inspector right-pane decodes the element type from the `file:line:col`

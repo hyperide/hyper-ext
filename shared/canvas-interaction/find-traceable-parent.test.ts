@@ -3,24 +3,21 @@
  * navigation. Covers the GalleryImage-style nested-component regression
  * (docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md).
  *
- * Real DOM is provided by happy-dom (see `shared/test-setup.ts` /
+ * Real DOM is provided by happy-dom (see `test/setup.ts` /
  * `bunfig.toml`). We don't simulate React fibers — only the contract between
  * `getSourceKey` (per-element mappedSource) and `findElementsByRef`
  * (index-aware lookup with dedup), which is what the regression hinges on.
  */
 
 import { describe, expect, it } from 'bun:test';
-import { findTraceableParent, type FindTraceableParentDeps, type TraceableParentStep } from './find-traceable-parent';
+import { type FindTraceableParentDeps, findTraceableParent, type TraceableParentStep } from './find-traceable-parent';
 
 function setupDOM(html: string): HTMLElement {
   document.body.innerHTML = html;
   return document.body;
 }
 
-function buildDeps(
-  keys: Map<HTMLElement, string>,
-  index: Map<string, HTMLElement[]>,
-): FindTraceableParentDeps {
+function buildDeps(keys: Map<HTMLElement, string>, index: Map<string, HTMLElement[]>): FindTraceableParentDeps {
   return {
     getSourceKey: (el) => keys.get(el) ?? null,
     findElementsByRef: (ref) => index.get(ref) ?? [],
@@ -156,7 +153,7 @@ describe('findTraceableParent', () => {
       expect(kinds).toEqual(['not-indexed', 'not-indexed', 'match']);
     });
 
-    it('returns null when an intermediate ancestor key resolves to nothing (HMR unmount)', () => {
+    it('walks past an intermediate ancestor whose key resolves to no element (HMR unmount)', () => {
       // The OUTERMOST host fiber for K_btn was unmounted by HMR between the
       // index build and this walk. findElementsByRef(K_btn) returns []. The
       // naive walk-up would still return K_btn — rect overlay's
@@ -184,6 +181,72 @@ describe('findTraceableParent', () => {
       // Skip the orphaned button, keep walking, land on section.
       expect(result?.element).toBe(section);
       expect(result?.ref).toBe('Index.tsx:445:0');
+    });
+
+    it('returns the NEAREST matching ancestor, not the highest one', () => {
+      // Three ancestors all match. Walk-up MUST stop at the first (nearest)
+      // to preserve "step into the immediate parent" UX — returning the
+      // grandparent would skip a level that the user cannot reach without
+      // an intermediate Shift+Enter press.
+      const root = setupDOM('<section><article><button><img></button></article></section>');
+      const section = root.querySelector('section') as HTMLElement;
+      const article = root.querySelector('article') as HTMLElement;
+      const button = root.querySelector('button') as HTMLElement;
+      const img = root.querySelector('img') as HTMLElement;
+
+      const keys = new Map<HTMLElement, string>([
+        [img, 'Gallery.tsx:1021:6'],
+        [button, 'Gallery.tsx:1001:4'],
+        [article, 'Index.tsx:460:8'],
+        [section, 'Index.tsx:445:0'],
+      ]);
+      const index = new Map<string, HTMLElement[]>([
+        ['Gallery.tsx:1021:6', [img]],
+        ['Gallery.tsx:1001:4', [button]],
+        ['Index.tsx:460:8', [article]],
+        ['Index.tsx:445:0', [section]],
+      ]);
+
+      const result = findTraceableParent(img, buildDeps(keys, index));
+      expect(result?.element).toBe(button);
+      expect(result?.ref).toBe('Gallery.tsx:1001:4');
+    });
+
+    it('returns null for a detached element with no parentElement chain', () => {
+      // Defensive — walk-up's `while (current && …)` guard keeps this safe.
+      // Pinning the contract so a future "optimization" that drops the
+      // null-check doesn't silently NPE on portal-unmounts.
+      const detached = document.createElement('div');
+      const result = findTraceableParent(detached, buildDeps(new Map(), new Map()));
+      expect(result).toBeNull();
+    });
+
+    it('terminates at stopAt without checking it as a candidate', () => {
+      // stopAt is the upper bound of the walk; the function must NOT call
+      // getSourceKey on stopAt itself even if it would match. Today the
+      // walk does `while (current !== deps.stopAt)` — pinning that contract
+      // so a refactor doesn't accidentally let the body element be returned.
+      const root = setupDOM('<section><img></section>');
+      const section = root.querySelector('section') as HTMLElement;
+      const img = root.querySelector('img') as HTMLElement;
+
+      const keys = new Map<HTMLElement, string>([
+        // Note: section has no key, so the walk would normally proceed up to
+        // body. With stopAt=body, it must terminate (return null) without
+        // examining body even though body might in some hypothetical world
+        // have a key.
+        [document.body, 'never:should:run'],
+      ]);
+      const index = new Map<string, HTMLElement[]>([['never:should:run', [document.body]]]);
+      // Stop at section so body is unreachable from this walk.
+      const deps: FindTraceableParentDeps = {
+        getSourceKey: (el) => keys.get(el) ?? null,
+        findElementsByRef: (ref) => index.get(ref) ?? [],
+        stopAt: section,
+      };
+
+      const result = findTraceableParent(img, deps);
+      expect(result).toBeNull();
     });
 
     it('still works when the immediate parent IS its own indexed entry', () => {
