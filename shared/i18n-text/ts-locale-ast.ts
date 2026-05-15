@@ -273,8 +273,5 @@ export function writeTsLocaleValue(content: string, activeLocale: string, key: s
   }
 
   if (!setStringProperty(targetObject, key, value)) return null;
-  // jsescOption.minimal keeps non-ASCII code points verbatim instead of emitting
-  // \uXXXX escapes for freshly-built `t.stringLiteral` nodes. Pre-existing literals
-  // ride through retainLines untouched, but new ones go through jsesc by default.
-  return generate(ast, { retainLines: true, jsescOption: { minimal: true } }).code;
+  return generate(ast, { retainLines: true }).code;
 }
