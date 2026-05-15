@@ -481,15 +481,9 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
   // Fetch available i18n keys after i18nText arrives (VS Code mode only)
   useEffect(() => {
-    // Always clear before re-fetching: when the user switches between two i18n
-    // elements, the previous element's key list must not leak into the new one's
-    // RPC window. handleI18nKeyChange relies on `availableKeys === undefined` as
-    // the "list not yet known" signal to bail (prevents creating a "new" key that
-    // is actually a real translation in the new element's locale, which would
-    // silently overwrite it via writeI18nResource).
-    setAvailableKeys(undefined);
     const i18nText = classData.i18nText;
     if (!canvas || !i18nText || i18nText.kind !== 'i18n') {
+      setAvailableKeys(undefined);
       latestKeysRequestRef.current = null;
       return;
     }
@@ -501,9 +495,9 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       if (msg.requestId !== requestId) return;
       if (latestKeysRequestRef.current !== requestId) return;
       unsub();
-      // On failure, leave availableKeys === undefined so handleI18nKeyChange bails
-      // rather than treating an unknown key as "create new" against an empty list.
-      setAvailableKeys(msg.success ? msg.keys : undefined);
+      if (msg.success) {
+        setAvailableKeys(msg.keys);
+      }
     });
 
     canvas.sendEvent({

@@ -317,20 +317,12 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   const layout = await discoverLayout(projectRoot, namespace, activeLocale, fileIO);
 
   if (!layout) {
-    return {
-      availableLocales: [],
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-locale-file',
-      writable: false,
-    };
+    return { availableLocales: [], activeLocale, resolvedText: null, unresolvedReason: 'missing-locale-file' };
   }
 
   const { getLocaleFilePath, availableLocales, mergedData } = layout;
 
-  // Merged single-file format (translations.ts): data already parsed, no file I/O needed.
-  // The backing file is TS/JS — `writeI18nResource` refuses these as `unsupported-format`,
-  // so writable: false even when the key resolves cleanly.
+  // Merged single-file format: data already parsed, no file I/O needed
   if (mergedData) {
     const localeData = mergedData[activeLocale] ?? (fallbackLocale ? mergedData[fallbackLocale] : undefined);
     const effectiveLocale = mergedData[activeLocale] !== undefined ? activeLocale : (fallbackLocale ?? activeLocale);
@@ -340,32 +332,19 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
         activeLocale: effectiveLocale,
         resolvedText: null,
         unresolvedReason: 'missing-locale-file',
-        writable: false,
       };
     }
     const resolvedText = resolveKey(localeData, key);
     if (resolvedText === null) {
-      return {
-        availableLocales,
-        activeLocale: effectiveLocale,
-        resolvedText: null,
-        unresolvedReason: 'missing-key',
-        writable: false,
-      };
+      return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'missing-key' };
     }
-    return { availableLocales, activeLocale: effectiveLocale, resolvedText, writable: false };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText };
   }
 
-  // Detect unsupported format (TS/JS per-locale files) — same write restriction as merged.
+  // Detect unsupported format (TS/JS per-locale files)
   const activeFilePath = getLocaleFilePath(activeLocale);
   if (activeFilePath.endsWith('.ts') || activeFilePath.endsWith('.js')) {
-    return {
-      availableLocales,
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'unsupported-format',
-      writable: false,
-    };
+    return { availableLocales, activeLocale, resolvedText: null, unresolvedReason: 'unsupported-format' };
   }
 
   // Read active locale file, fall back if needed
@@ -389,14 +368,7 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   }
 
   if (content === null) {
-    // Active locale file unreachable; write path will refuse (`missing-locale-file`).
-    return {
-      availableLocales,
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-locale-file',
-      writable: false,
-    };
+    return { availableLocales, activeLocale, resolvedText: null, unresolvedReason: 'missing-locale-file' };
   }
 
   // Parse JSON
@@ -404,28 +376,14 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   try {
     data = JSON.parse(content);
   } catch {
-    // Corrupt JSON — `writeI18nResource` refuses (`parse-error`), so not writable.
-    return {
-      availableLocales,
-      activeLocale: effectiveLocale,
-      resolvedText: null,
-      unresolvedReason: 'parse-error',
-      writable: false,
-    };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'parse-error' };
   }
 
   const resolvedText = resolveKey(data, key);
 
-  // JSON layouts: the file exists and parses, so writes (including missing-key) succeed.
   if (resolvedText === null) {
-    return {
-      availableLocales,
-      activeLocale: effectiveLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-key',
-      writable: true,
-    };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'missing-key' };
   }
 
-  return { availableLocales, activeLocale: effectiveLocale, resolvedText, writable: true };
+  return { availableLocales, activeLocale: effectiveLocale, resolvedText };
 }

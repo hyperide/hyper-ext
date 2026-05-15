@@ -524,33 +524,4 @@ describe('Bulka project — real client/lib/translations.ts', () => {
     });
     expect(result.resolvedText).toBe('Булка');
   });
-
-  // Merged TS translations.ts is read-only — `writeI18nResource` refuses TS files
-  // (see write-i18n-resource.ts:97). A `writable: true` here would let the inspector
-  // enable typing only for writes to fail silently. Pin both branches: resolved key
-  // and missing key.
-  it('marks writable=false for resolved key in merged translations.ts', async () => {
-    const result = await resolveI18nResource({
-      projectRoot: BULKA_ROOT,
-      library: 'custom',
-      key: 'brand.name',
-      activeLocale: 'en',
-      fileIO: realFileIO,
-    });
-    expect(result.resolvedText).toBe('Bulka');
-    expect(result.writable).toBe(false);
-  });
-
-  it('marks writable=false for missing key in merged translations.ts', async () => {
-    const result = await resolveI18nResource({
-      projectRoot: BULKA_ROOT,
-      library: 'custom',
-      key: 'nonexistent.key.path',
-      activeLocale: 'en',
-      fileIO: realFileIO,
-    });
-    expect(result.resolvedText).toBeNull();
-    expect(result.unresolvedReason).toBe('missing-key');
-    expect(result.writable).toBe(false);
-  });
 });
