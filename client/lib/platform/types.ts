@@ -196,6 +196,7 @@ export type PlatformMessage =
   | {
       type: 'styles:fetchI18nKeys';
       requestId: string;
+      library?: I18nLibrary;
       namespace?: string;
       activeLocale: string;
     }
