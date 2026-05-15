@@ -56,7 +56,13 @@ Do **not** touch:
 - `I18nTextInspector.tsx` UI — already accepts `resolvedText: null` (renders empty input).
 - Any unrelated ralphex plans, processes, or worktrees.
 
-### Task 1 — Restore `_createBindingFromDomMatch` helper
+### Task 1 — Restore `_createBindingFromDomMatch` helper [x]
+
+- [x] Re-add helper as introduced in `d8874e13`
+- [x] Replace inline binding at custom + DOM-text shortcut site
+- [x] Replace inline binding at i18next unsupported fallback site
+- [x] Import `type DomTextI18nMatch`
+- [x] Restore unit test "resolves selected locale text after DOM-text key lookup"
 
 In `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts`:
 
@@ -92,6 +98,10 @@ removed in `3bff90dd`, restore it from `git show d8874e13 -- '*StyleReadService.
 
 ### Task 2 — Drop the `unsupported` short-circuit on `resolvedText === null`
 
+- [ ] Replace `if (!resolved || resolved.resolvedText === null)` bail-out with `if (!resolved)` only
+- [ ] Build binding with `resolvedText: resolved.resolvedText` (may be `null`)
+- [ ] Add unit test for `resolvedText: null` returning `kind: 'i18n'` not `'unsupported'`
+
 `StyleReadService.ts:385–387` currently:
 ```ts
 if (!resolved || resolved.resolvedText === null) {
@@ -117,6 +127,10 @@ NOT `kind: 'unsupported'`.
 
 ### Task 3 — E2E: locale switch in bulka-the-dog (RED first)
 
+- [ ] Create `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-locale-switch.spec.ts`
+- [ ] Verify RED before fix, GREEN after
+- [ ] Capture before/after screenshots
+
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-locale-switch.spec.ts`:
 
 1. Launch bulka via `launchVSCode` (see `ext-test-projects/CLAUDE.md`).
@@ -134,6 +148,10 @@ Add `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-locale-switch.spec
 Test must be **RED before Tasks 1–2 land**, **GREEN after**.
 
 ### Task 4 — E2E: new key visibility in inspector (RED first)
+
+- [ ] Create `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-new-key-visibility.spec.ts`
+- [ ] Verify RED before Task 2 fix, GREEN after
+- [ ] Tolerate empty resolvedText (merged-TS write coordination)
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-i18n-new-key-visibility.spec.ts`:
 
@@ -161,6 +179,9 @@ If your worktree happens to have the merged-TS write fix already (rare), still w
 to tolerate empty text — reviewer will tighten later.
 
 ### Task 5 — Telegram handoff
+
+- [ ] Send TG report via `send-tg-report.sh`
+- [ ] Send Task 3 + Task 4 e2e screenshots via `send-tg-file.sh ... --photo`
 
 - Send a single TG report via `send-tg-report.sh` summarising:
   - what changed (Tasks 1 + 2 file references, helper signature)
