@@ -53,9 +53,9 @@ doesn't exist). To change locale we need to:
 
 ### Task 3: Add activeLocale state to RightSidebar, implement handleLocaleChange
 
-- [ ] In `RightSidebar.tsx`: add `const [activeLocale, setActiveLocale] = useState<string | undefined>(undefined)`
-- [ ] Implement `handleLocaleChange(locale: string)`: sets `activeLocale`, then calls `setStyleRefreshKey(k => k + 1)` (or equivalent re-read trigger)
-- [ ] Pass `onLocaleChange={handleLocaleChange}` to `I18nTextInspector`
+- [x] In `RightSidebar.tsx`: add `const [activeLocale, setActiveLocale] = useState<string | undefined>(undefined)` — already exists as `i18nActiveLocale` at :216 (commit 20fe6ed6)
+- [x] Implement `handleLocaleChange(locale: string)`: sets `activeLocale`, then calls `setStyleRefreshKey(k => k + 1)` (or equivalent re-read trigger) — `handleI18nLocaleChange` at :736, re-read triggered automatically via `activeLocale` in `useElementStyleData` deps
+- [x] Pass `onLocaleChange={handleLocaleChange}` to `I18nTextInspector` — `onLocaleChange={handleI18nLocaleChange}` at :1415
 
 ### Task 4: Thread activeLocale through useElementStyleData → PanelRouter message
 
