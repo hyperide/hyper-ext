@@ -354,6 +354,33 @@ describe('generatePreviewContent', () => {
     expect(content).toContain("'src/components/UserSuggestion.tsx': toPreviewComponent(UserSuggestion),");
   });
 
+  it('includes generic context-shaped prop stubs (state, theme, i18n, etc.)', () => {
+    const content = generatePreviewContent([makeEntry('src/components/BoardView.tsx', 'BoardView')]);
+
+    // Each new stub key should be present in previewFallbackProps
+    expect(content).toContain('dispatch:');
+    expect(content).toContain('state: new Proxy(');
+    expect(content).toContain('theme: new Proxy(');
+    expect(content).toContain('i18n:');
+    expect(content).toContain('session:');
+    expect(content).toContain('auth:');
+    expect(content).toContain('query:');
+    expect(content).toContain('mutation:');
+    expect(content).toContain('fetcher:');
+    expect(content).toContain('intl:');
+
+    // Existing store proxy must still be present
+    expect(content).toContain('store: new Proxy(');
+
+    // Output must still be valid TSX
+    expect(() =>
+      parse(content, {
+        sourceType: 'module',
+        plugins: ['typescript', 'jsx'],
+      }),
+    ).not.toThrow();
+  });
+
   it('provides calendar fallback props for standalone calendar components', () => {
     const content = generatePreviewContent([makeEntry('src/components/CalendarSidebar.tsx', 'CalendarSidebar')]);
 

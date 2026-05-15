@@ -457,6 +457,43 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('      return undefined;');
   lines.push('    },');
   lines.push('  }),');
+  // Generic context-shaped prop stubs for components that destructure
+  // common React/Remix/Redux/i18n/query patterns directly (not via store).
+  // These keep BoardView({ store, dispatch, theme }) and similar shapes
+  // rendering instead of crashing on undefined member access.
+  lines.push('  dispatch: () => {},');
+  lines.push('  reducer: () => {},');
+  lines.push('  state: new Proxy({}, {');
+  lines.push('    get: (_target, prop) => {');
+  lines.push("      if (typeof prop !== 'string') return undefined;");
+  lines.push(
+    "      if (prop.startsWith('set') || prop.startsWith('toggle') || prop.startsWith('on') || prop.startsWith('add') || prop.startsWith('remove') || prop.startsWith('update') || prop.startsWith('clear') || prop.startsWith('reset') || prop.startsWith('open') || prop.startsWith('close') || prop.startsWith('select')) {",
+  );
+  lines.push('        return () => {};');
+  lines.push('      }');
+  lines.push(
+    "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+  );
+  lines.push(
+    "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",
+  );
+  lines.push('      return undefined;');
+  lines.push('    },');
+  lines.push('  }),');
+  lines.push('  theme: new Proxy({ colors: {}, spacing: {}, fontSizes: {}, shadows: {}, breakpoints: {} }, {');
+  lines.push('    get: (target, prop) => {');
+  lines.push("      if (typeof prop !== 'string') return undefined;");
+  lines.push('      if (prop in target) return (target as Record<string, unknown>)[prop];');
+  lines.push('      return {};');
+  lines.push('    },');
+  lines.push('  }),');
+  lines.push("  i18n: { t: (key: string) => key, language: 'en', changeLanguage: () => {} },");
+  lines.push("  session: { user: null, isAuthenticated: false, sessionId: 'preview-session' },");
+  lines.push("  auth: { user: null, isAuthenticated: false, sessionId: 'preview-session' },");
+  lines.push('  query: { data: undefined, isLoading: false, isError: false, error: null, refetch: () => {} },');
+  lines.push('  mutation: { mutate: () => {}, mutateAsync: async () => {}, isPending: false, isError: false },');
+  lines.push("  fetcher: { submit: () => {}, load: () => {}, data: undefined, state: 'idle' },");
+  lines.push("  intl: { formatMessage: (m: { defaultMessage?: string }) => m?.defaultMessage ?? '', locale: 'en' },");
   lines.push('};');
   lines.push('');
 
