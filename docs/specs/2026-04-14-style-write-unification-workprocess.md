@@ -3046,3 +3046,37 @@ S2 temporary stall at 07:43–07:51 UTC (teardown of `component with ternary` te
 took longer than usual) resolved itself — S2 resumed and is now at 71.5%.
 
 No action needed. Continue monitoring until all 3 shards complete.
+
+## 📍 Remix cold compile root cause + 3 fixes (2026-04-28 ~10:15 CEST)
+
+### Root cause (investigated while Run #19 was in progress)
+
+Delay is NOT Remix compilation time — it is **Vite `optimizeDeps` cold pre-bundling**.
+Dev server starts in 1–2s. While Vite pre-bundles dependencies (7.1MB for Remix vs
+2.4MB for plain Vite), ALL requests return 403/504. PreviewProxy retries for ~222s,
+then `setup-preview` does 60s refresh-cycles. Total until timeout: 520s.
+
+Second worker on same project takes 5–8s because `.vite/deps/` is already populated
+in the shared workspace volume.
+
+### 3 fixes applied (ext-test-projects main, 3 atomic commits, pushed)
+
+1. **`e097090` — `docker-entrypoint.sh` pre-warm** (highest impact):
+   Added `vite optimize --force` step after rsync+install for all `remix-*/` dirs.
+   One-time cost ~40–90s total at container startup. Eliminates 323–524s per-test
+   cold compile. Toggle off with `HYPER_E2E_VITE_PREWARM=0`.
+
+2. **`0882fef` — `optimizeDeps.include` in all 4 Remix `vite.config.ts`**:
+   Tells Vite which packages to pre-bundle without full import scanning.
+   - remix-tw4-twitter, remix-cssmodules-spotify: `react`, `react-dom`, `@remix-run/react`
+   - remix-antd-jira: + `antd`, `@ant-design/icons`
+   - remix-mui-gmail: + `@mui/material`, `@mui/icons-material`, `@emotion/{react,styled}`
+
+3. **`50511a5` — poll timeout 520s → 600s, `test.setTimeout` 720s → 840s**:
+   Safety margin if pre-warm fails or `.vite/deps` is invalidated at runtime.
+
+### Image rebuild
+
+`docker-parallel-run.sh` checks `docker-entrypoint.sh` mtime against image age.
+Modified entrypoint triggers auto-rebuild on next `bun run test:docker`.
+Rebuild is fast (only the `COPY entrypoint + chmod` layer re-runs; bake layer cached).
