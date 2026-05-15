@@ -2812,3 +2812,56 @@ Result: 2 passed.
 - hypercanvas.openAIChat — chat panel opens
 - hypercanvas.openInspector — inspector sidebar opens
 ```
+
+## VS Code E2E Blank Preview Fix 2026-04-21 author: codex
+
+Root cause:
+
+```text
+`Hyper: Open Preview` opened the editor webview with `vscode.ViewColumn.Beside`.
+In the E2E Extension Development Host this created a live Hyper Canvas webview
+iframe, but VS Code positioned that parent `iframe.webview` outside the visible
+viewport (`y=872` in an 872px-tall window). The React app, toolbar, and nested
+preview iframe were loaded, so the previous DOM-only `isPreviewLoaded()` check
+returned true while the visible center editor pane stayed blank.
+```
+
+Fix:
+
+```text
+Main extension:
+- open Hyper Canvas in `vscode.ViewColumn.Two` instead of `Beside`.
+
+E2E harness:
+- require the parent `iframe.webview` to intersect the VS Code viewport before
+  treating preview as loaded;
+- keep `setMode()` from clicking an already-active mode button;
+- add a preview visibility regression test.
+```
+
+Validation:
+
+```text
+cd /Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview
+npm run build
+  pass (pre-existing Browserslist/Tailwind warnings still printed)
+
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/preview-visibility.spec.ts \
+  tests/project-independent/canvas-bugs.spec.ts \
+  -g "Preview visibility|Tab in design mode|Shift\\+Tab in design mode" \
+  --workers=1 --reporter=line --output=/tmp/hyper-e2e-targeted-results
+  Result: 3 passed.
+
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/ai-chat.spec.ts \
+  -g "selected element context passed to AI|canvas state \
+\\(selectedIds, mode\\) included in context" \
+  --workers=1 --reporter=line --output=/tmp/hyper-e2e-ai-context-results
+  Result: 2 passed.
+```

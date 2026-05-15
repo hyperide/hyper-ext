@@ -494,7 +494,7 @@ export function activate(context: vscode.ExtensionContext) {
       const componentName = patch.currentComponent.name;
 
       // Auto-open Preview Panel if not already visible
-      previewPanel?.createOrShow(vscode.ViewColumn.Beside);
+      previewPanel?.createOrShow(vscode.ViewColumn.Two);
 
       // Open the component file in the left editor group (ViewColumn.One)
       // so the user can see the code alongside the preview.
@@ -792,7 +792,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
-      previewPanel?.createOrShow(vscode.ViewColumn.Beside);
+      previewPanel?.createOrShow(vscode.ViewColumn.Two);
     }),
   );
 

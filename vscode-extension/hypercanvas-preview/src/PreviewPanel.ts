@@ -101,7 +101,7 @@ export class PreviewPanel {
     const panel = vscode.window.createWebviewPanel(
       PreviewPanel.viewType,
       'Hyper Canvas',
-      column || vscode.ViewColumn.Beside,
+      column || vscode.ViewColumn.Two,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
