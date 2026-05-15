@@ -42,36 +42,36 @@ Out of scope:
 
 ### Task 1: RED unit test — default-order item sorted in correct visual position
 
-- [ ] Add a fixture to `shared/canvas-interaction/order-drag-detect.test.ts`:
+- [x] Add a fixture to `shared/canvas-interaction/order-drag-detect.test.ts`:
       three siblings, two explicit `order-*` and one default (no order).
       Assert `computeOrderWritePlan` sorts the no-order child at the correct
       visual position (treat missing as 0, name `order-first` as -9999, etc.).
-- [ ] Test must be RED on current main.
+- [x] Test must be RED on current main.
 
 ### Task 2: Fix order-class-utils to return numeric default for missing class
 
-- [ ] In `getOrderValue` (or equivalent at line ~58), return `0` for elements
+- [x] In `getOrderValue` (or equivalent at line ~58), return `0` for elements
       without any `order-*` class, and the resolved numeric for `order-first`
       (-9999), `order-last` (9999), `order-none` (0).
-- [ ] Update `computeOrderWritePlan` sort comparator to use the new numeric.
-- [ ] Existing 53 unit tests + new test from Task 1 must all pass.
+- [x] Update `computeOrderWritePlan` sort comparator to use the new numeric.
+- [x] Existing 53 unit tests + new test from Task 1 must all pass.
 
 ### Task 3: Thread cursor-derived position into _resolveOrderWritePlan
 
-- [ ] Inspect `_dragPointerUp` in `vscode-extension/.../iframe-interaction.ts`
-      — find where it computes drop-position relative to target (the existing
-      `dropPosition` `'before' | 'after' | 'inside'` enum probably exists from
-      the broader drag flow).
-- [ ] Pass `dropPosition` into `_resolveOrderWritePlan`. Update
-      `computeOrderWritePlan` signature: `({ source, target, position }) → plan`.
-- [ ] When `position === 'before'`: source's new visual index is target's
-      current visual index (target shifts after).
-      When `position === 'after'`: source's new visual index is target's
-      current visual index + 1.
-      When `position === 'inside'`: undefined (not relevant for order-N — just
-      use AST insert path; return null plan).
-- [ ] Add a unit test per branch in
-      `shared/canvas-interaction/order-drag-detect.test.ts`.
+- [x] Inspect `_dragPointerUp` in `vscode-extension/.../iframe-interaction.ts`
+      — `_dragPointerUp` already computes `position: 'before' | 'after'` from
+      cursor X/Y vs target rect halves at line ~1759. No `'inside'` enum exists
+      yet at the iframe layer; the order-N path treats `'inside'` as null.
+- [x] Pass `dropPosition` into `_resolveOrderWritePlan`. Updated
+      `computeOrderWritePlan` signature to options-object
+      `({ siblings, source, target, position, viewportWidth }) → plan`.
+- [x] `position === 'before'` → source inserted at target's visual index;
+      `position === 'after'` → at target's visual index + 1; `position === 'inside'`
+      → returns null (caller falls back to AST insert path).
+- [x] Added unit tests per branch in
+      `shared/canvas-interaction/order-drag-detect.test.ts` (new
+      `cursor-derived position (Task 3)` describe block + cursor-flip-outcome
+      test that proves the codex finding 2 bug is gone).
 
 ### Task 4: codex review pass — confirm no remaining findings
 

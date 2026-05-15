@@ -103,9 +103,26 @@ export function pickActiveBreakpoint(
 }
 
 /**
+ * Cursor-derived drop position relative to the target element. `inside` short-circuits
+ * to a null plan because the order-N path can only model "before / after a sibling" —
+ * dropping into the middle of a target is the AST insert path's job.
+ */
+export type OrderDropPosition = 'before' | 'after' | 'inside';
+
+export interface ComputeOrderWritePlanInput {
+  readonly siblings: readonly SiblingInfo[];
+  readonly source: string;
+  readonly target: string;
+  /** Cursor-derived drop position (left/right or top/bottom half of target, or its centre). */
+  readonly position: OrderDropPosition;
+  readonly viewportWidth: number;
+}
+
+/**
  * Given the parent's source-bearing children plus the source/target/position of a drag,
  * return a plan that renumbers `order-*` densely (1..N) at the active breakpoint, OR
  * `null` when:
+ *   - position is `'inside'` (caller should fall back to AST insert), or
  *   - no sibling has any `order-*` token (parent isn't order-driven), or
  *   - source / target aren't in the sibling list (drag crossed a boundary), or
  *   - the active breakpoint is unknown / not used by any sibling, or
@@ -121,16 +138,14 @@ export function pickActiveBreakpoint(
  *   3. It writes the minimum diff — siblings whose new value equals their old one
  *      are skipped via `entries` filtering.
  *
- * @param viewportWidth - The iframe's `window.innerWidth`. Used to pick the active
- *   Tailwind variant via `pickActiveBreakpoint`.
+ * Position is cursor-derived (which half of the target the cursor lifted over), NOT
+ * source-vs-drop geometry — without that, dragging a sibling onto the LEFT half of a
+ * target still treated the target's old slot as the destination, ignoring the user's
+ * obvious intent.
  */
-export function computeOrderWritePlan(
-  siblings: readonly SiblingInfo[],
-  sourceElementId: string,
-  targetElementId: string,
-  position: 'before' | 'after',
-  viewportWidth: number,
-): OrderWritePlan | null {
+export function computeOrderWritePlan(input: ComputeOrderWritePlanInput): OrderWritePlan | null {
+  const { siblings, source: sourceElementId, target: targetElementId, position, viewportWidth } = input;
+  if (position === 'inside') return null;
   if (siblings.length < 2) return null;
   // Defense-in-depth: drop-on-self resolves to no reorder. Caller (`_dragPointerUp`)
   // already rejects this case earlier, but the public `computeOrderWritePlan` is
