@@ -10,7 +10,7 @@ import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
-import { resolveCallSiteSource } from '@shared/canvas-interaction/resolve-source';
+import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
@@ -90,7 +90,11 @@ const iframeResolver: TracingResolver = {
   },
 
   getItemIndex(element: HTMLElement): number {
-    return getItemIndexFromDOM(element);
+    const fiber = getFiberFromDOM(element);
+    const directItemIndex = getItemIndexFromDOM(element);
+    const source = getSourceLocationFromDOM(element);
+    if (source === null) return directItemIndex;
+    return resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex).itemIndex;
   },
 
   resolveClickLocal(element: HTMLElement): LocalResolveResult | null {
@@ -139,11 +143,10 @@ const iframeResolver: TracingResolver = {
 
     if (source === null) return null;
 
-    // Resolve to call site for imported component internals (shared logic)
-    const fiber2 = getFiberFromDOM(element);
-    source = resolveCallSiteSource(source, fiber2, renderedComponentPath);
-
-    const itemIndex = getItemIndexFromDOM(element);
+    const directItemIndex = getItemIndexFromDOM(element);
+    const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex);
+    source = target.source;
+    const itemIndex = target.itemIndex;
     // Extension's inline resolver does not have a node map cache,
     // so we generate a synthetic nodeRef from source location.
     // The extension host's NodeMapService will resolve this to a real entry.
@@ -366,6 +369,38 @@ function buildMapUrl(url: string): string {
   }
 }
 
+function isViteSourceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.includes('/src/') && !parsed.pathname.includes('/node_modules/');
+  } catch {
+    return url.includes('/src/') && !url.includes('/node_modules/');
+  }
+}
+
+async function loadInlineSourceMap(url: string): Promise<SourceMapV3 | null> {
+  const srcRes = await fetch(url);
+  if (!srcRes.ok) return null;
+
+  const text = await srcRes.text();
+  const inlineMatch = text.match(/\/\/# sourceMappingURL=data:application\/json;base64,(.+)$/m);
+  const encoded = inlineMatch?.[1];
+  if (!encoded) return null;
+
+  const decoded = atob(encoded);
+  return JSON.parse(decoded) as SourceMapV3;
+}
+
+async function loadExternalSourceMap(url: string): Promise<SourceMapV3 | null> {
+  const mapUrl = url.endsWith('.map') ? url : buildMapUrl(url);
+  const mapRes = await fetch(mapUrl);
+  if (!mapRes.ok) return null;
+  if (mapRes.status === 204) return null;
+  const contentType = mapRes.headers.get('content-type') ?? '';
+  if (contentType.includes('text/html')) return null;
+  return (await mapRes.json()) as SourceMapV3;
+}
+
 /**
  * Async: fetch source map for one client chunk URL, resolve and cache the given position.
  * Marks overlays dirty when the result arrives so the overlay re-renders immediately.
@@ -378,25 +413,16 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
   try {
     let sm: SourceMapV3 | null = null;
 
-    // Try .map file first (Next.js, webpack).
-    // Must append .map to the pathname, NOT after query params.
-    // Vite adds ?t=<timestamp> for HMR — naively appending .map after the query
-    // creates e.g. /src/App.tsx?t=123.map which Vite misroutes through the OXC
-    // transform plugin instead of the source map middleware, causing PARSE_ERROR.
-    const mapUrl = url.endsWith('.map') ? url : buildMapUrl(url);
-    const mapRes = await fetch(mapUrl);
-    if (mapRes.ok) {
-      sm = (await mapRes.json()) as SourceMapV3;
+    if (isViteSourceUrl(url)) {
+      sm = await loadInlineSourceMap(url);
+      if (!sm) {
+        sm = await loadExternalSourceMap(url);
+      }
     } else {
-      // Vite: source maps are INLINE in the module itself (data: URI)
-      const srcRes = await fetch(url);
-      if (srcRes.ok) {
-        const text = await srcRes.text();
-        const inlineMatch = text.match(/\/\/# sourceMappingURL=data:application\/json;base64,(.+)$/m);
-        if (inlineMatch) {
-          const decoded = atob(inlineMatch[1]);
-          sm = JSON.parse(decoded) as SourceMapV3;
-        }
+      // Next.js and webpack expose external source maps for bundled chunks.
+      sm = await loadExternalSourceMap(url);
+      if (!sm) {
+        sm = await loadInlineSourceMap(url);
       }
     }
 
@@ -525,11 +551,14 @@ function retryPendingClick(): void {
     return;
   }
   // Try client source maps first, then server source maps (RSC)
-  const source = resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber);
+  let source = resolveViaClientSourceMap(fiber) ?? resolveViaServerSourceMap(fiber);
   if (!source) return; // still warming — keep pending
   const element = pendingClickElement;
   pendingClickElement = null;
-  const itemIndex = getItemIndexFromDOM(element);
+  const directItemIndex = getItemIndexFromDOM(element);
+  const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex);
+  source = target.source;
+  const itemIndex = target.itemIndex;
   const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage({ type: 'hypercanvas:elementClick', elementId: syntheticRef, itemIndex, source }, '*');

@@ -306,6 +306,23 @@ describe('getItemIndexFromFiber', () => {
     expect(getItemIndexFromFiber(fiber2)).toBe(1);
   });
 
+  it('returns the ancestor map item index for a nested React 18 child', () => {
+    const itemSource = mockDebugSource({ lineNumber: 10, columnNumber: 7 });
+    const childSource = mockDebugSource({ lineNumber: 11, columnNumber: 9 });
+    const list = mockFiber();
+    const item1 = mockFiber({ _debugSource: itemSource, return: list });
+    const item2 = mockFiber({ _debugSource: itemSource, return: list });
+    const child1 = mockFiber({ _debugSource: childSource, return: item1 });
+    const child2 = mockFiber({ _debugSource: childSource, return: item2 });
+
+    list.child = item1;
+    item1.sibling = item2;
+    item1.child = child1;
+    item2.child = child2;
+
+    expect(getItemIndexFromFiber(child2)).toBe(1);
+  });
+
   it('returns 0 for single-instance React 18 fiber', () => {
     const source = mockDebugSource();
     const parent = mockFiber();
