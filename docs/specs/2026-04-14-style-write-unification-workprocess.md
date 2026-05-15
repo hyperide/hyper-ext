@@ -3235,3 +3235,25 @@ After every commit in this branch, append a short workprocess entry with the
 commit hash, scope, validation, and any remaining risk before moving on to the
 next work item. This file is the coordination ledger for humans and agents.
 ```
+
+Post-commit entry 2026-04-21 22:18 CEST:
+
+```text
+- Commit d24f2f8c fix(ext): render VS Code sidebar with matching panel layout
+  (HYP-363).
+  Scope: VS Code webview no longer renders the SaaS-only source-control panel,
+  and LeftSidebar filters persisted layouts against the actually rendered panel
+  set before passing them to react-resizable-panels or saving them back.
+  Validation before commit: bunx knip was run and still reports the known
+  repository-wide unused-file issue; bunx biome check LeftSidebar.tsx passed;
+  bunx tsc --noEmit --pretty false passed; npm run build passed;
+  ./build-and-install.sh passed; vscmd reload ran; focused E2E with
+  --retries=0 passed for missing dependency import, explorer cache reload, and
+  PI-4-1; grep found no [test-errors] or Invalid 5 panel layout in focused
+  logs; markdownlint on this file passed; git diff --check passed.
+  Commit hooks: react-hooks-import, biome lint, and typecheck passed.
+  Review note: nested codex review was skipped because the user explicitly
+  forbade launching Codex from inside Codex.
+  Remaining risk: the full 2209-test E2E run was stopped for analyzed signals
+  and has not yet completed end-to-end after these fixes.
+```
