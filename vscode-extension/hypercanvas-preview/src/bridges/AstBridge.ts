@@ -465,15 +465,16 @@ export class AstBridge {
     if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
     }
-    // Allow any printable chars in keys; reject only control chars (newline, null, etc.)
-    // that would break JSON parsing. Keys pass through JSON.stringify for JSX embedding.
+    // Reject control chars (would break JSON parsing) and JSX-structural chars
+    // ({, }, <, >). Curly braces in particular corrupt the source: the JSX-rewrite
+    // path below builds `{t("KEY")}` and routes through parseMixedContent's
+    // regex `/\{([^}]+)\}/g`, which is naïve about string literals — a `}` inside
+    // the key prematurely closes the expression and the rest leaks into JSXText.
     const keyLen = message.key.length;
     if (
       keyLen === 0 ||
       keyLen > 256 ||
-      message.key.includes('\n') ||
-      message.key.includes('\r') ||
-      message.key.includes('\0')
+      /[\n\r\0{}<>]/.test(message.key)
     ) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }
@@ -521,7 +522,12 @@ export class AstBridge {
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
+      // JSON.stringify covers backslashes, U+2028/2029, and quote escapes that the
+      // earlier `replace(/'/g, "\\'")` missed. Structural chars ({, }, <, >) and
+      // control chars are already rejected by the key validator above, so the
+      // resulting expression is safe to feed into the regex-based parseMixedContent.
+      const newExpression = `{t(${JSON.stringify(message.key)})}`;
+      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );
       if (!updateResult.success) {
