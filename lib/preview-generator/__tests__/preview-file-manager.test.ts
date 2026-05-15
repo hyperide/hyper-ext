@@ -96,6 +96,46 @@ describe('PreviewFileManager', () => {
       const path = await manager.getPreviewFilePath();
       expect(path).toBe('/project/src/__canvas_preview__.tsx');
     });
+
+    it('should use client/ when index.html has <script type="module" src="/client/main.tsx">', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set(
+        '/project/index.html',
+        `<!DOCTYPE html>
+    <html>
+      <body>
+        <div id="root"></div>
+        <script type="module" src="/client/main.tsx"></script>
+      </body>
+    </html>`,
+      );
+      const manager = createManager(io);
+      const path = await manager.getPreviewFilePath();
+      expect(path).toBe('/project/client/__canvas_preview__.tsx');
+    });
+
+    it('should prefer src/ over index.html when src/ directory exists', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/main.tsx', 'export {}');
+      io.files.set(
+        '/project/index.html',
+        `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+      );
+      const manager = createManager(io);
+      const path = await manager.getPreviewFilePath();
+      expect(path).toBe('/project/src/__canvas_preview__.tsx');
+    });
+
+    it('should use app/ when index.html has <script type="module" src="/app/main.tsx">', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set(
+        '/project/index.html',
+        `<!DOCTYPE html><html><body><script type="module" src="/app/main.tsx"></script></body></html>`,
+      );
+      const manager = createManager(io);
+      const path = await manager.getPreviewFilePath();
+      expect(path).toBe('/project/app/__canvas_preview__.tsx');
+    });
   });
 
   describe('ensureComponent', () => {

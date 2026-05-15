@@ -221,7 +221,7 @@ export class ComponentScanner {
 
     // Determine source roots to scan
     const sourceRoots: string[] = [];
-    for (const dir of ['src', 'app']) {
+    for (const dir of ['src', 'app', 'client']) {
       const fullPath = path.join(projectRoot, dir);
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
         sourceRoots.push(fullPath);

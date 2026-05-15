@@ -418,4 +418,19 @@ describe('ComponentScanner.detectProjectStructure', () => {
     // No components/ dir → nothing to detect
     expect(structure.compositeComponentsPaths).toHaveLength(0);
   });
+
+  it('should detect client/components/ as composites (bulka-the-dog pattern)', () => {
+    const root = createProject('client-root', ['client/components'], {
+      'package.json': '{"dependencies":{"react":"18","vite":"5"}}',
+      'client/main.tsx': 'import App from "./App"; render(<App/>);',
+      'client/App.tsx': 'export function App() { return <div/>; }',
+      'client/components/Gallery.tsx': 'export function Gallery() { return <div/>; }',
+      'client/components/Header.tsx': 'export function Header() { return <header/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'client', 'components'));
+  });
 });
