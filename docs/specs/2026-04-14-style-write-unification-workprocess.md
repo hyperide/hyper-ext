@@ -1695,3 +1695,24 @@ fail.
 
 Прогон продолжается. Это test infra fix в ext-test-projects, не
 extension fix. Сделаю после прогона.
+
+## 📍 2026-04-27 03:25 CEST: 3h checkpoint
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 479  | 436  | 28   | 9    |
+| s2    | 356  | 273  | 17   | 60   |
+| s3    | 397  | 256  | 19   | 119  |
+| s4    | 168  | 74   | 45   | 40   |
+| **Σ** | 1400 | 1039 | 109  | 228  |
+
+**Pass rate 90.5%** (с extension-lifecycle cluster ~12 fails из-за
+2c090915). Без них реальный pass ~94%.
+
+Disk 20GB free, стабилен.
+
+s4 жуёт remix-cssmodules-spotify + webpack-react-tw3-kanban + remix-tw4-twitter
+последовательно. Почти все тесты проходят, но медленно (30-90s/test).
+
+s1/s2/s3 в финальной четверти, должны закончиться в течение часа.
+s4 — ещё ~2-3 часа.
