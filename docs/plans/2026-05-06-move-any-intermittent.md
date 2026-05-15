@@ -32,10 +32,15 @@ C. **`_dragPointerUp` lift uses `dropResolved.el` which can be the wrong
 
 ### Task 1: Reproduce both failing E2E cases
 
-- [ ] `bun run test:docker --grep "cross-level drag reorders outer cards"`
-- [ ] `bun run test:docker --grep "drop on self-closing leaf"`
-- [ ] Capture full failure output: which assertion fails, what the source
-      file looks like before/after.
+- [x] `bun run test:docker --grep "cross-level drag reorders outer cards"` — already reproduced in run-20260506-140935-61342 (test-done 15233ms — failed; retry 17855ms — failed).
+- [x] `bun run test:docker --grep "drop on self-closing leaf"` — already reproduced in run-20260506-140935-61342 (test-done 25130ms — failed; retry 25332ms — failed).
+- [x] Captured: assertion that fails on PI-5-DR-17 = `expect.poll(... not.toBe(sourceBefore)).timeout(8_000)` — the fixture file was never written. Same for PI-5-DR-T6 (`leaf-target drop did not write the file`). Source-of-failure analysis (in AstService.moveElement, lines 730-859):
+
+  - PI-5-DR-17: source = inner `<div>Alpha</div>` deep in card-1, target = inner `<div>Beta</div>` deep in card-2. They have different JSX parents (each card's wrapper). moveElement enters the different-parent branch (lines 831-848) and either (a) succeeds writing Alpha-div into card-2 (does NOT swap outer cards — assertion `betaIdx < alphaIdx` would fail), or (b) throws `source disappeared after re-parse` due to parser cache / file-watcher race when the AST was parsed before HMR-triggered rewrite settled (8s poll times out — what we see in this run). No `liftToCommonJsxParent` helper is implemented in moveElement; the test name "via server-side JSX lift" describes a feature that doesn't exist yet.
+
+  - PI-5-DR-T6: drop source onto self-closing `<img />` leaf. moveElement re-parses, but `_resolveElement` likely returns null for the leaf because the resolver does not have a "leaf → sibling fallback" path. Throws `target disappeared after re-parse` or `target has no JSX parent` and the file stays untouched.
+
+  Pattern: "иногда работает" = drag handler resolves to a useful nodeRef ≈ 30% of the time (when DOM walk happens to settle on an element whose JSX parent matches target's). For the deterministic cross-level + leaf-drop cases the resolver never lifts, so the server has to do the lift — and currently doesn't.
 
 ### Task 2: Trace why moveElement returns success but file unchanged
 
