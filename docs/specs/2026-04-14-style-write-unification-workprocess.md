@@ -4096,3 +4096,108 @@ Final pre-commit Claude review and validation:
 - Docs-only Claude pass before the workfile commit:
   /tmp/claude-review-workfile-docs-20260422a.log. Result: no blockers.
 ```
+
+E2E save-dialog prevention follow-up, 2026-04-22 12:46 CEST:
+
+```text
+- User screenshot showed the VS Code "Do you want to save the changes to
+  App.tsx?" modal still appearing during E2E cleanup. Treating the screenshot as
+  ground truth: the correct fix is to prevent the dirty-buffer close path, not
+  to dismiss the modal after it appears.
+- Root cause found in ext-test-projects base fixture cleanup:
+  * The fixture ran git checkout on project files before closing any open VS Code
+    editors. That can leave VS Code with dirty/stale editor buffers while the
+    test harness later runs "View: Close All Editors".
+  * The cleanup path swallowed failures from "File: Save All" and "View: Close
+    All Editors", so a failed save could still continue into the close command
+    that opens the save dialog.
+  * The generic dialog handler could auto-dismiss a save dialog and let the run
+    continue, masking the fact that the dialog appeared on screen.
+- Fix in progress in ext-test-projects:
+  * Keep early git checkout as the disk safety net, but do not close editors
+    while dirty. Detect visible dirty editor tabs after "Hyper: Close Preview",
+    run "File: Save All", wait until dirty markers disappear, then run
+    "View: Close All Editors". Immediately after editor close, run git checkout
+    again to restore project files on disk.
+  * Attempted a no-disk-write path first:
+    per-tab "File: Revert File" was unstable and could loop until setup
+    timeout; "File: Revert All" / "File: Revert All Files" are not available in
+    this VS Code command palette. Final decision: use "File: Save All" only
+    after the preview webview is closed, then restore disk immediately.
+  * Stop swallowing "View: Close All Editors" failures.
+  * Refuse to auto-dismiss VS Code save dialogs in vscode-cleanup; these now
+    surface as explicit fixture failures instead of being hidden by the handler.
+  * Keep the existing iframe mouse fix that reactivates the Hyper Canvas tab
+    before raw iframe coordinate lookup, without hardcoding the test-preview
+    route and with a frame-presence poll after tab activation.
+- Validation before commit:
+  * ext-test-projects biome check passed for
+    e2e/fixtures/base.fixture.ts, e2e/helpers/iframe-mouse.ts,
+    e2e/helpers/vscode-cleanup.ts.
+  * ext-test-projects git diff --check passed for the same files.
+  * Initial focused E2E /tmp/hyper-e2e-drag-dialog-20260422b passed 2/2 with
+    --retries=0: PI-18-22 and PI-18-23.
+  * Revised focused E2E /tmp/hyper-e2e-drag-dialog-20260422c passed 2/2 with
+    --retries=0: PI-18-23 and PI-18-24.
+  * Revert-only attempts after Claude review failed before commit:
+    /tmp/hyper-e2e-drag-dialog-20260422d timed out in per-tab "File: Revert
+    File"; /tmp/hyper-e2e-drag-dialog-20260422e and 20260422f failed because
+    "File: Revert All Files" / "File: Revert All" are not command-palette
+    entries in this VS Code build.
+  * /tmp/hyper-e2e-drag-dialog-20260422g failed because the dirty marker was
+    asserted immediately after "File: Save All"; fixed by polling until dirty
+    markers clear.
+  * Successful focused E2E /tmp/hyper-e2e-drag-dialog-20260422h passed 2/2 with
+    --retries=0: PI-18-23 and PI-18-24.
+  * The final focused log contains no [fixture-dialog] marker. PI-18-24 setup
+    saw dirty App.tsx from the previous style write, saved it, waited for the
+    dirty marker to clear, closed all editors, then ran git checkout and cleared
+    residual diagnostics.
+- Next required steps before commit:
+  * Run Claude review because this is outside the 15:00-21:00 no-Claude-required
+    window.
+  * Commit the ext-test-projects harness fix atomically and push it.
+  * Record the commit hash here, then restart the full E2E run from scratch.
+```
+
+E2E save-dialog prevention finalization, 2026-04-22 13:07 CEST:
+
+```text
+- Final ext-test-projects commit:
+  * 52b75c3 test(e2e): prevent VS Code save dialogs during cleanup
+  * Pushed to ext-test-projects main: 491ee4b..52b75c3.
+- Final implementation:
+  * If setup sees dirty VS Code editor tabs, it runs "File: Save All", waits up
+    to 5s until dirty markers disappear, then runs "View: Close All Editors".
+  * It runs git checkout after editor close so disk writes from Save All are
+    immediately restored before the next test body starts.
+  * VS Code save dialogs are no longer auto-dismissed; they throw
+    SaveChangesDialogError and are recorded as fixture failures.
+  * Raw iframe mouse helpers now reactivate the visible Hyper Canvas tab and
+    retry visible frame lookup before failing.
+- Claude reviews:
+  * /tmp/claude-review-ext-dialog-prevention-20260422a.log: no blockers; raised
+    Save All vs Revert tradeoff and frame activation waiting.
+  * /tmp/claude-review-ext-dialog-prevention-20260422b.log: no blockers; caught
+    per-tab revert risk and save-dialog error propagation concerns.
+  * /tmp/claude-review-ext-dialog-prevention-20260422c.log: no blockers; accepted
+    Save All -> Close All -> git checkout as the working tradeoff, with HMR log
+    monitoring required.
+  * /tmp/claude-review-ext-dialog-prevention-20260422d.log: no blockers; suggested
+    removing dead assert and loosening the Hyper Canvas tab selector.
+  * /tmp/claude-review-ext-dialog-prevention-20260422e.log: final sanity review,
+    no blockers, explicitly "Можно коммитить."
+- Validation:
+  * ext-test-projects biome check passed for
+    e2e/fixtures/base.fixture.ts, e2e/helpers/iframe-mouse.ts,
+    e2e/helpers/vscode-cleanup.ts.
+  * ext-test-projects git diff --check passed for the same files.
+  * Final focused E2E /tmp/hyper-e2e-drag-dialog-20260422i passed 2/2 with
+    --retries=0: PI-18-23 and PI-18-24.
+  * The focused log exercised the dirty App.tsx path: Save All cleared the dirty
+    marker, Close All Editors did not open a dialog, git checkout restored disk,
+    and clear diagnostics ran before the next test body.
+- Next:
+  * Commit this workfile update in the main repo.
+  * Restart full E2E from scratch with the pushed ext-test fix.
+```
