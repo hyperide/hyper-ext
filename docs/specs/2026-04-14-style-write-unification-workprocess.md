@@ -39,7 +39,11 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #34** (`run-20260429-211849-86173`) — IN PROGRESS (1 shard, ~2.75h elapsed, ~576 tests, **1 flaky** / **0 hard fails**):
+- **Run #36** (2026-04-30) — **IN PROGRESS** (Docker image rebuilding after .gitignore + style-editing.spec.ts changes; 3 shards when memory permits, 1 shard otherwise). Previous old run #35 containers were lingering (killed manually).
+
+- **Run #35** (`run-20260430-003332-21049`) — COMPLETE: "Tamagui: style written as prop" HARD FAIL (×6: 3 projects × 2 attempts). Root cause confirmed from screenshot: `editor.getActiveEditorContent()` reads `.view-lines` DOM which returns `''` when Hyper Canvas preview webview is frontmost. The write to App.tsx DID happen (file dirty in teardown), but poll never matched. Fixed in `3287880` (disk-based fallback: `readFileSync(App.tsx)` when DOM returns empty).
+
+- **Run #34** (`run-20260429-211849-86173`) — COMPLETE (1 shard, ~2.75h elapsed, ~576 tests, **1 flaky** / **0 hard fails**):
   - S1: running, currently in mcp-tools tests (hyper_get_selection ~576)
   - FLAKY: "hyper_duplicate_element — copy appears" 57506ms attempt 1 FAIL → attempt 2 pass (32644ms). FIXED: `db75f80` poll 30s→60s
   - Extension: `out/extension.js` is bind-mounted from host → uses **compiled v0.1.33** (fc537973 IS active)
@@ -123,10 +127,21 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 ## Known Open Issues (to fix)
 
-### 1. ✅ Tamagui "style written as prop" — FIXED (1522602)
+### 1. ✅ Tamagui "style written as prop" — FIXED (3287880)
 
-**Root cause**: `getActiveEditorContent()` threw when canvas is frontmost (no text
-editor visible). `expect.poll()` doesn't retry on throw — fails immediately.
+**Root cause (final)**: `editor.getActiveEditorContent()` reads `.editor-instance .view-lines`
+via `innerText()` which returns `''` (NOT throws) when the Hyper Canvas preview webview
+panel occupies the center editor area. The write to App.tsx DID happen (confirmed: App.tsx
+marked M in file explorer during run #35 teardown), but the poll value was always `''`.
+
+**Prior fix `1522602`** wrapped in `.catch(() => '')` to prevent throw — still failed because
+the real problem is the value being `''`, not a throw.
+
+**Fix `3287880`**: after DOM read returns empty, fall back to `readFileSync(App.tsx)` from
+disk. App.tsx is always the write target for Tamagui tests (setupWithElementSelected falls
+back to SafeAreaProvider in App.tsx — all 5 navigation-wrapper elements have no fill input).
+
+**Run #36** is the first validation run for this fix.
 `setColor` may write to RecordScreen.tsx via `workspace.fs.writeFile` (disk-only,
 no dirty tab), so dirty tab wait also needed longer timeout.
 
@@ -241,7 +256,7 @@ _Составлен 2026-04-29. Основан на: анализе частот
 
 | Тест | Частота | Статус | Root cause |
 |------|---------|--------|-----------|
-| Tamagui: style written as prop | 37x | ✅ FIXED | watcher + poll throw |
+| Tamagui: style written as prop | 37x | ✅ FIXED (3287880) | DOM hidden behind webview → disk fallback |
 | elements/nested/ExportNamed (ast-ops) | 74x | 🔄 monitoring | OOM→webpack timeout, ожидаем fix из run #29 |
 | duplicate element (preserves/grows) | 33x | ❓ unknown | требует анализа run #29 |
 | component with error (607s) | 17x | ⚠️ known | Vite watcher degradation (NEEDS LINEAR) |
