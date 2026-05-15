@@ -1455,9 +1455,9 @@ function updateDesignStyles(mode: string): void {
   });
 
   if (mode !== 'interact') {
-    if (document.body) document.body.classList.add('design-mode');
+    document.documentElement.classList.add('design-mode');
   } else {
-    if (document.body) document.body.classList.remove('design-mode');
+    document.documentElement.classList.remove('design-mode');
   }
 }
 

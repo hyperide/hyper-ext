@@ -39,37 +39,37 @@ html, body {
   // Default cursor in design mode — covers pseudo-elements so CSS-generated
   // content (::before/::after) doesn't leak pointer/text cursors into the canvas.
   parts.push(`
-body.design-mode,
-body.design-mode *,
-body.design-mode *::before,
-body.design-mode *::after {
+html.design-mode,
+html.design-mode *,
+html.design-mode *::before,
+html.design-mode *::after {
   cursor: default !important;
 }
 
 /* Prevent native focus outlines and focus behavior in design mode.
    All navigation is handled by HyperCanvas selection, not browser focus. */
-body.design-mode *:focus,
-body.design-mode *:focus-visible {
+html.design-mode *:focus,
+html.design-mode *:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
-body.design-mode a,
-body.design-mode button,
-body.design-mode input,
-body.design-mode select,
-body.design-mode textarea,
-body.design-mode [tabindex] {
+html.design-mode a,
+html.design-mode button,
+html.design-mode input,
+html.design-mode select,
+html.design-mode textarea,
+html.design-mode [tabindex] {
   -webkit-user-modify: read-only !important;
 }
 
 /* Ensure disabled form elements are clickable in design mode.
    Browsers may skip pointer events on disabled elements; override to
    guarantee they can be selected on the canvas. */
-body.design-mode button:disabled,
-body.design-mode input:disabled,
-body.design-mode select:disabled,
-body.design-mode textarea:disabled,
-body.design-mode fieldset:disabled {
+html.design-mode button:disabled,
+html.design-mode input:disabled,
+html.design-mode select:disabled,
+html.design-mode textarea:disabled,
+html.design-mode fieldset:disabled {
   pointer-events: auto !important;
 }`);
 
