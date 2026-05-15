@@ -39,10 +39,20 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #38** (`run-20260430-091554-84104`, 2026-04-30 09:15 CEST) — **IN PROGRESS**. All known fixes active.
-  - New fixes vs run #37: `441a9860` (ViteReactSSG patchEntryFile fallback), `c3e0b60` (redo-limit 40s wait), `f85f4d3`+`2ec61e5`+`d08744a` (Tamagui), `c1736c6` (webpack), `a744506` (tamagui-whatsapp)
-  - Stale `__canvas_preview__.tsx` files cleaned (34 files deleted before run)
-  - `9e47627`: flaky timeout bumps — settings 30s→50s, tab-visible 20s→35s, undo-poll 8s→20s (ext-test-projects, already active via bind-mount)
+
+- **Run #40** (`run-20260430-112941-82810`, 2026-04-30 13:29 CEST) — **IN PROGRESS**. 3 shards.
+  - New fixes vs run #39: `b53e1331` (AstService cross-file resolve), `3e39f08e` (ViteReactSSG fallback render), `dee4d183` (bulka client/ root detection + PreviewProxy isolated path), `f756a802` (Tamagui root cause fix: resolveNodeRef file guard)
+  - Root causes fixed: Tamagui write went to App.tsx (coordinates of RecordScreen.tsx:10:5 accidentally matched SafeAreaProvider at App.tsx:10:5); bulka 404 (detectRouterFile/detectEntryFile didn't check client/ dir)
+
+- **Run #38** (`run-20260430-091554-84104`, 2026-04-30 09:15 CEST) — **KILLED** (obsolete, superseded by run #40).
+  - Partial results: S3 had 8 Tamagui fails + 2 webpack fiber-based-selection 905s fails. S1 had 2 insert-panel flakes (extension host unresponsive under load). S2 had 1 error-overlay flake.
+  - Root cause of Tamagui fails confirmed: `resolveNodeRef` in `_resolveElement` applied RecordScreen.tsx coordinates to App.tsx AST. Fixed in `f756a802`.
+
+- **Run #39** (`run-20260430-102713-33653`, 2026-04-30 12:27 CEST) — **KILLED** (had pre-fix Tamagui + bulka fails; superseded by run #40).
+
+- **Run #38** (`run-20260430-091554-84104`, 2026-04-30 09:15 CEST) — **KILLED**. See above for partial results.
+
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **DONE (S3 killed — bulka-the-dog stuck in refresh-retry loop, all hard fails already collected)**. 
 
 - **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **DONE (S3 killed — bulka-the-dog stuck in refresh-retry loop, all hard fails already collected)**. 
   - S1: 775 test-done, **1 HARD FAIL** ("redo limit" 67189ms+68792ms), **8 FLAKYs** (settings×5, open-preview, hyper_duplicate 56919ms, rapid-edit-undo)
