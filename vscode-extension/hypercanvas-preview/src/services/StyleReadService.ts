@@ -226,6 +226,7 @@ export class StyleReadService {
         availableLocales: [],
         resolvedText: null,
         editable: false,
+        writable: false,
         sourceLocation: { filePath: '', line: 0, column: 0 },
       };
       const adapter = await new AdapterFactory(this._workspaceRoot, this._fileIO).forBinding(stub, activeLocale);
@@ -349,6 +350,9 @@ export class StyleReadService {
             availableLocales: domMatch.availableLocales,
             resolvedText: domMatch.resolvedText,
             editable: true,
+            // resolveI18nByDomText only matches JSON candidates (see resolve-by-dom-text.ts),
+            // so the active locale file format always supports writes.
+            writable: true,
             sourceLocation: { filePath, line: exprLoc.line, column: exprLoc.column },
             confidence: 'locale-heuristic',
           };
@@ -375,7 +379,13 @@ export class StyleReadService {
         fileIO: this._fileIO,
       });
     } catch {
-      resolved = { availableLocales: [], activeLocale: requestedLocale, resolvedText: null };
+      resolved = {
+        availableLocales: [],
+        activeLocale: requestedLocale,
+        resolvedText: null,
+        unresolvedReason: 'missing-locale-file',
+        writable: false,
+      };
     }
 
     // If the project has no 'en' locale and no explicit locale was requested, retry with the
@@ -408,7 +418,17 @@ export class StyleReadService {
       activeLocale: resolved.activeLocale,
       availableLocales: resolved.availableLocales,
       resolvedText: resolved.resolvedText,
-      editable: resolved.resolvedText !== null,
+      // editable=true whenever the user can persist a translation. Two conditions:
+      //   1. The locale file format supports writes (`resolved.writable`). Merged
+      //      `translations.ts` and per-locale TS/JS layouts are read-only, so `writeI18nResource`
+      //      would refuse them even if we let the user type.
+      //   2. The key is either resolved or the file just lacks the key (`missing-key` →
+      //      typing creates the entry). Block on `missing-locale-file` / `parse-error` /
+      //      `unsupported-format` because the file itself cannot be safely written.
+      editable:
+        resolved.writable &&
+        (resolved.unresolvedReason === undefined || resolved.unresolvedReason === 'missing-key'),
+      writable: resolved.writable,
       sourceLocation: {
         filePath,
         line: detection.sourceLocation.line,
