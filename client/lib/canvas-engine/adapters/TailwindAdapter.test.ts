@@ -22,7 +22,7 @@ function createAstOpsRecorder() {
     updateProps: async () => undefined,
     renameElement: async () => undefined,
     updateText: async () => undefined,
-    writeI18nResource: async () => ({}),
+    writeI18nResource: async () => undefined,
   };
 
   return { astOps, updateStylesCalls };

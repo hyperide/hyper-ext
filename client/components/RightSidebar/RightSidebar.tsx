@@ -751,26 +751,9 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
-      // pollute prod consoles. Tracks the i18n-key-change flicker window
-      // (Task 1 of selection-survives-i18n-write).
-      const dbg = (label: string, extra?: unknown): void => {
-        const w = window as unknown as Record<string, unknown>;
-        if (!w.__HC_DEBUG_SELECTION) return;
-        // eslint-disable-next-line no-console
-        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
-      };
-      const t0 = performance.now();
-      dbg('start', { previousSelectedId, newKey, isNewKey });
       void (async () => {
-        // Path B (selection-survives-i18n-write): tell the preview iframe to
-        // freeze the last-known selection rect for the duration of the JSX
-        // rewrite. The HMR re-render gap (DOM gone + fiber-source-index
-        // rebuilding async) would otherwise flicker the outline off — the
-        // freeze keeps it on screen until the new fiber settles.
-        canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'start' });
         try {
-          const writeResult = await astOps.writeI18nResource({
+          await astOps.writeI18nResource({
             library: i18nText.library,
             key: newKey,
             namespace: i18nText.namespace,
@@ -781,30 +764,22 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
-          dbg('writeI18nResource resolved', writeResult);
-          // Path A (selection-survives-i18n-write): the bridge re-locates the
-          // rewritten JSX node and returns its post-write canonical ID. Single
-          // dispatch with that ID re-attaches selection cleanly — no x3 timeout
-          // kostyl needed. Fall back to the original selectedId if the bridge
-          // didn't surface a new ID (browser path, no JSX rewrite, etc.); for
-          // child-only mutations the opening tag is invariant so this also
-          // resolves correctly.
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
           if (i18nDispatch) {
-            const targetId = writeResult.newElementId ?? previousSelectedId;
-            i18nDispatch({ selectedIds: [targetId] });
-            dbg('dispatch sent', { selectedIds: [targetId] });
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
           }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
         } finally {
-          // Always release the freeze, even on throw, so the overlay can resume
-          // tracking the live DOM as soon as the write window is over.
-          canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
           setStyleRefreshKey((k) => k + 1);
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys, canvas],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
   );
 
   const handleI18nResolvedTextChange = useCallback(

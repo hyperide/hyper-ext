@@ -108,12 +108,13 @@ export class StateHub {
   }
 
   /**
-   * Broadcast an arbitrary message to every registered panel.
-   * Use for transient cross-panel signals that should not live in
-   * SharedEditorState (e.g. iframe coordination events that fire from one
-   * panel and need to land in another panel's webview).
+   * Broadcast a typed message to all registered panels.
+   * Used by PanelRouter to forward messages whose target panel is not the sender —
+   * e.g. `iframe:scrollToElement` is sent by the LeftPanel webview but must be
+   * received by the PreviewPanel webview (which hosts the iframe). Echoing back
+   * to the sender is a no-op in practice (only the PreviewPanel listens for it).
    */
-  broadcast(message: unknown): void {
+  broadcast(message: { type: string } & Record<string, unknown>): void {
     for (const [, webview] of this._panels) {
       webview.postMessage(message);
     }

@@ -97,18 +97,14 @@ export class PanelRouter {
       return true;
     }
 
-    // Canvas scroll — echo back to the sending panel so usePreviewBridge can forward to iframe
+    // Canvas scroll — broadcast to ALL registered panels so the PreviewPanel webview
+    // (which hosts the iframe) receives it even when the sender is the LeftPanel webview
+    // (Elements Tree click). VS Code webviews are isolated iframes; DOM events do not
+    // cross — broadcasting through StateHub is the only working path.
+    // The sender (LeftPanel) also receives the message and silently ignores it
+    // (no `case 'iframe:scrollToElement'` in its message handler).
     if (type === 'iframe:scrollToElement') {
-      webview.postMessage(message);
-      return true;
-    }
-
-    // Selection-freeze coordination — sender lives in the right sidebar,
-    // listener lives in the preview panel's iframe. Broadcast so the message
-    // reaches every registered webview; only usePreviewBridge handles it.
-    // See docs/plans/2026-05-06-selection-survives-i18n-write.md (Path B).
-    if (type === 'iframe:writeI18nResource') {
-      this._stateHub.broadcast(message);
+      this._stateHub.broadcast(message as { type: string } & Record<string, unknown>);
       return true;
     }
 
