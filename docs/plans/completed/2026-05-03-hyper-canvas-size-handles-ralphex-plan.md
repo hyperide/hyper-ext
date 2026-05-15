@@ -135,12 +135,12 @@ handles. (resize-handles.spec.ts: 1 passed 8s)
 
 ### Task 7: Final Checks And Report
 
-[ ] Run focused tests first, then broader relevant suites such as
+[x] Run focused tests first, then broader relevant suites such as
 `bun run test shared/canvas-interaction` and any touched client or extension
 tests.
-[ ] Run lint/type checks required for touched files if the change reaches shared
+[x] Run lint/type checks required for touched files if the change reaches shared
 platform contracts.
-[ ] Report the root cause: missing handle rendering, missing Tailwind
+[x] Report the root cause: missing handle rendering, missing Tailwind
 explicit-size detection, or class mutation.
-[ ] Report changed files, test commands, visual/E2E artifacts, and any deferred
+[x] Report changed files, test commands, visual/E2E artifacts, and any deferred
 findings that need Linear issues.
