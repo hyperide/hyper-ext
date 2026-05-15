@@ -2655,9 +2655,79 @@ Run completed (shard-2 only observed to completion). Summary from shard-2:
 - `Select Next Sibling does not crash`: click doesn't produce fiber selection.
 - OOM crash on `react-vite-cssmodules-spotify` during insert/delete/wrap AST ops.
 
+## 📍 Run #14 Final Analysis + 4 Fixes Applied (2026-04-28)
+
+Run #14 `20260428-015512-36063` completed (4 shards). All shard logs analyzed.
+
+### Failure inventory (persistent only — failed on both attempts)
+
+**Shard-2 failures:**
+- `redo limit — no redo after new edit` ×2 (attempts 25656ms, 29346ms):
+  Both failed. Teardown showed "saving dirty editors before close: App.tsx" — CMD_REDO
+  actually changed the file content. This is an extension bug, not a test bug.
+
+**Shard-4 failures (majority):**
+- 323–326s timeouts on `remix-tw4-twitter` (`preview:poll-loaded` exhausted):
+  PreviewProxy retry budget ~222s exhausted before Remix cold compile (~254s).
+  After retries exhausted, iframe stuck on 403 error page. 320s poll had no
+  recovery mechanism.
+- `preview iframe connects to localhost with port` at 7707ms:
+  After inspector opened, VS Code layout recalculated → preview webview bounding
+  box became ≤ 0 (offscreen). `getPreviewPanelContent()` tried `activatePreviewTab()`
+  + 1s poll — too short for VS Code layout recalculation.
+- `logs panel opens after dev server stop` at 301s:
+  `test.setTimeout(300_000)` expired before the 320s `isPreviewLoaded()` poll
+  could finish on Remix cold compile.
+
+### Root cause analysis
+
+**"redo limit" persistent failure:**
+In `_withUndoTracking()`, `beginTracking()` was called AFTER the `readFile()` try-catch.
+If `readFile()` threw (VS Code in-flight document update), `beginTracking()` was never
+called. This left `_redoStack` non-empty (from the preceding `undo()` call).
+`canRedo()` returned true → CMD_REDO executed → wrote `fileAfter80` instead of keeping
+`fileAfter90`.
+
+**Remix cold compile timeouts:**
+320s poll had no recovery: when PreviewProxy retry budget (~222s) exhausted, the iframe
+stayed on error page. No mechanism to reset the retry budget mid-poll.
+
+**Post-inspector offscreen:**
+`getPreviewPanelContent()` offscreen recovery poll was only 1s — not enough for VS Code
+layout recalculation after inspector sidebar opens.
+
+### Fixes applied
+
+**ext-test-projects commit `53d3cd8`** (pushed to main):
+
+1. **`setup-preview.ts`** — periodic 60s refresh during `isPreviewLoaded()` poll:
+   Each `Hyper: Refresh Preview` resets the iframe src and gives the PreviewProxy a
+   fresh 222s retry budget. Coverage: 60s + 222s = 282s per cycle, essentially
+   unlimited retries over 320s total poll.
+
+2. **`WebviewFrame.ts`** — offscreen recovery poll 1s → 5s:
+   `findPreviewPanelContent()` `expect.poll` timeout from 1000ms to 5000ms.
+   Gives VS Code layout recalculation enough time after inspector opens.
+
+3. **`dev-server.spec.ts`** — logs-panel test `test.setTimeout(300_000)` → `400_000`:
+   300s < 320s poll = timeout guaranteed on Remix. 400s gives 80s headroom.
+
+**hyper-canvas-draft commit `d713171f`** (pushed to branch):
+
+4. **`AstBridge.ts`** — `beginTracking()` moved before `readFile()` try-catch:
+   Now always called before any write, even if `readFile()` fails. `endTracking()`
+   in `finally` guarantees symmetry. Redo stack is cleared eagerly at operation
+   start, preventing stale redo entries from prior undo.
+
+Unit test verification: `bun test vscode-extension/.../UndoRedoService.test.ts` → 205 pass, 0 fail.
+
+### Run #15 target
+
+Start fresh 4-shard Docker run with all fixes applied.
+Expected improvement: ~25–30 fewer failures vs run #14.
+
 ## Next Step
 
-- Monitor run #14 to completion; collect full failure inventory.
-- Based on run #14 results, triage which Cat E failures persist and fix them.
-- Focus next fixes: stale selection after undo (redo limit), WS edit undo
-  nodeRef staleness, and the persistent PI-18-14 grid layout failure.
+- Run #15 with all 4 fixes from run #14 analysis.
+- Collect full failure inventory from run #15.
+- Fix any new persistent failures found.
