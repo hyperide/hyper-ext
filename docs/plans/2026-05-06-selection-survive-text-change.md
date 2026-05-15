@@ -130,10 +130,25 @@ either:
 
 ### Task 4: Guard `state:init` from clobbering selectedIds
 
-- [ ] If `state:init` arrives with `selectedIds: []` while the local store
+- [x] If `state:init` arrives with `selectedIds: []` while the local store
       already has a non-empty selection, IGNORE the empty value (or merge,
       keeping local). The empty default is a race artefact, not user intent.
-- [ ] Add a unit test for the merge logic.
+      (Extracted pure `mergeInitState(incoming, local)` in
+      `client/lib/platform/shared-editor-state.ts`. The `init` action now
+      calls `set((local) => mergeInitState(newState, local))` instead of
+      naked `set(newState)`. Rule: when `local.selectedIds.length > 0` and
+      `incoming.selectedIds.length === 0`, keep local `selectedIds` and
+      `selectedItemIndices` (the latter is keyed by selection IDs and must
+      stay in lockstep). Every other field — `currentComponent`,
+      `canvasMode`, `engineMode`, `astStructure`, `hoveredId`, etc. —
+      adopts the incoming snapshot unchanged so authoritative non-selection
+      state (component swap, mode toggle) still flows through reload.)
+- [x] Add a unit test for the merge logic.
+      (Created `client/lib/platform/shared-editor-state.test.ts` — 5 tests:
+      empty-incoming-keeps-local, non-empty-incoming-overrides, empty/empty
+      stays empty, empty-incoming preserves selection but adopts other
+      fields, non-empty-incoming brings its own `selectedItemIndices`.
+      `bun test` 5/5 pass; biome and tsc clean.)
 
 ### Task 5: Frame-by-frame e2e
 
