@@ -245,6 +245,12 @@ Status:
 - implemented in the working tree
 - not yet committed
 - still needs proof from the live full-matrix run and focused follow-up checks
+- focused validation completed: `bun test vscode-extension/hypercanvas-preview/src/__tests__/PreviewPanelApp.test.ts`
+  passed (`3 pass / 0 fail`)
+- the live full E2E matrix has already progressed well past the earlier
+  HYP-363 checkpoints without exposing a new preview-shell red cluster
+- external `claude` review was attempted for this subset, but the CLI produced
+  no findings before timing out
 
 ### Inspector width normalization follow-up
 
@@ -306,6 +312,14 @@ From the most recent full-matrix observation in this cycle:
   warnings that triggered refresh-and-continue behavior
 - treat this as a historical progress marker, not as proof that a run is still
   active right now
+
+More recent live checkpoints observed after that summary baseline:
+
+- the queue advanced through at least `363/2211` and later `Vite` / `Next.js`
+  overlay detection cases without introducing a red test at those checkpoints
+- `renderer process crash does not lose workspace state` passed in the live full
+  run, which is the relevant regression path for the preview shutdown/recovery
+  area
 
 ## Known Open Work
 

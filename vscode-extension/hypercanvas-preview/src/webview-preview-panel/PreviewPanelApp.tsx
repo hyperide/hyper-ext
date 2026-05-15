@@ -35,6 +35,14 @@ export function PreviewPanelApp() {
   );
 }
 
+export function getPreviewShellScreen(
+  devServerRunning: boolean,
+  disconnected: boolean,
+): 'preview' | 'start' | 'disconnected' {
+  if (devServerRunning) return 'preview';
+  return disconnected ? 'disconnected' : 'start';
+}
+
 // ============================================================================
 // Preview Content
 // ============================================================================
@@ -96,18 +104,26 @@ function PreviewContent() {
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
 
-  // Dev server not running — show start button (with reconnecting banner if was connected)
-  if (!devServerRunning) {
+  const shellScreen = getPreviewShellScreen(devServerRunning, disconnected);
+
+  // Dev server stopped after a successful connection — keep a dedicated disconnected
+  // shell instead of relying on a transient blend of banner + stale iframe content.
+  if (shellScreen === 'disconnected') {
     return (
       <>
-        {disconnected && <ReconnectingBanner />}
-        <StartDevServerScreen onStart={handleStartDevServer} />
+        <ReconnectingBanner />
+        <DisconnectedPreviewScreen onStart={handleStartDevServer} />
       </>
     );
   }
 
+  // Dev server not running before any successful connection — show initial start screen.
+  if (shellScreen === 'start') {
+    return <StartDevServerScreen onStart={handleStartDevServer} />;
+  }
+
   return (
-    <>
+    <div data-testid={TID.preview.surface} style={surfaceStyle}>
       {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       <div style={wrapperStyle}>
         <iframe
@@ -171,7 +187,7 @@ function PreviewContent() {
           onContinueReadonly={() => setReadonlyDismissed(true)}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -184,6 +200,18 @@ function StartDevServerScreen({ onStart }: { onStart: () => void }) {
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
+      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
+        Start Dev Server
+      </button>
+    </div>
+  );
+}
+
+function DisconnectedPreviewScreen({ onStart }: { onStart: () => void }) {
+  return (
+    <div data-testid="hyper-preview-disconnected-screen" style={disconnectedScreenStyle}>
+      <h2 style={headingStyle}>Hyper Preview</h2>
+      <p style={subtextStyle}>The dev server stopped. Start it again to restore the live preview.</p>
       <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
@@ -665,6 +693,13 @@ const wrapperStyle: React.CSSProperties = {
   height: '100%',
 };
 
+const surfaceStyle: React.CSSProperties = {
+  position: 'relative',
+  width: '100%',
+  height: '100%',
+  overflow: 'hidden',
+};
+
 const iframeStyle: React.CSSProperties = {
   border: 'none',
   width: '100%',
@@ -734,6 +769,14 @@ const reconnectingBannerStyle: React.CSSProperties = {
   fontFamily: 'var(--vscode-font-family)',
   textAlign: 'center',
   zIndex: 1001,
+};
+
+const disconnectedScreenStyle: React.CSSProperties = {
+  ...centerScreenStyle,
+  ...absoluteFillStyle,
+  justifyContent: 'flex-start',
+  gap: 12,
+  paddingTop: 88,
 };
 
 const warningIconStyle: React.CSSProperties = {
