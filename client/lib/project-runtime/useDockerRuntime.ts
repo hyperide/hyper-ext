@@ -9,6 +9,7 @@ interface UseDockerRuntimeOptions {
   setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
   setProjectRole: (role: 'owner' | 'editor' | 'viewer') => void;
+  reloadComposition?: () => Promise<void>;
 }
 
 const INERT: ProjectRuntime = {
@@ -25,7 +26,7 @@ const INERT: ProjectRuntime = {
 };
 
 export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRuntimeOptions): ProjectRuntime {
-  const { enabled, accessToken, setActiveProject, setIsStarting, setProjectRole } = opts;
+  const { enabled, accessToken, setActiveProject, setIsStarting, setProjectRole, reloadComposition } = opts;
 
   const hasBeenRunningRef = useRef(false);
   const [hasBeenRunning, setHasBeenRunning] = useState(false);
@@ -42,6 +43,7 @@ export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRun
     activeProject: enabled ? project : null,
     setActiveProject,
     handleProjectUpdate,
+    reloadComposition,
   });
 
   useEffect(() => {
