@@ -128,7 +128,6 @@ describe('AstBridge', () => {
       { color: 'red' },
       undefined,
       undefined,
-      undefined,
       'tailwind-v4:elementClass',
     );
   });

@@ -207,7 +207,6 @@ export class AstBridge {
         message.elementId,
         message.styles,
         message.state,
-        undefined,
         nodeRef,
         message.selectedSourceTabId,
       ),

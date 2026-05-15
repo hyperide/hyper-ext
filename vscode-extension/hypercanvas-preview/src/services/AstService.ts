@@ -8,16 +8,10 @@
  */
 
 import * as t from '@babel/types';
-import { detectClassNameType, modifyDynamicClassName } from '@lib/ast/dynamic-classname-mutator';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
 import { ensureImport } from '@lib/ast/import-manager';
-import {
-  applyInlineStyleUpdate,
-  getCssModuleImportLocalNames,
-  isCssModuleClassNameExpression,
-} from '@lib/ast/inline-style-mutator';
-import { getAttributeString, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
+import { setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import {
   duplicateElementInAST,
   extractElementSource,
@@ -29,9 +23,8 @@ import { createFileParser } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { findElementAtPosition } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
-import { generateTailwindClasses } from '@lib/tailwind/generator';
-import { removeConflictingClasses } from '@lib/tailwind/parser';
-import type { ClassNameLocation, FindElementResult } from '@lib/types';
+import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
+import type { FindElementResult } from '@lib/types';
 import type { NodeRef } from '@shared/element-tracing/types';
 
 // ============================================
@@ -59,6 +52,10 @@ export interface DuplicateElementResult extends AstOperationResult {
 
 export interface WrapElementResult extends AstOperationResult {
   wrapperId?: string;
+}
+
+function isJsxSourceFile(filePath: string): boolean {
+  return /\.(jsx|tsx)$/.test(filePath);
 }
 
 // ============================================
@@ -243,19 +240,14 @@ export class AstService {
     return null;
   }
 
-  /**
-   * Update element styles using shared Tailwind utilities.
-   * Handles both static and dynamic className expressions.
-   * For dynamic classNames (template literals, cn() calls),
-   * uses modifyDynamicClassName with optional AI-found locations.
-   */
+  /** Update element styles through the shared style-write planner and executor. */
   async updateStyles(
     filePath: string,
     elementId: string,
     styles: Record<string, string>,
     state?: string,
-    locations?: ClassNameLocation[],
     nodeRef?: NodeRef,
+    selectedSourceTabId?: string,
   ): Promise<UpdateStylesResult> {
     await this.ensureInitialized();
     try {
@@ -267,45 +259,28 @@ export class AstService {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
 
-      const changedStyleKeys = Object.keys(styles);
-      const cssModuleLocals = getCssModuleImportLocalNames(ast);
-      if (!state && isCssModuleClassNameExpression(result.element, cssModuleLocals)) {
-        applyInlineStyleUpdate(result.element, styles);
-
-        await this._fileParser.writeAST(ast, absolutePath);
-        await this._updateNodeMap(absolutePath);
-        return { success: true };
-      }
-
-      const classNameType = detectClassNameType(result.element);
-
-      if (classNameType === 'string') {
-        const existingClassName = getAttributeString(result.element, 'className') || '';
-        const { preserved } = removeConflictingClasses(existingClassName, changedStyleKeys, state);
-        const newClasses = generateTailwindClasses(styles, state);
-        const newClassName = [preserved, newClasses].filter(Boolean).join(' ').trim();
-        setAttribute(result.element, 'className', t.stringLiteral(newClassName));
-
-        await this._fileParser.writeAST(ast, absolutePath);
-        await this._updateNodeMap(absolutePath);
-        return { success: true, className: newClassName };
-      }
-
-      // Dynamic className
-      const sourceCode = await this._fileParser.readFileContent(absolutePath);
-      const newClasses = generateTailwindClasses(styles, state);
-      modifyDynamicClassName(
+      const writeResult = await executeStyleWriteRequest({
         ast,
-        sourceCode,
-        result.element,
-        locations ?? [],
-        { newClasses },
-        changedStyleKeys,
-        'append',
-      );
+        sourceFilePath: absolutePath,
+        element: result.element,
+        styles,
+        state,
+        selectedSourceTabId,
+        runtimeThemeContext: {
+          ideThemePreference: 'system',
+          resolvedColorScheme: 'light',
+          source: 'vscode',
+        },
+        fileIO: this._fileIO,
+        projectRoot: this._workspaceRoot,
+      });
+      if ('error' in writeResult) return { success: false, error: writeResult.error };
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      for (const mutatedFile of writeResult.mutatedFiles) {
+        if (isJsxSourceFile(mutatedFile)) {
+          await this._updateNodeMap(mutatedFile);
+        }
+      }
       return { success: true };
     } catch (error) {
       console.error('[AstService.updateStyles] Error:', error);

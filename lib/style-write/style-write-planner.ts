@@ -217,6 +217,7 @@ export class DefaultStyleWritePlanner implements StyleWritePlanner {
       cssSystem: system,
       sourceForm: defaultSourceFormForSystem(system),
       filePath: ctx.elementFacts.sourceOwners[0]?.filePath ?? '',
+      elementRef: ctx.elementFacts.sourceOwners[0]?.elementRef,
       property: firstProperty,
       condition: ctx.condition,
       confidence: 'exact',
