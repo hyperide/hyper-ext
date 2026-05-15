@@ -68,4 +68,8 @@ export class ReactI18nextAdapter implements I18nAdapter {
       return null;
     }
   }
+
+  async writeKey(_elementId: string, _newKey: string): Promise<void> {
+    throw new Error('ReactI18nextAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)');
+  }
 }

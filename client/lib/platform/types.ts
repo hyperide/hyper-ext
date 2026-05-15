@@ -152,6 +152,10 @@ export type PlatformMessage =
       namespace?: string;
       activeLocale: string;
       newText: string;
+      previousKey?: string;
+      filePath?: string;
+      elementId?: string;
+      skipResourceWrite?: boolean;
     }
   | {
       type: 'ast:response';
@@ -394,6 +398,14 @@ export interface AstOperations {
     namespace?: string;
     activeLocale: string;
     newText: string;
+    /** Previous key when the user switches to a different key from the combobox. */
+    previousKey?: string;
+    /** Source file of the element — required when previousKey is provided for JSX update. */
+    filePath?: string;
+    /** Element nodeRef — required when previousKey is provided for JSX update. */
+    elementId?: string;
+    /** Skip writing to the locale JSON file; only update the JSX expression. */
+    skipResourceWrite?: boolean;
   }): Promise<void>;
 }
 

@@ -486,20 +486,27 @@ export class AstBridge {
     ).catch(() => null);
     const localeFilePath = localeLayout?.getLocaleFilePath(message.activeLocale) ?? null;
 
-    const doWrite = async (): Promise<AstOperationResult & { filePath: string | null }> => {
-      const r = await writeI18nResource({
-        projectRoot: this._workspaceRoot,
-        library: message.library,
-        key: message.key,
-        namespace: message.namespace,
-        activeLocale: message.activeLocale,
-        newText: message.newText,
-        fileIO: this._fileIO,
-      });
-      return { success: r.success, error: r.error, filePath: r.filePath };
-    };
-
-    const writeResult = localeFilePath ? await this._withUndoTracking(localeFilePath, doWrite) : await doWrite();
+    // When skipResourceWrite is set, skip the JSON locale write — only update JSX below.
+    // Used when the user switches to an existing key from the dropdown: we don't want to
+    // overwrite the existing translation under the new key.
+    let writeResult: AstOperationResult & { filePath: string | null };
+    if (message.skipResourceWrite) {
+      writeResult = { success: true, filePath: null };
+    } else {
+      const doWrite = async (): Promise<AstOperationResult & { filePath: string | null }> => {
+        const r = await writeI18nResource({
+          projectRoot: this._workspaceRoot,
+          library: message.library,
+          key: message.key,
+          namespace: message.namespace,
+          activeLocale: message.activeLocale,
+          newText: message.newText,
+          fileIO: this._fileIO,
+        });
+        return { success: r.success, error: r.error, filePath: r.filePath };
+      };
+      writeResult = localeFilePath ? await this._withUndoTracking(localeFilePath, doWrite) : await doWrite();
+    }
 
     if (!writeResult.success) {
       return {

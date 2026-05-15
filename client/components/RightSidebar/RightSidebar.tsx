@@ -735,6 +735,33 @@ export default function RightSidebar({
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
   }, []);
 
+  const handleI18nKeyChange = useCallback(
+    (newKey: string) => {
+      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
+      if (!selectedId || !componentPath) return;
+      void (async () => {
+        try {
+          await astOps.writeI18nResource({
+            library: i18nText.library,
+            key: newKey,
+            namespace: i18nText.namespace,
+            activeLocale: i18nText.activeLocale,
+            newText: i18nText.resolvedText ?? '',
+            previousKey: i18nText.key,
+            filePath: i18nText.sourceLocation.filePath,
+            elementId: selectedId,
+            skipResourceWrite: true,
+          });
+        } catch {
+          // key change failed — no rollback needed (source file unchanged)
+        } finally {
+          setStyleRefreshKey((k) => k + 1);
+        }
+      })();
+    },
+    [i18nText, astOps, selectedId, componentPath],
+  );
+
   const handleI18nResolvedTextChange = useCallback(
     (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
@@ -1237,6 +1264,7 @@ export default function RightSidebar({
                 <I18nTextInspector
                   key={bindingKey}
                   i18nBinding={i18nText}
+                  onKeyChange={handleI18nKeyChange}
                   onResolvedTextChange={handleI18nResolvedTextChange}
                   onLocaleChange={handleI18nLocaleChange}
                   localeEditable={i18nText.availableLocales.length > 1}

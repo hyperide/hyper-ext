@@ -191,6 +191,11 @@ export type AstMessage =
       filePath?: string;
       elementId?: string;
       previousKey?: string;
+      /**
+       * When true, skip writing to the locale JSON file and only update the JSX expression.
+       * Used when switching to an existing key — we don't want to overwrite its translation.
+       */
+      skipResourceWrite?: boolean;
     };
 
 // AST response

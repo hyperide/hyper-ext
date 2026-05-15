@@ -36,4 +36,8 @@ export class TsMergedAdapter implements I18nAdapter {
     if (!localeData || typeof localeData !== 'object' || Array.isArray(localeData)) return null;
     return lookupDotPath(localeData as Record<string, unknown>, key);
   }
+
+  async writeKey(_elementId: string, _newKey: string): Promise<void> {
+    throw new Error('TsMergedAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)');
+  }
 }

@@ -565,6 +565,10 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
           namespace: params.namespace,
           activeLocale: params.activeLocale,
           newText: params.newText,
+          previousKey: params.previousKey,
+          filePath: params.filePath,
+          elementId: params.elementId,
+          skipResourceWrite: params.skipResourceWrite,
         },
         'ast:response',
       );
