@@ -51,38 +51,48 @@ Do **not** touch:
 
 ### Task 1 — Reproduce + isolate
 
-Add a unit test in `shared/i18n-text/__tests__/write-i18n-resource.test.ts`:
-- Input: a small merged-TS string mirroring bulka’s shape:
-  ```ts
-  export const translations: Translations = {
-    ru: { brand: { name: "Булка" } },
-    en: { brand: { name: "Bun" } },
-  };
-  ```
-- Call `writeI18nResource({ library: 'custom', key: 'q', activeLocale: 'ru', newText: 'Q!', … })`
-  using an in-memory `fileIO`.
-- Expect: `success: true`, file content now includes `q: "Q!"` inside the `ru` object.
-- Test must be **RED on current main**.
+- [x] Add unit tests in `shared/i18n-text/__tests__/write-i18n-resource.test.ts`
+  for the bulka-shape new-key write path.
+- [x] Add the AST-level test file `shared/i18n-text/__tests__/ts-locale-ast.test.ts`
+  exercising `writeTsLocaleValue` directly on the same merged-TS input.
+- [x] Run the new tests on current main and document findings.
 
-Also reproduce at the AST helper level: a unit test in
-`shared/i18n-text/__tests__/ts-locale-ast.test.ts` calling `writeTsLocaleValue(content, 'ru', 'q', 'Q!')`
-on the same input. Confirms whether the bug is in `writeTsLocaleValue` directly or higher up.
+#### Findings (2026-05-08)
 
-### Task 2 — Fix `writeTsLocaleValue` for merged-TS new keys
+The plan’s hypothesis (“`setStringProperty` silently fails to create new top-level
+keys”) is **disproven**. On current main:
 
-Likely culprits inside `setStringProperty`:
-- May only mutate existing properties; new-property branch may not insert into the object
-  literal at all.
-- May call `t.objectProperty` wrong, or fail to push into `properties` array.
-- May not handle the case where the locale value is identifier (`ru: ruDict`) vs inline
-  literal — `objectFromExpression` should be probed.
+- The bulka-shape merged-TS new-key path is GREEN end-to-end at the unit level:
+  `writeI18nResource` → `writeTsLocaleValue` → `setStringProperty` correctly
+  inserts `q: "Q!"` inside `ru`, leaves `rs`/`en` untouched, and the result still
+  parses as valid TS.
+- The same is true for nested new keys (`e2e.merged.newkey`) — intermediate
+  object literals are created.
+- Existing-key updates also work for ASCII values.
 
-Diagnose, fix, keep `retainLines: true` so line numbers don't drift. Verify the generated TS
-parses again (write a parse step in the test).
+The actual Task-2 bug surfaces only on **non-ASCII new values**: babel-generator’s
+default `jsescOption` escapes any string built from `t.stringLiteral(...)` into
+`\uXXXX` escapes. Pre-existing literals stay verbatim because `retainLines: true`
+preserves the original source range. The 3 RED tests all assert verbatim Cyrillic
+round-trip (e.g. expects `"Бублик"`, gets `"Бу..."`).
 
-For nested keys (`a.b.c`), `setStringProperty` should create intermediate object properties
-the same way the JSON path does in `setKey` (see `write-i18n-resource.ts:74–84`). If it
-doesn’t, mirror that behaviour.
+The user-reported “`q` does not appear in `translations.ts`” is therefore not in
+this layer. It will be caught by the Task 3 e2e — likely a RPC / AstService /
+fileIO integration issue (or stale state pre-`c5a0c82a`’s `writable: true` flip).
+
+### Task 2 — Fix non-ASCII escape in merged-TS write
+
+Task 1 found the real bug: babel-generator emits `\uXXXX` for new
+`t.stringLiteral` nodes. Bulka’s `translations.ts` is plain Cyrillic; one new key
+write would convert all *new* values to escape sequences while pre-existing
+literals stay verbatim. Visually destructive and confusing in diffs.
+
+- [x] Pass `jsescOption: { minimal: true }` (or equivalent) to the babel-generator
+  call inside `writeTsLocaleValue` so freshly-emitted string literals keep
+  their original code points.
+- [x] Verify `retainLines: true` still works — line numbers must not drift.
+- [x] Re-run the 3 RED tests added in Task 1; all must turn GREEN.
+- [x] Re-run the full `shared/i18n-text/__tests__` suite and confirm no regressions.
 
 ### Task 3 — E2E: bulka new-key creation writes resource
 
@@ -92,13 +102,18 @@ update**, this one tests the **on-disk write**):
 
 1. Launch bulka, select element with an existing `t(...)` binding.
 2. Type `e2e.merged.newkey` into the key combobox, set text "MERGED NEW", commit.
-3. Wait up to 5s for `client/lib/translations.ts` to contain `"e2e.merged.newkey": "MERGED NEW"`
-   inside the active-locale sub-object.
+3. Wait up to 5s for `client/lib/translations.ts` to contain `e2e.merged.newkey` →
+   `MERGED NEW` inside the active-locale sub-object.
 4. Assert the file is still valid TypeScript (parse via ts-morph, `Project.addSourceFileAtPath`,
    and check no diagnostics).
 5. Cleanup: revert the file at the end of the test.
 
-Must be **RED before Task 2 lands**, **GREEN after**.
+- [ ] Author the spec and confirm it is RED on a build that contains Task 1’s
+  unit work but no other Task-2/3 changes.
+- [ ] Re-run after Task 2 lands; expect GREEN.
+- [ ] If still RED after Task 2, the bug is integration-level — drill into
+  `AstService.writeI18nResource` / `PanelRouter` RPC / VS Code FileIO and
+  fix there. Add a unit-level reproduction once isolated.
 
 ### Task 4 — Coordinate with consistency plan
 
@@ -107,13 +122,18 @@ visibility e2e from `2026-05-08-i18n-inspector-consistency-ralphex-plan.md` Task
 now also show the resolved text (not just the key). Tighten the assertion in that test
 **only if** the consistency plan is already merged; otherwise leave a follow-up note.
 
+- [ ] Check whether the consistency plan is already merged into the target branch.
+- [ ] If merged: tighten the visibility e2e assertion to require resolved text.
+- [ ] If not merged: add a follow-up note in this file’s Findings block and skip.
+
 ### Task 5 — Telegram handoff
 
-- TG report listing: write-path file changes, both new tests + verdicts, e2e screenshot.
-- E2E screenshot proving `q`-equivalent key + value appear inside the resource. Visual check
-  before sending.
-- Update `MEMORY.md` to remove the "writeI18nResource merged-TS write support" deferred line
-  (or mark it resolved with the commit hash).
+- [ ] TG report listing: write-path file changes, both new tests + verdicts,
+  e2e screenshot path.
+- [ ] E2E screenshot proving the new key + value appear inside the resource.
+  Open the screenshot with `Read` and visually confirm before sending.
+- [ ] Update `MEMORY.md` to remove the "writeI18nResource merged-TS write support"
+  deferred line (or mark it resolved with the commit hash).
 
 ## Hard Rules
 
