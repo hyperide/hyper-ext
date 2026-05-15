@@ -852,6 +852,7 @@ attachClickHandler(
           source,
           computedStyle: extractComputedStyle(el),
           computedStyleSeq: ++elementClickSeq,
+          domTextContent: el.innerText?.trim() || undefined,
         },
         '*',
       );

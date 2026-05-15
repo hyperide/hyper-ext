@@ -29,6 +29,7 @@ import type {
 import type { NodeRef } from '@shared/element-tracing/types';
 import { detectI18nBinding, resolveCalleeOriginAtLocation } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
+import { resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
 import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
 import { isBundleArtifactPath } from './bundle-artifact-path';
@@ -75,7 +76,11 @@ export class StyleReadService {
    * Read className and metadata from an element in the AST.
    * Uses nodeRef (preferred) to resolve element by position.
    */
-  async readElementClassName(componentPath: string, nodeRef?: NodeRef): Promise<ElementStyleReadResult> {
+  async readElementClassName(
+    componentPath: string,
+    nodeRef?: NodeRef,
+    domTextContent?: string,
+  ): Promise<ElementStyleReadResult> {
     const absolutePath = resolveWorkspacePath(this._workspaceRoot, componentPath);
     const empty: ElementStyleReadResult = {
       className: '',
@@ -180,7 +185,7 @@ export class StyleReadService {
 
       const i18nText =
         childrenType === 'expression' || childrenType === 'expression-complex' || childrenType === 'jsx'
-          ? await this._tryDetectI18n(element, filePath, content)
+          ? await this._tryDetectI18n(element, filePath, content, domTextContent)
           : undefined;
 
       return {
@@ -206,6 +211,7 @@ export class StyleReadService {
     element: t.JSXElement,
     filePath: string,
     content: string,
+    domTextContent?: string,
   ): Promise<I18nBindingResult | undefined> {
     // Find the first non-empty JSXExpressionContainer child
     let exprLoc: { line: number; column: number } | null = null;
@@ -293,6 +299,28 @@ export class StyleReadService {
     });
 
     if (detection.kind === 'unsupported') {
+      // Fallback: search locale files by the rendered DOM text.
+      // Handles dynamic keys like {t(someVar)} where AST detection cannot resolve the key at build time.
+      if (domTextContent) {
+        const domMatch = await resolveI18nByDomText(domTextContent, this._workspaceRoot, this._fileIO).catch(
+          () => null,
+        );
+        if (domMatch) {
+          const binding: I18nTextBinding = {
+            kind: 'i18n',
+            library: library ?? 'custom',
+            key: domMatch.key,
+            namespace: domMatch.namespace,
+            activeLocale: domMatch.locale,
+            availableLocales: domMatch.availableLocales,
+            resolvedText: domMatch.resolvedText,
+            editable: true,
+            sourceLocation: { filePath, line: exprLoc.line, column: exprLoc.column },
+            confidence: 'locale-heuristic',
+          };
+          return binding;
+        }
+      }
       return detection;
     }
 

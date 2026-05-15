@@ -167,6 +167,7 @@ export type PlatformMessage =
       requestId: string;
       elementId: string;
       componentPath: string;
+      domTextContent?: string;
     }
   | {
       type: 'styles:response';

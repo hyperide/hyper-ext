@@ -65,6 +65,8 @@ export interface UseElementStyleDataOptions {
   /** Runtime computed style snapshot from the preview iframe. Used to fill in CSS-variable-based
    *  Tailwind values (e.g. bg-primary/15) that the extension-host parser cannot resolve. */
   runtimeStyle?: SelectedElementRuntimeStyle | null;
+  /** Trimmed innerText from the selected DOM element — used as i18n DOM-text search fallback. */
+  domTextContent?: string;
 }
 
 // ============================================================================
@@ -257,6 +259,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     itemIndex,
     refreshKey,
     runtimeStyle,
+    domTextContent,
   } = options;
 
   // Base style data from className RPC or engine — runtime merge applied via useMemo below
@@ -415,6 +418,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       requestId,
       elementId,
       componentPath: effectiveComponentPath,
+      domTextContent: domTextContent || undefined,
     });
 
     const timer = setTimeout(() => {
@@ -428,7 +432,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
       clearTimeout(timer);
     };
-  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey]);
+  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey, domTextContent]);
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.

@@ -171,6 +171,7 @@ export function useCanvasInteraction(
           const patch: Partial<SharedEditorState> & { source?: unknown } = {
             selectedIds: [elementId],
             insertTargetId: null,
+            selectedElementDomText: typeof msg.domTextContent === 'string' ? msg.domTextContent : null,
           };
           if (msg.itemIndex !== null && msg.itemIndex !== undefined) {
             patch.selectedItemIndices = { [elementId]: msg.itemIndex };

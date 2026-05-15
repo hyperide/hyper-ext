@@ -226,16 +226,17 @@ export class PanelRouter {
 
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
-      const { requestId, elementId, componentPath } = message as {
+      const { requestId, elementId, componentPath, domTextContent } = message as {
         requestId: string;
         elementId: string;
         componentPath: string;
+        domTextContent?: string;
       };
       try {
         // Ensure NodeMapService is populated before reading styles
         // (same race condition as HYP-268 for writes).
         await this._astBridge.astService.ensureInitialized();
-        const result = await this._styleReadService.readElementClassName(componentPath, elementId);
+        const result = await this._styleReadService.readElementClassName(componentPath, elementId, domTextContent);
         webview.postMessage({
           type: 'styles:response',
           requestId,
