@@ -2245,3 +2245,68 @@ Remix cold compile занял ~155s. Poll стартовал через +4.4s и
 
 После завершения Run #9 (или сбора достаточной выборки) — старт Run #10
 с `2b1dd12` HEAD. Все 4 класса failures из Run #9 закрыты.
+
+## 📍 2026-04-27 ~21:00 CEST: Run #10 результаты + Run #11 старт
+
+### Run #10 (185123-98899, VSIX 0.1.17) — killed globalTimeout 30 min
+
+| shard | done | pass | fail | flaky | skip | unrun |
+|-------|------|------|------|-------|------|-------|
+| s1    | 172  | 164  | 1    | 1     | 6    | 449   |
+| s2    | 100  | 79   | 12   | 2     | 0    | 407   |
+| s3    | 148  | 104  | 1    | 2     | 41   | 413   |
+| s4    | 33   | 11   | 6    | 7     | 9    | 520   |
+| **Σ** | 453  | 358  | 20   | 12    | 56   | 1789  |
+
+GlobalTimeout 30 min обрезал все шарды — 1789 тестов не запустились.
+Pass rate на запущенных: 79% (20 fails из 453 done).
+
+### Классификация failures Run #10
+
+**Class M (FIXED in `b255d4af`):**
+- s4: все 6 fails + 7 flaky — `remix-tw4-twitter` с `Dev server failed: Server startup timeout`
+- Причина: `DevServerManager._waitForReady(30000)` слишком мало для Remix cold compile (60-90s)
+- Fix: 30s → 90s
+
+**Class K2 (FIXED in `a5bf3b9`):**
+- s1: 1 fail — `concurrent start/stop race condition`
+- Причина: poll timeout 45s слишком мал для Docker cleanup
+- Fix: 45s → 90s
+
+**Class P (NEW, FIXED in `3c97477`):**
+- s2: 11 fails — settings.spec.ts (8 fails) + security.spec.ts (2) + smoke.spec.ts (1)
+- Все упали на `CommandPalette.ts:57/69` — `expect(input).toBeVisible({ timeout: 5_000 })`
+- Причина: `.quick-input-widget input:visible` недоступен >5s на загруженном Docker
+- Fix: 5_000 → 15_000 (commit `3c97477`)
+
+**Class style-screens (NEW, FIXED in `3c97477`):**
+- s2: 1 fail — `style-source-screens.spec.ts:58` — 120s timeout exceeded + Target crashed on retry
+- `test.setTimeout(120_000)` заменён на `test.slow()` (180s) — commit `3c97477`
+
+### Commits between Run #10 and Run #11
+
+`hyperide/hyper-canvas-draft`:
+- `b255d4af` — DevServerManager._waitForReady 30s → 90s
+
+`hyperide/hyper-ext-e2e`:
+- `a5bf3b9` — concurrent start/stop poll 45s → 90s + DevServerControls 30s → 90s
+- `3c97477` — CommandPalette 5s → 15s + style-source-screens test.slow()
+
+### Run #11 ожидаемые результаты
+
+При применении всех 4 фиксов:
+- Class M (s4 fails): 6 → 0
+- Class K2 (s1 fail): 1 → 0
+- Class P (s2 fails): 11 → 0
+- style-screens: 1 → 0
+- Итого: 20 fails → ~0 на доступных 453 тестах
+
+Риски:
+- GlobalTimeout 30 min снова обрежет ~1789 тестов — нужно смотреть что упадёт
+- Shard 4 now gets Remix with 90s wait — потенциально медленнее, больше шансов
+  упасть в timeout если compile > 90s
+
+### Run #11 старт
+
+`bun run test:docker` из `/Users/ultra/work/ext-test-projects/e2e`.
+VSIX: авто-select `hypercanvas-preview-0.1.17.vsix` (последний).
