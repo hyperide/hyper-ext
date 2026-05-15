@@ -42,8 +42,10 @@ import {
   PositionSection,
   StateSelectorSection,
   StrokeSection,
+  StyleSourceTabsSection,
   ViewControlsSection,
 } from './sections';
+import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
 import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
 
@@ -194,6 +196,7 @@ export default function RightSidebar({
 
   // Current state modifier for Tailwind (hover, focus, etc.)
   const [currentState, setCurrentState] = useState<string | undefined>(undefined);
+  const [selectedSourceTabId, setSelectedSourceTabId] = useState('computed');
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
@@ -209,6 +212,7 @@ export default function RightSidebar({
     tagType,
     loading,
     childrenLocation,
+    styleReadResult,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -219,6 +223,28 @@ export default function RightSidebar({
     itemIndex: selectedItemIndex,
     refreshKey: styleRefreshKey + styleVersion,
   });
+  const sourceTabs = useMemo(
+    () =>
+      resolveInspectorStyleSourceTabs({
+        inspectorUIKit,
+        componentPath,
+        canInspectStyles,
+        styleReadResult,
+      }),
+    [inspectorUIKit, componentPath, canInspectStyles, styleReadResult],
+  );
+  const explicitSourceTabId = useMemo(() => {
+    if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
+      return undefined;
+    }
+    return getExplicitStyleSourceTabId(selectedSourceTabId);
+  }, [sourceTabs, selectedSourceTabId]);
+
+  useEffect(() => {
+    if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
+      setSelectedSourceTabId('computed');
+    }
+  }, [sourceTabs, selectedSourceTabId]);
 
   // Apply state filter to parsedStyles
   const effectiveParsed: Partial<ParsedStyles> = useMemo(() => {
@@ -305,6 +331,7 @@ export default function RightSidebar({
     astOps,
     currentState,
     engine,
+    selectedSourceTabId: explicitSourceTabId,
     onSyncError: handleSyncError,
     onSyncStart: handleSyncStart,
     onSyncEnd: handleSyncEnd,
@@ -1107,6 +1134,15 @@ export default function RightSidebar({
                 </div>
               )}
             </div>
+          )}
+
+          {/* Style Source Tabs */}
+          {canInspectStyles && (
+            <StyleSourceTabsSection
+              tabs={sourceTabs}
+              selectedTabId={selectedSourceTabId}
+              onSourceTabChange={setSelectedSourceTabId}
+            />
           )}
 
           {/* State Selector */}

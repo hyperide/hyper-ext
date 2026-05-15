@@ -21,6 +21,8 @@ interface UseStyleSyncOptions {
   currentState?: string;
   /** Optional engine for DOM class reading (browser mode only) */
   engine?: CanvasEngine | null;
+  /** Selected non-computed style source tab for shared write routing */
+  selectedSourceTabId?: string;
   /** Called when style sync fails (e.g. to open AI chat as fallback) */
   onSyncError?: (styles: Record<string, string>, error: string) => void;
   /** Called when setIsStyleSyncing(true) */
@@ -51,6 +53,7 @@ export function useStyleSync({
   astOps,
   currentState,
   engine,
+  selectedSourceTabId,
   onSyncError,
   onSyncStart,
   onSyncEnd,
@@ -123,6 +126,7 @@ export function useStyleSync({
             instanceProps: {},
             instanceId: selectedId,
             state: currentState,
+            selectedSourceTabId,
           });
         }
 
@@ -165,6 +169,7 @@ export function useStyleSync({
             filePath,
             styles,
             state: currentState,
+            selectedSourceTabId,
           });
         }
 
@@ -183,6 +188,7 @@ export function useStyleSync({
     astOps,
     currentState,
     engine,
+    selectedSourceTabId,
     onSyncError,
     onSyncStart,
     onStyleNotApplied,

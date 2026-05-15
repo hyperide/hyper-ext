@@ -9,4 +9,5 @@ export { MarginSection } from './MarginSection';
 export { PositionSection } from './PositionSection';
 export { StateSelectorSection } from './StateSelectorSection';
 export { StrokeSection } from './StrokeSection';
+export { StyleSourceTabsSection } from './StyleSourceTabsSection';
 export { ViewControlsSection } from './ViewControlsSection';

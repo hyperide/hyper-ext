@@ -114,6 +114,7 @@ export type AstMessage =
       elementId: string;
       styles: Record<string, string>;
       state?: string; // hover, focus, etc.
+      selectedSourceTabId?: string;
     }
   | {
       type: 'ast:updateProps';

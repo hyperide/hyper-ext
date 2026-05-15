@@ -232,6 +232,24 @@ describe('CanvasEngine AST Integration', () => {
       expect(mockApi.getCallCount('updateStyles')).toBe(1);
     });
 
+    it('passes selected source tab id to the AST API', async () => {
+      engine.updateASTStyles(
+        'elem-1',
+        '/test/file.tsx',
+        { padding: '16px' },
+        {
+          state: 'hover',
+          selectedSourceTabId: 'css-modules:card',
+        },
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const call = mockApi.getLastCall('updateStyles');
+      const params = call?.args[0] as { selectedSourceTabId?: string };
+      expect(params.selectedSourceTabId).toBe('css-modules:card');
+    });
+
     it('should restore snapshot on undo', async () => {
       mockApi.updateStylesResult = { success: true, snapshotId: 42 };
       engine.updateASTStyles('elem-1', '/test/file.tsx', { padding: '16px' });

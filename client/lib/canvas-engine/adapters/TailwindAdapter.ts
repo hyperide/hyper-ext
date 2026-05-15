@@ -119,6 +119,11 @@ export class TailwindAdapter implements StyleAdapter {
       textColor = rgbToHex(computedColor);
     }
 
+    let fontSize = parsed.fontSize;
+    if (!fontSize && domElement) {
+      fontSize = window.getComputedStyle(domElement).fontSize;
+    }
+
     // Ensure flexDirection is properly typed
     const flexDirection: 'row' | 'column' | undefined =
       parsed.flexDirection === 'column' ? 'column' : parsed.flexDirection === 'row' ? 'row' : undefined;
@@ -130,6 +135,7 @@ export class TailwindAdapter implements StyleAdapter {
       layoutType,
       width,
       height,
+      fontSize,
       // Map textColor to color (ParsedStyles uses 'color', ParsedTailwindStyles uses 'textColor')
       color: textColor,
       // Convert nested padding object to flat fields

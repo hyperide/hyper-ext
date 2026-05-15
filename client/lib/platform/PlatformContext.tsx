@@ -314,6 +314,7 @@ function createBrowserAstOperations(): AstOperations {
           instanceProps: params.instanceProps,
           instanceId: params.instanceId,
           state: params.state,
+          selectedSourceTabId: params.selectedSourceTabId,
         }),
       });
       if (!response.ok) {
@@ -426,6 +427,7 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
           instanceProps: params.instanceProps,
           instanceId: params.instanceId,
           state: params.state,
+          selectedSourceTabId: params.selectedSourceTabId,
         },
         'ast:response',
       );

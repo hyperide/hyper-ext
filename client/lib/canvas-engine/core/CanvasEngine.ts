@@ -509,6 +509,7 @@ export class CanvasEngine {
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
+      selectedSourceTabId?: string;
     },
   ): Promise<void> | undefined {
     const operation = new ASTStyleOperation(this.api, {
@@ -519,6 +520,7 @@ export class CanvasEngine {
       instanceProps: options?.instanceProps,
       instanceId: options?.instanceId,
       state: options?.state,
+      selectedSourceTabId: options?.selectedSourceTabId,
     });
 
     const result = operation.execute(this.tree);

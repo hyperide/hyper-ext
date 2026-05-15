@@ -108,6 +108,31 @@ describe('AstBridge', () => {
     );
   });
 
+  it('passes selected source tab ID through ast:updateStyles', async () => {
+    const wv = createMockWebview();
+    await bridge.handleMessage(
+      {
+        type: 'ast:updateStyles',
+        requestId: 'r1-source-tab',
+        filePath: 'f.tsx',
+        elementId: 'e1',
+        styles: { color: 'red' },
+        selectedSourceTabId: 'tailwind-v4:elementClass',
+      } as never,
+      wv as never,
+    );
+
+    expect(mockAstService.updateStyles).toHaveBeenCalledWith(
+      'f.tsx',
+      'e1',
+      { color: 'red' },
+      undefined,
+      undefined,
+      undefined,
+      'tailwind-v4:elementClass',
+    );
+  });
+
   it('routes ast:updateProps', async () => {
     const wv = createMockWebview();
     await bridge.handleMessage(

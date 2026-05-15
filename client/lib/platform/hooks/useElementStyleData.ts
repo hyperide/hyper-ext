@@ -8,6 +8,7 @@
  * Mode is auto-detected: if engine is provided, uses browser path.
  */
 
+import type { StyleReadResult } from '@lib/style-read/types';
 import { useEffect, useRef, useState } from 'react';
 import { findNodeById } from '@/components/RightSidebar/utils';
 import type { CanvasEngine } from '@/lib/canvas-engine';
@@ -37,6 +38,8 @@ export interface ElementStyleData {
   loading: boolean;
   /** Location of the first meaningful child in source (VS Code only) */
   childrenLocation?: { line: number; column: number };
+  /** Shared read result with source ownership tabs and inspector decisions */
+  styleReadResult?: StyleReadResult;
 }
 
 export interface UseElementStyleDataOptions {
@@ -110,6 +113,7 @@ export function classNameToStyles(className: string): ParsedStyles {
     ...parsed,
     flexDirection,
     layoutType,
+    fontSize: parsed.fontSize,
     color: parsed.textColor,
     paddingTop: parsed.padding?.top,
     paddingRight: parsed.padding?.right,
@@ -302,6 +306,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         tagType: response.tagType || 'unknown',
         loading: false,
         childrenLocation: response.childrenLocation,
+        styleReadResult: response.styleReadResult,
       });
     });
 

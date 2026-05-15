@@ -6,6 +6,7 @@
  * 2. VS Code Extension - with native VS Code editor via webview
  */
 
+import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 
@@ -80,6 +81,7 @@ export type PlatformMessage =
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
+      selectedSourceTabId?: string;
     }
   | {
       type: 'ast:insertElement';
@@ -157,6 +159,7 @@ export type PlatformMessage =
       textContent?: string;
       tagType?: string;
       childrenLocation?: { line: number; column: number };
+      styleReadResult?: StyleReadResult;
       error?: string;
     }
 
@@ -309,6 +312,7 @@ export interface AstOperations {
     instanceProps?: Record<string, unknown>;
     instanceId?: string;
     state?: string;
+    selectedSourceTabId?: string;
   }): Promise<void>;
 
   /** Insert a new JSX element */
