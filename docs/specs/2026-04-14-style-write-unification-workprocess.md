@@ -3345,3 +3345,9 @@ These 2 failures will remain in Run #20 (containers use pre-fix image).
 Run #21 will pick up the fix from the mounted ext-test-projects directory.
 
 ### Run #20 still active, ~73% remaining.
+
+## 📍 Инструкция 2026-04-28 ~15:50 CEST
+
+- **Codex для фиксов с 15:00 до 21:00** — использовать `codex exec` для реализации новых фиксов
+- **Частота мониторинга тестов: раз в 30 минут** (ранее ~20 мин)
+- Текущий прогон Run #20: 672/2189, 2 провала (те же, уже зафиксировано)
