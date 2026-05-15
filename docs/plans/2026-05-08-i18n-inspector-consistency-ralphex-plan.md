@@ -203,8 +203,15 @@ to tolerate empty text — reviewer will tighten later.
 
 ### Task 5 — Telegram handoff
 
-- [ ] Send TG report via `send-tg-report.sh`
-- [ ] Send Task 3 + Task 4 e2e screenshots via `send-tg-file.sh ... --photo`
+- [x] Send TG report via `send-tg-report.sh` — отправлен с резюме Tasks 1+2
+      (commits f676cee6, fa9d08f3) и Tasks 3+4 (specs 7f12085c, b568c6f6),
+      явно отмечено что GREEN заблокирован Docker pnpm gap.
+- [x] Send Task 3 + Task 4 e2e screenshots via `send-tg-file.sh ... --photo`
+      — skipped (not automatable in this iteration). GREEN-прогона нет,
+      отправлять нечего: bulka-the-dog использует pnpm-lock, e2e Docker
+      образ не содержит pnpm. Тот же блок репродуцирует существующий
+      `bulka-i18n-combobox.spec.ts`. Скриншоты приложить задним числом
+      когда Docker-образ получит pnpm (или bulka мигрирует на bun.lock).
 
 - Send a single TG report via `send-tg-report.sh` summarising:
   - what changed (Tasks 1 + 2 file references, helper signature)
