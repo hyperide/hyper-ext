@@ -71,6 +71,31 @@ function isFrameworkReserved(fileName: string): boolean {
   return NEXTJS_APP_ROUTER_RESERVED.has(fileName) || REMIX_RESERVED.has(fileName);
 }
 
+/**
+ * Files that look like components by extension+casing but aren't renderable React components:
+ *
+ * - Platform-specific React Native variants (Foo.native.tsx, Foo.ios.tsx, Foo.android.tsx).
+ *   The web bundler resolves the bare `./Foo` to the non-suffixed file. Including the
+ *   suffixed variant generates a duplicate `import { Foo } from './Foo.native'` next to
+ *   `import { Foo } from './Foo'`, producing "Identifier has already been declared".
+ *
+ * - vanilla-extract / linaria / stylex style sheets (Foo.css.ts, Foo.css.tsx, Foo.styles.ts,
+ *   Foo.module.ts). They start with PascalCase so the basename guard accepts them, but they
+ *   export style tokens, not components — `extractComponentName` falls back to the filename
+ *   `Foo.css` (with a dot), which then becomes an invalid JS identifier in the import line.
+ */
+function isPreviewIneligibleByName(fileName: string): boolean {
+  // Strip terminal .tsx/.ts/.jsx/.js to inspect any inner segment (e.g. `.native`, `.css`).
+  const base = fileName.replace(/\.(tsx?|jsx?)$/, '');
+  if (!base.includes('.')) return false;
+  const segments = base.split('.');
+  // Last segment after the leading PascalCase name (e.g. `native` in `Foo.native`).
+  const tail = segments.slice(1);
+  const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android', 'web']);
+  const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
+  return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg));
+}
+
 export interface PreviewFileManagerConfig {
   projectRoot: string;
   io: FileIO;
@@ -410,6 +435,7 @@ export class PreviewFileManager {
       const isStale = (e: { componentName: string; componentPath: string }) =>
         !/^[A-Z]/.test(e.componentName) ||
         isFrameworkReserved(basename(e.componentPath)) ||
+        isPreviewIneligibleByName(basename(e.componentPath)) ||
         this.hasPathCaseMismatch(e.componentPath, canonicalPaths);
       if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate) return existingContent;
 
@@ -432,7 +458,9 @@ export class PreviewFileManager {
     const discoveredPaths = await this._scanAllComponents();
     const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
     const existingPaths = existingEntries
-      .filter((e) => !isFrameworkReserved(basename(e.componentPath)))
+      .filter(
+        (e) => !isFrameworkReserved(basename(e.componentPath)) && !isPreviewIneligibleByName(basename(e.componentPath)),
+      )
       .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
@@ -526,7 +554,8 @@ export class PreviewFileManager {
           !name.startsWith('__') &&
           !name.startsWith('index.') &&
           (f.endsWith('.tsx') || f.endsWith('.ts')) &&
-          /^[A-Z]/.test(name) // PascalCase = component
+          /^[A-Z]/.test(name) && // PascalCase = component
+          !isPreviewIneligibleByName(name) // Skip Foo.native.tsx, Foo.css.ts, etc.
         );
       })
       .map((abs) => relative(this.projectRoot, abs));
@@ -620,6 +649,13 @@ export class PreviewFileManager {
     // they export metadata / use framework hooks that crash without router context.
     const fileName = basename(componentPath);
     if (isFrameworkReserved(fileName)) {
+      return null;
+    }
+
+    // Exclude platform-specific RN variants (Foo.native.tsx) and CSS-in-JS style sheets
+    // (Foo.css.ts) — they collide with the canonical Foo.tsx import or yield invalid
+    // identifiers like `Foo.css`, breaking the generated preview file.
+    if (isPreviewIneligibleByName(fileName)) {
       return null;
     }
 

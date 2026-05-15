@@ -599,6 +599,119 @@ describe('PreviewFileManager — buildEntry error handling', () => {
   });
 });
 
+describe('PreviewFileManager — buildEntry preview-ineligible suffix guard', () => {
+  it('skips React Native platform-specific files (Foo.native.tsx) that would collide with Foo.tsx', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/components/RootProvider.tsx',
+      `export function RootProvider({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
+    );
+    io.files.set(
+      '/project/src/components/RootProvider.native.tsx',
+      `export function RootProvider({ children }: { children: React.ReactNode }) { return <>{children}</>; }`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/RootProvider.tsx',
+      'src/components/RootProvider.native.tsx',
+    ]);
+    // Web variant kept, .native dropped — no duplicate-import syntax error
+    expect(content).toContain("from './components/RootProvider'");
+    expect(content).not.toContain('RootProvider.native');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('skips iOS / Android RN variants in addition to .native', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Toolbar.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/src/components/Toolbar.ios.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/src/components/Toolbar.android.tsx', `export function Toolbar() { return <div/>; }`);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/Toolbar.tsx',
+      'src/components/Toolbar.ios.tsx',
+      'src/components/Toolbar.android.tsx',
+    ]);
+    expect(content).toContain("from './components/Toolbar'");
+    expect(content).not.toContain('Toolbar.ios');
+    expect(content).not.toContain('Toolbar.android');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('skips vanilla-extract Foo.css.ts style sheets that fall back to invalid identifier', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Navbar.tsx', `export function Navbar() { return <nav/>; }`);
+    // Style sheet — exports `style()` calls, no PascalCase component
+    io.files.set(
+      '/project/src/components/Navbar.css.ts',
+      `import { style } from '@vanilla-extract/css';\nexport const navbar = style({ display: 'flex' });`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Navbar.tsx', 'src/components/Navbar.css.ts']);
+    // Component import valid, style sheet skipped — no `Navbar.css` identifier leak
+    expect(content).toContain("from './components/Navbar'");
+    expect(content).not.toContain('Navbar.css');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('skips Foo.styles.ts and Foo.module.ts naming variants', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Card.tsx', `export function Card() { return <div/>; }`);
+    io.files.set('/project/src/components/Card.styles.ts', `export const cardClass = 'card';`);
+    io.files.set('/project/src/components/Card.module.ts', `export const cardMod = {};`);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/Card.tsx',
+      'src/components/Card.styles.ts',
+      'src/components/Card.module.ts',
+    ]);
+    expect(content).toContain("from './components/Card'");
+    expect(content).not.toContain('Card.styles');
+    expect(content).not.toContain('Card.module');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('strips platform/style suffix entries when migrating a stale preview file', async () => {
+    // Stale preview with a stylesheet entry that previously slipped past detection.
+    // Single import per identifier — still valid TS, but the stylesheet path leaks
+    // into componentRegistry. Next ensure must clean it out.
+    const stalePreview = `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}
+import React from 'react';
+import { Navbar } from './components/Navbar';
+import { navbarStyles as NavbarCssStyles } from './components/Navbar.css';
+const componentRegistry = {
+  'src/components/Navbar.tsx': Navbar,
+  'src/components/Navbar.css.ts': NavbarCssStyles,
+};
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/components/Navbar.tsx', `export function Navbar() { return <nav/>; }`);
+    io.files.set(
+      '/project/src/components/Navbar.css.ts',
+      `import { style } from '@vanilla-extract/css';\nexport const navbarStyles = style({});`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Navbar.tsx']);
+    expect(content).not.toContain('Navbar.css');
+    expect(content).toContain("from './components/Navbar'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+});
+
 describe('PreviewFileManager — buildEntry non-PascalCase guard', () => {
   it('skips entry files (main.tsx, index.tsx) that have no PascalCase export', async () => {
     const io = new InMemoryFileIO();
