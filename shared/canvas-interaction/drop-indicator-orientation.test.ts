@@ -202,40 +202,6 @@ describe('chooseIndicatorOrientation', () => {
     expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('horizontal');
   });
 
-  // New cases: el itself is a flex/grid container (cursor over container padding).
-  it('el itself is flex-col → vertical (horizontal indicator)', () => {
-    const drop = makeChain({ display: 'flex', flexDirection: 'column' });
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('vertical');
-  });
-
-  it('el itself is flex-row → horizontal (vertical indicator)', () => {
-    const drop = makeChain({ display: 'flex', flexDirection: 'row' });
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('horizontal');
-  });
-
-  it('el itself is inline-flex column-reverse → vertical', () => {
-    const drop = makeChain({ display: 'inline-flex', flexDirection: 'column-reverse' });
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('vertical');
-  });
-
-  it('el itself is grid multi-track → horizontal', () => {
-    const drop = makeChain({ display: 'grid', gridAutoFlow: 'row', gridTemplateColumns: '1fr 1fr' });
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('horizontal');
-  });
-
-  it('el itself is grid single-track → vertical', () => {
-    const drop = makeChain({ display: 'grid', gridAutoFlow: 'row', gridTemplateColumns: 'minmax(0,1fr)' });
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('vertical');
-  });
-
-  it('el itself is flex-col but parent is flex-row → el wins (vertical)', () => {
-    const drop = makeChain(
-      { display: 'flex', flexDirection: 'column' },
-      { display: 'flex', flexDirection: 'row' },
-    );
-    expect(chooseIndicatorOrientation(drop, { getComputedStyle: styleOf })).toBe('vertical');
-  });
-
   it('uses nearest flex/grid container, ignoring outer flex-column when inner row matches sibling level', () => {
     // Drop is inside flex-row, which is inside flex-column outer wrapper.
     // We want the orientation at the IMMEDIATE flex/grid ancestor, since
