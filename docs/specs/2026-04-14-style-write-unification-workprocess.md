@@ -4317,3 +4317,48 @@ E2E save-dialog prevention current pass, 2026-04-22 13:50 CEST:
   * ext-test-projects: 3e4e330 test(e2e): prevent save dialogs during VS Code
     cleanup (HYP-363)
 ```
+
+E2E save-dialog prevention follow-up, 2026-04-22 14:30 CEST:
+
+```text
+- User screenshot showed the App.tsx save dialog still appearing during E2E.
+  I stopped the full run at 89/2209 because continuing after a visible modal
+  would make the result untrustworthy.
+- Root cause found in ext-test cleanup:
+  * closeEditorsWithoutSaveDialog only ran "File: Save All" when the current
+    DOM dirty-marker heuristic detected dirty tabs.
+  * VS Code can render dirty state in a way the heuristic misses, so cleanup
+    could log "no dirty editors" and then run "View: Close All Editors", which
+    opens the save dialog.
+  * assertNoBlockingDialogs also checked only one immediate frame after the
+    command; a save dialog rendered slightly later could slip past the guard.
+- ext-test fix in progress:
+  * Always run "File: Save All" before "View: Close All Editors".
+  * Fail before Save All if any Untitled/Untitled-N editor tab is open, because
+    that path can trigger a native Save As dialog.
+  * assertNoBlockingDialogs can now optionally observe a short post-command
+    window and throws SaveChangesDialogError when the visible dialog text is a
+    save prompt.
+- Focused validation:
+  * /tmp/hyper-e2e-save-dialog-guard passed 2/2 with --retries=0:
+    "style change applies to component with dynamic className" followed by
+    "PI-5-1: single click selects element".
+  * The log shows App.tsx was saved before close in the style-write teardown.
+  * The next test setup ran the unconditional Save All guard before closing all
+    editors, then proceeded without a save dialog.
+- Claude review:
+  * First final-review pass found no blockers, but noted that
+    expect.poll(...).toBeNull() did not actually observe delayed dialog
+    appearance; it would pass on the first null read.
+  * Fixed the guard to optionally wait for a visible dialog after
+    "View: Close All Editors" and then read the dialog text.
+  * Re-ran /tmp/hyper-e2e-save-dialog-guard-2: passed 2/2 with --retries=0.
+  * Second Claude review found no blocking issues.
+- Commit:
+  * ext-test-projects: 7fd89f8 test(e2e): harden save-dialog cleanup guard
+    (HYP-363)
+  * Existing unrelated ext-test staged changes were preserved after the commit.
+- Next:
+  * Commit this workfile update in the main repo.
+  * Restart full E2E from scratch with --retries=0.
+```
