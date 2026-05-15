@@ -285,13 +285,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
-  // Keep iframeEl in a ref so doRefresh callback stays stable.
-  // Direct assignment during render is intentional — this is the standard React pattern
-  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
-  // between render and effect execution, which is worse than synchronous assignment.
-  const iframeElRef = useRef(iframeEl);
-  iframeElRef.current = iframeEl;
-
   // === Tree selection → canvas scroll ===
   // When the user clicks an element in the Elements Tree, useElementSelection dispatches
   // a local CustomEvent. We forward it to the iframe as hypercanvas:goToVisual so the
