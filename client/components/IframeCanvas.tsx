@@ -47,6 +47,8 @@ interface IframeCanvasProps {
   onRuntimeError?: (error: RuntimeError | null) => void;
   // Error state change callback for rendering overlays outside pan&zoom
   onErrorChange?: (error: string | null, retryCount: number) => void;
+  /** When set, uses this URL as iframe src instead of the built /project-preview proxy URL */
+  overrideSrc?: string;
 }
 
 export default function IframeCanvas({
@@ -68,6 +70,7 @@ export default function IframeCanvas({
   onGatewayError,
   onRuntimeError,
   onErrorChange,
+  overrideSrc,
 }: IframeCanvasProps) {
   const { meta } = useComponentMeta();
   const engine = useCanvasEngine();
@@ -1158,6 +1161,7 @@ export default function IframeCanvas({
         src={
           previewReady
             ? (() => {
+                if (overrideSrc) return overrideSrc;
                 const baseUrl = `/project-preview/${meta.projectId}/test-preview`;
                 const params = new URLSearchParams();
                 params.set('component', componentPath);
