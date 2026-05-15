@@ -187,6 +187,18 @@ function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: 
   return false;
 }
 
+/** Render a short JSX tag name for debug logs (e.g. "p", "div", "Card.Header"). */
+function describeJsxName(el: t.JSXElement): string {
+  const name = el.openingElement.name;
+  if (t.isJSXIdentifier(name)) return name.name;
+  if (t.isJSXMemberExpression(name)) {
+    const obj = t.isJSXIdentifier(name.object) ? name.object.name : '?';
+    return `${obj}.${name.property.name}`;
+  }
+  if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
+  return '?';
+}
+
 // ============================================
 // AstService Class
 // ============================================
@@ -327,6 +339,25 @@ export class AstService {
     } catch {
       // File read failure — node map will be stale but functional
     }
+  }
+
+  /**
+   * Drop cached AST + refresh NodeMapService for `filePath`. Use after an
+   * external mutation (file watcher event, HMR rewrite, prettier-on-save)
+   * so the next operation resolves nodeRefs against fresh line/column data
+   * instead of stale coordinates from the pre-rewrite version.
+   *
+   * Why both layers: the parser cache is content-keyed so it self-heals on
+   * a content change, but NodeMapService caches line/column entries that
+   * were valid only against the *previous* file content. Without this
+   * refresh, `findElementByPosition` would land on the wrong (or missing)
+   * element after an external rewrite — surfacing as the intermittent
+   * "иногда работает" race in moveElement, updateStyles, etc.
+   */
+  async invalidateFile(filePath: string): Promise<void> {
+    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    this._fileParser.invalidate(absolutePath);
+    await this._updateNodeMap(absolutePath);
   }
 
   /**
@@ -737,14 +768,41 @@ export class AstService {
 
     const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
 
+    dbg(
+      `[moveElement] BEGIN filePath=${filePath} absolutePath=${absolutePath} sourceId=${String(sourceId)} targetId=${String(targetId)} position=${position}`,
+    );
+
+    // Defensive freshen: drop parser cache + reparse NodeMapService for every
+    // file referenced by the inputs. Guards against the "иногда работает"
+    // race where an external rewrite (HMR, prettier-on-save, file watcher
+    // event) shifted line/column coordinates between a previous operation
+    // and this one — without freshen, NodeMapService still holds the old
+    // coordinates and `findElementByPosition` lands on the wrong element.
+    const filesToFreshen = new Set<string>([absolutePath]);
+    const sourceFile = this._extractFileFromNodeRef(String(sourceId));
+    if (sourceFile) filesToFreshen.add(sourceFile);
+    const targetFile = this._extractFileFromNodeRef(String(targetId));
+    if (targetFile) filesToFreshen.add(targetFile);
+    for (const f of filesToFreshen) {
+      try {
+        await this.invalidateFile(f);
+      } catch {
+        // Missing file (e.g. nodeRef points to a path that doesn't exist
+        // in the workspace yet) is fine — _resolveElementInCorrectFile
+        // will produce a clear "not found" error below.
+      }
+    }
+
     // Discover which file each endpoint actually lives in. We only use
     // the resolvedPath here — the AST returned is parsed-once-per-call,
     // so we re-parse below to ensure both endpoints share one AST object.
     const sourceLocate = await this._resolveElementInCorrectFile(absolutePath, sourceId as NodeRef);
+    dbg(`[moveElement] source locate result=${sourceLocate ? `path=${sourceLocate.resolvedPath}` : 'NULL'}`);
     if (!sourceLocate) {
       throw new Error(`moveElement: source element not found (nodeRef=${sourceId})`);
     }
     const targetLocate = await this._resolveElementInCorrectFile(absolutePath, targetId as NodeRef);
+    dbg(`[moveElement] target locate result=${targetLocate ? `path=${targetLocate.resolvedPath}` : 'NULL'}`);
     if (!targetLocate) {
       throw new Error(`moveElement: target element not found (nodeRef=${targetId})`);
     }
@@ -755,6 +813,9 @@ export class AstService {
     // both files. Returned MoveResult has `allCrossFileSnapshots` covering
     // both pre-write contents so undo can restore each file independently.
     if (sourceLocate.resolvedPath !== targetLocate.resolvedPath) {
+      dbg(
+        `[moveElement] cross-file branch sourceFile=${sourceLocate.resolvedPath} targetFile=${targetLocate.resolvedPath}`,
+      );
       return await this._moveAcrossFiles({
         sourceFilePath: sourceLocate.resolvedPath,
         targetFilePath: targetLocate.resolvedPath,
@@ -771,10 +832,16 @@ export class AstService {
     // caches by (path, content), so this read is cheap.
     const { ast } = await this._fileParser.readAndParseFile(targetFilePath);
     const sourceResult = this._resolveElement(ast, sourceId as NodeRef, targetFilePath);
+    dbg(
+      `[moveElement] same-file re-parse sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`,
+    );
     if (!sourceResult) {
       throw new Error(`moveElement: source disappeared after re-parse (nodeRef=${sourceId})`);
     }
     const targetResult = this._resolveElement(ast, targetId as NodeRef, targetFilePath);
+    dbg(
+      `[moveElement] same-file re-parse targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`,
+    );
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared after re-parse (nodeRef=${targetId})`);
     }
@@ -784,6 +851,7 @@ export class AstService {
 
     if (sourceNode === targetNode) {
       // Dropping a node onto itself is a no-op — succeed without touching the file.
+      dbg(`[moveElement] no-op: source === target`);
       return { success: true, resolvedPath: targetFilePath };
     }
 
@@ -797,6 +865,10 @@ export class AstService {
 
     const sourceParent = sourceResult.path.parent;
     const targetParent = targetResult.path.parent;
+
+    dbg(
+      `[moveElement] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'} sameParent=${sourceParent === targetParent}`,
+    );
 
     if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
       // Source is the root JSX returned from a function. Moving it would
@@ -848,8 +920,20 @@ export class AstService {
       targetSiblings.splice(position === 'before' ? tgtIdx : tgtIdx + 1, 0, sourceNode);
     }
 
+    dbg(`[moveElement] mutation done, writing AST to ${targetFilePath}`);
     await this._fileParser.writeAST(ast, targetFilePath);
     await this._updateNodeMap(targetFilePath);
+
+    let contentAfterWrite: string | undefined;
+    try {
+      contentAfterWrite = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+    const changed = contentBeforeWrite !== undefined && contentAfterWrite !== undefined
+      ? contentBeforeWrite !== contentAfterWrite
+      : 'unknown';
+    dbg(
+      `[moveElement] write done filePath=${targetFilePath} changed=${changed} bytesBefore=${contentBeforeWrite?.length ?? '?'} bytesAfter=${contentAfterWrite?.length ?? '?'}`,
+    );
 
     return {
       success: true,
@@ -895,10 +979,16 @@ export class AstService {
     const { ast: targetAst } = await this._fileParser.readAndParseFile(targetFilePath);
 
     const sourceResult = this._resolveElement(sourceAst, sourceId, sourceFilePath);
+    dbg(
+      `[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`,
+    );
     if (!sourceResult) {
       throw new Error(`moveElement: source disappeared in ${sourceFilePath} (nodeRef=${sourceId})`);
     }
     const targetResult = this._resolveElement(targetAst, targetId, targetFilePath);
+    dbg(
+      `[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`,
+    );
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared in ${targetFilePath} (nodeRef=${targetId})`);
     }
@@ -908,6 +998,10 @@ export class AstService {
 
     const sourceParent = sourceResult.path.parent;
     const targetParent = targetResult.path.parent;
+
+    dbg(
+      `[moveElement.cross] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'}`,
+    );
 
     if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
       throw new Error(
@@ -1044,10 +1138,29 @@ export class AstService {
     //    still in source AND new copy in target) rather than silent data loss
     //    (cut from source, never landed in target). Visible duplicate is
     //    recoverable — the user can delete the extra; data loss is not.
+    dbg(`[moveElement.cross] writing target=${targetFilePath} then source=${sourceFilePath}`);
     await this._fileParser.writeAST(targetAst, targetFilePath);
     await this._fileParser.writeAST(sourceAst, sourceFilePath);
     await this._updateNodeMap(sourceFilePath);
     await this._updateNodeMap(targetFilePath);
+
+    let targetAfter: string | undefined;
+    let sourceAfter: string | undefined;
+    try {
+      targetAfter = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+    try {
+      sourceAfter = await this._fileIO.readFile(sourceFilePath);
+    } catch {}
+    const tgtChanged = targetContentBefore !== undefined && targetAfter !== undefined
+      ? targetContentBefore !== targetAfter
+      : 'unknown';
+    const srcChanged = sourceContentBefore !== undefined && sourceAfter !== undefined
+      ? sourceContentBefore !== sourceAfter
+      : 'unknown';
+    dbg(
+      `[moveElement.cross] write done targetChanged=${tgtChanged} sourceChanged=${srcChanged} adjustments=${adjustments.length}`,
+    );
 
     const snapshots: Array<{ resolvedPath: string; contentBefore: string }> = [];
     if (sourceContentBefore !== undefined) {
