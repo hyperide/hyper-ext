@@ -173,7 +173,7 @@ export const FillSection = memo(function FillSection({
             }}
             onBlur={handleFontSizeBlur}
             placeholder="15px"
-            className="h-8 flex-1"
+            className="h-8 flex-1 text-xs"
           />
         </div>
       </div>
