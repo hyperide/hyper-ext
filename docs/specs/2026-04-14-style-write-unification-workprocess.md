@@ -3811,4 +3811,21 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 |--------|------|-----|
 | `17e6554` | ext-test-projects | `File: Revert File` title + 300ms wait + dialog dismiss + error overlay 300s |
 
-**Run #24 still active** — containers running, S1 still at 0 failures, monitoring continues.
+### S3 new failure: `elements identifiable via fiber-based selection` (×2 attempts)
+
+- Project: `webpack-react-tw3-kanban` (worker 54→56 fresh starts)
+- Root cause: `_patchEntryFile()` triggers 2nd webpack compile. Under Docker 3-shard CPU load, compile takes >320s. `setupPreviewWithDevServer` polls with 320s non-Remix timeout, firing `refresh-retry` every 60s. Each refresh KILLS the proxy chain (342s budget) before webpack finishes. Result: 5 proxy chain aborts × 60s = 311s; then poll times out at 320s. Both test attempts failed at 325s and 327s respectively.
+- **Fixed in ext-test-projects `e3fc60d`**: for `webpack-*` projects, refresh interval 60s→280s (below proxy budget) and poll timeout 320s→480s. Test timeout extended to 600s.
+
+### Run #24 failure summary at ~75 min
+
+| Failure | Count | Root cause | Fix |
+|---------|-------|-----------|-----|
+| Tamagui style-as-prop teardown | 4 | `File: Revert File` title not used | `17e6554` |
+| component with error — error overlay | 1 | 250s timeout too short | `17e6554` |
+| elements identifiable via fiber-based selection | 2 | webpack 2nd compile >320s, proxy chain interrupted | `e3fc60d` |
+| **Total** | **7** | **All fixed for Run #25** | |
+
+**S1: 420 passed, 0 failed** — completely clean.
+
+**Run #25 will include all 3 fix commits** (`17e6554`, `e3fc60d`). Run #24 continues to completion for remaining ~700 tests per shard.
