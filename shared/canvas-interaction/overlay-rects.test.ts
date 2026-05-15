@@ -273,6 +273,20 @@ describe('computeOverlayRects', () => {
     expect(result.overlayRects[0].resizable).toBeUndefined();
   });
 
+  it('sets resizable for SVG element with SVGAnimatedString className', () => {
+    const svgEl = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 48, height: 48 }),
+      childNodes: [],
+      // SVGElement.className is SVGAnimatedString in the browser, not a plain string
+      className: { baseVal: 'w-12 h-12', animVal: 'w-12 h-12' },
+    } as unknown as HTMLElement;
+    const resolver = createResolver(new Map([['svg-ref', [svgEl]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['svg-ref'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+  });
+
   it('does not set resizable on hover rect even for element with explicit size', () => {
     const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-12 h-12');
     const resolver = createResolver(new Map([['ref-1', [el]]]));

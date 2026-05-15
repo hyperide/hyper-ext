@@ -108,7 +108,10 @@ export function computeOverlayRects(
         height: rect.height,
         type: 'selection',
       };
-      const resizable = detectTailwindExplicitSize(elements[i].className);
+      const cn = elements[i].className;
+      // SVGElement.className is SVGAnimatedString in the browser, not a plain string
+      const rawClass = typeof cn === 'string' ? cn : (cn as unknown as SVGAnimatedString).baseVal;
+      const resizable = detectTailwindExplicitSize(rawClass);
       if (resizable.width || resizable.height) overlayRect.resizable = resizable;
       overlayRects.push(overlayRect);
     }
