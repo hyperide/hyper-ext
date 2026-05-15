@@ -6,8 +6,8 @@
  *   this is the "bulka-the-dog" format — translations.ts exports one object keyed by locale
  */
 
-import type { I18nAdapter } from './I18nAdapter';
 import { extractLeafKeys } from './extract-leaf-keys';
+import type { I18nAdapter } from './I18nAdapter';
 
 function lookupDotPath(data: Record<string, unknown>, key: string): string | null {
   const parts = key.split('.');
@@ -38,6 +38,8 @@ export class TsMergedAdapter implements I18nAdapter {
   }
 
   async writeKey(_elementId: string, _newKey: string): Promise<void> {
-    throw new Error('TsMergedAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)');
+    throw new Error(
+      'TsMergedAdapter.writeKey: route key changes through writeI18nResource RPC (AstBridge handles JSX update)',
+    );
   }
 }

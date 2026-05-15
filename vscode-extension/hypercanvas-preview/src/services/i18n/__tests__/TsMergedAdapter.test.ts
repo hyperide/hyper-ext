@@ -45,11 +45,7 @@ const BULKA_MERGED = {
 
 const BULKA_LOCALES = ['ru', 'rs', 'en'] as const;
 
-const BULKA_TRANSLATIONS_TS = `export const translations = ${JSON.stringify(
-  BULKA_MERGED,
-  null,
-  2,
-)};\n`;
+const BULKA_TRANSLATIONS_TS = `export const translations = ${JSON.stringify(BULKA_MERGED, null, 2)};\n`;
 
 const ROOT = '/workspace';
 const BULKA_PATH = `${ROOT}/client/lib/translations.ts`;
@@ -104,10 +100,7 @@ describe('AdapterFactory — bulka merged translations.ts', () => {
 
 describe('TsMergedAdapter on bulka-shape data', () => {
   function bulkaAdapter(): TsMergedAdapter {
-    return new TsMergedAdapter(
-      structuredClone(BULKA_MERGED) as Record<string, unknown>,
-      [...BULKA_LOCALES],
-    );
+    return new TsMergedAdapter(structuredClone(BULKA_MERGED) as Record<string, unknown>, [...BULKA_LOCALES]);
   }
 
   it('getAvailableKeys returns non-empty dot-path leaf keys for active locale', async () => {

@@ -4,6 +4,7 @@ import type { OverlayRect } from '@shared/canvas-interaction/types';
 import {
   applySelectionGraceCache,
   hydrateSelectionGraceCache,
+  invalidateSelectionGraceCacheForFile,
   makeSelectionGraceCacheState,
   serializeSelectionGraceCache,
 } from '../selection-grace-cache';
@@ -639,5 +640,105 @@ describe('serializeSelectionGraceCache + hydrateSelectionGraceCache', () => {
     });
     expect(r.hydratedIds).toEqual([ID_A]);
     expect(target.rectsByElementId.size).toBe(1);
+  });
+});
+
+describe('invalidateSelectionGraceCacheForFile', () => {
+  // Drag-end regression coverage (docs/plans/2026-05-08-drag-selection-rect-regressions-ralphex-plan.md).
+  // The grace cache was designed for i18n text changes (line/col stable). For
+  // drag-end → AST move/insert/delete, line/col of OTHER elements in the same
+  // file shift, so the cached old rect MUST not be replayed during the HMR
+  // gap — that is the user-visible "stale rect lingers" symptom.
+  test('drops every cached entry whose elementId is in the given file', () => {
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: ['src/Foo.tsx:10:5', 'src/Foo.tsx:42:9', 'src/Bar.tsx:7:1'],
+      computedRects: [
+        selectionRect('src/Foo.tsx:10:5'),
+        selectionRect('src/Foo.tsx:42:9'),
+        selectionRect('src/Bar.tsx:7:1'),
+      ],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+    expect(cache.rectsByElementId.size).toBe(3);
+
+    invalidateSelectionGraceCacheForFile(cache, 'src/Foo.tsx');
+
+    // Foo entries dropped, Bar entry untouched.
+    expect(Array.from(cache.rectsByElementId.keys())).toEqual(['src/Bar.tsx:7:1']);
+    expect(Array.from(cache.deadlineByElementId.keys())).toEqual(['src/Bar.tsx:7:1']);
+  });
+
+  test('replays nothing for a stale-bbox selection after invalidation', () => {
+    // Reproduce the symptom-2 path end-to-end at unit level:
+    //   1. Element selected, grace cache snapshots its rect.
+    //   2. AST mutation in same file shifts line numbers — DOM lookup miss.
+    //   3. Without invalidation, replay paints the OLD bbox (stale lag bug).
+    //   4. With invalidation, replay yields no rect for the now-stale ID.
+    const cache = makeSelectionGraceCacheState();
+    const oldId = 'src/Foo.tsx:10:5';
+    applySelectionGraceCache({
+      selectedIds: [oldId],
+      computedRects: [selectionRect(oldId)],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+    expect(cache.rectsByElementId.has(oldId)).toBe(true);
+
+    // Drag-end posts moveElement; iframe-interaction.ts immediately invalidates.
+    invalidateSelectionGraceCacheForFile(cache, 'src/Foo.tsx');
+
+    // Next paint within the original grace window: DOM lookup still misses
+    // (HMR hasn't rebuilt the fiber index yet) but the cache no longer has
+    // the stale entry, so no replay — overlay is empty rather than glued
+    // to the old position.
+    const result = applySelectionGraceCache({
+      selectedIds: [oldId],
+      computedRects: [],
+      cache,
+      now: 1100, // well within the original 2500ms grace window
+      gracePeriodMs: 2500,
+    });
+    expect(result.inGracePeriod).toBe(false);
+    expect(result.rects).toEqual([]);
+  });
+
+  test('treats colon delimiter strictly — does not drop sibling files with shared prefix', () => {
+    // Without the trailing colon in the prefix check, invalidating Foo.tsx
+    // would also drop FooBar.tsx entries.
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: ['src/Foo.tsx:1:1', 'src/FooBar.tsx:1:1'],
+      computedRects: [selectionRect('src/Foo.tsx:1:1'), selectionRect('src/FooBar.tsx:1:1')],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+
+    invalidateSelectionGraceCacheForFile(cache, 'src/Foo.tsx');
+
+    expect(Array.from(cache.rectsByElementId.keys())).toEqual(['src/FooBar.tsx:1:1']);
+  });
+
+  test('no-op for empty file path (defensive)', () => {
+    const cache = makeSelectionGraceCacheState();
+    applySelectionGraceCache({
+      selectedIds: ['src/Foo.tsx:1:1'],
+      computedRects: [selectionRect('src/Foo.tsx:1:1')],
+      cache,
+      now: 1000,
+      gracePeriodMs: 2500,
+    });
+    invalidateSelectionGraceCacheForFile(cache, '');
+    expect(cache.rectsByElementId.size).toBe(1);
+  });
+
+  test('no-op when cache is empty', () => {
+    const cache = makeSelectionGraceCacheState();
+    expect(() => invalidateSelectionGraceCacheForFile(cache, 'src/Foo.tsx')).not.toThrow();
+    expect(cache.rectsByElementId.size).toBe(0);
   });
 });
