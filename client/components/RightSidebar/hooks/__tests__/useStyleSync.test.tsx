@@ -31,7 +31,7 @@ function createAstOps(updateStyles: AstOperations['updateStyles']): AstOperation
     updateProps: async () => {},
     renameElement: async () => {},
     updateText: async () => {},
-    writeI18nResource: async () => {},
+    writeI18nResource: async () => ({}),
   };
 }
 

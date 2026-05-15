@@ -72,6 +72,20 @@ export interface WrapElementResult extends AstOperationResult {
   wrapperId?: string;
 }
 
+export interface UpdateTextResult extends AstOperationResult {
+  /**
+   * Source location of the JSX element's opening tag AFTER the write.
+   * line is 1-based, column is 0-based — matches React fiber `_debugSource`/`_debugStack`
+   * conventions, so callers can construct `${fileName}:${line}:${column}` IDs that the
+   * iframe FSM will recognize without re-resolving from a stale ref.
+   *
+   * The opening tag's start position is invariant for child-only mutations because
+   * recast preserves the original tokens up to the change site, and `updateElementChildren`
+   * only replaces JSXElement.children. Returned regardless to let callers verify.
+   */
+  newLocation?: { line: number; column: number };
+}
+
 function isJsxSourceFile(filePath: string): boolean {
   return /\.(jsx|tsx)$/.test(filePath);
 }
@@ -418,7 +432,7 @@ export class AstService {
    * Update text/expression children of a JSX element.
    * Uses shared updateElementChildren utility for proper JSX children replacement.
    */
-  async updateText(filePath: string, elementId: string, text: string, nodeRef?: NodeRef): Promise<AstOperationResult> {
+  async updateText(filePath: string, elementId: string, text: string, nodeRef?: NodeRef): Promise<UpdateTextResult> {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
@@ -437,11 +451,22 @@ export class AstService {
         } catch {}
       }
 
+      // Snapshot the opening tag's location BEFORE mutation. recast preserves the
+      // original tokens for unchanged AST nodes, so for child-only mutations the
+      // opening tag's printed position equals its parsed position — same line:col
+      // post-write. Snapshotting before writeAST avoids any risk of internal loc
+      // wrangling by the printer affecting the value we hand back.
+      const openingLoc = result.element.openingElement?.loc?.start ?? result.element.loc?.start;
+      const newLocation =
+        openingLoc !== undefined && openingLoc !== null
+          ? { line: openingLoc.line, column: openingLoc.column }
+          : undefined;
+
       updateElementChildren(result.element, text);
 
       await this._fileParser.writeAST(ast, resolvedPath);
       await this._updateNodeMap(resolvedPath);
-      return { success: true, resolvedPath, contentBeforeWrite };
+      return { success: true, resolvedPath, contentBeforeWrite, newLocation };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

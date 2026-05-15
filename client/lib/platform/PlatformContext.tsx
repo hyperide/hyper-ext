@@ -419,6 +419,9 @@ function createBrowserAstOperations(): AstOperations {
         const error = await response.json();
         throw new Error(error.error || response.statusText);
       }
+      // SaaS route doesn't rewrite JSX (only locale JSON), so it has no new ID
+      // to surface. Return an empty object so callers can uniformly destructure.
+      return {};
     },
   };
 }
@@ -575,6 +578,10 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
       if (!result.success) {
         throw new Error(result.error || 'Failed to write i18n resource');
       }
+      // AstBridge surfaces `data.newElementId` when the JSX rewrite was performed.
+      // Cast through a typed shape: `data` is declared as `unknown` on the wire.
+      const data = (result as { data?: { newElementId?: string } }).data;
+      return { newElementId: data?.newElementId };
     },
   };
 }

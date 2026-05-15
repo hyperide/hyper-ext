@@ -520,10 +520,9 @@ export class AstBridge {
     // When the key itself changes, update the JSX child expression so the AST
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
+    let newElementId: string | undefined;
     if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      // JSON.stringify covers backslashes, U+2028/2029, and other escapes that the
-      // earlier `replace(/'/g, "\\'")` missed — see the SAFE_KEY note above.
-      const newExpression = `{t(${JSON.stringify(message.key)})}`;
+      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );
@@ -535,13 +534,24 @@ export class AstBridge {
           error: updateResult.error,
         };
       }
+      // Build the canonical post-write element ID so the client can re-attach
+      // selection in a single dispatch instead of relying on a multi-shot kostyl.
+      // The fileName component is preserved verbatim from the incoming
+      // i18nElementId — the iframe FSM matches by literal fileName string, so
+      // converting absolute↔relative here would break the lookup. Line+column
+      // come from the AST opening tag (1-based line, 0-based column — matches
+      // SourceLocation convention used by FiberSourceIndex).
+      const m = i18nElementId.match(/^(.+):(\d+):(\d+)$/);
+      if (m && updateResult.newLocation) {
+        newElementId = `${m[1]}:${updateResult.newLocation.line}:${updateResult.newLocation.column}`;
+      }
     }
 
     return {
       type: 'ast:response',
       requestId: message.requestId,
       success: true,
-      data: { filePath: writeResult.filePath },
+      data: { filePath: writeResult.filePath, newElementId },
     };
   }
 
