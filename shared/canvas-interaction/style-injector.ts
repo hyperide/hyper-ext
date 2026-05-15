@@ -81,6 +81,20 @@ html.design-mode fieldset:disabled {
 }`);
   }
 
+  // Ghost element for drag/reorder visual feedback — follows cursor as a floating clone.
+  parts.push(`
+.hyper-drag-ghost {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  transform: scale(1.03) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5) !important;
+  opacity: 0.88 !important;
+  border-radius: 4px !important;
+  transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+  will-change: transform, left, top !important;
+}`);
+
   // Drop indicator for drag/reorder visual feedback (data-dir="h" = horizontal line, "v" = vertical line)
   parts.push(`
 .hyper-drop-indicator {

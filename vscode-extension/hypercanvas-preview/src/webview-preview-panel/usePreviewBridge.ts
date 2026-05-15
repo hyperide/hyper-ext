@@ -527,17 +527,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
           break;
 
-        case 'iframe:writeI18nResource':
-          // Freeze the last-known selection overlay rect during an i18n write so the
-          // HMR re-render gap doesn't manifest as a visible deselect (Path B in
-          // docs/plans/2026-05-06-selection-survives-i18n-write.md).
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:writeI18nResource', phase: msg.phase },
-            '*',
-          );
-          break;
-
         case 'ast:response':
         case 'editor:activeFileChanged':
           // Forward to iframe
