@@ -69,6 +69,8 @@ describe('I18nTextInspector (VS Code webview)', () => {
     );
     const ruButton = screen.getByText('ru');
     expect(ruButton).toBeTruthy();
+    expect(screen.getByText('en').getAttribute('aria-pressed')).toBe('true');
+    expect(ruButton.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(ruButton);
     expect(onLocaleChange).toHaveBeenCalledWith('ru');
   });
@@ -104,6 +106,91 @@ describe('I18nTextInspector (VS Code webview)', () => {
     );
     fireEvent.change(screen.getByDisplayValue('Go for a walk'), { target: { value: 'Take a walk' } });
     expect(onResolvedTextChange).toHaveBeenCalledWith('Take a walk');
+  });
+
+  describe('interaction flow after local edits', () => {
+    it('shows the newly selected locale text after editing the previous locale', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, activeLocale: 'en', availableLocales: ['en', 'ru', 'rs'] }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited English' } });
+      expect(screen.getByDisplayValue('Edited English')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{
+            ...supportedBinding,
+            activeLocale: 'ru',
+            availableLocales: ['en', 'ru', 'rs'],
+            resolvedText: 'Русский текст',
+          }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      expect(screen.getByDisplayValue('Русский текст')).toBeTruthy();
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Отредактированный русский' } });
+      expect(screen.getByDisplayValue('Отредактированный русский')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{
+            ...supportedBinding,
+            activeLocale: 'rs',
+            availableLocales: ['en', 'ru', 'rs'],
+            resolvedText: 'Srpski tekst',
+          }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      expect(screen.getByDisplayValue('Srpski tekst')).toBeTruthy();
+      expect(screen.queryByDisplayValue('Отредактированный русский')).toBeNull();
+    });
+
+    it('shows the newly selected key text after editing the previous key', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, key: 'hero.title', resolvedText: 'Hero title' }}
+          keyEditable
+          availableKeys={['hero.title', 'hero.subtitle']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited title' } });
+      expect(screen.getByDisplayValue('Edited title')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, key: 'hero.subtitle', resolvedText: 'Hero subtitle' }}
+          keyEditable
+          availableKeys={['hero.title', 'hero.subtitle']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      expect(screen.getByDisplayValue('Hero subtitle')).toBeTruthy();
+      expect(screen.queryByDisplayValue('Edited title')).toBeNull();
+    });
   });
 
   it('renders text input as disabled when editable is false', () => {
