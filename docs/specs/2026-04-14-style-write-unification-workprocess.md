@@ -1655,3 +1655,43 @@ fail на одном сценарии. Сравни старый прогон: s
 Прогон продолжается. Чинить означает пересборка `out/extension.js`,
 что не повлияет на уже работающие воркеры (extension загружен в
 память). Зафиксирую регрессию, после прогона починю.
+
+## 📍 2026-04-27 02:35 CEST: webview lifecycle "регрессия" — НЕ 0eb7e509
+
+Расследование показало: 5+ webview-lifecycle fails на s1 — это НЕ
+регрессия `0eb7e509`. Источник — `2c090915 fix(e2e): tighten
+preview-render PD-1-10 against silent webview fallback` (Apr 26
+20:08:24 +0200).
+
+### Хронология
+
+- OLD run start: **20:03:39** Apr 26
+- `2c090915` commit: **20:08:24** Apr 26 (5 min ПОСЛЕ старта OLD run)
+- NEW run start: **00:50:17** Apr 27 (с уже применённым 2c09091)
+
+OLD run использовал `WebviewFrame.getPreviewPanelContent` со старым
+fallback'ом на `getWebviewByIndex(0)` — возвращал sidebar webview
+вместо preview, тесты проходили "проходимо".
+
+NEW run: `getPreviewPanelContent` ТЕПЕРЬ throw'ит "Preview webview
+not found among N webview iframe(s)". Тесты которые не стартуют dev
+server (extension-lifecycle PI-15-7..PI-15-22) рендерят
+StartDevServerScreen — preview iframe отсутствует — getPreviewPanelContent
+throws при 2s.
+
+### Что это нам говорит
+
+OLD run pass rate был ИСКУССТВЕННО раздут — sidebar возвращался как
+preview, body всегда видим, тесты проходили без проверки реальной
+сути. Реальная видимость extension-lifecycle тестов после 2c090915 —
+fail.
+
+**Это правильное поведение** — sidebar не должен изображать preview.
+Но сами extension-lifecycle тесты надо адаптировать:
+- Использовать локатор не требующий preview iframe
+- Или скипать без dev server start
+
+### Не трогаю сейчас
+
+Прогон продолжается. Это test infra fix в ext-test-projects, не
+extension fix. Сделаю после прогона.
