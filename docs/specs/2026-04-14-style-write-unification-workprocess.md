@@ -3958,3 +3958,41 @@ if (componentFile === DEFAULT_COMPONENT_FILE_SENTINEL) {
 - All `e3fc60d` improvements (webpack 480s poll, 280s refresh interval) now
   actually reachable since `projectDir` is accessible
 - Tamagui/error-overlay/webpack fixes from `17e6554` + `e3fc60d` remain active
+
+## 📍 2026-04-29 Run #26 Interim Checkpoint (~04:12 CEST, ~40 min in)
+
+### Progress
+
+| Shard | Tests run | Total | Failures |
+|-------|-----------|-------|---------|
+| S1 | 149 | 769 | 0 |
+| S2 | 121 | 691 | 1 |
+| S3 | 196 | 729 | 4 |
+| **Total** | **466** | **2189** | **5** |
+
+### Failure Classification
+
+**All 5 failures are retry-pass flakes:**
+
+1. **S2: "component with error — error overlay appears" 307793ms → retry 15108ms passed**
+   - Root: first attempt poll 300s expired (Vite HMR cold cache under Docker load)
+   - Retry passed in 15s (Vite cache warm)
+   - Final result: FLAKY not FAILED
+   - Fix committed: `4bae85a` — poll 300s→450s + explicit `test.setTimeout(600s)`
+   - Will apply to Run #27
+
+2. **S3: "Tamagui: style written as prop, not className" ×4 (11063/11317/11565/11994ms)**
+   - Root: "File Modified Since" VS Code save error on all Tamagui projects
+   - Pattern: git checkout in fixture reverts file on disk; VS Code's stale model
+     conflict when test applies style; all retry-pass in ~15s
+   - Projects: tamagui-fitness, tamagui-food-delivery, tamagui-whatsapp, + 1 more
+   - No fix needed — inherent retry-pass flake in Tamagui file model sync
+
+### Net assessment
+
+Run #26 is healthy. No hard failures yet. The ReferenceError fix (`ead694e`) is
+confirmed working — all project-dependent tests proceed past `preview:poll-loaded:start`.
+
+### Fix committed during run
+
+`4bae85a` (ext-test-projects, pushed): error overlay poll 300s→450s + 600s timeout
