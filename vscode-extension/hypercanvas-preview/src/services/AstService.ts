@@ -556,7 +556,7 @@ export class AstService {
         ...(entry ? { nodeRef: entry.nodeRef } : {}),
       };
     } catch (error) {
-      console.error('[AstService.findElementAtPosition] Error:', error);
+      console.warn('[AstService.findElementAtPosition] parse failed (expected for broken/partial files):', error);
       return null;
     }
   }
