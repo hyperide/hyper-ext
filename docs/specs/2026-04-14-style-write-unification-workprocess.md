@@ -39,7 +39,7 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #38** — **STARTING** (2026-04-30, ~08:30 CEST). All known fixes active.
+- **Run #38** (`run-20260430-091554-84104`, 2026-04-30 09:15 CEST) — **IN PROGRESS**. All known fixes active.
   - New fixes vs run #37: `441a9860` (ViteReactSSG patchEntryFile fallback), `c3e0b60` (redo-limit 40s wait), `f85f4d3`+`2ec61e5`+`d08744a` (Tamagui), `c1736c6` (webpack), `a744506` (tamagui-whatsapp)
   - Stale `__canvas_preview__.tsx` files cleaned (34 files deleted before run)
 
