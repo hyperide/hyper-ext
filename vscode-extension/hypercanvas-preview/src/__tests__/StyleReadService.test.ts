@@ -70,7 +70,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
 
     expect(result.className).toBe('text-red');
     expect(result.tagType).toBe('div');
@@ -88,7 +88,7 @@ describe('StyleReadService', () => {
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
     // Use the UUID-style nodeRef from NodeMapService
-    const result = await service.readElementClassName('e1', 'src/App.tsx', spanEntry.nodeRef);
+    const result = await service.readElementClassName('src/App.tsx', spanEntry.nodeRef);
 
     expect(result.tagType).toBe('span');
   });
@@ -105,7 +105,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
 
     expect(result.tagType).toBe('span');
   });
@@ -115,7 +115,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: SIMPLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', undefined);
+    const result = await service.readElementClassName('src/App.tsx', undefined);
 
     expect(result.className).toBe('');
     expect(result.tagType).toBe('unknown');
@@ -127,7 +127,7 @@ describe('StyleReadService', () => {
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
     const { result, warnings } = await captureWarnings(() =>
-      service.readElementClassName('e1', 'src/App.tsx', 'src/App.tsx:999:999'),
+      service.readElementClassName('src/App.tsx', 'src/App.tsx:999:999'),
     );
 
     expect(result.className).toBe('');
@@ -149,7 +149,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: DYNAMIC_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
 
     expect(result.className).toContain('px-4');
     expect(result.className).toContain('py-2');
@@ -172,7 +172,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [FILE_PATH]: INLINE_STYLE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/App.tsx', syntheticRef);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
 
     expect(result.styleReadResult?.sourceTabs.map((tab) => tab.id)).toEqual(['computed', 'inline-style:style']);
     expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
@@ -195,7 +195,7 @@ describe('StyleReadService', () => {
     const fileIO = makeFileIO({ [CARD_FILE_PATH]: CSS_MODULE_JSX });
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
-    const result = await service.readElementClassName('e1', 'src/Card.tsx', syntheticRef);
+    const result = await service.readElementClassName('src/Card.tsx', syntheticRef);
 
     expect(result.styleReadResult?.sourceTabs.map((tab) => tab.id)).toEqual(['computed', 'css-modules:card']);
     expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
@@ -215,7 +215,7 @@ describe('StyleReadService', () => {
     const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
 
     const { result, warnings } = await captureWarnings(() =>
-      service.readElementClassName('e1', 'src/App.tsx', 'some-uuid-that-doesnt-exist'),
+      service.readElementClassName('src/App.tsx', 'some-uuid-that-doesnt-exist'),
     );
 
     expect(result.className).toBe('');

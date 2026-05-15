@@ -39,7 +39,7 @@ export interface ElementStyleReadResult {
 }
 
 const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
-  ideThemePreference: 'system',
+  ideThemePreference: 'light',
   resolvedColorScheme: 'light',
   source: 'vscode',
 };
@@ -66,11 +66,7 @@ export class StyleReadService {
    * Read className and metadata from an element in the AST.
    * Uses nodeRef (preferred) to resolve element by position.
    */
-  async readElementClassName(
-    _elementId: string,
-    componentPath: string,
-    nodeRef?: NodeRef,
-  ): Promise<ElementStyleReadResult> {
+  async readElementClassName(componentPath: string, nodeRef?: NodeRef): Promise<ElementStyleReadResult> {
     const absolutePath = resolveWorkspacePath(this._workspaceRoot, componentPath);
     const empty: ElementStyleReadResult = {
       className: '',

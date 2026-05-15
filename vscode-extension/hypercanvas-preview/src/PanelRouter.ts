@@ -229,7 +229,7 @@ export class PanelRouter {
         // Ensure NodeMapService is populated before reading styles
         // (same race condition as HYP-268 for writes).
         await this._astBridge.astService.ensureInitialized();
-        const result = await this._styleReadService.readElementClassName(elementId, componentPath, elementId);
+        const result = await this._styleReadService.readElementClassName(componentPath, elementId);
         webview.postMessage({
           type: 'styles:response',
           requestId,
