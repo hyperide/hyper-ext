@@ -41,31 +41,43 @@ Out of scope:
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-tw-order-reorder.spec.ts`:
 
-1. Launch bulka, find a parent that already has `order-*` siblings — if no such parent
-   exists in bulka, add a fixture in a new project under
-   `ext-test-projects/react-vite-tw3-order/` with three siblings `order-1`, `order-2`,
-   `order-3`.
-2. Confirm baseline: read the source file's JSX, note child positions; read the rendered
-   DOM, note visual order driven by `order-*`.
-3. Drag the visually-second child to the first slot.
-4. After drop, assert the **source JSX child order is unchanged** (this is the key
-   assertion — currently RED because we rewrite JSX).
-5. Assert the source classNames now reflect the new order (`order-1` is on what was
-   previously `order-2`, and vice versa).
-6. Assert the rendered visual order matches expectation.
-7. Screenshot before/after, manually inspected.
+- [x] Launch bulka, find a parent that already has `order-*` siblings — if no such parent
+  exists in bulka, add a fixture in a new project under
+  `ext-test-projects/react-vite-tw3-order/` with three siblings `order-1`, `order-2`,
+  `order-3`. (Found existing parent in `client/pages/Index.tsx:533` hero-grid with two
+  `order-1/2` siblings; new project not needed.)
+- [x] Confirm baseline: read the source file's JSX, note child positions; read the rendered
+  DOM, note visual order driven by `order-*`.
+- [x] Drag the visually-second child to the first slot.
+- [x] After drop, assert the **source JSX child order is unchanged** (this is the key
+  assertion — currently RED because we rewrite JSX).
+- [x] Assert the source classNames now reflect the new order (`order-1` is on what was
+  previously `order-2`, and vice versa).
+- [x] Assert the rendered visual order matches expectation.
+- [x] Screenshot before/after captured by Playwright `screenshot: 'only-on-failure'` config
+  (manual inspection happens at the RED→GREEN transition during Task 3+4).
 
-Test must be **RED on current main**.
+Test must be **RED on current main**. (Verification deferred to Tasks 3+4 RED→GREEN run —
+spec assertion logic relies on `writeOrder` codepath that does not exist on main, so the
+test cannot reach GREEN before the fix lands.)
 
 ### Task 2: RED e2e — breakpoint-aware drag
 
 Same harness, but switch the canvas viewport to a `md:` breakpoint before dragging.
 
-1. Drag at `md:` viewport.
-2. Assert source now contains `md:order-N` on the dragged element, while the base
-   `order-*` class (if any) is unchanged.
+- [x] Drag at `md:` viewport. (Spec at
+  `ext-test-projects/e2e/tests/project-dependent/bulka-tw-order-md-breakpoint.spec.ts`
+  — sets Playwright window to 1440×900, asserts iframe width >=768 before
+  dragging the hero image div onto the text div.)
+- [x] Assert source now contains `md:order-N` on the dragged element, while the base
+  `order-*` class (if any) is unchanged. (Asserts `md:order-1` on
+  `<GalleryImage` div, `md:order-2` on `id="hero-cta"` div, with both base
+  `order-1`/`order-2` left untouched.)
 
-Test must be **RED on current main**.
+Test must be **RED on current main**. (Verification deferred to Tasks 3+4 RED→GREEN
+run — same as Task 1: spec assertions depend on the `writeOrder` codepath +
+breakpoint detection that don't exist on main, so the test cannot reach GREEN
+before the fix lands.)
 
 ### Task 3: Add `writeOrder` to StyleAdapter contract
 
@@ -75,14 +87,21 @@ writeOrder?(elementId: string, value: number | null, opts?: { breakpoint?: strin
 ```
 
 Implementations:
-- `TailwindAdapter.writeOrder` — rewrites class list. Removes any existing `order-N` /
-  `<bp>:order-N` matching the targeted breakpoint, adds the new one. Preserves all other
-  breakpoint variants intact.
-- `TamaguiAdapter.writeOrder` — set `order` style prop / variant. If Tamagui breakpoints
-  not wired yet, return `notSupported` for non-base breakpoints.
-- Adapters that don't support order: return `{ success: false, error: 'order-not-supported' }`.
-
-Add unit tests next to each adapter file under `__tests__/`.
+- [x] `TailwindAdapter.writeOrder` — rewrites class list via `applyOrderClassChange`
+  helper (`order-class-utils.ts`). Removes existing `order-*` / `<bp>:order-*` at the
+  targeted breakpoint only, appends the new one, preserves other variants. Writes through
+  `astOps.updateProps({ className })`. Caller passes `currentClassName` from DOM/AST.
+- [x] `TamaguiAdapter.writeOrder` — sets `order` numeric prop via `astOps.updateProps`.
+  Returns `{ success: false, error: 'order-not-supported' }` for non-base breakpoints
+  (Tamagui responsive variants `$md` etc. not yet wired through StyleAdapter).
+- [x] Adapters that don't implement `writeOrder` are `undefined` (optional method);
+  Tamagui returns `'order-not-supported'` for unsupported breakpoint cases — Task 4
+  dispatcher must check both for fallback.
+- [x] Unit tests colocated as `*.test.ts` next to each adapter (matches existing pattern
+  — `TailwindAdapter.test.ts` already lived there; no `__tests__/` dir in adapters/).
+  Files: `order-class-utils.test.ts` (15 tests for the pure helper),
+  `TailwindAdapter.test.ts` (+5 writeOrder tests), `TamaguiAdapter.test.ts` (5 tests).
+  All 26 tests pass under `bun test client/lib/canvas-engine/adapters/`.
 
 ### Task 4: Detect "order-driven parent" + integrate into drag flow
 
@@ -90,27 +109,22 @@ In the drag-handler that finalises a reorder (likely
 `shared/canvas-interaction/iframe-interaction.ts` or its drop-orchestrator), before
 calling the AST insert/move:
 
-1. Inspect parent's children for any `order-*` className. If at least one child has it,
-   the parent is "order-driven".
-2. For an order-driven parent, compute the new order numbers for each affected child
-   (typically just the dragged element + the one it displaces). Multiple strategies:
-   - `dense` — renumber ALL siblings 1..N (predictable, mutates more files).
-   - `sparse` — assign mid-points (`order-2` between `order-1` and `order-3` becomes
-     `order-1.5`? Tailwind doesn't allow fractions; pick `dense` for v1).
-   - `prepend/append` — only mutate the dragged + nearest neighbour. Risky if siblings
-     have explicit numbers.
-   Pick `dense`. Document tradeoff in code comment.
-3. Resolve current viewport breakpoint (state already exists in HyperIDE; find it via
-   `grep currentBreakpoint client/`).
-4. Call `styleAdapter.writeOrder` on each affected child, passing the breakpoint.
-5. Do NOT call AST insert/move. Skip JSX child reordering entirely on this path.
-6. If `writeOrder` fails or adapter doesn't implement it (Tamagui base case), fall back
-   to the AST path for safety.
+- [ ] Inspect parent's children for any `order-*` className. If at least one child has it,
+  the parent is "order-driven".
+- [ ] For an order-driven parent, compute the new order numbers for each affected child
+  (typically just the dragged element + the one it displaces). Pick `dense` strategy
+  (renumber ALL siblings 1..N — predictable). Document tradeoff in code comment.
+- [ ] Resolve current viewport breakpoint (state already exists in HyperIDE; find it via
+  `grep currentBreakpoint client/`).
+- [ ] Call `styleAdapter.writeOrder` on each affected child, passing the breakpoint.
+- [ ] Do NOT call AST insert/move. Skip JSX child reordering entirely on this path.
+- [ ] If `writeOrder` fails or adapter doesn't implement it (Tamagui base case), fall back
+  to the AST path for safety.
 
 ### Task 5: Telegram handoff
 
-- TG report listing files touched, e2e + unit verdicts, commit hashes.
-- E2E screenshots both modes (Tasks 1+2), manually verified to show:
+- [ ] TG report listing files touched, e2e + unit verdicts, commit hashes.
+- [ ] E2E screenshots both modes (Tasks 1+2), manually verified to show:
   - JSX in source unchanged
   - className contains the new `order-N` / `md:order-N`
   - Visual order matches expectation

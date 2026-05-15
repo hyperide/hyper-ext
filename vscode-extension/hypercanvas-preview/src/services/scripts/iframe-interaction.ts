@@ -1089,45 +1089,11 @@ function getSourceKey(el: HTMLElement): string | null {
   return `${loc.fileName}:${loc.line}:${loc.column}`;
 }
 
-// Diagnostic tag for Shift+Enter / parent-walk regression (Task 2 of
-// docs/plans/2026-05-08-shift-enter-rect-ralphex-plan.md). Filter DevTools
-// console with `[shiftparent]`. Goal: capture for each parent-walk
-//   1. the selectedId Shift+Enter started from,
-//   2. each DOM ancestor walked + its getSourceKey result,
-//   3. the chosen parentRef,
-//   4. whether findElementsByRef(parentRef) immediately finds a DOM element.
-// Combined with the existing [selsurv] `findElements miss` log on the overlay
-// path, this pinpoints whether the rect vanishes because (a) parentRef itself
-// is malformed/missing, (b) parentRef is well-formed but FiberSourceIndex was
-// indexed under a deduplicated key, or (c) the OUTERMOST host fiber whose key
-// equals parentRef has been unmounted by HMR mid-walk.
-const SHIFTPARENT_TAG = '[shiftparent]';
-function logShiftParentWalk(
-  selectedId: string,
-  steps: Array<{ tag: string; ref: string | null }>,
-  parent: { tag: string; ref: string } | null,
-  parentLookupHits: number | null,
-): void {
-  console.debug(SHIFTPARENT_TAG, 'parent-walk', {
-    t: Math.round(performance.now()),
-    selectedId,
-    renderedComponentPath,
-    steps,
-    parentRef: parent?.ref ?? null,
-    parentTag: parent?.tag ?? null,
-    parentLookupHits,
-  });
-}
-
 /** Find the nearest ancestor DOM element that has a traceable fiber source. */
-function findTraceableParent(
-  el: HTMLElement,
-  trace?: Array<{ tag: string; ref: string | null }>,
-): { element: HTMLElement; ref: string } | null {
+function findTraceableParent(el: HTMLElement): { element: HTMLElement; ref: string } | null {
   let current = el.parentElement;
   while (current && current !== document.body) {
     const ref = getSourceKey(current);
-    if (trace) trace.push({ tag: current.tagName.toLowerCase(), ref });
     if (ref) return { element: current, ref };
     current = current.parentElement;
   }
@@ -1172,27 +1138,9 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     // so getEntry returns null and Shift+Enter clears selection instead of
     // navigating to parent.
     const el = findElementsByRef(nodeRef, 0)[0];
-    if (!el) {
-      // Diagnostic: parent-walk asked about a nodeRef the rect path also can't
-      // resolve. Emitting from the keyboard-side too lets us cross-reference
-      // against the [selsurv] `findElements miss` log timestamp.
-      console.debug(SHIFTPARENT_TAG, 'getEntry missing-base', {
-        t: Math.round(performance.now()),
-        nodeRef,
-        renderedComponentPath,
-      });
-      return null;
-    }
+    if (!el) return null;
 
-    const trace: Array<{ tag: string; ref: string | null }> = [];
-    const parent = findTraceableParent(el, trace);
-    const parentLookupHits = parent ? findElementsByRef(parent.ref, 0).length : null;
-    logShiftParentWalk(
-      nodeRef,
-      trace,
-      parent ? { tag: parent.element.tagName.toLowerCase(), ref: parent.ref } : null,
-      parentLookupHits,
-    );
+    const parent = findTraceableParent(el);
     const children = findTraceableChildren(el);
 
     return {

@@ -7,6 +7,7 @@ import type { AstOperations } from '@/lib/platform/types';
 import type { ASTNode } from '../types/ast';
 import type { ParsedTailwindStyles } from '../utils/tailwindParser';
 import { getClassNameFromNode, parseTailwindClasses } from '../utils/tailwindParser';
+import { applyOrderClassChange } from './order-class-utils';
 import type { StyleAdapter } from './StyleAdapter';
 import type { ParsedStyles } from './types';
 
@@ -213,6 +214,49 @@ export class TailwindAdapter implements StyleAdapter {
       state: options?.state,
       selectedSourceTabId: options?.selectedSourceTabId,
     });
+  }
+
+  /**
+   * Write the `order` class for a Tailwind element at the given breakpoint.
+   *
+   * Strategy: surgically rewrite className tokens — remove any existing order class
+   * at the targeted breakpoint, append the new one. Other breakpoint variants
+   * (base + `md:` + `lg:` etc.) are preserved verbatim.
+   *
+   * The caller MUST pass `currentClassName` from the live DOM/AST. The adapter
+   * does not read it itself because at the drag pipeline boundary the caller
+   * already has the element handy and passing it explicitly avoids an extra
+   * round-trip.
+   *
+   * Limitations: writes through `astOps.updateProps`, which sets the JSX
+   * `className` attribute as a static string. If the element uses a dynamic
+   * className expression (`className={cn(...)}`), the caller is responsible
+   * for falling back to the AST drag path — this method will overwrite the
+   * expression with a string literal.
+   */
+  async writeOrder(
+    elementId: string,
+    value: number | null,
+    opts: {
+      filePath: string;
+      breakpoint?: string;
+      currentClassName?: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!opts.filePath) {
+      return { success: false, error: 'filePath required' };
+    }
+    const newClassName = applyOrderClassChange(opts.currentClassName, value, opts.breakpoint);
+    try {
+      await this.astOps.updateProps({
+        elementId,
+        filePath: opts.filePath,
+        props: { className: newClassName },
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'updateProps failed' };
+    }
   }
 
   /**
