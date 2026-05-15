@@ -391,14 +391,7 @@ export interface AstOperations {
   /** Update text/expression children of a JSX element */
   updateText(params: { elementId: string; filePath: string; text: string }): Promise<void>;
 
-  /**
-   * Write a translated value for an i18n key in the active locale JSON file.
-   * When `previousKey` triggers a JSX rewrite, the implementation may return
-   * `newElementId` — the canonical `${fileName}:${line}:${column}` ID of the
-   * rewritten JSX element after the write. Callers (e.g. handleI18nKeyChange)
-   * use it to re-broadcast selection in a single dispatch without timeout-spam
-   * kostyls. Browser/SaaS path doesn't rewrite JSX → returns undefined.
-   */
+  /** Write a translated value for an i18n key in the active locale JSON file */
   writeI18nResource(params: {
     library: I18nLibrary;
     key: string;
@@ -413,7 +406,7 @@ export interface AstOperations {
     elementId?: string;
     /** Skip writing to the locale JSON file; only update the JSX expression. */
     skipResourceWrite?: boolean;
-  }): Promise<{ newElementId?: string }>;
+  }): Promise<void>;
 }
 
 // ============================================================================

@@ -743,6 +743,16 @@ export default function RightSidebar({
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
+      // Diagnostic logging for HYP-i18n-text-edit-disabled Task 3 — verify the
+      // RPC fires with the correct skipResourceWrite flag.
+      console.debug('[RightSidebar] handleI18nKeyChange', {
+        newKey,
+        currentKey: i18nText?.kind === 'i18n' ? i18nText.key : null,
+        hasI18nText: !!i18nText,
+        kind: i18nText?.kind,
+        selectedId,
+        componentPath,
+      });
       if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
       const previousSelectedId = selectedId;
@@ -751,20 +761,15 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
-      // pollute prod consoles. Tracks the i18n-key-change flicker window
-      // (Task 1 of selection-survives-i18n-write).
-      const dbg = (label: string, extra?: unknown): void => {
-        const w = window as unknown as Record<string, unknown>;
-        if (!w.__HC_DEBUG_SELECTION) return;
-        // eslint-disable-next-line no-console
-        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
-      };
-      const t0 = performance.now();
-      dbg('start', { previousSelectedId, newKey, isNewKey });
+      console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource', {
+        isNewKey,
+        skipResourceWrite: !isNewKey,
+        availableKeysCount: availableI18nKeys?.length,
+        filePath: i18nText.sourceLocation.filePath,
+      });
       void (async () => {
         try {
-          const writeResult = await astOps.writeI18nResource({
+          await astOps.writeI18nResource({
             library: i18nText.library,
             key: newKey,
             namespace: i18nText.namespace,
@@ -775,21 +780,18 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
-          dbg('writeI18nResource resolved', writeResult);
-          // Path A (selection-survives-i18n-write): the bridge re-locates the
-          // rewritten JSX node and returns its post-write canonical ID. Single
-          // dispatch with that ID re-attaches selection cleanly — no x3 timeout
-          // kostyl needed. Fall back to the original selectedId if the bridge
-          // didn't surface a new ID (browser path, no JSX rewrite, etc.); for
-          // child-only mutations the opening tag is invariant so this also
-          // resolves correctly.
+          console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource OK', { newKey });
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
           if (i18nDispatch) {
-            const targetId = writeResult.newElementId ?? previousSelectedId;
-            i18nDispatch({ selectedIds: [targetId] });
-            dbg('dispatch sent', { selectedIds: [targetId] });
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
+            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
           }
-        } catch {
+        } catch (err) {
           // key change failed — no rollback needed (source file unchanged)
+          console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource FAILED', err);
         } finally {
           setStyleRefreshKey((k) => k + 1);
         }
