@@ -743,16 +743,6 @@ export default function RightSidebar({
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      // Diagnostic logging for HYP-i18n-text-edit-disabled Task 3 — verify the
-      // RPC fires with the correct skipResourceWrite flag.
-      console.debug('[RightSidebar] handleI18nKeyChange', {
-        newKey,
-        currentKey: i18nText?.kind === 'i18n' ? i18nText.key : null,
-        hasI18nText: !!i18nText,
-        kind: i18nText?.kind,
-        selectedId,
-        componentPath,
-      });
       if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
       const previousSelectedId = selectedId;
@@ -761,12 +751,6 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource', {
-        isNewKey,
-        skipResourceWrite: !isNewKey,
-        availableKeysCount: availableI18nKeys?.length,
-        filePath: i18nText.sourceLocation.filePath,
-      });
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -780,7 +764,6 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
-          console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource OK', { newKey });
           // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
           // fiber tree, dropping the iframe's previous selection. Re-broadcast both
           // immediately and after a short delay to outrun the HMR window.
@@ -789,9 +772,8 @@ export default function RightSidebar({
             setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
             setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
           }
-        } catch (err) {
+        } catch {
           // key change failed — no rollback needed (source file unchanged)
-          console.debug('[RightSidebar] handleI18nKeyChange writeI18nResource FAILED', err);
         } finally {
           setStyleRefreshKey((k) => k + 1);
         }
