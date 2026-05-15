@@ -43,17 +43,22 @@ describe('PreviewAssetResponses', () => {
 
   it('swallows stale hashed bundle 403/404 to keep iframe console quiet across rebuilds', () => {
     // Bun's hashed _bun/client/<hash>.js rotates on every rebuild — old hash → 403/404.
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 403, false)).toBe(true);
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 404, false)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 403)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 404)).toBe(true);
     // Next.js static chunks rotate similarly on rebuild.
-    expect(shouldSwallowStaleBundleResponse('/_next/static/chunks/main-abc.js', 403, false)).toBe(true);
-    // Other 4xx, HTML responses, and non-bundle paths must NOT be swallowed.
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 500, false)).toBe(false);
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 200, false)).toBe(false);
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 403, true)).toBe(false);
-    expect(shouldSwallowStaleBundleResponse('/src/App.tsx', 403, false)).toBe(false);
-    expect(shouldSwallowStaleBundleResponse('/api/projects', 403, false)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/_next/static/chunks/main-abc.js', 403)).toBe(true);
+    // Webpack emits root hashed entry assets; stale CSS may be returned as history-fallback HTML.
+    expect(shouldSwallowStaleBundleResponse('/main.dab7e2e77da0b120b394.css', 404)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/bundle.2c5528684dc8c3dd90d4.js', 403)).toBe(true);
+    // Other statuses and non-bundle paths must NOT be swallowed.
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 500)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc123.js', 200)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/src/App.tsx', 403)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/api/projects', 403)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/main.css', 404)).toBe(false);
+    expect(shouldSwallowStaleBundleResponse('/src/main.abcdef123456.css', 404)).toBe(false);
     // Query params don't matter — pathname-only check.
-    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc.js?t=123', 403, false)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/_bun/client/index-abc.js?t=123', 403)).toBe(true);
+    expect(shouldSwallowStaleBundleResponse('/main.dab7e2e77da0b120b394.css?cache=1', 404)).toBe(true);
   });
 });

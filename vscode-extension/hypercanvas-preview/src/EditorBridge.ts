@@ -8,6 +8,9 @@
  */
 
 import * as vscode from 'vscode';
+import { isBundleArtifactPath } from './services/bundle-artifact-path';
+
+export { isBundleArtifactPath };
 
 /**
  * Callback to move the preview panel to ViewColumn.Two.
@@ -27,24 +30,6 @@ export type EditorMessage =
   | { type: 'editor:openFile'; path: string; line?: number; column?: number }
   | { type: 'editor:goToCode'; path: string; line: number; column: number }
   | { type: 'editor:getActiveFile'; requestId: string };
-
-/**
- * Path patterns for bundler-generated artifacts that are NOT user source files.
- * Source map resolution can leave these as the raw fileName when no map is
- * available (e.g. bun's hashed `_bun/client/<hash>.js` chunks). Opening them
- * fails with `cannot open file:///.../_bun/client/index-<hash>.js` because
- * the hash rotates on every rebuild and the path is gone before the click
- * lands. Filter early so we don't surface a misleading error to the user.
- */
-const BUNDLE_PATH_PATTERNS: readonly RegExp[] = [
-  /(?:^|\/)_bun\/client\//,
-  /(?:^|\/)_next\/static\/chunks\//,
-  /(?:^|\/)node_modules\//,
-];
-
-export function isBundleArtifactPath(filePath: string): boolean {
-  return BUNDLE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
-}
 
 /**
  * Handle editor-related messages from webview

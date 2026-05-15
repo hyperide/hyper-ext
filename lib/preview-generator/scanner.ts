@@ -54,6 +54,47 @@ export function scanSampleExports(sourceCode: string): string[] {
   return results;
 }
 
+/** Scan source code for exported renderable component names. */
+export function scanRenderableExportNames(sourceCode: string): string[] {
+  const ast = parseSource(sourceCode);
+  const results: string[] = [];
+
+  const push = (name: string) => {
+    if (!/^[A-Z]/.test(name) || name.startsWith('Sample')) return;
+    if (!results.includes(name)) results.push(name);
+  };
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ExportNamedDeclaration') continue;
+    if (node.exportKind === 'type') continue;
+
+    if (!node.source) {
+      for (const spec of node.specifiers) {
+        if (spec.type !== 'ExportSpecifier') continue;
+        if (spec.exportKind === 'type') continue;
+        if (spec.exported.type === 'Identifier') push(spec.exported.name);
+      }
+    }
+
+    if (!node.declaration) continue;
+    const decl = node.declaration;
+
+    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id) {
+      push(decl.id.name);
+      continue;
+    }
+
+    if (decl.type !== 'VariableDeclaration') continue;
+    for (const candidate of decl.declarations) {
+      if (candidate.id.type === 'Identifier' && isRenderableVariable(candidate)) {
+        push(candidate.id.name);
+      }
+    }
+  }
+
+  return results;
+}
+
 export type ExportStyle = 'named' | 'default-named' | 'default-anonymous';
 
 /**
@@ -70,8 +111,9 @@ export function detectExportStyle(sourceCode: string, componentName: string): Ex
     const decl = node.declaration;
 
     // export default function Name / export default class Name
-    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id?.name === componentName) {
-      return 'default-named';
+    if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+      if (decl.id?.name === componentName) return 'default-named';
+      if (!decl.id) return 'default-anonymous';
     }
 
     // export default Name
@@ -108,8 +150,8 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     const decl = node.declaration;
 
     // export default function Name / export default class Name
-    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id) {
-      return decl.id.name;
+    if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+      return decl.id?.name ?? fileName.replace(/\.[^.]+$/, '');
     }
 
     // export default Name
@@ -179,8 +221,53 @@ function isRenderableVariable(declaration: VariableDeclaratorNode): boolean {
   if (!init) return false;
   if (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') return true;
   if (init.type === 'Identifier' || init.type === 'MemberExpression') return true;
+  if (init.type === 'TaggedTemplateExpression') return true;
   if (init.type !== 'CallExpression') return false;
   return !isCreateContextCall(init);
+}
+
+export function hasComponentExport(sourceCode: string, componentName: string): boolean {
+  const ast = parseSource(sourceCode);
+
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportDefaultDeclaration') {
+      const decl = node.declaration;
+      if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+        return !decl.id || decl.id.name === componentName;
+      }
+      if (decl.type === 'Identifier') return decl.name === componentName;
+      if (decl.type === 'CallExpression') {
+        return decl.arguments.some((arg) => arg.type === 'Identifier' && arg.name === componentName);
+      }
+    }
+
+    if (node.type !== 'ExportNamedDeclaration') continue;
+    if (node.exportKind === 'type') continue;
+
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ExportSpecifier') continue;
+      if (spec.exportKind === 'type') continue;
+      if (spec.exported.type === 'Identifier' && spec.exported.name === componentName) return true;
+    }
+
+    if (!node.declaration) continue;
+    const decl = node.declaration;
+    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id?.name === componentName) {
+      return true;
+    }
+    if (decl.type !== 'VariableDeclaration') continue;
+    for (const candidate of decl.declarations) {
+      if (
+        candidate.id.type === 'Identifier' &&
+        candidate.id.name === componentName &&
+        isRenderableVariable(candidate)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'], { type: 'CallExpression' }>): boolean {
@@ -195,25 +282,44 @@ function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'],
 // in SampleDefault wrappers, not a production app-shell router. Including it
 // would falsely exclude previewable components that wrap their samples in
 // MemoryRouter for isolated rendering.
-const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set(['BrowserRouter', 'HashRouter', 'StaticRouter']);
+const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set([
+  'BrowserRouter',
+  'HashRouter',
+  'NavigationContainer',
+  'StaticRouter',
+]);
 
 const ROUTER_SHELL_SOURCES = new Set(['react-router-dom', 'react-router-dom/server', 'react-router']);
 
+const REACT_NAVIGATION_SOURCES = new Set([
+  '@react-navigation/bottom-tabs',
+  '@react-navigation/drawer',
+  '@react-navigation/material-bottom-tabs',
+  '@react-navigation/material-top-tabs',
+  '@react-navigation/native',
+  '@react-navigation/native-stack',
+  '@react-navigation/stack',
+]);
+
 /**
  * Detect whether the file is a router application shell — a file that imports
- * BrowserRouter, HashRouter, or StaticRouter from react-router-dom.
- * Such files set up routing context for the whole app and cause TDZ errors
- * in the preview registry when co-imported with the pages they wrap.
+ * a top-level routing container or navigator factory.
+ * Such files set up routing context for the whole app and cause TDZ/native
+ * module failures in the preview registry when co-imported with the pages they wrap.
  */
 export function detectRouterShell(sourceCode: string): boolean {
   const ast = parseSource(sourceCode);
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
-    if (!ROUTER_SHELL_SOURCES.has(node.source.value as string)) continue;
+    if (node.importKind === 'type') continue;
+    const source = node.source.value as string;
+    if (!ROUTER_SHELL_SOURCES.has(source) && !REACT_NAVIGATION_SOURCES.has(source)) continue;
     for (const spec of node.specifiers) {
       if (spec.type !== 'ImportSpecifier') continue;
+      if (spec.importKind === 'type') continue;
       const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
       if (name && ROUTER_SHELL_IMPORTS.has(name)) return true;
+      if (REACT_NAVIGATION_SOURCES.has(source) && name && /^create[A-Z].*Navigator$/.test(name)) return true;
     }
   }
   return false;

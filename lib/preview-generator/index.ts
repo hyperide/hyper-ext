@@ -29,9 +29,15 @@ export {
 } from './sample-ensurer';
 export { buildSamplePrompt, extractCodeFromAIResponse } from './sample-prompt';
 export {
+  buildSampleScaffold,
+  normalizeSampleComponentName,
+  type SampleScaffoldConfig,
+} from './sample-scaffold';
+export {
   detectExportStyle,
   detectRouterShell,
   type ExportStyle,
   extractComponentName,
+  scanRenderableExportNames,
   scanSampleExports,
 } from './scanner';

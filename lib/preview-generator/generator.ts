@@ -507,7 +507,8 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // Generic Zustand-style store stub. Components that destructure `store.xxx`
   // for setters (setCommandPaletteOpen, toggleX, addY, …) get no-op functions;
   // collection-like reads (issues, items, rows, tags, users, comments,
-  // messages, notifications) get empty arrays; everything else is undefined.
+  // messages, notifications) get empty arrays; grouped status maps get empty
+  // arrays for common workflow columns; everything else is undefined.
   // This keeps BoardView-shaped components rendering instead of throwing on
   // destructure when no real store is supplied.
   lines.push('  store: new Proxy({}, {');
@@ -520,6 +521,9 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('      }');
   lines.push(
     "      if (['issues', 'items', 'rows', 'tags', 'users', 'comments', 'messages', 'notifications', 'cards', 'columns', 'tasks', 'lists', 'projects', 'labels', 'filters', 'priorities', 'statuses'].includes(prop)) return [];",
+  );
+  lines.push(
+    "      if (prop === 'issuesByStatus') return { backlog: [], todo: [], in_progress: [], done: [], cancelled: [] };",
   );
   lines.push(
     "      if (prop === 'commandPaletteOpen' || prop === 'isOpen' || prop === 'isLoading' || prop === 'isError') return false;",

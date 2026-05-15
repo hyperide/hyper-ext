@@ -1,6 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { memo, useCallback } from 'react';
+import { Input } from '../../ui/input';
 import type { StrokeItem } from '../types';
 
 interface StrokeSectionProps {
@@ -40,6 +41,18 @@ export const StrokeSection = memo(function StrokeSection({
     syncStyleChange('borderWidth', '0');
   }, [onStrokesChange, syncStyleChange]);
 
+  const stroke = strokes[0];
+  const updateStroke = useCallback(
+    (patch: Partial<StrokeItem>, styles: Array<[string, string]>) => {
+      if (!stroke) return;
+      onStrokesChange([{ ...stroke, ...patch }]);
+      for (const [key, value] of styles) {
+        syncStyleChange(key, value);
+      }
+    },
+    [onStrokesChange, stroke, syncStyleChange],
+  );
+
   if (strokes.length === 0) {
     return (
       <div
@@ -52,7 +65,7 @@ export const StrokeSection = memo(function StrokeSection({
             className="text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             onClick={handleAddStroke}
           >
-            Stroke
+            Border
           </button>
           <button
             type="button"
@@ -73,7 +86,7 @@ export const StrokeSection = memo(function StrokeSection({
       className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-foreground">Stroke</span>
+        <span className="text-xs font-semibold text-foreground">Border</span>
         <button
           type="button"
           data-testid="hyper-inspector-stroke-remove"
@@ -83,9 +96,59 @@ export const StrokeSection = memo(function StrokeSection({
           <IconMinus className="w-4 h-4" stroke={1.5} />
         </button>
       </div>
-      <div className="text-xs text-muted-foreground">
-        {strokes[0]?.width}px {strokes[0]?.style} border
+      <div className="grid grid-cols-[1fr_72px_84px] gap-2">
+        <label className="h-7 px-2 bg-muted rounded flex items-center gap-2 min-w-0">
+          <span className="text-[11px] text-muted-foreground shrink-0">Color</span>
+          <input
+            type="color"
+            data-testid={TID.inspector.strokeColor}
+            value={normalizeColor(stroke?.color)}
+            onChange={(event) => updateStroke({ color: event.target.value }, [['borderColor', event.target.value]])}
+            className="h-5 w-7 shrink-0 rounded border border-border bg-transparent p-0"
+          />
+        </label>
+        <label
+          htmlFor="hyper-inspector-stroke-width-input"
+          className="h-7 px-2 bg-muted rounded flex items-center gap-1 min-w-0"
+        >
+          <span className="text-[11px] text-muted-foreground shrink-0">W</span>
+          <Input
+            id="hyper-inspector-stroke-width-input"
+            type="text"
+            testId={TID.inspector.strokeWidth}
+            value={stroke?.width ?? ''}
+            onChange={(event) =>
+              updateStroke({ width: event.target.value }, [['borderWidth', normalizeBorderWidth(event.target.value)]])
+            }
+            className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0"
+            placeholder="1"
+          />
+        </label>
+        <select
+          data-testid={TID.inspector.strokeStyle}
+          value={stroke?.style ?? 'solid'}
+          onChange={(event) =>
+            updateStroke({ style: event.target.value as StrokeItem['style'] }, [['borderStyle', event.target.value]])
+          }
+          className="h-7 px-2 rounded bg-muted text-[11px] text-foreground border-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+          <option value="double">Double</option>
+          <option value="none">None</option>
+        </select>
       </div>
     </div>
   );
 });
+
+function normalizeColor(value: string | undefined): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
+}
+
+function normalizeBorderWidth(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '0';
+  return /^-?\d+(?:\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+}

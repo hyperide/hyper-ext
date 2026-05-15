@@ -7,13 +7,65 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 import { describe, expect, it } from 'bun:test';
+import { act, createElement, useEffect, useState } from 'react';
+import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
+import { createRoot } from '../../node_modules/react-dom/client';
 import {
   buildComponentPreviewUrl,
   canUpdatePreviewComponentInPlace,
   getComponentFromPreviewUrl,
   hasNavigatedPreviewSource,
   shouldNavigateFrameToComponent,
+  shouldNavigateFromSharedStateMessage,
+  usePreviewBridge,
 } from '../webview-preview-panel/usePreviewBridge';
+
+type BridgeSnapshot = {
+  previewUrl: string | null;
+  devServerRunning: boolean;
+};
+
+function createCanvasAdapter(): CanvasAdapter {
+  return {
+    sendEvent: <T extends PlatformMessage>(_message: T) => {},
+    onEvent: () => () => {},
+  };
+}
+
+function postHostMessage(data: Record<string, unknown>): void {
+  window.dispatchEvent(new window.MessageEvent('message', { data }));
+}
+
+function BridgeHarness({ onSnapshot }: { onSnapshot: (snapshot: BridgeSnapshot) => void }) {
+  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
+  const bridge = usePreviewBridge({
+    iframeEl,
+    canvas: createCanvasAdapter(),
+    onStateUpdate: () => {},
+  });
+
+  useEffect(() => {
+    onSnapshot({
+      previewUrl: bridge.previewUrl,
+      devServerRunning: bridge.devServerRunning,
+    });
+  }, [bridge.devServerRunning, bridge.previewUrl, onSnapshot]);
+
+  return createElement('iframe', { ref: setIframeEl, title: 'preview' });
+}
+
+function renderBridge(onSnapshot: (snapshot: BridgeSnapshot) => void) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => {
+    root.render(createElement(BridgeHarness, { onSnapshot }));
+  });
+  return () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+}
 
 describe('preview bridge URL helpers', () => {
   it('builds component preview URL with encoded component path', () => {
@@ -67,5 +119,53 @@ describe('preview bridge URL helpers', () => {
         'http://localhost:5173/other-preview?component=src%2FApp.tsx',
       ),
     ).toBe(false);
+  });
+
+  it('does not treat shared StateHub component sync as iframe navigation readiness', () => {
+    expect(shouldNavigateFromSharedStateMessage('state:init')).toBe(false);
+    expect(shouldNavigateFromSharedStateMessage('state:update')).toBe(false);
+    expect(shouldNavigateFromSharedStateMessage('setComponent')).toBe(true);
+    expect(shouldNavigateFromSharedStateMessage('updateUrl')).toBe(true);
+  });
+
+  it('clears stale preview URL and component when the dev server stops', async () => {
+    const snapshots: BridgeSnapshot[] = [];
+    const cleanup = renderBridge((snapshot) => snapshots.push(snapshot));
+
+    try {
+      await act(async () => {
+        postHostMessage({
+          type: 'devserver:statusChanged',
+          running: true,
+          url: 'http://localhost:19000',
+        });
+        postHostMessage({
+          type: 'updateUrl',
+          url: 'http://localhost:19000/test-preview?component=src%2FApp.tsx',
+        });
+      });
+      expect(snapshots.at(-1)?.previewUrl).toBe('http://localhost:19000/test-preview?component=src%2FApp.tsx');
+
+      await act(async () => {
+        postHostMessage({
+          type: 'devserver:statusChanged',
+          running: false,
+          url: null,
+        });
+      });
+      expect(snapshots.at(-1)?.previewUrl).toBeNull();
+
+      await act(async () => {
+        postHostMessage({
+          type: 'devserver:statusChanged',
+          running: true,
+          url: 'http://localhost:19000',
+        });
+      });
+      expect(snapshots.at(-1)?.devServerRunning).toBe(true);
+      expect(snapshots.at(-1)?.previewUrl).toBeNull();
+    } finally {
+      cleanup();
+    }
   });
 });

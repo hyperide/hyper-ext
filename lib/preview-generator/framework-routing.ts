@@ -16,6 +16,7 @@ export type FrameworkType =
   | 'remix'
   | 'vite-spa-file-based'
   | 'vite-spa-jsx-router'
+  | 'bun'
   | 'parcel'
   | 'webpack'
   | 'unknown';
@@ -43,14 +44,17 @@ async function exists(io: FileIO, p: string): Promise<boolean> {
 interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
 }
 
 export async function detectFramework(projectRoot: string, io: FileIO): Promise<DetectionResult> {
   // 1. Read package.json once — primary signal for all frameworks
   let deps: Record<string, string> = {};
+  let scripts: Record<string, string> = {};
   try {
     const pkg = JSON.parse(await io.readFile(join(projectRoot, 'package.json'))) as PackageJson;
     deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    scripts = pkg.scripts ?? {};
   } catch {
     /* package.json missing — fall through to unknown */
   }
@@ -94,6 +98,15 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
 
   // 6. Parcel
   if (deps.parcel) return { framework: 'parcel' };
+
+  // 7. Bun's React template serves index.html through Bun.serve() and does
+  // not have a framework router. Patch its browser entry file like a plain SPA.
+  const scriptText = Object.values(scripts).join('\n').toLowerCase();
+  const hasBunLock =
+    (await exists(io, join(projectRoot, 'bun.lock'))) || (await exists(io, join(projectRoot, 'bun.lockb')));
+  if (hasBunLock || deps['bun-plugin-tailwind'] || scriptText.includes('bun ')) {
+    return { framework: 'bun' };
+  }
 
   return { framework: 'unknown' };
 }

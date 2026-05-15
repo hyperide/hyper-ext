@@ -56,28 +56,28 @@ export function shouldReturnEmptyAssetResponse(statusCode: number | undefined, i
  * during E2E. Swallow only those well-known patterns.
  */
 const HASHED_BUNDLE_PATH_PATTERNS: readonly RegExp[] = [/(?:^|\/)_bun\/client\//, /(?:^|\/)_next\/static\/chunks\//];
+const WEBPACK_ROOT_BUNDLE_PATTERN = /^\/(?:bundle|main|runtime|style|styles|vendor|vendors)\.[a-f0-9]{8,}\.(?:css|js)$/;
 
 function isHashedBundlePath(proxyPath: string): boolean {
   try {
     const pathname = new URL(proxyPath, 'http://localhost').pathname;
-    return HASHED_BUNDLE_PATH_PATTERNS.some((pattern) => pattern.test(pathname));
+    return (
+      HASHED_BUNDLE_PATH_PATTERNS.some((pattern) => pattern.test(pathname)) ||
+      WEBPACK_ROOT_BUNDLE_PATTERN.test(pathname)
+    );
   } catch {
     return false;
   }
 }
 
 /**
- * For hashed bundler chunks (bun's `_bun/client/<hash>.js`, Next.js
- * `_next/static/chunks/<hash>.js`), 403/404 responses are expected fallout
- * from rebuilds — the hash has already rotated. Return an empty 204 instead
- * so the iframe doesn't log a `Failed to load resource` error.
+ * For hashed bundler output (bun's `_bun/client/<hash>.js`, Next.js
+ * `_next/static/chunks/<hash>.js`, Webpack root `main.<hash>.css`), 403/404
+ * responses are expected fallout from rebuilds — the hash has already rotated.
+ * Return an empty 204 instead so the iframe doesn't log a `Failed to load
+ * resource` error or stylesheet MIME error from history-fallback HTML.
  */
-export function shouldSwallowStaleBundleResponse(
-  proxyPath: string,
-  statusCode: number | undefined,
-  isHtml: boolean,
-): boolean {
-  if (isHtml) return false;
+export function shouldSwallowStaleBundleResponse(proxyPath: string, statusCode: number | undefined): boolean {
   if (statusCode !== 403 && statusCode !== 404) return false;
   return isHashedBundlePath(proxyPath);
 }

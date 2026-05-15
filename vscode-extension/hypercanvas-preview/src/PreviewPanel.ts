@@ -14,6 +14,7 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { buildSampleScaffold, normalizeSampleComponentName } from '../../../lib/preview-generator/sample-scaffold';
 import { extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
@@ -21,33 +22,7 @@ import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
 import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 
-function isValidJsxComponentName(value: string): boolean {
-  return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value);
-}
-
-function toPascalIdentifier(value: string): string {
-  const words = value
-    .replace(/\.[jt]sx?$/i, '')
-    .split(/[^A-Za-z0-9_$]+/)
-    .filter(Boolean);
-  const identifier = words
-    .map((word) => {
-      const first = word.charAt(0);
-      return `${first.toUpperCase()}${word.slice(1)}`;
-    })
-    .join('');
-  if (!identifier) return 'Component';
-  return /^[A-Za-z_$]/.test(identifier) ? identifier : `Component${identifier}`;
-}
-
-export function normalizeSampleComponentName(componentName: string): string {
-  // React components must start with an uppercase letter; reject lowercase-leading names
-  // even if they are technically valid JS identifiers (e.g. Next.js "page", Remix "route").
-  if (isValidJsxComponentName(componentName) && /^[A-Z]/.test(componentName)) return componentName;
-  const fileName = componentName.split(/[\\/]/).pop() ?? componentName;
-  const candidate = toPascalIdentifier(fileName);
-  return isValidJsxComponentName(candidate) ? candidate : 'Component';
-}
+export { normalizeSampleComponentName };
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -55,11 +30,16 @@ export class PreviewPanel {
 
   private _panel?: vscode.WebviewPanel;
   private _currentComponent?: string;
+  private _navigableComponent?: string;
+  private _requiresPreviewRegeneration = false;
   private _defaultComponent?: string;
   private _disposables: vscode.Disposable[] = [];
 
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
+
+  // Sample creation callback (extension host regenerates __canvas_preview__.tsx)
+  private _onSampleCreatedCallback: ((componentPath: string) => Promise<void> | void) | null = null;
 
   // Component-missing callback (triggers self-healing ensureComponent in extension host)
   private _onComponentMissingCallback: ((componentPath: string) => void) | null = null;
@@ -114,6 +94,8 @@ export class PreviewPanel {
     this.clearSelection();
     this._workspaceRoot = workspaceRoot;
     this._currentComponent = undefined;
+    this._navigableComponent = undefined;
+    this._requiresPreviewRegeneration = false;
     this._defaultComponent = undefined;
     this._devServerRunning = false;
     this._previewBaseUrl = 'http://localhost:3000';
@@ -243,9 +225,6 @@ export class PreviewPanel {
     this._stateHub.register(PreviewPanel.PANEL_ID, panel.webview);
     this._panelRouter.setAstResponseTarget(panel.webview);
 
-    // Set HTML once — React app handles all UI state via messages
-    panel.webview.html = this._getHtmlForWebview();
-
     // Handle messages from webview
     panel.webview.onDidReceiveMessage(
       async (message) => {
@@ -254,6 +233,11 @@ export class PreviewPanel {
       undefined,
       this._disposables,
     );
+
+    // Set HTML once — React app handles all UI state via messages. The message
+    // handler must already be registered because the webview can post
+    // `webview:ready` during the initial HTML assignment.
+    panel.webview.html = this._getHtmlForWebview();
 
     // Listen for active editor changes
     this._disposables.push(
@@ -276,6 +260,7 @@ export class PreviewPanel {
         const component = patch.currentComponent;
         if (component && this._currentComponent !== component.path) {
           this._currentComponent = component.path;
+          this._navigableComponent = undefined;
           console.log('[HyperIDE] Component changed via state:', component.path);
         }
       }
@@ -290,6 +275,8 @@ export class PreviewPanel {
         clearTimeout(this._reEmitTimer);
         this._reEmitTimer = null;
       }
+      this._navigableComponent = undefined;
+      this._requiresPreviewRegeneration = true;
       for (const d of this._disposables) d.dispose();
       this._disposables = [];
       this._syncService?.dispose();
@@ -553,13 +540,14 @@ export class PreviewPanel {
     componentPath: string | undefined,
     propValues?: Record<string, unknown>,
     sampleName?: string,
-    options?: { componentName?: string; revealInEditor?: boolean },
+    options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
   ): Promise<boolean> {
     if (!componentPath) return false;
 
     const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
     const exportName = sampleName || 'SampleDefault';
     const revealInEditor = options?.revealInEditor ?? true;
+    const notifySampleCreated = options?.notifySampleCreated ?? true;
 
     // Read the file to check if this sample name already exists
     let sourceCode: string;
@@ -591,7 +579,7 @@ export class PreviewPanel {
 
       // Build replacement
       const propEntries = this._buildPropEntries(propValues);
-      const replacement = this._buildSampleScaffold(componentName, exportName, propEntries);
+      const replacement = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
 
       sourceCode = sourceCode.slice(0, sampleStart) + replacement.trimStart() + sourceCode.slice(sampleEnd);
 
@@ -601,6 +589,10 @@ export class PreviewPanel {
       } catch {
         void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
         return false;
+      }
+
+      if (notifySampleCreated) {
+        await this._onSampleCreatedCallback?.(componentPath);
       }
 
       if (!revealInEditor) {
@@ -620,7 +612,7 @@ export class PreviewPanel {
 
     // Generate a minimal sample scaffold — include user-provided prop values if available
     const propEntries = this._buildPropEntries(propValues);
-    const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries);
+    const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
 
     // Append to file
     const updatedCode = `${sourceCode}\n${scaffold}\n`;
@@ -653,6 +645,9 @@ export class PreviewPanel {
     if (this._panel) {
       this._watchSampleInFile(absPath, exportName, this._panel.webview);
     }
+    if (notifySampleCreated) {
+      await this._onSampleCreatedCallback?.(componentPath);
+    }
     return true;
   }
 
@@ -663,6 +658,7 @@ export class PreviewPanel {
   public async ensureDefaultSampleForNoProps(componentPath: string, componentName: string): Promise<boolean> {
     return this._handleCreateSampleFromError(componentPath, undefined, 'SampleDefault', {
       componentName,
+      notifySampleCreated: false,
       revealInEditor: false,
     });
   }
@@ -718,26 +714,9 @@ export class PreviewPanel {
     componentName: string,
     exportName: string,
     propEntries: Array<[string, unknown]>,
+    sourceCode = '',
   ): string {
-    const jsxComponentName = normalizeSampleComponentName(componentName);
-    const propLines =
-      propEntries.length > 0
-        ? propEntries.map(([key, value]) => {
-            if (typeof value === 'boolean') return `    ${key}={${value}}`;
-            if (typeof value === 'number') return `    ${key}={${value}}`;
-            if (typeof value === 'object') return `    ${key}={${JSON.stringify(value)}}`;
-            return `    ${key}={${JSON.stringify(String(value))}}`;
-          })
-        : [`    // TODO: Add required props here`];
-    return [
-      '',
-      `// Sample component — add required props below`,
-      `export const ${exportName} = () => (`,
-      `  <${jsxComponentName}`,
-      ...propLines,
-      `  />`,
-      ');',
-    ].join('\n');
+    return buildSampleScaffold({ sourceCode, componentName, exportName, propEntries });
   }
 
   // === Context menu handlers ===
@@ -991,6 +970,12 @@ export class PreviewPanel {
    */
   private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
     if (this._currentComponent) {
+      const stateComponent = this._stateHub.state.currentComponent;
+      if (this._requiresPreviewRegeneration && stateComponent?.path === this._currentComponent) {
+        this._requiresPreviewRegeneration = false;
+        this._stateHub.applyUpdate({ currentComponent: stateComponent });
+        return;
+      }
       this._pushFullStateToWebview();
       return;
     }
@@ -1001,6 +986,13 @@ export class PreviewPanel {
     const stateComponent = this._stateHub.state.currentComponent;
     if (stateComponent?.path) {
       this._currentComponent = stateComponent.path;
+      if (this._navigableComponent !== stateComponent.path) {
+        this._navigableComponent = undefined;
+      }
+      if (this._requiresPreviewRegeneration) {
+        this._requiresPreviewRegeneration = false;
+        this._stateHub.applyUpdate({ currentComponent: stateComponent });
+      }
       return;
     }
 
@@ -1035,7 +1027,8 @@ export class PreviewPanel {
       webview.postMessage({ type: 'projectError', error: this._projectError });
     }
 
-    if (this._currentComponent) {
+    const canNavigateCurrentComponent = !this._currentComponent || this._navigableComponent === this._currentComponent;
+    if (this._currentComponent && canNavigateCurrentComponent) {
       webview.postMessage({ type: 'setComponent', component: this._currentComponent });
     }
 
@@ -1112,6 +1105,9 @@ export class PreviewPanel {
   }
 
   private _setCurrentComponent(component: string): void {
+    if (this._currentComponent !== component) {
+      this._navigableComponent = undefined;
+    }
     this._currentComponent = component;
     const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
     const current = this._stateHub.state.currentComponent;
@@ -1141,6 +1137,10 @@ export class PreviewPanel {
     if (!component) {
       console.log('[HyperIDE] No component selected, showing hint');
       this._panel?.webview.postMessage({ type: 'showNoComponentHint' });
+      return;
+    }
+
+    if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
       return;
     }
 
@@ -1207,6 +1207,9 @@ export class PreviewPanel {
     // webview:ready fired before _pushFullStateToWebview had current state
     // (e.g. openPreview called before devserver:statusChanged propagated).
     this._pushFullStateToWebview();
+    if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
+      return;
+    }
     this._panel.webview.postMessage({ type: 'refresh' });
   }
 
@@ -1223,6 +1226,8 @@ export class PreviewPanel {
    */
   public dispose(): void {
     this.clearSelection();
+    this._navigableComponent = undefined;
+    this._requiresPreviewRegeneration = true;
     this._panel?.dispose();
   }
 
@@ -1232,6 +1237,8 @@ export class PreviewPanel {
    */
   public setComponentParam(componentPath: string): void {
     this._currentComponent = componentPath;
+    this._navigableComponent = componentPath;
+    this._requiresPreviewRegeneration = false;
     if (!this._panel) return;
 
     if (this._devServerRunning) {
@@ -1513,6 +1520,14 @@ export class PreviewPanel {
    */
   public onComponentMissing(callback: (componentPath: string) => void): void {
     this._onComponentMissingCallback = callback;
+  }
+
+  /**
+   * Set callback for sample creation from the preview overlay.
+   * Extension host uses this to regenerate the preview registry before reloading.
+   */
+  public onSampleCreated(callback: (componentPath: string) => Promise<void> | void): void {
+    this._onSampleCreatedCallback = callback;
   }
 
   /**

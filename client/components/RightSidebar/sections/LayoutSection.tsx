@@ -618,14 +618,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
-                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
-              }`}
+              className={cn(
+                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                paddingExpanded
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
-              <IconBorderSides
-                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
-                stroke={1.5}
-              />
+              <IconBorderSides className="w-4 h-4" stroke={1.5} />
             </button>
           </div>
         </>
@@ -1045,14 +1045,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
-                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
-              }`}
+              className={cn(
+                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                paddingExpanded
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
-              <IconBorderSides
-                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
-                stroke={1.5}
-              />
+              <IconBorderSides className="w-4 h-4" stroke={1.5} />
             </button>
           </div>
         </>
@@ -1179,14 +1179,14 @@ export const LayoutSection = memo(function LayoutSection({
             type="button"
             data-testid={TID.inspector.spacingLink('padding')}
             onClick={() => setPaddingExpanded(!paddingExpanded)}
-            className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
-              paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
-            }`}
+            className={cn(
+              'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+              paddingExpanded
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
           >
-            <IconBorderSides
-              className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
-              stroke={1.5}
-            />
+            <IconBorderSides className="w-4 h-4" stroke={1.5} />
           </button>
         </div>
       )}

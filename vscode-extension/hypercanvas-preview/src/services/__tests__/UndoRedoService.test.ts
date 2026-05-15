@@ -122,5 +122,24 @@ describe('UndoRedoService', () => {
       expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
       expect(save).not.toHaveBeenCalled();
     });
+
+    it('does not apply WorkspaceEdit for clean open documents', async () => {
+      const uri = vscode.Uri.file('/workspace/a.tsx');
+      const doc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt' | 'isDirty'> = {
+        uri,
+        getText: () => 'after',
+        positionAt: (offset: number) => new vscode.Position(0, offset),
+        isDirty: false,
+      };
+      vscode.workspace.textDocuments.push(doc as vscode.TextDocument);
+
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/workspace/a.tsx', 'before', 'after');
+
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+    });
   });
 });

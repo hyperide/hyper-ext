@@ -64,14 +64,32 @@ export function useStyleSync({
   const styleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFlushTimeRef = useRef<number>(0);
   const verificationCleanupRef = useRef<(() => void) | null>(null);
+  const selectedKey = selectedIds.join('\0');
+  const previousSyncScopeRef = useRef({ filePath, selectedKey });
 
-  // Cleanup verification on unmount
-  useEffect(() => {
-    return () => {
-      verificationCleanupRef.current?.();
-      if (styleTimerRef.current) clearTimeout(styleTimerRef.current);
-    };
+  const cancelPendingStyleSync = useCallback(() => {
+    styleQueueRef.current.clear();
+
+    if (styleTimerRef.current) {
+      clearTimeout(styleTimerRef.current);
+      styleTimerRef.current = null;
+    }
+
+    verificationCleanupRef.current?.();
+    verificationCleanupRef.current = null;
   }, []);
+
+  useEffect(() => {
+    return cancelPendingStyleSync;
+  }, [cancelPendingStyleSync]);
+
+  useEffect(() => {
+    const previousSyncScope = previousSyncScopeRef.current;
+    if (previousSyncScope.filePath !== filePath || previousSyncScope.selectedKey !== selectedKey) {
+      cancelPendingStyleSync();
+      previousSyncScopeRef.current = { filePath, selectedKey };
+    }
+  }, [filePath, selectedKey, cancelPendingStyleSync]);
 
   const finishSync = useCallback(() => {
     setIsStyleSyncing(false);
@@ -219,6 +237,7 @@ export function useStyleSync({
       } else {
         // Trailing: schedule batch flush (dblclick-capable controls, or rapid changes)
         styleTimerRef.current = setTimeout(() => {
+          styleTimerRef.current = null;
           lastFlushTimeRef.current = Date.now();
           flushQueue();
         }, STYLE_DEBOUNCE_MS);

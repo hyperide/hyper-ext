@@ -453,6 +453,9 @@ describe('generatePreviewContent', () => {
 
     // Existing store proxy must still be present
     expect(content).toContain('store: new Proxy(');
+    expect(content).toContain(
+      "if (prop === 'issuesByStatus') return { backlog: [], todo: [], in_progress: [], done: [], cancelled: [] };",
+    );
 
     // Output must still be valid TSX
     expect(() =>

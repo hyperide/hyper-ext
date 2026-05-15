@@ -250,6 +250,16 @@ export default React.memo(MyButton);`;
     expect(extractComponentName(source, 'LanguageContext.tsx')).toBe('LanguageProvider');
   });
 
+  it('should extract styled tagged-template exports', () => {
+    const source = `
+      import styled from '@emotion/styled';
+      export const LayoutRoot = styled.div\`
+        display: flex;
+      \`;
+    `;
+    expect(extractComponentName(source, 'Layout.tsx')).toBe('LayoutRoot');
+  });
+
   it('should skip type-only export specifiers', () => {
     const source = `
       type ToastProps = { title: string };
@@ -353,6 +363,23 @@ describe('detectRouterShell', () => {
     expect(detectRouterShell(source)).toBe(true);
   });
 
+  it('returns true for React Navigation containers', () => {
+    const source = `
+      import { NavigationContainer } from '@react-navigation/native';
+      export function AppNavigator() { return <NavigationContainer><div /></NavigationContainer>; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
+  it('returns true for React Navigation navigator factories', () => {
+    const source = `
+      import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+      const Tab = createBottomTabNavigator();
+      export function BottomTabs() { return <Tab.Navigator />; }
+    `;
+    expect(detectRouterShell(source)).toBe(true);
+  });
+
   it('returns true when BrowserRouter and StaticRouter are both imported (Bulka pattern)', () => {
     const source = `
       import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -400,6 +427,15 @@ describe('detectRouterShell', () => {
           <FillPicker />
         </MemoryRouter>
       );
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false for type-only React Navigation props', () => {
+    const source = `
+      import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+      type Props = { navigation: NativeStackNavigationProp<{ Home: undefined }, 'Home'> };
+      export function HomeScreen(_props: Props) { return <div />; }
     `;
     expect(detectRouterShell(source)).toBe(false);
   });

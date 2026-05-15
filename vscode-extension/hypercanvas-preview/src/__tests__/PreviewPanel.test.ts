@@ -60,6 +60,58 @@ function createEditor(path: string): vscode.TextEditor {
   } as vscode.TextEditor;
 }
 
+interface MockPreviewWebview {
+  options: unknown;
+  htmlWrites: string[];
+  postMessage: ReturnType<typeof mock>;
+  onDidReceiveMessage: (handler: (message: { type?: string }) => void) => { dispose: () => void };
+  asWebviewUri: (uri: vscode.Uri) => vscode.Uri;
+  fireMessage: (message: { type?: string }) => void;
+}
+
+function createMockPreviewWebviewPanel(options: { onHtmlWrite?: (webview: MockPreviewWebview) => void } = {}) {
+  const messageHandlers: Array<(message: { type?: string }) => void> = [];
+  const disposeHandlers: Array<() => void> = [];
+  const webview = {
+    options: {},
+    htmlWrites: [] as string[],
+    postMessage: mock(() => Promise.resolve(true)),
+    onDidReceiveMessage(handler: (message: { type?: string }) => void) {
+      messageHandlers.push(handler);
+      return { dispose: mock() };
+    },
+    asWebviewUri(uri: vscode.Uri) {
+      return uri;
+    },
+    fireMessage(message: { type?: string }) {
+      for (const handler of messageHandlers) handler(message);
+    },
+  };
+
+  Object.defineProperty(webview, 'html', {
+    get() {
+      return webview.htmlWrites.at(-1) ?? '';
+    },
+    set(value: string) {
+      webview.htmlWrites.push(value);
+      options.onHtmlWrite?.(webview);
+    },
+  });
+
+  const panel = {
+    webview,
+    reveal: mock(),
+    dispose: mock(() => {
+      for (const handler of disposeHandlers) handler();
+    }),
+    onDidDispose(handler: () => void) {
+      disposeHandlers.push(handler);
+      return { dispose: mock() };
+    },
+  };
+  return panel;
+}
+
 describe('PreviewPanel component selection', () => {
   it('normalizes path-like sample component names to JSX-safe identifiers', () => {
     expect(normalizeSampleComponentName('components/Sidebar.tsx')).toBe('Sidebar');
@@ -163,6 +215,41 @@ describe('PreviewPanel component selection', () => {
     expect(dispose).toHaveBeenCalled();
   });
 
+  it('requires preview regeneration again after disposing the preview panel', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string }, {
+      _currentComponent: 'src/App.tsx',
+      _navigableComponent: 'src/App.tsx',
+    });
+
+    panel.dispose();
+    (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
+
+    const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
+    expect(calls).not.toContain('setComponent');
+    expect(calls).not.toContain('updateUrl');
+  });
+
+  it('re-emits the same current component once after preview panel disposal', () => {
+    const stateHub = createStateHub({ name: 'App', path: 'src/App.tsx' });
+    const { panel } = createPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string }, {
+      _currentComponent: 'src/App.tsx',
+      _navigableComponent: 'src/App.tsx',
+    });
+
+    panel.dispose();
+    stateHub.applyUpdate.mockClear();
+    (panel as PreviewPanel & { _initializeComponent: (editor: vscode.TextEditor) => void })._initializeComponent(
+      createEditor('/workspace/src/App.tsx'),
+    );
+
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      currentComponent: { name: 'App', path: 'src/App.tsx' },
+    });
+  });
+
   it('does not overwrite an already-set currentComponent when re-attaching panel', () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
@@ -183,19 +270,24 @@ describe('PreviewPanel component selection', () => {
     expect(stateHub.applyUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ currentComponent: { name: 'App', path: 'src/App.tsx' } }),
     );
-    // State pushed to webview includes setComponent with the preserved value.
-    expect(postMessage).toHaveBeenCalledWith({ type: 'setComponent', component: 'src/components/Feed.tsx' });
+    // Pending component state is preserved locally, but iframe navigation waits for setComponentParam().
+    const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
+    expect(calls).not.toContain('setComponent');
   });
 
-  it('_pushFullStateToWebview emits devserver/projectError/setComponent/url', () => {
+  it('_pushFullStateToWebview emits devserver/projectError/setComponent/url for prepared component', () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
 
-    Object.assign(panel as PreviewPanel & { _currentComponent: string; _projectError: unknown }, {
-      _currentComponent: 'src/App.tsx',
-      _projectError: { kind: 'react-native', detail: 'no react-native-web' },
-      _previewBaseUrl: 'http://localhost:5173',
-    });
+    Object.assign(
+      panel as PreviewPanel & { _currentComponent: string; _navigableComponent: string; _projectError: unknown },
+      {
+        _currentComponent: 'src/App.tsx',
+        _navigableComponent: 'src/App.tsx',
+        _projectError: { kind: 'react-native', detail: 'no react-native-web' },
+        _previewBaseUrl: 'http://localhost:5173',
+      },
+    );
 
     (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
 
@@ -214,6 +306,45 @@ describe('PreviewPanel component selection', () => {
     });
     // _updatePreviewUrl posts updateUrl when devServerRunning
     expect(postMessage).toHaveBeenCalledWith({
+      type: 'updateUrl',
+      url: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+    });
+  });
+
+  it('does not push component navigation state until the component is prepared', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _previewBaseUrl: string }, {
+      _currentComponent: 'src/App.tsx',
+      _previewBaseUrl: 'http://localhost:5173',
+    });
+
+    (panel as PreviewPanel & { _pushFullStateToWebview: () => void })._pushFullStateToWebview();
+
+    const calls = postMessage.mock.calls.map((c) => (c[0] as { type: string }).type);
+    expect(calls).not.toContain('setComponent');
+    expect(calls).not.toContain('updateUrl');
+  });
+
+  it('waits for setComponentParam before navigating after dev server starts', () => {
+    const stateHub = createStateHub();
+    const { panel, postMessage } = createPanel(stateHub);
+
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _devServerRunning: boolean }, {
+      _currentComponent: 'src/App.tsx',
+      _devServerRunning: false,
+    });
+
+    panel.setPreviewUrl('http://localhost:5173');
+
+    let calls = postMessage.mock.calls.map((c) => c[0] as { type: string; url?: string });
+    expect(calls.some((message) => message.type === 'updateUrl')).toBe(false);
+
+    panel.setComponentParam('src/App.tsx');
+
+    calls = postMessage.mock.calls.map((c) => c[0] as { type: string; url?: string });
+    expect(calls).toContainEqual({
       type: 'updateUrl',
       url: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
     });
@@ -258,6 +389,103 @@ describe('PreviewPanel component selection', () => {
     expect(scaffold).not.toContain('<components/Sidebar.tsx');
   });
 
+  it('creates visible sample content for Alert-style optional-prop containers', () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+    const sourceCode = `
+const Alert = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
+  <div ref={ref} {...props} />
+));
+const AlertTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>((props, ref) => (
+  <h5 ref={ref} {...props} />
+));
+const AlertDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>((props, ref) => (
+  <p ref={ref} {...props} />
+));
+export { Alert, AlertTitle, AlertDescription };
+`;
+
+    const scaffold = (
+      panel as PreviewPanel & {
+        _buildSampleScaffold: (
+          componentName: string,
+          exportName: string,
+          propEntries: Array<[string, unknown]>,
+          sourceCode?: string,
+        ) => string;
+      }
+    )._buildSampleScaffold('Alert', 'SampleDefault', [], sourceCode);
+
+    expect(scaffold).toContain('<Alert>');
+    expect(scaffold).toContain('<AlertTitle>Preview title</AlertTitle>');
+    expect(scaffold).toContain(
+      '<AlertDescription>This sample shows the component with visible content.</AlertDescription>',
+    );
+    expect(scaffold).not.toContain('TODO');
+  });
+
+  it('accepts webview:ready fired during the initial preview HTML write', async () => {
+    const originalLog = console.log;
+    console.log = mock();
+    const stateHub = {
+      state: {
+        currentComponent: null,
+        insertTargetId: null,
+        selectedIds: [],
+      },
+      applyUpdate: mock(),
+      register: mock(),
+      unregister: mock(),
+      sendInit: mock(),
+      onChange: mock(() => () => {}),
+    };
+    let firedInitialReady = false;
+    const mockPanel = createMockPreviewWebviewPanel({
+      onHtmlWrite(webview) {
+        if (!firedInitialReady) {
+          firedInitialReady = true;
+          webview.fireMessage({ type: 'webview:ready' });
+        }
+      },
+    });
+
+    Object.assign(vscode.window, {
+      createWebviewPanel: mock(() => mockPanel),
+      onDidChangeTextEditorSelection: mock(() => ({ dispose: mock() })),
+    });
+    Object.assign(vscode.workspace, {
+      onDidChangeConfiguration: mock(() => ({ dispose: mock() })),
+    });
+    Object.assign(vscode.workspace, {
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as never,
+      {
+        astBridge: { astService: {} },
+        setAstResponseTarget: mock(),
+      } as never,
+      { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
+    );
+
+    try {
+      panel.createOrShow(vscode.ViewColumn.Two);
+      await Promise.resolve();
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(stateHub.sendInit).toHaveBeenCalledWith('preview');
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'devserver:statusChanged',
+      running: false,
+      url: null,
+    });
+  });
+
   it('uses the real default export name (Home) instead of the filename (page) for Next.js page.tsx', async () => {
     const stateHub = createStateHub();
     const { panel } = createPanel(stateHub);
@@ -279,7 +507,7 @@ export default function Home() {
           componentPath: string | undefined,
           propValues?: Record<string, unknown>,
           sampleName?: string,
-          options?: { componentName?: string; revealInEditor?: boolean },
+          options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
         ) => Promise<boolean>;
       }
     )._handleCreateSampleFromError('app/page.tsx', undefined, 'SampleDefault', { revealInEditor: false });

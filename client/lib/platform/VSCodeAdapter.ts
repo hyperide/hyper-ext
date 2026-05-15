@@ -31,6 +31,7 @@ interface VSCodeApi {
 interface HyperTestBridge {
   selectElement(elementId: string): void;
   selectElements(elementIds: string[]): void;
+  setCurrentComponent(componentPath: string): void;
   executeCommand(command: string, args?: string[]): void;
 }
 
@@ -64,6 +65,15 @@ webviewWindow.__hyperTestBridge = {
     getVSCodeApi().postMessage({
       type: 'state:update',
       patch: { selectedIds: elementIds },
+    });
+  },
+  setCurrentComponent(componentPath: string) {
+    const name = componentPath.replace(/^.*\//, '').replace(/\.\w+$/, '');
+    getVSCodeApi().postMessage({
+      type: 'state:update',
+      patch: {
+        currentComponent: { name, path: componentPath },
+      },
     });
   },
   executeCommand(command: string, args?: string[]) {

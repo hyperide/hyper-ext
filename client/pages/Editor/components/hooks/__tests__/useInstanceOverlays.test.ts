@@ -1,15 +1,3 @@
-/**
- * Regression test for drag-start iframe hit-testing fix.
- *
- * Before fix: iframe.style.pointerEvents was set to 'none' only after the 5 px
- * mousemove threshold inside handleDragMove. If the cursor crossed the iframe
- * boundary before that, the iframe absorbed mousemove events and the drag never
- * actually started.
- *
- * After fix: handleDragStart immediately sets pointer-events to 'none' so the
- * parent window continues receiving mousemove/mouseup regardless of where the
- * cursor ends up during the gesture.
- */
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import type { RefObject } from 'react';
@@ -80,7 +68,7 @@ describe('useInstanceOverlays — drag-start iframe hit-testing', () => {
     }
   });
 
-  it('sets iframe pointer-events to none immediately on mousedown (board mode)', async () => {
+  it('RAF sets iframe pointer-events to none in board mode', async () => {
     const { unmount } = renderHook(() =>
       useInstanceOverlays({
         boardModeActive: true,
@@ -104,17 +92,7 @@ describe('useInstanceOverlays — drag-start iframe hit-testing', () => {
     const frame = container.querySelector('[data-instance-frame="instance-1"]');
     if (!frame) throw new Error('frame overlay not found — hook did not create it');
 
-    // Board mode: RAF sets pointer-events to none when no drag is active
-    expect(mockIframe.style.pointerEvents).toBe('none');
-
-    // Reset to 'auto' so we can observe the immediate change from handleDragStart
-    mockIframe.style.pointerEvents = 'auto';
-
-    // Fire mousedown — this triggers handleDragStart
-    frame.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100, bubbles: true }));
-
-    // REGRESSION CHECK: pointer-events must be 'none' immediately after mousedown,
-    // before any mousemove event fires. Previously this only happened after 5 px.
+    // Board mode: RAF sets iframe pointer-events to none (needed for Excalidraw click passthrough)
     expect(mockIframe.style.pointerEvents).toBe('none');
 
     unmount();

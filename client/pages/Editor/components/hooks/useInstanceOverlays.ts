@@ -216,10 +216,6 @@ export function useInstanceOverlays({
         initialY: currentY,
       };
 
-      // Immediately disable iframe hit-testing so the parent window continues
-      // receiving mousemove/mouseup even if the cursor crosses the iframe boundary
-      // before the 5px drag threshold is reached.
-      iframe.style.pointerEvents = 'none';
       // Note: window listeners are already attached globally in separate useEffect
     };
 
@@ -604,16 +600,15 @@ export function useInstanceOverlays({
         overlay.badge.style.opacity = opacity;
 
         // Pointer events: in board mode - frame handles interaction, in design/interact - frame transparent for clicks
-        // IMPORTANT: Don't update while a drag is pending — handleDragStart sets iframe pointer-events to 'none'
-        // on mousedown (before the 5px threshold). instanceId is set from mousedown until handleDragEnd clears it.
+        // Skip during active drag to avoid unnecessary layout-triggering style mutations.
         if (!dragStateRef.current.instanceId) {
           overlay.frame.style.pointerEvents = boardModeActive ? 'auto' : 'none';
           overlay.badge.style.pointerEvents = 'auto';
         }
       }
 
-      // Restore iframe pointer-events after drag ends
-      // In board mode: iframe should have pointer-events: none for click passthrough to Excalidraw
+      // In board mode: iframe must have pointer-events: none for click passthrough to Excalidraw.
+      // Skip during active drag to avoid unnecessary style mutations.
       if (!dragStateRef.current.instanceId && iframeRef.current) {
         iframeRef.current.style.pointerEvents = boardModeActive ? 'none' : 'auto';
       }

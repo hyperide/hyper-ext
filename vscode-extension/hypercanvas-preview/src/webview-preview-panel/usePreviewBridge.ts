@@ -70,6 +70,10 @@ export function shouldNavigateFrameToComponent(src: string | null | undefined, n
   return currentComponent !== nextComponent;
 }
 
+export function shouldNavigateFromSharedStateMessage(messageType: string): boolean {
+  return messageType !== 'state:init' && messageType !== 'state:update';
+}
+
 export function applyComponentRenderSucceeded(
   prev: ComponentError | null,
   componentPath: string,
@@ -367,8 +371,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           devServerUrlRef.current = msg.url ?? null;
           setDevServerUrl(devServerUrlRef.current);
           if (!msg.running) {
-            // Reset so navigateToComponent fires again when server restarts on a new URL.
-            previewUrlRef.current = null;
+            // Drop the iframe session entirely. VS Code can reuse the same webview
+            // when the workspace changes; keeping the old component would navigate
+            // the next dev server to a stale path before the new component is ready.
+            currentComponentRef.current = null;
+            setComponentError(null);
+            setShowNoComponentHint(false);
+            setStoredPreviewUrl(null);
           }
           if (msg.running && devServerUrlRef.current && currentComponentRef.current && !previewUrlRef.current) {
             navigateToComponent(currentComponentRef.current, devServerUrlRef.current);
@@ -452,8 +461,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'state:update':
           // Forward to canvas interaction (overlay rendering)
           if (msg.patch) {
-            const component = (msg.patch as { currentComponent?: { path?: unknown } }).currentComponent;
-            if (typeof component?.path === 'string') {
+            const component = (msg.patch as { currentComponent?: { path?: unknown } | null }).currentComponent;
+            if (component === null) {
+              currentComponentRef.current = null;
+            }
+            if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
               currentComponentRef.current = component.path;
               syncComponentToFrame(component.path);
             }
@@ -466,8 +478,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'state:init':
           // Forward to canvas interaction (full state)
           if (msg.state) {
-            const component = (msg.state as { currentComponent?: { path?: unknown } }).currentComponent;
-            if (typeof component?.path === 'string') {
+            const component = (msg.state as { currentComponent?: { path?: unknown } | null }).currentComponent;
+            if (component === null) {
+              currentComponentRef.current = null;
+            }
+            if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
               currentComponentRef.current = component.path;
               syncComponentToFrame(component.path);
             }

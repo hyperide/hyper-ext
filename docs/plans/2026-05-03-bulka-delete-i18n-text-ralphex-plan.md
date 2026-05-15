@@ -167,7 +167,7 @@ rendering, or deletion behavior.
 
 ### Task 4: Add Targeted Regression Coverage
 
-- [ ] Add regression tests for fix; run lint
+- [x] Add regression tests for fix; run lint
 
 Keep tests focused on production code.
 
@@ -204,7 +204,7 @@ usable.
 
 ### Task 5: Verify SaaS And Extension Paths
 
-- [ ] Inspect both VS Code and SaaS delete paths; fix SaaS if vulnerable
+- [x] Inspect both VS Code and SaaS delete paths; fix SaaS if vulnerable
 
 Before considering the fix complete, explicitly inspect both paths:
 
@@ -220,7 +220,7 @@ also vulnerable, fix it in shared/server code with tests.
 
 ### Task 6: Bulka E2E And Visual Verification
 
-- [ ] Run Bulka E2E debug script, take before/after screenshots
+- [x] Run Bulka E2E debug script, take before/after screenshots
 
 Use the real VS Code extension E2E harness. Do not use browser-only Playwright
 for extension verification.

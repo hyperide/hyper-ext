@@ -206,6 +206,19 @@ describe('PreviewFileManager', () => {
       expect(content).not.toContain("'src/components/Missing.tsx'");
     });
 
+    it('should skip PascalCase files without a matching runtime export', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/App.tsx', 'export default function App() { return <div />; }');
+      io.files.set('/project/src/Layout.tsx', 'export const layoutTokens = { gap: 8 };');
+      const manager = createManager(io);
+
+      const content = await manager.ensureComponent(['src/App.tsx']);
+
+      expect(content).toContain("import App from './App';");
+      expect(content).not.toContain("import { Layout } from './Layout';");
+      expect(content).not.toContain("'src/Layout.tsx'");
+    });
+
     it('should throw PreviewGenerationError when no valid components', async () => {
       const io = new InMemoryFileIO();
       const manager = createManager(io);
@@ -1085,6 +1098,66 @@ export default function Index() {
     expect(content).toContain("'client/pages/Index.tsx'");
     expect(isValidTypeScript(content)).toBe(true);
   });
+
+  it('excludes React Navigation shells while keeping screens', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/App.web.tsx',
+      `import { ChatListScreen } from './src/screens/ChatListScreen';\nexport default function App() { return <ChatListScreen />; }`,
+    );
+    io.files.set(
+      '/project/src/navigation/AppNavigator.tsx',
+      `import { NavigationContainer } from '@react-navigation/native';\nexport function AppNavigator() { return <NavigationContainer><div /></NavigationContainer>; }`,
+    );
+    io.files.set(
+      '/project/src/navigation/BottomTabs.tsx',
+      `import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';\nconst Tab = createBottomTabNavigator();\nexport function BottomTabs() { return <Tab.Navigator />; }`,
+    );
+    io.files.set('/project/src/screens/ChatListScreen.tsx', `export function ChatListScreen() { return <main />; }`);
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+
+    const content = await manager.ensureComponent([
+      'App.web.tsx',
+      'src/navigation/AppNavigator.tsx',
+      'src/navigation/BottomTabs.tsx',
+      'src/screens/ChatListScreen.tsx',
+    ]);
+
+    expect(content).toContain("'App.web.tsx'");
+    expect(content).toContain("'src/screens/ChatListScreen.tsx'");
+    expect(content).not.toContain("'src/navigation/AppNavigator.tsx'");
+    expect(content).not.toContain("'src/navigation/BottomTabs.tsx'");
+    expect(content).not.toContain("from './navigation/AppNavigator'");
+    expect(content).not.toContain("from './navigation/BottomTabs'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('keeps explicitly requested App.web.tsx even when it owns React Navigation providers', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/App.web.tsx',
+      `import { NavigationContainer } from '@react-navigation/native';
+import { HomeScreen } from './src/screens/HomeScreen';
+
+export default function App() {
+  return <NavigationContainer><HomeScreen /></NavigationContainer>;
+}`,
+    );
+    io.files.set(
+      '/project/src/screens/HomeScreen.tsx',
+      `export function HomeScreen() { return <main>Free Delivery</main>; }`,
+    );
+    io.files.set('/project/package.json', '{}');
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+
+    const content = await manager.ensureComponent(['App.web.tsx']);
+
+    expect(content).toContain("'App.web.tsx'");
+    expect(content).toContain("import App from '../App.web';");
+    expect(content).toContain("'src/screens/HomeScreen.tsx'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
 });
 
 describe('isValidTypeScript', () => {
@@ -1383,6 +1456,39 @@ describe('ensureComponent — fast path', () => {
     expect(content).toContain('data: previewData');
   });
 
+  it('regenerates when an already registered component gains SampleDefault', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/src/components/Alert.tsx',
+      `
+export function Alert({ children }: { children?: React.ReactNode }) {
+  return <div>{children}</div>;
+}
+
+export const SampleDefault = () => <Alert>Visible alert</Alert>;
+`,
+    );
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}
+// @hyperide-managed
+import { Alert } from './components/Alert';
+const componentRegistry: Record<string, React.ComponentType<Record<string, unknown>>> = {
+  'src/components/Alert.tsx': Alert,
+};
+const sampleRenderMap: Record<string, React.FC> = {};
+const sampleRenderersMap: Record<string, Record<string, React.FC>> = {};
+export default function CanvasPreview() { return null; }
+`,
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const content = await manager.ensureComponent(['src/components/Alert.tsx']);
+
+    expect(content).toContain('SampleDefault as AlertSampleDefault');
+    expect(content).toContain("'src/components/Alert.tsx': AlertSampleDefault");
+  });
+
   it('AST-inserts missing import without full regeneration', async () => {
     const io = new InMemoryFileIO();
     io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
@@ -1433,6 +1539,42 @@ export default function App() {
 }
 `;
 
+const ROUTER_SOURCE_WITH_CATCH_ALL = `
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Home } from './pages/Home';
+import { NotFound } from './pages/NotFound';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`;
+
+const ROUTER_SOURCE_WITH_MANAGED_ROUTE_AFTER_CATCH_ALL = `
+import CanvasPreview from './__canvas_preview__'; // @hyperide-managed
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Home } from './pages/Home';
+import { NotFound } from './pages/NotFound';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="*" element={<NotFound />} />
+        <Route path="/test-preview" element={<CanvasPreview />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`;
+
 describe('PreviewFileManager.patchRouterConfig', () => {
   it('injects /test-preview route into <Routes>', async () => {
     const io = new InMemoryFileIO();
@@ -1447,6 +1589,34 @@ describe('PreviewFileManager.patchRouterConfig', () => {
     expect(patched).toContain('test-preview');
     expect(patched).toContain('@hyperide-managed');
     expect(patched).toContain('CanvasPreview');
+  });
+
+  it('injects /test-preview route before a catch-all route', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE_WITH_CATCH_ALL);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+
+    const patched = io.files.get('/project/src/App.tsx');
+    expect(patched).toBeDefined();
+    expect(patched?.indexOf('path="/test-preview"')).toBeLessThan(patched?.indexOf('path="*"') ?? -1);
+  });
+
+  it('moves an existing managed /test-preview route before a catch-all route', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE_WITH_MANAGED_ROUTE_AFTER_CATCH_ALL);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+
+    const patched = io.files.get('/project/src/App.tsx');
+    expect(patched).toBeDefined();
+    expect(patched?.indexOf('path="/test-preview"')).toBeLessThan(patched?.indexOf('path="*"') ?? -1);
+    expect(patched?.match(/import CanvasPreview/g)?.length).toBe(1);
+    expect(patched?.match(/path="\/test-preview"/g)?.length).toBe(1);
   });
 
   it('revertRouterPatch removes @hyperide-managed lines and preserves original routes', async () => {

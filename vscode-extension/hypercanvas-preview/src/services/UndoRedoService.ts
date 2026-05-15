@@ -127,14 +127,14 @@ export class UndoRedoService {
     return this._redoStack.length > 0 && this._trackingCount === 0;
   }
 
-  /** Write content disk-first, then sync an already-open VS Code document. */
+  /** Write content disk-first, then sync only dirty VS Code documents. */
   private async _writeContent(filePath: string, content: string): Promise<boolean> {
     try {
       const uri = vscode.Uri.file(filePath);
       await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 
       const openDoc = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === uri.fsPath);
-      if (openDoc && openDoc.getText() !== content) {
+      if (openDoc?.isDirty && openDoc.getText() !== content) {
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
         edit.replace(uri, fullRange, content);

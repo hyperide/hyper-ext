@@ -100,6 +100,18 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('parcel');
   });
 
+  it('detects Bun from its lockfile and dev script', async () => {
+    const io = makeIO({ scripts: { dev: 'bun --hot src/index.ts' }, dependencies: { react: '^19.0.0' } }, [
+      `${root}/bun.lock`,
+    ]);
+    expect((await detectFramework(root, io)).framework).toBe('bun');
+  });
+
+  it('keeps Vite precedence when a Vite project uses Bun as package manager', async () => {
+    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/bun.lock`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
   it('returns unknown when no known deps and no config files', async () => {
     const io = makeIO({ dependencies: { react: '^18.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('unknown');

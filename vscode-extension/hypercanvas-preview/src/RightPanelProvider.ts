@@ -88,8 +88,6 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
     };
 
-    webviewView.webview.html = this._getHtml(webviewView.webview);
-
     // Register with StateHub for cross-panel sync
     this._stateHub.register(RightPanelProvider.viewType, webviewView.webview);
 
@@ -133,6 +131,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       this._ready = false;
       this._stateHub.unregister(RightPanelProvider.viewType);
     });
+
+    webviewView.webview.html = this._getHtml(webviewView.webview);
   }
 
   private _sendExplorerState(webview: vscode.Webview): void {
