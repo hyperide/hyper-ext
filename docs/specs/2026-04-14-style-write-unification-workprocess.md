@@ -1548,3 +1548,30 @@ Image rebuild сработал автоматически (Dockerfile новее
 4. Inspector cluster ↓ Y частично
 
 Wakeup каждые 30 min для контроля.
+
+## 📍 2026-04-27 01:25 CEST: VSIX 0.1.10 — РАБОТАЕТ! (early data)
+
+Прогон `005017-18121` стартовал 00:50, через 35 min:
+- s1: 0/106 (0% fail) — **perfect**
+- s2: 3/71 (4%)
+- s3: 1/80 (1%)
+- s4: 5/27 (slow remix-tw4-twitter cluster)
+
+s4 — первые 1-2 теста на воркере падают 90s (cold-start race остался,
+не re-create), потом все проходят 5-25s. Сравни с предыдущим прогоном
+где в этой же группе ВСЕ тесты падали 90s.
+
+### Disk emergency
+
+Build cache распух до 19GB (бейк), диск свалился до 6.5GB free.
+`docker builder prune -f` освободил 19GB → 21GB free. Image сейчас 12GB
+(вырос с 3.5GB из-за bake). С 4 workspace volumes ~ +20GB transient.
+Должно влезть в 21GB free, но впритык.
+
+### Что 0.1.10 не закрыл
+
+1. **First-on-worker cold-start race** — первый тест на воркере фейлит
+   90s timeout. Iframe не получает URL. ОТДЕЛЬНЫЙ bug, не re-create.
+   Подозрение: `webview:ready` race vs dev-server-running gate.
+2. **XSS overlay sanitized + CSP enforced** (s2) — мелкие test-logic
+   issues, требуют отдельного смотра.
