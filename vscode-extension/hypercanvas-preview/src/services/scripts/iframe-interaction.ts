@@ -8,6 +8,7 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
+import { liftToCommonSiblings } from '@shared/canvas-interaction/drop-target-lift';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1134,11 +1135,8 @@ document.addEventListener('contextmenu', contextMenuHandler, true);
 // Maps elementId → original inline width/height so cancel can restore.
 const _previewResizeOrig = new Map<string, { width: string; height: string }>();
 
-// === Element drag/move state machine ===
-// Tracks pointerdown → threshold → drag → drop to post hypercanvas:moveElement.
-// AstService.moveElement handles same-file, cross-file, cross-parent, and
-// cross-component moves — no JSX-parent constraint, so the iframe sends raw
-// source/target NodeRefs without lifting to a common DOM ancestor.
+// === Element drag/reorder state machine ===
+// Tracks pointerdown → threshold → drag → drop to post hypercanvas:reorderElement.
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
@@ -1324,37 +1322,37 @@ function _dragPointerUp(e: PointerEvent): void {
 
   const rawDropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (!rawDropEl) return;
+  // Resolve drop side similarly to drag side: if cursor is over a decorative
+  // child (emoji span, aria-hidden) walk up to the nearest source-bearing
+  // ancestor. Otherwise dropping on the emoji of another card returns null
+  // and the reorder is silently swallowed.
+  const dropResolved = _resolveSourceWithFallback(rawDropEl);
+  if (!dropResolved) return;
 
-  // moveElement (Task 7+) accepts any source/target geometry — same parent,
-  // different parent, different component, different file, leaf target. The
-  // iframe no longer lifts to a common DOM ancestor: send the NodeRef of
-  // whatever the user dropped on. The drop indicator only highlights
-  // source-bearing elements, but `elementFromPoint` returns the literal
-  // element under the cursor — which may be a decorative inner span (emoji,
-  // aria-hidden wrapper) without a source of its own. Walk up the DOM until
-  // we find a source-bearing ancestor so the drop matches what the indicator
-  // showed (mirrors `resolveDragSource` on the drag-source side).
-  let dropEl: HTMLElement | null = rawDropEl;
-  let dropSrc = iframeResolver.getSourceLocation(dropEl);
-  if (!dropSrc) {
-    const bodyEl = typeof document !== 'undefined' ? document.body : null;
-    let cur = rawDropEl.parentElement;
-    while (cur && cur !== bodyEl) {
-      const ancestorSrc = iframeResolver.getSourceLocation(cur);
-      if (ancestorSrc) {
-        dropSrc = ancestorSrc;
-        dropEl = cur;
-        break;
-      }
-      cur = cur.parentElement;
-    }
-  }
-  if (!dropSrc || !dropEl) return;
-  const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
-  if (targetId === sourceId) return;
+  // Lift both source and drop target up to siblings of a common DOM ancestor.
+  // This is essential because AstService.reorderElement requires source and
+  // target to share a direct JSX parent — without lifting, a drop on Card B
+  // while dragging an inner div inside Card A would fail with "Elements must
+  // share a direct JSX parent". By promoting both to children of their nearest
+  // common DOM ancestor (which usually maps to the JSX list container), the
+  // reorder lands at the card-vs-card level the user actually expects.
+  const dragEl = _dragSourceEl ?? rawDropEl;
+  const lifted = liftToCommonSiblings(dragEl, dropResolved.el);
+  const finalSourceEl = lifted.source ?? dragEl;
+  const finalDropEl = lifted.drop ?? dropResolved.el;
+  // Source location must be readable on the lifted element; fall back to the
+  // pre-lift element if the parent layer has no own source.
+  const finalSourceSrc =
+    _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
+  const finalDropSrc =
+    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  if (!finalSourceSrc || !finalDropSrc) return;
+  const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
+  const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
+  if (targetId === finalSourceId) return;
 
-  const rect = dropEl.getBoundingClientRect();
-  const position: 'before' | 'after' = _isHorizontalLayout(dropEl)
+  const rect = finalDropEl.getBoundingClientRect();
+  const position: 'before' | 'after' = _isHorizontalLayout(finalDropEl)
     ? e.clientX < rect.left + rect.width / 2
       ? 'before'
       : 'after'
@@ -1366,14 +1364,38 @@ function _dragPointerUp(e: PointerEvent): void {
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
   window.parent.postMessage(
     {
-      type: 'hypercanvas:moveElement',
-      sourceId,
+      type: 'hypercanvas:reorderElement',
+      sourceId: finalSourceId,
       targetId,
-      filePath: sourceFilePath,
+      filePath: finalSourceSrc.fileName,
       position,
     },
     '*',
   );
+}
+
+// Drop-target lift logic lives in shared/canvas-interaction/drop-target-lift.ts
+// and is unit-tested separately. Re-imported below at the top of this module.
+
+/**
+ * Resolve source location for a DOM element. Falls back to the nearest
+ * source-bearing ancestor when the element itself is decorative (e.g. an
+ * aria-hidden emoji span). Returns the element used as the resolution anchor
+ * along with its source location.
+ */
+function _resolveSourceWithFallback(
+  el: HTMLElement,
+): { el: HTMLElement; source: { fileName: string; line: number; column: number } } | null {
+  const direct = iframeResolver.getSourceLocation(el);
+  if (direct) return { el, source: direct };
+  const bodyEl = typeof document !== 'undefined' ? document.body : null;
+  let cur: HTMLElement | null = el.parentElement;
+  while (cur && cur !== bodyEl) {
+    const s = iframeResolver.getSourceLocation(cur);
+    if (s) return { el: cur, source: s };
+    cur = cur.parentElement;
+  }
+  return null;
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {

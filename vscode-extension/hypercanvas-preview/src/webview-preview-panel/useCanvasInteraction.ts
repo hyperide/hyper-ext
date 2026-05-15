@@ -333,17 +333,13 @@ export function useCanvasInteraction(
           break;
         }
 
-        case 'hypercanvas:moveElement': {
-          // Drop pipeline (move-any-to-any). Source and target arrive as raw
-          // NodeRefs from the iframe — no lift, no fallback.
-          // AstService.moveElement handles same-file, cross-file, cross-parent,
-          // cross-component, and leaf-target moves uniformly.
+        case 'hypercanvas:reorderElement': {
           if (typeof msg.sourceId !== 'string' || typeof msg.targetId !== 'string') break;
           const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
           if (!filePath) break;
           canvas.sendEvent({
-            type: 'ast:moveElement',
-            requestId: `move-${Date.now()}`,
+            type: 'ast:reorderElement',
+            requestId: `reorder-${Date.now()}`,
             filePath,
             sourceId: msg.sourceId,
             targetId: msg.targetId,
