@@ -2310,3 +2310,49 @@ Pass rate на запущенных: 79% (20 fails из 453 done).
 
 `bun run test:docker` из `/Users/ultra/work/ext-test-projects/e2e`.
 VSIX: авто-select `hypercanvas-preview-0.1.17.vsix` (последний).
+
+## 📍 2026-04-27: Run #11 результаты + Run #12 старт
+
+### Run #11 (193834-55610, VSIX 0.1.17) — killed globalTimeout 30 min
+
+| shard | done | pass | fail | flaky | skip | unrun |
+|-------|------|------|------|-------|------|-------|
+| s1    | ~141 | 137  | 1    | 3     | 0    | 0     |
+| s2    | ~104 | 91   | 10   | 3     | 0    | 396   |
+| s3    | ~75  | 72   | 0    | 3     | 33   | 453   |
+| s4    | ~10  | 2    | 5    | 3     | 0    | 543   |
+| **Σ** | **~330** | **302** | **16** | **12** | **33** | **1392** |
+
+GlobalTimeout 30 min убил все шарды — s4 прогнал ровно 30.0m.
+Сравни: 1789 не запустились в Run #10, 1392 здесь — s1 успел дойти до конца.
+
+### Почему 30 min снова
+
+Docker rsync `/workspace-src` → `/workspace` происходит при старте контейнера.
+Run #11 запустился до того как `1179899` (globalTimeout 30min→3h) попал в working
+tree. Контейнеры получили старый `playwright.config.ts` с 30min.
+
+**Fix уже в репо:** `1179899` (ext-test-projects HEAD `b32f3ae`) — 3h globalTimeout.
+
+### Новые фиксы между Run #11 и Run #12
+
+`hyperide/hyper-canvas-draft`:
+- `c196a2a2` — PreviewProxy retry 403 для /test-preview (Remix cold compile)
+
+`hyperide/hyper-ext-e2e` (из предыдущих сессий, уже в HEAD):
+- `1179899` — globalTimeout 30min → 3h
+- `b0d8cd7` — base timeout 60s → 90s (test.slow() = 270s)
+- `b32f3ae` — replace all test.setTimeout(90s/120s/180s) with test.slow()
+
+### Run #12 ожидаемые результаты
+
+Все шарды дойдут до конца (3h достаточно для 550 тестов/шард при ~20s/тест).
+- Class M (s4 remix-startup): закрыто `b255d4af` + `c196a2a2` (403 retry)
+- Class P (s2 settings/security): закрыто `3c97477` (CommandPalette 15s)
+- GlobalTimeout: 3h → все ~2211 тестов запустятся
+- Ожидаем: ~5-10 fails (real bugs), не таймауты
+
+### Run #12 старт
+
+`bun run test:docker` из `/Users/ultra/work/ext-test-projects/e2e`.
+VSIX: авто-select `hypercanvas-preview-0.1.17.vsix`.
