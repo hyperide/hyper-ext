@@ -1183,11 +1183,6 @@ export default function RightSidebar({
             </div>
           )}
 
-          {/* i18n Text Inspector */}
-          {i18nText?.kind === 'i18n' && (
-            <I18nTextInspector i18nBinding={i18nText} onResolvedTextChange={handleI18nResolvedTextChange} />
-          )}
-
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection
@@ -1209,6 +1204,11 @@ export default function RightSidebar({
               isStyleSyncing && 'pointer-events-none opacity-60',
             )}
           >
+            {/* i18n Text Inspector */}
+            {i18nText?.kind === 'i18n' && (
+              <I18nTextInspector i18nBinding={i18nText} onResolvedTextChange={handleI18nResolvedTextChange} />
+            )}
+
             {/* Position Section */}
             {canInspectStyles && (
               <PositionSection
