@@ -75,8 +75,14 @@ export function useStyleSync({
       styleTimerRef.current = null;
     }
 
+    // Check before calling — verificationCleanupRef is set only after setIsStyleSyncing(true)
+    // in SaaS mode. Cancelling it without resetting the flag leaves the spinner stuck.
+    const hadActiveSync = verificationCleanupRef.current !== null;
     verificationCleanupRef.current?.();
     verificationCleanupRef.current = null;
+    if (hadActiveSync) {
+      setIsStyleSyncing(false);
+    }
   }, []);
 
   useEffect(() => {

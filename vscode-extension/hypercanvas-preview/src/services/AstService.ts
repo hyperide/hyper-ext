@@ -520,6 +520,11 @@ export class AstService {
       // _resolveElementInCorrectFile — same pattern as updateStyles, updateProps, etc.
       const identifiers = nodeRefs ?? elementIds;
 
+      // For cross-file deletes: capture content before the first write to a non-requested file.
+      // AstBridge uses this for undo tracking (same pattern as updateStyles/updateProps).
+      let contentBeforeWrite: string | undefined;
+      let crossFileCaptured = false;
+
       for (const id of identifiers) {
         // _resolveElementInCorrectFile re-reads the AST on every call, so child nodes
         // removed by earlier deletions do not corrupt Babel path references.
@@ -534,6 +539,16 @@ export class AstService {
         }
 
         const { result, ast, resolvedPath } = resolved;
+
+        // Capture contentBeforeWrite for the first cross-file path encountered.
+        if (resolvedPath !== absolutePath && !crossFileCaptured) {
+          crossFileCaptured = true;
+          try {
+            contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+          } catch {
+            // Leave contentBeforeWrite undefined — AstBridge will skip undo snapshot
+          }
+        }
 
         // Remove element and write to the actual resolved file (may differ from
         // absolutePath for cross-file nodeRefs, e.g. Tamagui child components).
@@ -554,7 +569,7 @@ export class AstService {
       // resolvedPath from the last deletion — callers can use it for undo tracking
       // when the element lived in a file other than filePath.
       const lastResolvedPath = [...mutatedFiles].at(-1);
-      return { success: true, data: { deletedCount }, resolvedPath: lastResolvedPath };
+      return { success: true, data: { deletedCount }, resolvedPath: lastResolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.deleteElements] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

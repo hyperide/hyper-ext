@@ -6,6 +6,7 @@
 
 import * as fsSync from 'node:fs';
 import path from 'node:path';
+import { writeI18nResource } from '@shared/i18n-text/write-i18n-resource';
 import type * as vscode from 'vscode';
 import type {
   AstOperationResult,
@@ -93,6 +94,10 @@ export class AstBridge {
 
         case 'ast:wrapElement':
           response = await this._handleWrapElement(message);
+          break;
+
+        case 'ast:writeI18nResource':
+          response = await this._handleWriteI18nResource(message);
           break;
 
         default:
@@ -202,16 +207,33 @@ export class AstBridge {
       }
       const result = await this._astService.deleteElements(filePath, elementIds);
       if (result.success) {
+        // For cross-file deletes (element lives in a child component file), use resolvedPath
+        // and contentBeforeWrite — same pattern as _withUndoTracking.
+        const actualPath = result.resolvedPath ?? absolutePath;
+        let contentBeforeActual: string;
+        if (actualPath !== absolutePath) {
+          if (result.contentBeforeWrite === undefined) {
+            // contentBeforeWrite capture failed in AstService — skip undo rather than record empty diff.
+            console.warn(
+              `[AstBridge] deleteElements: contentBeforeWrite unavailable for cross-file delete to ${path.basename(actualPath)}, skipping undo snapshot`,
+            );
+            return result;
+          }
+          contentBeforeActual = result.contentBeforeWrite;
+        } else {
+          contentBeforeActual = contentBefore;
+        }
+
         let contentAfter: string;
         try {
-          contentAfter = await this._fileIO.readFile(absolutePath);
+          contentAfter = await this._fileIO.readFile(actualPath);
         } catch {
-          contentAfter = contentBefore;
+          contentAfter = contentBeforeActual;
         }
-        if (contentBefore !== contentAfter) {
+        if (contentBeforeActual !== contentAfter) {
           // Single undo entry for the entire delete operation (regardless of element count).
           // Content snapshots capture the full before/after — no need for per-element entries.
-          this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+          this._undoRedoService.recordEdit(actualPath, contentBeforeActual, contentAfter);
         }
       }
       return result;
@@ -404,6 +426,59 @@ export class AstBridge {
       success: result.success,
       data: result.success ? { wrapperId: result.wrapperId } : undefined,
       error: result.error,
+    };
+  }
+
+  /**
+   * Handle writeI18nResource message.
+   * Writes a translated value for the given key in the active locale JSON file.
+   * If the key itself changes (previousKey provided), also updates the JSX child expression.
+   */
+  private async _handleWriteI18nResource(
+    message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
+  ): Promise<AstResponse> {
+    const writeResult = await writeI18nResource({
+      projectRoot: message.projectRoot,
+      library: message.library,
+      key: message.key,
+      namespace: message.namespace,
+      activeLocale: message.activeLocale,
+      newText: message.newText,
+      fileIO: this._fileIO,
+    });
+
+    if (!writeResult.success) {
+      return {
+        type: 'ast:response',
+        requestId: message.requestId,
+        success: false,
+        error: writeResult.error,
+      };
+    }
+
+    // When the key itself changes, update the JSX child expression so the AST
+    // reflects the new key (e.g. t("old.key") → t("new.key")).
+    const { filePath: i18nFilePath, elementId: i18nElementId } = message;
+    if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
+      const newExpression = `{t("${message.key}")}`;
+      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
+        this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
+      );
+      if (!updateResult.success) {
+        return {
+          type: 'ast:response',
+          requestId: message.requestId,
+          success: false,
+          error: updateResult.error,
+        };
+      }
+    }
+
+    return {
+      type: 'ast:response',
+      requestId: message.requestId,
+      success: true,
+      data: { filePath: writeResult.filePath },
     };
   }
 
