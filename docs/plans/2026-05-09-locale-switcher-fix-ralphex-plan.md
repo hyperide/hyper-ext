@@ -34,40 +34,40 @@ doesn't exist). To change locale we need to:
 
 ### Task 1: Read locale detection in StyleReadService + PanelRouter, understand full flow
 
-- [x] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `detectElementStyle` signature, `_tryDetectI18n`, how locale is used
-- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find `styles:read` handler, what message body fields it reads
-- [x] Read `client/lib/platform/hooks/useElementStyleData.ts` — find how it triggers re-read, what params it sends
-- [x] Read `client/components/RightSidebar/RightSidebar.tsx` — find `handleLocaleChange` (or absence), `styleRefreshKey`, state vars
-- [x] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — `onLocaleChange` prop shape, `localeEditable` condition, locale buttons rendering
-- [x] Document exact: IMPLEMENTATION ALREADY COMPLETE in commit 20fe6ed6 (2026-05-05). handleI18nLocaleChange at RightSidebar.tsx:736, i18nActiveLocale state at :216, activeLocale passed to useElementStyleData at :242, PanelRouter extracts activeLocale from styles:readClassName at :264, StyleReadService.readElementClassName accepts activeLocale at :85. E2E test exists at ext-test-projects/e2e/tests/project-dependent/bulka-i18n-locale-switch.spec.ts. No code changes needed in Tasks 3-5.
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `detectElementStyle` signature, `_tryDetectI18n`, how locale is used
+- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — find `styles:read` handler, what message body fields it reads
+- [ ] Read `client/hooks/useElementStyleData.ts` — find how it triggers re-read, what params it sends
+- [ ] Read `client/components/RightSidebar/RightSidebar.tsx` — find `handleLocaleChange` (or absence), `styleRefreshKey`, state vars
+- [ ] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — `onLocaleChange` prop shape, `localeEditable` condition, locale buttons rendering
+- [ ] Document exact: what changes are needed, where `activeLocale` must be threaded
 
 ### Task 2: RED — write failing E2E test: locale switch → text updates
 
-- [x] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-locale-switch.spec.ts` — test already exists at project-dependent/bulka-i18n-locale-switch.spec.ts (confirmed in Task 1); no duplicate needed
-- [x] Open bulka-the-dog project → select i18n element with locale buttons visible — covered by existing test (h1#hero-title selection with `canvas.waitForAnySelection`)
-- [x] Assert initial locale (e.g. 'en') text is shown in TEXT field — covered: dynamic initialLocale detection against HERO_TITLE_BY_LOCALE map
-- [x] Click 'IU' locale button → assert TEXT field updates to IU translation — covered: test cycles ru/rs/en locale buttons and asserts text matches dictionary value
-- [x] Click 'EN' back → assert TEXT field returns to EN translation — covered: final sanity cycle back to initialLocale
-- [x] Run test → confirm RED (locale switch does nothing currently) — skipped: implementation was already complete in commit 20fe6ed6 (discovered in Task 1); test goes GREEN directly
-- [x] Note: bulka-the-dog must have at least 2 locales in `locales/` directory; verify or add IU locale fixture if missing — bulka uses translations.ts (ru/rs/en) not a `locales/` dir; existing test already accounts for this
+- [ ] Create `../ext-test-projects/e2e/tests/project-independent/bulka-i18n-locale-switch.spec.ts`
+- [ ] Open bulka-the-dog project → select i18n element with locale buttons visible
+- [ ] Assert initial locale (e.g. 'en') text is shown in TEXT field
+- [ ] Click 'IU' locale button → assert TEXT field updates to IU translation
+- [ ] Click 'EN' back → assert TEXT field returns to EN translation
+- [ ] Run test → confirm RED (locale switch does nothing currently)
+- [ ] Note: bulka-the-dog must have at least 2 locales in `locales/` directory; verify or add IU locale fixture if missing
 
 ### Task 3: Add activeLocale state to RightSidebar, implement handleLocaleChange
 
-- [x] In `RightSidebar.tsx`: add `const [activeLocale, setActiveLocale] = useState<string | undefined>(undefined)` — already exists as `i18nActiveLocale` at :216 (commit 20fe6ed6)
-- [x] Implement `handleLocaleChange(locale: string)`: sets `activeLocale`, then calls `setStyleRefreshKey(k => k + 1)` (or equivalent re-read trigger) — `handleI18nLocaleChange` at :736, re-read triggered automatically via `activeLocale` in `useElementStyleData` deps
-- [x] Pass `onLocaleChange={handleLocaleChange}` to `I18nTextInspector` — `onLocaleChange={handleI18nLocaleChange}` at :1415
+- [ ] In `RightSidebar.tsx`: add `const [activeLocale, setActiveLocale] = useState<string | undefined>(undefined)`
+- [ ] Implement `handleLocaleChange(locale: string)`: sets `activeLocale`, then calls `setStyleRefreshKey(k => k + 1)` (or equivalent re-read trigger)
+- [ ] Pass `onLocaleChange={handleLocaleChange}` to `I18nTextInspector`
 
 ### Task 4: Thread activeLocale through useElementStyleData → PanelRouter message
 
-- [x] In `useElementStyleData.ts` (or wherever `styles:read` is sent): add `activeLocale` to the message body when set — already done: activeLocale sent in styles:readClassName at useElementStyleData.ts:455 (commit 20fe6ed6)
-- [x] In `PanelRouter.ts` `styles:read` handler: extract `activeLocale` from message body — already done: extracted at PanelRouter.ts:264 in styles:readClassName handler (commit 20fe6ed6)
-- [x] Pass `activeLocale` to `StyleReadService.detectElementStyle(...)` call — already done: passed as 4th arg to readElementClassName at PanelRouter.ts:279 (commit 20fe6ed6)
+- [ ] In `useElementStyleData.ts` (or wherever `styles:read` is sent): add `activeLocale` to the message body when set
+- [ ] In `PanelRouter.ts` `styles:read` handler: extract `activeLocale` from message body
+- [ ] Pass `activeLocale` to `StyleReadService.detectElementStyle(...)` call
 
 ### Task 5: Thread activeLocale into StyleReadService._tryDetectI18n
 
-- [x] In `StyleReadService.ts`: update `detectElementStyle` signature to accept optional `activeLocale: string` — already done: `readElementClassName` accepts `activeLocale?: string` at :85 (commit 20fe6ed6)
-- [x] In `_tryDetectI18n` (or wherever locale is resolved): use `activeLocale` if provided, otherwise default to `'en'` or project default — already done: `_tryDetectI18n` accepts `activeLocale?: string` at :252; uses `const requestedLocale = activeLocale ?? 'en'` at :357 (custom) and `activeLocale ?? DEFAULT_LOCALE` at :433 (non-custom)
-- [x] Ensure translated text returned matches the requested locale — already done: `requestedLocale` is passed to `resolveI18nResource` as `activeLocale` in both code paths
+- [ ] In `StyleReadService.ts`: update `detectElementStyle` signature to accept optional `activeLocale: string`
+- [ ] In `_tryDetectI18n` (or wherever locale is resolved): use `activeLocale` if provided, otherwise default to `'en'` or project default
+- [ ] Ensure translated text returned matches the requested locale
 
 ### Task 6: Build + install ext, run E2E → GREEN
 
