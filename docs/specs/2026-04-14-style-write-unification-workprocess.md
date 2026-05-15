@@ -5128,3 +5128,41 @@ E2E throughput retrospective, 2026-04-22 20:03 CEST:
   * Record exact command, start time, progress checkpoints, first failure, and
     stop reason. No silent restarts.
 ```
+
+Full E2E stop and revised execution rule, 2026-04-22 20:18 CEST:
+
+```text
+- Run:
+  * Started: 2026-04-22 19:40 CEST.
+  * Command:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --retries=0 --workers=1 --reporter=line`
+  * Log: `/tmp/hyper-e2e-full-20260422-194043.log`.
+- Result:
+  * `447 passed`, `1 failed`, `1 interrupted`, `9 skipped`,
+    `1751 did not run`.
+  * First real failure:
+    `tests/project-independent/inspector-ui.spec.ts:546`
+    `Inspector UI > Numeric Inputs > enter commits the typed value @inspector`.
+  * Assertion:
+    expected opacity `42`, received `0` after `inspector.setOpacity('42')`.
+  * Artifacts include:
+    `test-results/inspector-ui-Inspector-UI--2f53c-move-restores-initial-state-independent/attachments/`
+    `diagnostics-001-2026-04-22T18-15-04-611Z-test-end-failure-window-png-22fabb791b06ec1f9073540109a89a5f3ea05920.png`.
+- Root process mistake:
+  * I kept restarting a large full-suite run while fixing harness issues. That
+    made each new environmental failure throw away previous runtime and masked
+    the fact that the next actionable item was a focused inspector repro.
+  * I also mixed bridge-bot infrastructure work with E2E execution. That made
+    status messages active but did not advance the extension verification
+    critical path.
+- Mandatory rule from this point:
+  * Full E2E is only a final verification pass.
+  * Debugging starts from a focused command for the first failing test or a
+    small smoke shard.
+  * Before another full run, the focused inspector repro must either pass or
+    have a documented product/test bug with a dedicated commit.
+  * Any future full-suite stop must be recorded here immediately with command,
+    count, first failure, artifacts, resource state, and the next focused
+    command. No silent restart.
+```
