@@ -280,8 +280,11 @@ export class DevServerManager {
         this._updateStatus('error', error.message);
       });
 
-      // Wait for server to be ready (with timeout)
-      await this._waitForReady(30000);
+      // Wait for server to be ready (with timeout).
+      // 90s: Remix/Next.js cold compile on a loaded Docker shard can take 60s+
+      // before the port becomes accessible. 30s was too tight and caused
+      // spurious "Server startup timeout" failures in CI.
+      await this._waitForReady(90_000);
 
       return this.getState();
     } catch (error) {
