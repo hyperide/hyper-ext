@@ -172,13 +172,11 @@ export function useElementSelection(
           // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
-        console.debug('[tree-scroll] leg1 tree click → dispatch', { uuid: elementId, dispatchId });
         dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
         canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
-        // Also dispatch a local CustomEvent. NOTE: This stays in the LeftPanel webview's
-        // window — VS Code webviews are isolated iframes so DOM events do not cross to
-        // the PreviewPanel webview. Kept only for SaaS / single-window environments where
-        // ElementsTree and the canvas iframe share a window.
+        // Also notify preview panel locally to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — complements the bus event
+        // for environments where the extension-host round-trip echo is not enough.
         window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },

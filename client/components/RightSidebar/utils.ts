@@ -106,3 +106,62 @@ export function findNodeById(nodes: ASTNode[], id: string): ASTNode | null {
 export function generateItemId(): string {
   return Math.random().toString(36).substring(2, 9);
 }
+
+/**
+ * Pure helper for numeric inspector inputs that respond to ArrowUp/ArrowDown.
+ * Parses the current display value (e.g. '2px', '50%', '0.5rem'), increments
+ * or decrements by step (1, or 10 when shift/alt held), and re-formats with
+ * the same unit. Returns null if the key is not Arrow{Up,Down}.
+ *
+ * NOTE: This is a behaviour-preserving extraction of the original closure
+ * inside RightSidebar.tsx (`handleNumericKeyDown`). It DOES NOT clamp at 0
+ * for length properties — that fix lands in a follow-up task. It only
+ * clamps `opacity` to [0, 100], matching the original.
+ */
+export interface ComputeNumericArrowValueOptions {
+  key: string;
+  currentValue: string;
+  styleKey?: string;
+  defaultValue?: string;
+  shiftKey?: boolean;
+  altKey?: boolean;
+}
+
+export function computeNumericArrowValue(opts: ComputeNumericArrowValueOptions): string | null {
+  const { key, currentValue, styleKey, defaultValue, shiftKey, altKey } = opts;
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') {
+    return null;
+  }
+
+  const isUnitless =
+    styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
+  const trimmed = currentValue.replace(' Auto', '').trim();
+  const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+
+  const increment = key === 'ArrowUp' ? 1 : -1;
+  const step = shiftKey || altKey ? 10 : 1;
+
+  if (!match) {
+    const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+    const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
+    const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
+
+    let newNum = baseNum + increment * step;
+    if (styleKey === 'opacity') {
+      newNum = Math.max(0, Math.min(100, newNum));
+    }
+
+    const unit = isUnitless ? '' : baseUnit || 'px';
+    return `${newNum}${unit}`;
+  }
+
+  const num = Number.parseFloat(match[1]);
+  const unit = match[2] || (isUnitless ? '' : 'px');
+
+  let newNum = num + increment * step;
+  if (styleKey === 'opacity') {
+    newNum = Math.max(0, Math.min(100, newNum));
+  }
+
+  return `${newNum}${unit}`;
+}

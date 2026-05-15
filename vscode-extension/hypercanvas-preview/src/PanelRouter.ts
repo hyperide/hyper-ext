@@ -97,12 +97,8 @@ export class PanelRouter {
       return true;
     }
 
-    // Canvas scroll — echo back to the sending panel so usePreviewBridge can forward to iframe.
-    // BUG (Task 1 finding, 2026-05-06): this only echoes to the sender. When sender is the
-    // LeftPanel webview (Elements Tree click), the message never reaches the PreviewPanel
-    // webview where the iframe lives. Fix lands in Task 2 (broadcast through StateHub panels).
+    // Canvas scroll — echo back to the sending panel so usePreviewBridge can forward to iframe
     if (type === 'iframe:scrollToElement') {
-      console.debug('[tree-scroll] leg-router iframe:scrollToElement received (echo-only — see Task 2)');
       webview.postMessage(message);
       return true;
     }
