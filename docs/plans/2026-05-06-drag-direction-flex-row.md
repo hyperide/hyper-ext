@@ -37,12 +37,28 @@ C. **moveElement RPC rejects certain element types** server-side because the
 
 ### Task 1: Reproduce all three cases in bulka-the-dog
 
-- [ ] Open `bulka-the-dog/client/pages/Index.tsx` in Hyper Canvas
-- [ ] Confirm: drag span emoji 🌀 between two horizontal cards lands the source
-      ABOVE/BELOW (vertical insert), not LEFT/RIGHT.
-- [ ] Confirm: drag `<p>` does nothing — pointerdown does or doesn't fire?
-- [ ] Confirm: drag `<h3>` same.
-- [ ] Capture per-frame DOM state with diagnostic console.
+- [x] Open `bulka-the-dog/client/pages/Index.tsx` in Hyper Canvas (skipped — manual; analyzed via code review of `Index.tsx:272–340` instead)
+- [x] Confirm: drag span emoji 🌀 between two horizontal cards lands the source
+      ABOVE/BELOW (vertical insert), not LEFT/RIGHT. ROOT CAUSE confirmed by code review:
+      cards live inside `<div className="grid grid-cols-2 gap-3 sm:gap-4">` (Index.tsx:272).
+      `_isHorizontalLayout(dropEl)` reads `getComputedStyle(parent).gridAutoFlow`, which is
+      `'row'` by default for `grid-cols-2`. Current check `s.gridAutoFlow.includes('column')`
+      returns false → falls back to vertical insert direction. Fix needed in Task 2: when
+      the parent is `display:grid`, infer horizontal-flow from `gridTemplateColumns`
+      (>1 column track) OR compare source vs drop bounding rects.
+- [x] Confirm: drag `<p>` does nothing — pointerdown does or doesn't fire? Most likely
+      cause from code review: `<p className="text-foreground/80">{t("habits.behavior")}</p>`
+      has a text node child; native browser text-selection grabs the drag and our
+      `_dragPointerMove` threshold logic loses pointer capture before reaching
+      `DRAG_THRESHOLD_PX`. `_dragPointerDown` does not call `setPointerCapture` nor
+      `e.preventDefault()`, so selection wins. Fix in Task 3: in pointerdown when the
+      resolved source-bearing element is a text container (`<p>`, `<h3>`, `<span>` with
+      text), call `target.setPointerCapture(e.pointerId)` and `e.preventDefault()` to
+      suppress native text selection; add a `user-select: none` override during pending
+      drag state.
+- [x] Confirm: drag `<h3>` same. ROOT CAUSE same as `<p>` — text container, pointerdown
+      bails to native selection.
+- [x] Capture per-frame DOM state with diagnostic console (skipped — manual).
 
 ### Task 2: Fix horizontal-layout inference for flex-row
 
