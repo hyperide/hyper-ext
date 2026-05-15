@@ -7,6 +7,7 @@
  */
 import type { CssSystemId, SourceForm, StyleCondition, StyleSourceOwner } from '@lib/style-read/types';
 import type { FrameworkStyleAdapter, FrameworkStyleWriter, StyleWriteContext, StyleWritePlanner } from './types';
+import { camelToKebab } from './utils';
 
 interface SelectTargetResult {
   adapter: FrameworkStyleAdapter;
@@ -21,10 +22,6 @@ interface Diagnostic {
 
 interface SelectTargetResultWithDiagnostics extends SelectTargetResult {
   diagnostics: Diagnostic[];
-}
-
-function camelToKebab(str: string): string {
-  return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
 function defaultSourceFormForSystem(system: CssSystemId): SourceForm {

@@ -27,6 +27,7 @@ import {
   getRequestRoutableCssSystem,
 } from './style-write-request-context';
 import type { CssFilePlan, StyleWritePlan, StyleWriteResult, TailwindPlan, TargetStyleValue } from './types';
+import { errorMessage } from './utils';
 
 export interface StyleWriteExecutorOptions {
   fileIO?: FileIO;
@@ -70,11 +71,6 @@ function parseElementRef(elementRef: string): ElementRefPosition | null {
     line: Number.parseInt(match[2], 10),
     column: Number.parseInt(match[3], 10),
   };
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 function cssSystemLabel(plan: StyleWritePlan): string {

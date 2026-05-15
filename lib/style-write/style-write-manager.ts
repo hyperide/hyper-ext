@@ -12,6 +12,7 @@ import type {
   StyleWritePlanner,
   StyleWriteResult,
 } from './types';
+import { errorMessage } from './utils';
 
 export interface StyleWritePlanExecutor {
   execute(plan: StyleWritePlan): Promise<StyleWriteResult>;
@@ -20,11 +21,6 @@ export interface StyleWritePlanExecutor {
 export interface DefaultStyleWriteManagerOptions {
   planner: StyleWritePlanner;
   executor: StyleWritePlanExecutor;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }
 
 export class DefaultStyleWriteManager implements StyleWriteManager {

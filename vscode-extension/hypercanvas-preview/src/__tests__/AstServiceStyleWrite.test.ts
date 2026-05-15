@@ -6,56 +6,9 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 import { describe, expect, it } from 'bun:test';
-import type { FileIO } from '@lib/ast/file-io';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
+import { InMemoryFileIO } from '@lib/style-write/testing/in-memory-file-io';
 import { AstService } from '../services/AstService';
-
-class InMemoryFileIO implements FileIO {
-  private readonly files = new Map<string, string>();
-
-  constructor(files: Record<string, string>) {
-    for (const [filePath, content] of Object.entries(files)) {
-      this.files.set(filePath, content);
-    }
-  }
-
-  async readFile(absolutePath: string): Promise<string> {
-    const content = this.files.get(absolutePath);
-    if (content === undefined) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    return content;
-  }
-
-  async writeFile(absolutePath: string, content: string): Promise<void> {
-    if (!this.files.has(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    this.files.set(absolutePath, content);
-  }
-
-  async access(absolutePath: string): Promise<void> {
-    if (!this.files.has(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-  }
-
-  async listFiles(dirPath: string, extensions: string[] = []): Promise<string[]> {
-    return [...this.files.keys()].filter((filePath) => {
-      if (!filePath.startsWith(dirPath)) return false;
-      if (extensions.length === 0) return true;
-      return extensions.some((extension) => filePath.endsWith(extension));
-    });
-  }
-
-  content(absolutePath: string): string {
-    const content = this.files.get(absolutePath);
-    if (content === undefined) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    return content;
-  }
-}
 
 function syntheticRefFor(source: string, relativePath: string): string {
   const helper = new NodeMapService();

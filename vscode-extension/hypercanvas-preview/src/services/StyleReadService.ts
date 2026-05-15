@@ -27,6 +27,7 @@ import type {
   StyleReadManager,
 } from '@lib/style-read/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import { resolveWorkspacePath } from './workspace-path';
 
 export interface ElementStyleReadResult {
   className: string;
@@ -62,16 +63,6 @@ export class StyleReadService {
   }
 
   /**
-   * Resolve file path to absolute path
-   */
-  private _resolvePath(filePath: string): string {
-    if (filePath.startsWith('/')) {
-      return filePath;
-    }
-    return `${this._workspaceRoot}/${filePath}`;
-  }
-
-  /**
    * Read className and metadata from an element in the AST.
    * Uses nodeRef (preferred) to resolve element by position.
    */
@@ -80,7 +71,7 @@ export class StyleReadService {
     componentPath: string,
     nodeRef?: NodeRef,
   ): Promise<ElementStyleReadResult> {
-    const absolutePath = this._resolvePath(componentPath);
+    const absolutePath = resolveWorkspacePath(this._workspaceRoot, componentPath);
     const empty: ElementStyleReadResult = {
       className: '',
       childrenType: undefined,
@@ -106,7 +97,7 @@ export class StyleReadService {
         if (m) {
           directLine = Number.parseInt(m[2], 10);
           directColumn = Number.parseInt(m[3], 10);
-          directPath = this._resolvePath(m[1]);
+          directPath = resolveWorkspacePath(this._workspaceRoot, m[1]);
           entry = this._nodeMapService.resolveSourceLocation({
             fileName: m[1],
             line: directLine,

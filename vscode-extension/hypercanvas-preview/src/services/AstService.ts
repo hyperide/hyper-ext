@@ -26,6 +26,7 @@ import { NodeMapService } from '@lib/element-tracing/node-map-service';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import type { FindElementResult } from '@lib/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import { resolveWorkspacePath } from './workspace-path';
 
 // ============================================
 // Response Types
@@ -168,13 +169,6 @@ export class AstService {
     return this._nodeMapService;
   }
 
-  private _resolvePath(filePath: string): string {
-    if (filePath.startsWith('/')) {
-      return filePath;
-    }
-    return `${this._workspaceRoot}/${filePath}`;
-  }
-
   /** Parse file and update node map (called after every AST write operation). */
   private async _updateNodeMap(filePath: string): Promise<void> {
     try {
@@ -251,7 +245,7 @@ export class AstService {
   ): Promise<UpdateStylesResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
@@ -297,7 +291,7 @@ export class AstService {
   ): Promise<AstOperationResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
@@ -325,7 +319,7 @@ export class AstService {
   async updateText(filePath: string, elementId: string, text: string, nodeRef?: NodeRef): Promise<AstOperationResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
@@ -362,7 +356,7 @@ export class AstService {
   ): Promise<InsertElementResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const { element: newElement } = buildJSXElement({
@@ -411,7 +405,7 @@ export class AstService {
   async deleteElements(filePath: string, elementIds: string[], nodeRefs?: NodeRef[]): Promise<AstOperationResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       let deletedCount = 0;
 
       // Prefer nodeRefs if provided, fall back to elementIds
@@ -460,7 +454,7 @@ export class AstService {
   async duplicateElement(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<DuplicateElementResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
@@ -493,7 +487,7 @@ export class AstService {
   ): Promise<WrapElementResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
@@ -526,7 +520,7 @@ export class AstService {
     column: number,
   ): Promise<{ tagName: string; nodeRef?: NodeRef } | null> {
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
       const result = findElementAtPosition(ast, line, column);
       if (!result) return null;
@@ -577,7 +571,7 @@ export class AstService {
   /** Get element's TSX source code (for Copy operation). */
   async getElementCode(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<string | null> {
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const sourceCode = await this._fileParser.readFileContent(absolutePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
@@ -690,7 +684,7 @@ export class AstService {
     targetNodeRef?: NodeRef,
   ): Promise<InsertElementResult> {
     try {
-      const absolutePath = this._resolvePath(filePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
       const { elements: newElements } = parseTSXElements(tsxCode);

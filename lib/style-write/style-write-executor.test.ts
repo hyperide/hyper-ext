@@ -10,6 +10,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { createFileParser } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { executeStyleWriteRequest, StyleWriteExecutor } from './style-write-executor';
+import { InMemoryFileIO } from './testing/in-memory-file-io';
 import type {
   CssModulesFilePlan,
   PlainCssCreateRulePlan,
@@ -17,45 +18,6 @@ import type {
   ScriptObjectStylePlan,
   TailwindPlan,
 } from './types';
-
-class InMemoryFileIO implements FileIO {
-  private readonly files = new Map<string, string>();
-
-  constructor(files: Record<string, string>) {
-    for (const [filePath, content] of Object.entries(files)) {
-      this.files.set(filePath, content);
-    }
-  }
-
-  async readFile(absolutePath: string): Promise<string> {
-    const content = this.files.get(absolutePath);
-    if (content === undefined) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    return content;
-  }
-
-  async writeFile(absolutePath: string, content: string): Promise<void> {
-    if (!this.files.has(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    this.files.set(absolutePath, content);
-  }
-
-  async access(absolutePath: string): Promise<void> {
-    if (!this.files.has(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-  }
-
-  content(absolutePath: string): string {
-    const content = this.files.get(absolutePath);
-    if (content === undefined) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    return content;
-  }
-}
 
 async function parseElement(fileIO: FileIO, filePath: string, line: number, column: number) {
   const parser = createFileParser(fileIO);

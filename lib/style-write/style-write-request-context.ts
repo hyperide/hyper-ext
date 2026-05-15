@@ -17,6 +17,7 @@ import type {
   StyleSourceOwner,
 } from '@lib/style-read/types';
 import type { StyleWriteContext } from './types';
+import { camelToKebab } from './utils';
 
 const REQUEST_ROUTABLE_SYSTEMS = new Set<CssSystemId>(['tailwind-v4', 'css-modules', 'inline-style']);
 const PSEUDO_STATES = new Set<StylePseudoState>(['base', 'hover', 'focus', 'active', 'focus-visible', 'disabled']);
@@ -46,10 +47,6 @@ export interface CssModuleSourceOwnersInput {
   elementRef: string;
   styles: Record<string, string>;
   state?: string;
-}
-
-function camelToKebab(str: string): string {
-  return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
 function sourceFormForSystem(system: CssSystemId): SourceForm {
