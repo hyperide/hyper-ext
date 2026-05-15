@@ -3306,3 +3306,14 @@ Pace: ~4.2 tests/min → ETA ~21:30 CEST.
 These are product fixes only; Run #20 containers run unaffected extension code (bound from source dir).
 
 ### No action needed until first failure appears or run completes.
+
+## 📍 Run #20 Checkpoint 2 (2026-04-28 ~15:16 CEST, ~1h24m)
+
+| Shard | Total | Pass | Fail | Skip | Done% |
+|-------|-------|------|------|------|-------|
+| s1    | 2189  | 459  | 0    | 16   | 21.7% |
+
+**0 failures.** Pace increased to ~7 tests/min (inspector/keyboard tests are 5–8s each vs 15–25s for drag tests). ETA ~19:00 CEST.
+
+Current position: PI inspector keyboard/width/arrow-key tests.
+All project-independent suites progressing cleanly through: canvas-bugs, ai-chat, elements-tree, explorer, SCM, resize, spacing, drag, inspector.
