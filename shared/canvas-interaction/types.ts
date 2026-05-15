@@ -28,15 +28,13 @@ export interface OverlayRendererOptions {
 
 export interface OverlayRect {
   key: string;
-  /** nodeRef (fileName:line:col) used for AST mutation — only set on selection rects */
-  elementId?: string;
   left: number;
   top: number;
   width: number;
   height: number;
   type: 'selection' | 'hover';
   /** Present when the selected element has an explicit Tailwind/CSS size on that axis */
-  resizable?: { width: boolean; height: boolean; hasSizeClass?: boolean };
+  resizable?: { width: boolean; height: boolean };
 }
 
 export interface PlaceholderRect {

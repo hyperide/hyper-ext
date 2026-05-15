@@ -12,7 +12,6 @@ import {
   renderOverlayRects,
   renderPlaceholderOverlays,
 } from '@shared/canvas-interaction/overlay-renderer';
-import { computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter } from '@/lib/platform/types';
@@ -330,135 +329,9 @@ export function useCanvasInteraction(
 
     window.addEventListener('message', handleMessage);
 
-    // Resize drag — intercept pointerdown on handle dots inside the overlay container.
-    // Handle dots have pointer-events:auto; events bubble through the container's
-    // pointer-events:none to this listener.
-
-    // Track doc-level fallback listener so effect cleanup can remove it if effect tears down mid-drag.
-    let activeDocPointerUp: ((e: PointerEvent) => void) | null = null;
-
-    function handleResizePointerDown(event: PointerEvent) {
-      if (event.button !== 0) return;
-      const handle = (event.target as HTMLElement).closest?.('[data-resize-handle]') as HTMLElement | null;
-      if (!handle) return;
-
-      const overlayDiv = handle.closest('[data-selection-overlay]') as HTMLDivElement | null;
-      if (!overlayDiv) return;
-
-      const elementId = overlayDiv.dataset.elementId;
-      if (!elementId) return;
-
-      // TypeScript does not narrow const variables in closures — explicit typed aliases needed.
-      const capturedHandle: HTMLElement = handle;
-      const capturedElementId: string = elementId;
-      const capturedOverlayDiv: HTMLDivElement = overlayDiv;
-
-      const axis = capturedHandle.getAttribute('data-resize-handle') as 'width' | 'height';
-      const baseW = parseFloat(overlayDiv.style.width) || 0;
-      const baseH = parseFloat(overlayDiv.style.height) || 0;
-      const startX = event.clientX;
-      const startY = event.clientY;
-
-      try {
-        capturedHandle.setPointerCapture(event.pointerId);
-      } catch {
-        // setPointerCapture may fail in test environments with synthetic events
-      }
-      event.stopPropagation();
-
-      const dragPointerId = event.pointerId;
-      let dragFinished = false;
-
-      function finishDrag(endX: number, endY: number) {
-        if (dragFinished) return;
-        dragFinished = true;
-
-        capturedHandle.removeEventListener('pointermove', onPointerMove);
-        capturedHandle.removeEventListener('pointerup', onPointerUp);
-        capturedHandle.removeEventListener('pointercancel', onPointerCancel);
-        document.removeEventListener('pointerup', onDocPointerUp);
-        activeDocPointerUp = null;
-
-        const dX = endX - startX;
-        const dY = endY - startY;
-        const styles = computeResizeStyles(axis, baseW, baseH, dX, dY);
-        if (!styles) return;
-
-        // size-* sets both axes — stripping it for one axis loses the other.
-        // Preserve the perpendicular dimension explicitly when hasSizeClass is set.
-        if (capturedOverlayDiv.dataset.hasSizeClass === 'true') {
-          if (axis === 'width') styles.height = `${Math.round(baseH)}px`;
-          else styles.width = `${Math.round(baseW)}px`;
-        }
-
-        const filePathMatch = capturedElementId.match(/^(.+):\d+:\d+$/);
-        if (!filePathMatch) return;
-
-        canvas.sendEvent({
-          type: 'ast:updateStyles',
-          requestId: `resize-${Date.now()}`,
-          filePath: filePathMatch[1],
-          elementId: capturedElementId,
-          styles,
-        });
-      }
-
-      function onPointerUp(e: PointerEvent) {
-        finishDrag(e.clientX, e.clientY);
-      }
-
-      // Fallback: catch pointerup on document in case pointer capture fails or
-      // the pointer lands outside the handle element (common in test environments).
-      function onDocPointerUp(e: PointerEvent) {
-        if (e.pointerId !== dragPointerId) return;
-        finishDrag(e.clientX, e.clientY);
-      }
-
-      // Cancel drag on OS gesture interruption without writing to source.
-      function onPointerCancel() {
-        if (dragFinished) return;
-        dragFinished = true;
-        capturedHandle.removeEventListener('pointermove', onPointerMove);
-        capturedHandle.removeEventListener('pointerup', onPointerUp);
-        capturedHandle.removeEventListener('pointercancel', onPointerCancel);
-        document.removeEventListener('pointerup', onDocPointerUp);
-        activeDocPointerUp = null;
-      }
-
-      // pointermove listener kept for cross-browser compatibility with older WebKit builds
-      function onPointerMove(_e: PointerEvent) {}
-
-      activeDocPointerUp = onDocPointerUp;
-      capturedHandle.addEventListener('pointermove', onPointerMove);
-      capturedHandle.addEventListener('pointerup', onPointerUp);
-      capturedHandle.addEventListener('pointercancel', onPointerCancel);
-      document.addEventListener('pointerup', onDocPointerUp);
-    }
-
-    container.addEventListener('pointerdown', handleResizePointerDown);
-
-    // Forward right-click on resize handles to the design context menu.
-    // Handles have pointer-events:auto so the contextmenu event fires here
-    // instead of reaching the iframe; we must re-surface it ourselves.
-    function handleResizeContextMenu(event: MouseEvent) {
-      const handle = (event.target as HTMLElement).closest?.('[data-resize-handle]') as HTMLElement | null;
-      if (!handle) return;
-      const overlayDiv = handle.closest('[data-selection-overlay]') as HTMLDivElement | null;
-      if (!overlayDiv) return;
-      const elementId = overlayDiv.dataset.elementId;
-      if (!elementId) return;
-      event.preventDefault();
-      setContextMenu({ elementId, itemIndex: null, x: event.clientX, y: event.clientY });
-    }
-
-    container.addEventListener('contextmenu', handleResizeContextMenu);
-
     return () => {
       window.removeEventListener('message', handleMessage);
       frame.removeEventListener('load', handleIframeLoad);
-      container.removeEventListener('pointerdown', handleResizePointerDown);
-      container.removeEventListener('contextmenu', handleResizeContextMenu);
-      if (activeDocPointerUp) document.removeEventListener('pointerup', activeDocPointerUp);
       clearOverlays(overlayElements.current);
       clearOverlays(placeholderElements.current);
     };
