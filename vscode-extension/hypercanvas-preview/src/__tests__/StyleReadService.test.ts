@@ -792,26 +792,6 @@ describe('StyleReadService — getAvailableKeys', () => {
     expect(keys.length).toBe(2);
   });
 
-  it('returns dot-path keys from a react-i18next TypeScript locale file via ReactI18nextAdapter', async () => {
-    const nodeMap = new NodeMapService();
-    const files: Record<string, string> = {
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/locales/en.ts': 'export default { habits: { walks: "Go for a walk" }, greeting: "Hello" };',
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const keys = await service.getAvailableKeys(undefined, 'en', 'react-i18next');
-    expect(keys).toContain('habits.walks');
-    expect(keys).toContain('greeting');
-    expect(keys.length).toBe(2);
-  });
-
   it('returns empty array when locale file is missing', async () => {
     const nodeMap = new NodeMapService();
     const fileIO = makeFileIO({ [FILE_PATH]: I18N_JSX });

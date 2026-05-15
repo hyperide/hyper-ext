@@ -9,7 +9,7 @@
  * - Cold source maps → _debugSource fallback (the bug this file fixes)
  * - No source anywhere → null (drag blocked)
  * - Multi-select badge: state.selectedIds.length exposed for badge rendering
- * - Nested wrapper: aria-hidden child walks up to nearest source ancestor; non-decorative inner elements stay at their level
+ * - Nested wrapper: drag inner-div resolves to outer card (sibling-level walk-up)
  */
 
 import { describe, expect, it, mock } from 'bun:test';
@@ -213,17 +213,19 @@ describe('resolveDragSource', () => {
   });
 
   /**
-   * B1/B4 BUG: Clicking an emoji span (aria-hidden) inside a card was resolving
-   * to the span itself (when source maps were warm) instead of the parent card.
+   * B1/B4 BUG: Clicking an emoji span or inner-div inside a card resolves to
+   * the inner-div instead of the outer card. Even though AstService.moveElement
+   * now handles cross-parent moves, the resolver should still prefer the visual
+   * card the user perceives — dropping an inner-div confuses the user.
    *
    * DOM structure (bulka-the-dog Index.tsx):
    *   grid > outer-card > [emoji-span(aria-hidden), inner-div > text-div]
    *          other-card  (sibling of outer-card)
    *
-   * Fix: aria-hidden elements are unconditionally skipped in step 1; step 2's
-   * plain ancestor walk then finds the nearest ancestor with a source (outer-card).
-   * Non-decorative elements that have their own source are NOT walked up — the user
-   * dragging an inner-div expects that div to move, not its outer card.
+   * Fix: after resolving initial candidate (inner-div), walk further up until
+   * finding an element with at least one source-bearing sibling. That is outer-card
+   * (whose sibling other-card has a source), not inner-div (whose only sibling is
+   * aria-hidden emoji-span with no source).
    */
   describe('decorative-only walk-up (no over-walking)', () => {
     // Build the DOM tree:
@@ -255,6 +257,7 @@ describe('resolveDragSource', () => {
 
       // grid and document.body sentinel
       const body = makeEl({ tagName: 'BODY' });
+      linkChildren(grid, [outerCard, otherCard]);
       (grid as unknown as Record<string, unknown>).parentElement = body;
       (body as unknown as Record<string, unknown>).parentElement = null;
 

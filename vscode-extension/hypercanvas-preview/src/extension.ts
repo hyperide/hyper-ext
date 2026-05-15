@@ -13,7 +13,9 @@
  */
 
 import { execFile } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   ensureSample,
@@ -31,7 +33,7 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
-import { isForeignExtensionError } from './extension-utils';
+import { isForeignExtensionError, serializeRejectionReason } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -67,6 +69,7 @@ let rightPanelProvider: RightPanelProvider | null = null;
 let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
+let diagnosticsChannel: vscode.OutputChannel | null = null;
 
 /**
  * Detect project-specific providers needed by preview components.
@@ -335,24 +338,119 @@ export function activate(context: vscode.ExtensionContext) {
   // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
   void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
 
-  // Catch unhandled rejections inside the extension host process so they
-  // don't bubble up as VS Code ".error" notification toasts containing
-  // "Unhandled rejection ...". A specific known source was already fixed
-  // (extension.ts:537 showTextDocument chain, extension.ts:778 autoStart
-  // .then without .catch); this is a safety net for anything we missed
-  // and for VS Code core / library promises that escape in a hot path.
-  // Logged so real issues are still discoverable in the Output channel.
-  // Foreign extension rejections are filtered out — they must not be
-  // logged as [HyperIDE] when the stack points to another extension dir.
-  const unhandledHandler = (reason: unknown) => {
-    if (!isForeignExtensionError(reason)) {
-      console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+  // Catch unhandled rejections and uncaught exceptions inside the extension
+  // host process. Extension host is shared across all installed extensions, so
+  // foreign-extension errors are filtered out via isForeignExtensionError.
+  // Events are written to the 'HyperIDE Diagnostics' output channel (always)
+  // and optionally to HYPERIDE_DIAGNOSTIC_ERROR_SINK (a file path) so E2E
+  // harnesses and debug sessions can tail the structured log.
+  diagnosticsChannel = vscode.window.createOutputChannel('HyperIDE Diagnostics');
+  context.subscriptions.push(diagnosticsChannel);
+  const ch = diagnosticsChannel;
+
+  const logProcessError = (kind: 'unhandledRejection' | 'uncaughtException', reason: unknown) => {
+    if (isForeignExtensionError(reason)) return;
+    const serialized = serializeRejectionReason(reason);
+    const label = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason);
+    ch.appendLine(`[HyperIDE] ${kind}: ${label}`);
+    if (reason instanceof Error && reason.stack) {
+      ch.appendLine(reason.stack);
+    }
+    // Also emit to console so Playwright window.on('console') can detect rejections in E2E tests.
+    if (kind === 'unhandledRejection') {
+      console.error('[HyperIDE] Unhandled rejection in extension host:', label);
+    }
+    const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+    if (sinkPath) {
+      try {
+        appendFileSync(sinkPath, `${JSON.stringify({ ts: Date.now(), kind, reason: serialized })}\n`);
+      } catch {
+        // best effort — never crash extension host on logging failure
+      }
     }
   };
+
+  const unhandledHandler = (reason: unknown) => logProcessError('unhandledRejection', reason);
+  // Re-throw after logging to preserve Node.js crash semantics — a registered
+  // uncaughtException listener suppresses the default crash, which would leave
+  // the extension host running in a potentially corrupt state.
+  const uncaughtHandler = (error: unknown) => {
+    logProcessError('uncaughtException', error);
+    // Only re-throw for HyperIDE's own errors — foreign extension errors must not
+    // be escalated by our handler, since doing so would crash the shared extension host.
+    if (!isForeignExtensionError(error)) throw error;
+  };
   process.on('unhandledRejection', unhandledHandler);
+  process.on('uncaughtException', uncaughtHandler);
   context.subscriptions.push({
-    dispose: () => process.off('unhandledRejection', unhandledHandler),
+    dispose: () => {
+      process.off('unhandledRejection', unhandledHandler);
+      process.off('uncaughtException', uncaughtHandler);
+    },
   });
+
+  // Diagnostic capture commands — registered before workspace guard so they work
+  // even when no folder is open (the process error handlers above are also pre-guard).
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.startDiagnosticCapture', async () => {
+      const defaultPath = join(homedir(), `.hyperide-diagnostics-${Date.now()}.log`);
+      const filePath = await vscode.window.showInputBox({
+        prompt: 'Path for diagnostic capture output (NDJSON)',
+        value: defaultPath,
+        validateInput: (v: string) => (v.trim().length === 0 ? 'Path cannot be empty' : undefined),
+      });
+      if (!filePath) return;
+      process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = filePath.trim();
+      void vscode.window.showInformationMessage(
+        "Diagnostic capture active. Reproduce the bug, then run 'Stop Diagnostic Capture' to finish.",
+      );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.stopDiagnosticCapture', async () => {
+      const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+      if (!sinkPath) {
+        void vscode.window.showWarningMessage('No active diagnostic capture session.');
+        return;
+      }
+      // Stop capture immediately; events after this point are intentionally excluded.
+      delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+
+      let rejections = 0;
+      let exceptions = 0;
+      let fileExists = false;
+      try {
+        const content = await readFile(sinkPath, 'utf8');
+        fileExists = true;
+        for (const line of content.split('\n')) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line) as { kind?: string };
+            if (entry.kind === 'unhandledRejection') rejections++;
+            else if (entry.kind === 'uncaughtException') exceptions++;
+          } catch {
+            // skip malformed lines
+          }
+        }
+      } catch {
+        // file may not exist if no errors occurred
+      }
+
+      void vscode.window.showInformationMessage(
+        `Diagnostic capture stopped. Rejections: ${rejections}, exceptions: ${exceptions}.`,
+      );
+
+      if (fileExists) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(sinkPath);
+          await vscode.window.showTextDocument(doc, { preview: true });
+        } catch {
+          // ignore if file cannot be opened
+        }
+      }
+    }),
+  );
 
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
