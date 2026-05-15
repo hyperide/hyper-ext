@@ -35,6 +35,24 @@ import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps }
 import { isBundleArtifactPath } from './bundle-artifact-path';
 import { resolveWorkspacePath } from './workspace-path';
 
+/** Recursively extract all leaf keys from a JSON object, producing dot-path keys. */
+function extractLeafKeys(obj: unknown, prefix = ''): string[] {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+    return prefix ? [prefix] : [];
+  }
+  const keys: string[] = [];
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const path = prefix ? `${prefix}.${k}` : k;
+    if (typeof v === 'string') {
+      keys.push(path);
+    } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      keys.push(...extractLeafKeys(v, path));
+    }
+    // Skip non-string leaves (numbers, booleans, arrays)
+  }
+  return keys;
+}
+
 export interface ElementStyleReadResult {
   className: string;
   childrenType: 'text' | 'expression' | 'expression-complex' | 'jsx' | undefined;
@@ -202,6 +220,50 @@ export class StyleReadService {
     } catch (error) {
       console.error('[StyleReadService] Error reading element className:', error);
       return empty;
+    }
+  }
+
+  /**
+   * Fetch all available keys from the active locale file for the project.
+   * Called after i18nText arrives (kind === 'i18n') to populate the key combobox.
+   * Returns empty array on any error (missing layout, parse failure, etc.).
+   *
+   * @param namespace - optional namespace from the binding (for namespaced layouts)
+   * @param activeLocale - active locale from the binding (used to pick the right file)
+   */
+  async getAvailableKeys(namespace: string | undefined, activeLocale: string): Promise<string[]> {
+    try {
+      const layout = await discoverLayout(this._workspaceRoot, namespace, activeLocale, this._fileIO);
+      if (!layout) return [];
+
+      const filePath = layout.getLocaleFilePath(activeLocale);
+      // TS/JS locale files are not supported for JSON key extraction
+      if (filePath.endsWith('.ts') || filePath.endsWith('.js')) return [];
+
+      let content: string;
+      try {
+        content = await this._fileIO.readFile(filePath);
+      } catch {
+        // Try first available locale as fallback
+        const fallback = layout.availableLocales[0];
+        if (!fallback || fallback === activeLocale) return [];
+        try {
+          content = await this._fileIO.readFile(layout.getLocaleFilePath(fallback));
+        } catch {
+          return [];
+        }
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(content);
+      } catch {
+        return [];
+      }
+
+      return extractLeafKeys(data);
+    } catch {
+      return [];
     }
   }
 

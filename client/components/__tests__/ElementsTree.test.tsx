@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { fireEvent, render } from '@testing-library/react';
-import ElementsTree from '../ElementsTree';
 import type { TreeNode } from '../ElementsTree';
+import ElementsTree from '../ElementsTree';
 
 mock.module('@/lib/platform', () => ({
   usePlatformContext: () => 'browser',
@@ -34,36 +34,18 @@ describe('ElementsTree — scroll into view (Task A)', () => {
   });
 
   it('calls scrollIntoView when a node becomes selected', () => {
-    const { rerender } = render(
-      <ElementsTree
-        tree={[NODE]}
-        selectedElements={[]}
-        onSelectElement={() => {}}
-      />,
-    );
+    const { rerender } = render(<ElementsTree tree={[NODE]} selectedElements={[]} onSelectElement={() => {}} />);
 
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
 
-    rerender(
-      <ElementsTree
-        tree={[NODE]}
-        selectedElements={['node-1']}
-        onSelectElement={() => {}}
-      />,
-    );
+    rerender(<ElementsTree tree={[NODE]} selectedElements={['node-1']} onSelectElement={() => {}} />);
 
     expect(scrollIntoViewMock).toHaveBeenCalledTimes(1);
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
   });
 
   it('does not call scrollIntoView when node is not selected', () => {
-    render(
-      <ElementsTree
-        tree={[NODE]}
-        selectedElements={[]}
-        onSelectElement={() => {}}
-      />,
-    );
+    render(<ElementsTree tree={[NODE]} selectedElements={[]} onSelectElement={() => {}} />);
 
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
@@ -71,21 +53,9 @@ describe('ElementsTree — scroll into view (Task A)', () => {
   it('calls scrollIntoView for the correct node when multiple nodes exist', () => {
     const node2: TreeNode = { id: 'node-2', type: 'element', label: 'Text' };
 
-    const { rerender } = render(
-      <ElementsTree
-        tree={[NODE, node2]}
-        selectedElements={[]}
-        onSelectElement={() => {}}
-      />,
-    );
+    const { rerender } = render(<ElementsTree tree={[NODE, node2]} selectedElements={[]} onSelectElement={() => {}} />);
 
-    rerender(
-      <ElementsTree
-        tree={[NODE, node2]}
-        selectedElements={['node-2']}
-        onSelectElement={() => {}}
-      />,
-    );
+    rerender(<ElementsTree tree={[NODE, node2]} selectedElements={['node-2']} onSelectElement={() => {}} />);
 
     // Only the selected node scrolls into view
     expect(scrollIntoViewMock).toHaveBeenCalledTimes(1);
@@ -123,11 +93,7 @@ describe('ElementsTree — click selects element (Task B)', () => {
     const onSelectElement = mock();
 
     const { getByRole } = render(
-      <ElementsTree
-        tree={[NODE]}
-        selectedElements={[]}
-        onSelectElement={onSelectElement}
-      />,
+      <ElementsTree tree={[NODE]} selectedElements={[]} onSelectElement={onSelectElement} />,
     );
 
     const treeItem = getByRole('treeitem');
@@ -142,11 +108,7 @@ describe('ElementsTree — click selects element (Task B)', () => {
     const onSelectElement = mock();
 
     const { getAllByRole } = render(
-      <ElementsTree
-        tree={[NODE_WITH_CHILDREN]}
-        selectedElements={[]}
-        onSelectElement={onSelectElement}
-      />,
+      <ElementsTree tree={[NODE_WITH_CHILDREN]} selectedElements={[]} onSelectElement={onSelectElement} />,
     );
 
     const treeItems = getAllByRole('treeitem');
@@ -162,11 +124,7 @@ describe('ElementsTree — click selects element (Task B)', () => {
     const onSelectElement = mock();
 
     const { getByRole } = render(
-      <ElementsTree
-        tree={[NODE]}
-        selectedElements={[]}
-        onSelectElement={onSelectElement}
-      />,
+      <ElementsTree tree={[NODE]} selectedElements={[]} onSelectElement={onSelectElement} />,
     );
 
     const treeItem = getByRole('treeitem');

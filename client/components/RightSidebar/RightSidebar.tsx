@@ -227,6 +227,7 @@ export default function RightSidebar({
     childrenLocation,
     styleReadResult,
     i18nText,
+    availableKeys: availableI18nKeys,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -1240,6 +1241,8 @@ export default function RightSidebar({
                   onLocaleChange={handleI18nLocaleChange}
                   localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
+                  availableKeys={availableI18nKeys}
+                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                 />
               );
             })()}

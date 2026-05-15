@@ -182,6 +182,19 @@ export type PlatformMessage =
       i18nText?: I18nBindingResult;
       error?: string;
     }
+  | {
+      type: 'styles:fetchI18nKeys';
+      requestId: string;
+      namespace?: string;
+      activeLocale: string;
+    }
+  | {
+      type: 'styles:i18nKeysResponse';
+      requestId: string;
+      success: boolean;
+      keys: string[];
+      error?: string;
+    }
 
   // Component operations (visual editor ↔ extension host)
   | { type: 'component:open'; name: string; path: string }

@@ -237,6 +237,22 @@ export class PanelRouter {
       return true;
     }
 
+    // Update hypercanvas.devServer.autoStart setting from webview checkbox
+    if (type === 'panel:updateAutoStart') {
+      const { value } = message as { value: boolean };
+      await vscode.workspace
+        .getConfiguration('hypercanvas.devServer')
+        .update('autoStart', value, vscode.ConfigurationTarget.Global);
+      return true;
+    }
+
+    // Open VS Code Settings UI at a specific query
+    if (type === 'panel:openSettings') {
+      const { query } = message as { query: string };
+      await vscode.commands.executeCommand('workbench.action.openSettings', query);
+      return true;
+    }
+
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
       const { requestId, elementId, componentPath, domTextContent, activeLocale } = message as {
@@ -269,6 +285,22 @@ export class PanelRouter {
           success: false,
           error: String(e),
         });
+      }
+      return true;
+    }
+
+    // Fetch all available i18n keys from the active locale file
+    if (type === 'styles:fetchI18nKeys') {
+      const { requestId, namespace, activeLocale } = message as {
+        requestId: string;
+        namespace?: string;
+        activeLocale: string;
+      };
+      try {
+        const keys = await this._styleReadService.getAvailableKeys(namespace, activeLocale);
+        webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: true, keys });
+      } catch (e) {
+        webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: false, keys: [], error: String(e) });
       }
       return true;
     }

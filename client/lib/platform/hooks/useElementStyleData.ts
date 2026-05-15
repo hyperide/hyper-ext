@@ -45,6 +45,8 @@ export interface ElementStyleData {
   styleReadResult?: StyleReadResult;
   /** i18n binding detected in JSX expression children (VS Code only; SaaS browser requires server-side read path) */
   i18nText?: I18nBindingResult;
+  /** All available i18n keys from the locale file (VS Code only; populated after i18nText arrives) */
+  availableKeys?: string[];
 }
 
 export interface UseElementStyleDataOptions {
@@ -268,8 +270,13 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Base style data from className RPC or engine — runtime merge applied via useMemo below
   const [classData, setData] = useState<ElementStyleData>(EMPTY_DATA);
 
+  // Available i18n keys (fetched separately after i18nText arrives)
+  const [availableKeys, setAvailableKeys] = useState<string[] | undefined>(undefined);
+
   // Track latest RPC request to ignore stale responses (VS Code mode only)
   const latestRequestRef = useRef<string | null>(null);
+  // Track latest i18n keys request
+  const latestKeysRequestRef = useRef<string | null>(null);
 
   // Track the elementId of the last initiated request. Used in the RPC path to detect
   // element switches so we can eagerly clear i18nText before the response arrives.
@@ -472,14 +479,51 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     activeLocale,
   ]);
 
+  // Fetch available i18n keys after i18nText arrives (VS Code mode only)
+  useEffect(() => {
+    const i18nText = classData.i18nText;
+    if (!canvas || !i18nText || i18nText.kind !== 'i18n') {
+      setAvailableKeys(undefined);
+      latestKeysRequestRef.current = null;
+      return;
+    }
+
+    const requestId = crypto.randomUUID();
+    latestKeysRequestRef.current = requestId;
+
+    const unsub = canvas.onEvent('styles:i18nKeysResponse', (msg) => {
+      if (msg.requestId !== requestId) return;
+      if (latestKeysRequestRef.current !== requestId) return;
+      unsub();
+      if (msg.success) {
+        setAvailableKeys(msg.keys);
+      }
+    });
+
+    canvas.sendEvent({
+      type: 'styles:fetchI18nKeys',
+      requestId,
+      namespace: i18nText.namespace,
+      activeLocale: i18nText.activeLocale,
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [canvas, classData.i18nText]);
+
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
   const data = useMemo(() => {
-    if (!classData.parsedStyles || !runtimeStyle) return classData;
-    const merged = mergeRuntimeStyle(classData.parsedStyles, runtimeStyle, elementId, itemIndex);
-    if (merged === classData.parsedStyles) return classData;
-    return { ...classData, parsedStyles: merged };
-  }, [classData, runtimeStyle, elementId, itemIndex]);
+    if (!classData.parsedStyles && !availableKeys) {
+      if (!runtimeStyle) return classData;
+    }
+    const base = availableKeys !== undefined ? { ...classData, availableKeys } : classData;
+    if (!base.parsedStyles || !runtimeStyle) return base;
+    const merged = mergeRuntimeStyle(base.parsedStyles, runtimeStyle, elementId, itemIndex);
+    if (merged === base.parsedStyles) return base;
+    return { ...base, parsedStyles: merged };
+  }, [classData, availableKeys, runtimeStyle, elementId, itemIndex]);
 
   return data;
 }

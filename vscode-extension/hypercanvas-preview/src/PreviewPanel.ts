@@ -1046,6 +1046,9 @@ export class PreviewPanel {
       url: this._devServerRunning ? this._previewBaseUrl : null,
     });
 
+    const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
+    webview.postMessage({ type: 'devserver:settings', autoStart });
+
     webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
 
     if (this._projectError) {

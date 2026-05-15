@@ -200,6 +200,28 @@ describe('PanelRouter', () => {
     );
   });
 
+  it('routes styles:fetchI18nKeys and returns keys response', async () => {
+    const wv = createMockWebview();
+    await router.routeMessage(
+      {
+        type: 'styles:fetchI18nKeys',
+        requestId: 'r-keys',
+        library: 'react-i18next',
+        namespace: undefined,
+        activeLocale: 'en',
+      },
+      wv as never,
+    );
+    expect(wv.messages[0]).toEqual(
+      expect.objectContaining({
+        type: 'styles:i18nKeysResponse',
+        requestId: 'r-keys',
+        success: true,
+        keys: expect.any(Array),
+      }),
+    );
+  });
+
   it('returns false for unknown message types', async () => {
     const wv = createMockWebview();
     const handled = await router.routeMessage({ type: 'unknown:stuff' }, wv as never);

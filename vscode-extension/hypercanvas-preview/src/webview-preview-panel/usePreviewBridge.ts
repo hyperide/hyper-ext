@@ -43,9 +43,13 @@ interface UsePreviewBridgeResult {
   projectCapabilities: import('../types').ProjectCapabilities | null;
   /** Set when iframe ErrorBoundary catches a component render error */
   componentError: ComponentError | null;
+  /** Current value of hypercanvas.devServer.autoStart setting */
+  autoStart: boolean;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
   clearComponentError: () => void;
+  handleAutoStartChange: (value: boolean) => void;
+  handleOpenAutoStartSettings: () => void;
 }
 
 export function buildComponentPreviewUrl(devServerUrl: string, component: string): string {
@@ -109,6 +113,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
   const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
+  const [autoStart, setAutoStart] = useState(false);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -384,6 +389,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           }
           break;
 
+        case 'devserver:settings':
+          if (typeof msg.autoStart === 'boolean') setAutoStart(msg.autoStart);
+          break;
+
         case 'updateUrl': {
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
@@ -595,6 +604,21 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     canvas.sendEvent({ type: 'command:startDevServer' } as unknown as PlatformMessage);
   }, [canvas]);
 
+  const handleAutoStartChange = useCallback(
+    (value: boolean) => {
+      setAutoStart(value);
+      canvas.sendEvent({ type: 'panel:updateAutoStart', value } as unknown as PlatformMessage);
+    },
+    [canvas],
+  );
+
+  const handleOpenAutoStartSettings = useCallback(() => {
+    canvas.sendEvent({
+      type: 'panel:openSettings',
+      query: 'hypercanvas.devServer.autoStart',
+    } as unknown as PlatformMessage);
+  }, [canvas]);
+
   const clearComponentError = useCallback(() => setComponentError(null), []);
 
   return {
@@ -606,8 +630,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     projectError,
     projectCapabilities,
     componentError,
+    autoStart,
     handleStartDevServer,
     handleRefresh: doRefresh,
     clearComponentError,
+    handleAutoStartChange,
+    handleOpenAutoStartSettings,
   };
 }

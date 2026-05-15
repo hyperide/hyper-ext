@@ -70,6 +70,9 @@ function PreviewContent() {
     componentError,
     clearComponentError,
     handleStartDevServer,
+    autoStart,
+    handleAutoStartChange,
+    handleOpenAutoStartSettings,
   } = usePreviewBridge({
     iframeEl,
     canvas,
@@ -119,7 +122,14 @@ function PreviewContent() {
 
   // Dev server not running before any successful connection — show initial start screen.
   if (shellScreen === 'start') {
-    return <StartDevServerScreen onStart={handleStartDevServer} />;
+    return (
+      <StartDevServerScreen
+        onStart={handleStartDevServer}
+        autoStart={autoStart}
+        onAutoStartChange={handleAutoStartChange}
+        onOpenSettings={handleOpenAutoStartSettings}
+      />
+    );
   }
 
   return (
@@ -195,13 +205,35 @@ function PreviewContent() {
 // Sub-components
 // ============================================================================
 
-function StartDevServerScreen({ onStart }: { onStart: () => void }) {
+function StartDevServerScreen({
+  onStart,
+  autoStart,
+  onAutoStartChange,
+  onOpenSettings,
+}: {
+  onStart: () => void;
+  autoStart: boolean;
+  onAutoStartChange: (value: boolean) => void;
+  onOpenSettings: () => void;
+}) {
   return (
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
       <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
         Start Dev Server
+      </button>
+      <label style={autoStartLabelStyle}>
+        <input
+          type="checkbox"
+          checked={autoStart}
+          onChange={(e) => onAutoStartChange(e.target.checked)}
+          style={{ marginRight: 6, cursor: 'pointer' }}
+        />
+        Start server automatically
+      </label>
+      <button type="button" style={settingsLinkStyle} onClick={onOpenSettings}>
+        Open in Settings: Hyper Canvas › Auto-start
       </button>
     </div>
   );
@@ -757,6 +789,27 @@ const buttonStyle: React.CSSProperties = {
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
+};
+
+const autoStartLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  marginTop: 16,
+  fontSize: 12,
+  opacity: 0.75,
+  cursor: 'pointer',
+  userSelect: 'none',
+};
+
+const settingsLinkStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #4e94ce)',
+  fontSize: 11,
+  cursor: 'pointer',
+  marginTop: 6,
+  padding: 0,
+  textDecoration: 'underline',
 };
 
 const reconnectingBannerStyle: React.CSSProperties = {

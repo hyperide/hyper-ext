@@ -421,3 +421,85 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 });
+
+// =============================================================================
+// getAvailableKeys
+// =============================================================================
+
+const FLAT_LOCALES_EN = JSON.stringify({
+  'habits.walks': 'Go for a walk',
+  'habits.runs': 'Go for a run',
+  greeting: 'Hello',
+});
+const NESTED_LOCALES_EN = JSON.stringify({
+  habits: { walks: 'Go for a walk', runs: 'Go for a run' },
+  greeting: 'Hello',
+});
+
+describe('StyleReadService — getAvailableKeys', () => {
+  it('returns all leaf keys from a flat locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': FLAT_LOCALES_EN,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toContain('habits.walks');
+    expect(keys).toContain('habits.runs');
+    expect(keys).toContain('greeting');
+    expect(keys.length).toBe(3);
+  });
+
+  it('returns dot-path keys from a nested locale file', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      [FILE_PATH]: I18N_JSX,
+      '/workspace/package.json': PKG_WITH_I18N,
+      '/workspace/locales/en.json': NESTED_LOCALES_EN,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toContain('habits.walks');
+    expect(keys).toContain('habits.runs');
+    expect(keys).toContain('greeting');
+    expect(keys.length).toBe(3);
+  });
+
+  it('returns empty array when locale file is missing', async () => {
+    const nodeMap = new NodeMapService();
+    const fileIO = makeFileIO({ [FILE_PATH]: I18N_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toEqual([]);
+  });
+
+  it('returns empty array on parse error', async () => {
+    const nodeMap = new NodeMapService();
+    const files: Record<string, string> = {
+      '/workspace/locales/en.json': 'not valid json',
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const keys = await service.getAvailableKeys(undefined, 'en');
+    expect(keys).toEqual([]);
+  });
+});

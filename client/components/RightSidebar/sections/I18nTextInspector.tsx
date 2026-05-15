@@ -8,8 +8,6 @@
 import type { I18nBindingResult } from '@shared/i18n-text/types';
 import cn from 'clsx';
 import { memo, useEffect, useRef, useState } from 'react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface I18nTextInspectorProps {
   i18nBinding: I18nBindingResult;
@@ -20,14 +18,11 @@ export interface I18nTextInspectorProps {
   keyEditable?: boolean;
   /** Whether locale switching is active. False until onLocaleChange is wired server-side. */
   localeEditable?: boolean;
+  /** All available keys from the locale file. When provided + keyEditable, shows a combobox. */
+  availableKeys?: string[];
   /** Increments ONLY on write failure. Forces localText rollback when write fails and resolvedText stays unchanged.
    * Must NOT increment on success — doing so snaps localText to stale resolvedText before the RPC re-read returns. */
   rollbackKey?: number;
-  /**
-   * Available translation keys from the locale file — enables combobox with search + create-new.
-   * When not provided, key field shows as a read-only input (or plain text if keyEditable is false).
-   */
-  availableKeys?: string[];
 }
 
 export const I18nTextInspector = memo(function I18nTextInspector({
@@ -37,8 +32,8 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   onLocaleChange,
   keyEditable = false,
   localeEditable = false,
-  rollbackKey,
   availableKeys,
+  rollbackKey,
 }: I18nTextInspectorProps) {
   // Local draft prevents snap-back to stale resolvedText during the debounce window.
   // Component is re-keyed in RightSidebar when key/library changes, so this
@@ -48,9 +43,11 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const isFocusedRef = useRef(false);
   const resolvedText = i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '';
 
-  // Combobox state for key picker
-  const [keyComboOpen, setKeyComboOpen] = useState(false);
+  // Combobox state — only active when keys available and keyEditable
   const [keySearch, setKeySearch] = useState('');
+  const [showKeyDropdown, setShowKeyDropdown] = useState(false);
+  const keyInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Track previous rollbackKey to detect write-failure triggers from RightSidebar.
   // Initialized to the first rollbackKey so the initial render never counts as a "key changed" event.
@@ -73,6 +70,24 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedText, rollbackKey]);
 
+  // Close key dropdown when clicking outside
+  useEffect(() => {
+    if (!showKeyDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        keyInputRef.current &&
+        !keyInputRef.current.contains(e.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowKeyDropdown(false);
+        setKeySearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showKeyDropdown]);
+
   if (i18nBinding.kind === 'unsupported') {
     return (
       <div data-testid="i18n-unsupported-fallback" className="w-full px-4 py-2 text-[11px] text-muted-foreground">
@@ -81,81 +96,76 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     );
   }
 
+  const currentKey = i18nBinding.key;
+  const showCombobox = keyEditable && availableKeys && availableKeys.length > 0;
+  const filteredKeys = showCombobox
+    ? availableKeys.filter((k) => k.toLowerCase().includes(keySearch.toLowerCase()))
+    : [];
+
   return (
     <div className="w-full px-4 py-3 border-t border-border flex flex-col gap-2">
       <div className="flex flex-col gap-1">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Key</span>
-        {availableKeys && keyEditable ? (
-          <Popover
-            open={keyComboOpen}
-            onOpenChange={(open) => {
-              setKeyComboOpen(open);
-              if (!open) setKeySearch('');
-            }}
-          >
-            <PopoverTrigger asChild>
-              <button
-                data-testid="i18n-key-input"
-                type="button"
-                className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground text-left border-0 focus:outline-none focus:ring-1 focus:ring-ring truncate"
-                title={i18nBinding.key}
+
+        {showCombobox ? (
+          <div className="relative">
+            <input
+              ref={keyInputRef}
+              data-testid="i18n-key-input"
+              type="text"
+              value={showKeyDropdown ? keySearch : currentKey}
+              onChange={(e) => {
+                setKeySearch(e.target.value);
+                onKeyChange?.(e.target.value);
+              }}
+              onFocus={() => {
+                setKeySearch('');
+                setShowKeyDropdown(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowKeyDropdown(false);
+                  setKeySearch('');
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder={currentKey}
+              className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            {showKeyDropdown && filteredKeys.length > 0 && (
+              <div
+                ref={dropdownRef}
+                data-testid="i18n-key-dropdown"
+                className="absolute z-50 top-7 left-0 right-0 max-h-40 overflow-y-auto rounded-md border bg-popover shadow-md"
               >
-                {i18nBinding.key}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-64" align="start" sideOffset={4}>
-              <Command>
-                <CommandInput
-                  placeholder="Search or create key..."
-                  value={keySearch}
-                  onValueChange={setKeySearch}
-                  className="h-8 text-[11px]"
-                />
-                <CommandList>
-                  <CommandEmpty>
-                    {keySearch.trim() ? (
-                      <button
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-[11px] text-foreground hover:bg-accent rounded-sm"
-                        onClick={() => {
-                          onKeyChange?.(keySearch.trim());
-                          setKeyComboOpen(false);
-                          setKeySearch('');
-                        }}
-                      >
-                        Create key "<span className="font-mono">{keySearch.trim()}</span>"
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground text-[11px]">No keys found</span>
+                {filteredKeys.map((key) => (
+                  <button
+                    key={key}
+                    data-testid={`i18n-key-option-${key}`}
+                    type="button"
+                    onMouseDown={(e) => {
+                      // mousedown fires before blur, so we can select before dropdown closes
+                      e.preventDefault();
+                      onKeyChange?.(key);
+                      setShowKeyDropdown(false);
+                      setKeySearch('');
+                    }}
+                    className={cn(
+                      'w-full text-left px-2 py-1 text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer',
+                      key === currentKey && 'bg-accent/50',
                     )}
-                  </CommandEmpty>
-                  <CommandGroup>
-                    {availableKeys
-                      .filter((k) => k.toLowerCase().includes(keySearch.toLowerCase()))
-                      .map((k) => (
-                        <CommandItem
-                          key={k}
-                          value={k}
-                          onSelect={() => {
-                            onKeyChange?.(k);
-                            setKeyComboOpen(false);
-                            setKeySearch('');
-                          }}
-                          className="text-[11px] font-mono"
-                        >
-                          {k}
-                        </CommandItem>
-                      ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <input
             data-testid="i18n-key-input"
             type="text"
-            value={i18nBinding.key}
+            value={currentKey}
             disabled={!keyEditable}
             onChange={(e) => onKeyChange?.(e.target.value)}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
