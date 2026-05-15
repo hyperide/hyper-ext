@@ -701,14 +701,18 @@ export default function RightSidebar({
     (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = setTimeout(async () => {
-        await astOps.writeI18nResource({
-          library: i18nText.library,
-          key: i18nText.key,
-          activeLocale: i18nText.activeLocale,
-          newText,
-        });
-        setStyleRefreshKey((k) => k + 1);
+      debouncedI18nWriteRef.current = setTimeout(() => {
+        astOps
+          .writeI18nResource({
+            library: i18nText.library,
+            key: i18nText.key,
+            activeLocale: i18nText.activeLocale,
+            newText,
+          })
+          .then(() => setStyleRefreshKey((k) => k + 1))
+          .catch((err: unknown) => {
+            console.error('[i18n write] failed:', err);
+          });
       }, 300);
     },
     [i18nText, astOps],
