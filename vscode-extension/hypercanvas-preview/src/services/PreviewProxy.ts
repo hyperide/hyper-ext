@@ -188,7 +188,7 @@ export class PreviewProxy {
       // 200ms × 1.7^N caps ~30s over 16 retries, accommodates 20-40s webpack
       // cold rebuilds without holding fast Vite responses any longer.
       if (
-        (proxyRes.statusCode === 404 || proxyRes.statusCode === 503) &&
+        (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
         retryCount < 16
       ) {
