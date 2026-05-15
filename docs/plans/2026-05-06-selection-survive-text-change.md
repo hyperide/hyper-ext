@@ -152,13 +152,38 @@ either:
 
 ### Task 5: Frame-by-frame e2e
 
-- [ ] Inside the iframe (not top-doc), capture screenshots every 50ms from
+- [x] Inside the iframe (not top-doc), capture screenshots every 50ms from
       0 to 1500ms after the combobox click. Assert that at every frame, the
       selection bounding-box overlay is non-empty AND at the same source
       location as before the click.
-- [ ] Use `iframe.locator('[data-overlay-selection]')` (or whatever element
+      (New spec
+      `ext-test-projects/e2e/tests/project-independent/selection-survive-text-change.spec.ts`.
+      `captureFrames(page, appFrame, expectedId, 1500, 50)` runs a 1.5 s loop
+      that on every tick reads `__hyperCanvasState.selectedIds[0]` from inside
+      the test-preview iframe AND the overlay rect from the parent webview;
+      `≥ 20` samples required (30 expected at 50 ms cadence). Final assertion
+      filters samples whose `selectedId !== expectedId` OR overlay
+      `width/height === 0` OR `data-element-id !== expectedId`; fails with a
+      first-10-bad-frames timeline so a regression points at the exact ms
+      window where selection broke. Source-rewrite sanity check polls the
+      fixture file for `t('test.farewell')` to confirm the HMR path was
+      actually exercised. afterEach restores `t('test.greeting')` so reruns
+      start clean.)
+- [x] Use `iframe.locator('[data-overlay-selection]')` (or whatever element
       class the overlay uses) — read its bounding box via
       `evaluate(el => el.getBoundingClientRect())`.
+      (Discrepancy noted in spec doc-comment: the overlay is rendered in the
+      PARENT webview frame, not inside the test-preview iframe —
+      `iframe-interaction.ts` posts `hypercanvas:overlayRects` to the webview;
+      `useCanvasInteraction.ts` calls `renderOverlayRects` from
+      `shared/canvas-interaction/overlay-renderer.ts`, which appends
+      `[data-selection-overlay="true"][data-element-id="<id>"]` divs into the
+      webview's overlay container. The plan's `[data-overlay-selection]`
+      attribute name does not exist — `data-selection-overlay` is the real
+      one. `readOverlayRect` walks `page.frames()`, picks the frame that owns
+      such divs, and reads `style.width/height` (which the renderer writes
+      directly from `OverlayRect`, identical to what `getBoundingClientRect`
+      would yield for an absolutely-positioned div).)
 
 ### Task 6: Build, install, run e2e, send screenshots only when verified
 
