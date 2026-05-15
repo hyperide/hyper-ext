@@ -3432,3 +3432,27 @@ Run ID: `run-20260428-172708-72773`, 3 shards
 - S2: 1 failure (already fixed for next run), 96 done
 - S3: 3 failures, all root-caused and fixed for next run (93 done)
 - All fixes committed and pushed to ext-test-projects main
+
+## 📍 Run #21 Checkpoint 2 (2026-04-28 ~16:05 CEST, ~38 min)
+
+| Shard | Done | Fail | Notes |
+|-------|------|------|-------|
+| s1    | 153  |   0  | drag tests (PI-5-DR) |
+| s2    | 145  |   1  | preview-render tests |
+| s3    | 167  |   5  | style-editing, dev server |
+
+No new failures since checkpoint 1.
+
+**New fix applied (S3 new failure):**
+
+S3: `Tamagui: style written as prop, not className` failed TWICE (tamagui-fitness 13769ms, tamagui-uber 15021ms)
+- Root cause: style write modifies a nested component file (e.g. `DriverMatchScreen.tsx` in tamagui-uber), not `App.tsx` opened by setupPreviewWithDevServer. `getActiveEditorContent()` reads the active tab (App.tsx), not the written file.
+- Fix: click `.tab.dirty` to activate the written file before reading, increase poll timeout 5s→15s
+- Applied to PD-4-8, PD-4-9, PD-4-10 (commit `a53808f`, pushed)
+
+**Running fixes total for next run:**
+1. `preview-render.spec.ts`: error-overlay 90→120s (S2 kanban)
+2. `preview-render.spec.ts`: element visibility 10→20s (S3 tamagui-food-delivery)
+3. `preview-routing.spec.ts`: boundingBox poll 30s (S3 tamagui-food-delivery)
+4. `settings.spec.ts`: 3 fixes (poll timeouts + Close All Editors)
+5. `style-editing.spec.ts`: dirty tab activation + 5→15s (S3 tamagui)
