@@ -7,6 +7,7 @@
  */
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
+import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1152,34 +1153,22 @@ let _dragStartY = 0;
 let _dragSuppressNextClick = false;
 let _dragSourceEl: HTMLElement | null = null;
 let _dragIndicatorEl: HTMLElement | null = null;
+let _dragBadgeEl: HTMLElement | null = null;
 let _dragOrigStyleAttr = '';
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
   const target = e.target as HTMLElement;
-  let src = iframeResolver.getSourceLocation(target);
-  let dragEl: HTMLElement = target;
-  if (!src) {
-    // Decorative/untraceable elements (aria-hidden spans, emoji, etc.) have no source mapping.
-    // Walk up to the nearest ancestor that does — that's the logical drag unit.
-    let cur = target.parentElement;
-    while (cur && cur !== document.body) {
-      const ancestorSrc = iframeResolver.getSourceLocation(cur);
-      if (ancestorSrc) {
-        src = ancestorSrc;
-        dragEl = cur;
-        break;
-      }
-      cur = cur.parentElement;
-    }
-  }
-  if (!src) return;
-  _dragSourceId = `${src.fileName}:${src.line}:${src.column}`;
-  _dragSourceFilePath = src.fileName;
+  // resolveDragSource: walks up for decorative children (emoji, aria-hidden),
+  // then falls back to _debugSource when source maps are cold (React 18 Vite/Babel).
+  const resolved = resolveDragSource(target, (el) => iframeResolver.getSourceLocation(el), renderedComponentPath);
+  if (!resolved) return;
+  _dragSourceId = `${resolved.source.fileName}:${resolved.source.line}:${resolved.source.column}`;
+  _dragSourceFilePath = resolved.source.fileName;
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
   _dragState = 'pending';
-  _dragSourceEl = dragEl;
+  _dragSourceEl = resolved.el;
 }
 
 function _dragPointerMove(e: PointerEvent): void {
@@ -1207,6 +1196,19 @@ function _dragPointerMove(e: PointerEvent): void {
         indicator.style.display = 'none';
         document.body.appendChild(indicator);
         _dragIndicatorEl = indicator;
+
+        // Multi-select badge: show count when multiple elements are selected
+        if (state.selectedIds.length > 1) {
+          const badge = document.createElement('div');
+          badge.style.cssText =
+            'position:absolute;top:-8px;right:-8px;background:#3b82f6;color:white;' +
+            'border-radius:50%;width:20px;height:20px;display:flex;align-items:center;' +
+            'justify-content:center;font-size:11px;font-weight:bold;pointer-events:none;' +
+            'z-index:2147483647;';
+          badge.textContent = String(state.selectedIds.length);
+          _dragSourceEl.appendChild(badge);
+          _dragBadgeEl = badge;
+        }
       }
     }
     return;
@@ -1261,6 +1263,10 @@ function _dragPointerUp(e: PointerEvent): void {
     _dragSourceEl = null;
   }
   _dragOrigStyleAttr = '';
+  if (_dragBadgeEl) {
+    _dragBadgeEl.remove();
+    _dragBadgeEl = null;
+  }
   if (_dragIndicatorEl) {
     _dragIndicatorEl.remove();
     _dragIndicatorEl = null;
