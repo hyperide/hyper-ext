@@ -51,6 +51,7 @@ describe('computeOverlayRects', () => {
     expect(result.overlayRects).toHaveLength(1);
     expect(result.overlayRects[0]).toEqual({
       key: 'select-ref-1-0',
+      elementId: 'ref-1',
       left: 10,
       top: 20,
       width: 100,
@@ -262,6 +263,34 @@ describe('computeOverlayRects', () => {
     const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
 
     expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+  });
+
+  it('sets resizable.hasSizeClass for element with size-12 shorthand', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'size-12');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true, hasSizeClass: true });
+  });
+
+  it('does not set resizable.hasSizeClass for separate w-12 h-12', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'w-12 h-12');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable).toEqual({ width: true, height: true });
+    expect(result.overlayRects[0].resizable?.hasSizeClass).toBeUndefined();
+  });
+
+  it('sets resizable.hasSizeClass for size-[48px] arbitrary shorthand', () => {
+    const el = mockElement({ left: 0, top: 0, width: 48, height: 48 }, 'size-[48px]');
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null }, resolver);
+
+    expect(result.overlayRects[0].resizable?.hasSizeClass).toBe(true);
   });
 
   it('does not set resizable for class list without explicit size', () => {
