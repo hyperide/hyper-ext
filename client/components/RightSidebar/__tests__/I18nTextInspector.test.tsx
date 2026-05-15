@@ -430,6 +430,56 @@ describe('I18nTextInspector', () => {
     expect(keyInput.tagName.toLowerCase()).toBe('input');
   });
 
+  it('displays optimistic key immediately after commitKey', () => {
+    const onKeyChange = mock(() => {});
+    const { rerender } = render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'old.key' }}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        canCreateKeys
+      />,
+    );
+
+    const trigger = screen.getByTestId('i18n-key-input');
+    expect(trigger.textContent).toBe('old.key');
+
+    // Open combobox, type new key, click Create — triggers commitKey('new.key') → setOptimisticKey
+    fireEvent.click(trigger);
+    const searchInput = screen.getByPlaceholderText('Search or create key...');
+    fireEvent.change(searchInput, { target: { value: 'new.key' } });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+
+    // Button must immediately show the new key (optimistic, before any prop update)
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('new.key');
+    expect(onKeyChange).toHaveBeenCalledWith('new.key');
+
+    // Simulate prop catching up from RPC round-trip — optimisticKey cleared by useEffect
+    rerender(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'new.key' }}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        canCreateKeys
+      />,
+    );
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('new.key');
+
+    // Verify optimisticKey was cleared: rerender with a different key and it must show that key
+    rerender(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'other.key' }}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        canCreateKeys
+      />,
+    );
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('other.key');
+  });
+
   // Snap-back resilience after blur. The original isFocusedRef guard prevented
   // snap-back only while focus was held; if the user typed and then clicked
   // away before the server returned the new resolvedText, the input snapped
