@@ -17,6 +17,27 @@ import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/ty
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter } from '@/lib/platform/types';
 
+// ============================================================================
+// Scroll compensation helpers (exported for unit testing)
+// ============================================================================
+
+/**
+ * Compute the CSS translateY value to apply to the overlay container so that
+ * overlay rects (computed at `baselineScrollY`) visually track content after the
+ * iframe has scrolled to `currentScrollY`.
+ *
+ * Returns 0 when no compensation is needed (no scroll since last rect computation).
+ * The caller is responsible for resetting to 0 when fresh rects arrive.
+ *
+ * @param currentScrollY - The iframe's current window.scrollY (from overlayScroll msg)
+ * @param baselineScrollY - The scrollY captured when the last overlayRects were computed
+ * @returns Negative offset in px (translateY), 0 when aligned
+ */
+export function computeScrollCompensationPx(currentScrollY: number, baselineScrollY: number): number {
+  // Use `|| 0` to normalise -0 to 0 (JS: -0 === 0 is true but Object.is(-0, 0) is false)
+  return -(currentScrollY - baselineScrollY) || 0;
+}
+
 export interface ContextMenuState {
   elementId: string;
   itemIndex: number | null;
@@ -113,6 +134,11 @@ export function useCanvasInteraction(
   const iframeOriginRef = useRef<string | null>(null);
   const placeholderElements = useRef(new Map<string, HTMLDivElement>());
 
+  // Scroll compensation: baselineScrollY is the iframe window.scrollY captured when the
+  // last overlayRects message was computed. On overlayScroll we apply a CSS transform so
+  // overlay positions track the content immediately, without waiting for the next RAF cycle.
+  const scrollBaselineRef = useRef(0);
+
   useEffect(() => {
     if (!iframeEl || !overlayEl) return;
     const frame = iframeEl;
@@ -123,6 +149,9 @@ export function useCanvasInteraction(
     // Re-derive origin after iframe navigates (e.g. devserver URL update)
     function handleIframeLoad() {
       iframeOriginRef.current = getIframeOrigin(frame);
+      // Reset scroll compensation state — the new page starts at scrollY=0
+      scrollBaselineRef.current = 0;
+      container.style.transform = '';
       // Clear stale runtime style on component change / iframe reload
       canvas.sendEvent({
         type: 'state:update',
@@ -255,10 +284,29 @@ export function useCanvasInteraction(
 
         case 'hypercanvas:overlayRects': {
           if (!Array.isArray(msg.rects)) break;
+
+          // Update baseline scrollY — rects were computed at this scroll position.
+          // Reset any pending transform compensation: the fresh rects already account
+          // for current scroll, so the container should have no translate applied.
+          if (typeof msg.scrollY === 'number') {
+            scrollBaselineRef.current = msg.scrollY;
+          }
+          container.style.transform = '';
+
           renderOverlayRects(container, msg.rects as OverlayRect[], overlayElements.current);
 
           const pRects = (msg.placeholderRects ?? []) as PlaceholderRect[];
           renderPlaceholderOverlays(container, pRects, placeholderElements.current, openInsertPanel);
+          break;
+        }
+
+        case 'hypercanvas:overlayScroll': {
+          // Immediate scroll compensation: shift overlay container by the delta between
+          // current iframe scrollY and the baseline captured at last rect computation.
+          // This fills the ~1-frame gap before the RAF-computed rect update arrives.
+          if (typeof msg.scrollY !== 'number') break;
+          const compensationPx = computeScrollCompensationPx(msg.scrollY, scrollBaselineRef.current);
+          container.style.transform = compensationPx !== 0 ? `translateY(${compensationPx}px)` : '';
           break;
         }
 

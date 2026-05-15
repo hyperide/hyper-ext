@@ -11,7 +11,11 @@ import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-pla
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
-import { toggleItemIndex, toggleNodeRefInSelection } from '@shared/canvas-interaction/selection-utils';
+import {
+  computeEffectiveRef,
+  toggleItemIndex,
+  toggleNodeRefInSelection,
+} from '@shared/canvas-interaction/selection-utils';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
@@ -851,11 +855,14 @@ attachClickHandler(
         const nextIndices = toggleItemIndex(state.selectedItemIndices, nodeRef, nextIds, itemIndex);
         state.selectedIds = nextIds;
         state.selectedItemIndices = nextIndices;
-      } else if (nodeRef) {
+      } else {
         // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
         // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
-        state.selectedIds = [nodeRef];
-        if (itemIndex != null) state.selectedItemIndices = { [nodeRef]: itemIndex };
+        // When nodeRef is null (server round-trip pending), synthesize a ref from source so
+        // state.selectedIds is populated — matches sourceToElementId() in the extension host.
+        const effectiveRef = computeEffectiveRef(nodeRef, source);
+        state.selectedIds = [effectiveRef];
+        if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
       }
 
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -908,9 +915,7 @@ attachClickHandler(
 function getSourceKey(el: HTMLElement): string | null {
   const fiber = getFiberFromDOM(el);
   if (!fiber) return null;
-  let loc = findNearestSourceLocation(fiber);
-  const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
-  if (smLoc) loc = smLoc;
+  let loc = resolveSourceIndexFiberSource(fiber);
   if (!loc) return null;
   if (renderedComponentPath) {
     loc = resolveCallSiteSource(loc, fiber, renderedComponentPath);
@@ -1361,8 +1366,13 @@ function sendOverlayRects(): void {
   const payload = JSON.stringify({ rects, placeholderRects });
   if (payload !== prevRectsJSON) {
     prevRectsJSON = payload;
+    // Include window.scrollY so the webview can use it as the baseline for scroll
+    // compensation — see hypercanvas:overlayScroll handling in useCanvasInteraction.ts.
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
-    window.parent.postMessage({ type: 'hypercanvas:overlayRects', rects, placeholderRects }, '*');
+    window.parent.postMessage(
+      { type: 'hypercanvas:overlayRects', rects, placeholderRects, scrollY: window.scrollY },
+      '*',
+    );
   }
 
   // Only continue the overlay loop while updates are needed or overlays are active.
@@ -1425,7 +1435,14 @@ if (document.body) {
 }
 
 // Scroll must update overlays on every frame — skip the throttle to avoid 50 ms lag.
+// Additionally, post an immediate overlayScroll message so the webview can apply a
+// CSS transform compensation before the RAF-computed rects arrive (~1 frame later).
+// Always use window.scrollY — both here and in sendOverlayRects (baseline) — so the
+// two values are in the same coordinate space and compensation arithmetic is exact.
+// Nested-container scrollTop lives in a different space and must not be mixed in.
 const overlayScrollHandler = () => {
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage({ type: 'hypercanvas:overlayScroll', scrollY: window.scrollY }, '*');
   needsOverlayUpdate = true;
   scheduleOverlayLoopIfNeeded();
 };
