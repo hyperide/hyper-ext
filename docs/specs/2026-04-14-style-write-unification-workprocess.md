@@ -2971,10 +2971,34 @@ Recurrent flakies (all retry-pass, observed across all runs):
 - `component has non-zero dimensions (CSS applied in App Shell)` — preview warmup race
 These are harness-level first-attempt races, not real extension bugs.
 
+## 📍 Run #19 Checkpoint 3 (2026-04-28 09:22 CEST, ~80 min)
+
+S1r (first restart) killed and replaced by S1r2 after diagnosing persistent
+ERR_INSUFFICIENT_RESOURCES: restarted container lacked `--shm-size 2g` (Docker
+default is 64MB, Electron needs 2GB for IPC/GPU shared memory). All S1r "persistent
+failures" were false positives — each test passed in original S1.
+
+Root cause confirmed: missing `--shm-size 2g` in `docker run` caused Chromium
+shared-memory exhaustion → ERR_INSUFFICIENT_RESOURCES for all Vite module loads.
+
+**IMPORTANT infra note**: when manually restarting a shard, ALWAYS include:
+  `--shm-size 2g --memory 6144m --cpus 3`
+  These are the same params as `docker-parallel-run.sh`. Without them, tests that
+  use Vite dev server will fail with ERR_INSUFFICIENT_RESOURCES.
+
+S1r2 launched at 07:22 UTC: `hyper-e2e-20260428-080658-82045r2-s1`
+  artifacts: `run-20260428-080658-82045r2/shard-1/`
+
+Active containers:
+- `hyper-e2e-20260428-080658-82045r2-s1` → slot-34, proper shm
+- `hyper-e2e-20260428-080658-82045-s2` → slot: original run
+- `hyper-e2e-20260428-080658-82045-s3` → slot: original run
+
+Progress at 09:22 CEST: S2=329/691 (48%), S3=280/729 (38%), S1r2=starting
+
 ## Next Step
 
-1. Let S1r + S2 + S3 complete.
+1. Let S1r2 + S2 + S3 complete.
 2. Record final tally; classify any persistent failures.
-3. If all failures retry-pass → run is effectively green.
-4. S1 original produced 200 valid tests; S1r will cover remaining 569+.
-5. Target: 0 persistent failures across all 2189 tests.
+3. All failures so far: retry-pass (timing) or false positive (shm bug in S1r).
+4. Target: 0 persistent failures across all 2189 tests.
