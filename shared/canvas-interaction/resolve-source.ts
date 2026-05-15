@@ -22,7 +22,7 @@ function getAncestorItemIndex(fiber: Fiber, directItemIndex: number): number {
   let current: Fiber | null = fiber;
   for (let i = 0; i < 30 && current; i++) {
     const itemIndex = getItemIndexFromFiber(current);
-    if (itemIndex > directItemIndex) return itemIndex;
+    if (directItemIndex === 0 && itemIndex > 0) return itemIndex;
     current = current.return;
   }
   return directItemIndex;

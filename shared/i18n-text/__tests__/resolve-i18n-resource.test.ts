@@ -355,3 +355,26 @@ describe('messages/en.ts — unsupported TS format', () => {
     expect(result.unresolvedReason).toBe('unsupported-format');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Malformed JSON — parse-error path
+// ---------------------------------------------------------------------------
+
+describe('malformed JSON locale file', () => {
+  it('returns parse-error unresolvedReason for corrupt JSON', async () => {
+    const fileIO = new MemoryFileIO({
+      [`${ROOT}/locales/en.json`]: '{ "greeting": "Hello"',
+    });
+
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'greeting',
+      activeLocale: 'en',
+      fileIO,
+    });
+
+    expect(result.resolvedText).toBeNull();
+    expect(result.unresolvedReason).toBe('parse-error');
+  });
+});

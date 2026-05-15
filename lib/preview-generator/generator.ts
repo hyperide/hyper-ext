@@ -170,7 +170,7 @@ function toIdentifierSegment(segment: string): string {
 // consume up to 20 s of isPreviewLoaded polling. Exclude them from the
 // componentRegistry so the E2E probing loop only iterates actual project
 // components, keeping total probe time within the test budget.
-export function isUiPrimitive(componentPath: string): boolean {
+function isUiPrimitive(componentPath: string): boolean {
   return /(\/|^)components\/ui\//.test(componentPath);
 }
 

@@ -12,7 +12,10 @@ import type { DetectI18nBindingParams, I18nBindingDetected, I18nBindingDetection
 // @ts-expect-error - babel/traverse ESM/CJS interop
 const traverse = _traverse.default || _traverse;
 
+// Names accepted for any recognized library (including react-intl's formatMessage).
 const KNOWN_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n', 'formatMessage']);
+// Names accepted for 'custom' library detection: generic wrappers only, not library-specific ones.
+const CUSTOM_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n']);
 
 const JSX_COMPONENT_LIBRARY: Partial<Record<string, I18nLibrary>> = {
   FormattedMessage: 'react-intl',
@@ -47,7 +50,8 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       const calleeName = extractCalleeName(path.node.callee);
-      if (!calleeName || !KNOWN_CALL_NAMES.has(calleeName)) {
+      const acceptedNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      if (!calleeName || !acceptedNames.has(calleeName)) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;
       }
@@ -71,7 +75,17 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       if (firstArg.type === 'StringLiteral') {
-        found = makeDetected(library, firstArg.value, nodeLoc.start);
+        const secondArg = path.node.arguments[1];
+        if (secondArg !== undefined && secondArg.type !== 'ObjectExpression') {
+          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          return;
+        }
+        const namespace = secondArg !== undefined ? extractNsFromObject(secondArg as t.ObjectExpression) : undefined;
+        if (namespace === null) {
+          found = { kind: 'unsupported', reason: 'dynamic-key' };
+          return;
+        }
+        found = makeDetected(library, firstArg.value, nodeLoc.start, namespace);
         return;
       }
 
@@ -89,7 +103,8 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
       }
 
       const tagName = path.node.tag.type === 'Identifier' ? path.node.tag.name : null;
-      if (!tagName || !KNOWN_CALL_NAMES.has(tagName)) {
+      const acceptedTagNames = library === 'custom' ? CUSTOM_CALL_NAMES : KNOWN_CALL_NAMES;
+      if (!tagName || !acceptedTagNames.has(tagName)) {
         found = { kind: 'unsupported', reason: 'unknown-wrapper' };
         return;
       }
@@ -118,6 +133,12 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
         return;
       }
 
+      // Library-specific JSX components are not custom wrappers — reject them when library is 'custom'.
+      if (library === 'custom' && JSX_COMPONENT_LIBRARY[componentName] !== undefined) {
+        found = { kind: 'unsupported', reason: 'unknown-wrapper' };
+        return;
+      }
+
       const componentLibrary = JSX_COMPONENT_LIBRARY[componentName] ?? null;
       const resolvedLibrary = library ?? componentLibrary;
       if (!resolvedLibrary) {
@@ -125,12 +146,24 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
         return;
       }
 
-      const idAttr = path.node.openingElement.attributes.find(
-        (a): a is t.JSXAttribute =>
-          a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'id',
-      );
+      const attrs = path.node.openingElement.attributes;
+      let lastIdAttrIndex = -1;
+      let idAttr: t.JSXAttribute | null = null;
+      for (let i = 0; i < attrs.length; i++) {
+        const a = attrs[i];
+        if (a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === 'id') {
+          lastIdAttrIndex = i;
+          idAttr = a;
+        }
+      }
 
       if (!idAttr || !idAttr.value) {
+        found = { kind: 'unsupported', reason: 'non-string-id' };
+        return;
+      }
+
+      // A spread attribute after the last id could override it — treat as non-string-id.
+      if (attrs.slice(lastIdAttrIndex + 1).some((a) => a.type === 'JSXSpreadAttribute')) {
         found = { kind: 'unsupported', reason: 'non-string-id' };
         return;
       }
@@ -147,8 +180,53 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
   return found ?? { kind: 'unsupported', reason: 'unknown-wrapper' };
 }
 
-function makeDetected(library: I18nLibrary, key: string, start: { line: number; column: number }): I18nBindingDetected {
-  return { kind: 'i18n', library, key, sourceLocation: { line: start.line, column: start.column } };
+function makeDetected(
+  library: I18nLibrary,
+  key: string,
+  start: { line: number; column: number },
+  namespace?: string,
+): I18nBindingDetected {
+  return { kind: 'i18n', library, key, namespace, sourceLocation: { line: start.line, column: start.column } };
+}
+
+/** Returns namespace string for static ns prop, null for dynamic ns prop, undefined when no ns prop. */
+function extractNsFromObject(obj: t.ObjectExpression): string | null | undefined {
+  const properties = obj.properties;
+
+  // Find the last static ns property and its index (last-property-wins for duplicates).
+  let lastNsIndex = -1;
+  let lastNsProp: t.ObjectProperty | null = null;
+  for (let i = 0; i < properties.length; i++) {
+    const p = properties[i];
+    if (
+      p.type === 'ObjectProperty' &&
+      !p.computed &&
+      ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'ns') ||
+        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'ns'))
+    ) {
+      lastNsIndex = i;
+      lastNsProp = p as t.ObjectProperty;
+    }
+  }
+
+  if (lastNsProp === null) {
+    // No static ns property — a spread or computed key might still supply one, treat as dynamic.
+    return properties.some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+      ? null
+      : undefined;
+  }
+
+  // A spread or computed property after the last ns could override it at runtime — treat as dynamic.
+  if (
+    properties
+      .slice(lastNsIndex + 1)
+      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+  )
+    return null;
+
+  // The last ns property wins and is not overridden by any later spread.
+  if (lastNsProp.value.type !== 'StringLiteral') return null;
+  return lastNsProp.value.value;
 }
 
 function extractCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): string | null {
@@ -161,13 +239,34 @@ function extractCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): stri
 
 /** Returns key string on success, false for dynamic key, null for missing/non-string id prop. */
 function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
-  const idProp = obj.properties.find(
-    (p): p is t.ObjectProperty =>
+  const properties = obj.properties;
+
+  // Find the last static id property (last-property-wins for duplicates).
+  let lastIdIndex = -1;
+  let lastIdProp: t.ObjectProperty | null = null;
+  for (let i = 0; i < properties.length; i++) {
+    const p = properties[i];
+    if (
       p.type === 'ObjectProperty' &&
+      !p.computed &&
       ((p.key.type === 'Identifier' && (p.key as t.Identifier).name === 'id') ||
-        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'id')),
-  );
-  if (!idProp) return null;
-  if (idProp.value.type === 'StringLiteral') return idProp.value.value;
-  return false;
+        (p.key.type === 'StringLiteral' && (p.key as t.StringLiteral).value === 'id'))
+    ) {
+      lastIdIndex = i;
+      lastIdProp = p as t.ObjectProperty;
+    }
+  }
+
+  if (lastIdProp === null) return null;
+
+  // A spread or computed property after the last id could override it at runtime — treat as dynamic.
+  if (
+    properties
+      .slice(lastIdIndex + 1)
+      .some((p) => p.type === 'SpreadElement' || (p.type === 'ObjectProperty' && p.computed))
+  )
+    return false;
+
+  if (lastIdProp.value.type !== 'StringLiteral') return false;
+  return lastIdProp.value.value;
 }
