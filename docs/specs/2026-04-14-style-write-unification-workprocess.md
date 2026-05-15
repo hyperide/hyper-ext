@@ -3826,6 +3826,14 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 | elements identifiable via fiber-based selection | 2 | webpack 2nd compile >320s, proxy chain interrupted | `e3fc60d` |
 | **Total** | **7** | **All fixed for Run #25** | |
 
-**S1: 420 passed, 0 failed** — completely clean.
+**S1: 560 passed, 0 failed** — completely clean at 2h.
 
-**Run #25 will include all 3 fix commits** (`17e6554`, `e3fc60d`). Run #24 continues to completion for remaining ~700 tests per shard.
+### S3 mass-failure: all webpack-react-tw3-kanban tests
+
+- Every sequential ast-operations test on `webpack-react-tw3-kanban` hits the 320s poll timeout.
+- Pattern: 8 ast-operations tests × 2 retries × 326s = ~87 min additional failures in S3.
+- Root cause is the same as above (e3fc60d fix). S3 is poisoned for this project.
+- S1/S2 are unaffected (~25-30 min from completion).
+- Plan: wait for S1/S2 to finish, kill S3, start Run #25 immediately.
+
+**Run #25 will include all 3 fix commits** (`17e6554`, `e3fc60d`). Run #24 S1/S2 complete; S3 will be killed after they finish.
