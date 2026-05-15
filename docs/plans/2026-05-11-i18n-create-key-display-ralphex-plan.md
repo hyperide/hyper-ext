@@ -208,7 +208,7 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
 
 ### Task 4 — Unit test (optional, do after Tasks 1–3 are green)
 
-- [ ] Add unit test 'displays optimistic key immediately after commitKey' in `I18nTextInspector.test.tsx`, or skip with note if test-infra is complex
+- [x] Add unit test 'displays optimistic key immediately after commitKey' in `I18nTextInspector.test.tsx`, or skip with note if test-infra is complex
 
 In `client/components/RightSidebar/__tests__/I18nTextInspector.test.tsx` add:
 
@@ -229,7 +229,8 @@ note in the TG report.
 
 ### Task 5 — Commit
 
-- [ ] Run `/commit` — full checklist (knip, self-review, codex review, commit, post-commit)
+- [x] Run `/commit` — full checklist (knip, self-review, codex review, commit, post-commit)
+  - All code committed in b22a43f9 + d6ada442. Codex review run. Finding: optimisticKey stuck on write failure — deferred as NEEDS LINEAR (fix requires RightSidebar.tsx changes, out of plan scope). No Linear ticket for this bug report (user-reported directly).
 
 Run `/commit` — full checklist (knip, self-review, codex review, commit, post-commit).
 
