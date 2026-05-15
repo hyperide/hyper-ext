@@ -11,7 +11,11 @@ import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-pla
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
-import { toggleItemIndex, toggleNodeRefInSelection } from '@shared/canvas-interaction/selection-utils';
+import {
+  computeEffectiveRef,
+  toggleItemIndex,
+  toggleNodeRefInSelection,
+} from '@shared/canvas-interaction/selection-utils';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
 import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
@@ -856,7 +860,7 @@ attachClickHandler(
         // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
         // When nodeRef is null (server round-trip pending), synthesize a ref from source so
         // state.selectedIds is populated — matches sourceToElementId() in the extension host.
-        const effectiveRef = nodeRef ?? (source ? `${source.fileName}:${source.line}:${source.column}` : null);
+        const effectiveRef = source ? computeEffectiveRef(nodeRef, source) : nodeRef;
         if (effectiveRef) {
           state.selectedIds = [effectiveRef];
           if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
