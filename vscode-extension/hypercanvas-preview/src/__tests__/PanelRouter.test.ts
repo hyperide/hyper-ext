@@ -74,6 +74,8 @@ function createMockStateHub() {
     unregister: mock(),
     onChange: mock(() => () => {}),
     sendInit: mock(),
+    broadcast: mock(),
+    broadcastTracingMessage: mock(),
     dispose: mock(),
   };
 }
@@ -113,6 +115,20 @@ describe('PanelRouter', () => {
     const handled = await router.routeMessage({ type: 'state:update', patch: { hoveredId: 'x' } }, wv as never);
     expect(handled).toBe(true);
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({ hoveredId: 'x' });
+  });
+
+  it('broadcasts iframe:scrollToElement through stateHub instead of echoing to sender', async () => {
+    // Regression: prior implementation called webview.postMessage(message) which only
+    // echoed back to the sending panel (LeftPanel webview). The PreviewPanel webview
+    // — where the iframe lives — never received the scroll message. Fixed by routing
+    // through StateHub.broadcast which posts to every registered panel.
+    const wv = createMockWebview();
+    const message = { type: 'iframe:scrollToElement', elementId: '/src/App.tsx:42:8' };
+    const handled = await router.routeMessage(message, wv as never);
+    expect(handled).toBe(true);
+    expect(stateHub.broadcast).toHaveBeenCalledWith(message);
+    // Sender no longer receives a direct echo — the broadcast reaches it via StateHub.
+    expect(wv.messages).toHaveLength(0);
   });
 
   it('routes editor:* messages', async () => {

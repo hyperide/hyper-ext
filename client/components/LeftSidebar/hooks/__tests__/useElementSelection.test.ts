@@ -102,7 +102,10 @@ describe('handleSelect — VS Code path', () => {
     });
 
     expect(dispatchMock).toHaveBeenCalledTimes(1);
-    expect(dispatchMock.mock.calls[0][0]).toEqual({ selectedIds: [expectedRef] });
+    // handleSelect also resets selectedElementRuntimeStyle / selectedItemIndices
+    // as part of the selection-change payload. We only pin selectedIds here —
+    // the reset fields are an implementation detail of useSelectionDispatcher.
+    expect(dispatchMock.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedIds: [expectedRef] }));
   });
 
   it('sends iframe:scrollToElement with nodeRef after selection', () => {
@@ -119,7 +122,7 @@ describe('handleSelect — VS Code path', () => {
     });
   });
 
-  it('falls back to UUID when node has no loc', () => {
+  it('skips iframe:scrollToElement when node has no loc (no synthesizable nodeRef)', () => {
     const treeWithoutLoc: TreeNode[] = [{ id: 'uuid-noloc', label: 'div', type: 'element', children: [] }];
     const { result } = renderHook(() => useElementSelection(treeWithoutLoc));
 
@@ -127,14 +130,14 @@ describe('handleSelect — VS Code path', () => {
       result.current.handleSelect('uuid-noloc', makeClickEvent());
     });
 
-    expect(dispatchMock.mock.calls[0][0]).toEqual({ selectedIds: ['uuid-noloc'] });
-    expect(sendEventMock).toHaveBeenCalledWith({
-      type: 'iframe:scrollToElement',
-      elementId: 'uuid-noloc',
-    });
+    // Dispatch still happens with the UUID fallback — tree row highlighting needs it.
+    expect(dispatchMock.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedIds: ['uuid-noloc'] }));
+    // But scroll is skipped — the iframe's findElementsByRef parses only
+    // "file:line:col" refs and would silently no-op on a bare UUID.
+    expect(sendEventMock).not.toHaveBeenCalled();
   });
 
-  it('does NOT send scroll event when no currentComponent path', () => {
+  it('skips iframe:scrollToElement when no currentComponent path', () => {
     mockState.currentComponent = null;
     const { result } = renderHook(() => useElementSelection(TREE));
 
@@ -142,13 +145,11 @@ describe('handleSelect — VS Code path', () => {
       result.current.handleSelect('uuid-button', makeClickEvent());
     });
 
-    // dispatch happens with UUID fallback
+    // Dispatch happens with UUID fallback (no nodeRef synthesizable without component path).
     expect(dispatchMock).toHaveBeenCalledTimes(1);
-    // scroll still sent (with UUID)
-    expect(sendEventMock).toHaveBeenCalledWith({
-      type: 'iframe:scrollToElement',
-      elementId: 'uuid-button',
-    });
+    // Scroll skipped for the same reason as the no-loc case — the iframe handler
+    // would no-op on a bare UUID, so we don't waste a postMessage round-trip.
+    expect(sendEventMock).not.toHaveBeenCalled();
   });
 });
 
