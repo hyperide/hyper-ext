@@ -47,12 +47,16 @@ Fix:
 
 ### Task 1: Read all relevant files, understand current data flow
 
-- [ ] Read `shared/canvas-interaction/keyboard-handler.ts` — find `findParentNodeRef` call site, `onSelectElement(parentRef)` call, current callback type definitions
-- [ ] Read `shared/canvas-interaction/node-map-lookup.ts` — `findParentNodeRef` implementation, what it returns
-- [ ] Read `client/hooks/useCanvasInteraction.ts` — `onSelectElement` handler, how `selectedItemIndices` is set, `selectedIds` dispatch
-- [ ] Read `shared/canvas-interaction/overlay-rects.ts` around line 113 — `findElements(ref, itemIndex)` call and how itemIndex affects result
-- [ ] Read `client/hooks/useCanvasEngineContext.ts` — `engine.select` call and signature
-- [ ] Document: current `findParentNodeRef` return type, `onSelectElement` callback signature, where to thread itemIndex
+- [x] Read `shared/canvas-interaction/keyboard-handler.ts` — find `findParentNodeRef` call site, `onSelectElement(parentRef)` call, current callback type definitions
+- [x] Read `shared/canvas-interaction/node-map-lookup.ts` — `findParentNodeRef` implementation, what it returns
+  - NOTE: `node-map-lookup.ts` does NOT exist. `findParentNodeRef` is defined in `keyboard-handler.ts:41-44`. Task 3 must NOT refactor `findParentNodeRef` return type — instead extend `getState()` and `onSelectElement` callback signature in `keyboard-handler.ts`.
+- [x] Read `client/hooks/useCanvasInteraction.ts` — `onSelectElement` handler, how `selectedItemIndices` is set, `selectedIds` dispatch
+  - NOTE: `client/hooks/useCanvasInteraction.ts` does NOT exist. VS Code path is `vscode-extension/hypercanvas-preview/src/webview-preview-panel/useCanvasInteraction.ts`. SaaS path is `client/pages/Editor/components/hooks/useHotkeysSetup.ts`. The webview file already handles `msg.itemIndex` correctly — no changes needed there.
+- [x] Read `shared/canvas-interaction/overlay-rects.ts` around line 113 — `findElements(ref, itemIndex)` call and how itemIndex affects result
+- [x] Read `client/hooks/useCanvasEngineContext.ts` — `engine.select` call and signature
+  - NOTE: `client/hooks/useCanvasEngineContext.ts` does NOT exist. SaaS calls `engine.select(id)` directly in `useHotkeysSetup.ts:637`. `engine.selectWithItemIndex(id, itemIndex)` already exists in `CanvasEngine.ts:182-196` — use it in Task 5 for SaaS path.
+- [x] Document: current `findParentNodeRef` return type, `onSelectElement` callback signature, where to thread itemIndex
+  - `findParentNodeRef` returns `string | null`. `onSelectElement: (id: string) => void` (no itemIndex). Fix: (1) extend `DesignKeydownConfig.getState()` to include `selectedItemIndices`, (2) extend `onSelectElement` to `(id, itemIndex?) => void`, (3) read child's itemIndex in Shift+Enter handler, pass to callback. VS Code: `iframe-interaction.ts` postMessage currently hardcodes `itemIndex: null` — must read from `state.selectedItemIndices[freshId]`. SaaS: call `engine.selectWithItemIndex` instead of `engine.select`.
 
 ### Task 2: RED — write failing E2E test: Shift+Enter → only 1 rect
 
