@@ -15,13 +15,7 @@
 import { execFile } from 'node:child_process';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import {
-  ensureSample,
-  isUiPrimitive,
-  PreviewFileManager,
-  PreviewModeManager,
-  type SSRMockConfig,
-} from '@lib/preview-generator';
+import { ensureSample, PreviewFileManager, PreviewModeManager, type SSRMockConfig } from '@lib/preview-generator';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
@@ -500,11 +494,10 @@ export function activate(context: vscode.ExtensionContext) {
     previewPanel.onComponentMissing((componentPath) => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
+      componentMissingRetries.set(componentPath, count + 1);
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
       const relPath = relative(currentWorkspaceRoot, absPath);
-      if (isUiPrimitive(relPath)) return;
-      componentMissingRetries.set(componentPath, count + 1);
       previewManager
         .ensureComponent([relPath])
         .then(() => {
@@ -599,7 +592,6 @@ export function activate(context: vscode.ExtensionContext) {
     const currentWorkspaceRoot = syncWorkspaceRuntime();
     const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
     const relativePath = relative(currentWorkspaceRoot, absComponentPath);
-    if (isUiPrimitive(relativePath)) return;
     await previewManager.ensureComponent([relativePath]);
     await devServerManager?.awaitRecompile();
     previewPanel?.setComponentParam(relativePath);
@@ -702,15 +694,6 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Normalize: currentComponent.path may be relative or absolute
       const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      const relativePath = relative(currentWorkspaceRoot, absComponentPath);
-
-      // UI primitives (client/components/ui/*) are excluded from __canvas_preview__.tsx.
-      // Calling ensureComponent on them triggers HMR for every Explorer click and
-      // exhausts the E2E probing budget. Just update the URL param and return.
-      if (isUiPrimitive(relativePath)) {
-        previewPanel?.setComponentParam(relativePath);
-        return;
-      }
 
       // Skip source-file mutation entirely when the harness disables it.
       // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
@@ -740,6 +723,7 @@ export function activate(context: vscode.ExtensionContext) {
             await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
           }
           // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
+          const relativePath = relative(currentWorkspaceRoot, absComponentPath);
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {
@@ -780,6 +764,7 @@ export function activate(context: vscode.ExtensionContext) {
           await devServerManager?.awaitRecompile();
           if (ac.signal.aborted) return;
           // 5. Update iframe component URL param — no hard reload needed
+          const relativePath = relative(currentWorkspaceRoot, absComponentPath);
           previewPanel?.setComponentParam(relativePath);
         })
         .catch((err) => {
