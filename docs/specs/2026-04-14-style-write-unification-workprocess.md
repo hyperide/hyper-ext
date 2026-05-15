@@ -40,10 +40,16 @@
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
 
-- **Run #41** (`run-20260430-123732-60926`, 2026-04-30 12:37 CEST) — **RUNNING** (~15 min). 3 shards.
+- **Run #41** (`run-20260430-123732-60926`, 2026-04-30 12:37 CEST) — **RUNNING** (~45 min). 3 shards.
   - New fixes vs run #40: `9fc8de3d` (hash nodeRef cross-file fallback), `9aca060d` (debug logging gate), `225658f4` (cross-file undo fix + client/ nodeMap), `a9d096b` in ext-test-projects (App.tsx fallback scan)
   - S3 early results: Tamagui "style written as prop" → **PASSED (12.9s)**; ast-debug.log confirms `resolvedPath=App.tsx` correct
-  - S1: 41 tests done, 0 fails | S2: 2 tests done, 0 fails | S3: 16 tests done, 0 fails (as of 10:52 UTC)
+  - Progress at ~13:15 UTC: S1: 149 done, **0 fails** | S2: 135 done, **1 flaky** (error-overlay, retry-passed) | S3: 186 done, **3 flaky** (hex converts to nearest token — all retry-pass at 15-25s variants, Tamagui test running multiple fixture contexts)
+
+- **Bulka-the-dog preview fixes (v0.1.39–v0.1.40, 2026-04-30)**:
+  - `e15f4f93` fix(preview): removed `// @hyperide-managed` JSX comment from patchRouterConfig — was serialized as text node inside `<Routes>`, causing React Router v6 runtime error
+  - `0a2963ec` fix(preview): `readProviderContextFiles()` now uses `detectFrontendRoot()` (same index.html heuristic as PreviewModeManager) — so `client/App.tsx` is scanned for providers, not just `src/App.tsx`
+  - `0a2963ec` also adds `GalleryProvider`/`GalleryLightbox` detection — wraps isolated preview with gallery context to fix "Gallery components must be used inside <GalleryProvider>" error
+  - `__canvas_preview__.tsx` deleted from bulka to force regeneration with new provider wrapper on next preview open
 
 - **Run #40** (`run-20260430-112941-82810`, 2026-04-30 13:29 CEST) — **SUPERSEDED** by run #41.
   - New fixes vs run #39: `b53e1331` (AstService cross-file resolve), `3e39f08e` (ViteReactSSG fallback render), `dee4d183` (bulka client/ root detection + PreviewProxy isolated path), `f756a802` (Tamagui root cause fix: resolveNodeRef file guard)
