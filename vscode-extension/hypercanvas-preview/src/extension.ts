@@ -534,15 +534,26 @@ export function activate(context: vscode.ExtensionContext) {
       // so the user can see the code alongside the preview.
       // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
       const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
-      vscode.workspace.openTextDocument(vscode.Uri.file(absPath)).then(
-        (doc) =>
+      // .then(onFulfilled, onRejected) only catches openTextDocument's rejection.
+      // showTextDocument can also reject (disposed editor / workspace switch /
+      // race with another panel closing all editors), and that rejection
+      // becomes an unhandled promise rejection which VS Code surfaces as a
+      // ".error" notification toast containing "Unhandled rejection ..." —
+      // tripping every preview-render "renders without errors" assertion that
+      // greps for /fatal|crash|unhandled/i. Use a trailing .then().catch()
+      // chain so both stages funnel into the same handler.
+      vscode.workspace
+        .openTextDocument(vscode.Uri.file(absPath))
+        .then((doc) =>
           vscode.window.showTextDocument(doc, {
             viewColumn: vscode.ViewColumn.One,
             preserveFocus: true,
             preview: true,
           }),
-        (err) => console.error('[HyperIDE] Failed to open component file:', err),
-      );
+        )
+        .then(undefined, (err) => {
+          console.error('[HyperIDE] Failed to open component file:', err);
+        });
 
       // Parse component structure
       panelRouter?.componentService
