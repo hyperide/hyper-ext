@@ -107,11 +107,11 @@ it's Case A. If it also fails, it's Case B. Implement whichever task below match
 
 ### Task 2A — (Case A) Optimistic key update in I18nTextInspector
 
-- [ ] Add `optimisticKey` state to `I18nTextInspector`
-- [ ] Change `currentKey` derivation to use `optimisticKey ?? i18nBinding.key`
-- [ ] Set `optimisticKey` in `commitKey` before calling `onKeyChange`
-- [ ] Add `useEffect` to clear `optimisticKey` once `i18nBinding.key` matches
-- [ ] Run `bun run tsc --noEmit` — no new errors
+- [x] Add `optimisticKey` state to `I18nTextInspector`
+- [x] Change `currentKey` derivation to use `optimisticKey ?? i18nBinding.key`
+- [x] Set `optimisticKey` in `commitKey` before calling `onKeyChange`
+- [x] Add `useEffect` to clear `optimisticKey` once `i18nBinding.key` matches
+- [x] Run `bun run tsc --noEmit` — no new errors
 
 Only do this if Task 1 RED shows the key eventually appears (Case A).
 
@@ -158,9 +158,9 @@ In `client/components/RightSidebar/sections/I18nTextInspector.tsx`:
 
 ### Task 2B — (Case B) Fix stuck read pipeline
 
-- [ ] Investigate AstService/NodeMapService/StyleReadService chain for broken link
-- [ ] Implement fix for the broken read pipeline step
-- [ ] Run `bun run tsc --noEmit` — no new errors
+- [x] Investigate AstService/NodeMapService/StyleReadService chain for broken link [skipped — Case A confirmed, Case B did not occur]
+- [x] Implement fix for the broken read pipeline step [skipped — Case A confirmed, Case B did not occur]
+- [x] Run `bun run tsc --noEmit` — no new errors [skipped — Case A confirmed, Case B did not occur]
 
 Only do this if Task 1 RED shows the key never appears (Case B).
 
