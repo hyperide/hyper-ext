@@ -28,4 +28,10 @@ export {
   type SampleGeneratorFn,
 } from './sample-ensurer';
 export { buildSamplePrompt, extractCodeFromAIResponse } from './sample-prompt';
-export { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
+export {
+  detectExportStyle,
+  detectRouterShell,
+  type ExportStyle,
+  extractComponentName,
+  scanSampleExports,
+} from './scanner';

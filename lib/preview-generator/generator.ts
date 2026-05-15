@@ -343,7 +343,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
   lines.push('const previewProduct = {');
-  lines.push('  id: 1,');
+  lines.push('  id: "1",');
   lines.push('  name: "Preview Product",');
   lines.push('  price: 29.99,');
   lines.push('  originalPrice: 39.99,');
@@ -606,6 +606,12 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
 function extractImportedBindings(importLines: string[]): Set<string> {
   const bindings = new Set<string>();
   for (const line of importLines) {
+    const namespaceMatch = line.match(/^import\s+\*\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)/);
+    if (namespaceMatch?.[1]) {
+      bindings.add(namespaceMatch[1]);
+      continue;
+    }
+
     const defaultMatch = line.match(/^import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:,|\s+from\b)/);
     if (defaultMatch?.[1]) bindings.add(defaultMatch[1]);
 
@@ -791,6 +797,13 @@ function buildErrorBoundary(): string[] {
     '  static getDerivedStateFromError(error: Error) {',
     '    return { error };',
     '  }',
+    '  componentDidCatch(error: Error) {',
+    '    window.parent.postMessage({',
+    "      type: 'hypercanvas:componentError',",
+    '      componentPath: this.props.componentPath,',
+    '      error: error.message,',
+    "    }, '*');",
+    '  }',
     '  componentDidUpdate(prevProps: { componentPath: string }) {',
     '    // Reset error state when switching to a different component',
     '    if (prevProps.componentPath !== this.props.componentPath && this.state.error) {',
@@ -799,12 +812,6 @@ function buildErrorBoundary(): string[] {
     '  }',
     '  render() {',
     '    if (this.state.error) {',
-    '      // Notify parent webview about the error — UI renders in the overlay layer, not here',
-    '      window.parent.postMessage({',
-    "        type: 'hypercanvas:componentError',",
-    '        componentPath: this.props.componentPath,',
-    '        error: this.state.error.message,',
-    "      }, '*');",
     '      return null;',
     '    }',
     '    return this.props.children;',

@@ -667,7 +667,7 @@ export class PreviewFileManager {
    */
   async _hasImport(previewFilePath: string, importPath: string): Promise<boolean> {
     const source = await this.io.readFile(previewFilePath);
-    const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+    const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'], errorRecovery: true });
     const previewDir = dirname(previewFilePath);
     const normalizedTarget = this._normalizeImportPath(previewDir, importPath);
 
