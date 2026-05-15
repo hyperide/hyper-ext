@@ -60,4 +60,29 @@ export interface StyleAdapter {
    * @param layoutType - Layout type: 'layout', 'col', 'row', 'grid'
    */
   changeLayout(elementId: string, filePath: string, layoutType: 'layout' | 'col' | 'row' | 'grid'): Promise<void>;
+
+  /**
+   * Write the `order` style at a specific breakpoint without disturbing other variants.
+   *
+   * Tailwind: rewrites the className token for `order-*` (or `<bp>:order-*`) only.
+   * Tamagui: writes the `order` prop. Non-base breakpoints unsupported until
+   * media-query / variant infra is wired.
+   *
+   * @param elementId - Element identifier (nodeRef)
+   * @param value - New order number, or `null` to remove the order class entirely
+   * @param opts.filePath - Path to the file containing the element
+   * @param opts.breakpoint - Tailwind variant prefix (e.g. 'md', 'lg'); base breakpoint when undefined
+   * @param opts.currentClassName - Current className (read from DOM/AST by caller). Required for Tailwind;
+   *   ignored by prop-based adapters.
+   * @returns success flag and optional error code (`order-not-supported` for adapters that don't impl)
+   */
+  writeOrder?(
+    elementId: string,
+    value: number | null,
+    opts: {
+      filePath: string;
+      breakpoint?: string;
+      currentClassName?: string;
+    },
+  ): Promise<{ success: boolean; error?: string }>;
 }
