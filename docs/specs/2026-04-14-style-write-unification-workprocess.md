@@ -2952,10 +2952,29 @@ All 5 "failures" (4 on s3, 1 timedOut on s2) passed on retry. Breakdown:
 
 Zero confirmed real failures. All are first-attempt timing races that pass on retry.
 
+## 📍 Run #19 Checkpoint 2 (2026-04-28 09:00 CEST, ~55 min)
+
+Progress: S1=200, S2=158, S3=229 done → 587/2189 (27%). Same pattern: 6 fail-lines on s3,
+all RETRY-PASS. S1 froze at 06:51:14 UTC on test ET-9 (VS Code hung, CPU=0.19%, no new
+log lines for 9+ min past 120s test timeout). Killed s1 container, restarted as
+`20260428-080658-82045r-s1` (same slot-34 volume, new artifacts dir).
+
+Restart container launched at 07:01 UTC, first test passed in 874ms — healthy.
+Active containers:
+- `hyper-e2e-20260428-080658-82045r-s1` → new artifacts: `run-20260428-080658-82045r/shard-1/`
+- `hyper-e2e-20260428-080658-82045-s2` → original artifacts: `run-20260428-080658-82045/shard-2/`
+- `hyper-e2e-20260428-080658-82045-s3` → original artifacts: `run-20260428-080658-82045/shard-3/`
+
+Recurrent flakies (all retry-pass, observed across all runs):
+- `Tamagui: style written as prop, not className` — cold-start timing
+- `styles applied correctly (element has non-zero dimensions)` — preview warmup race
+- `component has non-zero dimensions (CSS applied in App Shell)` — preview warmup race
+These are harness-level first-attempt races, not real extension bugs.
+
 ## Next Step
 
-1. Let run #19 complete (est. ~3h from start = ~09:15 CEST).
+1. Let S1r + S2 + S3 complete.
 2. Record final tally; classify any persistent failures.
 3. If all failures retry-pass → run is effectively green.
-4. Start run #20 with VSIX 0.1.24 if any persistent failures need investigation.
-5. Target: 0 persistent failures across 2189 tests.
+4. S1 original produced 200 valid tests; S1r will cover remaining 569+.
+5. Target: 0 persistent failures across all 2189 tests.
