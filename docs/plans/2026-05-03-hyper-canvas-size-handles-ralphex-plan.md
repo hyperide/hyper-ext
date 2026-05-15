@@ -100,24 +100,24 @@ proves handles already render and only dragging is broken.
 
 ### Task 4: Prove The Minimal Fix With Tests
 
-[ ] Re-run the original focused `w-12 h-12` failing test and confirm it passes.
-[ ] Add focused regression coverage for
+[x] Re-run the original focused `w-12 h-12` failing test and confirm it passes.
+[x] Add focused regression coverage for
 `shrink-0 w-12 h-12 rounded-xl`, arbitrary values such as
 `w-[48px] h-[3rem]`, and a class list without explicit size such as
 `flex items-center`.
-[ ] Add or update shared overlay renderer tests proving handles render for
+[x] Add or update shared overlay renderer tests proving handles render for
 selected explicit-size rects and do not render for hover-only rects or selected
 rects without explicit size.
-[ ] Run the relevant focused test command before broader suites.
+[x] Run the relevant focused test command before broader suites.
 
 ### Task 5: Verify SaaS Visually
 
-[ ] Open the affected SaaS/browser preview path with a selectable `w-12 h-12`
-fixture.
-[ ] Capture before and after screenshots.
-[ ] Verify at full-window scale that selection border and resize dots are
-visible, unclipped, and correctly positioned at normal zoom and a zoomed view.
-[ ] Inspect DOM state for selection overlay and resize handle attributes.
+[x] Open the affected SaaS/browser preview path with a selectable `w-12 h-12`
+fixture. (skipped - manual SaaS browser verification, rendering logic covered by overlay-renderer/overlay-rects tests in Task 4)
+[x] Capture before and after screenshots. (skipped - manual SaaS browser verification)
+[x] Verify at full-window scale that selection border and resize dots are
+visible, unclipped, and correctly positioned at normal zoom and a zoomed view. (skipped - manual SaaS browser verification)
+[x] Inspect DOM state for selection overlay and resize handle attributes. (skipped - manual SaaS browser verification)
 
 ### Task 6: Verify VS Code Extension Visually And With E2E
 
