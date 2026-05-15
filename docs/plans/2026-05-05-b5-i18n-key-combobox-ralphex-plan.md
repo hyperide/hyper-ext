@@ -108,14 +108,14 @@ Acceptance: Test passes, combobox shows keys from locale file.
 
 ### Task 6: Lint + Typecheck
 
-- [ ] `bun lint` in hyper-canvas-draft.
-- [ ] `bun typecheck` or `tsc --noEmit` for extension.
-- [ ] Fix any errors.
+- [x] `bun lint` in hyper-canvas-draft.
+- [x] `bun typecheck` or `tsc --noEmit` for extension.
+- [x] Fix any errors.
 
 ### Task 7: Commit
 
-- [ ] Commit all changes with message: `feat(i18n): wire availableKeys combobox via styles:fetchI18nKeys RPC`.
-- [ ] Run `/commit` workflow (codex review, Linear comment, commit).
+- [x] Commit all changes with message: `feat(i18n): wire availableKeys combobox via styles:fetchI18nKeys RPC`.
+- [x] Run `/commit` workflow (codex review, Linear comment, commit).
 
 ### Task 8: Telegram Handoff
 
