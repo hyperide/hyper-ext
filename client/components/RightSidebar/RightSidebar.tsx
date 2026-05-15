@@ -751,6 +751,17 @@ export default function RightSidebar({
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
       const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
+      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
+      // pollute prod consoles. Tracks the i18n-key-change flicker window
+      // (Task 1 of selection-survives-i18n-write).
+      const dbg = (label: string, extra?: unknown): void => {
+        const w = window as unknown as Record<string, unknown>;
+        if (!w.__HC_DEBUG_SELECTION) return;
+        // eslint-disable-next-line no-console
+        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
+      };
+      const t0 = performance.now();
+      dbg('start', { previousSelectedId, newKey, isNewKey });
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -764,13 +775,21 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
+          dbg('writeI18nResource resolved');
           // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
           // fiber tree, dropping the iframe's previous selection. Re-broadcast both
           // immediately and after a short delay to outrun the HMR window.
           if (i18nDispatch) {
             i18nDispatch({ selectedIds: [previousSelectedId] });
-            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
-            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
+            dbg('dispatch[0] sent', { selectedIds: [previousSelectedId] });
+            setTimeout(() => {
+              i18nDispatch({ selectedIds: [previousSelectedId] });
+              dbg('dispatch[1@250ms] sent');
+            }, 250);
+            setTimeout(() => {
+              i18nDispatch({ selectedIds: [previousSelectedId] });
+              dbg('dispatch[2@800ms] sent');
+            }, 800);
           }
         } catch {
           // key change failed — no rollback needed (source file unchanged)

@@ -35,20 +35,6 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   availableKeys,
   rollbackKey,
 }: I18nTextInspectorProps) {
-  // Diagnostic logging for HYP-i18n-text-edit-disabled investigation. Cheap, gated by
-  // `kind === 'i18n'` so the unsupported-fallback path stays quiet. Remove once the
-  // editable-on-existing-keys bug is closed and E2E coverage is in place.
-  if (i18nBinding.kind === 'i18n') {
-    console.debug('[I18nTextInspector] binding', {
-      key: i18nBinding.key,
-      library: i18nBinding.library,
-      activeLocale: i18nBinding.activeLocale,
-      availableLocales: i18nBinding.availableLocales,
-      resolvedText: i18nBinding.resolvedText,
-      editable: i18nBinding.editable,
-      availableKeysCount: availableKeys?.length,
-    });
-  }
   // Local draft prevents snap-back to stale resolvedText during the debounce window.
   // Component is re-keyed in RightSidebar when key/library changes, so this
   // state naturally resets on binding identity change without a useEffect.
