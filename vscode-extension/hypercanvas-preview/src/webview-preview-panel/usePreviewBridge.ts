@@ -491,9 +491,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
               syncComponentToFrame(component.path);
             }
             onStateUpdateRef.current(msg.state);
+            // Forward to iframe as stateUpdate — same pattern as state:update above.
+            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.state }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           }
-          // Forward to iframe
-          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'iframe:scrollToElement':
