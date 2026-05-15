@@ -1716,3 +1716,37 @@ s4 жуёт remix-cssmodules-spotify + webpack-react-tw3-kanban + remix-tw4-twit
 
 s1/s2/s3 в финальной четверти, должны закончиться в течение часа.
 s4 — ещё ~2-3 часа.
+
+## 📍 2026-04-27 04:25 CEST: s2 ЗАВЕРШИЛСЯ
+
+**s2 finals**: 31 failed / 33 flaky / 144 skipped / 292 passed (3.4h, 500 total)
+
+Сравнение с OLD run (200339-88217):
+| metric | old | new | Δ |
+|--------|-----|-----|---|
+| failed | 41 | 31 | **−10** |
+| flaky | 33 | 33 | 0 |
+| skipped | 146 | 144 | −2 |
+| passed | 280 | 292 | **+12** |
+
+**Чистый выигрыш: 10 меньше fail'ов на s2 благодаря 0.1.10**.
+
+### s2 unique fail clusters (final summary)
+
+- **settings.spec.ts: 12 fails** (Setting persists, defaultPort, autoStart×2, AI provider change, Model override, baseURL, Backend, scope, etc.) — REAL bug в settings handler. НЕ связан с 0.1.10.
+- **preview-render.spec.ts:285 "empty component" 6 fails** на разных проектах — также real, error toast contains fatal/crash/unhandled.
+- **security**: XSS, CSP — real test bugs.
+- **debug-webpack-frame**: 2 fails (intentionally broken test for diagnostic).
+- **undo-redo**: 2 fails.
+
+### Prerequisite — Settings cluster требует расследования
+
+12 fails на `settings.spec.ts` это самый большой не-VSIX-связанный кластер.
+Все на single test file. Возможно проблема:
+- `setSettingViaJSON` ломается из-за path issues
+- VS Code не загружает settings.json правильно после re-launch
+- Settings not propagating to extension
+
+После прогона починю.
+
+s1, s3, s4 продолжают.
