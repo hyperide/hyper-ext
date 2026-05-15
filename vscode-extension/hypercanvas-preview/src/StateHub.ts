@@ -17,6 +17,7 @@ export class StateHub {
     astStructure: null,
     canvasMode: 'single',
     engineMode: 'design',
+    writeInProgress: null,
   };
 
   /** Registered panels by id */
@@ -102,19 +103,6 @@ export class StateHub {
       type: `element-tracing:${innerType}`,
       payload,
     };
-    for (const [, webview] of this._panels) {
-      webview.postMessage(message);
-    }
-  }
-
-  /**
-   * Broadcast a typed message to all registered panels.
-   * Used by PanelRouter to forward messages whose target panel is not the sender —
-   * e.g. `iframe:scrollToElement` is sent by the LeftPanel webview but must be
-   * received by the PreviewPanel webview (which hosts the iframe). Echoing back
-   * to the sender is a no-op in practice (only the PreviewPanel listens for it).
-   */
-  broadcast(message: { type: string } & Record<string, unknown>): void {
     for (const [, webview] of this._panels) {
       webview.postMessage(message);
     }

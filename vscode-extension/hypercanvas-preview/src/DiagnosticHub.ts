@@ -14,8 +14,13 @@ import type { RuntimeError } from '../../../shared/runtime-error';
 import type { LogEntry } from './services/DevServerManager';
 import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
 
-// No module-level ERROR_SINK_PATH — read at call time so startDiagnosticCapture
-// can set the env var after module load and reach this path.
+/**
+ * Optional append-only sink for diagnostic error lines, controlled by
+ * `HYPERIDE_DIAGNOSTIC_ERROR_SINK` env var (path to a file). E2E harnesses
+ * set this so they can tail the file for real-time flood detection — the
+ * sidebar Logs panel is the only place these errors otherwise appear.
+ */
+const ERROR_SINK_PATH = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
 
 /** Max server log entries included in AI diagnostic context */
 const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
@@ -201,23 +206,17 @@ export class DiagnosticHub {
 
     // Forward error-level entries to the optional E2E error sink so test
     // harnesses see the same failures the user sees in the Hyper Logs panel.
-    // Read the env var at call time so startDiagnosticCapture (set after module load) works.
-    const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
-    if (sinkPath) {
-      const errorEntries = entries.filter((e) => e.isError || e.level === 'error');
-      if (errorEntries.length > 0) {
-        const ndjson = errorEntries
-          .map((e) =>
-            JSON.stringify({
-              ts: e.timestamp,
-              kind: 'diagnosticEntry',
-              source: e.source ?? '',
-              line: (e.line ?? '').replace(/\n/g, ' '),
-            }),
-          )
-          .join('\n');
+    // VS Code extension host `console.error` goes to the Extension Host
+    // output channel, not to the Playwright-visible main window — so the
+    // only reliable cross-process channel is a file the fixture tails.
+    if (ERROR_SINK_PATH) {
+      const errorLines = entries
+        .filter((e) => e.level === 'error')
+        .map((e) => `${Date.now()}\t${e.source ?? ''}\t${(e.line ?? '').replace(/\n/g, ' ')}`)
+        .join('\n');
+      if (errorLines.length > 0) {
         try {
-          appendFileSync(sinkPath, `${ndjson}\n`);
+          appendFileSync(ERROR_SINK_PATH, `${errorLines}\n`);
         } catch {
           // Best effort — never crash extension host on logging failure.
         }

@@ -5,8 +5,9 @@
  * Assumptions: pure logic, host I/O is injected via FileIO adapter
  */
 
+import { parse as babelParse } from '@babel/parser';
+import type { ObjectExpression, ObjectProperty } from '@babel/types';
 import type { FileIO } from '../../lib/ast/file-io';
-import { parseTsLocaleObject, resolveLocaleKey } from './ts-locale-ast';
 import type { I18nLibrary, ResolveI18nResourceResult } from './types';
 
 export interface ResolveI18nResourceParams {
@@ -47,6 +48,83 @@ const MERGED_FILE_CANDIDATES = [
 ];
 
 /**
+ * Walk a Babel ObjectExpression AST node and extract a plain JS object.
+ * Only handles ObjectProperty (not SpreadElement/ObjectMethod).
+ * Template literals without substitutions are extracted as their static string.
+ * Template literals with substitutions are skipped (null value).
+ */
+function extractObjectLiteral(node: ObjectExpression): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const prop of node.properties) {
+    if (prop.type !== 'ObjectProperty') continue;
+    const p = prop as ObjectProperty;
+
+    // Extract key
+    let key: string | null = null;
+    if (p.key.type === 'Identifier') key = p.key.name;
+    else if (p.key.type === 'StringLiteral') key = p.key.value;
+    if (!key) continue;
+
+    // Extract value
+    if (p.value.type === 'ObjectExpression') {
+      result[key] = extractObjectLiteral(p.value);
+    } else if (p.value.type === 'StringLiteral') {
+      result[key] = p.value.value;
+    } else if (p.value.type === 'TemplateLiteral') {
+      // Only extract template literals with no dynamic substitutions
+      if (p.value.expressions.length === 0) {
+        result[key] = p.value.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
+      }
+      // Skip template literals with substitutions — can't statically resolve them
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse a TypeScript/JavaScript file and extract the exported `translations`
+ * or `messages` object. Returns null if parsing fails or the export is not found.
+ */
+function parseTranslationsTsFile(content: string): Record<string, unknown> | null {
+  try {
+    const ast = babelParse(content, {
+      sourceType: 'module',
+      plugins: ['typescript'],
+    });
+
+    for (const node of ast.program.body) {
+      // export const translations = {...}  or  export const messages = {...}
+      if (node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration') {
+        for (const decl of node.declaration.declarations) {
+          if (
+            decl.id.type === 'Identifier' &&
+            (decl.id.name === 'translations' || decl.id.name === 'messages') &&
+            decl.init?.type === 'ObjectExpression'
+          ) {
+            return extractObjectLiteral(decl.init);
+          }
+        }
+      }
+      // const translations = {...} (no export keyword — module.exports style projects)
+      if (node.type === 'VariableDeclaration') {
+        for (const decl of node.declarations) {
+          if (
+            decl.id.type === 'Identifier' &&
+            (decl.id.name === 'translations' || decl.id.name === 'messages') &&
+            decl.init?.type === 'ObjectExpression'
+          ) {
+            return extractObjectLiteral(decl.init);
+          }
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Try to discover a merged single-file translation layout
  * (e.g. `translations.ts` with `export const translations = { ru: {...}, en: {...} }`).
  * Returns a Layout with `mergedData` populated, or null if not found.
@@ -63,14 +141,14 @@ async function discoverMergedLayout(
     } catch {
       continue;
     }
-    const parsed = parseTsLocaleObject(content);
-    if (!parsed || parsed.kind !== 'merged') continue;
-    const locales = parsed.locales;
+    const parsed = parseTranslationsTsFile(content);
+    if (!parsed) continue;
+    const locales = Object.keys(parsed);
     if (locales.length === 0) continue;
     return {
       getLocaleFilePath: () => filePath,
       availableLocales: locales,
-      mergedData: parsed.data,
+      mergedData: parsed as Record<string, unknown>,
     };
   }
   return null;
@@ -142,8 +220,7 @@ export async function discoverLayout(
         };
       }
 
-      // TS/JS files — static object literals are writable via AST; dynamic modules
-      // remain unsupported after resolveI18nResource attempts to parse them.
+      // TS/JS files (unsupported format — detect so we can return a precise error)
       const tsFiles = await listFiles(dir, ['.ts', '.js']);
       const flatTs = tsFiles.filter((f) => {
         const rel = f.slice(prefix.length);
@@ -240,18 +317,12 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   const layout = await discoverLayout(projectRoot, namespace, activeLocale, fileIO);
 
   if (!layout) {
-    return {
-      availableLocales: [],
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-locale-file',
-      writable: false,
-    };
+    return { availableLocales: [], activeLocale, resolvedText: null, unresolvedReason: 'missing-locale-file' };
   }
 
   const { getLocaleFilePath, availableLocales, mergedData } = layout;
 
-  // Merged single-file format (translations.ts): data already parsed, no file I/O needed.
+  // Merged single-file format: data already parsed, no file I/O needed
   if (mergedData) {
     const localeData = mergedData[activeLocale] ?? (fallbackLocale ? mergedData[fallbackLocale] : undefined);
     const effectiveLocale = mergedData[activeLocale] !== undefined ? activeLocale : (fallbackLocale ?? activeLocale);
@@ -261,64 +332,19 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
         activeLocale: effectiveLocale,
         resolvedText: null,
         unresolvedReason: 'missing-locale-file',
-        writable: true,
       };
     }
     const resolvedText = resolveKey(localeData, key);
     if (resolvedText === null) {
-      return {
-        availableLocales,
-        activeLocale: effectiveLocale,
-        resolvedText: null,
-        unresolvedReason: 'missing-key',
-        writable: true,
-      };
+      return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'missing-key' };
     }
-    return { availableLocales, activeLocale: effectiveLocale, resolvedText, writable: true };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText };
   }
 
-  // Static TS/JS object-literal locale files are writable via AST.
+  // Detect unsupported format (TS/JS per-locale files)
   const activeFilePath = getLocaleFilePath(activeLocale);
   if (activeFilePath.endsWith('.ts') || activeFilePath.endsWith('.js')) {
-    let content: string;
-    try {
-      content = await fileIO.readFile(activeFilePath);
-    } catch {
-      return {
-        availableLocales,
-        activeLocale,
-        resolvedText: null,
-        unresolvedReason: 'missing-locale-file',
-        writable: false,
-      };
-    }
-    const parsed = parseTsLocaleObject(content, activeLocale);
-    if (parsed) {
-      const localeData = parsed.kind === 'merged' ? parsed.data[activeLocale] : parsed.data;
-      const resolvedText = resolveLocaleKey(localeData, key);
-      if (resolvedText === null) {
-        return {
-          availableLocales: parsed.kind === 'merged' ? parsed.locales : availableLocales,
-          activeLocale,
-          resolvedText: null,
-          unresolvedReason: 'missing-key',
-          writable: true,
-        };
-      }
-      return {
-        availableLocales: parsed.kind === 'merged' ? parsed.locales : availableLocales,
-        activeLocale,
-        resolvedText,
-        writable: true,
-      };
-    }
-    return {
-      availableLocales,
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'unsupported-format',
-      writable: false,
-    };
+    return { availableLocales, activeLocale, resolvedText: null, unresolvedReason: 'unsupported-format' };
   }
 
   // Read active locale file, fall back if needed
@@ -342,13 +368,7 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   }
 
   if (content === null) {
-    return {
-      availableLocales,
-      activeLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-locale-file',
-      writable: false,
-    };
+    return { availableLocales, activeLocale, resolvedText: null, unresolvedReason: 'missing-locale-file' };
   }
 
   // Parse JSON
@@ -356,28 +376,14 @@ export async function resolveI18nResource(params: ResolveI18nResourceParams): Pr
   try {
     data = JSON.parse(content);
   } catch {
-    // Corrupt JSON — `writeI18nResource` refuses (`parse-error`), so not writable.
-    return {
-      availableLocales,
-      activeLocale: effectiveLocale,
-      resolvedText: null,
-      unresolvedReason: 'parse-error',
-      writable: false,
-    };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'parse-error' };
   }
 
   const resolvedText = resolveKey(data, key);
 
-  // JSON layouts: the file exists and parses, so writes (including missing-key) succeed.
   if (resolvedText === null) {
-    return {
-      availableLocales,
-      activeLocale: effectiveLocale,
-      resolvedText: null,
-      unresolvedReason: 'missing-key',
-      writable: true,
-    };
+    return { availableLocales, activeLocale: effectiveLocale, resolvedText: null, unresolvedReason: 'missing-key' };
   }
 
-  return { availableLocales, activeLocale: effectiveLocale, resolvedText, writable: true };
+  return { availableLocales, activeLocale: effectiveLocale, resolvedText };
 }

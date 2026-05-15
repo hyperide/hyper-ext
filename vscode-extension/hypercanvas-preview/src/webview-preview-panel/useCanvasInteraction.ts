@@ -15,7 +15,6 @@ import {
 import { computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { canvasRPC } from '@/lib/platform/PlatformContext';
 import type { CanvasAdapter } from '@/lib/platform/types';
 
 // ============================================================================
@@ -334,84 +333,18 @@ export function useCanvasInteraction(
           break;
         }
 
-        case 'hypercanvas:moveElement': {
-          // Drop pipeline (move-any-to-any). Source and target arrive as raw
-          // NodeRefs from the iframe — no lift, no fallback.
-          // AstService.moveElement handles same-file, cross-file, cross-parent,
-          // cross-component, and leaf-target moves uniformly.
+        case 'hypercanvas:reorderElement': {
           if (typeof msg.sourceId !== 'string' || typeof msg.targetId !== 'string') break;
           const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
           if (!filePath) break;
           canvas.sendEvent({
-            type: 'ast:moveElement',
-            requestId: `move-${Date.now()}`,
+            type: 'ast:reorderElement',
+            requestId: `reorder-${Date.now()}`,
             filePath,
             sourceId: msg.sourceId,
             targetId: msg.targetId,
             position: msg.position === 'before' ? 'before' : 'after',
           });
-          break;
-        }
-
-        case 'hypercanvas:writeOrders': {
-          // Order-driven parent fast path (Tailwind `order-N`). The iframe has
-          // already done the detection + dense renumber; here we just relay each
-          // entry as `ast:updateProps` so the existing undo/file-snapshot
-          // pipeline records a normal className edit per affected sibling.
-          //
-          // Note: this matches `StyleAdapter.writeOrder` semantically — that
-          // method ultimately calls `astOps.updateProps({ className })` too.
-          // We bypass instantiating `TailwindAdapter` here because the webview
-          // doesn't carry an `AstOperations` adapter at this layer; reusing the
-          // pre-computed entries from `applyOrderClassChange` (already done in
-          // the iframe) is functionally equivalent and avoids a round-trip.
-          //
-          // Serialization: sequential `await canvasRPC` per entry, NOT a parallel
-          // burst. AstService.updateProps reads + parses + mutates + writes the
-          // whole file; two concurrent calls into the SAME file would race —
-          // call 2 reads pre-write disk content, mutates, writes its own AST —
-          // overwriting call 1's edit. Sequencing each through the canvasRPC
-          // request/response handshake lets the file-cache invalidate (line 678
-          // in AstService.updateProps) before the next call reads.
-          const entries = Array.isArray(msg.entries) ? msg.entries : [];
-          if (entries.length === 0) break;
-          // Fire-and-forget IIFE — message handlers can't be async themselves.
-          // canvasRPC failure on any entry is logged but doesn't abort the
-          // remaining writes; partial dense renumber is the user-visible result.
-          // Could fall back to ast:moveElement on first failure, but that path
-          // would re-introduce the JSX-rewrite problem the order-driven branch
-          // exists to avoid. Surfacing the failure in console is the lesser
-          // evil until we have a UI affordance for it.
-          (async () => {
-            for (const entry of entries) {
-              if (
-                !entry ||
-                typeof entry.elementId !== 'string' ||
-                typeof entry.filePath !== 'string' ||
-                typeof entry.newClassName !== 'string'
-              ) {
-                continue;
-              }
-              try {
-                const result = await canvasRPC(
-                  canvas,
-                  {
-                    type: 'ast:updateProps',
-                    requestId: `writeOrder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    filePath: entry.filePath,
-                    elementId: entry.elementId,
-                    props: { className: entry.newClassName },
-                  },
-                  'ast:response',
-                );
-                if (!result.success) {
-                  console.warn('[useCanvasInteraction] writeOrder updateProps failed:', result.error, entry);
-                }
-              } catch (err) {
-                console.warn('[useCanvasInteraction] writeOrder updateProps threw:', err, entry);
-              }
-            }
-          })();
           break;
         }
 
