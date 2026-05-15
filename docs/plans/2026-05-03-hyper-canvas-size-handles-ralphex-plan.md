@@ -65,16 +65,16 @@ failed for the expected missing-handle reason.
 
 ### Task 2: Inspect Shared And Platform Code Paths
 
-[ ] Inspect shared overlay types and rendering:
+[x] Inspect shared overlay types and rendering:
 `shared/canvas-interaction/types.ts`,
 `shared/canvas-interaction/overlay-rects.ts`, and
 `shared/canvas-interaction/overlay-renderer.ts`.
-[ ] Inspect SaaS overlay integration in
+[x] Inspect SaaS overlay integration in
 `client/pages/Editor/components/hooks/useSelectionOverlays.ts`.
-[ ] Inspect VS Code extension overlay integration in
+[x] Inspect VS Code extension overlay integration in
 `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts`
 and the webview receiver for `hypercanvas:overlayRects`.
-[ ] Inspect existing Tailwind size read/write helpers before adding any new
+[x] Inspect existing Tailwind size read/write helpers before adding any new
 helper:
 `client/lib/canvas-engine/utils/tailwindParser.ts`,
 `client/lib/canvas-engine/utils/tailwindGenerator.ts`,
@@ -83,19 +83,19 @@ helper:
 
 ### Task 3: Implement Minimal Shared Handle Visibility Fix
 
-[ ] Implement only enough shared logic to make the failing `w-12 h-12` test pass.
-[ ] If no reusable explicit-size detector exists, add the smallest shared
+[x] Implement only enough shared logic to make the failing `w-12 h-12` test pass.
+[x] If no reusable explicit-size detector exists, add the smallest shared
 detector needed for `w-*`, `h-*`, and arbitrary size values such as `w-[48px]`
 and `h-[3rem]`; include min/max classes only if the tests or existing behavior
 requires them.
-[ ] Extend shared overlay metadata only as needed for selected rects to describe
+[x] Extend shared overlay metadata only as needed for selected rects to describe
 resize capability per axis.
-[ ] Render resize dots/handles in
+[x] Render resize dots/handles in
 `shared/canvas-interaction/overlay-renderer.ts` for selected elements with
 explicit width and/or height metadata.
-[ ] Keep SaaS and VS Code extension code thin; canvas interaction fixes must
+[x] Keep SaaS and VS Code extension code thin; canvas interaction fixes must
 live in `shared/` and be consumed by both paths where applicable.
-[ ] Do not implement resize dragging or class mutation unless the failing test
+[x] Do not implement resize dragging or class mutation unless the failing test
 proves handles already render and only dragging is broken.
 
 ### Task 4: Prove The Minimal Fix With Tests

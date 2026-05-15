@@ -20,6 +20,42 @@ import type {
 const HOVER_BORDER = '2px solid rgba(59, 130, 246, 0.5)';
 const SELECTION_BORDER = '2px solid rgb(59, 130, 246)';
 
+const HANDLE_SIZE = 8;
+
+function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
+  const dot = document.createElement('div');
+  dot.setAttribute('data-resize-handle', axis);
+  dot.style.position = 'absolute';
+  dot.style.width = `${HANDLE_SIZE}px`;
+  dot.style.height = `${HANDLE_SIZE}px`;
+  dot.style.borderRadius = '50%';
+  dot.style.background = 'rgb(59, 130, 246)';
+  dot.style.border = '2px solid white';
+  dot.style.boxSizing = 'border-box';
+  dot.style.pointerEvents = 'none';
+  if (axis === 'width') {
+    dot.style.right = `${-HANDLE_SIZE / 2}px`;
+    dot.style.top = '50%';
+    dot.style.transform = 'translateY(-50%)';
+  } else {
+    dot.style.bottom = `${-HANDLE_SIZE / 2}px`;
+    dot.style.left = '50%';
+    dot.style.transform = 'translateX(-50%)';
+  }
+  return dot;
+}
+
+function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect): void {
+  for (const child of Array.from(overlay.children)) {
+    if ((child as HTMLElement).hasAttribute('data-resize-handle')) {
+      child.remove();
+    }
+  }
+  if (rect.type !== 'selection' || !rect.resizable) return;
+  if (rect.resizable.width) overlay.appendChild(createResizeHandleDot('width'));
+  if (rect.resizable.height) overlay.appendChild(createResizeHandleDot('height'));
+}
+
 // ============================================================================
 // Low-level: render pre-computed rects as overlay divs
 // ============================================================================
@@ -53,6 +89,7 @@ export function renderOverlayRects(
     element.style.top = `${rect.top}px`;
     element.style.width = `${rect.width}px`;
     element.style.height = `${rect.height}px`;
+    syncResizeHandles(element, rect);
   }
 
   // Remove unused overlays
