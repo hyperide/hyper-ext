@@ -1150,3 +1150,34 @@ completes, restart with the latest agent commits applied and
 look for the residual count to drop further. If `component with
 error — error overlay appears` Cat-2 is still failing, it gets
 the next dedicated agent.
+
+## 2026-04-25 16:32 CEST: live `155809-52954` checkpoint at 34 min
+
+Run started 15:58, slots 14/15 (s1=14, s2=15). Both shards
+actively writing. Latest tail mtime within 4 seconds of check.
+
+| shard | done   | passed | failed | unique fails |
+|-------|--------|--------|--------|--------------|
+| s1    | 315    | 304    | 0      | 0            |
+| s2    | 236    | 163    | 2      | 1 (HYP-289)  |
+
+s2 failures are both retries of `multiple components — switch
+between them, each renders` on `react-vite-shadcn-linear`. This
+is the known-residual HYP-289 store stub gap — `BoardView`
+component requires Zustand store, preview wrapper falls back to
+ErrorBoundary which renders `null`, `#root > *` count = 0,
+`isPreviewLoaded()` poll times out. The PD-1-5 walk
+(`7ef7fa6`) still picks `BoardView` first because the project
+has only `BoardView` and a couple of style demos in
+`src/components/`. Real fix is `generatePreviewContent()` store
+stub (HYP-289). Out of scope for this cycle.
+
+**Combined so far: 467 passed / 2 failed (1 unique) — >99.5%
+pass rate.** No new failure clusters surfaced; the Cat-2
+overlay-detection drift from the previous shard is NOT
+reappearing.
+
+Cycle outcome looking like: matrix is green except for 1
+architectural limitation that needs HYP-289 ticket. Will let
+both shards finish, write the final tally, atomic-commit any
+remaining working tree, and report final outcome via TG.
