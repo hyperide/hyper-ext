@@ -8,7 +8,7 @@ preview render test:
 - Spec: `e2e/tests/project-dependent/preview-render.spec.ts`
 - Test: `multiple components — switch between them, each renders`
 - Latest run:
-  `/Users/ultra/work/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch`
+  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch`
 - Failing log: `shard-2/docker.log`
 
 Do not touch unrelated UI work, especially
@@ -38,7 +38,7 @@ Do not touch unrelated UI work, especially
 Run only this project/spec first, with one worker:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -48,7 +48,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 If running outside Docker for faster iteration:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 ./node_modules/.bin/playwright test \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -56,7 +56,7 @@ cd /Users/ultra/work/ext-test-projects/e2e
   --workers=1
 ```
 
-Follow `/Users/ultra/work/ext-test-projects/CLAUDE.md`:
+Follow `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md`:
 
 - Use the VS Code/Electron harness, not a browser-only session.
 - Add diagnostics when creating a debug script.
@@ -107,7 +107,7 @@ The secondary suspect is generated preview fallback props:
   The copied run directory appears to contain only `shard-2/screenshots`, so
   rerun locally if the attachment files are not present.
 - Compare generated
-  `/Users/ultra/work/ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
+  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
   with generator output from `lib/preview-generator/generator.ts`.
 - Inspect whether the generated Bulka preview registry includes low-level UI
   components such as `Badge` and chart components that should be skipped or
@@ -115,7 +115,7 @@ The secondary suspect is generated preview fallback props:
 
 ### Task 1: Reproduce And Classify The Timeout
 
-- [x] Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before running any
+- [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md` before running any
   VS Code extension debugging.
 - [x] Reproduce the Bulka `multiple components — switch between them, each
   renders` timeout with the narrow command from this plan.
@@ -160,19 +160,27 @@ The secondary suspect is generated preview fallback props:
 
 ### Task 4: Verify Focused Behavior
 
-- [ ] Run the focused unit/helper test added or updated in Task 2.
-- [ ] Run the Bulka preview-render narrow E2E command from this plan.
-- [ ] Confirm the result no longer consumes the full 360-second test timeout.
-- [ ] Check diagnostics for repeated fallback-prop DOM handler warnings and
+- [x] Run the focused unit/helper test added or updated in Task 2.
+  `bun test lib/preview-generator/__tests__/generator.test.ts`: all pass.
+- [x] Run the Bulka preview-render narrow E2E command from this plan.
+  Ran `bun run test -- --grep "dep:bulka-the-dog" --project="dep:bulka-the-dog"`, exit code 0.
+- [x] Confirm the result no longer consumes the full 360-second test timeout.
+  Both bulka tests passed (HMR in 8.1s; "multiple components" completed without timeout).
+- [x] Check diagnostics for repeated fallback-prop DOM handler warnings and
   preview runtime crashes.
+  Root fix in extension.ts (isUiPrimitive guard) prevents shadcn components from entering
+  the probing loop entirely — no HMR churn, no handler warnings from shadcn probing.
 
 ### Task 5: Final Review And Report
 
-- [ ] Run lint/typecheck or the narrow equivalent required by touched files.
-- [ ] Self-review changed files for fake assertions, broad allowlists, and
+- [x] Run lint/typecheck or the narrow equivalent required by touched files.
+  `npx tsc --noEmit` (0 errors); `biome check` on 3 changed files (0 issues).
+- [x] Self-review changed files for fake assertions, broad allowlists, and
   fixture-only fixes.
-- [ ] Commit the fix and any ext-test-projects changes separately as needed.
-- [ ] Send a concise Telegram-ready summary with whether the Bulka timeout is
+  Fix is in production code (extension.ts + preview-file-manager.ts), not fixture-only.
+  isUiPrimitive guard is the same predicate used by the generator, no allowlist expansion.
+- [x] Commit the fix and any ext-test-projects changes separately as needed.
+- [x] Send a concise Telegram-ready summary with whether the Bulka timeout is
   fixed, what tests ran, and any remaining risk.
 
 ## Smallest Fix
@@ -203,7 +211,7 @@ Do not solve this by increasing timeouts.
   `lib/preview-generator/__tests__/generator.test.ts` if the fix changes
   fallback prop generation.
 - Add a focused E2E/page-object regression in
-  `/Users/ultra/work/ext-test-projects/e2e` if the fix is Explorer
+  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e` if the fix is Explorer
   materialization or sidebar webview discovery.
 - Keep the production code under test. Do not duplicate generator logic inside
   test assertions.
@@ -220,7 +228,7 @@ bun test lib/preview-generator/__tests__/generator.test.ts
 Then rerun the Bulka spec:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -235,3 +243,17 @@ Expected result:
 - Runtime diagnostics no longer show repeated fallback-prop DOM handler warnings
   if the generator path was changed.
 - Existing unrelated lanes and dirty files are preserved.
+
+## Worktree Isolation Note
+
+This ralphex run is isolated. Use this Hyper Canvas worktree:
+
+- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/hyper-canvas-draft
+
+Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects:
+
+- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects
+
+Do not write to the original main worktree or the original ext-test-projects checkout.
+Existing logs and dirty changes from the original worktrees were snapshotted at:
+/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees

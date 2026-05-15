@@ -135,13 +135,8 @@ export async function discoverLayout(
       }
     }
     if (localeFileMap.size > 0) {
-      // Derive the JSON filename (e.g. "messages.json") from discovered entries so the
-      // fallback path for unknown locales matches the project's actual convention.
-      const firstDiscoveredPath = localeFileMap.values().next().value as string;
-      const discoveredFilename = firstDiscoveredPath.slice(firstDiscoveredPath.lastIndexOf('/') + 1);
       return {
-        getLocaleFilePath: (locale) =>
-          localeFileMap.get(locale) ?? `${appDir}/${locale}/messages/${discoveredFilename}`,
+        getLocaleFilePath: (locale) => localeFileMap.get(locale) ?? `${appDir}/${locale}/messages/${locale}.json`,
         availableLocales: Array.from(localeFileMap.keys()),
       };
     }
