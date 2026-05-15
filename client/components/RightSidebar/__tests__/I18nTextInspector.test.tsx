@@ -480,6 +480,59 @@ describe('I18nTextInspector', () => {
     expect(screen.getByTestId('i18n-key-input').textContent).toBe('other.key');
   });
 
+  it('clears optimistic key when binding identity changes (e.g. locale switch)', () => {
+    const onKeyChange = mock(() => {});
+    const { rerender } = render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'old.key' }}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        canCreateKeys
+      />,
+    );
+    // Create key → setOptimisticKey('new.key')
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.change(screen.getByPlaceholderText('Search or create key...'), {
+      target: { value: 'new.key' },
+    });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('new.key');
+
+    // Locale changes while library+key stay the same (no remount in prod) — bindingIdentity changes
+    rerender(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'old.key', activeLocale: 'fr' }}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        canCreateKeys
+      />,
+    );
+    // optimisticKey must be cleared — show new binding's real key, not stale 'new.key'
+    expect(screen.getByTestId('i18n-key-input').textContent).toBe('old.key');
+  });
+
+  it('shows optimistic key immediately in plain input mode (keyEditable, no combobox)', () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'old.key' }}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+    const keyInput = screen.getByTestId('i18n-key-input') as HTMLInputElement;
+    expect(keyInput.tagName.toLowerCase()).toBe('input');
+
+    fireEvent.change(keyInput, { target: { value: 'new.key' } });
+    fireEvent.keyDown(keyInput, { key: 'Enter' });
+
+    expect((screen.getByTestId('i18n-key-input') as HTMLInputElement).value).toBe('new.key');
+    expect(onKeyChange).toHaveBeenCalledWith('new.key');
+  });
+
   // Snap-back resilience after blur. The original isFocusedRef guard prevented
   // snap-back only while focus was held; if the user typed and then clicked
   // away before the server returned the new resolvedText, the input snapped

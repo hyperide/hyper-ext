@@ -95,6 +95,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     if (isBindingChange) {
       pendingTextRef.current = null;
       setLocalText(resolvedText);
+      setOptimisticKey(null);
       return;
     }
 
@@ -291,7 +292,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               if (e.key === 'Enter') {
                 e.preventDefault();
                 const v = (e.target as HTMLInputElement).value.trim();
-                if (v && v !== currentKey) onKeyChange?.(v);
+                if (v && v !== currentKey) commitKey(v);
               } else if (e.key === 'Escape') {
                 (e.target as HTMLInputElement).value = currentKey;
                 (e.target as HTMLInputElement).blur();
@@ -299,7 +300,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             }}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== currentKey) onKeyChange?.(v);
+              if (v && v !== currentKey) commitKey(v);
               else e.target.value = currentKey;
             }}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
