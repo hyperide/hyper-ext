@@ -4087,5 +4087,31 @@ Root: 450s poll still insufficient for react-vite-tw3-kanban under 3-shard load.
 - test.setTimeout: 600_000 → 720_000
 - Observed data point: >450s on react-vite-tw3-kanban (run-20260429-055849)
 
-**Run is still active.** Webpack and Remix tests not yet reached in any shard.
-Next check scheduled in ~4 min.
+**Fix applied during run:** `4ca1bfc` (pushed to ext-test-projects main):
+- error overlay poll: 450_000 → 600_000
+- test.setTimeout: 600_000 → 720_000
+- Observed data point: >450s on react-vite-tw3-kanban (run-20260429-055849)
+
+**S3 FLAKY ×2:** "Tamagui: style written as prop, not className" on tamagui-food-delivery
+and tamagui-uber. First attempts: 11788ms / 11554ms — failed. Retries passed.
+Root: Vite HMR file watcher writes to component file simultaneously with extension
+style writer → VS Code `handleSaveError` console.error → fixture teardown fails.
+Test body assertion (backgroundColor poll) HAD passed before teardown check.
+
+**Fix applied during run:** `8d35fef` (pushed to ext-test-projects main):
+- Added 'File Modified Since' and 'The content of the file is newer' to benignPatterns
+- These are inherent Vite HMR/extension style-writer race signals; test body always passes
+
+## 📍 2026-04-29 Run #27 Checkpoint (06:49 CEST, ~51 min)
+
+**S1:** 219+ tests done, 0 hard failures. On react-vite-tw4-twitter (ET/PI tests).
+**S2:** 165 tests done, 1 hard failure (error overlay 457s — pre-fix, known). On react-vite-cssmodules-spotify.
+**S3:** 177 tests done, 2 hard failures (File Modified Since ×2 — pre-fix, known). On tamagui-whatsapp.
+
+**All confirmed failures are pre-fix (containers started before commits 4ca1bfc + 8d35fef).**
+No new failure classes observed.
+
+Webpack (webpack-react-tw3-kanban, webpack-react-cssmodules-spotify, webpack-react-emotion-dashboard)
+and Remix (remix-tw4-twitter, remix-cssmodules-spotify) not yet reached in any shard.
+
+Docker containers still healthy (Up ~51 min, 3/3 active).
