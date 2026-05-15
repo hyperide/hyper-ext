@@ -39,11 +39,19 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards, ~30 min elapsed). Active fixes: `3287880` (Tamagui disk fallback), `4909041` (redo-limit 75s+45s).
-  - S1: 131 tests done, 0 hard fails, proxy tests running (redo-limit not reached yet)
-  - S2: 94 tests done, 0 hard fails, project-dependent render tests
-  - S3: 68 tests done, **3 HARD FAILS** — "Tamagui: style written as prop" at 165375ms / 169634ms / 162760ms (pre-known; disk fallback `3287880` ineffective without `files.autoSave`)
-  - Fix `aeb693c` NOT in this run — will be in run #38.
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards, ~1h 20m elapsed). Active fixes: `3287880`, `aeb693c`, `4909041`. NOT active: `f85f4d3`, `2ec61e5`, `d08744a`.
+  - S1: 302 tests done, **0 hard fails**
+  - S2: 266 tests done, **0 hard fails** (1 flaky: "component with error" retry-passed)
+  - S3: 240 tests done, **8 failures** = 4 Tamagui projects × 2 attempts:
+    - tamagui-fitness: dirty=App.tsx, style written as `style={{ backgroundColor: '#123456' }}`, regex missed space → poll timeout 150s
+    - tamagui-food-delivery: dirty=HomeScreen.tsx, readModifiedFile read App.tsx → ''
+    - tamagui-uber: dirty=DriverMatchScreen.tsx, readModifiedFile read App.tsx → ''
+    - tamagui-whatsapp: dirty=ChatListScreen.tsx, readModifiedFile read App.tsx → ''
+  
+  **Fixes committed AFTER run #37 started** (will be in run #38):
+  - `f85f4d3`: dirty tab search (fixes food-delivery, uber, whatsapp)
+  - `2ec61e5`: full project scan fallback (safety net for non-dirty files)
+  - `d08744a`: regex `\s*` fix (fixes fitness: style-object format)
 
 - **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **KILLED** (timeout after 927/2211 tests, exit code 124). Reached `react-vite-cssmodules-spotify` (project #3), never reached bulka-the-dog (#23).
   - **1 HARD FAIL**: "redo limit — no redo after new edit" — both attempts timed out at ~48-52s. Root cause: `isPreviewLoaded(45s)` exhausted in 1-shard low-memory Docker (avail≈4.4GB). Fixed in `4909041` (75s).
@@ -136,29 +144,33 @@ Run #29 with `--memory-swap -1` is the first run that should cover all of these.
 
 ## Known Open Issues (to fix)
 
-### 1. ✅ Tamagui "style written as prop" — FIXED (f85f4d3)
+### 1. ✅ Tamagui "style written as prop" — FIXED (f85f4d3 + 2ec61e5 + d08744a)
 
-**Root cause (final, run #37)**: `readModifiedFile()` hardcoded `App.tsx` but the extension
-writes to the selected element's source file — `HomeScreen.tsx`, `RecordScreen.tsx`, etc.,
-depending on which element `setupWithElementSelected` iterates to with a fill input.
-Confirmed from run #37 teardown log: `"saving dirty editors before close: HomeScreen.tsx"`.
-DOM returns `''` (preview webview covers editor), disk fallback reads wrong file → always `''` → 150s timeout.
+**Root cause (final, run #37 analysis)**: Three separate issues:
 
-VSCodeFileIO uses `workspace.fs.writeFile` (direct disk write) as PRIMARY — file IS on disk
-immediately. `workspace.applyEdit()` is secondary (syncs in-memory doc). Neither auto-save nor
-dirty-tab timing was the issue; only the hardcoded App.tsx path was wrong.
+1. **food-delivery / uber / whatsapp**: `readModifiedFile()` hardcoded `App.tsx` but extension
+   writes to element's source file (HomeScreen.tsx, DriverMatchScreen.tsx, ChatListScreen.tsx).
+   Teardown logs confirm dirty file names.
 
-**Fix `f85f4d3`**: `readModifiedFile` now queries VS Code dirty tabs via `window.evaluate()`,
-extracts the filename (`.label-name` textContent), searches for it recursively in the project
-directory, then reads that file and checks for `#123456`. Falls back to App.tsx if no dirty
-tab found.
+2. **fitness**: extension writes `style={{ backgroundColor: '#123456' }}` (style-object format,
+   not JSX prop) because `setupWithElementSelected` falls through to SafeAreaProvider (no Tamagui
+   element available in top-level fiber tree). Regex `/backgroundColor[=:\s]["']?#?123456/` doesn't
+   match due to space between `:` and `'`. File IS written correctly (dirty at teardown), poll just
+   couldn't match the format.
+
+3. **safety net**: `workspace.fs.writeFile` writes to disk directly — file may not appear as dirty
+   tab if the document was never opened in VS Code editor.
+
+**Fixes**:
+- `f85f4d3`: `readModifiedFile` queries dirty tabs via `window.evaluate()`, searches project recursively
+- `2ec61e5`: Added third fallback — scan ALL .tsx/.ts/.jsx/.js files for '#123456' (catches files not in dirty tabs)
+- `d08744a`: Regex updated: `backgroundColor[=:\s]\s*["']?#?123456` — `\s*` handles space in style-object format
 
 **Prior fixes (still active)**:
-- `3287880`: Added initial disk fallback (fixed wrong path assumption)
-- `aeb693c`: `files.autoSave: afterDelay 500ms` (belt-and-suspenders; harmless since writeFile already disk-first)
-increase dirty tab `isVisible` timeout 500ms → 2000ms.
+- `3287880`: Added initial disk fallback
+- `aeb693c`: `files.autoSave: afterDelay 500ms` (belt-and-suspenders)
 
-**Commit**: `ext-test-projects:1522602`
+**Expected result in run #38**: 0 hard fails on Tamagui style-write test.
 
 ### 2. ⚠️ ast-operations 600s timeouts — NOT OOM, root cause: slow patched-entry compile
 
@@ -266,7 +278,7 @@ _Составлен 2026-04-29. Основан на: анализе частот
 
 | Тест | Частота | Статус | Root cause |
 |------|---------|--------|-----------|
-| Tamagui: style written as prop | 37x | ✅ FIXED (f85f4d3) | DOM hidden + wrong file: readModifiedFile searched App.tsx but write went to HomeScreen.tsx etc. |
+| Tamagui: style written as prop | 37x | ✅ FIXED (f85f4d3+2ec61e5+d08744a) | Wrong file (f85f4d3) + missing fallback (2ec61e5) + regex space (d08744a) |
 | elements/nested/ExportNamed (ast-ops) | 74x | 🔄 monitoring | OOM→webpack timeout, ожидаем fix из run #29 |
 | duplicate element (preserves/grows) | 33x | ❓ unknown | требует анализа run #29 |
 | component with error (607s) | 17x | ⚠️ known | Vite watcher degradation (NEEDS LINEAR) |
