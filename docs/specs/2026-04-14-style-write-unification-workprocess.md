@@ -3780,7 +3780,9 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 
 ### Run #24 Launch
 
-**Run #24 started:** 2026-04-29 (time below)
+**Run #24 started:** 2026-04-29 00:24 CEST
+**Run ID:** `run-20260429-002452-60989`
 **Extension version:** v0.1.28
+**Containers:** `hyper-e2e-20260429-002452-60989-s{1,2,3}`
 **Fixes vs run #23:** duplicate element child-file, redo HMR delay, 502/ERR_CACHE_RACE benign, error overlay poll 150→250s, Tamagui poll 20→45s, zombie container prevention, File Modified Since teardown
 **Expected improvements:** `hyper_duplicate_element` and `redo limit` should be hard failures no more; `canvas-bugs switching components` should be flaky→pass (retry works now); Tamagui and error overlay failures should not appear
