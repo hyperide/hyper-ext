@@ -752,3 +752,84 @@ workspace volume.
 4. Continue Monitor on s2 for inventory; do not stop it.
 5. Loop: classify, fix, atomic-commit, repeat — until the next docker run
    completes with `0 failed`.
+
+## 2026-04-25 03:30–04:20 CEST: progress and disk-blocker
+
+### What landed (atomic, pushed)
+
+`hyperide/hyper-saas` on `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
+(8 commits since `0049b4d4`):
+
+1. `docs(workfile)` — multi-shard docker rules + 2026-04-25 cycle pickup
+2. `fix(canvas-interaction)` — map item resolution through fiber metadata
+3. `perf(extension)` — postMessage component switch instead of full nav
+4. `feat(preview-generator)` — richer fallback data + scanner path normalization
+5. `fix(extension)` — asset content-type + dev server stop hardening
+6. `feat(extension)` — runtime workspace switching + sample normalization +
+   canvas wiring
+7. `docs(workflow)` — external Claude CLI policy
+
+`hyperide/hyper-ext-e2e` on `main` (10 commits since `df5e060`):
+
+1. `test(e2e)` — CommandPalette aliases for canvas commands (unblocks ~14)
+2. `test(e2e)` — annotate intentional-error tests with `expected-runtime-errors`
+3. `test(e2e)` — skip visual-regression suite under Docker Linux Xvfb
+4. `test(e2e)` — distinct map item resolution in canvas bugs spec
+5. `test(e2e)` — benign runtime errors filter
+6. `chore(e2e)` — docker parallel harness with auto-shard sizing
+7. `test(e2e)` — harden setupPreviewWithDevServer for Docker load
+8. `docs(claude)` — docker single-project run shortcut
+9. `test(e2e)` — project-switching-stale-preview spec
+10. `test(e2e)` — style-source-screens spec
+
+### Disk blocker
+
+- Host root partition `/dev/disk3s1s1`: 460Gi total, ~17Gi used,
+  **~600Mi to ~850Mi free** at the worst — 96–97% capacity.
+- Docker Desktop VM disk
+  `~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw`
+  is `74G` on-disk (apparent `471G`, sparse). This file does not shrink
+  when volumes/images are removed inside the VM.
+- I ran `docker container/image/builder/volume prune -af` — only freed
+  ~250Mi.
+- I removed old `e2e/docker-artifacts/run-*` runs — freed ~270Mi.
+- I quit Docker Desktop. Disk usage unchanged because `Docker.raw` is
+  retained on disk regardless of Docker running.
+
+### Why the cleanup did not progress further
+
+- Compacting `Docker.raw` requires `Docker Desktop → Troubleshoot →
+  Clean / Purge data` from the GUI, or `qemu-img convert -O raw` with
+  **another 74Gi free** (which is not available right now).
+- I will NOT delete `Docker.raw` directly — it stores `bge-server`,
+  `hypercanvas-postgres`, `hypercanvas-redis`, `open-webui` and similar
+  long-lived containers/volumes that are unrelated to this E2E cycle.
+  That is too broad a blast radius without explicit user authorization.
+
+### What is needed to unblock the loop
+
+- One of:
+  - User-triggered `Docker Desktop → Troubleshoot → Clean / Purge data`
+    (loses everything Docker but reclaims the 74G).
+  - User-triggered Docker Desktop restart with `Resources → Disk image
+    size` reduced; macOS reclaims by recompacting on size shrink.
+  - User explicitly authorizing me to remove non-E2E containers/volumes
+    so `docker volume prune -af` picks up more.
+- After unblock: kick off `bun run test:docker` with `HYPER_E2E_SHARDS=2`
+  from the freshly-pushed HEAD and resume triage from the new failure
+  set.
+
+### Live state
+
+- No Docker containers are running. Last fresh run attempt
+  (`run_id=20260425-041632-18770`) failed at container creation because
+  the daemon was thrashing under disk pressure.
+- Working trees on both repos are clean for the categories committed
+  above. Remaining unstaged items are debug scripts and a tamagui
+  submodule modification — not on the critical path for green.
+
+### Loop continuation
+
+- Wakeup is rescheduled. On next fire, recheck `df -h /` and
+  `docker info`; if disk is clear and daemon healthy, restart shards
+  and re-arm Monitor on the new container names.
