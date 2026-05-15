@@ -114,19 +114,22 @@ export class AstBridge {
     operation: () => Promise<T>,
   ): Promise<T> {
     const absolutePath = this._resolvePath(filePath);
-    let contentBefore: string;
-    try {
-      contentBefore = await this._fileIO.readFile(absolutePath);
-    } catch {
-      // File doesn't exist yet — no undo tracking possible
-      console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
-      return operation();
-    }
-    // Block redo until recordEdit() clears the redo stack. Without this guard,
-    // CMD_REDO can fire after the file write (which wakes watchers) but before
-    // recordEdit() runs — replaying a stale redo entry.
+    // Clear redo stack before ANY write — even when readFile fails.
+    // If beginTracking() were called only after a successful readFile(), a
+    // readFile() error (e.g. VS Code in-flight document update) would skip it,
+    // leaving the redo stack non-empty. CMD_REDO would then replay a stale
+    // entry from before the new edit. beginTracking() must always run first.
     this._undoRedoService.beginTracking();
     try {
+      let contentBefore: string;
+      try {
+        contentBefore = await this._fileIO.readFile(absolutePath);
+      } catch {
+        // File doesn't exist yet — run operation without undo tracking.
+        // Redo was already cleared by beginTracking() above.
+        console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
+        return await operation();
+      }
       const result = await operation();
       if (result.success) {
         let contentAfter: string;
