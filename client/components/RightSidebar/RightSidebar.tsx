@@ -830,6 +830,11 @@ export default function RightSidebar({
             i18nDispatch({ selectedIds: [previousSelectedId] });
           }
           pendingTextKeyRef.current = null;
+          // Roll back optimisticKey in the inspector — same signal used by text-write rollback.
+          // Without this, optimisticKey stays on the new (failed) key permanently because
+          // realKey doesn't change (file unchanged), so the safety-net useEffect never fires.
+          const bindingId = `${i18nText.library}|${i18nText.key}`;
+          setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
         } finally {
           // Always release the freeze, even on throw.
           canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });

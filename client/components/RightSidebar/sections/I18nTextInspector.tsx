@@ -105,6 +105,11 @@ export const I18nTextInspector = memo(function I18nTextInspector({
       // Explicit failure — drop the pending guard and snap back so the user sees the truth.
       pendingTextRef.current = null;
       setLocalText(resolvedText);
+      // Also clear the optimistic key so the combobox trigger reverts to the real key.
+      // Without this, optimisticKey stays on the new (failed) key even though realKey
+      // didn't change (file unchanged → re-read returns same key → safety-net effect
+      // never fires because realKey !== optimisticKey remains stable).
+      setOptimisticKey(null);
       return;
     }
     if (isFocusedRef.current) return;
