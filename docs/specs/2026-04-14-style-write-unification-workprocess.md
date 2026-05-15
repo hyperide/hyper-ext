@@ -966,3 +966,29 @@ cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMA
 - bulka-the-dog preview → PASS (ViteReactSSG renders component on /test-preview)
 - "redo limit" → PASS (75s budget, unchanged)
 
+
+## 📍 2026-04-30 12:45 CEST — Targeted Tamagui test PASSED + Codex review cycle
+
+### Targeted Docker verification run: PASSED
+- Run ID: `run-20260430-122255-45838`, 1 shard, tamagui-fitness only
+- **"Tamagui: style written as prop, not className" → PASSED (15.7s)**
+- ast-debug.log confirms write: `elementId=App.tsx:10:4 → resolvedPath=App.tsx → SafeAreaProvider`
+- Source-location nodeRef resolved in primary file — `entryFileMatchesAst` guard now passes correctly
+
+### Commits since run #39
+- `9fc8de3d`: hash nodeRef cross-file fallback — nodeMap lookup when `_extractFileFromNodeRef` returns null
+- `baae1750`: diagnostic logging AstBridge + AstService (CI=true file sink)
+- `9aca060d`: gate debug logging behind env flag (Medium Codex finding — no sync file I/O in production)
+- `225658f4`: cross-file undo fix — `_withUndoTracking` uses `result.resolvedPath` not `message.filePath`;
+  `_populateNodeMaps` adds `client/` to SOURCE_DIRS for bulka-the-dog
+
+### Remaining Codex findings addressed
+- ✅ High: cross-file undo entries (225658f4)
+- ✅ Medium: `client/` not scanned by NodeMapService (225658f4)
+- ✅ Medium: E2E App.tsx fallback skips disk scan (a9d096b in ext-test-projects)
+- ✅ Medium: debug logging unconditional file I/O (9aca060d)
+- ✅ Bulka debug artifact `/test-preview` in App.tsx (reverted from working tree)
+
+### ext v0.1.38 built and installed
+All fixes above included. Reload VS Code window to activate.
+
