@@ -48,12 +48,12 @@ describe('DevServerManager', () => {
   });
 
   describe('callbacks', () => {
-    it('onStatusChange fires on status updates', () => {
+    it('onStatusChange fires on status updates', async () => {
       const cb = mock();
       manager.onStatusChange(cb);
 
       // Trigger via stop() which calls _updateStatus('stopped')
-      manager.stop();
+      await manager.stop();
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'stopped' }));
     });
 

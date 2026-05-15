@@ -146,9 +146,11 @@ export class PreviewModeManager {
       case 'vite-spa-file-based': {
         // ensurePreviewFiles() is idempotent — returns 'ok-files-written' only when
         // route files are freshly created or updated. Fresh writes trigger HMR/recompile,
-        // so we arm the gate beforehand (same pattern as webpack/parcel) to let
-        // awaitRecompile() in extension.ts hold off the iframe until the dev server
-        // emits "hmr update" / "page reload" / "compiled successfully".
+        // so we arm the gate after the write to let awaitRecompile() in extension.ts
+        // hold off the iframe until the dev server emits "hmr update" / "page reload" /
+        // "compiled successfully". Unlike webpack/parcel (where the gate is armed before
+        // _patchEntryFile so a fast compile can't slip past), Vite's file watcher is
+        // debounced so the race window is negligible.
         // On 2nd+ tests the same files already exist (content identical) — _writeIfSafe
         // skips writing → 'ok' returned → no gate armed → awaitRecompile is a no-op.
         const fileResult = await this._fileManager.ensurePreviewFiles();

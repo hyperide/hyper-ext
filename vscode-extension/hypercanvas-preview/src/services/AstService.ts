@@ -668,12 +668,13 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef ?? elementId, elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath } = resolved;
 
       const { wrapped } = wrapElementInAST(result, wrapperType, wrapperProps);
 
@@ -681,8 +682,8 @@ export class AstService {
         return { success: false, error: 'Could not wrap element' };
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.wrapElement] Error:', error);

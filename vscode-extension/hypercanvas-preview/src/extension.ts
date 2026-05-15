@@ -611,7 +611,10 @@ export function activate(context: vscode.ExtensionContext) {
       const componentName = patch.currentComponent.name;
       const sampleComponentName = normalizeSampleComponentName(componentName);
 
-      // Auto-open Preview Panel if not already visible
+      // Auto-open Preview Panel if not already visible.
+      // ViewColumn.Two (not Beside): in single-column E2E setups, ViewColumn.Beside
+      // resolves to column 2 which doesn't exist yet — VS Code places the webview
+      // off-screen. ViewColumn.Two forces a visible split in any layout.
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
 
       // Open the component file in the left editor group (ViewColumn.One)
@@ -937,6 +940,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
+      // ViewColumn.Two — see the auto-open comment above for why not ViewColumn.Beside.
       previewPanel?.createOrShow(vscode.ViewColumn.Two);
       // Sync current dev-server state into the just-created panel. The
       // hypercanvas.startDevServer command path calls setPreviewUrl(state.url)
