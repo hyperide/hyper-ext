@@ -4157,3 +4157,38 @@ All failures remain pre-fix. No new failure classes. Docker containers healthy (
 **S3:** 301 done, 3 hard failures (all pre-fix Tamagui). Now on remix-cssmodules-spotify.
 
 Total: 2189 tests across 40 files. ~948 tests done (43%). Webpack not started on any shard.
+
+## 📍 2026-04-29 Run #27 TERMINATED (07:38 CEST, ~100 min)
+
+**Terminated early — global webpack bug (pre-fix, no filesystem cache).**
+
+S3 hit webpack-react-tw3-kanban: both attempt (606797ms) AND retry (604608ms) failed.
+Root cause: no `cache: { type: 'filesystem' }` in any webpack config → cold compile
+every test, 300-600s under Docker CPU pressure. With ~90 webpack tests × 600s×2 retries,
+continuing Run #27 would take 30+ extra hours. Classified as global bug → terminated.
+
+**Final Run #27 failures (all pre-fix):**
+- "component with error — error overlay appears" ×2 → pre-fix `4ca1bfc` (poll 450→600s)
+- "Tamagui: style written as prop, not className" ×3 → pre-fix `8d35fef` (benignPatterns)
+- "elements identifiable via fiber-based selection" on webpack ×2 → pre-fix `1e974e6`
+
+**Tests done at termination:** S1:542, S2:394, S3:351 = 1287/2189 (59%)
+
+**New fix committed: `1e974e6`** (in ext-test-projects/main)
+- `cache: { type: 'filesystem' }` added to all 3 webpack configs
+- `docker-entrypoint.sh`: WEBPACK_PREWARM block adds `webpack build --mode development`
+  pre-warm so first test also uses cache (not cold)
+
+**Fixes active in Run #28:**
+- `8d35fef`: Tamagui "File Modified Since" benignPatterns
+- `4ca1bfc`: error overlay poll 450→600s
+- `227c6ea`: webpack poll 480→600s
+- `6495da9`: editor openFile retry 300ms→5s
+- `1e974e6`: webpack filesystem cache + pre-warm (NEW)
+
+## 📍 2026-04-29 Run #28 STARTED (07:57 CEST)
+
+Run ID: `run-20260429-075702-41743`. Containers: s1, s2, s3 Up.
+All 5 fixes are active in this run (containers rsync'd after `1e974e6`).
+Webpack pre-warm runs in docker-entrypoint.sh before tests start.
+ETA: ~90-120 min (sans webpack slow compile).
