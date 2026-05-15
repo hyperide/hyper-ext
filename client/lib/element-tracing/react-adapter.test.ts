@@ -25,6 +25,14 @@ function withFiber(fiber: Fiber): HTMLElement {
   return el as unknown as HTMLElement;
 }
 
+function makeTrendingSidebarStack(): Error {
+  return {
+    stack:
+      'Error\n' +
+      '    at TrendingSidebar (/Users/ultra/work/ext-test-projects/react-vite-tw4-twitter/src/components/TrendingSidebar.tsx:20:3)',
+  } as Error;
+}
+
 describe('ReactAdapter', () => {
   let adapter: ReactAdapter;
 
@@ -114,6 +122,21 @@ describe('ReactAdapter', () => {
       stateNodeRecord['__reactFiber$test'] = li2;
 
       expect(adapter.getItemIndex(li2.stateNode as HTMLElement)).toBe(1);
+    });
+
+    it('should return the second TrendingSidebar map item in React 19', () => {
+      const sidebarFiber = mockFiber({ tag: 0, _debugStack: makeTrendingSidebarStack() });
+      const containerFiber = mockFiber({ tag: 5, return: sidebarFiber });
+      const item1 = mockFiber({ tag: 5, return: containerFiber, stateNode: {} as HTMLElement });
+      const item2 = mockFiber({ tag: 5, return: containerFiber, stateNode: {} as HTMLElement });
+      containerFiber.child = item1;
+      item1.sibling = item2;
+      item1.return = containerFiber;
+      item2.return = containerFiber;
+      sidebarFiber.child = containerFiber;
+
+      const el = withFiber(item2);
+      expect(adapter.getItemIndex(el)).toBe(1);
     });
   });
 });

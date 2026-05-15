@@ -123,6 +123,10 @@ export function debugSourceToLocation(ds: DebugSource): SourceLocation {
   };
 }
 
+function sameLocation(a: SourceLocation, b: SourceLocation): boolean {
+  return a.fileName === b.fileName && a.line === b.line && a.column === b.column;
+}
+
 /* ─── React 19: _debugStack parsing ─────────────────────────────── */
 
 // Patterns identifying React-internal and bundler-internal stack frames.
@@ -224,8 +228,44 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
     return 0;
   }
 
-  // React 19: walk up to the nearest component fiber that has _debugStack
-  let compFiber: Fiber | null = fiber.return;
+  // React 19: resolve the current fiber's effective source, then prefer the
+  // immediate sibling group when it is a DOM-level repeated render (e.g. `.map()`).
+  const parent = fiber.return;
+  if (parent === null) return 0;
+  const myLoc = findNearestSourceLocation(fiber) ?? resolveLocation?.(fiber) ?? null;
+
+  const getSiblingIndex = (start: Fiber | null, targetLocation: SourceLocation): number => {
+    if (start === null) return 0;
+    let index = 0;
+    let current: Fiber | null = start.child;
+    while (current !== null) {
+      const loc = findNearestSourceLocation(current) ?? resolveLocation?.(current) ?? null;
+      if (loc && sameLocation(loc, targetLocation)) {
+        if (current === fiber) return index;
+        index++;
+      }
+      current = current.sibling;
+    }
+    return 0;
+  };
+
+  // When the immediate parent is not a component-like fiber, repeated items are
+  // usually rendered as sibling host nodes inside the same container.
+  if (
+    myLoc !== null &&
+    parent.tag !== FiberTag.FunctionComponent &&
+    parent.tag !== FiberTag.ClassComponent &&
+    parent.tag !== FiberTag.ForwardRef &&
+    parent.tag !== FiberTag.MemoComponent &&
+    parent.tag !== FiberTag.SimpleMemoComponent
+  ) {
+    const hostIndex = getSiblingIndex(parent, myLoc);
+    if (hostIndex > 0) return hostIndex;
+  }
+
+  // Fallback: walk up to the nearest component fiber that has _debugStack and
+  // compare component-level siblings. This handles repeated component instances.
+  let compFiber: Fiber | null = parent;
   while (compFiber !== null && !compFiber._debugStack) {
     compFiber = compFiber.return;
   }
@@ -233,8 +273,8 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
 
   // parseDebugStack returns null for RSC/Turbopack (_debugStack has .next/ paths).
   // Fall back to resolveLocation callback which uses source map caches.
-  const myLoc = parseDebugStack(compFiber._debugStack) ?? resolveLocation?.(compFiber) ?? null;
-  if (myLoc === null) return 0;
+  const compLoc = parseDebugStack(compFiber._debugStack) ?? resolveLocation?.(compFiber) ?? null;
+  if (compLoc === null) return 0;
 
   const compParent = compFiber.return;
   if (compParent === null) return 0;
@@ -245,7 +285,7 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
     if (current === compFiber) return index;
     if (current._debugStack) {
       const loc = parseDebugStack(current._debugStack) ?? resolveLocation?.(current) ?? null;
-      if (loc && loc.fileName === myLoc.fileName && loc.line === myLoc.line && loc.column === myLoc.column) {
+      if (loc && sameLocation(loc, compLoc)) {
         index++;
       }
     }

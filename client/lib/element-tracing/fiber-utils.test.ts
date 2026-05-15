@@ -36,6 +36,12 @@ function mockDebugSource(overrides: Partial<DebugSource> = {}): DebugSource {
   };
 }
 
+function mockErrorStack(fileName: string, line: number, column: number): Error {
+  return {
+    stack: `Error\n    at TrendingSidebar (${fileName}:${line}:${column})`,
+  } as Error;
+}
+
 describe('getFiberFromDOM', () => {
   it('should extract fiber from __reactFiber$ property', () => {
     const fiber = mockFiber();
@@ -366,6 +372,69 @@ describe('getItemIndexFromFiber', () => {
     // Neither is a repeated instance — both are unique call sites
     expect(getItemIndexFromFiber(host1)).toBe(0);
     expect(getItemIndexFromFiber(host2)).toBe(0);
+  });
+
+  it('returns 1 for the second TrendingSidebar map item in React 19', () => {
+    const fileName = '/Users/ultra/work/ext-test-projects/react-vite-tw4-twitter/src/components/TrendingSidebar.tsx';
+    const trendingSidebar = mockFiber({
+      tag: 0,
+      _debugStack: mockErrorStack(fileName, 20, 3),
+    });
+    const container = mockFiber({ tag: 5, return: trendingSidebar });
+    const first = mockFiber({ tag: 5, return: container, stateNode: {} as HTMLElement });
+    const second = mockFiber({ tag: 5, return: container, stateNode: {} as HTMLElement });
+    container.child = first;
+    first.sibling = second;
+    first.return = container;
+    second.return = container;
+    trendingSidebar.child = container;
+
+    expect(getItemIndexFromFiber(second)).toBe(1);
+  });
+
+  it('returns 2 for the third TrendingSidebar map item in React 19', () => {
+    const fileName = '/Users/ultra/work/ext-test-projects/react-vite-tw4-twitter/src/components/TrendingSidebar.tsx';
+    const trendingSidebar = mockFiber({
+      tag: 0,
+      _debugStack: mockErrorStack(fileName, 20, 3),
+    });
+    const container = mockFiber({ tag: 5, return: trendingSidebar });
+    const first = mockFiber({ tag: 5, return: container, stateNode: {} as HTMLElement });
+    const second = mockFiber({ tag: 5, return: container, stateNode: {} as HTMLElement });
+    const third = mockFiber({ tag: 5, return: container, stateNode: {} as HTMLElement });
+    container.child = first;
+    first.sibling = second;
+    second.sibling = third;
+    first.return = container;
+    second.return = container;
+    third.return = container;
+    trendingSidebar.child = container;
+
+    expect(getItemIndexFromFiber(third)).toBe(2);
+  });
+
+  it('keeps resolveLocation fallback when React 19 stack points at compiled output', () => {
+    const compiledStack = mockErrorStack('/project/.next/static/chunks/app.js', 10, 1);
+    const sourceLoc = {
+      fileName: '/project/src/components/TrendingSidebar.tsx',
+      line: 20,
+      column: 3,
+    };
+    const parent = mockFiber({ tag: 5 });
+    const firstComponent = mockFiber({ tag: 0, return: parent, _debugStack: compiledStack });
+    const secondComponent = mockFiber({ tag: 0, return: parent, _debugStack: compiledStack });
+    const firstHost = mockFiber({ tag: 5, return: firstComponent, stateNode: {} as HTMLElement });
+    const secondHost = mockFiber({ tag: 5, return: secondComponent, stateNode: {} as HTMLElement });
+    parent.child = firstComponent;
+    firstComponent.sibling = secondComponent;
+    firstComponent.child = firstHost;
+    secondComponent.child = secondHost;
+
+    expect(
+      getItemIndexFromFiber(secondHost, (fiber) =>
+        fiber === firstComponent || fiber === secondComponent ? sourceLoc : null,
+      ),
+    ).toBe(1);
   });
 });
 
