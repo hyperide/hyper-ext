@@ -163,6 +163,7 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain('useSearchParams');
     expect(content).toContain('Suspense');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
     expect(content).toContain('CanvasPreview');
     // Must pass component/mode props to CanvasPreview so it doesn't use window.location.search
     // (window is undefined during SSR in Next.js App Router)
@@ -174,6 +175,7 @@ describe('generateRouteFileContent', () => {
     const content = generateRouteFileContent('nextjs-pages-router', '../src/__canvas_preview__');
     expect(content).toContain('CanvasPreview');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
     expect(content).not.toContain('useSearchParams');
   });
 
@@ -181,6 +183,13 @@ describe('generateRouteFileContent', () => {
     const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
     expect(content).toContain('CanvasPreview');
     expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('id="root"');
+    expect(content).toContain('useEffect');
+    expect(content).toContain('useSearchParams');
+    expect(content).toContain("params.get('component')");
+    expect(content).toContain("params.get('mode')");
+    expect(content).toContain('/__hypercanvas/iframe-interaction.js');
+    expect(content).not.toContain('suppressHydrationWarning');
   });
 });
 

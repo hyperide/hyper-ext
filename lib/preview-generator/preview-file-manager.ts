@@ -864,7 +864,9 @@ export class PreviewFileManager {
         console.warn(`[PreviewFileManager] Skipping ${filePath} — exists without @hyperide-managed marker`);
         return;
       }
-      // Already managed — skip (idempotent)
+      if (existing === content) return;
+      await this.io.mkdir?.(dirname(filePath));
+      await this.io.writeFile(filePath, content);
       return;
     } catch {
       // File doesn't exist — safe to write

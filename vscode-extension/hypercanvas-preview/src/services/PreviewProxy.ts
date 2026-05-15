@@ -17,13 +17,30 @@ import * as path from 'node:path';
 const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
 const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-error-detection.js'), 'utf-8');
 const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-console-capture.js'), 'utf-8');
+const chromeDetectionScriptContent = `
+(function() {
+  window.addEventListener('load', function() {
+    var hasChrome = document.querySelector('nav, header, aside') !== null;
+    if (hasChrome) {
+      window.parent.postMessage({ type: 'chrome-detected' }, '*');
+    }
+  }, { once: true });
+})();
+`;
 const INJECTED_SCRIPTS = `<script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
+const HYPERCANVAS_SCRIPT_RESPONSES = new Map([
+  ['/__hypercanvas/iframe-interaction.js', interactionScriptContent],
+  ['/__hypercanvas/iframe-error-detection.js', errorDetectionScriptContent],
+  ['/__hypercanvas/iframe-console-capture.js', consoleCaptureScriptContent],
+  ['/__hypercanvas/chrome-detection.js', chromeDetectionScriptContent],
+]);
 
 export class PreviewProxy {
   private _server: http.Server | null = null;
   private _proxyPort: number | null = null;
   private _targetPort: number;
   private _isIsolatedMode = false;
+  private _isRemixProject = false;
   private _projectRoot: string | undefined;
   private _viteBase: string | undefined;
 
@@ -62,12 +79,28 @@ export class PreviewProxy {
     }
   }
 
+  private async _detectRemixProject(): Promise<boolean> {
+    if (!this._projectRoot) return false;
+    try {
+      const packageJsonPath = path.join(this._projectRoot, 'package.json');
+      const packageJson = JSON.parse(await fs.promises.readFile(packageJsonPath, 'utf-8')) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      return Boolean(deps['@remix-run/react'] || deps['@remix-run/node']);
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Start the proxy server on a random available port
    */
   async start(): Promise<void> {
     if (this._server) return;
     this._viteBase = await this._readViteBase();
+    this._isRemixProject = await this._detectRemixProject();
 
     this._server = http.createServer((req, res) => {
       this._handleHttp(req, res);
@@ -110,6 +143,15 @@ export class PreviewProxy {
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
     const proxyPath = clientReq.url || '/';
+    const virtualScript = HYPERCANVAS_SCRIPT_RESPONSES.get(proxyPath);
+    if (virtualScript !== undefined) {
+      clientRes.writeHead(200, {
+        'content-type': 'application/javascript; charset=utf-8',
+        'cache-control': 'no-cache, no-store, must-revalidate',
+      });
+      clientRes.end(virtualScript);
+      return;
+    }
 
     const options: http.RequestOptions = {
       hostname: 'localhost',
@@ -146,14 +188,19 @@ export class PreviewProxy {
         proxyRes.on('end', () => {
           let html = Buffer.concat(chunks).toString('utf-8');
 
-          // Inject interaction + error detection scripts after <head>
-          const injectedScripts = INJECTED_SCRIPTS;
-          const headIndex = html.indexOf('<head>');
-          if (headIndex !== -1) {
-            html = html.slice(0, headIndex + 6) + injectedScripts + html.slice(headIndex + 6);
-          } else {
-            // No <head> found, prepend scripts
-            html = injectedScripts + html;
+          if (!this._isRemixProject) {
+            // Inject interaction + error detection scripts after <head>.
+            // Remix hydrates the full document, so its generated route renders
+            // these scripts itself via /__hypercanvas/* endpoints to avoid
+            // proxy-added nodes causing hydration mismatch.
+            const injectedScripts = INJECTED_SCRIPTS;
+            const headIndex = html.indexOf('<head>');
+            if (headIndex !== -1) {
+              html = html.slice(0, headIndex + 6) + injectedScripts + html.slice(headIndex + 6);
+            } else {
+              // No <head> found, prepend scripts
+              html = injectedScripts + html;
+            }
           }
 
           // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
@@ -177,17 +224,8 @@ export class PreviewProxy {
           }
 
           // Inject chrome-detection script for /test-preview requests (App Shell mode)
-          if (proxyPath.startsWith('/test-preview')) {
-            const chromeDetectScript = `<script>
-  (function() {
-    window.addEventListener('load', function() {
-      var hasChrome = document.querySelector('nav, header, aside') !== null;
-      if (hasChrome) {
-        window.parent.postMessage({ type: 'chrome-detected' }, '*');
-      }
-    }, { once: true });
-  })();
-</script>`;
+          if (proxyPath.startsWith('/test-preview') && !this._isRemixProject) {
+            const chromeDetectScript = `<script>${chromeDetectionScriptContent}</script>`;
             html = html.replace('</head>', `${chromeDetectScript}</head>`);
           }
 

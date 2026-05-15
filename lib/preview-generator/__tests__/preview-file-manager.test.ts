@@ -823,7 +823,7 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     expect(layoutFile).toContain('@hyperide-managed');
   });
 
-  it('skips route file if it already exists with @hyperide-managed', async () => {
+  it('updates route file if it already exists with @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
     io.files.set('/project/app/layout.tsx', '...');
     io.files.set('/project/package.json', JSON.stringify({ dependencies: { next: '^14.0.0' } }));
@@ -837,8 +837,9 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
-    // File should remain unchanged
-    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(existingContent);
+    const routeFile = io.files.get('/project/app/test-preview/page.tsx');
+    expect(routeFile).not.toBe(existingContent);
+    expect(routeFile).toContain('id="root"');
   });
 
   it('does not overwrite user file without @hyperide-managed', async () => {

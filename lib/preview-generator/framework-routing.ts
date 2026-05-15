@@ -142,7 +142,7 @@ function PreviewContent() {
 }
 
 export default function TestPreviewPage() {
-  return <Suspense><PreviewContent /></Suspense>;
+  return <div id="root"><Suspense><PreviewContent /></Suspense></div>;
 }
 `;
   }
@@ -152,17 +152,62 @@ export default function TestPreviewPage() {
 import CanvasPreview from '${previewImportPath}';
 
 export default function TestPreviewPage() {
-  return <CanvasPreview />;
+  return <div id="root"><CanvasPreview /></div>;
 }
 `;
   }
 
-  // Remix, Vite file-based
+  if (framework === 'remix') {
+    return `${managed}
+import { useEffect as useHyperCanvasEffect } from 'react';
+import { useSearchParams } from '@remix-run/react';
+import CanvasPreview from '${previewImportPath}';
+
+const hyperCanvasScripts = [
+  { id: 'interaction', src: '/__hypercanvas/iframe-interaction.js' },
+  { id: 'error-detection', src: '/__hypercanvas/iframe-error-detection.js' },
+  { id: 'console-capture', src: '/__hypercanvas/iframe-console-capture.js' },
+  { id: 'chrome-detection', src: '/__hypercanvas/chrome-detection.js' },
+];
+
+function HyperCanvasScripts() {
+  useHyperCanvasEffect(() => {
+    const addedScripts: HTMLScriptElement[] = [];
+    for (const script of hyperCanvasScripts) {
+      if (document.querySelector(\`script[data-hyper-inject="\${script.id}"]\`)) continue;
+      const element = document.createElement('script');
+      element.dataset.hyperInject = script.id;
+      element.src = script.src;
+      document.head.appendChild(element);
+      addedScripts.push(element);
+    }
+    return () => {
+      for (const element of addedScripts) element.remove();
+    };
+  }, []);
+
+  return null;
+}
+
+export default function TestPreviewRoute() {
+  const [params] = useSearchParams();
+
+  return (
+    <div id="root">
+      <HyperCanvasScripts />
+      <CanvasPreview component={params.get('component')} mode={params.get('mode') as 'single' | 'multi'} />
+    </div>
+  );
+}
+`;
+  }
+
+  // Vite file-based
   return `${managed}
 import CanvasPreview from '${previewImportPath}';
 
 export default function TestPreviewRoute() {
-  return <CanvasPreview />;
+  return <div id="root"><CanvasPreview /></div>;
 }
 `;
 }
