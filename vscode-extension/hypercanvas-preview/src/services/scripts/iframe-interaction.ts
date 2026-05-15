@@ -1447,6 +1447,7 @@ let _dragCapturedTarget: HTMLElement | null = null;
 // selection while open).
 let _dragPrevBodyUserSelect: string | null = null;
 let _dragPrevBodyWebkitUserSelect: string | null = null;
+let _dragEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1539,6 +1540,13 @@ function _dragPointerMove(e: PointerEvent): void {
     const dy = e.clientY - _dragStartY;
     if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
       _dragState = 'dragging';
+      _dragEscapeHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          _dragCleanup();
+        }
+      };
+      document.addEventListener('keydown', _dragEscapeHandler);
       if (_dragSourceEl) {
         const rect = _dragSourceEl.getBoundingClientRect();
         _dragOffsetX = _dragStartX - rect.left;
@@ -1583,6 +1591,9 @@ function _dragPointerMove(e: PointerEvent): void {
   }
 
   if (_dragState !== 'dragging') return;
+
+  needsOverlayUpdate = true;
+  scheduleOverlayLoopIfNeeded();
 
   if (_dragGhostEl) {
     _dragGhostEl.style.left = `${e.clientX - _dragOffsetX}px`;
@@ -1645,6 +1656,10 @@ function _dragCleanup(): void {
   _dragState = 'idle';
   _dragSourceId = null;
   _dragSourceFilePath = null;
+  if (_dragEscapeHandler !== null) {
+    document.removeEventListener('keydown', _dragEscapeHandler);
+    _dragEscapeHandler = null;
+  }
 
   if (_dragGhostEl) {
     _dragGhostEl.remove();
@@ -1777,6 +1792,7 @@ function _dragPointerUp(e: PointerEvent): void {
       window.parent.postMessage(
         {
           type: 'hypercanvas:writeOrders',
+          sourceId,
           breakpoint: orderPlan.breakpoint,
           entries: orderPlan.entries,
         },
