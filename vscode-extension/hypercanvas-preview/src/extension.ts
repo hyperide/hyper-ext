@@ -744,6 +744,39 @@ export function activate(context: vscode.ExtensionContext) {
   let modeManager = createPreviewModeManager(activeWorkspaceRoot);
   modeManager.startWatching();
 
+  // Re-patch entry/router file after git-discard removes the @hyperide-managed marker.
+  // Watches both the router file (App.tsx for vite-spa-jsx-router) and the entry file
+  // (index.tsx/main.tsx for webpack/bun). Debounced to coalesce rapid git-discard events.
+  let entryWatcherDisposables: vscode.Disposable[] = [];
+  const setupEntryFileWatcher = async (workspaceRootPath: string, mgr: PreviewModeManager) => {
+    for (const d of entryWatcherDisposables) d.dispose();
+    entryWatcherDisposables = [];
+
+    const [routerFile, entryFile] = await Promise.all([
+      mgr.detectRouterFile().catch(() => null),
+      mgr.getEntryFilePath().catch(() => null),
+    ]);
+
+    let repatchTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRepatch = () => {
+      clearTimeout(repatchTimer);
+      repatchTimer = setTimeout(async () => {
+        await mgr.onComponentSelected().catch(() => {});
+        previewPanel?.refresh();
+      }, 300);
+    };
+
+    for (const filePath of [routerFile, entryFile]) {
+      if (!filePath) continue;
+      const rel = relative(workspaceRootPath, filePath);
+      const pattern = new vscode.RelativePattern(workspaceRootPath, rel);
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern, true, false, true);
+      watcher.onDidChange(scheduleRepatch);
+      entryWatcherDisposables.push(watcher);
+    }
+  };
+  void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
+
   const syncWorkspaceRuntime = (): string => {
     const currentRoot = getWorkspaceRoot() ?? activeWorkspaceRoot;
     if (currentRoot === activeWorkspaceRoot) return activeWorkspaceRoot;
@@ -753,6 +786,7 @@ export function activate(context: vscode.ExtensionContext) {
     previewManager = createPreviewFileManager(activeWorkspaceRoot);
     modeManager = createPreviewModeManager(activeWorkspaceRoot);
     modeManager.startWatching();
+    void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
 
     previewPanel?.setWorkspaceRoot(activeWorkspaceRoot);
     rightPanelProvider?.notifyCapabilities(null);
@@ -763,7 +797,10 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   context.subscriptions.push({
-    dispose: () => modeManager.stopWatching(),
+    dispose: () => {
+      modeManager.stopWatching();
+      for (const d of entryWatcherDisposables) d.dispose();
+    },
   });
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
 

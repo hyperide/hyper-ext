@@ -267,6 +267,10 @@ export class PreviewModeManager {
     return 'src';
   }
 
+  async getEntryFilePath(): Promise<string | null> {
+    return this._detectEntryFile();
+  }
+
   /** Override in tests to inject a known router file path. */
   async detectRouterFile(): Promise<string | null> {
     const frontendRoot = await this._detectFrontendRoot();
