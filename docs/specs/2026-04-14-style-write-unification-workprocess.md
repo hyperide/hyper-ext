@@ -39,11 +39,16 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #29** (`run-20260429-110015-36155`) in progress, ~42 min:
-  - S1: 163 tests, MEM 1.5GiB/6GiB, drag-reorder tests
-  - S2: 155 tests, MEM 1.6GiB/6GiB, project-dependent empty/nested
-  - S3: 192 tests, MEM 3.4GiB/6GiB, tamagui-style tests — healthy
-  - 0 hard failures detected in any shard
+- **Run #29** (`run-20260429-110015-36155`) — PARTIAL RESULTS (S3 still running):
+  - S1: **0 failed, 0 flaky** — clean
+  - S2: **1 failed** (project-switching stale-preview — FIXED in ext-test-projects + committed),
+        **2 flaky** (react-vite-tw3-kanban preview-render known P3, tamagui-banking style write retry-pass),
+        **426 passed**, 262 skipped
+  - S3: **still running** — "ExportNamedDeclaration" webpack ast-operations (started 12:53 CEST, timeout ~13:03, retry ~13:04)
+
+  **Fixes applied during run #29 monitoring:**
+  - `fix(e2e): use correct project root for entry detection after workspace switch` — project-switching test now explicitly resolves entry component for the TARGET project (tamagui-food-delivery), not the Playwright config's reference project. Prevents `src/App.tsx` → `AppContainer.tsx src/stubs` fuzzy match confusion after workspace switch.
+  - Report HYP-363 link fix (hyperide.github.io cb9d6ea): ext-test-projects commits and finding files now correctly link to `hyperide/hyper-ext-e2e` instead of `hyperide/hyper-saas`.
 
 ### Test Matrix: Projects That NEVER Ran (run #28 OOM)
 
