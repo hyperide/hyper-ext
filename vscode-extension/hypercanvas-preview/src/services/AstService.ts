@@ -1128,10 +1128,9 @@ export class AstService {
     try {
       contentAfterWrite = await this._fileIO.readFile(targetFilePath);
     } catch {}
-    const changed =
-      contentBeforeWrite !== undefined && contentAfterWrite !== undefined
-        ? contentBeforeWrite !== contentAfterWrite
-        : 'unknown';
+    const changed = contentBeforeWrite !== undefined && contentAfterWrite !== undefined
+      ? contentBeforeWrite !== contentAfterWrite
+      : 'unknown';
     dbg(
       `[moveElement] write done filePath=${targetFilePath} changed=${changed} bytesBefore=${contentBeforeWrite?.length ?? '?'} bytesAfter=${contentAfterWrite?.length ?? '?'}`,
     );
@@ -1180,12 +1179,16 @@ export class AstService {
     const { ast: targetAst } = await this._fileParser.readAndParseFile(targetFilePath);
 
     const sourceResult = this._resolveElement(sourceAst, sourceId, sourceFilePath);
-    dbg(`[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`);
+    dbg(
+      `[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`,
+    );
     if (!sourceResult) {
       throw new Error(`moveElement: source disappeared in ${sourceFilePath} (nodeRef=${sourceId})`);
     }
     const targetResult = this._resolveElement(targetAst, targetId, targetFilePath);
-    dbg(`[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`);
+    dbg(
+      `[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`,
+    );
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared in ${targetFilePath} (nodeRef=${targetId})`);
     }
@@ -1349,10 +1352,12 @@ export class AstService {
     try {
       sourceAfter = await this._fileIO.readFile(sourceFilePath);
     } catch {}
-    const tgtChanged =
-      targetContentBefore !== undefined && targetAfter !== undefined ? targetContentBefore !== targetAfter : 'unknown';
-    const srcChanged =
-      sourceContentBefore !== undefined && sourceAfter !== undefined ? sourceContentBefore !== sourceAfter : 'unknown';
+    const tgtChanged = targetContentBefore !== undefined && targetAfter !== undefined
+      ? targetContentBefore !== targetAfter
+      : 'unknown';
+    const srcChanged = sourceContentBefore !== undefined && sourceAfter !== undefined
+      ? sourceContentBefore !== sourceAfter
+      : 'unknown';
     dbg(
       `[moveElement.cross] write done targetChanged=${tgtChanged} sourceChanged=${srcChanged} adjustments=${adjustments.length}`,
     );

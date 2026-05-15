@@ -184,7 +184,8 @@ export function computeNumericArrowValue(opts: ComputeNumericArrowValueOptions):
     return null;
   }
 
-  const isUnitless = styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
+  const isUnitless =
+    styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
   const trimmed = currentValue.replace(' Auto', '').trim();
   const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
 

@@ -26,23 +26,33 @@ import { computeNumericArrowValue } from '../../utils';
 
 describe('computeNumericArrowValue — length decrement', () => {
   it('returns null for non-arrow keys', () => {
-    expect(computeNumericArrowValue({ key: 'Enter', currentValue: '2px', styleKey: 'paddingTop' })).toBeNull();
+    expect(
+      computeNumericArrowValue({ key: 'Enter', currentValue: '2px', styleKey: 'paddingTop' }),
+    ).toBeNull();
   });
 
   it('decrements `2px` to `1px`', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowDown', currentValue: '2px', styleKey: 'paddingTop' })).toBe('1px');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowDown', currentValue: '2px', styleKey: 'paddingTop' }),
+    ).toBe('1px');
   });
 
   it('decrements `1px` to `0px`', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowDown', currentValue: '1px', styleKey: 'paddingTop' })).toBe('0px');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowDown', currentValue: '1px', styleKey: 'paddingTop' }),
+    ).toBe('0px');
   });
 
   it('clamps at 0 when current value is `0px`', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowDown', currentValue: '0px', styleKey: 'paddingTop' })).toBe('0px');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowDown', currentValue: '0px', styleKey: 'paddingTop' }),
+    ).toBe('0px');
   });
 
   it('clamps at 0 when current value is empty', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowDown', currentValue: '', styleKey: 'paddingTop' })).toBe('0px');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowDown', currentValue: '', styleKey: 'paddingTop' }),
+    ).toBe('0px');
   });
 
   it('preserves the step=10 (shift) decrement path on length', () => {
@@ -68,11 +78,17 @@ describe('computeNumericArrowValue — length decrement', () => {
   });
 
   it('still allows ArrowUp to increment past current value', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowUp', currentValue: '0px', styleKey: 'paddingTop' })).toBe('1px');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowUp', currentValue: '0px', styleKey: 'paddingTop' }),
+    ).toBe('1px');
   });
 
   it('keeps opacity clamped to [0, 100] (regression guard for existing behaviour)', () => {
-    expect(computeNumericArrowValue({ key: 'ArrowUp', currentValue: '100', styleKey: 'opacity' })).toBe('100');
-    expect(computeNumericArrowValue({ key: 'ArrowDown', currentValue: '0', styleKey: 'opacity' })).toBe('0');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowUp', currentValue: '100', styleKey: 'opacity' }),
+    ).toBe('100');
+    expect(
+      computeNumericArrowValue({ key: 'ArrowDown', currentValue: '0', styleKey: 'opacity' }),
+    ).toBe('0');
   });
 });

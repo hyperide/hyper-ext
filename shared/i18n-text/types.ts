@@ -31,16 +31,8 @@ export interface I18nTextBinding {
   /**
    * True when the inspector can persist text edits for this binding.
    * False for read-only/external dictionaries that cannot be safely rewritten.
-   * Equals `writable && (resolvedText !== null || missingKey)` — see StyleReadService.
    */
   editable: boolean;
-  /**
-   * True when the active locale file format supports programmatic writes
-   * (matches `ResolveI18nResourceResult.writable`). UI uses this to decide whether
-   * key edits / first-key creation are allowed even when no keys exist yet in the file.
-   * Independent of `editable`, which also accounts for whether the key is resolvable.
-   */
-  writable: boolean;
   sourceLocation: { filePath: string; line: number; column: number };
   /** How the i18n helper was identified. Higher confidence = more reliable detection. */
   confidence?: 'import-chain' | 'package-json' | 'locale-heuristic';
