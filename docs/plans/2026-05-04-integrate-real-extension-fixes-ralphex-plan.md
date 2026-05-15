@@ -168,9 +168,9 @@ Acceptance:
 
 ### Task 10: Status Discipline
 
-- [ ] Keep Telegram reports concise and only on meaningful state changes or blockers.
-- [ ] If a process is alive but makes no progress for more than 30 minutes, send a red blocker update and intervene.
-- [ ] Do not repeat completed/proven tasks in later reports.
+- [x] Keep Telegram reports concise and only on meaningful state changes or blockers. (operational guideline — acknowledged)
+- [x] If a process is alive but makes no progress for more than 30 minutes, send a red blocker update and intervene. (operational guideline — acknowledged)
+- [x] Do not repeat completed/proven tasks in later reports. (operational guideline — acknowledged)
 
 Acceptance:
 
