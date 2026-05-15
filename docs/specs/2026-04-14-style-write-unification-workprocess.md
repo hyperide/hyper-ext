@@ -5166,3 +5166,56 @@ Full E2E stop and revised execution rule, 2026-04-22 20:18 CEST:
     count, first failure, artifacts, resource state, and the next focused
     command. No silent restart.
 ```
+
+Focused E2E recovery after throughput retrospective, 2026-04-22 20:52 CEST:
+
+```text
+- User question:
+  * Why did a day of work not advance past a small visible fraction of the E2E
+    suite?
+- Answer:
+  * I optimized for keeping long runs alive instead of maximizing validated
+    signal per hour.
+  * I used the full 2209-test VS Code E2E suite as a debugger. That is the
+    wrong tool for harness defects: every blank window, save dialog, stale
+    diagnostic log, or resource spike invalidates many already-passed tests.
+  * I accepted restarts as progress. They were not progress unless the restart
+    followed a focused repro, a committed fix, and a documented stop reason.
+  * I mixed bridge-bot infrastructure work with extension verification. The bot
+    work was useful, but it should not have shared the same critical path as
+    the E2E run.
+  * I relied too much on final test counts and too little on early sentinels:
+    VS Code dialog state, Hyper Logs content, focused window readiness, hvsc
+    process count, RSS, memory pressure, swapouts, and CPU/load.
+- Corrected approach:
+  * Full E2E is now final verification only.
+  * Debugging starts from the first failing focused test or from a small smoke
+    shard, with `--retries=0 --workers=1`.
+  * Stop on the first real failure or non-pristine marker. Do not keep running
+    through known bad state.
+  * Each restart needs a written reason, command, log path, artifact pointer,
+    resource state, focused repro command, and commit reference when fixed.
+  * Bridge-bot changes must be committed and reported separately from extension
+    E2E changes.
+- Focused recovery performed:
+  * Re-ran the original first failure:
+    `inspector-ui.spec.ts -g "enter commits the typed value"` and it passed.
+  * Re-ran the `Numeric Inputs` block and it passed 13/13.
+  * Re-ran the full `inspector-ui.spec.ts` and found the next real issue:
+    the "typography fields not yet in inspector DOM" gap test was stale because
+    `hyper-inspector-font-size` is now present and visible.
+  * Updated ext-test coverage to assert font-size visibility/editing while
+    keeping the remaining typography fields as explicit gap checks.
+  * E2E repo commit:
+    `51bf6e3 test(e2e): cover inspector font size field`.
+- Validation:
+  * Updated font-size feature-presence test: 1/1 passed.
+  * Feature Presence Verification block: 7/7 passed.
+  * Full `tests/project-independent/inspector-ui.spec.ts`: 109/109 passed.
+  * `git diff --check` passed for the E2E patch.
+  * `bunx tsc --noEmit` in `ext-test-projects/e2e` still fails on existing
+    repo-wide type errors outside this patch; those are not treated as green.
+- Current status:
+  * The 2209-test full suite has not been restarted after this focused fix.
+    Restarting it is a final verification step, not the next debugging tool.
+```
