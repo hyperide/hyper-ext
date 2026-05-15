@@ -430,6 +430,171 @@ describe('FiberSourceIndex', () => {
       expect(index.findDOMElement(callSite, 1)).toBe(divEl2);
     });
   });
+
+  describe('findClosestSourceDOMElements', () => {
+    it('should return null when no entry shares fileName', () => {
+      const { hostRoot } = buildSimpleTree();
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      const result = index.findClosestSourceDOMElements({
+        fileName: '/no/such/file.tsx',
+        line: 1,
+        column: 0,
+      });
+      expect(result).toBeNull();
+    });
+
+    it('should return null when source has no fileName', () => {
+      const { hostRoot } = buildSimpleTree();
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      const result = index.findClosestSourceDOMElements({
+        fileName: '',
+        line: 3,
+        column: 5,
+      });
+      expect(result).toBeNull();
+    });
+
+    it('should pick the entry with the smallest line distance', () => {
+      const elNear = mockElement();
+      const elFar = mockElement();
+
+      // Two host elements in the same file: one at line 10, one at line 50.
+      const fiberFar = mockFiber({
+        tag: 5,
+        type: 'div',
+        stateNode: elFar,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 50, columnNumber: 1 },
+      });
+      const fiberNear = mockFiber({
+        tag: 5,
+        type: 'div',
+        stateNode: elNear,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 10, columnNumber: 1 },
+        sibling: fiberFar,
+      });
+      const hostRoot = mockFiber({ tag: 3, child: fiberNear });
+      fiberNear.return = hostRoot;
+      fiberFar.return = hostRoot;
+
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      // Requested line 12 — closer to 10 (distance 2) than to 50 (distance 38).
+      const result = index.findClosestSourceDOMElements({
+        fileName: '/app/src/App.tsx',
+        line: 12,
+        column: 0,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.elements).toEqual([elNear]);
+      expect(result!.matchedSource.line).toBe(10);
+    });
+
+    it('should break line-distance ties using column proximity', () => {
+      const elColA = mockElement();
+      const elColB = mockElement();
+
+      // Two host elements on the same line, different columns.
+      const fiberB = mockFiber({
+        tag: 5,
+        type: 'span',
+        stateNode: elColB,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 10, columnNumber: 21 },
+      });
+      const fiberA = mockFiber({
+        tag: 5,
+        type: 'span',
+        stateNode: elColA,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 10, columnNumber: 6 },
+        sibling: fiberB,
+      });
+      const hostRoot = mockFiber({ tag: 3, child: fiberA });
+      fiberA.return = hostRoot;
+      fiberB.return = hostRoot;
+
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      // _debugSource columnNumber → 0-based: A at column 5, B at column 20.
+      // Requested column 8 → A wins (distance 3 < 12).
+      const result = index.findClosestSourceDOMElements({
+        fileName: '/app/src/App.tsx',
+        line: 10,
+        column: 8,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.elements).toEqual([elColA]);
+      expect(result!.matchedSource.column).toBe(5);
+    });
+
+    it('should respect maxLineDistance and return null past the bound', () => {
+      const el = mockElement();
+      const fiber = mockFiber({
+        tag: 5,
+        type: 'div',
+        stateNode: el,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 10, columnNumber: 1 },
+      });
+      const hostRoot = mockFiber({ tag: 3, child: fiber });
+      fiber.return = hostRoot;
+
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      // Requested line 100 — distance 90, which exceeds the default bound (20).
+      const tooFar = index.findClosestSourceDOMElements({
+        fileName: '/app/src/App.tsx',
+        line: 100,
+        column: 0,
+      });
+      expect(tooFar).toBeNull();
+
+      // Within an explicit larger bound, the lookup succeeds.
+      const withLargerBound = index.findClosestSourceDOMElements(
+        { fileName: '/app/src/App.tsx', line: 100, column: 0 },
+        { maxLineDistance: 200 },
+      );
+      expect(withLargerBound).not.toBeNull();
+      expect(withLargerBound!.elements).toEqual([el]);
+    });
+
+    it('should skip entries whose elements are all disconnected', () => {
+      const liveEl = mockElement(true);
+      const deadEl = mockElement(false);
+
+      // Closer entry has only a disconnected element; should be skipped in favor
+      // of the live one further away.
+      const fiberLive = mockFiber({
+        tag: 5,
+        type: 'div',
+        stateNode: liveEl,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 30, columnNumber: 1 },
+      });
+      const fiberDead = mockFiber({
+        tag: 5,
+        type: 'div',
+        stateNode: deadEl,
+        _debugSource: { fileName: '/app/src/App.tsx', lineNumber: 12, columnNumber: 1 },
+        sibling: fiberLive,
+      });
+      const hostRoot = mockFiber({ tag: 3, child: fiberDead });
+      fiberDead.return = hostRoot;
+      fiberLive.return = hostRoot;
+
+      index = new FiberSourceIndex(() => hostRoot, mockDoc);
+
+      const result = index.findClosestSourceDOMElements({
+        fileName: '/app/src/App.tsx',
+        line: 14,
+        column: 0,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.elements).toEqual([liveEl]);
+      expect(result!.matchedSource.line).toBe(30);
+    });
+  });
 });
 
 describe('hookIntoReactCommits', () => {
