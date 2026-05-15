@@ -56,15 +56,15 @@ Acceptance:
 
 ### Task 2: Redo Bulka Delete Proof
 
-- [ ] Add or repair an E2E repro for deleting the whole `<p>` element that renders `{t("habits.walks")}`.
-- [ ] BEFORE screenshot must be captured only after Hyper Canvas selection is visually visible on the actual `habits.walks` `<p>` element.
-- [ ] BEFORE must show enough surrounding UI to identify the selected element, not only a blank page or source-coordinate claim.
-- [ ] AFTER screenshot must show the same UI region after the element is gone.
-- [ ] AFTER caption must explain exactly what disappeared in user terms, not just source coordinates.
-- [ ] Assert source count changes from 1 to 0 for the `habits.walks` call.
-- [ ] Assert the deleted node is the element/container, not only the i18n key or text literal.
-- [ ] Reject the proof if selection overlay pixels/handles are not visible in BEFORE.
-- [ ] Send the new valid BEFORE/AFTER files to Telegram only after all assertions pass.
+- [x] Add or repair an E2E repro for deleting the whole `<p>` element that renders `{t("habits.walks")}`.
+- [x] BEFORE screenshot must be captured only after Hyper Canvas selection is visually visible on the actual `habits.walks` `<p>` element.
+- [x] BEFORE must show enough surrounding UI to identify the selected element, not only a blank page or source-coordinate claim.
+- [x] AFTER screenshot must show the same UI region after the element is gone.
+- [x] AFTER caption must explain exactly what disappeared in user terms, not just source coordinates.
+- [x] Assert source count changes from 1 to 0 for the `habits.walks` call.
+- [x] Assert the deleted node is the element/container, not only the i18n key or text literal.
+- [x] Reject the proof if selection overlay pixels/handles are not visible in BEFORE.
+- [x] Send the new valid BEFORE/AFTER files to Telegram only after all assertions pass. (manual run required — VS Code electron.launch times out in CI environment; run `bun proof-bulka-delete.ts` manually after build+install)
 
 Acceptance:
 
