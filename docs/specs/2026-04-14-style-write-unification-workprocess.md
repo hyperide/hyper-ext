@@ -39,7 +39,11 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards). Active fixes: `3287880` (Tamagui disk fallback), `4909041` (redo-limit 75s+45s).
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS** (3 shards, ~30 min elapsed). Active fixes: `3287880` (Tamagui disk fallback), `4909041` (redo-limit 75s+45s).
+  - S1: 131 tests done, 0 hard fails, proxy tests running (redo-limit not reached yet)
+  - S2: 94 tests done, 0 hard fails, project-dependent render tests
+  - S3: 68 tests done, **3 HARD FAILS** — "Tamagui: style written as prop" at 165375ms / 169634ms / 162760ms (pre-known; disk fallback `3287880` ineffective without `files.autoSave`)
+  - Fix `aeb693c` NOT in this run — will be in run #38.
 
 - **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **KILLED** (timeout after 927/2211 tests, exit code 124). Reached `react-vite-cssmodules-spotify` (project #3), never reached bulka-the-dog (#23).
   - **1 HARD FAIL**: "redo limit — no redo after new edit" — both attempts timed out at ~48-52s. Root cause: `isPreviewLoaded(45s)` exhausted in 1-shard low-memory Docker (avail≈4.4GB). Fixed in `4909041` (75s).
@@ -837,4 +841,20 @@ HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 HYPER_E2E_IGNORE_HOST_RUNS=1 bash e2e
 - "Tamagui: style written as prop" → PASS (disk fallback, no poll timeout dependency)
 - "redo limit" → PASS (75s budget covers 45-50s Docker inotify lag)
 - bulka-the-dog tests → first time with `3287880` active in a shard that covers project #23
+
+**Run #37 partial results** (06:37 CEST, ~30 min in):
+- S1: 131 tests, 0 hard fails, proxy tests running (redo-limit not reached yet)
+- S2: 94 tests, 0 hard fails (component-with-error FLAKY: 22701ms → 14638ms retry pass)
+- S3: 68 tests, **3 HARD FAILS** — "Tamagui: style written as prop" at 165375ms / 169634ms / 162760ms (3 Tamagui projects)
+
+**Root cause Tamagui hard fail in #37**: `3287880` (disk fallback) is ineffective because VS Code auto-save is OFF by default. `workspace.applyEdit()` keeps changes in-memory (dirty tab) but never writes to disk without `files.autoSave`. `readFileSync` reads old content → poll always returns '' → times out at 150s.
+
+**Fix `aeb693c`**: add `'files.autoSave': 'afterDelay', 'files.autoSaveDelay': 500` to test VS Code settings. With this, disk is flushed within 500ms of the write, making disk fallback effective.
+
+**Status of known issues after run #37 partial data:**
+- Tamagui "style written as prop" → still hard fail (needs `aeb693c`, NOT in run #37). Expected: up to 5 hard fails (×2 attempts per Tamagui project)
+- redo-limit → not tested yet in #37 (S1 needs to reach undo-redo.spec.ts)
+- component-with-error → FLAKY as expected
+
+**Run #38 will include**: `aeb693c` (auto-save) + all previous fixes.
 
