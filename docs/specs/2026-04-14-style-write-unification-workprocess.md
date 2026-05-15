@@ -4580,3 +4580,29 @@ Bridge bot persisted-thread resume follow-up, 2026-04-22 17:09 CEST:
   * Do not start E2E while bridge delivery is unconfirmed and load is elevated.
   * Latest load snapshot: around `3.58 4.54 6.36`.
 ```
+
+Ext-test inspector readiness commit, 2026-04-22 17:11 CEST:
+
+```text
+- Repo: `/Users/ultra/work/ext-test-projects`.
+- Commit: fe24243 test(e2e): wait for inspector root during preview setup
+- Scope:
+  * `setupPreviewWithDevServer()` now waits for
+    `TID.inspector.root` after running `Hyper: Open Inspector`.
+  * This prevents tests from continuing when the right sidebar header is
+    visible but the inspector webview root is not mounted yet.
+- Commit isolation:
+  * The repo had many unrelated staged changes before this work.
+  * Used backup/restore and `git commit --only e2e/helpers/setup-preview.ts`
+    so the commit contains only the 3-line inspector-root wait.
+  * Restored the pre-existing staged setup-preview changes after the commit.
+- Validation:
+  * Earlier focused validation after this helper change passed:
+    `commands.spec.ts -g "hypercanvas.canvas(Undo|Redo)"` 2/2 with
+    `--retries=0`.
+  * `bunx biome check e2e/helpers/setup-preview.ts` passed.
+  * `git diff --cached --check` passed for the staged commit.
+- Current E2E decision:
+  * Full E2E remains on hold while system load is elevated and bridge-bot
+    delivery is not yet confirmed after the latest fixes.
+```
