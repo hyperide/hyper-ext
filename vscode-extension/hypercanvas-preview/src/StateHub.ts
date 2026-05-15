@@ -107,18 +107,6 @@ export class StateHub {
     }
   }
 
-  /**
-   * Broadcast an arbitrary message to every registered panel.
-   * Use for transient cross-panel signals that should not live in
-   * SharedEditorState (e.g. iframe coordination events that fire from one
-   * panel and need to land in another panel's webview).
-   */
-  broadcast(message: unknown): void {
-    for (const [, webview] of this._panels) {
-      webview.postMessage(message);
-    }
-  }
-
   dispose(): void {
     this._panels.clear();
     this._listeners.length = 0;

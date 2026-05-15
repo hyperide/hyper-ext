@@ -214,9 +214,9 @@ describe('resolveDragSource', () => {
 
   /**
    * B1/B4 BUG: Clicking an emoji span or inner-div inside a card resolves to
-   * the inner-div instead of the outer card. Since inner-div and outer-card don't
-   * share the same JSX parent, AstService.reorderElement throws
-   * "Elements must share a direct JSX parent".
+   * the inner-div instead of the outer card. Even though AstService.moveElement
+   * now handles cross-parent moves, the resolver should still prefer the visual
+   * card the user perceives — dropping an inner-div confuses the user.
    *
    * DOM structure (bulka-the-dog Index.tsx):
    *   grid > outer-card > [emoji-span(aria-hidden), inner-div > text-div]
