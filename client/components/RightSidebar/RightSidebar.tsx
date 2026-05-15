@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -735,10 +735,17 @@ export default function RightSidebar({
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
   }, []);
 
+  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
+  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
+  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
+  // is no longer attached to the same DOM node.
+  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
       if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
+      const previousSelectedId = selectedId;
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -752,6 +759,12 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: true,
           });
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast it so
+          // the inspector stays open on the same element.
+          if (i18nDispatch) {
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+          }
         } catch {
           // key change failed — no rollback needed (source file unchanged)
         } finally {
@@ -759,7 +772,7 @@ export default function RightSidebar({
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch],
   );
 
   const handleI18nResolvedTextChange = useCallback(

@@ -46,8 +46,9 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // Combobox state — only active when keys available and keyEditable
   const [keySearch, setKeySearch] = useState('');
   const [showKeyDropdown, setShowKeyDropdown] = useState(false);
-  const keyInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Track previous rollbackKey to detect write-failure triggers from RightSidebar.
   // Initialized to the first rollbackKey so the initial render never counts as a "key changed" event.
@@ -70,15 +71,22 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedText, rollbackKey]);
 
+  // Auto-focus search when popover opens
+  useEffect(() => {
+    if (showKeyDropdown) {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+  }, [showKeyDropdown]);
+
   // Close key dropdown when clicking outside
   useEffect(() => {
     if (!showKeyDropdown) return;
     const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
       if (
-        keyInputRef.current &&
-        !keyInputRef.current.contains(e.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        popoverRef.current && !popoverRef.current.contains(target)
       ) {
         setShowKeyDropdown(false);
         setKeySearch('');
@@ -98,9 +106,23 @@ export const I18nTextInspector = memo(function I18nTextInspector({
 
   const currentKey = i18nBinding.key;
   const showCombobox = keyEditable && availableKeys && availableKeys.length > 0;
+  const trimmedSearch = keySearch.trim();
   const filteredKeys = showCombobox
-    ? availableKeys.filter((k) => k.toLowerCase().includes(keySearch.toLowerCase()))
+    ? (availableKeys ?? []).filter((k) => k.toLowerCase().includes(trimmedSearch.toLowerCase()))
     : [];
+  const isExactMatch = trimmedSearch.length > 0 && (availableKeys ?? []).includes(trimmedSearch);
+  const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch;
+
+  const commitKey = (key: string) => {
+    if (!key || key === currentKey) {
+      setShowKeyDropdown(false);
+      setKeySearch('');
+      return;
+    }
+    onKeyChange?.(key);
+    setShowKeyDropdown(false);
+    setKeySearch('');
+  };
 
   return (
     <div className="w-full px-4 py-3 border-t border-border flex flex-col gap-2">
@@ -109,55 +131,86 @@ export const I18nTextInspector = memo(function I18nTextInspector({
 
         {showCombobox ? (
           <div className="relative">
-            <input
-              ref={keyInputRef}
+            <button
+              ref={triggerRef}
               data-testid="i18n-key-input"
-              type="text"
-              value={showKeyDropdown ? keySearch : currentKey}
-              onChange={(e) => {
-                setKeySearch(e.target.value);
-                onKeyChange?.(e.target.value);
-              }}
-              onFocus={() => {
+              type="button"
+              onClick={() => {
                 setKeySearch('');
-                setShowKeyDropdown(true);
+                setShowKeyDropdown((s) => !s);
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setShowKeyDropdown(false);
-                  setKeySearch('');
-                  e.currentTarget.blur();
-                }
-              }}
-              placeholder={currentKey}
-              className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            {showKeyDropdown && filteredKeys.length > 0 && (
+              className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 text-left focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {currentKey}
+            </button>
+            {showKeyDropdown && (
               <div
-                ref={dropdownRef}
+                ref={popoverRef}
                 data-testid="i18n-key-dropdown"
-                className="absolute z-50 top-7 left-0 right-0 max-h-40 overflow-y-auto rounded-md border bg-popover shadow-md"
+                className="absolute z-50 top-7 left-0 right-0 rounded-md border bg-popover shadow-md flex flex-col"
               >
-                {filteredKeys.map((key) => (
-                  <button
-                    key={key}
-                    data-testid={`i18n-key-option-${key}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      // mousedown fires before blur, so we can select before dropdown closes
-                      e.preventDefault();
-                      onKeyChange?.(key);
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={keySearch}
+                  placeholder="Search or create key..."
+                  onChange={(e) => setKeySearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
                       setShowKeyDropdown(false);
                       setKeySearch('');
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filteredKeys.length === 1) {
+                        commitKey(filteredKeys[0]);
+                      } else if (showCreateAffordance) {
+                        commitKey(trimmedSearch);
+                      } else if (isExactMatch) {
+                        commitKey(trimmedSearch);
+                      }
+                    }
+                  }}
+                  className="h-7 w-full bg-transparent border-b px-2 text-[11px] text-foreground focus:outline-none"
+                />
+                <div className="max-h-40 overflow-y-auto">
+                  {filteredKeys.map((key) => (
+                    <button
+                      key={key}
+                      data-testid={`i18n-key-option-${key}`}
+                      type="button"
+                      onMouseDown={(e) => {
+                        // mousedown fires before blur, so we can select before dropdown closes
+                        e.preventDefault();
+                        commitKey(key);
+                      }}
+                      className={cn(
+                        'w-full text-left px-2 py-1 text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer',
+                        key === currentKey && 'bg-accent/50',
+                      )}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                  {filteredKeys.length === 0 && !showCreateAffordance && (
+                    <div className="px-2 py-1 text-[11px] text-muted-foreground">No keys</div>
+                  )}
+                </div>
+                {showCreateAffordance && (
+                  <button
+                    data-testid="i18n-key-create"
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      commitKey(trimmedSearch);
                     }}
-                    className={cn(
-                      'w-full text-left px-2 py-1 text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer',
-                      key === currentKey && 'bg-accent/50',
-                    )}
+                    className="border-t px-2 py-1.5 text-left text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center gap-1"
                   >
-                    {key}
+                    <span className="text-muted-foreground">+</span>
+                    <span>
+                      Create key: <span className="font-mono text-foreground">{trimmedSearch}</span>
+                    </span>
                   </button>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -165,9 +218,24 @@ export const I18nTextInspector = memo(function I18nTextInspector({
           <input
             data-testid="i18n-key-input"
             type="text"
-            value={currentKey}
+            defaultValue={currentKey}
+            key={currentKey}
             disabled={!keyEditable}
-            onChange={(e) => onKeyChange?.(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const v = (e.target as HTMLInputElement).value.trim();
+                if (v && v !== currentKey) onKeyChange?.(v);
+              } else if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).value = currentKey;
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== currentKey) onKeyChange?.(v);
+              else e.target.value = currentKey;
+            }}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
           />
         )}
