@@ -164,17 +164,19 @@ export const FillSection = memo(function FillSection({
         />
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground min-w-[60px]">Size</span>
-          <Input
-            testId={TID.inspector.fontSize}
-            value={fontSize ?? ''}
-            onChange={(e) => {
-              onFontSizeChange(e.target.value);
-              syncStyleChange('fontSize', e.target.value);
-            }}
-            onBlur={handleFontSizeBlur}
-            placeholder="15px"
-            className="h-8 flex-1 text-xs"
-          />
+          <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center">
+            <Input
+              testId={TID.inspector.fontSize}
+              value={fontSize ?? ''}
+              onChange={(e) => {
+                onFontSizeChange(e.target.value);
+                syncStyleChange('fontSize', e.target.value);
+              }}
+              onBlur={handleFontSizeBlur}
+              placeholder="15px"
+              className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
+            />
+          </div>
         </div>
       </div>
     </div>

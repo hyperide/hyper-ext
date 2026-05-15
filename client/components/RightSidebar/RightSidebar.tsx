@@ -400,6 +400,9 @@ export default function RightSidebar({
   const [textContent, setTextContent] = useState('');
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard: prevent external data refresh from overriding text the user is actively typing
+  const isEditingTextRef = useRef(false);
+  const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Root ref for wheel event handling
   const rootRef = useRef<HTMLDivElement>(null);
@@ -587,6 +590,14 @@ export default function RightSidebar({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setTextContent(value);
+
+      // Prevent external data refresh from overriding user input while typing
+      isEditingTextRef.current = true;
+      if (editingTextResetRef.current) clearTimeout(editingTextResetRef.current);
+      // Reset after 2s — covers debounce 300ms + sync roundtrip + file-watch latency
+      editingTextResetRef.current = setTimeout(() => {
+        isEditingTextRef.current = false;
+      }, 2000);
 
       if (debouncedTextSyncRef.current) {
         clearTimeout(debouncedTextSyncRef.current);
@@ -892,8 +903,10 @@ export default function RightSidebar({
     }
     setEffects(newEffects);
 
-    // Update text content
-    setTextContent(dataTextContent);
+    // Update text content — skip if user is actively typing to prevent cursor reset
+    if (!isEditingTextRef.current) {
+      setTextContent(dataTextContent);
+    }
     // In browser mode, text from DOM (no childrenType) is "from props"
     setIsTextFromProps(engine !== null && !childrenType && !!dataTextContent);
   }, [selectedId, parsedStyles, effectiveParsed, dataTextContent, childrenType, engine]);
