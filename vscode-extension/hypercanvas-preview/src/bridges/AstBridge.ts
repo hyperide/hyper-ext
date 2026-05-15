@@ -96,6 +96,10 @@ export class AstBridge {
           response = await this._handleWrapElement(message);
           break;
 
+        case 'ast:reorderElement':
+          response = await this._handleReorderElement(message);
+          break;
+
         case 'ast:writeI18nResource':
           response = await this._handleWriteI18nResource(message);
           break;
@@ -423,6 +427,23 @@ export class AstBridge {
       requestId: message.requestId,
       success: result.success,
       data: result.success ? { wrapperId: result.wrapperId } : undefined,
+      error: result.error,
+    };
+  }
+
+  /**
+   * Handle reorderElement message — moves a JSX sibling before/after another sibling.
+   */
+  private async _handleReorderElement(
+    message: Extract<AstMessage, { type: 'ast:reorderElement' }>,
+  ): Promise<AstResponse> {
+    const result = await this._withUndoTracking(message.filePath, () =>
+      this._astService.reorderElement(message.filePath, message.sourceId, message.targetId, message.position),
+    );
+    return {
+      type: 'ast:response',
+      requestId: message.requestId,
+      success: result.success,
       error: result.error,
     };
   }

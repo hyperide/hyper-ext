@@ -277,6 +277,21 @@ export function useCanvasInteraction(
           break;
         }
 
+        case 'hypercanvas:reorderElement': {
+          if (typeof msg.sourceId !== 'string' || typeof msg.targetId !== 'string') break;
+          const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
+          if (!filePath) break;
+          canvas.sendEvent({
+            type: 'ast:reorderElement',
+            requestId: `reorder-${Date.now()}`,
+            filePath,
+            sourceId: msg.sourceId,
+            targetId: msg.targetId,
+            position: msg.position === 'before' ? 'before' : 'after',
+          });
+          break;
+        }
+
         case 'hypercanvas:keydown': {
           const isMod = msg.metaKey || msg.ctrlKey;
           const isZ = msg.code === 'KeyZ' || msg.key?.toLowerCase() === 'z';

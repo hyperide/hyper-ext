@@ -137,6 +137,14 @@ export type PlatformMessage =
       text: string;
     }
   | {
+      type: 'ast:reorderElement';
+      requestId: string;
+      filePath: string;
+      sourceId: string;
+      targetId: string;
+      position: 'before' | 'after';
+    }
+  | {
       type: 'ast:writeI18nResource';
       requestId: string;
       library: I18nLibrary;

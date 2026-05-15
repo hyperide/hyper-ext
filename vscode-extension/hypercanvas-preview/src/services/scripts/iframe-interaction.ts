@@ -1072,6 +1072,78 @@ const contextMenuHandler = (e: MouseEvent) => {
 };
 document.addEventListener('contextmenu', contextMenuHandler, true);
 
+// === Element drag/reorder state machine ===
+// Tracks pointerdown → threshold → drag → drop to post hypercanvas:reorderElement.
+// Suppresses the click event that fires after pointerup to prevent accidental deselect.
+const DRAG_THRESHOLD_PX = 5;
+
+let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
+let _dragSourceId: string | null = null;
+let _dragSourceFilePath: string | null = null;
+let _dragStartX = 0;
+let _dragStartY = 0;
+let _dragSuppressNextClick = false;
+
+function _dragPointerDown(e: PointerEvent): void {
+  if (state.engineMode !== 'design' || e.button !== 0) return;
+  const target = e.target as HTMLElement;
+  const src = iframeResolver.getSourceLocation(target);
+  if (!src) return;
+  _dragSourceId = `${src.fileName}:${src.line}:${src.column}`;
+  _dragSourceFilePath = src.fileName;
+  _dragStartX = e.clientX;
+  _dragStartY = e.clientY;
+  _dragState = 'pending';
+}
+
+function _dragPointerMove(e: PointerEvent): void {
+  if (_dragState !== 'pending') return;
+  const dx = e.clientX - _dragStartX;
+  const dy = e.clientY - _dragStartY;
+  if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
+    _dragState = 'dragging';
+  }
+}
+
+function _dragPointerUp(e: PointerEvent): void {
+  const wasDragging = _dragState === 'dragging';
+  const sourceId = _dragSourceId;
+  const sourceFilePath = _dragSourceFilePath;
+  _dragState = 'idle';
+  _dragSourceId = null;
+  _dragSourceFilePath = null;
+  if (!wasDragging || !sourceId || !sourceFilePath) return;
+
+  const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+  if (!dropEl) return;
+  const dropSrc = iframeResolver.getSourceLocation(dropEl);
+  if (!dropSrc) return;
+  const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
+  if (targetId === sourceId) return;
+
+  const rect = dropEl.getBoundingClientRect();
+  const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+
+  _dragSuppressNextClick = true;
+  // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+  window.parent.postMessage(
+    { type: 'hypercanvas:reorderElement', sourceId, targetId, filePath: sourceFilePath, position },
+    '*',
+  );
+}
+
+function _dragClickSuppressor(e: MouseEvent): void {
+  if (!_dragSuppressNextClick) return;
+  _dragSuppressNextClick = false;
+  e.stopPropagation();
+  e.preventDefault();
+}
+
+document.addEventListener('pointerdown', _dragPointerDown, true);
+document.addEventListener('pointermove', _dragPointerMove, true);
+document.addEventListener('pointerup', _dragPointerUp, true);
+document.addEventListener('click', _dragClickSuppressor, true);
+
 // === Focus prevention in design mode (mousedown, not focusin) ===
 const mousedownHandler = (e: MouseEvent) => {
   if (state.engineMode !== 'design') return;
@@ -1221,6 +1293,10 @@ window.addEventListener('unload', () => {
   document.removeEventListener('keydown', keydownForwardingHandler, true);
   document.removeEventListener('contextmenu', contextMenuHandler, true);
   document.removeEventListener('mousedown', mousedownHandler, true);
+  document.removeEventListener('pointerdown', _dragPointerDown, true);
+  document.removeEventListener('pointermove', _dragPointerMove, true);
+  document.removeEventListener('pointerup', _dragPointerUp, true);
+  document.removeEventListener('click', _dragClickSuppressor, true);
 });
 
 // === Design mode CSS (shared) ===

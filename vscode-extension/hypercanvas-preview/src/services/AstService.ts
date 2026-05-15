@@ -601,6 +601,63 @@ export class AstService {
   }
 
   /**
+   * Reorder a JSX element relative to a sibling in the same parent JSX element.
+   * Same-parent only: cross-parent reparenting is not supported.
+   */
+  async reorderElement(
+    filePath: string,
+    sourceId: string,
+    targetId: string,
+    position: 'before' | 'after',
+  ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+
+      const sourceResult = this._resolveElement(ast, sourceId as NodeRef, absolutePath);
+      if (!sourceResult) {
+        return { success: false, error: `Source element not found (nodeRef=${sourceId})` };
+      }
+
+      const targetResult = this._resolveElement(ast, targetId as NodeRef, absolutePath);
+      if (!targetResult) {
+        return { success: false, error: `Target element not found (nodeRef=${targetId})` };
+      }
+
+      const sourceParent = sourceResult.path.parent;
+      const targetParent = targetResult.path.parent;
+
+      if (!t.isJSXElement(sourceParent) || sourceParent !== targetParent) {
+        return { success: false, error: 'Elements must share a direct JSX parent (same-parent reorder only)' };
+      }
+
+      const children = sourceParent.children;
+      const sourceNode = sourceResult.element;
+      const targetNode = targetResult.element;
+
+      const srcIdx = children.indexOf(sourceNode);
+      const tgtIdx = children.indexOf(targetNode);
+
+      if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) {
+        return { success: false, error: 'Invalid reorder: elements not in parent children or same element' };
+      }
+
+      children.splice(srcIdx, 1);
+      const newTgtIdx = children.indexOf(targetNode);
+      if (newTgtIdx === -1) return { success: false, error: 'Target lost after source removal' };
+      children.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, sourceNode);
+
+      await this._fileParser.writeAST(ast, absolutePath);
+      await this._updateNodeMap(absolutePath);
+      return { success: true };
+    } catch (error) {
+      console.error('[AstService.reorderElement] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
    * Extract the absolute file path from a source-location nodeRef ("fileName:line:col").
    * Returns null if the nodeRef isn't a source-location ref or the file can't be resolved.
    */
