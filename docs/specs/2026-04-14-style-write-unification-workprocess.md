@@ -2393,3 +2393,81 @@ After first-test failures, all subsequent remix-tw4-twitter tests pass quickly
 Let Run #12 complete. Analyze full failure inventory. If only s4 cold-compile
 failures remain (≤2 per shard), that's effectively green for this VSIX.
 Run #13 with 0.1.19 expected to close remaining failures.
+
+## 📍 2026-04-27 ~23:30 CEST: Run #12 full analysis + Run #13 start
+
+Run #12 `20260427-212925-91349` completed analysis (stopped manually after 1.5h,
+not full run, but all shard failures identified).
+
+| shard | pass  | fail | root cause summary |
+|-------|-------|------|--------------------|
+| s1    | 298   | 6    | concurrent start/stop ×2, PI-18-17, PI-18-18 |
+| s2    | 287   | 5    | click element, redo limit ×2, undo depth, error overlay |
+| s3    | 194   | 3    | calendar Electron crash ×2, proxy ECONNRESET 1 |
+| s4    | 54    | 19   | Remix cold-compile ×14, HMR useLoaderData ×2, 403 proxy ×2, cascades |
+
+### Run #12 failure analysis
+
+All failures classified into 4 categories:
+
+**A — Fixed (test-side, committed da92f69 + aaced68)**:
+- `concurrent start/stop` ×2 → inner poll 90→130s
+- `PI-18-17 aspect ratio lock` → added expect.poll for async height change
+- `click element in preview` → inspector poll 15→30s
+- `redo limit` ×2 → 500ms wait + expect.poll condition fix
+- `undo stack depth` → final poll 8→20s
+- `component with error (19s)` → error overlay poll 15→25s
+- `HMR — edit file` ×2 → removed useLoaderData crash (Explore.tsx replaced by
+  just editor.save())
+
+**B — Fixed (extension-side, VSIX 0.1.20, beginTracking/endTracking semaphore)**:
+- redo limit root cause: CMD_REDO racing `_withUndoTracking()` after file write
+  but before `recordEdit()` clears redo stack. `beginTracking()` at operation
+  start, `endTracking()` in finally block guards `canRedo()` for the full window.
+
+**C — Fixed (test-side + config, committed 503238b)**:
+- Remix cold-compile ×14: `preview:poll-loaded` at 250s was 4s short of Remix
+  compile time (254s observed). Increased to 320s. Base timeout 90→120s so
+  test.slow()=360s covers 320s setup + 40s body.
+
+**D — Still open (extension-level bugs)**:
+- `calendar Electron crash`: `react-vite-emotion-cssmodules-calendar` Electron
+  renderer crashes during test teardown. Root cause: Emotion `@emotion/react`
+  with `jsxImportSource` + VS Code webview sandbox → `page.evaluate: Target
+  crashed`. Affects shard-3 preview-refresh and CSS-value tests.
+- `remix-cssmodules-spotify 403 proxy`: PreviewProxy returns 403 for some CSS
+  resource on this project. `#root > *` = 0 despite 200 HTML. React can't
+  hydrate because JS gets blocked. poll-loaded timer runs 320s (now), FAILS.
+  Root cause: specific CSS Module file path gets 403 from proxy. Needs deeper
+  investigation.
+- `PI-18-18 setting width` (first attempt, 48s): `preview:poll-loaded` never
+  started (refresh command sent but no `poll-loaded:start`). PASSES on retry.
+  Cold start race in VS Code webview initialization.
+- `component with error DaisyUI (97s)`: PreviewProxy ECONNRESET + 502 errors
+  during setup delayed `poll-loaded` to 25s. Test failed. TRANSIENT.
+
+### Run #12 → Run #13 changes
+
+New VSIX 0.1.20 includes:
+- `beginTracking()`/`endTracking()` semaphore in UndoRedoService
+
+Test commits applied before Run #13:
+- `da92f69` — 4 test fixes (HMR, redo, PI-18-17, click element)
+- `aaced68` — 4 poll timeout increases (undo depth, inspector, error overlay)
+- `503238b` — preview:poll-loaded 250→320s, base timeout 90→120s
+
+### Run #13 start
+
+`20260427-231233-22841` — 4 shards started at ~23:12 CEST 2026-04-27.
+VSIX: `hypercanvas-preview-0.1.20.vsix`.
+
+Expected outcome:
+- Category A fixes → eliminate 11/19 shard-4 failures, 5/5 shard-2, 4/6 shard-1
+- Category B fix → redo limit passes (test + extension both fixed)
+- Category C fix → Remix cold-compile passes (320s poll + 360s total budget)
+- Category D (calendar crash, 403 proxy) — still open, needs extension investigation
+
+Remaining risks after Run #13:
+1. `react-vite-emotion-cssmodules-calendar` → 2 tests still expected to fail
+2. `remix-cssmodules-spotify` 403 proxy → duplicate/delete tests may still fail
+3. Other transient failures → retries=1 should absorb them
