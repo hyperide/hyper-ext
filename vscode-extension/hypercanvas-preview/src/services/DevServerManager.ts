@@ -413,9 +413,9 @@ export class DevServerManager {
    * preview-side code that must not load the iframe URL until webpack finishes
    * the SECOND compile (the post-patch one).
    */
-  async awaitRecompile(): Promise<void> {
+  async awaitRecompile(timeoutMs = 300_000): Promise<void> {
     if (!this._recompileGate) return;
-    await this._recompileGate.promise;
+    await Promise.race([this._recompileGate.promise, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
   }
 
   /**
@@ -447,7 +447,8 @@ export class DevServerManager {
   private _isRecompileReadyMessage(text: string): boolean {
     const lower = text.toLowerCase();
     return (
-      lower.includes('compiled successfully') || // webpack/CRA
+      lower.includes('compiled successfully') || // webpack/CRA success
+      lower.includes('compiled with') || // webpack/CRA finish with errors/warnings — still done
       lower.includes('compiled in') || // Next.js post-HMR "Compiled in 200ms"
       lower.includes('compiled client') || // Next.js post-HMR
       lower.includes('hmr update') || // Vite "[vite] hmr update"
