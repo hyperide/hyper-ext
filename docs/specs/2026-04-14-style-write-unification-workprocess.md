@@ -42,6 +42,7 @@
 - **Run #38** (`run-20260430-091554-84104`, 2026-04-30 09:15 CEST) — **IN PROGRESS**. All known fixes active.
   - New fixes vs run #37: `441a9860` (ViteReactSSG patchEntryFile fallback), `c3e0b60` (redo-limit 40s wait), `f85f4d3`+`2ec61e5`+`d08744a` (Tamagui), `c1736c6` (webpack), `a744506` (tamagui-whatsapp)
   - Stale `__canvas_preview__.tsx` files cleaned (34 files deleted before run)
+  - `9e47627`: flaky timeout bumps — settings 30s→50s, tab-visible 20s→35s, undo-poll 8s→20s (ext-test-projects, already active via bind-mount)
 
 - **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **DONE (S3 killed — bulka-the-dog stuck in refresh-retry loop, all hard fails already collected)**. 
   - S1: 775 test-done, **1 HARD FAIL** ("redo limit" 67189ms+68792ms), **8 FLAKYs** (settings×5, open-preview, hyper_duplicate 56919ms, rapid-edit-undo)
