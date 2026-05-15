@@ -29,6 +29,7 @@ type UIKit = 'tamagui' | 'shadcn';
 type CreationStep = 'setup' | 'creating' | 'chatting' | 'completed' | 'error';
 
 const STORAGE_KEY = 'projectCreationForm';
+const INPROGRESS_KEY = 'projectCreationInProgress';
 
 interface SavedFormData {
   repoName: string;
@@ -295,7 +296,11 @@ export default function ProjectCreationAIChat({
         setChatId(newChatId);
       }
 
-      // AIAgentChat will handle initial prompt via initialPrompt prop
+      // Persist so reload can resume this session
+      localStorage.setItem(
+        INPROGRESS_KEY,
+        JSON.stringify({ id: data.projectId, path: data.projectPath, framework, packageManager, name: repoName }),
+      );
       localStorage.removeItem(STORAGE_KEY);
       setCurrentStep('chatting');
     } catch (err) {
@@ -316,6 +321,7 @@ export default function ProjectCreationAIChat({
         throw new Error('Failed to finalize project');
       }
 
+      localStorage.removeItem(INPROGRESS_KEY);
       setCurrentStep('completed');
       onProjectCreated?.(projectId);
     } catch (err) {
