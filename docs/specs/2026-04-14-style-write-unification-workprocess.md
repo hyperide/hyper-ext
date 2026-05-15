@@ -3837,3 +3837,53 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 - Plan: wait for S1/S2 to finish, kill S3, start Run #25 immediately.
 
 **Run #25 will include all 3 fix commits** (`17e6554`, `e3fc60d`). Run #24 S1/S2 complete; S3 will be killed after they finish.
+
+---
+
+## 📍 2026-04-29 Run #24 Final Analysis + Run #25 Launch (~02:57 CEST)
+
+### Run #24 Final Results
+
+**S1 killed at 439 test-done (~3h runtime):**
+
+All 6 failures were flaky (retries passed on all):
+
+| Test | Attempt 1 | Retry |
+|------|-----------|-------|
+| "Setting change takes effect immediately" | 11835ms failed | 7559ms passed |
+| "autoStart false → no auto start" | 11558ms failed | 1857ms passed |
+| "Model override" | 17115ms failed | 1215ms passed |
+| "Custom baseURL" | 11958ms failed | 1243ms passed |
+| "Backend for proxy/opencode" | 16937ms failed | 1249ms passed |
+| "open preview command works" | 16427ms failed | 1076ms passed |
+
+Classification: ALL ENVIRONMENT FLAKES — no fix needed. These are the same MCP/settings tests that flake under Docker load.
+
+**S2 killed at 636 test-done:**
+
+| Failure | Root cause | Fix |
+|---------|-----------|-----|
+| "component with error — error overlay" 257286ms | 250s timeout too short | `17e6554` (300s) |
+| "style written as prop, not className" 19315ms → retry 83060ms passed | `workbench.action.revertFile` silent fail, VS Code state damaged | `17e6554` |
+| "stop dev server command runs without crash" (tamagui-fitness) 307s→timeout | Cascade: VS Code in bad state after 83s Tamagui teardown struggle; Metro preview never loads | `17e6554` (prevents VS Code state damage) |
+
+**S3 killed at 242+ test-done:**
+
+- 4× Tamagui style-as-prop teardown failures (all `workbench.action.revertFile` → fixed by `17e6554`)
+- 7+ webpack-react-tw3-kanban mass-failures (all 325-353s → fixed by `e3fc60d`)
+
+### Run #25 Launch
+
+**Run #25 started:** 2026-04-29 02:57 CEST
+**Run ID:** `run-20260429-025737-13448`
+**Extension version:** v0.1.28 (unchanged)
+**Containers:** `hyper-e2e-20260429-025737-13448-s{1,2,3}`
+**Commits in this run vs run #24:** `17e6554` + `e3fc60d`
+
+**Expected improvements:**
+- Tamagui style-as-prop teardown: should pass on first attempt (correct revert command)
+- VS Code cascade failures: should not occur (teardown no longer damages VS Code state)
+- "stop dev server command works without crash": should pass (cascade cause removed)
+- webpack-react-tw3-kanban tests: should pass with 480s poll and 280s refresh interval
+- Error overlay: should pass with 300s timeout
+- MCP/settings flakes: still expected to appear but all retry-pass
