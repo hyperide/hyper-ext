@@ -1051,9 +1051,6 @@ export class PreviewFileManager {
             null,
             [],
           );
-          (newRoute as { comments?: unknown[] }).comments = [
-            { type: 'CommentLine', value: ' @hyperide-managed', leading: false, trailing: true },
-          ];
           if (!el.children) el.children = [];
           el.children.push(b.jsxText('\n        '), newRoute, b.jsxText('\n      '));
           patched = true;
