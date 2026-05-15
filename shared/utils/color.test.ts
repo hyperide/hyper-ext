@@ -194,15 +194,10 @@ describe('findContrastFixHex', () => {
   });
 
   test('returns null when no lightness can achieve target', () => {
-    // Theoretically impossible case: very low saturation, paired with mid-gray
-    // Even L=0 or L=100 might not pass — but practically black/white always pass
-    // So test with a realistic pair where saturation=0 and paired is mid-gray
+    // #7a7a7a background: black achieves ~4.9:1, white achieves ~4.3:1 — both below AAA 7:1.
+    // No lightness of a gray (s=0) can reach 7:1 against this mid-gray background.
     const fix = findContrastFixHex('#808080', '#7a7a7a', 'AAA');
-    // Either finds a fix (extreme L) or null — just verify it doesn't crash
-    if (fix) {
-      const ratio = contrastRatio(fix, '#7a7a7a');
-      expect(ratio).toBeGreaterThanOrEqual(7);
-    }
+    expect(fix).toBeNull();
   });
 });
 

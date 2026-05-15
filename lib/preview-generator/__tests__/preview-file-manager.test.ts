@@ -1295,8 +1295,8 @@ describe('PreviewFileManager.ensureGitExclude', () => {
 
     const content = io.files.get('/project/.git/info/exclude');
     expect(content).toContain('# HyperIDE — generated preview files');
-    expect(content).toContain('src/__canvas_preview__.tsx');
-    expect(content).toContain('src/__canvas_preview_standalone__.tsx');
+    expect(content).toContain('__canvas_preview__.tsx');
+    expect(content).toContain('__canvas_preview_standalone__.tsx');
     expect(content).toContain('**/test-preview/');
     expect(content).toContain('**/test-preview.tsx');
   });
@@ -1310,14 +1310,14 @@ describe('PreviewFileManager.ensureGitExclude', () => {
     const content = io.files.get('/project/.git/info/exclude');
     expect(content).toContain('# existing');
     expect(content).toContain('*.log');
-    expect(content).toContain('src/__canvas_preview__.tsx');
+    expect(content).toContain('__canvas_preview__.tsx');
   });
 
   it('is idempotent — does not duplicate entries', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/.git/info/exclude',
-      '# HyperIDE — generated preview files\nsrc/__canvas_preview__.tsx\nsrc/__canvas_preview_standalone__.tsx\n**/test-preview/\n**/test-preview.tsx\n',
+      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n**/test-preview/\n**/test-preview.tsx\n',
     );
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const before = io.files.get('/project/.git/info/exclude');

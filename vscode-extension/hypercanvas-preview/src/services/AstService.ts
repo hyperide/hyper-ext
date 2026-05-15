@@ -520,10 +520,10 @@ export class AstService {
       // _resolveElementInCorrectFile — same pattern as updateStyles, updateProps, etc.
       const identifiers = nodeRefs ?? elementIds;
 
-      // For cross-file deletes: capture content before the first write to a non-requested file.
-      // AstBridge uses this for undo tracking (same pattern as updateStyles/updateProps).
-      let contentBeforeWrite: string | undefined;
-      let crossFileCaptured = false;
+      // For cross-file deletes: capture content before the first write to each non-requested file.
+      // Keyed by path so the returned contentBeforeWrite always matches resolvedPath (lastResolvedPath).
+      // AstBridge uses this pair for undo tracking (same pattern as updateStyles/updateProps).
+      const contentBeforeByPath = new Map<string, string>();
 
       for (const id of identifiers) {
         // _resolveElementInCorrectFile re-reads the AST on every call, so child nodes
@@ -540,13 +540,12 @@ export class AstService {
 
         const { result, ast, resolvedPath } = resolved;
 
-        // Capture contentBeforeWrite for the first cross-file path encountered.
-        if (resolvedPath !== absolutePath && !crossFileCaptured) {
-          crossFileCaptured = true;
+        // Capture contentBefore for any new cross-file path before writing (once per path).
+        if (resolvedPath !== absolutePath && !contentBeforeByPath.has(resolvedPath)) {
           try {
-            contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+            contentBeforeByPath.set(resolvedPath, await this._fileIO.readFile(resolvedPath));
           } catch {
-            // Leave contentBeforeWrite undefined — AstBridge will skip undo snapshot
+            // Leave unset — AstBridge will skip undo snapshot for this path
           }
         }
 
@@ -555,20 +554,24 @@ export class AstService {
         result.path.remove();
         await this._fileParser.writeAST(ast, resolvedPath);
         mutatedFiles.add(resolvedPath);
+        // Refresh node map immediately so subsequent iterations resolve against
+        // up-to-date coordinates (sibling line numbers shift after each deletion).
+        await this._updateNodeMap(resolvedPath);
         deletedCount++;
-      }
-
-      for (const f of mutatedFiles) {
-        await this._updateNodeMap(f);
       }
 
       if (deletedCount === 0) {
         return { success: false, error: 'No elements found with provided IDs' };
       }
 
-      // resolvedPath from the last deletion — callers can use it for undo tracking
-      // when the element lived in a file other than filePath.
+      // resolvedPath from the last deletion — callers use it for undo tracking.
+      // contentBeforeWrite is the snapshot for that exact path, ensuring AstBridge
+      // never writes one file's content into a different file during undo.
       const lastResolvedPath = [...mutatedFiles].at(-1);
+      const contentBeforeWrite =
+        lastResolvedPath !== undefined && lastResolvedPath !== absolutePath
+          ? contentBeforeByPath.get(lastResolvedPath)
+          : undefined;
       return { success: true, data: { deletedCount }, resolvedPath: lastResolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.deleteElements] Error:', error);

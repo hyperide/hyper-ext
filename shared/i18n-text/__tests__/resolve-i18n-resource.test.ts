@@ -241,6 +241,17 @@ describe('app/[locale]/messages layout — next-intl App Router', () => {
     });
     expect(result.resolvedText).toBe('Home');
   });
+
+  it('resolves the same key for a non-primary locale (de)', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'next-intl',
+      key: 'page.title',
+      activeLocale: 'de',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Startseite');
+  });
 });
 
 // ---------------------------------------------------------------------------

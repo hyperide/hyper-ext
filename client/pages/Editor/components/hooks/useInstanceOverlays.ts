@@ -111,11 +111,16 @@ export function useInstanceOverlays({
   useEffect(() => {
     window.addEventListener('mousemove', stableHandleDragMove);
     window.addEventListener('mouseup', stableHandleDragEnd);
+    // Cancel pending drag if the window loses focus (mouse released outside browser).
+    // Without this, iframe stays pointer-events:none permanently when mouseup fires
+    // outside the viewport.
+    window.addEventListener('blur', stableHandleDragEnd);
 
     return () => {
       // Only cleanup on unmount
       window.removeEventListener('mousemove', stableHandleDragMove);
       window.removeEventListener('mouseup', stableHandleDragEnd);
+      window.removeEventListener('blur', stableHandleDragEnd);
     };
   }, [stableHandleDragMove, stableHandleDragEnd]);
 

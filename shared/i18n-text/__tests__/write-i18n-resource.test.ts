@@ -267,6 +267,36 @@ describe('parse error in locale file', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Read-only filesystem — writeFile throws
+// ---------------------------------------------------------------------------
+
+describe('read-only filesystem', () => {
+  it('returns read-only error when writeFile throws', async () => {
+    class ReadOnlyFileIO extends MemoryFileIO {
+      override async writeFile(): Promise<void> {
+        throw new Error('EROFS: read-only file system');
+      }
+    }
+
+    const fileIO = new ReadOnlyFileIO({
+      [`${ROOT}/locales/en.json`]: JSON.stringify({ greeting: 'Hello' }),
+    });
+
+    const result = await writeI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'greeting',
+      activeLocale: 'en',
+      newText: 'Hi',
+      fileIO,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('read-only');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unsupported TS/JS locale format — read-only, do not attempt eval
 // ---------------------------------------------------------------------------
 

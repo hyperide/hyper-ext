@@ -960,6 +960,7 @@ function getWorkspaceRoot(): string | null {
  * Register all commands
  */
 function registerCommands(context: vscode.ExtensionContext, workspaceRoot: string): void {
+  const getCurrentRoot = () => getWorkspaceRoot() ?? workspaceRoot;
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
@@ -1095,7 +1096,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       const line = position.line + 1;
       const column = position.character + 1;
 
-      const astService = new AstService(workspaceRoot, new VSCodeFileIO());
+      const astService = new AstService(getCurrentRoot(), new VSCodeFileIO());
       const result = await astService.findElementAtPosition(filePath, line, column);
 
       if (result?.nodeRef) {
@@ -1159,7 +1160,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
-      const pkgManager = await detectPackageManager(workspaceRoot);
+      const root = getCurrentRoot();
+      const pkgManager = await detectPackageManager(root);
       const installCmd =
         pkgManager === 'bun'
           ? 'bun add'
@@ -1180,7 +1182,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       // Detect if this is a Next.js project
       let isNextJs = false;
       try {
-        const pkgRaw = await readFile(join(workspaceRoot, 'package.json'), 'utf-8');
+        const pkgRaw = await readFile(join(root, 'package.json'), 'utf-8');
         const pkg = JSON.parse(pkgRaw);
         isNextJs = !!(pkg.dependencies?.next || pkg.devDependencies?.next);
       } catch {
@@ -1191,7 +1193,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       let isTamaguiOne = false;
       if (!isNextJs) {
         try {
-          const viteRaw = await readFile(join(workspaceRoot, 'vite.config.ts'), 'utf-8');
+          const viteRaw = await readFile(join(root, 'vite.config.ts'), 'utf-8');
           isTamaguiOne =
             /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
         } catch {
@@ -1213,7 +1215,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1227,7 +1229,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               let existingConfigPath: string | null = null;
               let existingConfigContent = '';
               for (const variant of configVariants) {
-                const candidate = join(workspaceRoot, variant);
+                const candidate = join(root, variant);
                 try {
                   existingConfigContent = await readFile(candidate, 'utf-8');
                   existingConfigPath = candidate;
@@ -1237,7 +1239,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 }
               }
 
-              const targetConfigPath = existingConfigPath ?? join(workspaceRoot, 'next.config.ts');
+              const targetConfigPath = existingConfigPath ?? join(root, 'next.config.ts');
               const isTypeScript = targetConfigPath.endsWith('.ts');
 
               // Check if config already has tamagui transpilePackages and turbo alias
@@ -1304,7 +1306,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1324,7 +1326,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1334,7 +1336,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing vite + plugins...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1345,7 +1347,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // alias, overwrite it — a bare vite.config without these won't work
               // for Tamagui web builds.
               progress.report({ message: 'Configuring Vite for Tamagui...' });
-              const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
+              const viteConfigPath = join(root, 'vite.config.ts');
               let existingViteConfig = '';
               try {
                 existingViteConfig = await readFile(viteConfigPath, 'utf-8');
@@ -1364,7 +1366,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   !existingViteConfig.includes('react-native-web'));
               if (needsViteConfig) {
                 // Create stub files for deep react-native imports that rolldown can't resolve
-                const stubsDir = join(workspaceRoot, 'src', 'stubs');
+                const stubsDir = join(root, 'src', 'stubs');
                 await mkdir(stubsDir, { recursive: true });
                 const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
                 const appContainerStub = join(stubsDir, 'AppContainer.tsx');
@@ -1419,7 +1421,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               }
 
               // Step 4: Create index.html if it doesn't exist
-              const indexHtmlPath = join(workspaceRoot, 'index.html');
+              const indexHtmlPath = join(root, 'index.html');
               let indexHtmlExists = false;
               try {
                 await readFile(indexHtmlPath);
@@ -1449,7 +1451,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
               progress.report({ message: 'Updating package.json scripts...' });
               try {
-                const pkgJsonPath = join(workspaceRoot, 'package.json');
+                const pkgJsonPath = join(root, 'package.json');
                 const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
                 const pkg = JSON.parse(pkgRaw);
                 const scripts = (pkg.scripts ?? {}) as Record<string, string>;
@@ -1470,7 +1472,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // but replaces native-stack navigator with direct screen render.
               progress.report({ message: 'Creating web entry point...' });
               try {
-                const appPath = join(workspaceRoot, 'App.tsx');
+                const appPath = join(root, 'App.tsx');
                 const appContent = await readFile(appPath, 'utf-8');
                 const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
                   appContent,
@@ -1490,7 +1492,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   // Find first screen in src/screens/
                   let screenName = 'HomeScreen';
                   try {
-                    const files = await readdir(join(workspaceRoot, 'src', 'screens'));
+                    const files = await readdir(join(root, 'src', 'screens'));
                     const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
                     const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
                     const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
@@ -1504,10 +1506,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   // Check if screen uses useNavigation hook
                   let needsNavContainer = false;
                   try {
-                    const screenSrc = await readFile(
-                      join(workspaceRoot, 'src', 'screens', `${screenName}.tsx`),
-                      'utf-8',
-                    );
+                    const screenSrc = await readFile(join(root, 'src', 'screens', `${screenName}.tsx`), 'utf-8');
                     needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
                   } catch {
                     /* can't read screen — skip nav container */
@@ -1573,7 +1572,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   lines.push('}');
                   lines.push('');
 
-                  await writeFile(join(workspaceRoot, 'App.web.tsx'), lines.join('\n'), 'utf-8');
+                  await writeFile(join(root, 'App.web.tsx'), lines.join('\n'), 'utf-8');
                 }
               } catch {
                 // App.tsx doesn't exist or can't be read — skip
@@ -1582,7 +1581,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
           );
         }
         // Re-check to confirm the package was recorded in package.json
-        const stillUnsupported = await detectUnsupportedProject(workspaceRoot);
+        const stillUnsupported = await detectUnsupportedProject(root);
         if (stillUnsupported) {
           vscode.window.showWarningMessage(
             'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
@@ -1721,7 +1720,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Open/create project structure config file
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openProjectStructure', async () => {
-      const configDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.hyperide');
+      const configDir = vscode.Uri.joinPath(vscode.Uri.file(getCurrentRoot()), '.hyperide');
       const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
 
       try {
@@ -1761,7 +1760,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         agentId: 'copilot' | 'claude-code' | 'codex' | 'opencode';
       }
 
-      const configured = await detectConfiguredAgents(workspaceRoot);
+      const configured = await detectConfiguredAgents(getCurrentRoot());
 
       const agents: AgentItem[] = [
         {
@@ -1800,15 +1799,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       const url = mcpServer.url;
 
+      const configRoot = getCurrentRoot();
       for (const agent of picked) {
         if (agent.agentId === 'copilot') {
-          await writeVsCodeMcpJson(workspaceRoot, url);
+          await writeVsCodeMcpJson(configRoot, url);
         } else if (agent.agentId === 'claude-code') {
-          await writeMcpJson(workspaceRoot, url);
+          await writeMcpJson(configRoot, url);
         } else if (agent.agentId === 'codex') {
-          await writeCodexConfig(workspaceRoot, url);
+          await writeCodexConfig(configRoot, url);
         } else if (agent.agentId === 'opencode') {
-          await writeOpenCodeJson(workspaceRoot, url);
+          await writeOpenCodeJson(configRoot, url);
         }
       }
 
@@ -1871,7 +1871,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       const agentIds = picked.map((a) => a.agentId);
 
       if (companionConfigs.length > 0) {
-        await writeCompanionServers(workspaceRoot, agentIds, companionConfigs);
+        await writeCompanionServers(configRoot, agentIds, companionConfigs);
       }
 
       const allNames = [...picked.map((a) => a.label), ...(pickedCompanions ?? []).map((c) => c.label)];

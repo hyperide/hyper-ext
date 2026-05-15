@@ -953,8 +953,8 @@ export class PreviewFileManager {
     const excludePath = join(this.projectRoot, '.git/info/exclude');
     const entries = [
       '# HyperIDE — generated preview files',
-      'src/__canvas_preview__.tsx',
-      'src/__canvas_preview_standalone__.tsx',
+      '__canvas_preview__.tsx',
+      '__canvas_preview_standalone__.tsx',
       '**/test-preview/',
       '**/test-preview.tsx',
     ];
@@ -1380,11 +1380,14 @@ export class PreviewFileManager {
       let importBody: string;
       if (isStandalone) {
         // Standalone module has its own createRoot() call — just importing it is enough.
-        importBody = `import("${importTarget}")`;
+        // Replace #root node first to sever any React root the original bootstrap created,
+        // preventing createRoot() conflicts when the app framework already mounted to #root.
+        importBody = `(function(){var o=document.getElementById("root");if(o&&o.parentNode){var f=o.cloneNode(false);o.parentNode.replaceChild(f,o);}})();import("${importTarget}")`;
       } else {
         // App Shell: __canvas_preview__ only exports a component — must render it explicitly.
+        // Replace #root node first to sever any React root the original bootstrap created.
         // React and react-dom/client resolve from Vite's module cache (already loaded by the app).
-        importBody = `import("${importTarget}").then(function(m){var C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){var el=document.getElementById("root")||document.body;mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
+        importBody = `import("${importTarget}").then(function(m){var C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){var orig=document.getElementById("root");var el;if(orig&&orig.parentNode){var fr=orig.cloneNode(false);orig.parentNode.replaceChild(fr,orig);el=fr;}else{el=document.body;}mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
       }
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       onBeforeWrite?.();
