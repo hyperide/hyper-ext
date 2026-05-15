@@ -104,7 +104,9 @@ export class UndoRedoService {
           console.warn(`[UndoRedoService] undo: _writeContent returned false for ${path.basename(file.filePath)}`);
           success = false;
           for (const w of reverted) {
-            await this._writeContent(w.filePath, w.contentAfter);
+            const rollbackOk = await this._writeContent(w.filePath, w.contentAfter);
+            if (!rollbackOk)
+              console.error(`[UndoRedoService] undo rollback write also failed for ${path.basename(w.filePath)}`);
           }
           break;
         }
@@ -143,7 +145,9 @@ export class UndoRedoService {
           console.warn(`[UndoRedoService] redo: _writeContent returned false for ${path.basename(file.filePath)}`);
           success = false;
           for (const w of replayed) {
-            await this._writeContent(w.filePath, w.contentBefore);
+            const rollbackOk = await this._writeContent(w.filePath, w.contentBefore);
+            if (!rollbackOk)
+              console.error(`[UndoRedoService] redo rollback write also failed for ${path.basename(w.filePath)}`);
           }
           break;
         }
