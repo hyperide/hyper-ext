@@ -39,13 +39,10 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #34** (`run-20260429-211849-86173`) — IN PROGRESS (1 shard, ~2h elapsed, ~420 tests, **0 hard fails**):
-  - S1: running, currently in project-independent inspector-ui tests (flex/layout ~420)
+- **Run #34** (`run-20260429-211849-86173`) — IN PROGRESS (1 shard, ~2.75h elapsed, ~576 tests, **1 flaky** / **0 hard fails**):
+  - S1: running, currently in mcp-tools tests (hyper_get_selection ~576)
+  - FLAKY: "hyper_duplicate_element — copy appears" 57506ms attempt 1 FAIL → attempt 2 pass (32644ms). FIXED: `db75f80` poll 30s→60s
   - Extension: `out/extension.js` is bind-mounted from host → uses **compiled v0.1.33** (fc537973 IS active)
-    Note: workfile previously said "v0.1.32 in container" — incorrect. `out/` is bind-mounted, not baked
-    into Docker image. After `build-and-install.sh patch` ran and compiled v0.1.33, the container picked
-    up the new binary automatically. Confirmed: `out/extension.js` contains index.html check BEFORE src/.
-  - Memory: 122MB unused — only 1 container possible at this time
 
   **All fixes active in run #34 container (via bind-mount):**
   - `fix(preview)` `fc537973` — `getPreviewFilePath()` order: index.html BEFORE src/ — bulka-the-dog FIXED
