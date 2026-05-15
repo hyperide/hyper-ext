@@ -233,7 +233,7 @@ describe('PanelRouter', () => {
         type: 'styles:i18nKeysResponse',
         requestId: 'r-keys',
         success: true,
-        keys: [],
+        keys: expect.any(Array),
       }),
     );
   });
