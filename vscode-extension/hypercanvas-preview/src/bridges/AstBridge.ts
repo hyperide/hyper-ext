@@ -521,7 +521,10 @@ export class AstBridge {
     // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
-      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
+      // JSON.stringify covers backslashes, U+2028/2029, and other escapes that the
+      // earlier `replace(/'/g, "\\'")` missed — see the SAFE_KEY note above.
+      const newExpression = `{t(${JSON.stringify(message.key)})}`;
+      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );
       if (!updateResult.success) {
