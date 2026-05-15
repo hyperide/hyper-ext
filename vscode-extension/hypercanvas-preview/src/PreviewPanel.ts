@@ -774,6 +774,8 @@ export class PreviewPanel {
       this._stateHub.applyUpdate({
         selectedIds: [result.newId],
       });
+    } else if (!result.success) {
+      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
     }
   }
 
@@ -1331,6 +1333,8 @@ export class PreviewPanel {
     const result = await this._panelRouter.astBridge.duplicateElement(componentPath, selectedIds[0]);
     if (result.success && result.newId) {
       this._stateHub.applyUpdate({ selectedIds: [result.newId] });
+    } else if (!result.success) {
+      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
     }
   }
 

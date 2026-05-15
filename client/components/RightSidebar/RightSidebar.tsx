@@ -212,6 +212,8 @@ export default function RightSidebar({
   // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
   // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
   const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
+  // Locale selected by the user in the i18n inspector. Resets when element/binding changes.
+  const [i18nActiveLocale, setI18nActiveLocale] = useState<string | undefined>(undefined);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
   const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
@@ -236,6 +238,7 @@ export default function RightSidebar({
     refreshKey: styleRefreshKey + styleVersion,
     runtimeStyle,
     domTextContent: selectedElementDomText ?? undefined,
+    activeLocale: i18nActiveLocale,
   });
   const sourceTabs = useMemo(
     () =>
@@ -271,6 +274,13 @@ export default function RightSidebar({
       setSelectedSourceTabId(nonComputedTabs[0].id);
     }
   }, [sourceTabs, selectedSourceTabId]);
+
+  // Reset i18n locale selection when the selected element changes.
+  // This prevents a stale locale from carrying over to a different element's binding.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
+  useEffect(() => {
+    setI18nActiveLocale(undefined);
+  }, [selectedId]);
 
   // Apply state filter to parsedStyles
   const effectiveParsed: Partial<ParsedStyles> = useMemo(() => {
@@ -719,6 +729,11 @@ export default function RightSidebar({
     goToCode(componentPath, childrenLocation.line, childrenLocation.column);
   }, [componentPath, childrenLocation, goToCode]);
 
+  const handleI18nLocaleChange = useCallback((locale: string) => {
+    setI18nActiveLocale(locale);
+    // Re-read is triggered automatically via activeLocale in useElementStyleData deps
+  }, []);
+
   const handleI18nResolvedTextChange = useCallback(
     (newText: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
@@ -735,7 +750,7 @@ export default function RightSidebar({
             });
           } catch {
             // write failed — rollback scoped to this binding so other visible bindings are not affected
-            const bindingId = `${i18nText.library}|${i18nText.key}|${i18nText.activeLocale}`;
+            const bindingId = `${i18nText.library}|${i18nText.key}`;
             setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
           } finally {
             // always re-read to sync inspector with file state
@@ -1213,12 +1228,17 @@ export default function RightSidebar({
           {/* i18n Text Inspector */}
           {i18nText?.kind === 'i18n' &&
             (() => {
-              const bindingKey = `${i18nText.library}|${i18nText.key}|${i18nText.activeLocale}`;
+              // Key only changes on library/key identity change, NOT on locale change.
+              // Locale change triggers a re-read via useElementStyleData deps; the component
+              // stays mounted so localText is not reset.
+              const bindingKey = `${i18nText.library}|${i18nText.key}`;
               return (
                 <I18nTextInspector
                   key={bindingKey}
                   i18nBinding={i18nText}
                   onResolvedTextChange={handleI18nResolvedTextChange}
+                  onLocaleChange={handleI18nLocaleChange}
+                  localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                 />
               );

@@ -36,6 +36,35 @@ function RightPanelContent() {
   // RightPanelContent mounts once; canvas is a stable singleton — no duplicate subscriptions
   useSharedEditorStateSync(canvas);
 
+  // Notify extension host when an input/textarea in this panel gains/loses focus,
+  // so the `hypercanvas.rightPanelInputFocused` context variable can be set correctly.
+  // This prevents canvas keybindings (Delete, Backspace, Enter, Tab, Escape) from
+  // firing while the user is typing in an inspector field.
+  useEffect(() => {
+    const isInputEl = (target: EventTarget | null): boolean =>
+      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+
+    const handleFocusIn = (e: FocusEvent) => {
+      if (isInputEl(e.target)) {
+        canvas.sendEvent({ type: 'panel:inputFocus', active: true });
+      }
+    };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      if (!isInputEl(e.target)) return;
+      // Skip if focus is moving to another input within the same panel
+      if (isInputEl(e.relatedTarget)) return;
+      canvas.sendEvent({ type: 'panel:inputFocus', active: false });
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, [canvas]);
+
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
   const componentPath = useSharedEditorState((s) => s.currentComponent?.path);
   const insertTargetId = useSharedEditorState((s) => s.insertTargetId);

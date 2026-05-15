@@ -49,6 +49,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     if (!this._view) return;
     const webview = this._view.webview;
     this._ready = false;
+    // Webview reloads — old inputs lose focus without firing focusout, clear the guard
+    void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
     const ready = new Promise<void>((resolve) => {
       const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
         if (msg?.type === 'webview:ready') {
@@ -129,6 +131,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       this._view = undefined;
       this._ready = false;
       this._stateHub.unregister(RightPanelProvider.viewType);
+      // Clear input-focus guard so canvas keybindings aren't permanently blocked
+      void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
     });
 
     webviewView.webview.html = this._getHtml(webviewView.webview);

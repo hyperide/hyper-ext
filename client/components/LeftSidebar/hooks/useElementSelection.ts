@@ -173,9 +173,10 @@ export function useElementSelection(
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
         dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
+        canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
       }
     },
-    [engine, dispatch, elementsTree, currentComponent],
+    [engine, dispatch, elementsTree, canvas, currentComponent],
   );
 
   const handleHover = useCallback(
@@ -184,11 +185,18 @@ export function useElementSelection(
         // SaaS: propagate via prop callback
         onHoverElement?.(id);
       } else {
-        // VS Code: dispatch to shared state
-        dispatch?.({ hoveredId: id });
+        // VS Code: resolve UUID → nodeRef so iframe can find the DOM element
+        let hoverId = id;
+        if (id !== null && nodeRefToUuid && currentComponent?.path) {
+          const node = findTreeNode(elementsTree, id);
+          if (node?.loc) {
+            hoverId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
+          }
+        }
+        dispatch?.({ hoveredId: hoverId });
       }
     },
-    [engine, dispatch, onHoverElement],
+    [engine, dispatch, onHoverElement, nodeRefToUuid, elementsTree, currentComponent],
   );
 
   return { selectedIds, hoveredId, handleSelect, handleHover };

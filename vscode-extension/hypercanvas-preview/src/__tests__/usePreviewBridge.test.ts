@@ -4,9 +4,10 @@
  * Accessed via: Hyper Canvas preview webview when switching the selected component
  * Assumptions: an iframe at about:blank has not loaded the preview app and must be navigated.
  * Past bugs: HYP-363 — updateUrl was sent as postMessage into about:blank, leaving preview empty.
+ * Past bugs: HYP-363 — state:update forwarded raw to iframe instead of as hypercanvas:stateUpdate.
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import { act, createElement, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
@@ -60,6 +61,42 @@ function renderBridge(onSnapshot: (snapshot: BridgeSnapshot) => void) {
   const root = createRoot(host);
   act(() => {
     root.render(createElement(BridgeHarness, { onSnapshot }));
+  });
+  return () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+}
+
+type PostMessageSpy = ReturnType<typeof mock>;
+
+function BridgeWithSpy({ onSpy }: { onSpy: (spy: PostMessageSpy) => void }) {
+  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
+  const spy = mock();
+  usePreviewBridge({
+    iframeEl,
+    canvas: createCanvasAdapter(),
+    onStateUpdate: () => {},
+  });
+
+  const refCallback = (el: HTMLIFrameElement | null) => {
+    if (el?.contentWindow) {
+      // @ts-expect-error -- override for test spy
+      el.contentWindow.postMessage = spy;
+      onSpy(spy);
+    }
+    setIframeEl(el);
+  };
+
+  return createElement('iframe', { ref: refCallback, title: 'preview' });
+}
+
+function renderBridgeWithSpy(onSpy: (spy: PostMessageSpy) => void) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => {
+    root.render(createElement(BridgeWithSpy, { onSpy }));
   });
   return () => {
     act(() => root.unmount());
@@ -164,6 +201,41 @@ describe('preview bridge URL helpers', () => {
       });
       expect(snapshots.at(-1)?.devServerRunning).toBe(true);
       expect(snapshots.at(-1)?.previewUrl).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('state:update → iframe forwarding', () => {
+  it('forwards state:update as hypercanvas:stateUpdate with patch fields directly on message', async () => {
+    let capturedSpy: PostMessageSpy | null = null;
+    const cleanup = renderBridgeWithSpy((spy) => {
+      capturedSpy = spy;
+    });
+
+    try {
+      await act(async () => {
+        postHostMessage({
+          type: 'state:update',
+          patch: { selectedIds: ['node-abc'], hoveredId: null },
+        });
+      });
+
+      expect(capturedSpy).not.toBeNull();
+      // The iframe must receive hypercanvas:stateUpdate (not state:update)
+      // with fields from patch spread directly onto the message object.
+      const calls = (capturedSpy as PostMessageSpy).mock.calls;
+      const stateUpdateCall = calls.find(
+        (args) => (args[0] as Record<string, unknown>).type === 'hypercanvas:stateUpdate',
+      );
+      expect(stateUpdateCall).toBeDefined();
+      const sentMsg = stateUpdateCall?.[0] as Record<string, unknown>;
+      expect(sentMsg.selectedIds).toEqual(['node-abc']);
+      expect(sentMsg.hoveredId).toBeNull();
+      // Must NOT forward raw state:update type
+      const wrongCall = calls.find((args) => (args[0] as Record<string, unknown>).type === 'state:update');
+      expect(wrongCall).toBeUndefined();
     } finally {
       cleanup();
     }

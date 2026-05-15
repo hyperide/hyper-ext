@@ -481,3 +481,47 @@ describe('malformed JSON locale file', () => {
     expect(result.unresolvedReason).toBe('parse-error');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Real-filesystem: Bulka project — merged single-file translations.ts
+// ---------------------------------------------------------------------------
+
+describe('Bulka project — real client/lib/translations.ts', () => {
+  const BULKA_ROOT = '/Users/ultra/work/ext-test-projects/bulka-the-dog';
+
+  const realFileIO = {
+    async readFile(path: string): Promise<string> {
+      const { readFile } = await import('node:fs/promises');
+      return readFile(path, 'utf8');
+    },
+    async access(path: string): Promise<void> {
+      const { access } = await import('node:fs/promises');
+      await access(path);
+    },
+  };
+
+  it('resolves brand.name in "en" locale to "Bulka"', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: BULKA_ROOT,
+      library: 'custom',
+      key: 'brand.name',
+      activeLocale: 'en',
+      fileIO: realFileIO,
+    });
+    expect(result.resolvedText).toBe('Bulka');
+    expect(result.availableLocales).toContain('en');
+    expect(result.availableLocales).toContain('ru');
+    expect(result.availableLocales).toContain('rs');
+  });
+
+  it('resolves brand.name in "ru" locale to "Булка"', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: BULKA_ROOT,
+      library: 'custom',
+      key: 'brand.name',
+      activeLocale: 'ru',
+      fileIO: realFileIO,
+    });
+    expect(result.resolvedText).toBe('Булка');
+  });
+});

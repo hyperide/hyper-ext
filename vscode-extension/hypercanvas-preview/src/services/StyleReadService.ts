@@ -75,11 +75,13 @@ export class StyleReadService {
   /**
    * Read className and metadata from an element in the AST.
    * Uses nodeRef (preferred) to resolve element by position.
+   * @param activeLocale - when provided, resolve i18n text for this locale instead of the default.
    */
   async readElementClassName(
     componentPath: string,
     nodeRef?: NodeRef,
     domTextContent?: string,
+    activeLocale?: string,
   ): Promise<ElementStyleReadResult> {
     const absolutePath = resolveWorkspacePath(this._workspaceRoot, componentPath);
     const empty: ElementStyleReadResult = {
@@ -185,7 +187,7 @@ export class StyleReadService {
 
       const i18nText =
         childrenType === 'expression' || childrenType === 'expression-complex' || childrenType === 'jsx'
-          ? await this._tryDetectI18n(element, filePath, content, domTextContent)
+          ? await this._tryDetectI18n(element, filePath, content, domTextContent, activeLocale)
           : undefined;
 
       return {
@@ -206,12 +208,14 @@ export class StyleReadService {
   /**
    * Try to detect and resolve an i18n binding from the first expression container child.
    * Returns undefined when no i18n expression is found or the expression is complex/unknown.
+   * @param activeLocale - when provided, resolve using this locale instead of the default 'en'.
    */
   private async _tryDetectI18n(
     element: t.JSXElement,
     filePath: string,
     content: string,
     domTextContent?: string,
+    activeLocale?: string,
   ): Promise<I18nBindingResult | undefined> {
     // Find the first non-empty JSXExpressionContainer child
     let exprLoc: { line: number; column: number } | null = null;
@@ -324,8 +328,11 @@ export class StyleReadService {
       return detection;
     }
 
-    // Resolve locale resources to get translated text
+    // Resolve locale resources to get translated text.
+    // When activeLocale is explicitly provided by the panel (locale switcher), always honour it.
+    // When not provided (initial load), fall back to 'en' then first available locale.
     const DEFAULT_LOCALE = 'en';
+    const requestedLocale = activeLocale ?? DEFAULT_LOCALE;
     let resolved: Awaited<ReturnType<typeof resolveI18nResource>>;
     try {
       resolved = await resolveI18nResource({
@@ -333,17 +340,18 @@ export class StyleReadService {
         library: detection.library,
         key: detection.key,
         namespace: detection.namespace,
-        activeLocale: DEFAULT_LOCALE,
-        fallbackLocale: 'en-US',
+        activeLocale: requestedLocale,
+        fallbackLocale: activeLocale ? undefined : 'en-US',
         fileIO: this._fileIO,
       });
     } catch {
-      resolved = { availableLocales: [], activeLocale: DEFAULT_LOCALE, resolvedText: null };
+      resolved = { availableLocales: [], activeLocale: requestedLocale, resolvedText: null };
     }
 
-    // If the project has no 'en' locale, retry with the first discovered locale so
-    // non-English-primary projects still show resolved text in the inspector.
+    // If the project has no 'en' locale and no explicit locale was requested, retry with the
+    // first discovered locale so non-English-primary projects still show resolved text.
     if (
+      !activeLocale &&
       resolved.resolvedText === null &&
       resolved.availableLocales.length > 0 &&
       !resolved.availableLocales.includes(DEFAULT_LOCALE)
