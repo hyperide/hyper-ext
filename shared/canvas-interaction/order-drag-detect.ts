@@ -14,19 +14,11 @@
  *     so they can be unit-tested without jsdom.
  */
 
-import {
-  applyOrderClassChange,
-  hasDuplicateEffectiveOrderTokenAtBp,
-  hasUnparseableEffectiveOrderTokenAtBp,
-  readOrderSortValueForBp,
-} from './order-class-utils';
+import { applyOrderClassChange, readOrderForBp } from './order-class-utils';
 
 /**
  * Tailwind v3 default breakpoint thresholds in CSS pixels. Sorted ascending so
  * `pickActiveBreakpoint` can iterate from largest to smallest and short-circuit.
- *
- * Keep the `name` list in sync with `RESPONSIVE_BP_CHAIN` in `order-class-utils.ts` —
- * both files enumerate the same Tailwind v3 default variants from independent constants.
  */
 export const TAILWIND_BREAKPOINTS: ReadonlyArray<{ readonly name: string; readonly px: number }> = [
   { name: 'sm', px: 640 },
@@ -111,26 +103,9 @@ export function pickActiveBreakpoint(
 }
 
 /**
- * Cursor-derived drop position relative to the target element. `inside` short-circuits
- * to a null plan because the order-N path can only model "before / after a sibling" —
- * dropping into the middle of a target is the AST insert path's job.
- */
-export type OrderDropPosition = 'before' | 'after' | 'inside';
-
-export interface ComputeOrderWritePlanInput {
-  readonly siblings: readonly SiblingInfo[];
-  readonly source: string;
-  readonly target: string;
-  /** Cursor-derived drop position (left/right or top/bottom half of target, or its centre). */
-  readonly position: OrderDropPosition;
-  readonly viewportWidth: number;
-}
-
-/**
  * Given the parent's source-bearing children plus the source/target/position of a drag,
  * return a plan that renumbers `order-*` densely (1..N) at the active breakpoint, OR
  * `null` when:
- *   - position is `'inside'` (caller should fall back to AST insert), or
  *   - no sibling has any `order-*` token (parent isn't order-driven), or
  *   - source / target aren't in the sibling list (drag crossed a boundary), or
  *   - the active breakpoint is unknown / not used by any sibling, or
@@ -146,14 +121,16 @@ export interface ComputeOrderWritePlanInput {
  *   3. It writes the minimum diff — siblings whose new value equals their old one
  *      are skipped via `entries` filtering.
  *
- * Position is cursor-derived (which half of the target the cursor lifted over), NOT
- * source-vs-drop geometry — without that, dragging a sibling onto the LEFT half of a
- * target still treated the target's old slot as the destination, ignoring the user's
- * obvious intent.
+ * @param viewportWidth - The iframe's `window.innerWidth`. Used to pick the active
+ *   Tailwind variant via `pickActiveBreakpoint`.
  */
-export function computeOrderWritePlan(input: ComputeOrderWritePlanInput): OrderWritePlan | null {
-  const { siblings, source: sourceElementId, target: targetElementId, position, viewportWidth } = input;
-  if (position === 'inside') return null;
+export function computeOrderWritePlan(
+  siblings: readonly SiblingInfo[],
+  sourceElementId: string,
+  targetElementId: string,
+  position: 'before' | 'after',
+  viewportWidth: number,
+): OrderWritePlan | null {
   if (siblings.length < 2) return null;
   // Defense-in-depth: drop-on-self resolves to no reorder. Caller (`_dragPointerUp`)
   // already rejects this case earlier, but the public `computeOrderWritePlan` is
@@ -181,31 +158,15 @@ export function computeOrderWritePlan(input: ComputeOrderWritePlanInput): OrderW
   const activeBp = pickActiveBreakpoint(usedBps, viewportWidth);
   if (activeBp === null) return null;
 
-  // 2a. Bail if any sibling's cascade-effective order token at activeBp is either
-  //     - a non-int arbitrary `order-[<expr>]` (CSS-var / non-int reference we cannot
-  //       safely renumber over without destroying user intent), or
-  //     - duplicated (`order-3 order-1`) — Tailwind's CSS-output-order resolution
-  //       is not knowable from className text, so the starting visual sort value
-  //       is unreliable and any dense renumber would build on a guess.
-  //     Cascade-aware: at md viewport a sibling whose only order token is base
-  //     `order-[var(--x)]` still has its CSS `order` driven by that base token; the
-  //     check must walk md → sm → base, not just the active bp. Falling back to AST
-  //     move handles both cases correctly.
-  for (const s of siblings) {
-    if (hasUnparseableEffectiveOrderTokenAtBp(s.className, activeBp)) return null;
-    if (hasDuplicateEffectiveOrderTokenAtBp(s.className, activeBp)) return null;
-  }
-
   // 3. Build the current visual order.
-  //    Sort by CSS-resolved `order` value ascending; ties fall back to DOM index.
-  //    `readOrderSortValueForBp` mirrors the CSS spec: missing / `order-none` → 0,
-  //    `order-first` → -9999, `order-last` → 9999, numeric → integer. Required so
-  //    parents that mix explicit `order-N` with default-ordered siblings produce
-  //    a CSS-correct starting visual order before the drop.
+  //    Sort by readOrderForBp(activeBp) ascending; ties / nulls fall back to DOM index.
+  //    Note: `Array.prototype.sort` is stable in modern JS, but we're explicit here.
   const visual = [...siblings].sort((a, b) => {
-    const oa = readOrderSortValueForBp(a.className, activeBp);
-    const ob = readOrderSortValueForBp(b.className, activeBp);
-    if (oa !== ob) return oa - ob;
+    const oa = readOrderForBp(a.className, activeBp);
+    const ob = readOrderForBp(b.className, activeBp);
+    if (oa !== null && ob !== null && oa !== ob) return oa - ob;
+    if (oa !== null && ob === null) return -1;
+    if (oa === null && ob !== null) return 1;
     return a.domIndex - b.domIndex;
   });
 
