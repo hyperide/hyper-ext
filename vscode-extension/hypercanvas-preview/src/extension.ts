@@ -803,6 +803,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     }),
   );
 
+  // Clear diagnostics
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.clearDiagnostics', () => {
+      diagnosticHub?.clear();
+    }),
+  );
+
   // Open AI Chat
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openAIChat', async () => {

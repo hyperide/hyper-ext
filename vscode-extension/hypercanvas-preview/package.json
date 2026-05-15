@@ -133,6 +133,10 @@
         "title": "Hyper: Open Logs"
       },
       {
+        "command": "hypercanvas.clearDiagnostics",
+        "title": "Hyper: Clear Diagnostics"
+      },
+      {
         "command": "hypercanvas.openAIChat",
         "title": "Hyper: Open AI Chat"
       },
