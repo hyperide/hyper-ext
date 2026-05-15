@@ -48,6 +48,28 @@ interface UsePreviewBridgeResult {
   clearComponentError: () => void;
 }
 
+export function buildComponentPreviewUrl(devServerUrl: string, component: string): string {
+  return `${devServerUrl.replace(/\/$/, '')}/test-preview?component=${encodeURIComponent(component)}`;
+}
+
+export function hasNavigatedPreviewSource(src: string | null | undefined): boolean {
+  return Boolean(src && src !== 'about:blank');
+}
+
+export function getComponentFromPreviewUrl(src: string | null | undefined): string | null {
+  if (!src || src === 'about:blank') return null;
+  try {
+    return new URL(src).searchParams.get('component');
+  } catch {
+    return null;
+  }
+}
+
+export function shouldNavigateFrameToComponent(src: string | null | undefined, nextComponent: string): boolean {
+  const currentComponent = getComponentFromPreviewUrl(src);
+  return currentComponent !== nextComponent;
+}
+
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
   const [devServerRunning, setDevServerRunning] = useState(false);
   const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
@@ -69,6 +91,57 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // in CanvasPreview is lost. history.replaceState keeps the URL in sync,
   // but as a safety net we also re-send setComponent after each iframe load.
   const currentComponentRef = useRef<string | null>(null);
+  const devServerUrlRef = useRef<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  // Keep iframeEl in a ref so callbacks stay stable.
+  // Direct assignment during render is intentional — this is the standard React pattern
+  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
+  // between render and effect execution, which is worse than synchronous assignment.
+  const iframeElRef = useRef(iframeEl);
+  iframeElRef.current = iframeEl;
+  const setStoredPreviewUrl = useCallback((url: string | null) => {
+    previewUrlRef.current = url;
+    setPreviewUrl(url);
+  }, []);
+
+  const navigateToComponent = useCallback(
+    (component: string, baseUrl = devServerUrlRef.current): boolean => {
+      if (!baseUrl) return false;
+      setShowNoComponentHint(false);
+      setStoredPreviewUrl(buildComponentPreviewUrl(baseUrl, component));
+      return true;
+    },
+    [setStoredPreviewUrl],
+  );
+
+  const getFrameHref = useCallback((frame: HTMLIFrameElement): string => {
+    const frameSrc = frame.getAttribute('src') || frame.src;
+    try {
+      return frame.contentWindow?.location.href || frameSrc;
+    } catch {
+      return frameSrc;
+    }
+  }, []);
+
+  const syncComponentToFrame = useCallback(
+    (component: string, frame = iframeElRef.current): boolean => {
+      if (!frame || !hasNavigatedPreviewSource(frame.getAttribute('src') || frame.src)) {
+        return navigateToComponent(component);
+      }
+
+      const frameHref = getFrameHref(frame);
+      const currentComponent = getComponentFromPreviewUrl(frameHref);
+      if (!currentComponent) {
+        return navigateToComponent(component);
+      }
+
+      if (currentComponent !== component) {
+        frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+      }
+      return true;
+    },
+    [getFrameHref, navigateToComponent],
+  );
 
   // === iframe -> extension message forwarding ===
   // Origin validation: event.source check ensures only messages from our iframe are processed.
@@ -162,13 +235,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
-  // Keep iframeEl in a ref so doRefresh callback stays stable.
-  // Direct assignment during render is intentional — this is the standard React pattern
-  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
-  // between render and effect execution, which is worse than synchronous assignment.
-  const iframeElRef = useRef(iframeEl);
-  iframeElRef.current = iframeEl;
-
   // === Re-send current component after iframe (re)load ===
   // When Vite HMR triggers a full page reload inside the iframe, the postMessage-based
   // setComponent is lost (the old page is gone). After the new page loads, CanvasPreview
@@ -180,11 +246,15 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     if (!iframeEl) return;
     let initialLoad = true; // skip the very first load (initial navigation)
     function handleLoad() {
+      const comp = currentComponentRef.current;
+      if (comp && iframeEl && shouldNavigateFrameToComponent(getFrameHref(iframeEl), comp)) {
+        syncComponentToFrame(comp, iframeEl);
+        return;
+      }
       if (initialLoad) {
         initialLoad = false;
         return;
       }
-      const comp = currentComponentRef.current;
       if (comp && iframeEl?.contentWindow) {
         // Small delay: wait for iframe scripts to initialize their message listeners
         setTimeout(() => {
@@ -197,7 +267,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     }
     iframeEl.addEventListener('load', handleLoad);
     return () => iframeEl.removeEventListener('load', handleLoad);
-  }, [iframeEl]);
+  }, [getFrameHref, iframeEl, syncComponentToFrame]);
 
   // === Refresh logic ===
   const doRefresh = useCallback(() => {
@@ -253,7 +323,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             wasConnectedRef.current = true;
           }
           setDevServerRunning(msg.running);
-          setDevServerUrl(msg.url ?? null);
+          devServerUrlRef.current = msg.url ?? null;
+          setDevServerUrl(devServerUrlRef.current);
+          if (msg.running && devServerUrlRef.current && currentComponentRef.current && !previewUrlRef.current) {
+            navigateToComponent(currentComponentRef.current, devServerUrlRef.current);
+          }
           break;
 
         case 'updateUrl': {
@@ -269,12 +343,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             /* ignore */
           }
           const frame = iframeElRef.current;
-          if (frame?.src) {
+          const frameSrc = frame?.getAttribute('src') || frame?.src;
+          if (frame && hasNavigatedPreviewSource(frameSrc)) {
             // Iframe already loaded — extract component param and send via postMessage
             // to avoid iframe navigation flash
             try {
               const component = new URL(url).searchParams.get('component');
-              if (component) {
+              const currentComponent = getComponentFromPreviewUrl(getFrameHref(frame));
+              if (component && currentComponent) {
                 frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
                 break;
               }
@@ -283,7 +359,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             }
             frame.src = url;
           } else {
-            setPreviewUrl(url);
+            setStoredPreviewUrl(url);
           }
           break;
         }
@@ -302,9 +378,17 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Only clear error when switching to a DIFFERENT component
           setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
           const frame = iframeElRef.current;
-          if (frame?.contentWindow) {
-            // Send via postMessage — no iframe reload
-            frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+          const frameSrc = frame?.getAttribute('src') || frame?.src;
+          if (frame?.contentWindow && hasNavigatedPreviewSource(frameSrc)) {
+            const currentComponent = getComponentFromPreviewUrl(getFrameHref(frame));
+            if (currentComponent) {
+              // Send via postMessage — no iframe reload
+              frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
+            } else if (comp) {
+              navigateToComponent(comp);
+            }
+          } else if (comp) {
+            navigateToComponent(comp);
           }
           break;
         }
@@ -323,6 +407,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'state:update':
           // Forward to canvas interaction (overlay rendering)
           if (msg.patch) {
+            const component = (msg.patch as { currentComponent?: { path?: unknown } }).currentComponent;
+            if (typeof component?.path === 'string') {
+              currentComponentRef.current = component.path;
+              syncComponentToFrame(component.path);
+            }
             onStateUpdateRef.current(msg.patch);
           }
           // Forward to iframe (platform state sync)
@@ -332,6 +421,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'state:init':
           // Forward to canvas interaction (full state)
           if (msg.state) {
+            const component = (msg.state as { currentComponent?: { path?: unknown } }).currentComponent;
+            if (typeof component?.path === 'string') {
+              currentComponentRef.current = component.path;
+              syncComponentToFrame(component.path);
+            }
             onStateUpdateRef.current(msg.state);
           }
           // Forward to iframe
@@ -414,7 +508,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
-  }, [iframeEl, doRefresh]);
+  }, [doRefresh, getFrameHref, iframeEl, navigateToComponent, setStoredPreviewUrl, syncComponentToFrame]);
 
   // === Signal webview ready to extension ===
   // 'webview:ready' is an internal extension event, not a PlatformMessage —

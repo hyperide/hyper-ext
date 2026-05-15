@@ -173,6 +173,10 @@
         "title": "Hyper: Wrap Selected Element"
       },
       {
+        "command": "hypercanvas.canvasInsertElement",
+        "title": "Hyper: Insert Element"
+      },
+      {
         "command": "hypercanvas.canvasSelectChildren",
         "title": "Hyper: Select Children"
       },

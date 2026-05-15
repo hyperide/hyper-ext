@@ -87,6 +87,10 @@ class TabInputWebview {
   constructor(public readonly viewType: string) {}
 }
 
+class TabInputText {
+  constructor(public readonly uri: MockUri) {}
+}
+
 /* ---------- namespace: window ---------- */
 
 const window = {
@@ -102,6 +106,7 @@ const window = {
     dispose: mock(),
   })),
   onDidChangeActiveTextEditor: mock(() => ({ dispose: mock() })),
+  visibleTextEditors: [] as unknown[],
   tabGroups: { all: [] as unknown[] },
 };
 
@@ -167,6 +172,7 @@ mock.module('vscode', () => ({
   TextEditorRevealType,
   FileType,
   TabInputWebview,
+  TabInputText,
   window,
   workspace,
   commands,
@@ -213,6 +219,7 @@ beforeEach(() => {
   commands.executeCommand.mockImplementation(() => Promise.resolve());
 
   window.activeTextEditor = undefined;
+  window.visibleTextEditors = [];
   window.tabGroups = { all: [] as unknown[] };
   workspace.textDocuments.length = 0;
 });

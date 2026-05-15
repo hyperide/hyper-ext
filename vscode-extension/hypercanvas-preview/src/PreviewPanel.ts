@@ -92,7 +92,10 @@ export class PreviewPanel {
    * Always pins the panel so it cannot be accidentally closed.
    */
   public createOrShow(column?: vscode.ViewColumn): void {
+    const activeEditor = this._resolveComponentEditor();
+
     if (this._panel) {
+      this._initializeComponent(activeEditor);
       this._panel.reveal(column);
       this._pinPanel();
       return;
@@ -109,7 +112,7 @@ export class PreviewPanel {
       },
     );
 
-    this._setupPanel(panel);
+    this._setupPanel(panel, activeEditor);
     this._pinPanel();
   }
 
@@ -151,14 +154,14 @@ export class PreviewPanel {
     if (this._panel) {
       this._panel.dispose();
     }
-    this._setupPanel(panel);
+    this._setupPanel(panel, this._resolveComponentEditor());
     this._pinPanel();
   }
 
   /**
    * Shared panel initialization
    */
-  private _setupPanel(panel: vscode.WebviewPanel): void {
+  private _setupPanel(panel: vscode.WebviewPanel, activeEditor?: vscode.TextEditor): void {
     this._panel = panel;
 
     // Register callback so EditorBridge can move preview to the right
@@ -240,7 +243,7 @@ export class PreviewPanel {
     }, undefined);
 
     // Initialize component
-    this._initializeComponent();
+    this._initializeComponent(activeEditor);
   }
 
   /**
@@ -906,16 +909,10 @@ export class PreviewPanel {
   /**
    * Initialize component from active editor
    */
-  private _initializeComponent(): void {
-    if (vscode.window.activeTextEditor) {
-      const component = this._extractComponentFromEditor(vscode.window.activeTextEditor);
-      if (component) {
-        this._currentComponent = component;
-        const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-        this._stateHub.applyUpdate({
-          currentComponent: { name, path: component },
-        });
-      }
+  private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
+    const component = this._resolveComponentPath(activeEditor);
+    if (component) {
+      this._setCurrentComponent(component);
     }
 
     // Fallback: pick component from StateHub (e.g. opened via Explorer click)
@@ -925,16 +922,16 @@ export class PreviewPanel {
         this._currentComponent = stateComponent.path;
       }
     }
-
-    this._updatePreviewUrl();
   }
 
   /**
    * Extract component path from editor (relative to workspace root)
    */
   private _extractComponentFromEditor(editor: vscode.TextEditor): string | undefined {
-    const filePath = editor.document.uri.fsPath;
+    return this._extractComponentFromPath(editor.document.uri.fsPath);
+  }
 
+  private _extractComponentFromPath(filePath: string): string | undefined {
     if (!/\.(tsx|jsx)$/.test(filePath)) {
       return undefined;
     }
@@ -943,6 +940,36 @@ export class PreviewPanel {
       return filePath.substring(this._workspaceRoot.length + 1);
     }
     return undefined;
+  }
+
+  private _resolveComponentPath(editor = vscode.window.activeTextEditor): string | undefined {
+    if (editor) {
+      const component = this._extractComponentFromEditor(editor);
+      if (component) return component;
+    }
+
+    for (const candidate of vscode.window.visibleTextEditors) {
+      const component = this._extractComponentFromEditor(candidate);
+      if (component) return component;
+    }
+
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (tab.input instanceof vscode.TabInputText) {
+          const component = this._extractComponentFromPath(tab.input.uri.fsPath);
+          if (component) return component;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private _resolveComponentEditor(editor = vscode.window.activeTextEditor): vscode.TextEditor | undefined {
+    if (editor && this._extractComponentFromEditor(editor)) {
+      return editor;
+    }
+    return vscode.window.visibleTextEditors.find((candidate) => Boolean(this._extractComponentFromEditor(candidate)));
   }
 
   /**
@@ -954,18 +981,28 @@ export class PreviewPanel {
     if (!editor) return;
 
     const component = this._extractComponentFromEditor(editor);
-    if (component && this._currentComponent !== component) {
-      this._currentComponent = component;
+    if (
+      component &&
+      (this._currentComponent !== component || this._stateHub.state.currentComponent?.path !== component)
+    ) {
       console.log('[HyperIDE] Component from editor:', component);
-
-      // Dispatch to StateHub so Inspector and other panels sync
-      const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-      this._stateHub.applyUpdate({
-        currentComponent: { name, path: component },
-      });
-
-      this._updatePreviewUrl();
+      this._setCurrentComponent(component);
     }
+  }
+
+  private _setCurrentComponent(component: string): void {
+    this._currentComponent = component;
+    const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
+    const current = this._stateHub.state.currentComponent;
+
+    if (current?.path === component && current.name === name) {
+      return;
+    }
+
+    // Dispatch to StateHub so Inspector and other panels sync.
+    this._stateHub.applyUpdate({
+      currentComponent: { name, path: component },
+    });
   }
 
   /**
@@ -1067,8 +1104,14 @@ export class PreviewPanel {
    * Triggers navigation to /test-preview?component=<componentPath>.
    */
   public setComponentParam(componentPath: string): void {
-    if (!this._panel) return;
     this._currentComponent = componentPath;
+    if (!this._panel) return;
+
+    if (this._devServerRunning) {
+      this._updatePreviewUrl();
+      return;
+    }
+
     this._panel.webview.postMessage({
       type: 'setComponent',
       component: componentPath,
@@ -1145,6 +1188,16 @@ export class PreviewPanel {
     if (result.success && result.wrapperId) {
       this._stateHub.applyUpdate({ selectedIds: [result.wrapperId] });
     }
+  }
+
+  /**
+   * Open the insertion UI for the first selected element (called from VS Code command).
+   */
+  public async openInsertPanelForSelection(): Promise<void> {
+    const selectedIds = await this._waitForSelectedIds();
+    if (!selectedIds.length) return;
+
+    this._stateHub.applyUpdate({ selectedIds, insertTargetId: selectedIds[0] });
   }
 
   /**
