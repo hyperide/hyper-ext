@@ -127,32 +127,6 @@ function sameLocation(a: SourceLocation, b: SourceLocation): boolean {
   return a.fileName === b.fileName && a.line === b.line && a.column === b.column;
 }
 
-function getReact18SiblingIndex(
-  fiber: Fiber,
-  source: DebugSource,
-): { index: number; matchCount: number; found: boolean } {
-  const parent = fiber.return;
-  if (parent === null) return { index: 0, matchCount: 1, found: true };
-
-  let index = 0;
-  let matchCount = 0;
-  let found = false;
-  let current: Fiber | null = parent.child;
-  while (current !== null) {
-    const currentSource = current._debugSource ?? extractDebugSourceFromType(current);
-    if (currentSource && sameDebugSource(currentSource, source)) {
-      if (current === fiber) {
-        found = true;
-        index = matchCount;
-      }
-      matchCount++;
-    }
-    current = current.sibling;
-  }
-
-  return { index, matchCount, found };
-}
-
 /* ─── React 19: _debugStack parsing ─────────────────────────────── */
 
 // Patterns identifying React-internal and bundler-internal stack frames.
@@ -239,16 +213,17 @@ export function parseDebugStack(err: Error): SourceLocation | null {
 export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fiber) => SourceLocation | null): number {
   // React 18: _debugSource on the fiber directly
   if (fiber._debugSource != null) {
-    let current: Fiber | null = fiber;
+    const mySource = fiber._debugSource;
+    const parent = fiber.return;
+    if (parent === null) return 0;
+    let index = 0;
+    let current: Fiber | null = parent.child;
     while (current !== null) {
-      const currentSource = current._debugSource ?? extractDebugSourceFromType(current);
-      if (currentSource !== null) {
-        const siblingIndex = getReact18SiblingIndex(current, currentSource);
-        if (siblingIndex.found && siblingIndex.matchCount > 1) {
-          return siblingIndex.index;
-        }
+      if (current === fiber) return index;
+      if (current._debugSource && sameDebugSource(current._debugSource, mySource)) {
+        index++;
       }
-      current = current.return;
+      current = current.sibling;
     }
     return 0;
   }

@@ -30,7 +30,6 @@ export interface KeyboardHandlerCallbacks {
   onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;
   onDeleteElements: (ids: string[]) => void;
-  onDuplicateElement?: (id: string) => void;
 }
 
 // ============================================================================
@@ -191,15 +190,6 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
       }, 150);
 
       return true;
-    }
-
-    // === Cmd+D / Ctrl+D: duplicate selected element ===
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && !e.shiftKey) {
-      if (callbacks.onDuplicateElement) {
-        e.preventDefault();
-        callbacks.onDuplicateElement(selectedId);
-        return true;
-      }
     }
 
     return false;

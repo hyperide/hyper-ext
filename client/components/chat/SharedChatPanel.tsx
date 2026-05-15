@@ -149,14 +149,7 @@ export function SharedChatPanel({
         await stream.sendMessage(chatId, queued);
       }
     },
-    [
-      history.currentChatId,
-      forceNewChat,
-      history.createNewChat,
-      history.setIsStreaming,
-      stream.sendMessage,
-      onMessagesAppend,
-    ],
+    [history.currentChatId, forceNewChat, history.createNewChat, stream.sendMessage, onMessagesAppend],
   );
 
   const input = useChatInput({

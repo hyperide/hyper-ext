@@ -22,25 +22,10 @@ describe('VSCodeFileIO', () => {
       expect(Buffer.from(buf).toString('utf-8')).toBe('new content');
     });
 
-    it('skips applyEdit for clean open document after disk write', async () => {
+    it('syncs open document via applyEdit when content differs', async () => {
       vscode.workspace.textDocuments.push({
         getText: () => 'old content',
         positionAt: (o: number) => new vscode.Position(0, o),
-        isDirty: false,
-        uri: vscode.Uri.file('/test/file.tsx'),
-      } as unknown as vscode.TextDocument);
-
-      await fileIO.writeFile('/test/file.tsx', 'new content');
-
-      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
-      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
-    });
-
-    it('syncs dirty open document via applyEdit when content differs', async () => {
-      vscode.workspace.textDocuments.push({
-        getText: () => 'old content',
-        positionAt: (o: number) => new vscode.Position(0, o),
-        isDirty: true,
         uri: vscode.Uri.file('/test/file.tsx'),
       } as unknown as vscode.TextDocument);
 
@@ -60,7 +45,6 @@ describe('VSCodeFileIO', () => {
       vscode.workspace.textDocuments.push({
         getText: () => 'same content',
         positionAt: (o: number) => new vscode.Position(0, o),
-        isDirty: true,
         uri: vscode.Uri.file('/test/file.tsx'),
       } as unknown as vscode.TextDocument);
 
@@ -81,7 +65,6 @@ describe('VSCodeFileIO', () => {
       vscode.workspace.textDocuments.push({
         getText: () => 'old content',
         positionAt: (o: number) => new vscode.Position(0, o),
-        isDirty: true,
         uri: vscode.Uri.file('/test/file.tsx'),
       } as unknown as vscode.TextDocument);
       (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockImplementation(() =>
@@ -95,29 +78,14 @@ describe('VSCodeFileIO', () => {
   });
 
   describe('readFile', () => {
-    it('returns content from dirty open TextDocument when available', async () => {
+    it('returns content from open TextDocument when available', async () => {
       vscode.workspace.textDocuments.push({
         uri: vscode.Uri.file('/test/file.tsx'),
-        isDirty: true,
         getText: () => 'open doc content',
       } as unknown as vscode.TextDocument);
 
       const result = await fileIO.readFile('/test/file.tsx');
       expect(result).toBe('open doc content');
-    });
-
-    it('reads from disk when open TextDocument is clean', async () => {
-      vscode.workspace.textDocuments.push({
-        uri: vscode.Uri.file('/test/file.tsx'),
-        isDirty: false,
-        getText: () => 'stale open doc content',
-      } as unknown as vscode.TextDocument);
-      (vscode.workspace.fs.readFile as ReturnType<typeof mock>).mockReturnValue(
-        Promise.resolve(new TextEncoder().encode('fresh disk content')),
-      );
-
-      const result = await fileIO.readFile('/test/file.tsx');
-      expect(result).toBe('fresh disk content');
     });
 
     it('falls back to disk read when document is not open', async () => {
@@ -132,7 +100,6 @@ describe('VSCodeFileIO', () => {
     it('does not read from disk when open document exists', async () => {
       vscode.workspace.textDocuments.push({
         uri: vscode.Uri.file('/test/file.tsx'),
-        isDirty: true,
         getText: () => 'cached',
       } as unknown as vscode.TextDocument);
 

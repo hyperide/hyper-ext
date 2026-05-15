@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -37,7 +37,6 @@ import {
   EffectsSection,
   FillSection,
   HeaderSection,
-  I18nTextInspector,
   LayoutSection,
   MarginSection,
   PositionSection,
@@ -201,23 +200,11 @@ export default function RightSidebar({
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
-  const sharedItemIndices = useSharedEditorState((s) => s.selectedItemIndices);
   const selectedItemIndex =
-    selectedId && engine
-      ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null)
-      : selectedId
-        ? (sharedItemIndices?.[selectedId] ?? null)
-        : null;
+    selectedId && engine ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null) : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
-  // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
-  // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
-  const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
-  // Locale selected by the user in the i18n inspector. Resets when element/binding changes.
-  const [i18nActiveLocale, setI18nActiveLocale] = useState<string | undefined>(undefined);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
-  const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
-  const selectedElementDomText = useSharedEditorState((s) => s.selectedElementDomText);
   const {
     parsedStyles,
     childrenType,
@@ -226,8 +213,6 @@ export default function RightSidebar({
     loading,
     childrenLocation,
     styleReadResult,
-    i18nText,
-    availableKeys: availableI18nKeys,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -237,9 +222,6 @@ export default function RightSidebar({
     activeInstanceId,
     itemIndex: selectedItemIndex,
     refreshKey: styleRefreshKey + styleVersion,
-    runtimeStyle,
-    domTextContent: selectedElementDomText ?? undefined,
-    activeLocale: i18nActiveLocale,
   });
   const sourceTabs = useMemo(
     () =>
@@ -251,11 +233,6 @@ export default function RightSidebar({
       }),
     [inspectorUIKit, componentPath, canInspectStyles, styleReadResult],
   );
-  // Only show the tab row when there's more than one real CSS approach to choose from.
-  const visibleSourceTabs = useMemo(() => {
-    const nonComputed = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
-    return nonComputed.length <= 1 ? [] : sourceTabs;
-  }, [sourceTabs]);
   const explicitSourceTabId = useMemo(() => {
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       return undefined;
@@ -266,22 +243,8 @@ export default function RightSidebar({
   useEffect(() => {
     if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
       setSelectedSourceTabId('computed');
-      return;
-    }
-    // When the project has exactly one concrete CSS approach, auto-select it so the user
-    // doesn't have to manually switch away from "Computed" every time.
-    const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
-    if (nonComputedTabs.length === 1 && selectedSourceTabId === 'computed') {
-      setSelectedSourceTabId(nonComputedTabs[0].id);
     }
   }, [sourceTabs, selectedSourceTabId]);
-
-  // Reset i18n locale selection when the selected element changes.
-  // This prevents a stale locale from carrying over to a different element's binding.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
-  useEffect(() => {
-    setI18nActiveLocale(undefined);
-  }, [selectedId]);
 
   // Apply state filter to parsedStyles
   const effectiveParsed: Partial<ParsedStyles> = useMemo(() => {
@@ -437,10 +400,6 @@ export default function RightSidebar({
   const [textContent, setTextContent] = useState('');
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Guard: prevent external data refresh from overriding text the user is actively typing
-  const isEditingTextRef = useRef(false);
-  const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Root ref for wheel event handling
   const rootRef = useRef<HTMLDivElement>(null);
@@ -629,14 +588,6 @@ export default function RightSidebar({
       const value = e.target.value;
       setTextContent(value);
 
-      // Prevent external data refresh from overriding user input while typing
-      isEditingTextRef.current = true;
-      if (editingTextResetRef.current) clearTimeout(editingTextResetRef.current);
-      // Reset after 2s — covers debounce 300ms + sync roundtrip + file-watch latency
-      editingTextResetRef.current = setTimeout(() => {
-        isEditingTextRef.current = false;
-      }, 2000);
-
       if (debouncedTextSyncRef.current) {
         clearTimeout(debouncedTextSyncRef.current);
       }
@@ -729,86 +680,6 @@ export default function RightSidebar({
     if (!componentPath || !childrenLocation) return;
     goToCode(componentPath, childrenLocation.line, childrenLocation.column);
   }, [componentPath, childrenLocation, goToCode]);
-
-  const handleI18nLocaleChange = useCallback((locale: string) => {
-    setI18nActiveLocale(locale);
-    // Re-read is triggered automatically via activeLocale in useElementStyleData deps
-  }, []);
-
-  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
-  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
-  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
-  // is no longer attached to the same DOM node.
-  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
-
-  const handleI18nKeyChange = useCallback(
-    (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
-      if (!selectedId || !componentPath) return;
-      const previousSelectedId = selectedId;
-      // If the user typed a key that doesn't yet exist in the locale, treat this
-      // as "create new key" — also write the JSON resource so the next re-read
-      // returns editable=true and the user can immediately type the translation.
-      // Otherwise (existing key) skip the JSON write and only retarget JSX.
-      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      void (async () => {
-        try {
-          await astOps.writeI18nResource({
-            library: i18nText.library,
-            key: newKey,
-            namespace: i18nText.namespace,
-            activeLocale: i18nText.activeLocale,
-            newText: i18nText.resolvedText ?? '',
-            previousKey: i18nText.key,
-            filePath: i18nText.sourceLocation.filePath,
-            elementId: selectedId,
-            skipResourceWrite: !isNewKey,
-          });
-          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
-          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
-          // immediately and after a short delay to outrun the HMR window.
-          if (i18nDispatch) {
-            i18nDispatch({ selectedIds: [previousSelectedId] });
-            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 250);
-            setTimeout(() => i18nDispatch({ selectedIds: [previousSelectedId] }), 800);
-          }
-        } catch {
-          // key change failed — no rollback needed (source file unchanged)
-        } finally {
-          setStyleRefreshKey((k) => k + 1);
-        }
-      })();
-    },
-    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
-  );
-
-  const handleI18nResolvedTextChange = useCallback(
-    (newText: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
-      if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = setTimeout(() => {
-        void (async () => {
-          try {
-            await astOps.writeI18nResource({
-              library: i18nText.library,
-              key: i18nText.key,
-              namespace: i18nText.namespace,
-              activeLocale: i18nText.activeLocale,
-              newText,
-            });
-          } catch {
-            // write failed — rollback scoped to this binding so other visible bindings are not affected
-            const bindingId = `${i18nText.library}|${i18nText.key}`;
-            setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
-          } finally {
-            // always re-read to sync inspector with file state
-            setStyleRefreshKey((k) => k + 1);
-          }
-        })();
-      }, 300);
-    },
-    [i18nText, astOps],
-  );
 
   // ========================================================================
   // Populate UI state from parsedStyles
@@ -1021,10 +892,8 @@ export default function RightSidebar({
     }
     setEffects(newEffects);
 
-    // Update text content — skip if user is actively typing to prevent cursor reset
-    if (!isEditingTextRef.current) {
-      setTextContent(dataTextContent);
-    }
+    // Update text content
+    setTextContent(dataTextContent);
     // In browser mode, text from DOM (no childrenType) is "from props"
     setIsTextFromProps(engine !== null && !childrenType && !!dataTextContent);
   }, [selectedId, parsedStyles, effectiveParsed, dataTextContent, childrenType, engine]);
@@ -1065,12 +934,6 @@ export default function RightSidebar({
       }
       if (syncToastTimerRef.current) {
         clearTimeout(syncToastTimerRef.current);
-      }
-      if (debouncedI18nWriteRef.current) {
-        clearTimeout(debouncedI18nWriteRef.current);
-      }
-      if (editingTextResetRef.current) {
-        clearTimeout(editingTextResetRef.current);
       }
     };
   }, []);
@@ -1212,16 +1075,16 @@ export default function RightSidebar({
       {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
         <>
           {/* Frame type */}
-          <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
             <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
               {getFrameType()}
             </span>
           </div>
 
           {/* Text Content */}
-          {childrenType !== 'jsx' && i18nText?.kind !== 'i18n' && (
+          {childrenType !== 'jsx' && (
             <div
-              className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
+              className={`px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div className="flex items-center gap-1">
                 <div className="flex-1 min-w-0 min-h-6 px-2 bg-muted rounded flex items-center gap-1">
@@ -1273,31 +1136,10 @@ export default function RightSidebar({
             </div>
           )}
 
-          {/* i18n Text Inspector */}
-          {i18nText?.kind === 'i18n' &&
-            (() => {
-              // Key only changes on library/key identity change, NOT on locale change.
-              // Locale change triggers a re-read via useElementStyleData deps; the component
-              // stays mounted so localText is not reset.
-              const bindingKey = `${i18nText.library}|${i18nText.key}`;
-              return (
-                <I18nTextInspector
-                  key={bindingKey}
-                  i18nBinding={i18nText}
-                  onKeyChange={handleI18nKeyChange}
-                  onResolvedTextChange={handleI18nResolvedTextChange}
-                  onLocaleChange={handleI18nLocaleChange}
-                  localeEditable={i18nText.availableLocales.length > 1}
-                  rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
-                  availableKeys={availableI18nKeys}
-                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
-                />
-              );
-            })()}
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection
-              tabs={visibleSourceTabs}
+              tabs={sourceTabs}
               selectedTabId={selectedSourceTabId}
               onSourceTabChange={setSelectedSourceTabId}
             />
@@ -1422,7 +1264,6 @@ export default function RightSidebar({
                 onFontSizeChange={setFontSize}
                 onFillModeChange={setFillMode}
                 syncStyleChange={syncStyleChange}
-                onNumericKeyDown={handleNumericKeyDown}
                 engine={engine}
                 componentPath={componentPath}
                 textOpacity={textOpacity}

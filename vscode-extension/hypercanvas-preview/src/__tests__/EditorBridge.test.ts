@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
-import { goToCode, handleEditorMessage, isBundleArtifactPath, setMovePreviewToRight } from '../EditorBridge';
+import { goToCode, handleEditorMessage, setMovePreviewToRight } from '../EditorBridge';
 
 function createMockWebview() {
   const messages: unknown[] = [];
@@ -124,34 +124,6 @@ describe('EditorBridge', () => {
       expect(uri.fsPath).toBe('/test-workspace/app/page.tsx');
     });
 
-    it('skips bundle artifact paths without opening or erroring', async () => {
-      // Bun's hashed _bun/client/<hash>.js rotates on every rebuild — opening
-      // it produces "cannot open file:///.../_bun/client/index-<hash>.js"
-      // because the file is gone by the time the click resolves. Skip silently.
-      const origLog = console.log;
-      console.log = mock();
-      try {
-        await goToCode('/workspace/proj/_bun/client/index-abc123.js', 10, 5);
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
-      } finally {
-        console.log = origLog;
-      }
-    });
-
-    it('skips Next.js static chunks and node_modules paths', async () => {
-      const origLog = console.log;
-      console.log = mock();
-      try {
-        await goToCode('/proj/_next/static/chunks/main-abc.js', 1, 1);
-        await goToCode('node_modules/react-dom/cjs/react-dom.development.js', 1, 1);
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
-      } finally {
-        console.log = origLog;
-      }
-    });
-
     it('shows error message on failure', async () => {
       // Suppress console.error — goToCode logs the caught error, and bun test
       // runner treats Error objects in console.error as uncaught errors in full suite
@@ -166,24 +138,6 @@ describe('EditorBridge', () => {
       } finally {
         console.error = origError;
       }
-    });
-  });
-
-  describe('isBundleArtifactPath', () => {
-    it('detects bun, Next.js, and node_modules bundle paths', () => {
-      expect(isBundleArtifactPath('/workspace/proj/_bun/client/index-abc.js')).toBe(true);
-      expect(isBundleArtifactPath('_bun/client/index-abc.js')).toBe(true);
-      expect(isBundleArtifactPath('/proj/_next/static/chunks/main.js')).toBe(true);
-      expect(isBundleArtifactPath('node_modules/react/index.js')).toBe(true);
-      expect(isBundleArtifactPath('/abs/node_modules/react/index.js')).toBe(true);
-    });
-
-    it('does not flag user source files', () => {
-      expect(isBundleArtifactPath('src/App.tsx')).toBe(false);
-      expect(isBundleArtifactPath('/abs/path/Button.tsx')).toBe(false);
-      expect(isBundleArtifactPath('app/page.tsx')).toBe(false);
-      // Files that *contain* the string "_bun" but not as the segment are user code.
-      expect(isBundleArtifactPath('src/my_bundle.ts')).toBe(false);
     });
   });
 

@@ -23,12 +23,10 @@ confirms it's still broken after installing 0.1.41.
 
 ### Task 1: Trace the scroll message path
 
-- [x] Read `vscode-extension/hypercanvas-preview/src/services/PanelRouter.ts` — find `iframe:scrollToElement` or `scrollToElement` handling.
-- [x] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — find scroll handler.
-- [x] Read `client/components/LeftSidebar/ElementsTree.tsx` — find click handler that should trigger scroll.
-- [x] Write findings: where the message breaks in the chain.
-
-Findings: `iframe:scrollToElement` never existed. Scroll is done via `hypercanvas:goToVisual` in iframe-interaction.ts. Tree click dispatches `state:update` → `hypercanvas:stateUpdate` in iframe — updates overlays only, NO scroll. `hypercanvas:goToVisual` is only sent from `hypercanvas.goToVisual` VS Code command (code→visual), never from tree. Fix implemented in Task 1: CustomEvent `hypercanvas:treeSelect` dispatched in useElementSelection.ts (VS Code path), forwarded to iframe as `hypercanvas:goToVisual` in usePreviewBridge.ts.
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/PanelRouter.ts` — find `iframe:scrollToElement` or `scrollToElement` handling.
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/scripts/iframe-interaction.ts` — find scroll handler.
+- [ ] Read `client/components/LeftSidebar/ElementsTree.tsx` — find click handler that should trigger scroll.
+- [ ] Write findings: where the message breaks in the chain.
 
 ### Task 2: Write RED e2e test
 

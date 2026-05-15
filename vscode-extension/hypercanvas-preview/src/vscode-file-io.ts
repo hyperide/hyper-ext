@@ -3,9 +3,9 @@
  *
  * Disk-first write strategy:
  * 1. Write directly to disk via workspace.fs.writeFile (triggers Vite HMR reliably).
- * 2. If the document is clean, the next readFile() reads disk while VS Code's
- *    file-system watcher updates the model. Dirty documents still use the
- *    open buffer so unsaved user edits stay visible to AST operations.
+ * 2. If the document is already open in VS Code's model AND content differs,
+ *    apply a WorkspaceEdit to sync the in-memory buffer so the next readFile()
+ *    returns fresh content immediately (before the file-system watcher fires).
  *
  * Undo/redo uses content-based snapshots in UndoRedoService, not VS Code native undo.
  *
@@ -20,8 +20,9 @@ export class VSCodeFileIO implements FileIO {
   async readFile(absolutePath: string): Promise<string> {
     const uri = vscode.Uri.file(absolutePath);
 
+    // Prefer open document — sequential AST ops must see each other's unsaved results
     const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
-    if (openDoc?.isDirty) {
+    if (openDoc) {
       return openDoc.getText();
     }
 
@@ -44,12 +45,10 @@ export class VSCodeFileIO implements FileIO {
     // Undo/redo uses content-based snapshots in UndoRedoService, not VS Code native undo.
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 
-    // Only force-sync dirty buffers. Clean open documents can lag briefly until
-    // VS Code's watcher refreshes them; readFile() reads disk for clean docs.
-    // Applying WorkspaceEdit to a clean-but-stale model after a disk write can
-    // emit "has changed in the meantime" errors from VS Code under HMR load.
+    // Sync the in-memory document if it is open, so the next readFile() call returns
+    // the new content immediately (before VS Code's file-system watcher fires).
     const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
-    if (openDoc?.isDirty && openDoc.getText() !== content) {
+    if (openDoc && openDoc.getText() !== content) {
       const edit = new vscode.WorkspaceEdit();
       const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
       edit.replace(uri, fullRange, content);

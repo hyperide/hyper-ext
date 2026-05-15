@@ -63,12 +63,12 @@ New i18n key creation is also unimplemented.
 
 ### Task 1: Define I18nAdapter interface
 
-- [x] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `getAvailableKeys` and i18n-related code.
-- [x] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — find `onKeyChange`.
-- [x] Create `vscode-extension/hypercanvas-preview/src/services/i18n/I18nAdapter.ts` with interface:
+- [ ] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` — find `getAvailableKeys` and i18n-related code.
+- [ ] Read `client/components/RightSidebar/sections/I18nTextInspector.tsx` — find `onKeyChange`.
+- [ ] Create `vscode-extension/hypercanvas-preview/src/services/i18n/I18nAdapter.ts` with interface:
   - `getAvailableKeys(locale: string): Promise<string[]>`
   - `resolveText(key: string, locale: string): Promise<string | null>`
-- [x] Run `bun run typecheck` — confirm no errors for new interface.
+- [ ] Run `bun run typecheck` — confirm no errors for new interface.
 
 ### Task 2: Implement ReactI18nextAdapter and CustomJsonAdapter
 

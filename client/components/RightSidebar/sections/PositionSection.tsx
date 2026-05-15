@@ -42,7 +42,10 @@ export const PositionSection = memo(function PositionSection({
   );
 
   return (
-    <div data-testid={TID.inspector.sectionHeader('position')} className="w-full px-4 py-3 overflow-hidden">
+    <div
+      data-testid={TID.inspector.sectionHeader('position')}
+      className="px-4 py-3 max-w-sidebar-section overflow-hidden"
+    >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">Position</span>
       </div>
