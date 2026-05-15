@@ -515,22 +515,25 @@ describe('I18nTextInspector', () => {
 
   it('shows optimistic key immediately in plain input mode (keyEditable, no combobox)', () => {
     const onKeyChange = mock(() => {});
-    render(
-      <I18nTextInspector
-        i18nBinding={{ ...supportedBinding, key: 'old.key' }}
-        onKeyChange={onKeyChange}
-        onResolvedTextChange={mock(() => {})}
-        keyEditable
-      />,
-    );
+    const props = {
+      i18nBinding: { ...supportedBinding, key: 'old.key' },
+      onKeyChange,
+      onResolvedTextChange: mock(() => {}),
+      keyEditable: true,
+    };
+    const { rerender } = render(<I18nTextInspector {...props} />);
     const keyInput = screen.getByTestId('i18n-key-input') as HTMLInputElement;
     expect(keyInput.tagName.toLowerCase()).toBe('input');
 
     fireEvent.change(keyInput, { target: { value: 'new.key' } });
     fireEvent.keyDown(keyInput, { key: 'Enter' });
 
-    expect((screen.getByTestId('i18n-key-input') as HTMLInputElement).value).toBe('new.key');
     expect(onKeyChange).toHaveBeenCalledWith('new.key');
+
+    // Simulate the in-flight window: server hasn't responded yet — props still carry old.key.
+    // bindingIdentity is unchanged, so optimisticKey is preserved → input must show 'new.key'.
+    rerender(<I18nTextInspector {...props} />);
+    expect((screen.getByTestId('i18n-key-input') as HTMLInputElement).value).toBe('new.key');
   });
 
   it('does not fire onKeyChange when selecting the current key in combobox', () => {

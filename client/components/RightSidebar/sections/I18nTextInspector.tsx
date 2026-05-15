@@ -154,7 +154,10 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     return () => document.removeEventListener('mousedown', handler);
   }, [showKeyDropdown]);
 
-  // Clear optimistic key once the binding prop catches up.
+  // Safety net: clear optimistic key if it somehow matches the incoming real key.
+  // In practice, primary cleanup happens via bindingIdentity change (line 98 above)
+  // or parent-driven remount (parent passes key={bindingKey}). This effect handles
+  // the narrow window where bindingIdentity is unchanged but realKey already caught up.
   const realKey = i18nBinding.kind === 'i18n' ? i18nBinding.key : '';
   useEffect(() => {
     if (optimisticKey !== null && realKey === optimisticKey) {
@@ -184,7 +187,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
-    if (!key || key === currentKey) {
+    if (!key || key === realKey) {
       setShowKeyDropdown(false);
       setKeySearch('');
       return;
@@ -292,7 +295,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               if (e.key === 'Enter') {
                 e.preventDefault();
                 const v = (e.target as HTMLInputElement).value.trim();
-                if (v && v !== currentKey) commitKey(v);
+                if (v && v !== realKey) commitKey(v);
               } else if (e.key === 'Escape') {
                 (e.target as HTMLInputElement).value = currentKey;
                 (e.target as HTMLInputElement).blur();
@@ -300,7 +303,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             }}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== currentKey) commitKey(v);
+              if (v && v !== realKey) commitKey(v);
               else e.target.value = currentKey;
             }}
             className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
