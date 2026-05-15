@@ -39,19 +39,24 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **IN PROGRESS (~2h)**. Active fixes: `3287880`, `aeb693c`, `4909041`. NOT active: `f85f4d3`, `2ec61e5`, `d08744a`.
-  - S1: ~650/737 done, **1 flaky** ("hyper_duplicate_element" 56919ms → retry-passed), 0 hard fails
-  - S2: DONE (653 tests), **2 hard fail** (Tamagui: tamagui-crypto CryptoScreen.tsx + tamagui-banking App.tsx), 1 flaky ("component with error" retry-passed)
-  - S3: ~507/737 done, **10 failures**: 8 Tamagui hard fails (4 projects × 2 attempts each: fitness/food-delivery/uber/whatsapp) + 2 webpack hard fails ("elements identifiable" 904865ms + 903564ms)
-  
-  **Expected: all failures are pre-fix (Tamagui) or known infrastructure issue (webpack).**
-  
+- **Run #38** — **STARTING** (2026-04-30, ~08:30 CEST). All known fixes active.
+  - New fixes vs run #37: `441a9860` (ViteReactSSG patchEntryFile fallback), `c3e0b60` (redo-limit 40s wait), `f85f4d3`+`2ec61e5`+`d08744a` (Tamagui), `c1736c6` (webpack), `a744506` (tamagui-whatsapp)
+  - Stale `__canvas_preview__.tsx` files cleaned (34 files deleted before run)
+
+- **Run #37** (`run-20260430-060719-86089`, 2026-04-30 06:07 CEST) — **DONE (S3 killed — bulka-the-dog stuck in refresh-retry loop, all hard fails already collected)**. 
+  - S1: 775 test-done, **1 HARD FAIL** ("redo limit" 67189ms+68792ms), **8 FLAKYs** (settings×5, open-preview, hyper_duplicate 56919ms, rapid-edit-undo)
+  - S2: 653 test-done, **1 HARD FAIL** (Tamagui "style written as prop" 162735ms+166579ms), **1 FLAKY** ("component with error" 22701ms)
+  - S3: 586/737 test-done, **KILLED** (bulka-the-dog stuck — patchEntryFile ViteReactSSG bug), **4 HARD FAILS** (Tamagui: 4 projects × 2 attempts: 162-174s each), **1 HARD FAIL** (webpack "elements identifiable" ~905s × 2)
+  - All hard fails are pre-fix: `c3e0b60` fixes redo-limit; `441a9860` fixes bulka-the-dog; `f85f4d3`+`d08744a` fix Tamagui; `c1736c6` fixes webpack.
+
   **Fixes committed AFTER run #37 started** (active in run #38):
-  - `f85f4d3`: dirty tab search (fixes food-delivery, uber, whatsapp, banking, crypto)
-  - `2ec61e5`: full project scan fallback (safety net for non-dirty files)
-  - `d08744a`: regex `\s*` fix (fixes fitness: style-object format)
-  - `a744506`: tamagui-whatsapp submodule pointer update (navigation stub fix)
-  - `c1736c6`: Phase 2 webpack pre-warm (populates dynamic-import chunk cache for `__canvas_preview__` → eliminates 900s "elements identifiable" compile)
+  - `441a9860`: patchEntryFile fallback for ViteReactSSG (bulka-the-dog preview never loaded)
+  - `c3e0b60`: redo-limit 25s→40s wait (VS Code file watcher under load)
+  - `f85f4d3`: dirty tab search (Tamagui style-prop test polling fix)
+  - `2ec61e5`: full project scan fallback (Tamagui safety net)
+  - `d08744a`: regex `\s*` fix (Tamagui fitness style-object format)
+  - `a744506`: tamagui-whatsapp submodule pointer update
+  - `c1736c6`: Phase 2 webpack pre-warm (eliminates 900s "elements identifiable" compile)
 
 - **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **KILLED** (timeout after 927/2211 tests, exit code 124). Reached `react-vite-cssmodules-spotify` (project #3), never reached bulka-the-dog (#23).
   - **1 HARD FAIL**: "redo limit — no redo after new edit" — both attempts timed out at ~48-52s. Root cause: `isPreviewLoaded(45s)` exhausted in 1-shard low-memory Docker (avail≈4.4GB). Fixed in `4909041` (75s).
