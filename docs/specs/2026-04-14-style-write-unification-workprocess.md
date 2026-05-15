@@ -3216,3 +3216,51 @@ All fixes active:
 - `8dfc896` socket benign errors + Editor.openFile aria-label fix
 
 Image rebuild in progress (~20 min). Log: `/tmp/hyper-e2e-run20-20260428-134436.log`
+
+## 📍 2026-04-28 14:05 CEST: 2 product fixes + Run #20 tests started
+
+### 2 product fixes committed and pushed
+
+**`bc5a5703` — fix(extension): require PascalCase in normalizeSampleComponentName**
+
+Root cause: Next.js `page.tsx` / Remix route modules have lowercase file basenames.
+`_setCurrentComponent` derives `name` from basename → `'page'`.
+`normalizeSampleComponentName('page')` returned `'page'` verbatim because
+`isValidJsxComponentName` only checks JS identifier validity, not React's PascalCase
+convention. Scaffold emitted `<page />` which is an HTML element tag, not a React
+component; VS Code TypeScript parser complained and the preview failed to parse.
+
+Fix: added `&& /^[A-Z]/.test(componentName)` guard. Lowercase-leading names go
+through `toPascalIdentifier` → `'Page'`, `'Route'`, etc.
+
+Verification: `bun test vscode-extension/hypercanvas-preview/src/__tests__/PreviewPanel.test.ts`
+→ 11 pass, 0 fail.
+
+**`4f4b5f07` — fix(inspector): use text-xs for font-size input in FillSection**
+
+Root cause: `FillSection.tsx` passed `className="h-8 flex-1"` to the shared `Input`
+component. `Input` defaults to `text-base` (16px); VS Code webview doesn't trigger
+the `md:` Tailwind breakpoint, so it stays at 16px — inconsistent with the compact
+inspector style used everywhere else.
+
+Fix: added `text-xs` to className.
+
+Verification: `bun test client/components/RightSidebar/sections/__tests__/FillSection.test.tsx`
+→ 2 pass, 0 fail.
+
+Both commits pushed to `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`.
+Extension rebuilt with `npm run build` (vscode-extension/hypercanvas-preview).
+No VSIX bump needed — these changes don't require a new Docker test run (product polish only).
+
+### Run #20 status at 14:05 CEST
+
+Docker image rebuilt and containers launched after 4-project Vite pre-warm.
+Container: `hyper-e2e-20260428-135231-70548-s1` (only 1 shard — RAM check
+auto-reduced; override with `HYPER_E2E_SHARDS=N` next time if needed).
+
+3/3 tests so far: **all passed**.
+- "type message in input" 1141ms — passed
+- "send message with Enter key" 760ms — passed  
+- "send message with send button click" 735ms — passed
+
+Run is active. Will monitor until completion.
