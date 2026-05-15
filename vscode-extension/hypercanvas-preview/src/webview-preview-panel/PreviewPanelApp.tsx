@@ -273,9 +273,11 @@ function ReadonlyStubScreen({
       }}
     >
       <div style={warningIconStyle}>🔒</div>
-      <h2 style={headingStyle}>Readonly mode — {cssSystem}</h2>
+      <h2 style={headingStyle}>Readonly mode</h2>
       <p style={{ ...subtextStyle, maxWidth: 480 }}>
-        Visual editing is not available for <strong>{cssSystem}</strong> projects.
+        Visual editing is not available for this project — the CSS system is <strong>{cssSystem}</strong>, but the
+        bundler (Next.js / Remix) does not yet support AST-based style writes. The CSS framework itself may be editable
+        on Vite / webpack — see the table below.
         {renderSucceeded
           ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
           : ' Waiting for preview to render...'}
