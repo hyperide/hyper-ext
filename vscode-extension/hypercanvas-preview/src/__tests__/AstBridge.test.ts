@@ -51,18 +51,19 @@ function createMockWebview() {
  * The first readFile call (before operation) returns `before`,
  * the second call (after operation) returns `after`.
  * VSCodeFileIO.readFile checks textDocuments first, then falls back to workspace.fs.readFile.
- * We use textDocuments to control the return value.
+ * UndoRedoService also syncs an already-open textDocument after its disk-first write.
  */
 function setupFileSnapshotsForPath(filePath: string, before: string, after: string): void {
   let callCount = 0;
-  const mockDoc = {
-    uri: { fsPath: filePath } as vscode.Uri,
+  const mockDoc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt'> = {
+    uri: vscode.Uri.file(filePath),
     getText: () => {
       callCount++;
       return callCount <= 1 ? before : after;
     },
+    positionAt: (offset: number) => new vscode.Position(0, offset),
   };
-  (vscode.workspace.textDocuments as unknown[]).push(mockDoc);
+  vscode.workspace.textDocuments.push(mockDoc as vscode.TextDocument);
 }
 
 describe('AstBridge', () => {
@@ -375,14 +376,13 @@ describe('AstBridge', () => {
   });
 
   describe('undo/redo delegation', () => {
-    it('undo writes contentBefore via WorkspaceEdit', async () => {
+    it('undo writes contentBefore via disk-first file write', async () => {
       setupFileSnapshotsForPath('/workspace/comp.tsx', 'original', 'modified');
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       const result = await bridge.undo(panel);
       expect(result).toBe(true);
-      // Should have used workspace.applyEdit (via UndoRedoService._writeContent)
-      // instead of commands.executeCommand('undo')
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
       expect(vscode.workspace.applyEdit).toHaveBeenCalled();
     });
 
@@ -391,10 +391,10 @@ describe('AstBridge', () => {
       await bridge.deleteElements('/workspace/comp.tsx', ['e1']);
       const panel = { reveal: mock(() => {}) } as never;
       await bridge.undo(panel);
-      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockClear();
+      (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mockClear();
       const result = await bridge.redo(panel);
       expect(result).toBe(true);
-      expect(vscode.workspace.applyEdit).toHaveBeenCalled();
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalled();
     });
 
     it('redo works after undo (content-based, not native VS Code redo)', async () => {

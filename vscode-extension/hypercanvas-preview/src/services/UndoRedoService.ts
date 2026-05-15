@@ -6,9 +6,8 @@
  * completely independent of VS Code's native undo/redo stack.
  *
  * Why not native VS Code undo?
- * doc.save() after WorkspaceEdit clears the native redo stack.
- * Since we must save to trigger HMR, native redo is always broken.
- * Content snapshots sidestep this entirely.
+ * AST writes go through disk-first file operations so Vite HMR sees changes
+ * reliably. Content snapshots sidestep VS Code's editor undo stack entirely.
  */
 
 import path from 'node:path';
@@ -111,32 +110,25 @@ export class UndoRedoService {
     return this._redoStack.length > 0;
   }
 
-  /**
-   * Write content directly to file via WorkspaceEdit + save.
-   * This creates a native VS Code undo entry as a side effect, but we don't
-   * rely on it — our own stack manages undo/redo state.
-   */
+  /** Write content disk-first, then sync an already-open VS Code document. */
   private async _writeContent(filePath: string, content: string): Promise<boolean> {
     try {
       const uri = vscode.Uri.file(filePath);
-      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 
-      // Skip if content is already identical (e.g. double-undo to same state)
-      if (doc.getText() === content) return true;
+      const openDoc = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === uri.fsPath);
+      if (openDoc && openDoc.getText() !== content) {
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(openDoc.positionAt(0), openDoc.positionAt(openDoc.getText().length));
+        edit.replace(uri, fullRange, content);
 
-      const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-      edit.replace(uri, fullRange, content);
-      const applied = await vscode.workspace.applyEdit(edit);
-
-      if (applied && doc.isDirty) {
-        const saved = await doc.save();
-        if (!saved) {
-          // Fallback: write directly to disk for HMR
-          await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+        const synced = await Promise.resolve(vscode.workspace.applyEdit(edit)).catch((error: unknown) => {
+          console.warn('[UndoRedoService] open document sync failed:', error);
+          return false;
+        });
+        if (!synced) {
+          console.warn(`[UndoRedoService] open document sync was not applied for ${path.basename(filePath)}`);
         }
-      } else if (!applied) {
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
       }
 
       return true;
