@@ -117,7 +117,10 @@ function bareToken(token: string, breakpoint: string | undefined): string {
  * can share the same notion of "the effective breakpoint at which this sibling's
  * order applies right now".
  */
-function findEffectiveOrderBp(tokens: readonly string[], breakpoint: string | undefined): string | undefined | null {
+function findEffectiveOrderBp(
+  tokens: readonly string[],
+  breakpoint: string | undefined,
+): string | undefined | null {
   const has = (bp: string | undefined): boolean => tokensAtBp(tokens, bp).length > 0;
   if (breakpoint === undefined) return has(undefined) ? undefined : null;
   const idx = RESPONSIVE_BP_CHAIN.indexOf(breakpoint);

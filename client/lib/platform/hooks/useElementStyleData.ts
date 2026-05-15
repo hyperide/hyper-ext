@@ -505,7 +505,6 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     canvas.sendEvent({
       type: 'styles:fetchI18nKeys',
       requestId,
-      library: i18nText.library,
       namespace: i18nText.namespace,
       activeLocale: i18nText.activeLocale,
     });
