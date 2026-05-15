@@ -2023,6 +2023,22 @@ for (const evt of VITE_LIFECYCLE_EVENTS) {
     if (evt === 'vite:beforeFullReload') {
       persistSelectionGraceCache(true);
     }
+    // After every HMR apply (vite:afterUpdate), force IMMEDIATE overlay repaint
+    // — bypassing the 50 ms throttle. The selected element's text content may
+    // have changed (e.g. i18n key swap rewrites the t() argument and HMR
+    // updates the rendered string), which means its bounding rect has shifted
+    // and the existing overlay is now stale. The MutationObserver also fires,
+    // but its 50 ms throttle visibly lags the text update — users notice the
+    // outline "stuck on old position" for ~50 ms. requestAnimationFrame is
+    // the right cadence: we want to paint after the same frame that React
+    // committed the text update.
+    if (evt === 'vite:afterUpdate') {
+      invalidateSourceCache();
+      requestAnimationFrame(() => {
+        needsOverlayUpdate = true;
+        sendOverlayRects();
+      });
+    }
   });
 }
 window.addEventListener('beforeunload', () => {
