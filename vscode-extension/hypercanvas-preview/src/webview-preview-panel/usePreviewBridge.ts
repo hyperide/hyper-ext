@@ -285,21 +285,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
-  // === Tree selection → canvas scroll ===
-  // When the user clicks an element in the Elements Tree, useElementSelection dispatches
-  // a local CustomEvent. We forward it to the iframe as hypercanvas:goToVisual so the
-  // canvas scrolls to the element. This is local-only (no round-trip through extension host).
-  useEffect(() => {
-    function handleTreeSelect(event: Event) {
-      const e = event as CustomEvent<{ elementId: string }>;
-      const elementId = e.detail?.elementId;
-      if (!elementId) return;
-      // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-      iframeElRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId }, '*');
-    }
-    window.addEventListener('hypercanvas:treeSelect', handleTreeSelect);
-    return () => window.removeEventListener('hypercanvas:treeSelect', handleTreeSelect);
-  }, []);
+  // Tree → canvas scroll is now driven entirely by the `iframe:scrollToElement` message
+  // (LeftPanel → extension host → StateHub.broadcast → PreviewPanel webview, handled in
+  // the extension-message switch below). The earlier local `hypercanvas:treeSelect`
+  // CustomEvent path was deleted: VS Code webviews are isolated iframes, so a CustomEvent
+  // dispatched in the LeftPanel window never reached the listener in this PreviewPanel
+  // window. SaaS takes the engine.select branch in useElementSelection and never used it.
 
   // === Re-send current component after iframe (re)load ===
   // When Vite HMR triggers a full page reload inside the iframe, the postMessage-based
@@ -523,19 +514,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
         case 'iframe:scrollToElement':
           // Scroll canvas (iframe) to the specified element without changing selection
+          console.debug('[tree-scroll] leg3 webview iframe:scrollToElement → iframe scrollToElement', {
+            elementId: msg.elementId,
+          });
           // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
-          break;
-
-        case 'iframe:writeI18nResource':
-          // Freeze the last-known selection overlay rect during an i18n write so the
-          // HMR re-render gap doesn't manifest as a visible deselect (Path B in
-          // docs/plans/2026-05-06-selection-survives-i18n-write.md).
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:writeI18nResource', phase: msg.phase },
-            '*',
-          );
           break;
 
         case 'ast:response':

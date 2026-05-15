@@ -19,12 +19,7 @@ import {
   toggleNodeRefInSelection,
 } from '@shared/canvas-interaction/selection-utils';
 import { buildDesignStylesCSS } from '@shared/canvas-interaction/style-injector';
-import type {
-  LocalResolveResult,
-  OverlayElementResolver,
-  OverlayRect,
-  TracingResolver,
-} from '@shared/canvas-interaction/types';
+import type { LocalResolveResult, OverlayElementResolver, TracingResolver } from '@shared/canvas-interaction/types';
 import {
   type Fiber,
   FiberTag,
@@ -851,51 +846,10 @@ const state = {
   hoveredItemIndex: null as number | null,
   selectedItemIndices: {} as Record<string, number | null>,
   engineMode: 'design' as string,
-  /**
-   * True between `hypercanvas:writeI18nResource` start/done events.
-   * While set, the overlay renderer paints the last-known selection rects
-   * (see frozenSelection* below) even if `selectedIds[0]` momentarily fails
-   * to match a DOM element — Path B in
-   * docs/plans/2026-05-06-selection-survives-i18n-write.md.
-   */
-  writeInProgress: false,
 };
 // Expose for E2E test tooling (waitForFunction polling)
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
-
-// Diagnostic: log every state.selectedIds mutation with a stack trace.
-// Opt-in via `window.__HC_DEBUG_SELECTION = true` (set from devtools or E2E setup)
-// so production users do not get a console-noise tax.
-// Used to chase the i18n-key-change selection-flicker bug
-// (docs/plans/2026-05-06-selection-survives-i18n-write.md, Task 1).
-(() => {
-  const w = window as unknown as Record<string, unknown>;
-  let backing: string[] = state.selectedIds;
-  const desc: PropertyDescriptor = {
-    get(): string[] {
-      return backing;
-    },
-    set(next: string[]): void {
-      const prev = backing;
-      backing = next;
-      if (w.__HC_DEBUG_SELECTION) {
-        try {
-          const sameLen = prev.length === next.length && prev.every((v, i) => v === next[i]);
-          if (!sameLen) {
-            // eslint-disable-next-line no-console
-            console.warn('[HC selection]', { prev: [...prev], next: [...next] }, new Error('selection-trace').stack);
-          }
-        } catch {
-          /* never break runtime over diagnostics */
-        }
-      }
-    },
-    configurable: true,
-    enumerable: true,
-  };
-  Object.defineProperty(state, 'selectedIds', desc);
-})();
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -1385,8 +1339,7 @@ function _dragPointerUp(e: PointerEvent): void {
   // pre-lift element if the parent layer has no own source.
   const finalSourceSrc =
     _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
-  const finalDropSrc =
-    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
@@ -1472,16 +1425,6 @@ let prevRectsJSON = '';
 let needsOverlayUpdate = true;
 let overlayRafScheduled = false;
 
-// === Selection-rect freeze for HMR window during i18n writes (Path B) ===
-// While `state.writeInProgress` is true, retain the last-known selection rects
-// even if `selectedIds[0]` momentarily fails to match a DOM element. Without
-// this safety net, the HMR re-render gap (DOM gone + fiber-source-index
-// rebuilding async) flashes the selection outline off until the new fiber
-// settles. Scoped to the cached selectedId so a selection change mid-write
-// never restores a stale rect over the new target.
-let frozenSelectionId: string | null = null;
-let frozenSelectionRects: OverlayRect[] = [];
-
 function scheduleOverlayLoopIfNeeded(): void {
   if (!overlayRafScheduled) {
     overlayRafScheduled = true;
@@ -1508,24 +1451,6 @@ function sendOverlayRects(): void {
     },
     iframeElementResolver,
   );
-
-  // Freeze logic — cache the latest known selection geometry (scoped by id),
-  // and during a write window restore it when the live resolver returns nothing
-  // for the current selectedIds[0]. Hover/placeholder rects are intentionally
-  // not frozen — only the selection outline.
-  const currentSelectionId = state.selectedIds[0] ?? null;
-  const liveSelectionRects = result.overlayRects.filter((r) => r.type === 'selection');
-  if (liveSelectionRects.length > 0) {
-    frozenSelectionId = currentSelectionId;
-    frozenSelectionRects = liveSelectionRects;
-  } else if (
-    state.writeInProgress &&
-    currentSelectionId !== null &&
-    currentSelectionId === frozenSelectionId &&
-    frozenSelectionRects.length > 0
-  ) {
-    result.overlayRects.push(...frozenSelectionRects);
-  }
 
   const rects = result.overlayRects.map((r) => ({
     key: r.key,
@@ -1750,6 +1675,10 @@ window.addEventListener('message', (event: MessageEvent) => {
     state.selectedIds = [msg.elementId];
     state.selectedItemIndices = {};
     const el = findElementsByRef(msg.elementId, 0)[0];
+    console.debug('[tree-scroll] leg4 iframe goToVisual → element lookup', {
+      elementId: msg.elementId,
+      found: !!el,
+    });
     if (el) {
       scrollIntoViewCenterSmooth(el);
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
@@ -1793,23 +1722,11 @@ window.addEventListener('message', (event: MessageEvent) => {
   // Scroll to element without changing selection (tree row click → canvas scroll)
   if (msg.type === 'hypercanvas:scrollToElement') {
     const el = findElementsByRef(msg.elementId, 0)[0];
+    console.debug('[tree-scroll] leg5 iframe scrollToElement → element lookup', {
+      elementId: msg.elementId,
+      found: !!el,
+    });
     if (el) scrollIntoViewCenterSmooth(el);
-    return;
-  }
-
-  // i18n write window — flip the selection-freeze flag so the overlay can
-  // retain its last-known rect during the HMR re-render gap (Path B in
-  // docs/plans/2026-05-06-selection-survives-i18n-write.md).
-  if (msg.type === 'hypercanvas:writeI18nResource') {
-    state.writeInProgress = msg.phase === 'start';
-    if (msg.phase === 'done') {
-      // Drop the cache once the write completes — a stale rect should not
-      // outlive the write window even if the next HMR cycle is briefly idle.
-      frozenSelectionId = null;
-      frozenSelectionRects = [];
-    }
-    needsOverlayUpdate = true;
-    scheduleOverlayLoopIfNeeded();
     return;
   }
 
