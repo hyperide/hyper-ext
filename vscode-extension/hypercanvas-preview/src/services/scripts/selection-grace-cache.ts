@@ -26,14 +26,6 @@ export interface CachedSelectionRect {
   height: number;
   type: 'selection';
   resizable?: { width: boolean; height: boolean; hasSizeClass?: boolean };
-  /**
-   * Snapshot of `selectedItemIndices[elementId]` at capture time. Persisted across
-   * full-reload so the post-hydrate paint can target the specific `.map()` instance
-   * that was selected — without it, `computeOverlayRects` would render selection
-   * rects for EVERY instance at that source until the parent rebroadcasts state.
-   * `null` means the element is not a `.map()` item; field omitted preserves that.
-   */
-  itemIndex?: number | null;
 }
 
 /** Mutable cache state owned by the caller. */
@@ -53,21 +45,6 @@ export interface ApplyGraceCacheOptions {
   now: number;
   /** How long to keep replaying a cached rect after the last successful paint. */
   gracePeriodMs: number;
-  /**
-   * Per-id `.map()` item index at capture time. Stored on each snapshot so that a
-   * subsequent full-reload can restore which specific instance was selected. Pass
-   * the same Map/Record the overlay code reads from `OverlayState.selectedItemIndices`.
-   */
-  selectedItemIndices?: Map<string, number | null> | Record<string, number | null>;
-  /**
-   * Optional diagnostic callback invoked once per element when its cache entry is
-   * evicted. Reasons:
-   *   - 'deselected': caller no longer reports the ID as selected
-   *   - 'expired':    the grace deadline elapsed before a fresh paint arrived
-   * Used by iframe-interaction.ts to surface the moment the overlay disappears
-   * (Task 1 of selection-flicker-some-elements).
-   */
-  onPrune?: (elementId: string, reason: 'deselected' | 'expired') => void;
 }
 
 export interface ApplyGraceCacheResult {
@@ -89,149 +66,18 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
 }
 
 /**
- * Wire-format payload used to persist the cache across a full iframe document reload
- * (Task 2 of selection-flicker-some-elements). Stored by iframe-interaction.ts in
- * sessionStorage so that a Vite full-reload — which destroys the in-memory cache —
- * does not drop the selection rect.
- *
- * Shape is intentionally minimal: only the data needed to replay a rect. Schema
- * version (`v`) lets us reject older payloads if the format ever drifts.
- */
-export interface PersistedSelectionGraceCache {
-  v: 1;
-  rects: CachedSelectionRect[];
-  /** Date.now() when the snapshot was written — used for staleness rejection. */
-  ts: number;
-}
-
-/**
- * Build a JSON-serialisable snapshot of the current cache. Caller stringifies and
- * writes to sessionStorage (or any other persistence layer).
- */
-export function serializeSelectionGraceCache(
-  state: SelectionGraceCacheState,
-  wallClockNow: number,
-): PersistedSelectionGraceCache {
-  return {
-    v: 1,
-    rects: Array.from(state.rectsByElementId.values()),
-    ts: wallClockNow,
-  };
-}
-
-export interface HydrateSelectionGraceCacheOptions {
-  state: SelectionGraceCacheState;
-  /** Parsed sessionStorage payload — may be anything; validated here. */
-  serialized: unknown;
-  /** performance.now() of the new session. Deadlines are reset to now + gracePeriodMs. */
-  now: number;
-  /** Date.now() of the new session — used for staleness rejection. */
-  wallClockNow: number;
-  /** TTL applied to each rehydrated entry. */
-  gracePeriodMs: number;
-  /** Snapshots older than this are dropped. */
-  maxAgeMs: number;
-}
-
-export interface HydrateSelectionGraceCacheResult {
-  hydratedIds: string[];
-  /**
-   * Per-id `.map()` item indices restored from the persisted snapshot. Only contains
-   * entries whose original capture had a non-null item index — used by callers as a
-   * stand-in for `state.selectedItemIndices` until the parent rebroadcasts the
-   * post-reload selection state.
-   */
-  hydratedItemIndices: Record<string, number | null>;
-}
-
-/**
- * Restore a previously serialised cache into `state`. Each entry gets a fresh
- * deadline of `now + gracePeriodMs` because performance.now() resets across
- * document reloads. Returns the list of hydrated element IDs so the caller can
- * keep painting them until the parent webview confirms the new `selectedIds`.
- */
-export function hydrateSelectionGraceCache(opts: HydrateSelectionGraceCacheOptions): HydrateSelectionGraceCacheResult {
-  const { state, serialized, now, wallClockNow, gracePeriodMs, maxAgeMs } = opts;
-  const empty: HydrateSelectionGraceCacheResult = { hydratedIds: [], hydratedItemIndices: {} };
-  if (!serialized || typeof serialized !== 'object') return empty;
-  const s = serialized as Partial<PersistedSelectionGraceCache>;
-  if (s.v !== 1 || !Array.isArray(s.rects) || typeof s.ts !== 'number') {
-    return empty;
-  }
-  const age = wallClockNow - s.ts;
-  if (age < 0 || age > maxAgeMs) return empty;
-  const hydratedIds: string[] = [];
-  const hydratedItemIndices: Record<string, number | null> = {};
-  for (const r of s.rects) {
-    if (!r || typeof r !== 'object') continue;
-    if (typeof r.elementId !== 'string' || r.elementId.length === 0) continue;
-    // Use Number.isFinite to reject NaN / ±Infinity — typeof passes them and a
-    // hydrated NaN-positioned rect renders as an invisible overlay that the retry
-    // loop then re-persists for the entire grace window.
-    if (!Number.isFinite(r.left) || !Number.isFinite(r.top)) continue;
-    if (!Number.isFinite(r.width) || !Number.isFinite(r.height)) continue;
-    if (typeof r.key !== 'string' || r.key.length === 0) continue;
-    if (r.type !== 'selection') continue;
-    // itemIndex is optional. Reject malformed values silently — a rect without a
-    // valid index will fall through to the all-instances render path, which is
-    // strictly no worse than the pre-fix behaviour.
-    let itemIndex: number | null | undefined;
-    if (Object.hasOwn(r, 'itemIndex')) {
-      const raw = (r as { itemIndex?: unknown }).itemIndex;
-      if (raw === null) {
-        itemIndex = null;
-      } else if (typeof raw === 'number' && Number.isFinite(raw) && Number.isInteger(raw) && raw >= 0) {
-        itemIndex = raw;
-      } else {
-        itemIndex = undefined;
-      }
-    }
-    const cleanRect: CachedSelectionRect = {
-      key: r.key,
-      elementId: r.elementId,
-      left: r.left,
-      top: r.top,
-      width: r.width,
-      height: r.height,
-      type: 'selection',
-      ...(r.resizable && { resizable: r.resizable }),
-      ...(itemIndex !== undefined && { itemIndex }),
-    };
-    state.rectsByElementId.set(r.elementId, cleanRect);
-    state.deadlineByElementId.set(r.elementId, now + gracePeriodMs);
-    hydratedIds.push(r.elementId);
-    if (itemIndex !== undefined) {
-      hydratedItemIndices[r.elementId] = itemIndex;
-    }
-  }
-  return { hydratedIds, hydratedItemIndices };
-}
-
-/**
  * Refresh the cache against this frame's computed rects, then replay any cached
  * snapshots whose IDs are still selected but produced no fresh rect — until the
  * grace deadline expires.
  */
-function readItemIndex(
-  src: Map<string, number | null> | Record<string, number | null> | undefined,
-  id: string,
-): number | null | undefined {
-  if (!src) return undefined;
-  if (src instanceof Map) return src.has(id) ? (src.get(id) ?? null) : undefined;
-  return Object.hasOwn(src, id) ? (src[id] ?? null) : undefined;
-}
-
 export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGraceCacheResult {
-  const { selectedIds, computedRects, cache, now, gracePeriodMs, onPrune, selectedItemIndices } = opts;
+  const { selectedIds, computedRects, cache, now, gracePeriodMs } = opts;
 
   // 1. Drop entries for IDs no longer selected so we never paint a stale rect for a deselected element.
   if (cache.rectsByElementId.size > 0 || cache.deadlineByElementId.size > 0) {
     const active = new Set(selectedIds);
     for (const id of cache.rectsByElementId.keys()) {
-      if (!active.has(id)) {
-        cache.rectsByElementId.delete(id);
-        onPrune?.(id, 'deselected');
-      }
+      if (!active.has(id)) cache.rectsByElementId.delete(id);
     }
     for (const id of cache.deadlineByElementId.keys()) {
       if (!active.has(id)) cache.deadlineByElementId.delete(id);
@@ -244,7 +90,6 @@ export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGra
     if (r.type !== 'selection' || !r.elementId) continue;
     if (r.width <= 0 || r.height <= 0) continue;
     idsWithFreshSelection.add(r.elementId);
-    const itemIndex = readItemIndex(selectedItemIndices, r.elementId);
     const snapshot: CachedSelectionRect = {
       key: r.key,
       elementId: r.elementId,
@@ -254,7 +99,6 @@ export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGra
       height: r.height,
       type: 'selection',
       ...(r.resizable && { resizable: r.resizable }),
-      ...(itemIndex !== undefined && { itemIndex }),
     };
     cache.rectsByElementId.set(r.elementId, snapshot);
     cache.deadlineByElementId.set(r.elementId, now + gracePeriodMs);
@@ -272,7 +116,6 @@ export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGra
     if (now > deadline) {
       cache.rectsByElementId.delete(id);
       cache.deadlineByElementId.delete(id);
-      onPrune?.(id, 'expired');
       continue;
     }
     rects.push({
