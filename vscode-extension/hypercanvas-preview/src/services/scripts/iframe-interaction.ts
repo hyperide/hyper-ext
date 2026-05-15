@@ -920,40 +920,6 @@ function logSelsurvOverlayPaint(selectedId: string | null, domElementFound: bool
     rectVisible,
   });
 }
-// Task 1 of selection-flicker-some-elements: surface grace-cache pruning so we
-// can tell whether the overlay disappears because the deadline expired (HMR
-// took longer than SELECTION_GRACE_PERIOD_MS) or because selectedIds dropped
-// the entry.
-function logSelsurvCachePrune(elementId: string, reason: 'deselected' | 'expired'): void {
-  console.debug(SELSURV_TAG, 'grace-cache prune', {
-    t: Math.round(performance.now()),
-    elementId,
-    reason,
-  });
-}
-// Task 1: log HMR-related lifecycle events (Vite + full-document reload) so the
-// timeline can be aligned with selection-loss moments. Vite client emits these
-// events on the Window via a custom EventEmitter; we additionally listen to
-// `beforeunload`/`load` to detect a true full reload (hypothesis B).
-function logSelsurvLifecycle(event: string, extra?: Record<string, unknown>): void {
-  console.debug(SELSURV_TAG, 'lifecycle', {
-    t: Math.round(performance.now()),
-    event,
-    readyState: typeof document !== 'undefined' ? document.readyState : 'n/a',
-    ...(extra ?? {}),
-  });
-}
-let lastFindMissLogKey = '';
-function logSelsurvFindMiss(selectedId: string, itemIndex: number | null): void {
-  const key = `${selectedId}|${itemIndex ?? ''}`;
-  if (key === lastFindMissLogKey) return;
-  lastFindMissLogKey = key;
-  console.debug(SELSURV_TAG, 'findElements miss', {
-    t: Math.round(performance.now()),
-    selectedId,
-    itemIndex,
-  });
-}
 // Always null until VS Code extension supports component instances (SaaS-only for now).
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
@@ -1591,7 +1557,6 @@ function sendOverlayRects(): void {
     cache: selectionGraceCache,
     now: performance.now(),
     gracePeriodMs: SELECTION_GRACE_PERIOD_MS,
-    onPrune: logSelsurvCachePrune,
   });
   result.overlayRects = graced.rects;
   if (graced.inGracePeriod) {
@@ -1621,12 +1586,6 @@ function sendOverlayRects(): void {
       const selectionRect = result.overlayRects.find((r) => r.type === 'selection' && r.elementId === sel0);
       const rectVisible = !!selectionRect && selectionRect.width > 0 && selectionRect.height > 0;
       logSelsurvOverlayPaint(sel0, domElementFound, rectVisible);
-      // Task 1 of selection-flicker-some-elements: explicitly surface findElements
-      // misses so we can tell post-HMR fiber-resolution gaps apart from genuine
-      // deselection. Coalesced inside the helper.
-      if (!domElementFound) {
-        logSelsurvFindMiss(sel0, itemIdx);
-      }
     } else {
       logSelsurvOverlayPaint(null, false, false);
     }
@@ -1722,31 +1681,6 @@ const overlayResizeHandler = () => {
 };
 window.addEventListener('scroll', overlayScrollHandler, true);
 window.addEventListener('resize', overlayResizeHandler);
-
-// Task 1 of selection-flicker-some-elements: surface HMR + full-reload timing.
-// `vite:beforeUpdate` / `vite:afterUpdate` are emitted on `window` by Vite's
-// hot-runtime client; webpack-dev-server fires `webpackHotUpdate` similarly.
-// `beforeunload` + readystatechange let us tell a fast-refresh apart from a
-// full-document reload (hypothesis B).
-const VITE_LIFECYCLE_EVENTS = [
-  'vite:beforeUpdate',
-  'vite:afterUpdate',
-  'vite:beforeFullReload',
-  'vite:beforePrune',
-  'vite:invalidate',
-  'vite:error',
-];
-for (const evt of VITE_LIFECYCLE_EVENTS) {
-  window.addEventListener(evt, () => {
-    logSelsurvLifecycle(evt);
-  });
-}
-window.addEventListener('beforeunload', () => {
-  logSelsurvLifecycle('beforeunload');
-});
-document.addEventListener('readystatechange', () => {
-  logSelsurvLifecycle('readystatechange');
-});
 
 // Start the loop
 scheduleOverlayLoopIfNeeded();

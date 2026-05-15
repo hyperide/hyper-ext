@@ -206,56 +206,6 @@ describe('applySelectionGraceCache', () => {
     expect(result.rects[0]?.resizable).toEqual(resizable);
   });
 
-  test('onPrune fires with reason "expired" when grace deadline elapses', () => {
-    const cache = makeSelectionGraceCacheState();
-    const pruned: Array<{ id: string; reason: 'deselected' | 'expired' }> = [];
-
-    applySelectionGraceCache({
-      selectedIds: [ID_A],
-      computedRects: [selectionRect(ID_A)],
-      cache,
-      now: 1000,
-      gracePeriodMs: 800,
-      onPrune: (id, reason) => pruned.push({ id, reason }),
-    });
-
-    applySelectionGraceCache({
-      selectedIds: [ID_A],
-      computedRects: [],
-      cache,
-      now: 2000, // past 1000 + 800
-      gracePeriodMs: 800,
-      onPrune: (id, reason) => pruned.push({ id, reason }),
-    });
-
-    expect(pruned).toEqual([{ id: ID_A, reason: 'expired' }]);
-  });
-
-  test('onPrune fires with reason "deselected" when caller drops the ID', () => {
-    const cache = makeSelectionGraceCacheState();
-    const pruned: Array<{ id: string; reason: 'deselected' | 'expired' }> = [];
-
-    applySelectionGraceCache({
-      selectedIds: [ID_A],
-      computedRects: [selectionRect(ID_A)],
-      cache,
-      now: 1000,
-      gracePeriodMs: 800,
-      onPrune: (id, reason) => pruned.push({ id, reason }),
-    });
-
-    applySelectionGraceCache({
-      selectedIds: [],
-      computedRects: [],
-      cache,
-      now: 1100,
-      gracePeriodMs: 800,
-      onPrune: (id, reason) => pruned.push({ id, reason }),
-    });
-
-    expect(pruned).toEqual([{ id: ID_A, reason: 'deselected' }]);
-  });
-
   test('non-selection rects are passed through unchanged and not cached', () => {
     const cache = makeSelectionGraceCacheState();
     const hover: OverlayRect = {

@@ -36,18 +36,112 @@ C. **`StyleReadService.getAvailableKeys` is failing for translations.ts merged
 
 ### Task 1: Reproduce in bulka-the-dog Index.tsx
 
-- [ ] Install current main VSIX, open Index.tsx in Hyper Canvas
-- [ ] Click element with `t('hero.question')` (or similar)
-- [ ] Document: is combobox rendered? Are availableKeys populated?
+- [x] Install current main VSIX, open Index.tsx in Hyper Canvas (skipped — not automatable in ralphex loop; diagnosed via code path trace below)
+- [x] Click element with `t('hero.question')` (or similar) (skipped — not automatable)
+- [x] Document: is combobox rendered? Are availableKeys populated?
       Is text input disabled? Open DevTools, log the actual i18nBinding shape.
+
+#### Diagnosis (static trace, no live VS Code)
+
+bulka-the-dog uses `client/lib/translations.ts`:
+`export const translations = { ru: {...}, rs: {...}, en: {...} }`. Each
+`t(key)` call goes through a custom `useLanguage` hook returning a `t`
+helper that does `getTranslation(language, key)`.
+
+Code path through StyleReadService for an element like
+`<h2>{t('faq.title')}</h2>`:
+
+1. `discoverLayout(workspaceRoot, undefined, 'en', fileIO)`:
+   - flat dirs (`locales/`, `public/locales/`, `src/i18n/`, `src/locales/`,
+     `messages/`) — none exist in bulka.
+   - app router probe — no.
+   - `discoverMergedLayout` finds `client/lib/translations.ts` (matches
+     `MERGED_FILE_CANDIDATES[2]`), parses, returns `Layout` with
+     `mergedData = { ru: {...}, rs: {...}, en: {...} }`,
+     `availableLocales = ['ru','rs','en']`.
+
+2. `resolveI18nResource` enters the `mergedData` branch
+   (`resolve-i18n-resource.ts:334`). For any key — resolved, missing, or
+   empty string — it returns **`writable: false`** unconditionally
+   because the backing file is `.ts` and `writeI18nResource` refuses TS.
+
+3. `StyleReadService._tryDetectI18n` builds the binding with
+   `editable: resolved.writable && (...)` → `false && X` → **`editable:
+   false`**. Text input is rendered with `disabled` (`I18nTextInspector.tsx:295`).
+
+4. `getAvailableKeys`: `AdapterFactory.forBinding` sees
+   `layout.mergedData` and returns `TsMergedAdapter`, which extracts dot-path
+   leaf keys (e.g. `nav.appearance`, `cta.adopt`, …). `availableKeys` is
+   populated and combobox renders (`showCombobox = keyEditable && availableKeys.length>0`,
+   and `keyEditable` is true via `RightSidebar.tsx:1275-1277` because keys
+   are non-empty).
+
+5. `canCreateKeys = i18nText.writable = false` →
+   `showCreateAffordance = false` → "+ Create key" branch
+   (`I18nTextInspector.tsx:232`) is hidden even when typing a brand-new
+   string into the search box.
+
+#### Effective shape of `i18nBinding` for bulka
+
+```
+{
+  kind: 'i18n',
+  library: 'custom',
+  key: 'faq.title',
+  namespace: undefined,
+  activeLocale: 'en',
+  availableLocales: ['ru','rs','en'],
+  resolvedText: '<value from translations.ts>',
+  editable: false,    ← BUG #1: text input disabled
+  writable: false,    ← BUG #2: Create-key hidden
+  confidence: 'package-json' | 'import-chain' | 'locale-heuristic',
+  sourceLocation: { filePath, line, column },
+}
+```
+
+#### Conclusion
+
+Both reported regressions trace to a single root cause: `resolveI18nResource`
+returns `writable: false` for the merged TS layout. Hypotheses A and B from
+the plan header are partially correct (TsMergedAdapter is involved); C is
+wrong — `getAvailableKeys` and `resolveText` both work fine for bulka.
+
+Real fix surface for Tasks 2–5: either teach `writeI18nResource` to mutate
+the merged TS export (preferred — restores full editing), or — if we accept
+read-only merged TS — decouple `editable` from `writable` so the user at
+least sees the resolved text and can switch keys (but cannot author new
+translations). Task 4's empty-string carve-out is a non-fix: with
+`writable: false`, `editable` stays `false` regardless of `resolvedText`.
 
 ### Task 2: Trace the gap
 
-- [ ] In `StyleReadService.getAvailableKeys`, log adapter type chosen for
+- [x] In `StyleReadService.getAvailableKeys`, log adapter type chosen for
       bulka. If TsMergedAdapter, dump what it returns.
-- [ ] If it returns `[]`, walk into `TsMergedAdapter.getAvailableKeys` and
+      → Confirmed: `AdapterFactory.forBinding` selects `TsMergedAdapter` when
+      `discoverLayout` returns `mergedData` (bulka path). New unit test
+      `TsMergedAdapter.test.ts` "selects TsMergedAdapter when project has
+      merged translations.ts" pins this behavior with an in-memory FileIO
+      against a bulka-shape translations.ts.
+- [x] If it returns `[]`, walk into `TsMergedAdapter.getAvailableKeys` and
       find why. The translations.ts file shape: `{ ru: {...}, en: {...} }`.
-- [ ] Same for `resolveText` — confirm a value is returned for hero.question.
+      → It does NOT return `[]`. Hypothesis C is wrong. Tests confirm
+      `getAvailableKeys('en')` for bulka returns `['hero.question',
+      'faq.title', 'brand.name', 'nav.appearance', ...]`. Parallel keysets
+      across `ru`/`rs`/`en`. Falls back to first available locale when
+      requested locale is missing. Combobox is populated.
+- [x] Same for `resolveText` — confirm a value is returned for hero.question.
+      → Confirmed: `resolveText('hero.question', 'en')` returns
+      `'Did you lose a dog?'`; `'ru'` returns `'Вы потеряли собаку?'`.
+      Returns `null` only for truly missing keys or non-leaf paths.
+
+#### Task 2 conclusion
+
+Both `getAvailableKeys` and `resolveText` work correctly on the bulka shape.
+Hypothesis C is ruled out. The remaining root cause is `writable: false`
+returned by `resolveI18nResource` for any merged TS layout — already pinned
+by `resolve-i18n-resource.test.ts:532-555`. Tasks 3-4 should focus on
+decoupling `editable` from `writable` (or on enabling TS merged-file
+writes), not on adapter behavior.
 
 ### Task 3: Fix the adapter for the actual bulka layout
 
