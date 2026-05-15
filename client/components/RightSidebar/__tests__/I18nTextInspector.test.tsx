@@ -84,7 +84,7 @@ describe('I18nTextInspector', () => {
     expect(ruButton.disabled).toBe(true);
   });
 
-  it('fires onKeyChange when the key input is changed', () => {
+  it('fires onKeyChange when the key input is committed (Enter / blur)', () => {
     const onKeyChange = mock(() => {});
     render(
       <I18nTextInspector
@@ -95,7 +95,13 @@ describe('I18nTextInspector', () => {
         keyEditable
       />,
     );
-    fireEvent.change(screen.getByDisplayValue('habits.walks'), { target: { value: 'habits.runs' } });
+    const input = screen.getByDisplayValue('habits.walks') as HTMLInputElement;
+    // Per-keystroke change MUST NOT trigger onKeyChange — that previously caused
+    // the inspector to apply a partial key before the user finished typing.
+    fireEvent.change(input, { target: { value: 'habits.runs' } });
+    expect(onKeyChange).not.toHaveBeenCalled();
+    // Commit on blur is the canonical apply path.
+    fireEvent.blur(input);
     expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
   });
 
@@ -251,5 +257,71 @@ describe('I18nTextInspector', () => {
     );
     const keyInput = screen.getByTestId('i18n-key-input');
     expect(keyInput.tagName.toLowerCase()).toBe('input');
+  });
+
+  // Snap-back resilience after blur. The original isFocusedRef guard prevented
+  // snap-back only while focus was held; if the user typed and then clicked
+  // away before the server returned the new resolvedText, the input snapped
+  // back to the OLD resolvedText (because the focus guard had already lifted).
+  // Fix tracks expected text so the rollback effect skips stale-server props
+  // until the round-trip is acknowledged.
+  describe('text input survives blur with stale server prop', () => {
+    it('keeps user-typed text after blur even if resolvedText prop is still the old value', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+        />,
+      );
+      const textInput = screen.getByDisplayValue('Go for a walk') as HTMLInputElement;
+      // User focuses, types, then blurs (e.g. clicks away before debounce flushes)
+      fireEvent.focus(textInput);
+      fireEvent.change(textInput, { target: { value: 'Updated text' } });
+      fireEvent.blur(textInput);
+      // Server has not yet returned the new resolvedText — re-render with the
+      // SAME stale prop. Without the fix, the rollback effect snaps localText
+      // back to 'Go for a walk' because focus is gone.
+      rerender(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+        />,
+      );
+      expect(textInput.value).toBe('Updated text');
+    });
+
+    it('still applies external server updates after the round-trip catches up', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+        />,
+      );
+      const textInput = screen.getByDisplayValue('Go for a walk') as HTMLInputElement;
+      fireEvent.focus(textInput);
+      fireEvent.change(textInput, { target: { value: 'Updated text' } });
+      fireEvent.blur(textInput);
+      // Server eventually echoes our update — input must reflect that value.
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, resolvedText: 'Updated text' }}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+        />,
+      );
+      expect(textInput.value).toBe('Updated text');
+      // Now an external edit (someone else changes the file) — that must propagate.
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, resolvedText: 'External edit' }}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+        />,
+      );
+      expect(textInput.value).toBe('External edit');
+    });
   });
 });

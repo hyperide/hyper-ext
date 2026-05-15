@@ -8,6 +8,7 @@
 
 import { attachClickHandler } from '@shared/canvas-interaction/click-handler';
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
+import { liftToCommonSiblings } from '@shared/canvas-interaction/drop-target-lift';
 import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import { computeOverlayRects } from '@shared/canvas-interaction/overlay-rects';
@@ -1314,8 +1315,14 @@ function _dragPointerUp(e: PointerEvent): void {
 
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
-  const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-  if (!dropEl) return;
+  const rawDropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+  if (!rawDropEl) return;
+  // Resolve drop side similarly to drag side: if cursor is over a decorative
+  // child (emoji span, aria-hidden) walk up to the nearest source-bearing
+  // ancestor. Otherwise dropping on the emoji of another card returns null
+  // and the reorder is silently swallowed.
+  const dropResolved = _resolveSourceWithFallback(rawDropEl);
+  if (!dropResolved) return;
 
   // Lift both source and drop target up to siblings of a common DOM ancestor.
   // This is essential because AstService.reorderElement requires source and
@@ -1324,11 +1331,16 @@ function _dragPointerUp(e: PointerEvent): void {
   // share a direct JSX parent". By promoting both to children of their nearest
   // common DOM ancestor (which usually maps to the JSX list container), the
   // reorder lands at the card-vs-card level the user actually expects.
-  const lifted = liftToCommonSiblings(_dragSourceEl ?? dropEl, dropEl);
-  const finalSourceEl = lifted.source ?? _dragSourceEl ?? dropEl;
-  const finalDropEl = lifted.drop ?? dropEl;
-  const finalSourceSrc = iframeResolver.getSourceLocation(finalSourceEl);
-  const finalDropSrc = iframeResolver.getSourceLocation(finalDropEl);
+  const dragEl = _dragSourceEl ?? rawDropEl;
+  const lifted = liftToCommonSiblings(dragEl, dropResolved.el);
+  const finalSourceEl = lifted.source ?? dragEl;
+  const finalDropEl = lifted.drop ?? dropResolved.el;
+  // Source location must be readable on the lifted element; fall back to the
+  // pre-lift element if the parent layer has no own source.
+  const finalSourceSrc =
+    _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
+  const finalDropSrc =
+    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
@@ -1357,42 +1369,28 @@ function _dragPointerUp(e: PointerEvent): void {
   );
 }
 
-/**
- * Lift `source` and `drop` to their respective children of the nearest DOM
- * ancestor that contains both — i.e. produce a pair of DOM siblings that the
- * reorder operation can act on.
- *
- * Returns null for either side if it could not be lifted (e.g. the original
- * element already sits at the right level, or no common ancestor exists).
- */
-function liftToCommonSiblings(
-  source: HTMLElement,
-  drop: HTMLElement,
-): { source: HTMLElement | null; drop: HTMLElement | null } {
-  if (source === drop) return { source: null, drop: null };
-  // Build the source ancestor chain so we can find the lowest common ancestor.
-  const sourceAncestors: HTMLElement[] = [];
-  for (let c: HTMLElement | null = source; c; c = c.parentElement) sourceAncestors.push(c);
-  let common: HTMLElement | null = null;
-  for (let c: HTMLElement | null = drop; c; c = c.parentElement) {
-    if (sourceAncestors.includes(c)) {
-      common = c;
-      break;
-    }
-  }
-  if (!common) return { source: null, drop: null };
-  // Walk up from each side until the parent is the common ancestor; that's the
-  // sibling-of-common element we want.
-  const liftedSource = walkUpToChildOf(source, common);
-  const liftedDrop = walkUpToChildOf(drop, common);
-  return { source: liftedSource, drop: liftedDrop };
-}
+// Drop-target lift logic lives in shared/canvas-interaction/drop-target-lift.ts
+// and is unit-tested separately. Re-imported below at the top of this module.
 
-function walkUpToChildOf(start: HTMLElement, ancestor: HTMLElement): HTMLElement | null {
-  if (start === ancestor) return null;
-  let cur: HTMLElement | null = start;
-  while (cur && cur.parentElement && cur.parentElement !== ancestor) cur = cur.parentElement;
-  return cur && cur.parentElement === ancestor ? cur : null;
+/**
+ * Resolve source location for a DOM element. Falls back to the nearest
+ * source-bearing ancestor when the element itself is decorative (e.g. an
+ * aria-hidden emoji span). Returns the element used as the resolution anchor
+ * along with its source location.
+ */
+function _resolveSourceWithFallback(
+  el: HTMLElement,
+): { el: HTMLElement; source: { fileName: string; line: number; column: number } } | null {
+  const direct = iframeResolver.getSourceLocation(el);
+  if (direct) return { el, source: direct };
+  const bodyEl = typeof document !== 'undefined' ? document.body : null;
+  let cur: HTMLElement | null = el.parentElement;
+  while (cur && cur !== bodyEl) {
+    const s = iframeResolver.getSourceLocation(cur);
+    if (s) return { el: cur, source: s };
+    cur = cur.parentElement;
+  }
+  return null;
 }
 
 function _dragClickSuppressor(e: MouseEvent): void {

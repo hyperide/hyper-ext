@@ -54,19 +54,41 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // Initialized to the first rollbackKey so the initial render never counts as a "key changed" event.
   const prevRollbackKeyRef = useRef<number | undefined>(rollbackKey);
 
+  // Track the value the user last submitted via onResolvedTextChange. The
+  // server round-trip is debounced (~300ms) and HMR can re-render while focus
+  // is gone, so we cannot rely on isFocusedRef alone — clicking away after
+  // typing previously caused localText to snap back to the OLD resolvedText
+  // because the focus guard had already lifted.
+  // Until we observe that resolvedText caught up to the pending value (or the
+  // value diverged via an external edit), we keep showing what the user typed.
+  const pendingTextRef = useRef<string | null>(null);
+
   // Re-sync localText when server pushes a new resolvedText (undo/redo, external file edit).
-  // Focus guard prevents snap-back while the user is actively typing — EXCEPT when rollbackKey
-  // changes (write failure). On failure resolvedText stays unchanged, so without bypassing the
-  // focus guard the rollback never fires while the input is focused.
-  // On success rollbackKey does NOT change, so the focus guard keeps localText at what the
-  // user typed until the RPC re-read arrives and resolvedText catches up.
+  // Three guards stack to avoid snap-back:
+  //   - rollbackKey change (explicit failure signal): always re-apply.
+  //   - focus held: never overwrite — user is mid-edit.
+  //   - pending write: keep localText at the user's value until either the
+  //     server confirms (resolvedText === pending) or someone else changes the
+  //     value to something different (in which case the external edit wins).
   useEffect(() => {
     const isRollback = rollbackKey !== prevRollbackKeyRef.current;
     prevRollbackKeyRef.current = rollbackKey;
-    // Use isFocusedRef instead of document.activeElement — in VS Code WebviewView
-    // (sidebar iframe) document.activeElement may not reliably reflect the input focus
-    // state, causing snap-back while the user is actively typing.
-    if (!isRollback && isFocusedRef.current) return;
+    if (isRollback) {
+      // Explicit failure — drop the pending guard and snap back so the user sees the truth.
+      pendingTextRef.current = null;
+      setLocalText(resolvedText);
+      return;
+    }
+    if (isFocusedRef.current) return;
+    if (pendingTextRef.current !== null) {
+      if (resolvedText === pendingTextRef.current) {
+        // Server caught up — clear pending and accept the value.
+        pendingTextRef.current = null;
+        setLocalText(resolvedText);
+      }
+      // Otherwise keep showing what the user typed.
+      return;
+    }
     setLocalText(resolvedText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedText, rollbackKey]);
@@ -184,11 +206,8 @@ export const I18nTextInspector = memo(function I18nTextInspector({
                       key={key}
                       data-testid={`i18n-key-option-${key}`}
                       type="button"
-                      onMouseDown={(e) => {
-                        // mousedown fires before blur, so we can select before dropdown closes
-                        e.preventDefault();
-                        commitKey(key);
-                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => commitKey(key)}
                       className={cn(
                         'w-full text-left px-2 py-1 text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer',
                         key === currentKey && 'bg-accent/50',
@@ -205,10 +224,8 @@ export const I18nTextInspector = memo(function I18nTextInspector({
                   <button
                     data-testid="i18n-key-create"
                     type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      commitKey(trimmedSearch);
-                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => commitKey(trimmedSearch)}
                     className="border-t px-2 py-1.5 text-left text-[11px] text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center gap-1"
                   >
                     <span className="text-muted-foreground">+</span>
@@ -255,8 +272,10 @@ export const I18nTextInspector = memo(function I18nTextInspector({
           type="text"
           value={localText}
           onChange={(e) => {
-            setLocalText(e.target.value);
-            onResolvedTextChange(e.target.value);
+            const v = e.target.value;
+            setLocalText(v);
+            pendingTextRef.current = v;
+            onResolvedTextChange(v);
           }}
           onFocus={() => {
             isFocusedRef.current = true;
