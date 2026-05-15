@@ -19,8 +19,8 @@ NodePod (`@scelar/nodepod` v1.8.x): Node.js reimplemented in browser Workers + S
 HTTP interception. Validated live: Vite + React boots in ~15s. License: MIT + Commons Clause
 (building SaaS on it is allowed; reselling NodePod itself is not).
 
-The SaaS uses Bun's HTMLBundle (not Vite), so the `@scelar/nodepod/vite` plugin can't be
-used directly. We serve the SW script manually via a Bun route.
+The SaaS uses Bun's HTMLBundle. `@scelar/nodepod/server` provides `serveSW()` — a Fetch-API
+handler for non-Vite servers — used to expose `/__sw__.js` from the Hono app.
 
 ## Hard Rules
 
@@ -48,18 +48,28 @@ used directly. We serve the SW script manually via a Bun route.
 - Create: `server/database/migrations/0009_add-client-side-runtime.sql`
 - Modify: `server/database/schema/auth.ts`
 
-- [ ] Create the migration file:
-
-```sql
--- 0009_add-client-side-runtime.sql
-ALTER TABLE users ADD COLUMN client_side_runtime boolean NOT NULL DEFAULT false;
-```
-
 - [ ] Add the column to the Drizzle schema in `server/database/schema/auth.ts`.
   After `theme: varchar('theme', { length: 10 }).default('system'),` add:
 
 ```typescript
 clientSideRuntime: boolean('client_side_runtime').notNull().default(false),
+```
+
+- [ ] Generate the migration (creates SQL + snapshot + journal entry automatically):
+
+```bash
+npx drizzle-kit generate
+```
+
+Expected: creates `server/database/migrations/0009_<random-name>.sql` +
+`server/database/migrations/meta/0009_snapshot.json` + updates `_journal.json`.
+
+- [ ] Rename the SQL file for readability (also update `tag` in `_journal.json` to match):
+
+```bash
+mv server/database/migrations/0009_*.sql \
+   server/database/migrations/0009_add-client-side-runtime.sql
+# then edit _journal.json: change "tag": "0009_<random>" → "tag": "0009_add-client-side-runtime"
 ```
 
 - [ ] Run migration locally to verify it applies (only if `DATABASE_URL` is set):
@@ -236,9 +246,10 @@ Expected: `Cannot find module '../server/routes/project-files'` or similar.
 
 ```typescript
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
+import { errors } from '../lib/errors';
 import { requireProjectAccess } from '../middleware/projectRole';
 
 const SKIP_DIRS = new Set([
@@ -255,8 +266,8 @@ const BINARY_EXTENSIONS = new Set([
   '.sqlite', '.db',
 ]);
 
-const MAX_FILE_BYTES = 500 * 1024;      // 500 KB per file
-const MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB total
+const MAX_FILE_BYTES = 500 * 1024;        // 500 KB per file
+const MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB total response
 
 export async function readProjectFiles(projectPath: string): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
@@ -264,6 +275,8 @@ export async function readProjectFiles(projectPath: string): Promise<Record<stri
 
   async function walk(dir: string): Promise<void> {
     const entries = await readdir(dir, { withFileTypes: true });
+    // Sort for deterministic output (easier to test and diff)
+    entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -276,9 +289,11 @@ export async function readProjectFiles(projectPath: string): Promise<Record<stri
         if (s.size > MAX_FILE_BYTES) continue;
         if (totalBytes + s.size > MAX_TOTAL_BYTES) continue;
         const content = await readFile(full, 'utf-8').catch(() => null);
-        if (content === null) continue;
+        if (content === null) continue; // binary content that slipped through extension check
         totalBytes += s.size;
-        files[relative(projectPath, full)] = content;
+        // NodePod VFS uses POSIX paths regardless of host OS
+        const rel = relative(projectPath, full).split(sep).join('/');
+        files[rel] = content;
       }
     }
   }
@@ -292,7 +307,7 @@ projectFilesRouter.use('*', authMiddleware);
 
 projectFilesRouter.get('/:id/files', requireProjectAccess, async (c) => {
   const project = c.get('checkedProject');
-  if (!project.path) return c.json({ error: 'Project has no path' }, 400);
+  if (!project.path) throw errors.validation('Project has no path configured');
   const files = await readProjectFiles(project.path);
   return c.json({ files });
 });
@@ -357,14 +372,23 @@ export interface User {
 - [ ] Create `client/lib/project-runtime/types.ts`:
 
 ```typescript
+import type { ContainerPhase, ProjectStatus } from '@shared/types/statuses';
+
 export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error'
 export type RuntimeMode = 'docker' | 'nodepod'
 
+// Matches ProjectStartOverlay's expected shape; uses the same types as useProjectSSE
 export interface PollStatus {
   lastPoll: Date | null;
-  lastResult: { running: boolean; status: string; phase?: string } | null;
+  lastResult: { running: boolean; status: ProjectStatus; phase?: ContainerPhase } | null;
   isPolling: boolean;
 }
+
+export const INERT_POLL_STATUS: PollStatus = {
+  lastPoll: null,
+  lastResult: null,
+  isPolling: false,
+};
 
 export interface ProjectRuntime {
   mode: RuntimeMode
@@ -375,8 +399,11 @@ export interface ProjectRuntime {
   previewUrl: string | null
   logs: string[]
   error: string | null
-  /** Docker-specific: null in NodePod mode */
-  pollStatus: PollStatus | null
+  /**
+   * Always non-null — NodePod mode returns INERT_POLL_STATUS so ProjectStartOverlay never crashes.
+   * Docker mode fills with real poll data.
+   */
+  pollStatus: PollStatus
   start(): Promise<void>
   stop(): Promise<void>
   restart(): Promise<void>
@@ -425,7 +452,7 @@ All Docker-specific logic (SSE, polling, container status) stays here.
 import { useEffect, useRef, useState } from 'react';
 import { type ProjectData, useProjectControl } from '@/pages/Editor/components/hooks/useProjectControl';
 import { useProjectSSE } from '@/pages/Editor/components/hooks/useProjectSSE';
-import type { PollStatus, ProjectRuntime, RuntimeStatus } from './types';
+import { INERT_POLL_STATUS, type PollStatus, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseDockerRuntimeOptions {
   enabled: boolean;
@@ -443,7 +470,7 @@ const INERT: ProjectRuntime = {
   previewUrl: null,
   logs: [],
   error: null,
-  pollStatus: null,
+  pollStatus: INERT_POLL_STATUS,
   start: async () => {},
   stop: async () => {},
   restart: async () => {},
@@ -512,7 +539,8 @@ export function useDockerRuntime(
     previewUrl: null,
     logs: [],
     error: project?.status === 'error' ? 'Container error' : null,
-    pollStatus: pollStatus as PollStatus,
+    // Cast is safe: useProjectSSE's PollStatus uses ProjectStatus/ContainerPhase, same as our PollStatus
+    pollStatus: (pollStatus as PollStatus) ?? INERT_POLL_STATUS,
     start: handleStartProject,
     stop: handleStopProject,
     restart: handleRestartProject,
@@ -543,13 +571,25 @@ mounts into virtual FS, runs npm install then vite dev, sets previewUrl on serve
 
 ```typescript
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Nodepod } from '@scelar/nodepod';
 import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
 import { authFetch } from '@/utils/authFetch';
-import type { ProjectRuntime, RuntimeStatus } from './types';
+import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseNodePodRuntimeOptions {
   enabled: boolean;
+}
+
+// Minimal interface for the NodePod pod instance.
+// Nodepod is dynamically imported inside start() — this avoids bundling the ~3MB package
+// for Docker-only users who never trigger NodePod mode.
+interface PodInstance {
+  fs: { writeFile(path: string, content: string): Promise<void> }
+  spawn(cmd: string, args: string[], opts?: { cwd?: string }): Promise<SpawnHandle>
+  teardown(): Promise<void>
+}
+interface SpawnHandle {
+  on(event: 'output' | 'error', handler: (t: string) => void): void
+  completion: Promise<{ exitCode: number }>
 }
 
 const INERT: ProjectRuntime = {
@@ -559,7 +599,7 @@ const INERT: ProjectRuntime = {
   previewUrl: null,
   logs: [],
   error: null,
-  pollStatus: null,
+  pollStatus: INERT_POLL_STATUS,
   start: async () => {},
   stop: async () => {},
   restart: async () => {},
@@ -571,7 +611,9 @@ export function useNodePodRuntime(
 ): ProjectRuntime {
   const { enabled } = opts;
 
-  const podRef = useRef<Awaited<ReturnType<typeof Nodepod.boot>> | null>(null);
+  const podRef = useRef<PodInstance | null>(null);
+  // Track current run to ignore stale async results from previous start() invocations
+  const runIdRef = useRef(0);
   const [status, setStatus] = useState<RuntimeStatus>('idle');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hasBeenRunning, setHasBeenRunning] = useState(false);
@@ -584,7 +626,11 @@ export function useNodePodRuntime(
 
   const start = useCallback(async () => {
     if (!project?.id || !enabled) return;
-    if (podRef.current) return; // already running
+    // Allow restart after error by not returning early when podRef === null
+    if (podRef.current) return; // already running (pod alive)
+
+    const runId = ++runIdRef.current;
+    const isStale = () => runId !== runIdRef.current;
 
     setStatus('starting');
     setLogs([]);
@@ -593,22 +639,26 @@ export function useNodePodRuntime(
     setHasBeenRunning(false);
 
     try {
-      // Dynamic import — avoids bundling NodePod for Docker-only users
+      // Dynamic import — tree-shaken away for Docker users
       const { Nodepod } = await import('@scelar/nodepod');
+      if (isStale()) return;
 
       appendLog('[nodepod] booting...');
-      let resolveServer: (url: string) => void;
+      // Non-null assertion: resolveServer is always called before the Promise resolves
+      let resolveServer!: (url: string) => void;
       const serverReady = new Promise<string>((r) => { resolveServer = r; });
 
       const pod = await Nodepod.boot({
         watermark: false,
         workdir: '/app',
-        allowedFetchDomains: null,
         onServerReady: (_port: number, url: string) => {
-          appendLog('[nodepod] server ready: ' + url);
-          resolveServer(url);
+          if (!isStale()) {
+            appendLog('[nodepod] server ready: ' + url);
+            resolveServer(url);
+          }
         },
       });
+      if (isStale()) { pod.teardown().catch(() => {}); return; }
       podRef.current = pod;
       appendLog('[nodepod] runtime booted');
 
@@ -617,16 +667,20 @@ export function useNodePodRuntime(
       const res = await authFetch(`/api/projects/${project.id}/files`);
       if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
       const { files } = await res.json() as { files: Record<string, string> };
+      if (isStale()) return;
 
       // Mount files into NodePod virtual FS
-      // Override Vite version to 7.3.1 to avoid Vite 8 HMR WebSocket bug in NodePod v1.8.2
+      // Override Vite to 7.3.1 in both dependencies and devDependencies —
+      // Vite 8 has an HMR WebSocket bug in NodePod v1.8.2
       const patchedFiles: Record<string, string> = {};
       for (const [path, content] of Object.entries(files)) {
         if (path === 'package.json') {
           try {
             const pkg = JSON.parse(content) as Record<string, unknown>;
-            const deps = pkg.devDependencies as Record<string, string> | undefined;
-            if (deps?.vite) deps.vite = '7.3.1';
+            for (const field of ['dependencies', 'devDependencies'] as const) {
+              const deps = pkg[field] as Record<string, string> | undefined;
+              if (deps?.vite) deps.vite = '7.3.1';
+            }
             patchedFiles[path] = JSON.stringify(pkg, null, 2);
           } catch {
             patchedFiles[path] = content;
@@ -646,48 +700,57 @@ export function useNodePodRuntime(
       // npm install
       appendLog('[npm] install started...');
       const install = await pod.spawn('npm', ['install'], { cwd: '/app' });
-      install.on('output', (t: string) => appendLog('[npm] ' + t));
-      install.on('error', (t: string) => appendLog('[npm:err] ' + t));
+      install.on('output', (t) => appendLog('[npm] ' + t));
+      install.on('error', (t) => appendLog('[npm:err] ' + t));
       const { exitCode: installCode } = await install.completion;
+      if (isStale()) return;
       if (installCode !== 0) throw new Error('npm install failed with exit ' + installCode);
       appendLog('[npm] install done');
 
       // vite dev
       appendLog('[vite] starting dev server...');
       const dev = await pod.spawn('npm', ['run', 'dev'], { cwd: '/app' });
-      dev.on('output', (t: string) => appendLog('[vite] ' + t));
-      dev.on('error', (t: string) => appendLog('[vite:err] ' + t));
-      dev.completion.then((r: { exitCode: number }) => {
-        appendLog('[vite] process exited: ' + r.exitCode);
-        if (status === 'running') setError('Vite dev server exited unexpectedly');
+      dev.on('output', (t) => appendLog('[vite] ' + t));
+      dev.on('error', (t) => appendLog('[vite:err] ' + t));
+      dev.completion.then(({ exitCode }) => {
+        if (isStale()) return;
+        appendLog('[vite] process exited: ' + exitCode);
+        podRef.current = null; // allow restart
+        setStatus((s) => {
+          if (s === 'running') setError('Vite dev server exited unexpectedly');
+          return s === 'running' ? 'error' : s;
+        });
       });
 
       const url = await Promise.race([
         serverReady,
-        dev.completion.then((r: { exitCode: number }) =>
-          Promise.reject(new Error('vite exited: ' + r.exitCode))
+        dev.completion.then(({ exitCode }) =>
+          Promise.reject(new Error('vite exited early: ' + exitCode))
         ),
         new Promise<never>((_, rej) =>
           setTimeout(() => rej(new Error('timeout 120s waiting for vite')), 120_000)
         ),
       ]);
+      if (isStale()) return;
 
       setPreviewUrl(url);
       setStatus('running');
       setHasBeenRunning(true);
     } catch (err) {
+      if (isStale()) return;
       const msg = err instanceof Error ? err.message : String(err);
       appendLog('[error] ' + msg);
       setError(msg);
       setStatus('error');
       if (podRef.current) {
         podRef.current.teardown().catch(() => {});
-        podRef.current = null;
+        podRef.current = null; // allow restart after error
       }
     }
   }, [project?.id, enabled, appendLog]);
 
   const stop = useCallback(async () => {
+    runIdRef.current++; // invalidate any in-flight start()
     setStatus('stopping');
     if (podRef.current) {
       await podRef.current.teardown().catch(() => {});
@@ -696,6 +759,7 @@ export function useNodePodRuntime(
     setPreviewUrl(null);
     setStatus('idle');
     setHasBeenRunning(false);
+    setError(null);
   }, []);
 
   const restart = useCallback(async () => {
@@ -706,6 +770,7 @@ export function useNodePodRuntime(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      runIdRef.current++;
       if (podRef.current) {
         podRef.current.teardown().catch(() => {});
         podRef.current = null;
@@ -722,7 +787,7 @@ export function useNodePodRuntime(
     previewUrl,
     logs,
     error,
-    pollStatus: null,
+    pollStatus: INERT_POLL_STATUS,
     start,
     stop,
     restart,
@@ -909,9 +974,12 @@ const runtime = useProjectRuntime(activeProject, user, {
   setActiveProject,
   setIsStarting,
   setProjectRole,
-  reloadComposition,
+  reloadComposition,  // keep this — it's defined elsewhere in CanvasEditor, passed to SSE
 });
 ```
+
+  `reloadComposition` is already defined in CanvasEditor and was being passed to `useProjectSSE`.
+  It stays as-is — `useDockerRuntime` accepts it and forwards to `useProjectSSE` internally.
 
 - [ ] Update the iframe visibility check (line ~1074). Replace:
 
@@ -924,6 +992,27 @@ with:
 ```typescript
 activeProject && (runtime.status === 'running' || runtime.hasBeenRunning)
 ```
+
+- [ ] Derive `isStarting` from `runtime.status` so the overlay shows loading in NodePod mode too.
+  Find where `isStarting` is currently set and add a synchronization effect after the runtime call:
+
+```typescript
+// Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
+useEffect(() => {
+  if (runtime.mode === 'nodepod') {
+    setIsStarting(runtime.status === 'starting');
+  }
+}, [runtime.mode, runtime.status]);
+```
+
+- [ ] Handle NodePod error state for canvas visibility. Find the `activeProject.status === 'error'`
+  branch in the render (if any) and also check `runtime.error`:
+
+```typescript
+const hasError = activeProject?.status === 'error' || runtime.status === 'error';
+```
+
+  Update the relevant conditional rendering to use `hasError`.
 
 - [ ] Update `IframeCanvas` usage (line ~1137). Add `overrideSrc={runtime.previewUrl ?? undefined}`:
 
