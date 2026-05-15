@@ -4362,3 +4362,142 @@ E2E save-dialog prevention follow-up, 2026-04-22 14:30 CEST:
   * Commit this workfile update in the main repo.
   * Restart full E2E from scratch with --retries=0.
 ```
+
+E2E restart safety and system-load rule, 2026-04-22 16:26 CEST:
+
+```text
+- The machine rebooted during continued E2E work. Treat this as an E2E
+  resource-control failure until proven otherwise.
+- New mandatory rule before starting any full VS Code E2E run:
+  * Check active VS Code/Electron/Playwright/Vite processes:
+    pgrep -fl "Visual Studio Code|Electron|playwright|vite --port|hypercanvas"
+  * Check system load:
+    uptime
+  * Check top CPU consumers:
+    ps -axo pid,ppid,%cpu,%mem,command | sort -k3 -nr | sed -n '1,40p'
+  * Do not start a full E2E run when load is already high, when previous
+    isolated hvsc/extensionDevelopmentPath windows are still alive, or when
+    multiple unrelated automation processes make window targeting ambiguous.
+  * During long E2E runs, poll the same process/load status periodically and
+    report it with the test progress. If VS Code windows or load grow
+    unexpectedly, stop and analyze instead of opening more windows.
+- Current post-reboot observation:
+  * Main repo still has the PreviewPanel dispose fix and regression test
+    uncommitted.
+  * ext-test-projects still has the inspector-root wait on top of existing
+    staged E2E changes.
+  * No active Playwright test process is running, but the machine is still
+    under high load (load averages observed: 13.30 48.46 29.63) with multiple
+    Electron/Playwright MCP processes present.
+- First E2E failure before reboot:
+  * Full E2E stopped at 106/2209 on
+    "hypercanvas.canvasRedo — redo in canvas context".
+  * Root cause was stale cross-test selection: closing the preview panel did
+    not clear StateHub.selectedIds, so the next test could re-emit a previous
+    nodeRef after undo/redo.
+  * Production fix in progress: PreviewPanel.dispose() now clears selection
+    and insertTargetId before disposing the webview.
+  * Regression test added in PreviewPanel.test.ts.
+  * Focused validation after rebuilding the extension:
+    tests/project-independent/commands.spec.ts -g
+    "hypercanvas.canvas(Undo|Redo)" passed 2/2 with --retries=0.
+- Second E2E harness issue found while validating:
+  * setupPreviewWithDevServer opened Inspector and returned immediately.
+    On a cold/slow VS Code window the right sidebar header could be visible
+    while the inspector webview root was still absent.
+  * ext-test harness fix in progress: wait for hyper-inspector-root after
+    "Hyper: Open Inspector" before returning from setupPreviewWithDevServer.
+```
+
+Post-commit entry 2026-04-22 16:33 CEST:
+
+```text
+- Main repo commit:
+  * 2ab56656 fix(vscode): clear preview selection on dispose (HYP-363)
+- Scope:
+  * PreviewPanel.dispose() clears shared selectedIds and insertTargetId before
+    disposing the webview, preventing stale selection from leaking into the
+    next E2E spec after preview close/reopen.
+  * PreviewPanel.test.ts now has a regression test for disposal selection
+    cleanup.
+- Validation before commit:
+  * bun test vscode-extension/hypercanvas-preview/src/__tests__/PreviewPanel.test.ts
+    passed 5/5.
+  * bunx biome check on PreviewPanel.ts and PreviewPanel.test.ts passed.
+  * npx tsc --noEmit --project vscode-extension/hypercanvas-preview/tsconfig.json
+    passed.
+  * npm run build in vscode-extension/hypercanvas-preview passed with the
+    existing Browserslist and Tailwind duration-[233ms] warnings.
+  * git diff --check passed.
+  * Pre-commit lefthook passed lint and typecheck.
+- Review:
+  * codex exec review was intentionally not run because this session must not
+    self-invoke nested Codex.
+  * Current local time is inside the 15:00-21:00 interval, so the extra Claude
+    pre-commit review requirement did not apply.
+- Next:
+  * Commit the ext-test inspector-root readiness fix separately while preserving
+    the unrelated staged E2E changes.
+  * Do not start full E2E until the VS Code/Electron/Playwright process list and
+    load average are checked again and safe for another run.
+```
+
+Bridge bot and process hygiene entry 2026-04-22 17:00 CEST:
+
+```text
+- System/process hygiene:
+  * User reported the machine started lagging/recording after the reboot.
+  * Checked recorder and automation processes before continuing.
+  * Stopped the leftover manual `codex app-server --listen ws://127.0.0.1:9120`
+    diagnostic process.
+  * Stopped Loom processes; no /Applications/Loom.app process remained after
+    cleanup. macOS replayd may respawn as a system service and is not by itself
+    evidence of active recording.
+  * Found high CPU in unrelated Claude-spawned ExpenseSyncBot tests:
+    `bun test src/services/receipt/ocr-extractor.test.ts`. Stopped only those
+    test subprocesses, not Claude itself.
+- HyperCalendarBot cleanup:
+  * Restored the repo to a clean tracked state.
+  * Removed ignored runtime state `data/codex-session.json`, which pointed at
+    this Codex session but had cwd `/Users/ultra/xp/hypercalendarbot`.
+  * Verified no tracked `codex-session`/`current-session` bridge files remain
+    in `/Users/ultra/xp/hypercalendarbot`. Its own `scripts/send-tg-report.sh`
+    remains because it belongs to HyperCalendarBot and does not implement the
+    Codex bridge.
+- Codex Telegram bridge bot:
+  * Repo: `/Users/ultra/xp/codex-tg-bot`.
+  * Commit: ac8c6a1 fix: recover Codex app-server current-session binding
+  * Fixes:
+    - app-server discovery no longer treats stdio-only Codex.app
+      `codex app-server` processes as reachable `ws://127.0.0.1:9120`
+      endpoints.
+    - discovery merges loaded threads with persisted `thread/list` results,
+      so not-loaded but existing sessions can still be found.
+    - `turn/start` handles `thread not loaded` by calling `thread/resume`
+      and retrying.
+    - stale saved bindings keep their cwd as a preference, so the bot can
+      auto-bind the most recent live/persisted thread for the same project.
+    - when all candidates share the same cwd+endpoint, the bot auto-binds the
+      most recent one; when multiple distinct targets exist, it shows an inline
+      choice in Telegram.
+    - bot startup now has a lock directory to avoid double polling instances.
+  * Validation:
+    - `bun test` passed 22/22.
+    - `bunx tsc --noEmit` passed.
+    - `git diff --check` passed.
+    - Reachable code scan found no `codex exec` fallback.
+  * Runtime:
+    - launchd service `com.ultra.codex-tg-bot` restarted; new PID observed:
+      6369.
+    - Current session state rebound to
+      `019daf72-658b-7c60-93ae-abd83245fcef` with cwd
+      `/Users/ultra/work/hyper-canvas-draft`.
+    - Sent a Telegram status via
+      `/Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`.
+- Next:
+  * Commit this workfile update in the main repo.
+  * Commit the ext-test inspector-root readiness fix separately while preserving
+    unrelated staged E2E changes.
+  * Start full E2E only after another process/load check and only with
+    `--retries=0`; retry failures must be analyzed, not hidden.
+```
