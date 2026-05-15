@@ -139,17 +139,13 @@ export class PreviewModeManager {
     const detection = await detectFramework(this._projectRoot, this._io);
     const { framework } = detection;
 
-    // Arm the recompile gate BEFORE any file write that triggers HMR.
-    // Webpack/Vite/Remix/Next.js all do a fresh compile when route or entry
-    // files change; the gate forces consumers to wait for the post-write
-    // ready marker instead of racing the iframe load. See HYP-363.
-    this._onBeforeWebpackEntryPatch?.();
-
     switch (framework) {
       case 'nextjs-app-router':
       case 'nextjs-pages-router':
       case 'remix':
       case 'vite-spa-file-based':
+        // These frameworks use file-based routing; ensurePreviewFiles() may skip
+        // writing when marker files already exist — no HMR fires, so no recompile gate.
         return this._fileManager.ensurePreviewFiles();
       case 'vite-spa-jsx-router': {
         const routerFile = await this.detectRouterFile();
@@ -157,13 +153,15 @@ export class PreviewModeManager {
           await this._fileManager.patchRouterConfig(routerFile);
           return 'ok';
         }
-        // No JSX router found — patch entry file (same as webpack/parcel).
-        // Plain Vite SPA projects without React Router.
+        // No JSX router found — patch entry file. Vite uses HMR, no full recompile.
         return this._patchEntryFile();
       }
       case 'webpack':
+        // Always writes entry file → HMR → recompile gate needed.
+        this._onBeforeWebpackEntryPatch?.();
         return this._patchEntryFile();
       case 'parcel':
+        this._onBeforeWebpackEntryPatch?.();
         return this._patchEntryFile();
       case 'unknown':
         return 'unsupported';
