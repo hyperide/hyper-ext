@@ -1421,14 +1421,8 @@ export class PreviewPanel {
     }
     const handled = await this._panelRouter.astBridge.redo(panel);
     console.log(`[PreviewPanel] redo: astBridge.redo returned ${handled}`);
-    if (!handled) {
-      console.log('[PreviewPanel] redo: falling back to native VS Code redo');
-      await vscode.commands.executeCommand('redo');
-      const editor = vscode.window.activeTextEditor;
-      if (editor?.document.isDirty) {
-        await editor.document.save();
-      }
-    }
+    // No native redo fallback — applyEdit() syncs populate VS Code's native undo stack,
+    // causing spurious file writes when canRedo()=false. Canvas redo is self-contained.
     // Always bump styleVersion to refresh inspector after redo
     this._bumpStyleVersion();
     // Re-emit selection after HMR settles so the new fiber tree picks it up
