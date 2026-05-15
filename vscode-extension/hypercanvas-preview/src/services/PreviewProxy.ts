@@ -181,19 +181,22 @@ export class PreviewProxy {
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
-      // Retry for /test-preview 404/503 — handles dev server FSWatch lag after
+      // Retry for /test-preview 404/403/503 — handles dev server FSWatch lag after
       // route file creation AND webpack-dev-server's second-compile gap (after
       // _patchEntryFile, webpack rebuilds while iframe requests; retry budget
-      // must cover full recompile, not just FS watch). Exponential backoff:
-      // 200ms × 1.7^N caps ~30s over 16 retries, accommodates 20-40s webpack
-      // cold rebuilds without holding fast Vite responses any longer.
+      // must cover full recompile, not just FS watch). Also covers Remix SSR route
+      // compilation: dev server reports "ready" quickly but returns 403 while SSR
+      // routes are still compiling (~90-155s cold start).
+      // Exponential backoff: 200ms × 1.7^N caps at 4000ms per retry.
+      // 60 retries ≈ 222s total budget: 16 geometric + 44 × 4s = 46 + 176s.
+      // Covers Remix cold compile (90-155s) with margin for poll-loaded timeout (250s).
       if (
         (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
-        retryCount < 16
+        retryCount < 60
       ) {
         proxyRes.resume(); // drain response
-        const delay = Math.min(200 * Math.pow(1.7, retryCount), 4000);
+        const delay = Math.min(200 * 1.7 ** retryCount, 4000);
         setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
         return;
       }
