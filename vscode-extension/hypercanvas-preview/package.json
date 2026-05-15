@@ -203,14 +203,6 @@
       {
         "command": "hypercanvas.canvasGoToCode",
         "title": "Hyper: Go to Code"
-      },
-      {
-        "command": "hypercanvas.startDiagnosticCapture",
-        "title": "Hyper: Start Diagnostic Capture"
-      },
-      {
-        "command": "hypercanvas.stopDiagnosticCapture",
-        "title": "Hyper: Stop Diagnostic Capture"
       }
     ],
     "keybindings": [

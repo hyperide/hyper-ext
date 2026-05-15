@@ -10,6 +10,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { TracingClientMessage } from '@shared/element-tracing/types';
+import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
@@ -296,13 +297,24 @@ export class PanelRouter {
 
     // Fetch all available i18n keys from the active locale file
     if (type === 'styles:fetchI18nKeys') {
-      const { requestId, namespace, activeLocale } = message as {
+      const { requestId, library, namespace, activeLocale } = message as {
         requestId: string;
+        library?: I18nLibrary;
         namespace?: string;
         activeLocale: string;
       };
+      if (!activeLocale || typeof activeLocale !== 'string') {
+        webview.postMessage({
+          type: 'styles:i18nKeysResponse',
+          requestId,
+          success: false,
+          keys: [],
+          error: 'activeLocale missing',
+        });
+        return true;
+      }
       try {
-        const keys = await this._styleReadService.getAvailableKeys(namespace, activeLocale);
+        const keys = await this._styleReadService.getAvailableKeys(namespace, activeLocale, library);
         webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: true, keys });
       } catch (e) {
         webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: false, keys: [], error: String(e) });

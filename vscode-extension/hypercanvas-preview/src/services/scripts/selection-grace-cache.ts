@@ -105,10 +105,7 @@ export function makeSelectionGraceCacheState(): SelectionGraceCacheState {
  *
  * Cross-file moves should call this for both the source and target paths.
  */
-export function invalidateSelectionGraceCacheForFile(
-  state: SelectionGraceCacheState,
-  filePath: string,
-): void {
+export function invalidateSelectionGraceCacheForFile(state: SelectionGraceCacheState, filePath: string): void {
   if (!filePath) return;
   const prefix = `${filePath}:`;
   for (const id of Array.from(state.rectsByElementId.keys())) {
@@ -264,13 +261,13 @@ export function applySelectionGraceCache(opts: ApplyGraceCacheOptions): ApplyGra
   // 1. Drop entries for IDs no longer selected so we never paint a stale rect for a deselected element.
   if (cache.rectsByElementId.size > 0 || cache.deadlineByElementId.size > 0) {
     const active = new Set(selectedIds);
-    for (const id of cache.rectsByElementId.keys()) {
+    for (const id of Array.from(cache.rectsByElementId.keys())) {
       if (!active.has(id)) {
         cache.rectsByElementId.delete(id);
         onPrune?.(id, 'deselected');
       }
     }
-    for (const id of cache.deadlineByElementId.keys()) {
+    for (const id of Array.from(cache.deadlineByElementId.keys())) {
       if (!active.has(id)) cache.deadlineByElementId.delete(id);
     }
   }
