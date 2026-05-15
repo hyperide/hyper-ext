@@ -634,4 +634,29 @@ HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.
 **Expected result**: 0 hard fails (all known failure patterns covered).
 Monitoring in progress — will update when shards complete.
 
+---
+
+## 📍 2026-04-29 17:47 CEST — Run #31 intermediate (S1/S2/S3 ~15-140 tests each)
+
+### Findings so far
+
+**S1** (142 tests done): **0 hard fails** — clean
+
+**S2** (107 tests done): **0 hard fails**
+- 1 flaky: "component with error — error overlay appears" 22161ms → retry 14010ms passed
+
+**S3** (19 tests done, tamagui-fitness project): **1 hard fail** — NEW
+- FLAKY (3): "component has non-zero dimensions" (35s → retry 8s pass), "inspector typography section visible" (323s → retry 11s pass), "Tamagui: semantic token fallback" (323s → retry 16s pass)
+  - Root: App.web.tsx component-not-found race on first preview load (scanner indexing delay). FLAKY acceptable.
+- **HARD FAIL (1)**: "Tamagui: style written as prop, not className" — both attempts ~102-106s
+  - Root: App.web.tsx is larger than App.tsx; cold Tamagui AST parse takes ~97-100s. 90s poll budget exhausted.
+  - Teardown confirms write DID happen (dirty App.web.tsx), but after poll ended.
+  - **Fix committed**: `1e83ca8` — poll 90s→150s. Budget: 5s setup + 2s delay + 150s poll = ~160s, within test.slow() 360s.
+
+### New fix for Run #32
+
+| Commit | Fix | Root cause |
+|--------|-----|-----------|
+| `1e83ca8` | Tamagui poll 90s→150s | App.web.tsx cold parse takes ~97-100s, 90s budget insufficient |
+
 
