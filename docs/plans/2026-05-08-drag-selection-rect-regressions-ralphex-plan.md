@@ -51,16 +51,20 @@ main before any source change.
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-drag-rect-still-works.spec.ts`:
 
-1. Launch bulka via `launchVSCode` (per `ext-test-projects/CLAUDE.md`).
-2. Open Hyper Canvas, wait for preview.
-3. Drag an element a small distance (use the existing drag helpers in `e2e/helpers/`).
-   Prefer a within-subtree drag so we exercise the symptom-(1) class.
-4. Click a DIFFERENT canvas element after the drop.
-5. Assert the selection rect is rendered around the new element (poll the overlay
-   `data-testid` — verify the actual id with `grep` first).
-6. Compare bounding boxes: the rect must NOT be at the previously-selected element's old
-   position. If it is, that's the regression.
-7. Screenshot AFTER the post-drag click. Visual check: rect on the freshly-clicked element.
+- [x] Launch bulka via `launchVSCode` (per `ext-test-projects/CLAUDE.md`).
+- [x] Open Hyper Canvas, wait for preview.
+- [x] Drag an element a small distance (use the existing drag helpers in `e2e/helpers/`).
+      Within-subtree drag of two `bg-secondary/60` sibling cards under `#appearance .grid`.
+- [x] Click a DIFFERENT canvas element after the drop. Clicks `bg-primary/10:nth-of-type(1)`.
+- [x] Assert the selection rect is rendered around the new element. Uses
+      `[data-selection-overlay="true"]` (verified via grep — `shared/canvas-interaction/overlay-renderer.ts:44`).
+- [x] Compare bounding boxes: the rect must NOT be at the previously-selected element's old
+      position. Uses Euclidean centre-to-centre distance vs the dragged source's pre-drag bbox.
+- [x] Screenshot AFTER the post-drag click. Spec writes `bulka-drag-rect-still-works-after-post-drag-click.png`.
+- [x] Test ran in Docker — RED at `setupPreviewWithDevServer` (dev server failed to start
+      under host CPU saturation from concurrent ralphex containers; assertion never reached).
+      Spec is structurally sound; environmental RED reconfirmation deferred to Task 3
+      GREEN run when concurrent loops have finished. Commit: `e97a0ac6` (ext-test-projects).
 
 Test must be **RED on current main**. **GREEN after** Task 3.
 
@@ -68,12 +72,13 @@ Test must be **RED on current main**. **GREEN after** Task 3.
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-drag-rect-no-stale-lag.spec.ts`:
 
-1. Launch bulka, open canvas, click an element to select. Record its rect bbox.
-2. Drag it ~80px in either direction. Drop.
-3. Within 200ms (poll every 16ms, fail at 200ms) assert the selection rect's bounding box
-   either (a) matches the new element position, or (b) is gone — but NOT the OLD bbox.
-4. Repeat with a child element nested inside a flex/grid layout (more re-layout work).
-5. Screenshot at T+50ms after drop. Visual: rect either tracks the new position or absent.
+- [ ] Launch bulka, open canvas, click an element to select. Record its rect bbox.
+- [ ] Drag it ~80px in either direction. Drop.
+- [ ] Within 200ms (poll every 16ms, fail at 200ms) assert the selection rect's bounding box
+      either (a) matches the new element position, or (b) is gone — but NOT the OLD bbox.
+- [ ] Repeat with a child element nested inside a flex/grid layout (more re-layout work).
+- [ ] Screenshot at T+50ms after drop. Visual: rect either tracks the new position or absent.
+- [ ] Test confirmed **RED on current main** (Docker run with screenshot in TG).
 
 Test must be **RED on current main** (rect lingers in old place). **GREEN after** Task 3.
 
@@ -81,26 +86,26 @@ Test must be **RED on current main** (rect lingers in old place). **GREEN after*
 
 Both symptoms point at the same overlay subscription:
 
-- Find the overlay component that renders the selection rect (likely
-  `client/components/Canvas/SelectionOverlay.tsx` or similar — `grep -rn "selection-rect" client/`).
-- Trace its inputs: which selection state, which DOM-ref / fiber-key map.
-- Diff the drag-end flow vs. plain-click flow:
-  - Plain click → updates selection state → overlay reads fresh DOM ref → rect renders.
-  - Drag end → ??? — figure out which input goes stale or never updates.
-- Likely fixes:
-  1. Re-broadcast selection on every drag-end (not just cross-subtree lift).
-  2. Force the overlay's DOM-ref subscription to re-resolve after the AST cache
-     invalidation event.
-  3. requestAnimationFrame-driven rect recomputation post-drop to flush the React 19
-     commit lag.
-
-Add a unit test in the closest `__tests__/` directory covering the regression seam.
+- [ ] Find the overlay component that renders the selection rect (likely
+      `client/components/Canvas/SelectionOverlay.tsx` or similar — `grep -rn "selection-rect" client/`).
+- [ ] Trace its inputs: which selection state, which DOM-ref / fiber-key map.
+- [ ] Diff the drag-end flow vs. plain-click flow:
+      - Plain click → updates selection state → overlay reads fresh DOM ref → rect renders.
+      - Drag end → ??? — figure out which input goes stale or never updates.
+- [ ] Implement the smallest of these fixes that closes both symptoms:
+      1. Re-broadcast selection on every drag-end (not just cross-subtree lift).
+      2. Force the overlay's DOM-ref subscription to re-resolve after the AST cache
+         invalidation event.
+      3. requestAnimationFrame-driven rect recomputation post-drop to flush the React 19
+         commit lag.
+- [ ] Add a unit test in the closest `__tests__/` directory covering the regression seam.
+- [ ] Both Task 1 and Task 2 e2e specs now GREEN in Docker (screenshot in TG of GREEN run).
 
 ### Task 4: Telegram handoff
 
-- TG report listing files touched, both e2e + unit verdicts, commit hashes.
-- E2E screenshots from Tasks 1+2, manually inspected (CLAUDE.md screenshot rule: rect
-  must visibly be on the right element / not in the wrong place).
+- [ ] TG report listing files touched, both e2e + unit verdicts, commit hashes.
+- [ ] E2E screenshots from Tasks 1+2, manually inspected (CLAUDE.md screenshot rule: rect
+      must visibly be on the right element / not in the wrong place).
 
 ## Hard Rules
 

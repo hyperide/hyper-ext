@@ -56,7 +56,7 @@ Out of scope:
 - Renaming/restructuring nodeRef formats.
 - Anything in i18n / canvas-discard / other parallel ralphex plans.
 
-### Task 1: RED e2e on bulka GalleryImage
+### Task 1 — RED e2e on bulka GalleryImage
 
 Add `ext-test-projects/e2e/tests/project-dependent/bulka-shift-enter-rect-survives.spec.ts`:
 
@@ -77,7 +77,7 @@ Add `ext-test-projects/e2e/tests/project-dependent/bulka-shift-enter-rect-surviv
 
 Test must be **RED on current main** (rect disappears).
 
-### Task 2: Diagnose the divergence
+### Task 2 — Diagnose the divergence
 
 Compare the selection-rect path and the inspector-update path for the same Shift+Enter
 event. Likely sites:
@@ -98,7 +98,7 @@ Add tracing console logs at the divergence point to compare:
 You'll likely find that the rect path uses one of the old/non-uniform key derivations that
 355321c5 already fixed for one direction but not the other.
 
-### Task 3: Apply minimal fix
+### Task 3 — Apply minimal fix
 
 Restore consistency: both paths use the **same** key derivation (`resolveSourceIndexFiberSource`
 or `computeEffectiveRef`, depending on where 355321c5/06913a91 landed). Add a unit test
@@ -110,7 +110,7 @@ If the cause is missing `_debugSource` on the host element (the React 19 `_debug
 finding from `project_ext_click_debug.md`), the fix is to fall back to `_debugStack` for
 that lookup the same way `06913a91` aligned the inspector path.
 
-### Task 4: Telegram handoff
+### Task 4 — Telegram handoff
 
 - TG report listing: divergence found, file changes, e2e/unit verdicts, commit hashes.
 - E2E before/after screenshots from Task 1, **manually inspected** before sending. The
