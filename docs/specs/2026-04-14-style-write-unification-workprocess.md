@@ -976,3 +976,89 @@ D. **`nextjs-tw-sample` whole-project cluster** — Monitor saw ~200
    survive any classification, so they're not retroactively rolled back.
 5. Telegram-side: every status answer mirrors to TG (`send-tg-report.sh`),
    not only inline replies.
+
+## 2026-04-25 12:00 CEST: live mid-run classification
+
+Fresh sharded run `hyper-e2e-20260425-111119-28759` (slots 49, 50)
+has been live for ~50 minutes. Both shards still running.
+
+### Mid-run tally
+
+- `s1` (independent + odd dep projects): `459 passed / 4 failed` so far.
+- `s2` (even dep projects): `289 passed / 5 failed` so far.
+- Combined `748 passed / 9 failed` over half the matrix — significantly
+  better than yesterday's pace (s1 had 50 fails by 2.1h).
+- Disk: `25Gi` free (still healthy).
+
+### Failure inventory at mid-run
+
+| # | Test | Project(s) | Cluster |
+|---|------|------------|---------|
+| 1 | `multiple components — switch between them, each renders` | tw3-kanban (BoardView) + 1 other | Cat-1 harness noise |
+| 2 | `component with error — error overlay appears` | 2 vite projects | Cat-2 body assertion |
+| 3 | `styles applied correctly (non-zero dimensions)` | 1 dep project | Cat-3 body assertion |
+| 4 | `PI-18-19: resize multiple selected elements scales all together` | independent | Cat-4 body assertion |
+
+### Cat-1 — React-19 ErrorBoundary-caught console.error noise
+
+**Pattern**: when a previewed component depends on a global state store
+(Zustand, jotai, …) which the preview wrapper does not supply, React 19
+renders `<ComponentErrorBoundary>` fallback successfully but emits a
+console.error of the form `'%o\n\n%s\n\n%s\n', errorObj, componentStack,
+retryMessage`. The webview log forwarder concatenates this into a
+single string that ends with
+`The above error occurred in the <X> component. React will try to
+recreate this component tree from scratch using the error boundary you
+provided, ComponentErrorBoundary.`
+
+**Result**: preview iframe renders fine (boundary catches), test body
+passes its assertion, but the iframe console-capture in
+`base.fixture.ts` records the long error string and the fixture
+teardown raises it as `[test-errors]`. The `[diagnostic] %o %s %s …`
+twin is the extension-side capture of the same React error.
+
+**Why agent C's f6483b7 didn't catch it**: that filter only matched
+`text.trim() === '%o'` (bare token); the React-19 multi-line format
+has the full error stack inline.
+
+**Fix scope**: narrow extension to `isBenignRuntimeError`:
+`text.includes('error boundary you provided')` AND
+`text.includes('The above error occurred in')`. Real assertion errors
+that don't go through an ErrorBoundary still fail tests. Same filter
+must accept both `[console.error]` and `[diagnostic]` prefixes.
+
+### Cat-2 — `component with error — error overlay appears` body fail
+
+`expectRuntimeErrors` annotation is active (verified by
+`[fixture-diagnostics] cleared expected runtime diagnostics` log
+line) — teardown does not raise on the intentional Vite errors.
+The test fails on its body assertion (the overlay-detection logic).
+Needs investigation: maybe overlay selector drifted, or the extension
+hides Vite overlays now via the recent preview-shell changes.
+
+### Cat-3 — `styles applied correctly (non-zero dimensions)` body fail
+
+Single project, single occurrence. From yesterday's workfile:
+"preview-render/routing E2E now treats RN-web/Tamagui non-semantic DOM
+as valid rendered content and checks the first visible non-zero
+descendant instead of a brittle top-level wrapper." The fix may be
+incomplete on this specific project. Needs project name from the log
+context to triage.
+
+### Cat-4 — `PI-18-19 resize multiple selected elements`
+
+drag-resize-advanced.spec test. Failed twice (first attempt + retry).
+Body assertion failure — the multi-select resize behavior either
+isn't producing the expected DOM/style transition, or the harness
+isn't able to drive the resize correctly through CDP.
+
+### Triage decision for the live run
+
+- **Cat-1**: low-risk pure-harness filter extension. Fix candidate
+  for an immediate atomic commit + push. Effective only after a fresh
+  shard run.
+- **Cat-2,3,4**: need investigation. Wait for the active shards to
+  reach more failure types so the inventory is comprehensive before
+  dispatching fixers.
+- Do NOT restart the active run — it's still producing useful
+  data. Let it finish or stall on its own.
