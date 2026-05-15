@@ -174,6 +174,10 @@ export function useElementSelection(
         }
         dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
         canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
+        // Also notify preview panel locally to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — complements the bus event
+        // for environments where the extension-host round-trip echo is not enough.
+        window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },
     [engine, dispatch, elementsTree, canvas, currentComponent],
