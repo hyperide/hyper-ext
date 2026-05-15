@@ -1,34 +1,21 @@
 /**
  * @file i18n key resolution by DOM text content.
  *
- * Accessed via: StyleReadService i18n text inspection and key creation flows.
- * Assumptions: static TS/JS dictionaries are object literals; dynamic dictionary builders are read-only.
+ * Accessed via: StyleReadService._tryDetectI18n (fallback when AST detection fails)
+ * Assumptions: locale files are JSON; project uses one of the well-known directory layouts.
  *
  * Algorithm:
- *   1. List known JSON/TS/JS dictionary locations.
- *   2. Search each dictionary for domText as a VALUE → extract the dot-path key.
+ *   1. List all .json files in known locale directories.
+ *   2. Search each file for domText as a VALUE → extract the dot-path key.
  *   3. If not found as value, search for domText as a KEY (covers mock/passthrough t = k => k).
- *   4. Derive locale and namespace from the dictionary shape or file path.
- *   5. Collect all matching locale dictionaries → availableLocales.
+ *   4. Derive locale and namespace from the file path.
+ *   5. Collect all matching locale files → availableLocales.
  */
 
 import type { FileIO } from '../../lib/ast/file-io';
-import { findTsDomTextHit, parseTsLocaleObject, resolveLocaleKey } from './ts-locale-ast';
 
 /** Locale directories probed in priority order. */
 const LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'];
-const MERGED_FILE_CANDIDATES = [
-  'src/translations.ts',
-  'src/lib/translations.ts',
-  'client/lib/translations.ts',
-  'lib/translations.ts',
-  'src/i18n.ts',
-  'src/translations.js',
-  'src/lib/translations.js',
-  'client/lib/translations.js',
-  'lib/translations.js',
-  'src/i18n.js',
-];
 
 export interface DomTextI18nMatch {
   key: string;
@@ -38,12 +25,12 @@ export interface DomTextI18nMatch {
   resolvedText: string;
   namespace?: string;
   availableLocales: string[];
-  /** 'value' = domText was a dictionary value; 'key' = domText was the key itself (passthrough mock). */
+  /** 'value' = domText was a JSON value; 'key' = domText was the key itself (passthrough mock). */
   matchType: 'value' | 'key';
 }
 
 /**
- * Recursively find domText as a dictionary VALUE.
+ * Recursively find domText as a JSON VALUE.
  * Returns the dot-path key (e.g. "nested.greeting") or null if not found.
  */
 function findByValue(obj: unknown, target: string, prefix = ''): string | null {
@@ -60,7 +47,7 @@ function findByValue(obj: unknown, target: string, prefix = ''): string | null {
 }
 
 /**
- * Check if target is a valid key in the dictionary object (exact literal key, or dot-path traversal).
+ * Check if target is a valid key in the JSON object (exact literal key, or dot-path traversal).
  * Returns the string value if found, null otherwise.
  */
 function findByKey(obj: unknown, key: string): string | null {
@@ -84,8 +71,8 @@ function findByKey(obj: unknown, key: string): string | null {
  * Parse locale and namespace from a file path.
  *
  * Patterns:
- *   {dir}/{locale}.{json,ts,js}          → locale=locale, namespace=undefined
- *   {dir}/{locale}/{ns}.{json,ts,js}     → locale=locale, namespace=ns
+ *   {dir}/{locale}.json          → locale=locale, namespace=undefined
+ *   {dir}/{locale}/{ns}.json     → locale=locale, namespace=ns
  *   {root}/app/{locale}/messages/{file}.json → locale=locale, namespace=undefined
  */
 function parseLocaleFromPath(filePath: string, dirPrefix: string): { locale: string; namespace?: string } | null {
@@ -93,17 +80,15 @@ function parseLocaleFromPath(filePath: string, dirPrefix: string): { locale: str
   if (!rel) return null;
   const parts = rel.split('/');
 
-  const localeFileExt = ['.json', '.ts', '.js'].find((ext) => parts.length === 1 && parts[0].endsWith(ext));
-  if (localeFileExt) {
-    // {dir}/{locale}.{json,ts,js}
-    const locale = parts[0].slice(0, -localeFileExt.length);
+  if (parts.length === 1 && parts[0].endsWith('.json')) {
+    // {dir}/{locale}.json
+    const locale = parts[0].slice(0, -5);
     if (locale) return { locale };
   }
-  const namespaceFileExt = ['.json', '.ts', '.js'].find((ext) => parts.length === 2 && parts[1].endsWith(ext));
-  if (namespaceFileExt) {
-    // {dir}/{locale}/{ns}.{json,ts,js}
+  if (parts.length === 2 && parts[1].endsWith('.json')) {
+    // {dir}/{locale}/{ns}.json
     const locale = parts[0];
-    const namespace = parts[1].slice(0, -namespaceFileExt.length);
+    const namespace = parts[1].slice(0, -5);
     if (locale && namespace) return { locale, namespace };
   }
   return null;
@@ -131,25 +116,14 @@ export async function resolveI18nByDomText(
 
   const listFiles = fileIO.listFiles?.bind(fileIO);
 
-  // Collect candidate dictionaries with enough path context to derive locale metadata.
-  const candidates: Array<{ filePath: string; dirPrefix: string; isAppRouter: boolean; kind: 'json' | 'ts' }> = [];
+  // Collect all candidate JSON files with their dir prefix
+  const candidates: Array<{ filePath: string; dirPrefix: string; isAppRouter: boolean }> = [];
 
   if (listFiles) {
     for (const relDir of LOCALE_DIRS) {
       const dir = `${projectRoot}/${relDir}`;
       const files = await listFiles(dir, ['.json']).catch(() => [] as string[]);
-      for (const f of files) candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'json' });
-      const tsFiles = await listFiles(dir, ['.ts', '.js']).catch(() => [] as string[]);
-      for (const f of tsFiles) candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'ts' });
-    }
-    for (const relPath of MERGED_FILE_CANDIDATES) {
-      const filePath = `${projectRoot}/${relPath}`;
-      try {
-        await fileIO.access(filePath);
-        candidates.push({ filePath, dirPrefix: projectRoot, isAppRouter: false, kind: 'ts' });
-      } catch {
-        // not found
-      }
+      for (const f of files) candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false });
     }
     // App Router: app/{locale}/messages/*.json
     const appDir = `${projectRoot}/app`;
@@ -157,7 +131,7 @@ export async function resolveI18nByDomText(
     for (const f of appFiles) {
       const parts = f.slice(appDir.length + 1).split('/');
       if (parts.length === 3 && parts[1] === 'messages') {
-        candidates.push({ filePath: f, dirPrefix: appDir, isAppRouter: true, kind: 'json' });
+        candidates.push({ filePath: f, dirPrefix: appDir, isAppRouter: true });
       }
     }
   } else {
@@ -169,7 +143,7 @@ export async function resolveI18nByDomText(
           const f = `${dir}/${locale}${ext}`;
           try {
             await fileIO.access(f);
-            candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'json' });
+            candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false });
           } catch {
             // not found
           }
@@ -190,27 +164,11 @@ export async function resolveI18nByDomText(
   }
   const hits: Hit[] = [];
 
-  for (const { filePath, dirPrefix, isAppRouter, kind } of candidates) {
+  for (const { filePath, dirPrefix, isAppRouter } of candidates) {
     let content: string;
     try {
       content = await fileIO.readFile(filePath);
     } catch {
-      continue;
-    }
-
-    if (kind === 'ts') {
-      const parsed = parseTsLocaleObject(content);
-      if (!parsed) continue;
-      const info = parseLocaleFromPath(filePath, dirPrefix);
-      const hit = findTsDomTextHit(parsed, domText, filePath, info?.locale);
-      if (hit) {
-        hits.push({
-          key: hit.key,
-          locale: hit.locale,
-          resolvedText: hit.resolvedText,
-          matchType: hit.matchType,
-        });
-      }
       continue;
     }
 
@@ -272,24 +230,11 @@ export async function resolveI18nByDomText(
   // Second pass: find all locales that contain the same key (even if their value wasn't the search term).
   // This fills availableLocales for multi-locale projects where the DOM showed only one locale's text.
   const extraLocales: string[] = [];
-  for (const { filePath, dirPrefix, isAppRouter, kind } of candidates) {
+  for (const { filePath, dirPrefix, isAppRouter } of candidates) {
     let content: string;
     try {
       content = await fileIO.readFile(filePath);
     } catch {
-      continue;
-    }
-    if (kind === 'ts') {
-      const parsed = parseTsLocaleObject(content);
-      if (!parsed) continue;
-      if (parsed.kind === 'merged') {
-        for (const locale of parsed.locales) {
-          if (resolveLocaleKey(parsed.data[locale], best.key) !== null) extraLocales.push(locale);
-        }
-      } else if (resolveLocaleKey(parsed.data, best.key) !== null) {
-        const info = parseLocaleFromPath(filePath, dirPrefix);
-        extraLocales.push(info?.locale ?? best.locale);
-      }
       continue;
     }
     let data: unknown;

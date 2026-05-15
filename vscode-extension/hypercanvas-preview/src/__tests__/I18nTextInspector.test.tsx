@@ -22,6 +22,7 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
+  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -119,7 +120,7 @@ describe('I18nTextInspector (VS Code webview)', () => {
     expect((textInput as HTMLInputElement).disabled).toBe(true);
   });
 
-  // Regression: read-only layouts (canCreateKeys=false) — switch-to-existing
+  // Regression: read-only TS/JS layouts (canCreateKeys=false) — switch-to-existing
   // must still work (JSX-only rewrite via skipResourceWrite=true), but Create
   // affordance must be hidden so the user cannot push the inspector into a
   // write that the locale-file format would refuse.
@@ -157,24 +158,6 @@ describe('I18nTextInspector (VS Code webview)', () => {
       fireEvent.change(searchInput, { target: { value: 'brand.new.key' } });
       expect(screen.queryByTestId('i18n-key-create')).toBeNull();
     });
-  });
-
-  it('allows creating a key before the available key list has loaded', () => {
-    const onKeyChange = mock(() => {});
-    render(
-      <I18nTextInspector
-        i18nBinding={supportedBinding}
-        keyEditable
-        canCreateKeys
-        onKeyChange={onKeyChange}
-        onResolvedTextChange={mock(() => {})}
-      />,
-    );
-    fireEvent.click(screen.getByTestId('i18n-key-input'));
-    const searchInput = screen.getByPlaceholderText('Search or create key...');
-    fireEvent.change(searchInput, { target: { value: 'brand.loading.key' } });
-    fireEvent.click(screen.getByTestId('i18n-key-create'));
-    expect(onKeyChange).toHaveBeenCalledWith('brand.loading.key');
   });
 
   it('renders raw expression fallback for unsupported bindings and hides i18n controls', () => {

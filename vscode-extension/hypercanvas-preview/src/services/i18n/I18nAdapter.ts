@@ -18,7 +18,7 @@ export interface I18nAdapter {
   /**
    * Update the JSX element to reference a different i18n key.
    * elementId is the element's nodeRef. The adapter updates the source expression
-   * (e.g. t("old.key") → t("new.key")) without touching the locale dictionary.
+   * (e.g. t("old.key") → t("new.key")) without touching the locale JSON file.
    * In practice, key changes are routed through the writeI18nResource RPC channel
    * (which handles JSX update via AstBridge). Implementations that are not wired
    * to an AstService instance should throw.

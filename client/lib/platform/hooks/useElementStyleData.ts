@@ -67,7 +67,7 @@ export interface UseElementStyleDataOptions {
   /** Runtime computed style snapshot from the preview iframe. Used to fill in CSS-variable-based
    *  Tailwind values (e.g. bg-primary/15) that the extension-host parser cannot resolve. */
   runtimeStyle?: SelectedElementRuntimeStyle | null;
-  /** Trimmed innerText from the selected DOM element — used for i18n DOM-text search. */
+  /** Trimmed innerText from the selected DOM element — used as i18n DOM-text search fallback. */
   domTextContent?: string;
   /** When set, resolve i18n text for this locale (VS Code only). Triggers a re-read when changed. */
   activeLocale?: string;
@@ -483,8 +483,10 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   useEffect(() => {
     // Always clear before re-fetching: when the user switches between two i18n
     // elements, the previous element's key list must not leak into the new one's
-    // RPC window. Creation remains available for editable bindings while the list
-    // is loading; the write path only creates a key path inside an existing dictionary.
+    // RPC window. handleI18nKeyChange relies on `availableKeys === undefined` as
+    // the "list not yet known" signal to bail (prevents creating a "new" key that
+    // is actually a real translation in the new element's locale, which would
+    // silently overwrite it via writeI18nResource).
     setAvailableKeys(undefined);
     const i18nText = classData.i18nText;
     if (!canvas || !i18nText || i18nText.kind !== 'i18n') {
@@ -499,6 +501,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       if (msg.requestId !== requestId) return;
       if (latestKeysRequestRef.current !== requestId) return;
       unsub();
+      // On failure, leave availableKeys === undefined so handleI18nKeyChange bails
+      // rather than treating an unknown key as "create new" against an empty list.
       setAvailableKeys(msg.success ? msg.keys : undefined);
     });
 

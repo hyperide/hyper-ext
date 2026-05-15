@@ -554,7 +554,7 @@ export class AstBridge {
 
   /**
    * Handle writeI18nResource message.
-   * Writes a translated value for the given key in the active locale dictionary.
+   * Writes a translated value for the given key in the active locale JSON file.
    * If the key itself changes (previousKey provided), also updates the JSX child expression.
    */
   private async _handleWriteI18nResource(
@@ -609,7 +609,7 @@ export class AstBridge {
     ).catch(() => null);
     const localeFilePath = localeLayout?.getLocaleFilePath(message.activeLocale) ?? null;
 
-    // When skipResourceWrite is set, skip the locale dictionary write — only update JSX below.
+    // When skipResourceWrite is set, skip the JSON locale write — only update JSX below.
     // Used when the user switches to an existing key from the dropdown: we don't want to
     // overwrite the existing translation under the new key.
     let writeResult: AstOperationResult & { filePath: string | null };
@@ -640,13 +640,13 @@ export class AstBridge {
       };
     }
 
-    // When the key itself changes, update only the key literal inside the
-    // current JSX child expression so custom helper shape is preserved.
+    // When the key itself changes, update the JSX child expression so the AST
+    // reflects the new key (e.g. t("old.key") → t("new.key")).
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
-    const previousKey = message.previousKey;
-    if (i18nFilePath && i18nElementId && previousKey && previousKey !== message.key) {
+    if (i18nFilePath && i18nElementId && message.previousKey && message.previousKey !== message.key) {
+      const newExpression = `{t('${message.key.replace(/'/g, "\\'")}')}`;
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
-        this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
+        this._astService.updateText(i18nFilePath, i18nElementId, newExpression),
       );
       if (!updateResult.success) {
         return {

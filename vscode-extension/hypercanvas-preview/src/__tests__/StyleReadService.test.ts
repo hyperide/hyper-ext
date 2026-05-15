@@ -452,93 +452,6 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
-  it('marks editable=true for merged TS translations object files', async () => {
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/client/lib/translations.ts': `export const translations = { en: { habits: { walks: 'Go for a walk' } }, ru: { habits: { walks: 'Гулять' } } };`,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.resolvedText).toBe('Go for a walk');
-      expect(result.i18nText.editable).toBe(true);
-      expect(result.i18nText.availableLocales.sort()).toEqual(['en', 'ru']);
-    }
-  });
-
-  it('uses DOM text as primary custom i18n resolution when the source key is dynamic', async () => {
-    const JSX_DYNAMIC_KEY = `const Greeting = ({ keyName }) => <p className="text-lg">{t(keyName)}</p>;`;
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(JSX_DYNAMIC_KEY, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: JSX_DYNAMIC_KEY,
-      '/workspace/client/lib/translations.ts': `export const translations = { ru: { hero: { title: 'Привет! Я собака Булка' } }, en: { hero: { title: 'Hello Bulka' } } };`,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef, 'Привет! Я собака Булка', 'ru');
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.key).toBe('hero.title');
-      expect(result.i18nText.resolvedText).toBe('Привет! Я собака Булка');
-      expect(result.i18nText.editable).toBe(true);
-    }
-  });
-
-  it('does not mark custom static JSX keys editable unless the dictionary resolves a value', async () => {
-    const JSX_CUSTOM = `const Greeting = () => <p className="text-lg">{t("missing.key")}</p>;`;
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(JSX_CUSTOM, 'src/App.tsx');
-    const pEntry = entries[0];
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: JSX_CUSTOM,
-      '/workspace/client/lib/translations.ts': `export const translations = { en: { hero: { title: 'Hello Bulka' } } };`,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText?.kind).toBe('unsupported');
-  });
-
   it('marks editable=false when locale file is malformed JSON (parse-error)', async () => {
     const nodeMap = new NodeMapService();
     const helper = new NodeMapService();
@@ -567,7 +480,7 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
-  it('keeps editable=false through the catch fallback when fileIO throws unexpectedly', async () => {
+  it('preserves editable=false through the catch fallback when fileIO throws unexpectedly', async () => {
     const nodeMap = new NodeMapService();
     const helper = new NodeMapService();
     const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
@@ -595,36 +508,6 @@ describe('StyleReadService — i18n binding detection', () => {
     if (result.i18nText?.kind === 'i18n') {
       expect(result.i18nText.resolvedText).toBeNull();
       expect(result.i18nText.editable).toBe(false);
-    }
-  });
-
-  it('marks editable=true for static per-locale TS object files', async () => {
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    const files: Record<string, string> = {
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/messages/en.ts': `export default { habits: { walks: 'Go for a walk' } } as const;`,
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.resolvedText).toBe('Go for a walk');
-      expect(result.i18nText.editable).toBe(true);
     }
   });
 });
@@ -684,26 +567,6 @@ describe('StyleReadService — getAvailableKeys', () => {
     expect(keys).toContain('habits.runs');
     expect(keys).toContain('greeting');
     expect(keys.length).toBe(3);
-  });
-
-  it('returns dot-path keys from a static per-locale TypeScript dictionary', async () => {
-    const nodeMap = new NodeMapService();
-    const files: Record<string, string> = {
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/locales/en.ts': 'export default { habits: { walks: "Go for a walk" }, greeting: "Hello" };',
-    };
-    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
-      ...makeFileIO(files),
-      listFiles: async (dir: string, exts: string[]) => {
-        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
-      },
-    };
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const keys = await service.getAvailableKeys(undefined, 'en');
-    expect(keys).toContain('habits.walks');
-    expect(keys).toContain('greeting');
-    expect(keys.length).toBe(2);
   });
 
   it('returns empty array when locale file is missing', async () => {
