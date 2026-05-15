@@ -103,6 +103,15 @@ export class PanelRouter {
       return true;
     }
 
+    // Selection-freeze coordination — sender lives in the right sidebar,
+    // listener lives in the preview panel's iframe. Broadcast so the message
+    // reaches every registered webview; only usePreviewBridge handles it.
+    // See docs/plans/2026-05-06-selection-survives-i18n-write.md (Path B).
+    if (type === 'iframe:writeI18nResource') {
+      this._stateHub.broadcast(message);
+      return true;
+    }
+
     // Editor operations
     if (type.startsWith('editor:')) {
       await handleEditorMessage(message as EditorMessage, webview);
