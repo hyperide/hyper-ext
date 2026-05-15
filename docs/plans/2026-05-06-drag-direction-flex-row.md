@@ -109,11 +109,23 @@ C. **moveElement RPC rejects certain element types** server-side because the
 
 ### Task 4: AstService.moveElement for `<p>` / `<h3>` and inline `<span>`
 
-- [ ] Test via `bun test` against bulka fixtures: source = `<p>{t(...)}</p>`,
-      target = sibling `<h3>...</h3>`. Should succeed.
-- [ ] Same for `<span>🌀</span>` source dropped onto another card. Both
+- [x] Test via `bun test` against bulka fixtures: source = `<p>{t(...)}</p>`,
+      target = sibling `<h3>...</h3>`. Should succeed. Done in
+      `vscode-extension/hypercanvas-preview/src/__tests__/AstServiceMoveTextContainers.test.ts`
+      — same-card sibling reorder block covers `<p>` before/after `<h3>`,
+      `<h3>` after `<span>`, plus immediate-sibling-no-gap invariants.
+- [x] Same for `<span>🌀</span>` source dropped onto another card. Both
       should land on the same JSX parent (lifted), with `before/after`
-      reflecting the visual horizontal direction.
+      reflecting the visual horizontal direction. Cross-card block in the
+      same test file covers grid-cols-2 cards: `<p body-tail>` BEFORE
+      `<h3 title-bark>`, `<span emoji-tail>` 🌀 AFTER `<span emoji-bark>`,
+      `<h3 title-tail>` AFTER `<p body-bark>`. 9/9 tests pass; lint clean.
+      Note: AstService.moveElement no longer requires "common JSX parent"
+      pre-lift after the move-any-to-any merge (commit 40b0564e) — the
+      different-parent splice path inside the same file handles the
+      cross-card geometry directly. Lifting still happens in the iframe
+      `_dragPointerUp` walk-up but is no longer a precondition at the RPC
+      level.
 
 ### Task 5: E2E coverage for each case
 
