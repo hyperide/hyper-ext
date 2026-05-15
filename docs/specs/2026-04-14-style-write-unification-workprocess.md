@@ -3166,3 +3166,53 @@ with `input/output error`.
 
 Image building from scratch (old image deleted). ETA: ~20 min for image, then containers.
 All fixes: e097090 vite pre-warm + 0882fef optimizeDeps + 50511a5 poll 600s + 8dfc896 socket benign+Editor fix.
+
+## 📍 2026-04-28 13:30 CEST: Docker factory reset + critical esbuild fix
+
+### Critical bug found: @anthropic-ai/sdk missing from VSIX bundle
+
+User reported extension 0.1.24 failing to activate with
+`Cannot find module '@anthropic-ai/sdk'` in VS Code Extension Host.
+
+**Root cause**: `esbuild.js` line 119 had `@anthropic-ai/sdk` in the `external` array,
+so it was never bundled into `out/extension.js`. Combined with `.vscodeignore` excluding
+`node_modules/**`, all VSIX builds since commit `157990ca` were broken for real users.
+
+**Why e2e tests didn't catch this**: Docker containers use `--extensionDevelopmentPath`
+pointing to source (where `node_modules/@anthropic-ai/sdk` exists). Tests never validate
+VSIX activation.
+
+**Fixes (2 atomic commits pushed)**:
+- `78e14163` — Remove `@anthropic-ai/sdk` from `external` array in `esbuild.js`.
+  Also: remove dead `bundlerReadonly` variable in `ProjectDetector.ts`,
+  fix `!` non-null assertions in `mutation-tracing.test.ts`.
+- `78480fb2` — Bump version to 0.1.25. VSIX packaged and installed locally.
+
+Verification:
+- `node esbuild.js`: 172 occurrences of "anthropic" in `out/extension.js`
+- `code --install-extension hypercanvas-preview-0.1.25.vsix --force`: installed
+- User needs to run "Developer: Reload Window" in VS Code
+
+### Docker recovery
+
+Previous Docker VM filesystem was full (`no space left on device`):
+- `com.docker.backend` log: `input/output error` on containerd blobs
+- Docker daemon running but socket not created (VM couldn't write)
+- Docker.raw was 76GB (APFS sparse file)
+
+**Recovery**:
+1. Killed `com.docker.backend` processes
+2. Deleted `Docker.raw` (76GB sparse image)
+3. Restarted Docker Desktop → fresh VM created in 5s
+4. `docker system df` confirmed clean state
+
+### Run #20 (2026-04-28 13:44 CEST)
+
+All fixes active:
+- `78e14163` esbuild fix (sdk bundled)
+- `e097090` vite pre-warm in entrypoint
+- `0882fef` optimizeDeps.include in Remix vite.config.ts
+- `50511a5` poll 600s + test.setTimeout 840s
+- `8dfc896` socket benign errors + Editor.openFile aria-label fix
+
+Image rebuild in progress (~20 min). Log: `/tmp/hyper-e2e-run20-20260428-134436.log`
