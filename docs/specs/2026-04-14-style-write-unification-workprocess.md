@@ -1416,3 +1416,36 @@ VSIX через mount `-v $EXTENSION_REPO:$CONTAINER_EXTENSION_REPO:ro`.
 2. Бейк нового docker image с VSIX 0.1.10 и текущим e2e репо.
 3. Запустить ночной прогон — ожидать сильного снижения spotify
    кластера (21 fail сейчас) и аналогичных Remix re-create фейлов.
+
+## 📍 2026-04-26 23:05 CEST: live checkpoint run `200339-88217` at ~3h00m
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 460  | 426  | 8    | 9    |
+| s2    | 331  | 257  | 15   | 48   |
+| s3    | 490  | 315  | 13   | 152  |
+| s4    | 208  | 94   | 52   | 50   |
+| **Σ** | 1489 | 1092 | 88   | 259  |
+
+68% сделано, pass rate 92.5%. Диск 35GB free. s4 всё ещё доедает
+spotify cluster (~52 fails, в основном setupPreview таймауты от
+старого VSIX — 0.1.10 их закроет).
+
+### Image bake — не нужен сейчас
+
+`docker-parallel-run.sh` уже умеет auto-rebuild: если image старше
+Dockerfile — пересобирает. Текущий image от Apr 24 16:50, Dockerfile
+от Apr 26 16:17 (commit `e4b6c3b` BuildKit bake). Следующий запуск
+автоматически перестроит image с bake feature. **Не делаю
+параллельный build** — добавит нагрузки и риск disk usage.
+
+### Что ждёт следующий прогон
+
+1. ✅ VSIX 0.1.10 (фикс preserve currentComponent)
+2. ✅ Auto-rebuild image с COPY --parents node_modules bake
+3. ✅ Shared nm-cache volume (commit `9f36a21`)
+4. ✅ DevServerManager FSM gate (`d585a745`)
+
+Ожидаем закрытия spotify cluster + аналогичных Remix re-create
+fail'ов. `setupPreview poll-loaded` на cold-start был 60-90s, должно
+упасть до 5-10s в старте.
