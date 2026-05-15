@@ -176,8 +176,15 @@ Remix routes using `useLoaderData()`/`useRouteLoaderData()` now get wrapped in
 
 ---
 
-## 📍 2026-04-29 10:55 CEST — Run #29 launched
+## 📍 2026-04-29 11:00 CEST — Run #29 launched
+
+Run ID: `run-20260429-110015-36155` — 3 shards, all started at 11:00 CEST.
 
 ```bash
-cd /Users/ultra/work/ext-test-projects && HYPER_E2E_SHARDS=3 bash e2e/scripts/docker-parallel-run.sh
+HYPER_E2E_SHARDS=3 HYPER_E2E_BUILD_IMAGE=0 bash e2e/scripts/docker-parallel-run.sh
 ```
+
+**Note**: Added `HYPER_E2E_BUILD_IMAGE=0` to skip Docker image rebuild. There's a timezone
+conversion bug in the image freshness check (`date -j` interprets Docker's UTC timestamp as
+local CEST time → image appears 2h older than it is → unnecessary rebuild). The entrypoint
+is bind-mounted at runtime so skipping the rebuild is safe.
