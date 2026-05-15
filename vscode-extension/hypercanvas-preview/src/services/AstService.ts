@@ -223,21 +223,39 @@ export class AstService {
       if (m) {
         const line = Number.parseInt(m[2], 10);
         const column = Number.parseInt(m[3], 10);
-        // Try resolving via source map location
+        const fileName = m[1];
+
+        // Try resolving via source map location.
+        // Only use the result when the resolved location belongs to the ast we're searching
+        // (i.e. locEntry.loc.fileName matches filePath).  If the nodeRef points to a
+        // different file — e.g. "src/screens/RecordScreen.tsx:5:4" while filePath is
+        // "App.tsx" — the NodeMapService will still find the entry, but applying those
+        // coordinates to the wrong AST would silently mutate the wrong element.
+        // Returning null here lets _resolveElementInCorrectFile re-try with the right file.
         const locEntry = this._nodeMapService.resolveSourceLocation({
-          fileName: m[1],
+          fileName,
           line,
           column,
         });
         if (locEntry) {
-          return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
+          const locFile = locEntry.loc.fileName;
+          const locMatchesAst =
+            !filePath ||
+            locFile === filePath ||
+            filePath.endsWith(`/${locFile}`) ||
+            locFile.endsWith(`/${filePath}`) ||
+            locFile === filePath;
+          if (locMatchesAst) {
+            return findElementByPosition(ast, locEntry.loc.line, locEntry.loc.column);
+          }
+          // locEntry belongs to a different file — caller should parse that file instead.
+          return null;
         }
 
         // Fallback: if source map resolution failed, try direct AST position lookup.
         // Vite source maps may return positions that match original source (not transformed),
         // especially for React 18 _debugSource which gives original positions directly.
         // Only use when the nodeRef fileName matches the file being edited (same file = safe).
-        const fileName = m[1];
         const fileMatches =
           filePath && (filePath.endsWith(`/${fileName}`) || filePath.endsWith(fileName) || fileName === filePath);
         if (fileMatches) {
@@ -264,16 +282,17 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef ?? (elementId as NodeRef), elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath } = resolved;
 
       const writeResult = await executeStyleWriteRequest({
         ast,
-        sourceFilePath: absolutePath,
+        sourceFilePath: resolvedPath,
         element: result.element,
         styles,
         state,
@@ -310,19 +329,20 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef, elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath } = resolved;
 
       for (const [propName, propValue] of Object.entries(props)) {
         setAttribute(result.element, propName, valueToJSXAttribute(propValue));
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.updateProps] Error:', error);
@@ -338,17 +358,18 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
-      const result = this._resolveElement(ast, nodeRef ?? (elementId as NodeRef), elementId, absolutePath);
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath } = resolved;
 
       updateElementChildren(result.element, text);
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
@@ -473,29 +494,13 @@ export class AstService {
     await this.ensureInitialized();
     try {
       const effectiveNodeRef = nodeRef ?? elementId;
-      let absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      let { ast } = await this._fileParser.readAndParseFile(absolutePath);
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
 
-      let result = this._resolveElement(ast, effectiveNodeRef, elementId, absolutePath);
-
-      // If resolution failed with the hint filePath, the nodeRef may point to a child
-      // component file (e.g. clicking a button defined in Sidebar.tsx while App.tsx is
-      // the active component). Extract the file from the nodeRef and retry.
-      if (!result) {
-        const nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
-        if (nodeRefFile && nodeRefFile !== absolutePath) {
-          const { ast: childAst } = await this._fileParser.readAndParseFile(nodeRefFile);
-          result = this._resolveElement(childAst, effectiveNodeRef, elementId, nodeRefFile);
-          if (result) {
-            absolutePath = nodeRefFile;
-            ast = childAst;
-          }
-        }
-      }
-
-      if (!result) {
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
+      if (!resolved) {
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
+      const { result, ast, resolvedPath: actualPath } = resolved;
 
       const { inserted } = duplicateElementInAST(result);
 
@@ -503,8 +508,8 @@ export class AstService {
         return { success: false, error: `Could not duplicate element (parent is not a JSX element or fragment)` };
       }
 
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
+      await this._fileParser.writeAST(ast, actualPath);
+      await this._updateNodeMap(actualPath);
       return { success: true };
     } catch (error) {
       console.error('[AstService.duplicateElement] Error:', error);
@@ -521,6 +526,45 @@ export class AstService {
     if (!m) return null;
     const fileName = m[1];
     return resolveWorkspacePath(this._workspaceRoot, fileName);
+  }
+
+  /**
+   * Resolve an element and its AST, following the nodeRef to the correct source file when
+   * it differs from the hint `filePath` (the currently-displayed component).
+   *
+   * Tamagui (and similar) projects define components in child files (e.g. RecordScreen.tsx)
+   * that are rendered inside a shell like App.tsx.  The nodeRef carries the true source
+   * location ("src/screens/RecordScreen.tsx:10:5"), but `filePath` is the shell file.
+   * Without cross-file fallback, _resolveElement searches App.tsx's AST for a node that
+   * lives in RecordScreen.tsx → not found → write silently fails.
+   *
+   * Returns `{ result, ast, resolvedPath }` on success, `null` if the element cannot be found.
+   */
+  private async _resolveElementInCorrectFile(
+    absolutePath: string,
+    effectiveNodeRef: NodeRef | string,
+    elementId: string | undefined,
+  ): Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null> {
+    const { ast } = await this._fileParser.readAndParseFile(absolutePath);
+    const result = this._resolveElement(ast, effectiveNodeRef as NodeRef, elementId, absolutePath);
+    if (result) return { result, ast, resolvedPath: absolutePath };
+
+    // Cross-file fallback: nodeRef encodes "src/screens/Foo.tsx:line:col" while the
+    // caller supplied App.tsx as filePath.  Resolve the actual file and retry.
+    const nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
+    if (nodeRefFile && nodeRefFile !== absolutePath) {
+      try {
+        const { ast: childAst } = await this._fileParser.readAndParseFile(nodeRefFile);
+        const childResult = this._resolveElement(childAst, effectiveNodeRef as NodeRef, elementId, nodeRefFile);
+        if (childResult) {
+          return { result: childResult, ast: childAst, resolvedPath: nodeRefFile };
+        }
+      } catch {
+        // File unreadable — fall through to null
+      }
+    }
+
+    return null;
   }
 
   /** Wrap element in a new container element. */
