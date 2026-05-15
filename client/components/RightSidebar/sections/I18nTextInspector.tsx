@@ -11,13 +11,9 @@ import { memo } from 'react';
 
 export interface I18nTextInspectorProps {
   i18nBinding: I18nBindingResult;
-  onKeyChange: (key: string) => void;
+  onKeyChange?: (key: string) => void;
   onResolvedTextChange: (text: string) => void;
-  onLocaleChange: (locale: string) => void;
-  /** Whether the key field is editable. False until onKeyChange is wired server-side. */
-  keyEditable?: boolean;
-  /** Whether locale switching is active. False until onLocaleChange is wired server-side. */
-  localeEditable?: boolean;
+  onLocaleChange?: (locale: string) => void;
 }
 
 export const I18nTextInspector = memo(function I18nTextInspector({
@@ -25,8 +21,6 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   onKeyChange,
   onResolvedTextChange,
   onLocaleChange,
-  keyEditable = false,
-  localeEditable = false,
 }: I18nTextInspectorProps) {
   if (i18nBinding.kind === 'unsupported') {
     return (
@@ -43,8 +37,8 @@ export const I18nTextInspector = memo(function I18nTextInspector({
         <input
           type="text"
           value={i18nBinding.key}
-          onChange={(e) => onKeyChange(e.target.value)}
-          disabled={!keyEditable}
+          readOnly={!onKeyChange}
+          onChange={(e) => onKeyChange?.(e.target.value)}
           className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
@@ -66,15 +60,13 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             <button
               key={locale}
               type="button"
-              onClick={() => onLocaleChange(locale)}
-              disabled={!localeEditable || locale === i18nBinding.activeLocale}
+              disabled={!onLocaleChange}
+              onClick={() => onLocaleChange?.(locale)}
               className={cn(
                 'h-5 px-1.5 rounded text-[10px] font-medium transition-colors',
                 locale === i18nBinding.activeLocale
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground',
-                localeEditable && locale !== i18nBinding.activeLocale && 'hover:bg-muted/80',
-                !localeEditable && locale !== i18nBinding.activeLocale && 'opacity-50 cursor-not-allowed',
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80',
               )}
             >
               {locale}

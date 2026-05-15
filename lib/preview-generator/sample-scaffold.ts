@@ -1,69 +1,137 @@
 /**
- * @file Scaffold generators for Sample* component exports.
+ * @file Sample scaffold generation for preview component stubs
  *
- * Accessed via: PreviewPanel (VS Code extension) and ensureSample (server/extension)
- * Assumptions: output is appended verbatim to TypeScript/TSX source files
+ * Accessed via: PreviewPanel (VS Code extension) and sample-ensurer
+ * Assumptions: sourceCode may be empty when generating simple scaffolds;
+ *   normalizeSampleComponentName was previously defined in PreviewPanel.ts
  */
 
 export interface SampleScaffoldConfig {
-  /** Full source of the component file (used to infer prop types) */
   sourceCode: string;
-  /** PascalCase component name, e.g. "Button" */
   componentName: string;
-  /** Name of the export to generate, e.g. "SampleDefault" */
   exportName: string;
-  /** Known prop values to include in the scaffold */
-  propEntries: Array<[string, unknown]>;
+  propEntries?: Array<[string, unknown]>;
 }
 
-/**
- * Strip path and extension from a component file name, normalize to PascalCase.
- * "/src/components/my-button.tsx" → "MyButton"
- */
-export function normalizeSampleComponentName(name: string): string {
-  const base = name.replace(/\\/g, '/').split('/').pop() ?? name;
-  const noExt = base.replace(/\.[^.]+$/, '');
-  return noExt
-    .split(/[-_\s]+/)
-    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : ''))
+export interface DeterministicScaffoldConfig {
+  sourceCode: string;
+  componentName: string;
+  exportName: string;
+}
+
+function isValidJsxComponentName(value: string): boolean {
+  return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value);
+}
+
+function toPascalIdentifier(value: string): string {
+  const words = value
+    .replace(/\.[jt]sx?$/i, '')
+    .split(/[^A-Za-z0-9_$]+/)
+    .filter(Boolean);
+  const identifier = words
+    .map((word) => {
+      const first = word.charAt(0);
+      return `${first.toUpperCase()}${word.slice(1)}`;
+    })
     .join('');
+  if (!identifier) return 'Component';
+  return /^[A-Za-z_$]/.test(identifier) ? identifier : `Component${identifier}`;
 }
 
-function serializeProp(value: unknown): string {
-  if (typeof value === 'string') return `"${value.replace(/"/g, '\\"')}"`;
-  if (typeof value === 'boolean') return value ? '{true}' : '{false}';
-  if (typeof value === 'number') return `{${value}}`;
-  return `{${JSON.stringify(value)}}`;
+export function normalizeSampleComponentName(componentName: string): string {
+  if (isValidJsxComponentName(componentName) && /^[A-Z]/.test(componentName)) return componentName;
+  const fileName = componentName.split(/[\\/]/).pop() ?? componentName;
+  const candidate = toPascalIdentifier(fileName);
+  return isValidJsxComponentName(candidate) ? candidate : 'Component';
+}
+
+function extractExportNames(sourceCode: string): string[] {
+  const names: string[] = [];
+  for (const m of sourceCode.matchAll(/export\s*\{([^}]+)\}/g)) {
+    const parts = m[1]
+      .split(',')
+      .map((s) =>
+        s
+          .trim()
+          .split(/\s+as\s+/)
+          .pop()
+          ?.trim(),
+      )
+      .filter(Boolean);
+    names.push(...(parts as string[]));
+  }
+  for (const m of sourceCode.matchAll(/export\s+(?:const|function|class|interface|type)\s+([A-Za-z_$][\w$]*)/g)) {
+    names.push(m[1]);
+  }
+  return [...new Set(names)];
+}
+
+function getCompanionPlaceholder(companionName: string, baseName: string): string {
+  const suffix = companionName.slice(baseName.length);
+  if (suffix === 'Title') return 'Preview title';
+  if (suffix === 'Description') return 'This sample shows the component with visible content.';
+  return `${suffix} content`;
 }
 
 /**
- * Build a minimal Sample* function export using the supplied prop values.
+ * Build a deterministic scaffold for compound/container components
+ * (e.g. Alert with AlertTitle + AlertDescription siblings).
+ * Returns null when no companion exports are found.
+ */
+export function buildDeterministicContainerSampleScaffold(config: DeterministicScaffoldConfig): string | null {
+  const { sourceCode, componentName, exportName } = config;
+
+  const exportNames = extractExportNames(sourceCode);
+  const companions = exportNames.filter(
+    (name) => name !== componentName && name.startsWith(componentName) && name.length > componentName.length,
+  );
+
+  if (companions.length === 0) return null;
+
+  const childLines = companions.map(
+    (companion) => `    <${companion}>${getCompanionPlaceholder(companion, componentName)}</${companion}>`,
+  );
+
+  return [
+    `export const ${exportName} = () => (`,
+    `  <${componentName}>`,
+    ...childLines,
+    `  </${componentName}>`,
+    ');',
+  ].join('\n');
+}
+
+/**
+ * Build a sample component scaffold.
+ * When sourceCode is provided, attempts compound-component detection first.
+ * Falls back to a simple self-closing scaffold with prop placeholders.
  */
 export function buildSampleScaffold(config: SampleScaffoldConfig): string {
-  const { componentName, exportName, propEntries } = config;
-  const propsStr =
-    propEntries.length > 0 ? ` ${propEntries.map(([k, v]) => `${k}=${serializeProp(v)}`).join(' ')}` : '';
-  return `export function ${exportName}() {\n  return <${componentName}${propsStr} />;\n}\n`;
-}
+  const { sourceCode, componentName, exportName, propEntries = [] } = config;
 
-/**
- * Attempt to build a deterministic scaffold for container-style components
- * (those that accept children). Returns null when the component structure
- * cannot be determined without AI assistance.
- */
-export function buildDeterministicContainerSampleScaffold(config: {
-  sourceCode: string;
-  componentName: string;
-  exportName: string;
-}): string | null {
-  const { componentName, exportName, sourceCode } = config;
-
-  // Detect if component accepts a `children` prop — if so, wrap a placeholder.
-  const acceptsChildren = /\bchildren\b/.test(sourceCode) || /\bPropsWithChildren\b/.test(sourceCode);
-
-  if (!acceptsChildren) {
-    return null;
+  if (sourceCode) {
+    const compound = buildDeterministicContainerSampleScaffold({ sourceCode, componentName, exportName });
+    if (compound) return compound;
   }
 
-  return `export function ${exportName}() {\n  return <${componentName}>Sample content</${componentName}>;\n}\n`;
+  const jsxComponentName = normalizeSampleComponentName(componentName);
+  const propLines =
+    propEntries.length > 0
+      ? propEntries.map(([key, value]) => {
+          if (typeof value === 'boolean') return `    ${key}={${value}}`;
+          if (typeof value === 'number') return `    ${key}={${value}}`;
+          if (typeof value === 'object') return `    ${key}={${JSON.stringify(value)}}`;
+          return `    ${key}={${JSON.stringify(String(value))}}`;
+        })
+      : [`    // TODO: Add required props here`];
+
+  return [
+    '',
+    '// Sample component — add required props below',
+    `export const ${exportName} = () => (`,
+    `  <${jsxComponentName}`,
+    ...propLines,
+    '  />',
+    ');',
+  ].join('\n');
 }

@@ -12,7 +12,7 @@ does not work in the Bulka fixture:
 ```
 
 Fixture path:
-`/Users/ultra/work/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`.
+`/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`.
 
 Use the Bulka project only as a reproduction fixture. Do not make permanent
 edits to `ext-test-projects` source files.
@@ -66,14 +66,14 @@ Run:
 cd /Users/ultra/work/hyper-canvas-draft
 git status --short
 rg -n "deleteElements|keyboard:delete|contextMenu:delete|hypercanvas:deleteElements|resolveClickLocal|sourceLocation|findElementByPosition|JSXExpressionContainer|CallExpression" client shared vscode-extension lib server test -S
-rg -n "habits\\.walks|<p className=\"text-foreground/80\"|t\\(\"habits" /Users/ultra/work/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
-sed -n '330,390p' /Users/ultra/work/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
+rg -n "habits\\.walks|<p className=\"text-foreground/80\"|t\\(\"habits" /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
+sed -n '330,390p' /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
 ```
 
 Also read the VS Code E2E rules before any extension debug work:
 
 ```bash
-sed -n '1,220p' /Users/ultra/work/ext-test-projects/CLAUDE.md
+sed -n '1,220p' /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects/CLAUDE.md
 ```
 
 Record the exact selected nodeRef shape observed or inferred from source
@@ -231,7 +231,7 @@ up and restores `client/pages/Index.tsx` in `finally`.
 Suggested command:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects
 EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview \
   bun /tmp/hyper-bulka-delete-i18n-debug.ts \
   > /tmp/hyper-bulka-delete-i18n-debug.log 2>&1 &
@@ -243,7 +243,7 @@ The debug script must:
 - Import `launchVSCode` from `e2e/setup/electron-app`.
 - Import `setupPreviewWithDevServer` from `e2e/helpers/setup-preview`.
 - Use project
-  `/Users/ultra/work/ext-test-projects/bulka-the-dog`.
+  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects/bulka-the-dog`.
 - Open `client/pages/Index.tsx`.
 - Select or click the rendered paragraph for `habits.walks` using the real
   preview iframe and CDP mouse/page object helpers.
@@ -258,7 +258,7 @@ state. Record the screenshot paths in the final handoff.
 
 ### Task 7: Final Checks And Handoff
 
-- [ ] Run git diff, verify no unrelated files changed, produce handoff summary
+- [x] Run git diff, verify no unrelated files changed, produce handoff summary
 
 Run:
 
@@ -282,3 +282,17 @@ Final handoff must include:
 - Whether SaaS needed a matching fix, with file references.
 - Any skipped findings and why. If a real out-of-scope bug is found, create or
   request a Linear issue instead of silently dropping it.
+
+## Worktree Isolation Note
+
+This ralphex run is isolated. Use this Hyper Canvas worktree:
+
+- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/hyper-canvas-draft
+
+Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects:
+
+- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-delete-i18n/ext-test-projects
+
+Do not write to the original main worktree or the original ext-test-projects checkout.
+Existing logs and dirty changes from the original worktrees were snapshotted at:
+/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees
