@@ -169,6 +169,132 @@ Remix routes using `useLoaderData()`/`useRouteLoaderData()` now get wrapped in
 
 ---
 
+## Roadmap to Full Green
+
+_Составлен 2026-04-29. Основан на: анализе частоты падений по 16 прогонам, аудите покрытия canvas/inspector, статистике 15 745 тестовых записей._
+
+### Этап 0 ✅ Инфраструктура (DONE)
+
+Починено до run #29:
+- Docker OOM: `--memory-swap -1` + `--init` (4f802bd)
+- `--retries=1` как стандарт
+- Redo limit: 8s→15s watcher wait (6df6548)
+- Project switcher: 3×1s→6×3s retry (08ed413)
+- Tamagui poll: `.catch(()=>'')` + 500ms→2000ms (1522602)
+- Unsupported project test isolation: `testMatch` fix (f63d6ce)
+- Docker TZ bug: `TZ=UTC date -j` (1dbe026)
+
+---
+
+### Этап 1 — Нулевые hard failures (~1 неделя, run #29 + 1-2 после)
+
+**Цель**: ни одного теста где обе попытки fail.
+
+Самые частые падения по архивным прогонам (топ по частоте):
+
+| Тест | Частота | Статус | Root cause |
+|------|---------|--------|-----------|
+| Tamagui: style written as prop | 37x | ✅ FIXED | watcher + poll throw |
+| elements/nested/ExportNamed (ast-ops) | 74x | 🔄 monitoring | OOM→webpack timeout, ожидаем fix из run #29 |
+| duplicate element (preserves/grows) | 33x | ❓ unknown | требует анализа run #29 |
+| component with error (607s) | 17x | ⚠️ known | Vite watcher degradation (NEEDS LINEAR) |
+| insert element | 16x | ❓ unknown | требует анализа |
+| redo limit | 14x | ✅ FIXED | watcher lag |
+| styles applied/dimensions | 12x | ❓ unknown | requires analysis |
+| delete/wrap element | 9-11x | ❓ unknown | requires analysis |
+| Settings (5 тестов) | 8x each | ⚠️ flaky | VS Code instance shared, propagation lag |
+| open preview command (smoke) | 8x | ⚠️ flaky | extension activation timing |
+
+**Действия**:
+1. Дождаться run #29 → полный список failures
+2. Классифицировать неизвестные паттерны (duplicate/insert/wrap/delete)
+3. Починить по одному, каждый fix = отдельный атомарный коммит + run
+
+---
+
+### Этап 2 — Полное покрытие проектов (~3-5 дней)
+
+**Цель**: все 35 проектов стабильно проходят в каждом прогоне.
+
+Проекты с нулевым историческим покрытием (S3 умирал до них):
+- `webpack-react-cssmodules-spotify`, `webpack-react-emotion-dashboard`
+- `react-vite-sass-portfolio`, `bun-tw-shadcn-sample`, `nextjs-tw-sample`
+- 12 unsupported CSS проектов (mui, antd, chakra, mantine, nextui, ...)
+
+Run #29 первый который должен их покрыть. Если найдутся падения — починить.
+Unsupported: проверить что `ReadonlyStubScreen` корректно показывается для всех 12.
+
+---
+
+### Этап 3 — Canvas: покрытие критических пробелов (~2-3 недели)
+
+Аудит выявил 5 зон без E2E покрытия:
+
+**Приоритет 1 — ComponentErrorOverlay**
+Ни одного E2E теста. Компонент с missing props → ErrorOverlay → форма создания sample.
+Ломался несколько раз (видно по commits). Риск: незаметная регрессия.
+Файл: `project-independent/coverage-gaps.spec.ts` или новый `component-error.spec.ts`.
+
+**Приоритет 2 — Scope toggle (Isolated / In app)**
+`TID.preview.toolbarScope` не тестируется поведенчески. Нет проверки что iframe src меняется.
+Файл: `canvas-interactions.spec.ts`.
+
+**Приоритет 3 — State selector → pseudo-selector результат**
+Кнопки Hover/Focus кликаются, но нет теста что стиль применился.
+Файл: `project-dependent/style-editing.spec.ts`.
+
+**Приоритет 4 — Context menu items**
+Меню открывается (PI-5-10), но `contextMenuItem(action)` не тестируется ни разу.
+
+**Приоритет 5 — ReconnectingBanner полный цикл**
+stop → banner виден → start → banner исчезает → preview работает.
+
+---
+
+### Этап 4 — Inspector: completeness (~2-3 недели)
+
+UI-фичи которые появятся в будущем (сейчас `NOT in UI`):
+- stroke color/width/style → тесты нужны как только UI появится
+- shadow params (x/y/blur/spread/color per-shadow) → аналогично
+- z-index input
+- rotate input
+- layout justify/align
+
+Уже в UI но без тестов:
+- `fillOpacity` — unreachable через CDP (ограничение documented)
+- `fillLinkToggle` round-trip: hex→token→hex cycle
+- Typography section (fontFamily/weight/lineHeight/letterSpacing) — вся секция без позитивных тестов
+- Breadcrumb navigation
+
+---
+
+### Этап 5 — Style editing cross-project (~1-2 недели)
+
+`style-editing.spec.ts` покрывает часть CSS-систем, но:
+- Bundler-specific тесты: sass (css vars), bun (shadcn), nextjs (app router CSS)
+- Remix style write: проверить write через RemixMockWrapper
+- Cleanup inflated timeouts (NEEDS LINEAR): f90da03/3e4323d/69c1569 — overshoots
+
+---
+
+### Оценка времени
+
+| Этап | Оценка | Блокер |
+|------|--------|--------|
+| 0 Инфраструктура | ✅ Done | — |
+| 1 Нулевые failures | ~1 нед | run #29 данные + 1-2 fix-run |
+| 2 Полный охват проектов | ~3-5 дн | зависит от run #29 |
+| 3 Canvas coverage | ~2-3 нед | написание тестов |
+| 4 Inspector completeness | ~2-3 нед | частично ждём UI фичи |
+| 5 Style editing cross-project | ~1-2 нед | анализ результатов |
+| **Minimum green** (этапы 0+1+2) | **~2 нед** | |
+| **Full green** (все этапы) | **~8-10 нед** | |
+
+**Minimum green** = 0 hard failures + все 35 проектов покрыты.
+**Full green** = minimum + все canvas/inspector фичи тестами защищены.
+
+---
+
 ## 📍 2026-04-29 10:25 CEST — Run #28 final
 
 ### Run #28 Results (run-20260429-075702-41743)
