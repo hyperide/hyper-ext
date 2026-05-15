@@ -1097,6 +1097,9 @@ let _dragSourceFilePath: string | null = null;
 let _dragStartX = 0;
 let _dragStartY = 0;
 let _dragSuppressNextClick = false;
+let _dragSourceEl: HTMLElement | null = null;
+let _dragIndicatorEl: HTMLElement | null = null;
+let _dragOrigStyleAttr = '';
 
 function _dragPointerDown(e: PointerEvent): void {
   if (state.engineMode !== 'design' || e.button !== 0) return;
@@ -1108,14 +1111,53 @@ function _dragPointerDown(e: PointerEvent): void {
   _dragStartX = e.clientX;
   _dragStartY = e.clientY;
   _dragState = 'pending';
+  _dragSourceEl = target;
 }
 
 function _dragPointerMove(e: PointerEvent): void {
-  if (_dragState !== 'pending') return;
+  if (_dragState === 'pending') {
+    const dx = e.clientX - _dragStartX;
+    const dy = e.clientY - _dragStartY;
+    if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
+      _dragState = 'dragging';
+      if (_dragSourceEl) {
+        _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
+        const s = _dragSourceEl.style;
+        s.transition = 'box-shadow 0.12s ease';
+        s.transform = 'scale(1.03)';
+        s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
+        s.opacity = '0.88';
+        s.position = 'relative';
+        s.zIndex = '2147483647';
+        s.pointerEvents = 'none';
+        const indicator = document.createElement('div');
+        indicator.className = 'hyper-drop-indicator';
+        indicator.style.display = 'none';
+        document.body.appendChild(indicator);
+        _dragIndicatorEl = indicator;
+      }
+    }
+    return;
+  }
+
+  if (_dragState !== 'dragging') return;
+
   const dx = e.clientX - _dragStartX;
   const dy = e.clientY - _dragStartY;
-  if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD_PX) {
-    _dragState = 'dragging';
+  if (_dragSourceEl) {
+    _dragSourceEl.style.transform = `scale(1.03) translate(${dx}px, ${dy}px)`;
+  }
+
+  if (_dragIndicatorEl) {
+    const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const dropSrc = dropEl ? iframeResolver.getSourceLocation(dropEl) : null;
+    if (dropSrc && dropEl && `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}` !== _dragSourceId) {
+      const r = dropEl.getBoundingClientRect();
+      _dragIndicatorEl.style.top = `${(e.clientY < r.top + r.height / 2 ? r.top : r.bottom) - 1}px`;
+      _dragIndicatorEl.style.display = 'block';
+    } else {
+      _dragIndicatorEl.style.display = 'none';
+    }
   }
 }
 
@@ -1126,6 +1168,17 @@ function _dragPointerUp(e: PointerEvent): void {
   _dragState = 'idle';
   _dragSourceId = null;
   _dragSourceFilePath = null;
+
+  if (_dragSourceEl) {
+    _dragSourceEl.setAttribute('style', _dragOrigStyleAttr);
+    _dragSourceEl = null;
+  }
+  _dragOrigStyleAttr = '';
+  if (_dragIndicatorEl) {
+    _dragIndicatorEl.remove();
+    _dragIndicatorEl = null;
+  }
+
   if (!wasDragging || !sourceId || !sourceFilePath) return;
 
   const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;

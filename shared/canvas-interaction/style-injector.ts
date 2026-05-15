@@ -81,6 +81,32 @@ body.design-mode fieldset:disabled {
 }`);
   }
 
+  // Drop indicator for drag/reorder visual feedback
+  parts.push(`
+.hyper-drop-indicator {
+  position: fixed !important;
+  left: 4px !important;
+  right: 4px !important;
+  height: 2px !important;
+  background: #3b82f6 !important;
+  z-index: 2147483646 !important;
+  pointer-events: none !important;
+  border-radius: 2px !important;
+}
+.hyper-drop-indicator::before,
+.hyper-drop-indicator::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+}
+.hyper-drop-indicator::before { left: -3px !important; }
+.hyper-drop-indicator::after  { right: -3px !important; }`);
+
   return parts.join('\n');
 }
 
