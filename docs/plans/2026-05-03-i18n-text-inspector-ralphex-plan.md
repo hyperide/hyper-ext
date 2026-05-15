@@ -293,13 +293,13 @@ bun test vscode-extension/hypercanvas-preview/src/__tests__/I18nTextInspector.te
 
 ### Task 10: Implement Inspector UI
 
-- [ ] Add a compact text inspector UI consistent with the existing sidebar:
+- [x] Add a compact text inspector UI consistent with the existing sidebar:
   key combobox/dropdown, resolved text input, language switcher, and go-to-code.
-- [ ] Use existing shadcn/Radix primitives and semantic theme tokens.
-- [ ] Do not use or modify `client/components/ui/color-combobox.*`.
-- [ ] Keep plain text and unsupported expression behavior unchanged.
-- [ ] Ensure dark theme support and stable dimensions for compact sidebar layout.
-- [ ] Ensure no in-app instructional text; use short field labels only where
+- [x] Use existing shadcn/Radix primitives and semantic theme tokens.
+- [x] Do not use or modify `client/components/ui/color-combobox.*`.
+- [x] Keep plain text and unsupported expression behavior unchanged.
+- [x] Ensure dark theme support and stable dimensions for compact sidebar layout.
+- [x] Ensure no in-app instructional text; use short field labels only where
   required for form clarity.
 
 Verification:
@@ -311,12 +311,12 @@ bun test vscode-extension/hypercanvas-preview/src/__tests__/I18nTextInspector.te
 
 ### Task 11: Add Write-Path Tests First
 
-- [ ] Add failing tests for editing resolved text:
+- [x] Add failing tests for editing resolved text:
   `shared/i18n-text/__tests__/write-i18n-resource.test.ts`.
-- [ ] Cover updating an existing translation key in active locale.
-- [ ] Cover switching the key dropdown from `habits.walks` to another key.
-- [ ] Cover unresolved/missing key behavior without corrupting JSX.
-- [ ] Confirm failure is missing production write support.
+- [x] Cover updating an existing translation key in active locale.
+- [x] Cover switching the key dropdown from `habits.walks` to another key.
+- [x] Cover unresolved/missing key behavior without corrupting JSX.
+- [x] Confirm failure is missing production write support.
 
 Verification:
 
