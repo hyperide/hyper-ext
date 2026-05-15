@@ -679,12 +679,14 @@ Monitoring in progress — will update when shards complete.
 - **Fix** (`499e786`): click activity bar before Monaco (same as `Editor.openFile` pattern) to escape webview focus; bump post-click wait 500ms→1000ms.
 - Note: Attempt 1 (Vite FS watcher) remains a known intermittent issue. With attempt 2 reliably fixed, the test becomes FLAKY (acceptable per green definition).
 
-**S3** (141 tests done): **4 hard fails** — all pre-existing patterns, all covered by fixes
+**S3** (141 tests done): **4+ hard fails** — all pre-existing patterns, all covered by fixes
 
 | Test | Hard fails | Root cause | Fix |
 |------|-----------|-----------|-----|
-| "Tamagui: style written as prop" | 6 failures (3 projects × 2 attempts) | App.web.tsx cold AST parse ~100s, 90s poll insufficient | `1e83ca8` (150s) |
+| "Tamagui: style written as prop" | 7 failures (4 projects × 2 attempts — see note) | App.web.tsx cold AST parse ~100s, 90s poll insufficient | `1e83ca8` (150s) |
 | "opacity set + HMR round-trip" | 2 failures (1 project, 2 attempts) | Tamagui HMR recompile takes ~100s; `isPreviewLoaded()` poll 30s insufficient | `5a7402b` (150s) |
+
+**Note on "style written as prop" 4th project (tamagui-whatsapp)**: Attempt 1 failed at 120134ms. Attempt 2 started on worker 15, ran for ~720s (vs 360s timeout), VS Code crashed in teardown (`page.evaluate: Target crashed`). No `test-done` emitted for attempt 2 — classified as HARD FAIL. Root cause same: App.web.tsx cold parse + 90s poll budget.
 
 **S3 FLAKY** (all acceptable):
 - "component has non-zero dimensions" — 35s → retry 8s (App.web.tsx scanner indexing race)
@@ -709,4 +711,37 @@ Monitoring in progress — will update when shards complete.
 - "opacity set + HMR round-trip" — PASS (150s poll covers ~100s HMR recompile)
 - "component with error" on react-vite-styled-shopify — FLAKY/PASS (focus fix prevents attempt 2 fail; attempt 1 remains intermittent due to Vite FS watcher degradation)
 - All other tests — same as run #31 (no regressions expected)
+
+---
+
+## 📍 2026-04-29 19:15 CEST — Run #31 late analysis (S1: 53%, S2: 84%, S3: 73%)
+
+### Status
+
+Run #31 still running (~3.75h in). No new hard fails since 18:30 analysis.
+
+**S1** (28230/52523 log lines ≈ 53%): **0 hard fails** — 1 flaky ("default export and named export components both appear" 70449ms → retry 26294ms pass)
+
+**S2** (36767/43562 log lines ≈ 84%): **1 hard fail** (already documented) — no new failures since line 17940
+
+**S3** (20867/28402 log lines ≈ 73%): Tamagui projects DONE. Currently running preview-render tests. No new failures.
+
+### 4th Tamagui project confirmed: tamagui-whatsapp
+
+S3 deep-dive revealed 4 Tamagui projects failing "style written as prop" (not 3 as stated at 18:30):
+- 3 projects (A, B, C): 2 clean test-done entries each (both failed) — HARD FAIL pairs
+- tamagui-whatsapp: attempt 1 = 120134ms fail, attempt 2 = VS Code crash in teardown (no test-done)
+  All 4 covered by `1e83ca8` (150s poll).
+
+### opacity HMR: multiple projects, first one fails
+
+"opacity set + HMR round-trip" fails on tamagui-fitness (cold App.web.tsx cache) but passes on later projects (10149ms). Fix `5a7402b` (150s) fixes the first-encounter cold-cache issue.
+
+### Run #32 readiness: 3 fixes committed
+
+| Commit | Fix | Covers |
+|--------|-----|--------|
+| `1e83ca8` | Tamagui style-write poll 90s→150s | 4 Tamagui projects "style written" |
+| `5a7402b` | HMR isPreviewLoaded timeout 30s→150s | tamagui-fitness "opacity HMR" |
+| `499e786` | Monaco editor focus: activity bar click + 1000ms | react-vite-styled-shopify "component with error" |
 
