@@ -60,6 +60,7 @@ describe('I18nTextInspector (VS Code webview)', () => {
     render(
       <I18nTextInspector
         i18nBinding={supportedBinding}
+        localeEditable
         onKeyChange={mock(() => {})}
         onResolvedTextChange={mock(() => {})}
         onLocaleChange={onLocaleChange}
