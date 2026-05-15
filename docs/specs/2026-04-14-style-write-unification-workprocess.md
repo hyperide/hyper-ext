@@ -4793,3 +4793,40 @@ Bridge bot report pagination and E2E teardown noise fix,
   * Restart full E2E with `--retries=0 --workers=1` and continue monitoring
     fail markers, VS Code windows/dialogs, CPU, and memory.
 ```
+
+Bridge bot page-callback hardening and full E2E restart,
+2026-04-22 18:37 CEST:
+
+```text
+- Repo: `/Users/ultra/xp/codex-tg-bot`.
+- Commit: 710b3ae fix: answer Telegram page callbacks explicitly
+- Trigger:
+  * User reported that Telegram pagination still showed an infinite loading
+    spinner when pressing page buttons.
+  * Existing logs had no fresh exception, so the callback path needed explicit
+    diagnostics instead of silent generic handling.
+- Fix:
+  * Added a dedicated `bot.callbackQuery(/^page.../)` handler for page buttons.
+  * Started the bot with explicit allowed updates:
+    `["message", "callback_query"]`.
+  * Added `page callback data=...` logging for every page callback received.
+  * Added fallback `answerCallbackQuery` responses for missing, invalid,
+    expired, and unmatched page callbacks.
+  * Kept page edit failures visible by logging them and sending a chat message
+    with the edit failure text.
+- Validation:
+  * `bun test` passed 29/29.
+  * `bunx tsc --noEmit` passed.
+  * `git diff --check` passed.
+  * launchd service `com.ultra.codex-tg-bot` restarted; active PID observed:
+    68361.
+  * Sent a new long paginated report after restart asking the user to press
+    `Next`/`Prev`.
+  * As of this note, no `page callback` log line has appeared yet.
+- E2E:
+  * Full E2E restarted at `/tmp/hyper-e2e-full-20260422-1827.log` with
+    `--retries=0 --workers=1`.
+  * The previous failure point passed:
+    `log entries with stack traces are expandable` at `139/2209`.
+  * Progress observed at `150/2209`; no `[test-errors]` or save dialogs.
+```
