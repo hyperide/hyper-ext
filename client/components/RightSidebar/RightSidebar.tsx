@@ -442,6 +442,10 @@ export default function RightSidebar({
   // Set to true on unmount so any in-flight i18n write callbacks bail out instead of
   // dispatching selection / writeInProgress updates to a detached component.
   const i18nWriteAbortedRef = useRef(false);
+  // Stores the last selectedId + componentPath when i18nText was valid. Used as fallback in
+  // handleI18nKeyChange: HMR transiently clears selectedIds, but we still need to send the
+  // second write to the correct element if the inspector panel is still showing (via ?? prev.i18nText).
+  const lastI18nElementRef = useRef<{ elementId: string; path: string | null } | null>(null);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -745,11 +749,18 @@ export default function RightSidebar({
   // is no longer attached to the same DOM node.
   const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
 
+  // Capture last-known element identity while i18nText is valid. HMR may transiently
+  // clear selectedIds after a write; this ref lets the second write still go through.
+  if (i18nText && selectedId) {
+    lastI18nElementRef.current = { elementId: selectedId, path: componentPath };
+  }
+
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
-      if (!selectedId || !componentPath) return;
-      const previousSelectedId = selectedId;
+      const effectiveSelectedId = selectedId ?? lastI18nElementRef.current?.elementId ?? null;
+      if (!effectiveSelectedId) return;
+      const previousSelectedId = effectiveSelectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
       // as "create new key" — also write the JSON resource so the next re-read
       // returns editable=true and the user can immediately type the translation.
@@ -781,7 +792,7 @@ export default function RightSidebar({
             newText: i18nText.resolvedText ?? '',
             previousKey: i18nText.key,
             filePath: i18nText.sourceLocation.filePath,
-            elementId: selectedId,
+            elementId: effectiveSelectedId,
             skipResourceWrite: !isNewKey,
           });
           dbg('writeI18nResource resolved', writeResult);

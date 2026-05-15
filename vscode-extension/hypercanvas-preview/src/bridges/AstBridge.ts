@@ -640,13 +640,16 @@ export class AstBridge {
       };
     }
 
-    // When the key itself changes, update only the key literal inside the
-    // current JSX child expression so custom helper shape is preserved.
+    // Always attempt to update the key literal in JSX when a previousKey is provided,
+    // even if previousKey === message.key. The client can hold stale state (HMR clears
+    // selectedIds briefly; ?? prev.i18nText preserves the pre-write key), so the file
+    // may have a different key than what the client reports. updateI18nKey's fallback
+    // handles this: when previousKey is not found, it replaces the first StringLiteral.
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     const previousKey = message.previousKey;
     let newElementId: string | undefined;
     _dbgBridge(`[writeI18nResource] key=${message.key} previousKey=${previousKey} filePath=${i18nFilePath} elementId=${i18nElementId} skipResourceWrite=${message.skipResourceWrite}`);
-    if (i18nFilePath && i18nElementId && previousKey && previousKey !== message.key) {
+    if (i18nFilePath && i18nElementId && previousKey) {
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
       );
