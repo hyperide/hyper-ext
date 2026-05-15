@@ -272,23 +272,23 @@ bun test vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.tes
 
 ### Task 9: Add Inspector UI Tests First
 
-- [ ] Add failing UI tests for SaaS inspector text display:
+- [x] Add failing UI tests for SaaS inspector text display:
   `client/components/RightSidebar/__tests__/I18nTextInspector.test.tsx`
   or the closest existing RightSidebar test path.
-- [ ] Add failing VS Code webview test:
-  `vscode-extension/hypercanvas-preview/src/__tests__/PropsForm.test.ts` or a
-  focused preview-panel test if PropsForm is the active inspector for text.
-- [ ] Assert the i18n state shows:
+- [x] Add failing VS Code webview test:
+  `vscode-extension/hypercanvas-preview/src/__tests__/I18nTextInspector.test.tsx`
+  (PropsForm.test.ts is for ComponentErrorOverlay, not the text inspector).
+- [x] Assert the i18n state shows:
   key combobox/dropdown with `habits.walks`, resolved text for active language,
   language switcher, and a raw-expression fallback for unsupported expressions.
-- [ ] Confirm tests fail because the UI still shows only raw `{}` expression
+- [x] Confirm tests fail because the UI still shows only raw `{}` expression
   editing.
 
 Verification:
 
 ```bash
 bun test client/components/RightSidebar/__tests__/I18nTextInspector.test.tsx
-bun test vscode-extension/hypercanvas-preview/src/__tests__/PropsForm.test.ts
+bun test vscode-extension/hypercanvas-preview/src/__tests__/I18nTextInspector.test.tsx
 ```
 
 ### Task 10: Implement Inspector UI
@@ -306,7 +306,7 @@ Verification:
 
 ```bash
 bun test client/components/RightSidebar/__tests__/I18nTextInspector.test.tsx
-bun test vscode-extension/hypercanvas-preview/src/__tests__/PropsForm.test.ts
+bun test vscode-extension/hypercanvas-preview/src/__tests__/I18nTextInspector.test.tsx
 ```
 
 ### Task 11: Add Write-Path Tests First
