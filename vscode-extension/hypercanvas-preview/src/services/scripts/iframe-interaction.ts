@@ -425,6 +425,9 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
     } else {
       clientSourceMapCache.set(key, loc);
       if (loc) {
+        // FiberSourceIndex stores source-derived keys; source-map cache updates
+        // can change those keys from compiled positions to original locations.
+        invalidateSourceCache();
         needsOverlayUpdate = true;
         scheduleOverlayLoopIfNeeded();
         retryPendingClick(); // retry any click waiting for this source map
