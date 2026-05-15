@@ -139,6 +139,12 @@ export class PreviewModeManager {
     const detection = await detectFramework(this._projectRoot, this._io);
     const { framework } = detection;
 
+    // Arm the recompile gate BEFORE any file write that triggers HMR.
+    // Webpack/Vite/Remix/Next.js all do a fresh compile when route or entry
+    // files change; the gate forces consumers to wait for the post-write
+    // ready marker instead of racing the iframe load. See HYP-363.
+    this._onBeforeWebpackEntryPatch?.();
+
     switch (framework) {
       case 'nextjs-app-router':
       case 'nextjs-pages-router':
@@ -156,11 +162,6 @@ export class PreviewModeManager {
         return this._patchEntryFile();
       }
       case 'webpack':
-        // Arm the recompile gate BEFORE writing the entry-file patch.
-        // Webpack notices the file change ~20–40s later and emits a second
-        // `compiled successfully`; the gate forces consumers to wait for THAT
-        // message instead of accepting the stale first one. See HYP-363.
-        this._onBeforeWebpackEntryPatch?.();
         return this._patchEntryFile();
       case 'parcel':
         return this._patchEntryFile();

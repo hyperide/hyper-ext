@@ -428,11 +428,30 @@ export class DevServerManager {
     const gate = this._recompileGate;
     if (!gate) return;
     if (Date.now() < gate.armedAt) return; // can't happen with monotonic Date.now, but defensive
-    const lower = text.toLowerCase();
-    if (!lower.includes('compiled successfully')) return;
+    // Match the same set of markers we accept for initial server-ready
+    // detection. After PreviewModeManager writes a route/entry file, the dev
+    // server recompiles and emits one of these markers — webpack writes
+    // "compiled successfully", Remix/Vite writes "page reload" or "hmr
+    // update", Next.js writes "Compiled in" or "Ready in". Matching only the
+    // webpack phrase missed the Remix/Vite/Next clusters and caused 90s
+    // setupPreview hangs on those projects (HYP-363 cluster).
+    if (!this._isRecompileReadyMessage(text)) return;
     console.log('[HyperIDE] DevServer recompile gate released');
     this._recompileGate = null;
     gate.resolve();
+  }
+
+  private _isRecompileReadyMessage(text: string): boolean {
+    const lower = text.toLowerCase();
+    return (
+      lower.includes('compiled successfully') || // webpack/CRA
+      lower.includes('compiled in') || // Next.js post-HMR "Compiled in 200ms"
+      lower.includes('compiled client') || // Next.js post-HMR
+      lower.includes('hmr update') || // Vite "[vite] hmr update"
+      lower.includes('page reload') || // Vite/Remix "[vite] page reload"
+      lower.includes('rebuilt in') || // esbuild
+      (lower.includes('ready') && lower.includes('ms')) // Vite "ready in N ms" after restart
+    );
   }
 
   private async _syncProjectPathWithWorkspace(): Promise<void> {
