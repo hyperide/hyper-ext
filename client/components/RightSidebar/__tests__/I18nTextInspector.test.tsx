@@ -21,6 +21,7 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
+  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -67,6 +68,8 @@ describe('I18nTextInspector', () => {
     );
     const ruButton = screen.getByText('ru');
     expect(ruButton).toBeTruthy();
+    expect(screen.getByText('en').getAttribute('aria-pressed')).toBe('true');
+    expect(ruButton.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(ruButton);
     expect(onLocaleChange).toHaveBeenCalledWith('ru');
   });
@@ -130,6 +133,88 @@ describe('I18nTextInspector', () => {
     );
     fireEvent.change(screen.getByDisplayValue('Go for a walk'), { target: { value: 'Take a walk' } });
     expect(onResolvedTextChange).toHaveBeenCalledWith('Take a walk');
+  });
+
+  describe('interaction flow after local edits', () => {
+    it('shows the newly selected locale text after editing the previous locale', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, activeLocale: 'en', availableLocales: ['en', 'ru', 'rs'] }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited English' } });
+      expect(screen.getByDisplayValue('Edited English')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{
+            ...supportedBinding,
+            activeLocale: 'ru',
+            availableLocales: ['en', 'ru', 'rs'],
+            resolvedText: 'Русский текст',
+          }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+      expect(screen.getByDisplayValue('Русский текст')).toBeTruthy();
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Отредактированный русский' } });
+      expect(screen.getByDisplayValue('Отредактированный русский')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{
+            ...supportedBinding,
+            activeLocale: 'rs',
+            availableLocales: ['en', 'ru', 'rs'],
+            resolvedText: 'Srpski tekst',
+          }}
+          localeEditable
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+      expect(screen.getByDisplayValue('Srpski tekst')).toBeTruthy();
+      expect(screen.queryByDisplayValue('Отредактированный русский')).toBeNull();
+    });
+
+    it('shows the newly selected key text after editing the previous key', () => {
+      const { rerender } = render(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, key: 'hero.title', resolvedText: 'Hero title' }}
+          keyEditable
+          availableKeys={['hero.title', 'hero.subtitle']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+
+      fireEvent.change(screen.getByTestId('i18n-text-input'), { target: { value: 'Edited title' } });
+      expect(screen.getByDisplayValue('Edited title')).toBeTruthy();
+
+      rerender(
+        <I18nTextInspector
+          i18nBinding={{ ...supportedBinding, key: 'hero.subtitle', resolvedText: 'Hero subtitle' }}
+          keyEditable
+          availableKeys={['hero.title', 'hero.subtitle']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          onLocaleChange={mock(() => {})}
+        />,
+      );
+      expect(screen.getByDisplayValue('Hero subtitle')).toBeTruthy();
+      expect(screen.queryByDisplayValue('Edited title')).toBeNull();
+    });
   });
 
   it('renders text input as disabled when editable is false', () => {
@@ -217,6 +302,7 @@ describe('I18nTextInspector', () => {
         onKeyChange={mock(() => {})}
         onResolvedTextChange={mock(() => {})}
         keyEditable
+        canCreateKeys
       />,
     );
     fireEvent.click(screen.getByTestId('i18n-key-input'));
@@ -236,6 +322,7 @@ describe('I18nTextInspector', () => {
         onKeyChange={onKeyChange}
         onResolvedTextChange={mock(() => {})}
         keyEditable
+        canCreateKeys
       />,
     );
     fireEvent.click(screen.getByTestId('i18n-key-input'));
@@ -246,7 +333,91 @@ describe('I18nTextInspector', () => {
     expect(onKeyChange).toHaveBeenCalledWith('onboarding.step1');
   });
 
-  it('falls back to plain input when keyEditable is true but no availableKeys provided', () => {
+  it('allows creating a key when the available key list is empty', async () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        availableKeys={[]}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+        canCreateKeys
+      />,
+    );
+    const trigger = screen.getByTestId('i18n-key-input');
+    expect(trigger.tagName.toLowerCase()).toBe('button');
+    fireEvent.click(trigger);
+    const searchInput = screen.getByPlaceholderText('Search or create key...');
+    fireEvent.change(searchInput, { target: { value: 'brand.first.key' } });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+    expect(onKeyChange).toHaveBeenCalledWith('brand.first.key');
+  });
+
+  it('allows creating a key before the available key list has loaded', async () => {
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+        canCreateKeys
+      />,
+    );
+    const trigger = screen.getByTestId('i18n-key-input');
+    expect(trigger.tagName.toLowerCase()).toBe('button');
+    fireEvent.click(trigger);
+    const searchInput = screen.getByPlaceholderText('Search or create key...');
+    fireEvent.change(searchInput, { target: { value: 'brand.loading.key' } });
+    fireEvent.click(screen.getByTestId('i18n-key-create'));
+    expect(onKeyChange).toHaveBeenCalledWith('brand.loading.key');
+  });
+
+  // Regression: non-editable layouts must still allow switching
+  // JSX to an already-existing key. AstBridge handles that path with skipResourceWrite=true,
+  // so no locale-file write happens and the format restriction does not apply.
+  // Only the Create affordance is gated on canCreateKeys.
+  describe('read-only layout (canCreateKeys=false) with existing keys', () => {
+    it('renders the combobox and lets user pick an existing key', () => {
+      const onKeyChange = mock(() => {});
+      render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          availableKeys={['habits.walks', 'habits.runs', 'home.title']}
+          onKeyChange={onKeyChange}
+          onResolvedTextChange={mock(() => {})}
+          keyEditable
+          canCreateKeys={false}
+        />,
+      );
+      const trigger = screen.getByTestId('i18n-key-input');
+      expect(trigger.tagName.toLowerCase()).toBe('button');
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByText('habits.runs'));
+      expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
+    });
+
+    it('hides the Create key affordance when typed text does not match', () => {
+      render(
+        <I18nTextInspector
+          i18nBinding={supportedBinding}
+          availableKeys={['habits.walks', 'habits.runs']}
+          onKeyChange={mock(() => {})}
+          onResolvedTextChange={mock(() => {})}
+          keyEditable
+          canCreateKeys={false}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('i18n-key-input'));
+      const searchInput = screen.getByPlaceholderText('Search or create key...');
+      fireEvent.change(searchInput, { target: { value: 'brand.new.key' } });
+      expect(screen.queryByTestId('i18n-key-create')).toBeNull();
+      expect(screen.queryByText((t) => t.includes('Create key'))).toBeNull();
+    });
+  });
+
+  it('falls back to plain input when keyEditable is true but no creation path is available', () => {
     render(
       <I18nTextInspector
         i18nBinding={supportedBinding}

@@ -12,7 +12,14 @@ import * as t from '@babel/types';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
 import { ensureImport } from '@lib/ast/import-manager';
-import { setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
+import {
+  collectJsxExternalRefs,
+  collectJsxLocalBindings,
+  findImportForName,
+  pruneOrphanImports,
+  replicateImport,
+} from '@lib/ast/jsx-deps';
+import { cloneElement, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import {
   duplicateElementInAST,
   extractElementSource,
@@ -39,6 +46,41 @@ function dbg(msg: string) {
   } catch {}
 }
 
+function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValue: string): boolean {
+  let changed = false;
+
+  const visit = (current: t.Node | null | undefined): void => {
+    if (!current) return;
+    if (t.isStringLiteral(current) && current.value === previousValue) {
+      current.value = nextValue;
+      changed = true;
+      return;
+    }
+    if (t.isTemplateLiteral(current) && current.expressions.length === 0) {
+      const raw = current.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('');
+      if (raw === previousValue) {
+        current.quasis = [t.templateElement({ raw: nextValue, cooked: nextValue }, true)];
+        changed = true;
+      }
+      return;
+    }
+
+    for (const value of Object.values(current)) {
+      if (!value) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item && typeof item === 'object' && 'type' in item) visit(item as t.Node);
+        }
+      } else if (typeof value === 'object' && 'type' in value) {
+        visit(value as t.Node);
+      }
+    }
+  };
+
+  visit(node);
+  return changed;
+}
+
 // ============================================
 // Response Types
 // ============================================
@@ -59,6 +101,64 @@ export interface UpdateStylesResult extends AstOperationResult {
   className?: string;
 }
 
+// ============================================
+// moveElement contract — spec for Task 2+ in
+// docs/plans/2026-05-06-move-any-to-any-no-shared-parent.md
+// ============================================
+//
+// Semantics (the "any element to any place" promise):
+//
+// 1. moveElement(source, target, position) ALWAYS succeeds from the user's
+//    standpoint. There is no "must share JSX parent" / "rejected" branch —
+//    if the move would otherwise be ambiguous, the implementation does its
+//    best (auto-import what it can, inline what it cannot) and returns a
+//    list of `adjustments` describing what it had to do.
+//
+// 2. Cases the implementation MUST handle:
+//    a) Same JSX parent — sibling reorder (array splice in shared parent).
+//    b) Different JSX parents in the same file — cut-and-splice across
+//       subtrees of one module.
+//    c) Different files in the same component graph — cut from source file,
+//       paste into target file. Auto-add imports that the moved subtree
+//       references; auto-remove imports orphaned in the source file.
+//    d) Cross-component (e.g. drag from <Sidebar> into <Hero>) — same as
+//       (c). If the moved subtree references symbols bound only in the
+//       source component scope, surface them as new props on the target
+//       (or inline the resolved value when trivially safe).
+//    e) Drop into a non-container leaf (e.g. <img>) — insert as a sibling
+//       at `position`, never split the leaf.
+//
+// 3. The `position` parameter is the visual direction the user dragged
+//    toward — 'before' means "land just before target in document order",
+//    'after' means "land just after target". It is always defined; callers
+//    compute it from pointer geometry.
+//
+// 4. NodeRef inputs are raw — no client-side "lift to common parent"
+//    pre-processing. Both `source` and `target` may sit anywhere in the
+//    workspace. The shared/canvas-interaction/drop-target-lift module that
+//    used to enforce the "siblings only" precondition has been deleted.
+//
+// MoveResult shape:
+//   { success: true }                                 // clean move, no adjustments
+//   { success: true; adjustments: string[] }          // best-effort move
+//
+// Note: there is intentionally no `success: false` variant. Internal
+// failures (file I/O, parse errors) propagate as exceptions; the bridge
+// layer surfaces them as toasts but the contract from the iframe's
+// standpoint is "moveElement always returns success".
+
+export interface MoveResult {
+  success: true;
+  /** Human-readable list of best-effort adjustments (e.g. "added import: Foo from './Foo'", "inlined prop value `theme.primary`"). Omitted when the move was clean. */
+  adjustments?: string[];
+  /** Absolute path of the file that received the moved subtree (may differ from the source file for cross-file moves). */
+  resolvedPath?: string;
+  /** Pre-write content of the target file (for undo tracking). */
+  contentBeforeWrite?: string;
+  /** Pre-write content of every file mutated (source file + target file for cross-file moves). */
+  allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
+}
+
 export interface InsertElementResult extends AstOperationResult {
   newId?: string;
   index?: number;
@@ -74,6 +174,156 @@ export interface WrapElementResult extends AstOperationResult {
 
 function isJsxSourceFile(filePath: string): boolean {
   return /\.(jsx|tsx)$/.test(filePath);
+}
+
+/**
+ * Test whether `needle` is a descendant of `haystack` in the JSX tree.
+ * Used by moveElement to refuse cycles (move a subtree into itself).
+ * Walks JSXElement/JSXFragment children recursively; expressions inside
+ * `{…}` containers are unwrapped so e.g. `<div>{cond && <Foo />}</div>`
+ * is still detected.
+ */
+function jsxContains(haystack: t.JSXElement, needle: t.JSXElement): boolean {
+  for (const child of haystack.children) {
+    if (child === needle) return true;
+    if (t.isJSXElement(child) || t.isJSXFragment(child)) {
+      if (jsxContains(child as t.JSXElement, needle)) return true;
+    } else if (t.isJSXExpressionContainer(child)) {
+      // Walk inside `{…}` expressions in case the source contains the target
+      // through a conditional / fragment inside an expression slot.
+      const found = findJsxInExpression(child.expression, needle);
+      if (found) return true;
+    }
+  }
+  return false;
+}
+
+function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: t.JSXElement): boolean {
+  if (t.isJSXElement(expr)) {
+    if (expr === needle) return true;
+    return jsxContains(expr, needle);
+  }
+  if (t.isJSXFragment(expr)) {
+    for (const child of expr.children) {
+      if (child === needle) return true;
+      if (t.isJSXElement(child) && jsxContains(child, needle)) return true;
+    }
+  }
+  if (t.isLogicalExpression(expr) || t.isBinaryExpression(expr)) {
+    return findJsxInExpression(expr.left as t.Expression, needle) || findJsxInExpression(expr.right, needle);
+  }
+  if (t.isConditionalExpression(expr)) {
+    return (
+      findJsxInExpression(expr.test, needle) ||
+      findJsxInExpression(expr.consequent, needle) ||
+      findJsxInExpression(expr.alternate, needle)
+    );
+  }
+  return false;
+}
+
+/**
+ * Walk the JSX hierarchy upward from sourcePath and targetPath, find the
+ * deepest common JSX ancestor, and return the source/target JSXElements
+ * that are direct children of that common ancestor.
+ *
+ * This is the server-side counterpart of the deleted DOM-side
+ * `liftToCommonSiblings` (shared/canvas-interaction/drop-target-lift.ts —
+ * removed in 7864d180). Without lift, dragging an inner element of card-1
+ * onto an inner element of card-2 would just relocate the inner node into
+ * card-2's parent — which is rarely what the user wants. With lift, the
+ * outer cards reorder, matching the visual gesture.
+ *
+ * Returns null when:
+ *   - no common JSX ancestor exists (different return statements / fragments);
+ *   - the common ancestor is the source or target itself (one is an ancestor
+ *     of the other — caller decides whether to throw or extract);
+ *   - the lifted source/target is not itself a JSXElement (e.g. raw text
+ *     child of a fragment).
+ */
+function liftToCommonJsxParent(
+  sourcePath: import('@babel/traverse').NodePath<t.JSXElement>,
+  targetPath: import('@babel/traverse').NodePath<t.JSXElement>,
+): {
+  sourceLifted: t.JSXElement;
+  targetLifted: t.JSXElement;
+  commonParent: t.JSXElement | t.JSXFragment;
+} | null {
+  type AnyPath = import('@babel/traverse').NodePath;
+  const buildChain = (start: AnyPath): t.Node[] => {
+    const chain: t.Node[] = [];
+    let p: AnyPath | null = start;
+    while (p) {
+      chain.push(p.node);
+      p = p.parentPath ?? null;
+    }
+    return chain;
+  };
+  const sourceChain = buildChain(sourcePath as AnyPath);
+  const targetChain = buildChain(targetPath as AnyPath);
+
+  const sourceSet = new Set(sourceChain);
+  let commonIdxInTarget = -1;
+  for (let i = 0; i < targetChain.length; i++) {
+    if (sourceSet.has(targetChain[i])) {
+      commonIdxInTarget = i;
+      break;
+    }
+  }
+  if (commonIdxInTarget === -1) return null;
+
+  const commonNode = targetChain[commonIdxInTarget];
+  const sourceNode = sourceChain[0];
+  const targetNode = targetChain[0];
+
+  // Case A — common ancestor IS the source. Means source contains target.
+  // Caller guards this via jsxContains() and throws as a cycle, so we just
+  // refuse here too (defense-in-depth).
+  if (commonNode === sourceNode) return null;
+
+  // Case B — common ancestor IS the target. Means target is in source's
+  // ancestor chain (user dropped an inner element onto its own outer
+  // container). Extract: move sourceNode itself out of its current parent
+  // and into target's parent as a sibling of target.
+  if (commonNode === targetNode) {
+    const targetParent = targetChain[1];
+    if (!targetParent || (!t.isJSXElement(targetParent) && !t.isJSXFragment(targetParent))) {
+      return null;
+    }
+    if (!t.isJSXElement(sourceNode) || !t.isJSXElement(targetNode)) return null;
+    return {
+      sourceLifted: sourceNode,
+      targetLifted: targetNode,
+      commonParent: targetParent as t.JSXElement | t.JSXFragment,
+    };
+  }
+
+  // Case C — common ancestor is a third JSX node strictly above both.
+  if (!t.isJSXElement(commonNode) && !t.isJSXFragment(commonNode)) return null;
+  const commonIdxInSource = sourceChain.indexOf(commonNode);
+  if (commonIdxInSource < 1 || commonIdxInTarget < 1) return null;
+
+  const sourceLifted = sourceChain[commonIdxInSource - 1];
+  const targetLifted = targetChain[commonIdxInTarget - 1];
+  if (!t.isJSXElement(sourceLifted) || !t.isJSXElement(targetLifted)) return null;
+
+  return {
+    sourceLifted,
+    targetLifted,
+    commonParent: commonNode,
+  };
+}
+
+/** Render a short JSX tag name for debug logs (e.g. "p", "div", "Card.Header"). */
+function describeJsxName(el: t.JSXElement): string {
+  const name = el.openingElement.name;
+  if (t.isJSXIdentifier(name)) return name.name;
+  if (t.isJSXMemberExpression(name)) {
+    const obj = t.isJSXIdentifier(name.object) ? name.object.name : '?';
+    return `${obj}.${name.property.name}`;
+  }
+  if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
+  return '?';
 }
 
 // ============================================
@@ -216,6 +466,25 @@ export class AstService {
     } catch {
       // File read failure — node map will be stale but functional
     }
+  }
+
+  /**
+   * Drop cached AST + refresh NodeMapService for `filePath`. Use after an
+   * external mutation (file watcher event, HMR rewrite, prettier-on-save)
+   * so the next operation resolves nodeRefs against fresh line/column data
+   * instead of stale coordinates from the pre-rewrite version.
+   *
+   * Why both layers: the parser cache is content-keyed so it self-heals on
+   * a content change, but NodeMapService caches line/column entries that
+   * were valid only against the *previous* file content. Without this
+   * refresh, `findElementByPosition` would land on the wrong (or missing)
+   * element after an external rewrite — surfacing as the intermittent
+   * "иногда работает" race in moveElement, updateStyles, etc.
+   */
+  async invalidateFile(filePath: string): Promise<void> {
+    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    this._fileParser.invalidate(absolutePath);
+    await this._updateNodeMap(absolutePath);
   }
 
   /**
@@ -448,6 +717,47 @@ export class AstService {
     }
   }
 
+  async updateI18nKey(
+    filePath: string,
+    elementId: string,
+    previousKey: string,
+    nextKey: string,
+    nodeRef?: NodeRef,
+  ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
+
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
+      }
+      const { result, ast, resolvedPath } = resolved;
+
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
+      let changed = false;
+      for (const child of result.element.children) {
+        if (!t.isJSXExpressionContainer(child)) continue;
+        changed = replaceStringLiteralValue(child.expression, previousKey, nextKey) || changed;
+      }
+      if (!changed) return { success: false, error: 'i18n key literal not found in selected element' };
+
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
+      return { success: true, resolvedPath, contentBeforeWrite };
+    } catch (error) {
+      console.error('[AstService.updateI18nKey] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   /**
    * Insert a new JSX element into a component file.
    * Builds the element, adds import for PascalCase types, inserts at parent or root.
@@ -601,60 +911,467 @@ export class AstService {
   }
 
   /**
-   * Reorder a JSX element relative to a sibling in the same parent JSX element.
-   * Same-parent only: cross-parent reparenting is not supported.
+   * Move a JSX element from any place to any place.
+   *
+   * Implements the contract documented above (`MoveResult`). Same-file moves
+   * (Task 2) and cross-file moves (Task 3) are both wired in here. Each
+   * NodeRef is followed to its actual source file via
+   * `_resolveElementInCorrectFile`; if source and target sit in different
+   * files, the subtree is cut from source's AST, spliced into target's AST,
+   * and bookkeeping for imports (replicate into target, prune orphans in
+   * source) runs before both files are written.
+   *
+   * Internal failures (file I/O, parse errors, unresolvable nodeRefs)
+   * propagate as exceptions per the spec — there is no `success: false`
+   * branch from the user's standpoint. Callers (the bridge layer) translate
+   * thrown errors into surface notifications.
    */
-  async reorderElement(
+  async moveElement(
     filePath: string,
-    sourceId: string,
-    targetId: string,
+    sourceId: NodeRef | string,
+    targetId: NodeRef | string,
     position: 'before' | 'after',
-  ): Promise<AstOperationResult> {
+  ): Promise<MoveResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
 
-      const sourceResult = this._resolveElement(ast, sourceId as NodeRef, absolutePath);
-      if (!sourceResult) {
-        return { success: false, error: `Source element not found (nodeRef=${sourceId})` };
+    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+
+    dbg(
+      `[moveElement] BEGIN filePath=${filePath} absolutePath=${absolutePath} sourceId=${String(sourceId)} targetId=${String(targetId)} position=${position}`,
+    );
+
+    // Defensive freshen: drop parser cache + reparse NodeMapService for every
+    // file referenced by the inputs. Guards against the "иногда работает"
+    // race where an external rewrite (HMR, prettier-on-save, file watcher
+    // event) shifted line/column coordinates between a previous operation
+    // and this one — without freshen, NodeMapService still holds the old
+    // coordinates and `findElementByPosition` lands on the wrong element.
+    const filesToFreshen = new Set<string>([absolutePath]);
+    const sourceFile = this._extractFileFromNodeRef(String(sourceId));
+    if (sourceFile) filesToFreshen.add(sourceFile);
+    const targetFile = this._extractFileFromNodeRef(String(targetId));
+    if (targetFile) filesToFreshen.add(targetFile);
+    for (const f of filesToFreshen) {
+      try {
+        await this.invalidateFile(f);
+      } catch {
+        // Missing file (e.g. nodeRef points to a path that doesn't exist
+        // in the workspace yet) is fine — _resolveElementInCorrectFile
+        // will produce a clear "not found" error below.
       }
-
-      const targetResult = this._resolveElement(ast, targetId as NodeRef, absolutePath);
-      if (!targetResult) {
-        return { success: false, error: `Target element not found (nodeRef=${targetId})` };
-      }
-
-      const sourceParent = sourceResult.path.parent;
-      const targetParent = targetResult.path.parent;
-
-      if (!t.isJSXElement(sourceParent) || sourceParent !== targetParent) {
-        return { success: false, error: 'Elements must share a direct JSX parent (same-parent reorder only)' };
-      }
-
-      const children = sourceParent.children;
-      const sourceNode = sourceResult.element;
-      const targetNode = targetResult.element;
-
-      const srcIdx = children.indexOf(sourceNode);
-      const tgtIdx = children.indexOf(targetNode);
-
-      if (srcIdx === -1 || tgtIdx === -1 || srcIdx === tgtIdx) {
-        return { success: false, error: 'Invalid reorder: elements not in parent children or same element' };
-      }
-
-      children.splice(srcIdx, 1);
-      const newTgtIdx = children.indexOf(targetNode);
-      if (newTgtIdx === -1) return { success: false, error: 'Target lost after source removal' };
-      children.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, sourceNode);
-
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
-      return { success: true };
-    } catch (error) {
-      console.error('[AstService.reorderElement] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
+
+    // Discover which file each endpoint actually lives in. We only use
+    // the resolvedPath here — the AST returned is parsed-once-per-call,
+    // so we re-parse below to ensure both endpoints share one AST object.
+    const sourceLocate = await this._resolveElementInCorrectFile(absolutePath, sourceId as NodeRef);
+    dbg(`[moveElement] source locate result=${sourceLocate ? `path=${sourceLocate.resolvedPath}` : 'NULL'}`);
+    if (!sourceLocate) {
+      throw new Error(`moveElement: source element not found (nodeRef=${sourceId})`);
+    }
+    const targetLocate = await this._resolveElementInCorrectFile(absolutePath, targetId as NodeRef);
+    dbg(`[moveElement] target locate result=${targetLocate ? `path=${targetLocate.resolvedPath}` : 'NULL'}`);
+    if (!targetLocate) {
+      throw new Error(`moveElement: target element not found (nodeRef=${targetId})`);
+    }
+
+    // Cross-file branch — both endpoints in different files. Cut from source's
+    // AST, splice into target's AST, replicate imports the moved subtree
+    // depends on, prune any source-file imports orphaned by the cut, write
+    // both files. Returned MoveResult has `allCrossFileSnapshots` covering
+    // both pre-write contents so undo can restore each file independently.
+    if (sourceLocate.resolvedPath !== targetLocate.resolvedPath) {
+      dbg(
+        `[moveElement] cross-file branch sourceFile=${sourceLocate.resolvedPath} targetFile=${targetLocate.resolvedPath}`,
+      );
+      return await this._moveAcrossFiles({
+        sourceFilePath: sourceLocate.resolvedPath,
+        targetFilePath: targetLocate.resolvedPath,
+        sourceId: sourceId as NodeRef,
+        targetId: targetId as NodeRef,
+        position,
+      });
+    }
+
+    const targetFilePath = sourceLocate.resolvedPath;
+
+    // Re-parse so both endpoints resolve into the SAME AST instance.
+    // _resolveElementInCorrectFile parses once per call and the parser
+    // caches by (path, content), so this read is cheap.
+    const { ast } = await this._fileParser.readAndParseFile(targetFilePath);
+    const sourceResult = this._resolveElement(ast, sourceId as NodeRef, targetFilePath);
+    dbg(
+      `[moveElement] same-file re-parse sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`,
+    );
+    if (!sourceResult) {
+      throw new Error(`moveElement: source disappeared after re-parse (nodeRef=${sourceId})`);
+    }
+    const targetResult = this._resolveElement(ast, targetId as NodeRef, targetFilePath);
+    dbg(
+      `[moveElement] same-file re-parse targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`,
+    );
+    if (!targetResult) {
+      throw new Error(`moveElement: target disappeared after re-parse (nodeRef=${targetId})`);
+    }
+
+    const sourceNode = sourceResult.element;
+    const targetNode = targetResult.element;
+
+    if (sourceNode === targetNode) {
+      // Dropping a node onto itself is a no-op — succeed without touching the file.
+      dbg(`[moveElement] no-op: source === target`);
+      return { success: true, resolvedPath: targetFilePath };
+    }
+
+    // Refuse to move a subtree into one of its own descendants — that
+    // would create a cycle and corrupt the AST. Throw rather than
+    // best-effort because the user-visible drop indicator should never
+    // permit this geometry; if it does, that's a separate bug.
+    if (jsxContains(sourceNode, targetNode)) {
+      throw new Error('moveElement: cannot move a node into one of its descendants');
+    }
+
+    const sourceParent = sourceResult.path.parent;
+    const targetParent = targetResult.path.parent;
+
+    dbg(
+      `[moveElement] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'} sameParent=${sourceParent === targetParent}`,
+    );
+
+    if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
+      // Source is the root JSX returned from a function. Moving it would
+      // require replacing the function's return value — not in Task 2 scope.
+      throw new Error(
+        `moveElement: source has no JSX parent (parent type=${sourceParent?.type}); root-JSX moves not supported yet`,
+      );
+    }
+    if (!t.isJSXElement(targetParent) && !t.isJSXFragment(targetParent)) {
+      throw new Error(
+        `moveElement: target has no JSX parent (parent type=${targetParent?.type}); cannot insert before/after the root JSX`,
+      );
+    }
+
+    // Capture content before write for undo tracking.
+    let contentBeforeWrite: string | undefined;
+    try {
+      contentBeforeWrite = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+
+    // Decide what to actually move. When source and target share a direct
+    // JSX parent → simple sibling reorder. Otherwise lift both up to the
+    // deepest common JSX ancestor (Task 4) so e.g. dragging an inner
+    // <p> from card-1 onto an inner <h3> in card-2 reorders the OUTER
+    // cards instead of stuffing the <p> into card-2's wrapper div.
+    let movingNode: t.JSXElement = sourceNode;
+    let movingParent: t.JSXElement | t.JSXFragment = sourceParent;
+    let pivotNode: t.JSXElement = targetNode;
+    let pivotParent: t.JSXElement | t.JSXFragment = targetParent;
+    if (sourceParent !== targetParent) {
+      const lifted = liftToCommonJsxParent(sourceResult.path, targetResult.path);
+      dbg(
+        `[moveElement] liftToCommonJsxParent → ${
+          lifted
+            ? `sourceLifted=${describeJsxName(lifted.sourceLifted)} targetLifted=${describeJsxName(lifted.targetLifted)} commonParent=${lifted.commonParent.type}`
+            : 'NULL'
+        }`,
+      );
+      if (lifted) {
+        if (lifted.sourceLifted === lifted.targetLifted) {
+          // Both nodes live inside the same outer-card subtree → no-op at
+          // the outer level. Treat as success without mutation.
+          dbg(`[moveElement] no-op: lifted source === lifted target`);
+          return { success: true, resolvedPath: targetFilePath };
+        }
+        movingNode = lifted.sourceLifted;
+        pivotNode = lifted.targetLifted;
+        pivotParent = lifted.commonParent;
+        // movingParent is whichever JSXElement/Fragment actually contains
+        // movingNode in its `children` array. For the standard lift case
+        // (Case C: lifted to a third common ancestor) movingParent ===
+        // commonParent. For the extract case (Case B: target is ancestor
+        // of source — sourceLifted === sourceNode itself), movingParent
+        // is the original sourceParent.
+        movingParent = movingNode === sourceNode ? sourceParent : lifted.commonParent;
+      } else {
+        // No common JSX ancestor — happens when source and target live
+        // in different return statements / component functions in the
+        // same file. Fall back to the original cut-from-sourceParent +
+        // splice-into-targetParent semantic so cross-component moves
+        // (Task 4 of move-any-to-any) keep working.
+        dbg(`[moveElement] no common ancestor → fallback to cross-parent splice`);
+      }
+    }
+
+    // Splice movingNode out of movingParent.children, then insert it
+    // into pivotParent.children at position relative to pivotNode.
+    // When movingParent === pivotParent the recompute after the cut
+    // matters (target's index can shift); when they differ it's a no-op
+    // but we still recompute defensively in case Babel reuses arrays.
+    const movingSiblings = movingParent.children;
+    const srcIdx = movingSiblings.indexOf(movingNode);
+    if (srcIdx === -1) {
+      throw new Error('moveElement: source not found in its parent children');
+    }
+    movingSiblings.splice(srcIdx, 1);
+    const pivotSiblings = pivotParent.children;
+    const newTgtIdx = pivotSiblings.indexOf(pivotNode);
+    if (newTgtIdx === -1) {
+      throw new Error('moveElement: target not found in its parent children after source cut');
+    }
+    pivotSiblings.splice(position === 'before' ? newTgtIdx : newTgtIdx + 1, 0, movingNode);
+
+    dbg(`[moveElement] mutation done, writing AST to ${targetFilePath}`);
+    await this._fileParser.writeAST(ast, targetFilePath);
+    await this._updateNodeMap(targetFilePath);
+
+    let contentAfterWrite: string | undefined;
+    try {
+      contentAfterWrite = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+    const changed =
+      contentBeforeWrite !== undefined && contentAfterWrite !== undefined
+        ? contentBeforeWrite !== contentAfterWrite
+        : 'unknown';
+    dbg(
+      `[moveElement] write done filePath=${targetFilePath} changed=${changed} bytesBefore=${contentBeforeWrite?.length ?? '?'} bytesAfter=${contentAfterWrite?.length ?? '?'}`,
+    );
+
+    return {
+      success: true,
+      resolvedPath: targetFilePath,
+      contentBeforeWrite,
+    };
+  }
+
+  /**
+   * Cross-file move (Task 3). Source subtree is removed from `sourceFilePath`,
+   * cloned (so recast doesn't carry the original file's location info into
+   * the new context), and inserted at `position` relative to target inside
+   * `targetFilePath`. Imports referenced by the moved subtree get replicated
+   * in target (merging into existing same-source declarations); imports
+   * orphaned in source after the cut get pruned.
+   *
+   * Returns a MoveResult with `adjustments` describing the import bookkeeping
+   * and `allCrossFileSnapshots` carrying pre-write content for BOTH files
+   * (undo restores them independently).
+   */
+  private async _moveAcrossFiles(opts: {
+    sourceFilePath: string;
+    targetFilePath: string;
+    sourceId: NodeRef;
+    targetId: NodeRef;
+    position: 'before' | 'after';
+  }): Promise<MoveResult> {
+    const { sourceFilePath, targetFilePath, sourceId, targetId, position } = opts;
+
+    // Snapshot both files BEFORE any mutation so undo can restore them.
+    let sourceContentBefore: string | undefined;
+    let targetContentBefore: string | undefined;
+    try {
+      sourceContentBefore = await this._fileIO.readFile(sourceFilePath);
+    } catch {}
+    try {
+      targetContentBefore = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+
+    // Re-parse so each side resolves into its own AST instance (the parser
+    // caches per-(path, content), so this is cheap).
+    const { ast: sourceAst } = await this._fileParser.readAndParseFile(sourceFilePath);
+    const { ast: targetAst } = await this._fileParser.readAndParseFile(targetFilePath);
+
+    const sourceResult = this._resolveElement(sourceAst, sourceId, sourceFilePath);
+    dbg(`[moveElement.cross] sourceResult=${sourceResult ? `name=${describeJsxName(sourceResult.element)}` : 'NULL'}`);
+    if (!sourceResult) {
+      throw new Error(`moveElement: source disappeared in ${sourceFilePath} (nodeRef=${sourceId})`);
+    }
+    const targetResult = this._resolveElement(targetAst, targetId, targetFilePath);
+    dbg(`[moveElement.cross] targetResult=${targetResult ? `name=${describeJsxName(targetResult.element)}` : 'NULL'}`);
+    if (!targetResult) {
+      throw new Error(`moveElement: target disappeared in ${targetFilePath} (nodeRef=${targetId})`);
+    }
+
+    const sourceNode = sourceResult.element;
+    const targetNode = targetResult.element;
+
+    const sourceParent = sourceResult.path.parent;
+    const targetParent = targetResult.path.parent;
+
+    dbg(
+      `[moveElement.cross] parents sourceParent=${sourceParent?.type ?? 'undefined'} targetParent=${targetParent?.type ?? 'undefined'}`,
+    );
+
+    if (!t.isJSXElement(sourceParent) && !t.isJSXFragment(sourceParent)) {
+      throw new Error(
+        `moveElement: source has no JSX parent (parent type=${sourceParent?.type}); root-JSX moves not supported`,
+      );
+    }
+    if (!t.isJSXElement(targetParent) && !t.isJSXFragment(targetParent)) {
+      throw new Error(
+        `moveElement: target has no JSX parent (parent type=${targetParent?.type}); cannot insert before/after the root JSX`,
+      );
+    }
+
+    // 1. Decide which imports the moved subtree needs in the target file.
+    //    Over-collect identifiers from the subtree, then subtract names BOUND
+    //    inside the subtree (arrow params like `(item) => …`, inline
+    //    destructures like `const { x } = ctx`) — those bindings travel with
+    //    the moved JSX so they aren't unresolved in target. The remainder
+    //    intersects with source's import declarations: matches replicate as
+    //    imports, non-matches surface as `unresolvedLocalRefs` adjustments
+    //    (props / hook returns / source-component locals — Task 4/5 territory:
+    //    we don't auto-lift them yet, but we tell the user instead of
+    //    silently emitting broken target code).
+    const refs = collectJsxExternalRefs(sourceNode);
+    const localBindings = collectJsxLocalBindings(sourceNode);
+    for (const name of localBindings) refs.delete(name);
+    const adjustments: string[] = [];
+
+    // 2. Cut the source node from its parent's children. Do this BEFORE
+    //    pruning orphans so the prune scan sees the post-cut AST.
+    const sourceSiblings = sourceParent.children;
+    const srcIdx = sourceSiblings.indexOf(sourceNode);
+    if (srcIdx === -1) {
+      throw new Error('moveElement: source not found in its parent children');
+    }
+    sourceSiblings.splice(srcIdx, 1);
+
+    // 3. Clone the JSX subtree before splicing into the target AST so
+    //    recast doesn't try to reuse the source file's original token
+    //    spans against target's source map (would produce stale whitespace).
+    const movedNode = cloneElement(sourceNode);
+
+    // 4. Replicate each needed import into the target file. Track refs that
+    //    exist in the moved subtree but DON'T resolve to a source-file import
+    //    — those are local-scope (function params, hooks, helpers); we can't
+    //    auto-replicate them, surface as adjustments so the user knows.
+    const unresolvedLocalRefs: string[] = [];
+    // Universally-bound names that are always available in any React/JS scope —
+    // never flag these as unresolved even if source has no import for them.
+    // (`React` is special-cased because classic JSX runtime relies on a global
+    // React; modern automatic runtime doesn't import it explicitly. The rest
+    // are JS globals / built-ins that the over-collector picks up from
+    // expression slots.)
+    const ALWAYS_AVAILABLE = new Set([
+      'React',
+      'undefined',
+      'null',
+      'true',
+      'false',
+      'NaN',
+      'Infinity',
+      'console',
+      'window',
+      'document',
+      'globalThis',
+      'Math',
+      'Date',
+      'JSON',
+      'Number',
+      'String',
+      'Boolean',
+      'Array',
+      'Object',
+      'Promise',
+      'Symbol',
+      'Error',
+    ]);
+    for (const name of refs) {
+      const found = findImportForName(sourceAst, name);
+      if (!found) {
+        // No matching import in source → this identifier is bound somewhere
+        // outside the subtree (source-component scope: hook return, helper,
+        // prop, destructured local) OR is a universal global. Skip universals;
+        // surface everything else as an adjustment so the user finds out
+        // before runtime. The PascalCase-only filter that lived here before
+        // silently dropped lowercase props/hook-returns/helpers — exactly the
+        // failure mode of cross-component moves that the plan promised to
+        // surface.
+        if (!ALWAYS_AVAILABLE.has(name)) {
+          unresolvedLocalRefs.push(name);
+        }
+        continue;
+      }
+      const result = replicateImport(targetAst, found, sourceFilePath, targetFilePath);
+      switch (result.kind) {
+        case 'added':
+          adjustments.push(`added import: ${name} from '${result.sourceValue}'`);
+          break;
+        case 'collision':
+          // Target already imports `name` from a different module. The moved
+          // subtree will bind to the existing (wrong) symbol — surface so the
+          // user can fix manually rather than producing silent runtime breakage.
+          adjustments.push(
+            `import collision: '${name}' already imported from '${result.existingSourceValue}' in target, expected '${result.expectedSourceValue}' — fix manually`,
+          );
+          break;
+        case 'already-present':
+          // Same local name, same module — nothing to do.
+          break;
+      }
+    }
+    if (unresolvedLocalRefs.length > 0) {
+      adjustments.push(
+        `unresolved references in moved subtree: ${unresolvedLocalRefs.join(', ')} — bound in source-component scope, not auto-replicated`,
+      );
+    }
+
+    // 5. Splice the cloned subtree into target.
+    const targetSiblings = targetParent.children;
+    const tgtIdx = targetSiblings.indexOf(targetNode);
+    if (tgtIdx === -1) {
+      throw new Error('moveElement: target not found in its parent children');
+    }
+    targetSiblings.splice(position === 'before' ? tgtIdx : tgtIdx + 1, 0, movedNode);
+
+    // 6. Prune source imports orphaned by the cut.
+    const orphaned = pruneOrphanImports(sourceAst);
+    for (const name of orphaned) {
+      adjustments.push(`removed orphaned import: ${name}`);
+    }
+
+    // 7. Write both files. Target FIRST, then source — this ordering matters
+    //    for crash safety: if the second write throws (disk full, permission
+    //    denied, race), we leave the user with a visible duplicate (original
+    //    still in source AND new copy in target) rather than silent data loss
+    //    (cut from source, never landed in target). Visible duplicate is
+    //    recoverable — the user can delete the extra; data loss is not.
+    dbg(`[moveElement.cross] writing target=${targetFilePath} then source=${sourceFilePath}`);
+    await this._fileParser.writeAST(targetAst, targetFilePath);
+    await this._fileParser.writeAST(sourceAst, sourceFilePath);
+    await this._updateNodeMap(sourceFilePath);
+    await this._updateNodeMap(targetFilePath);
+
+    let targetAfter: string | undefined;
+    let sourceAfter: string | undefined;
+    try {
+      targetAfter = await this._fileIO.readFile(targetFilePath);
+    } catch {}
+    try {
+      sourceAfter = await this._fileIO.readFile(sourceFilePath);
+    } catch {}
+    const tgtChanged =
+      targetContentBefore !== undefined && targetAfter !== undefined ? targetContentBefore !== targetAfter : 'unknown';
+    const srcChanged =
+      sourceContentBefore !== undefined && sourceAfter !== undefined ? sourceContentBefore !== sourceAfter : 'unknown';
+    dbg(
+      `[moveElement.cross] write done targetChanged=${tgtChanged} sourceChanged=${srcChanged} adjustments=${adjustments.length}`,
+    );
+
+    const snapshots: Array<{ resolvedPath: string; contentBefore: string }> = [];
+    if (sourceContentBefore !== undefined) {
+      snapshots.push({ resolvedPath: sourceFilePath, contentBefore: sourceContentBefore });
+    }
+    if (targetContentBefore !== undefined) {
+      snapshots.push({ resolvedPath: targetFilePath, contentBefore: targetContentBefore });
+    }
+
+    return {
+      success: true,
+      resolvedPath: targetFilePath,
+      contentBeforeWrite: targetContentBefore,
+      allCrossFileSnapshots: snapshots,
+      ...(adjustments.length > 0 ? { adjustments } : {}),
+    };
   }
 
   /**

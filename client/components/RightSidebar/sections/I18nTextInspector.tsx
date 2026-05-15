@@ -16,6 +16,12 @@ export interface I18nTextInspectorProps {
   onLocaleChange?: (locale: string) => void;
   /** Whether the key field is editable. False until onKeyChange is wired server-side. */
   keyEditable?: boolean;
+  /**
+   * Whether the user is allowed to create new keys (requires an editable i18n binding).
+   * Independent of keyEditable: read-only layouts can still switch JSX to an
+   * already-existing key (JSX-only rewrite, no resource write), but cannot create new ones.
+   */
+  canCreateKeys?: boolean;
   /** Whether locale switching is active. False until onLocaleChange is wired server-side. */
   localeEditable?: boolean;
   /** All available keys from the locale file. When provided + keyEditable, shows a combobox. */
@@ -31,17 +37,20 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   onResolvedTextChange,
   onLocaleChange,
   keyEditable = false,
+  canCreateKeys = false,
   localeEditable = false,
   availableKeys,
   rollbackKey,
 }: I18nTextInspectorProps) {
   // Local draft prevents snap-back to stale resolvedText during the debounce window.
-  // Component is re-keyed in RightSidebar when key/library changes, so this
-  // state naturally resets on binding identity change without a useEffect.
   const [localText, setLocalText] = useState(i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '');
   const textInputRef = useRef<HTMLInputElement>(null);
   const isFocusedRef = useRef(false);
   const resolvedText = i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '';
+  const bindingIdentity =
+    i18nBinding.kind === 'i18n'
+      ? `${i18nBinding.library}\0${i18nBinding.namespace ?? ''}\0${i18nBinding.key}\0${i18nBinding.activeLocale}`
+      : i18nBinding.kind;
 
   // Combobox state — only active when keys available and keyEditable
   const [keySearch, setKeySearch] = useState('');
@@ -62,6 +71,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // Until we observe that resolvedText caught up to the pending value (or the
   // value diverged via an external edit), we keep showing what the user typed.
   const pendingTextRef = useRef<string | null>(null);
+  const prevBindingIdentityRef = useRef(bindingIdentity);
 
   // Re-sync localText when server pushes a new resolvedText (undo/redo, external file edit).
   // Three guards stack to avoid snap-back:
@@ -71,6 +81,14 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   //     server confirms (resolvedText === pending) or someone else changes the
   //     value to something different (in which case the external edit wins).
   useEffect(() => {
+    const isBindingChange = bindingIdentity !== prevBindingIdentityRef.current;
+    prevBindingIdentityRef.current = bindingIdentity;
+    if (isBindingChange) {
+      pendingTextRef.current = null;
+      setLocalText(resolvedText);
+      return;
+    }
+
     const isRollback = rollbackKey !== prevRollbackKeyRef.current;
     prevRollbackKeyRef.current = rollbackKey;
     if (isRollback) {
@@ -91,7 +109,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     }
     setLocalText(resolvedText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedText, rollbackKey]);
+  }, [resolvedText, rollbackKey, bindingIdentity]);
 
   // Auto-focus search when popover opens. No select() — leave the cursor at the
   // end so the user can keep typing immediately without their first keystroke
@@ -135,13 +153,17 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   }
 
   const currentKey = i18nBinding.key;
-  const showCombobox = keyEditable && availableKeys && availableKeys.length > 0;
+  const showCombobox = keyEditable && ((availableKeys !== undefined && availableKeys.length > 0) || canCreateKeys);
   const trimmedSearch = keySearch.trim();
   const filteredKeys = showCombobox
     ? (availableKeys ?? []).filter((k) => k.toLowerCase().includes(trimmedSearch.toLowerCase()))
     : [];
   const isExactMatch = trimmedSearch.length > 0 && (availableKeys ?? []).includes(trimmedSearch);
-  const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch;
+  // Create affordance gated on canCreateKeys: read-only layouts can switch
+  // to an existing key (JSX-only rewrite) but cannot add a new translation entry.
+  // Missing/empty key lists still allow creation; the write path adds the key
+  // inside an already-resolved editable dictionary.
+  const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
     if (!key || key === currentKey) {
@@ -297,14 +319,15 @@ export const I18nTextInspector = memo(function I18nTextInspector({
               key={locale}
               data-testid={`i18n-locale-button-${locale}`}
               type="button"
+              aria-pressed={locale === i18nBinding.activeLocale}
               disabled={!localeEditable || locale === i18nBinding.activeLocale}
               onClick={() => onLocaleChange?.(locale)}
               className={cn(
-                'h-5 px-1.5 rounded text-[10px] font-medium transition-colors',
+                'h-5 px-1.5 rounded border text-[10px] font-medium transition-colors',
                 locale === i18nBinding.activeLocale
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground',
-                localeEditable && locale !== i18nBinding.activeLocale && 'hover:bg-muted/80',
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-transparent bg-transparent text-muted-foreground',
+                localeEditable && locale !== i18nBinding.activeLocale && 'hover:bg-muted hover:text-foreground',
                 !localeEditable && locale !== i18nBinding.activeLocale && 'opacity-50 cursor-not-allowed',
               )}
             >
