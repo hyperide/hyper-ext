@@ -79,30 +79,30 @@ Acceptance: PanelRouter routes the message and responds with `{ type: 'styles:i1
 
 ### Task 3: Wire Available Keys in useElementStyleData
 
-- [ ] Read `client/lib/platform/hooks/useElementStyleData.ts`.
-- [ ] After `i18nText` arrives with `kind === 'i18n'`, send `styles:fetchI18nKeys` with the same `elementId` and `componentPath`.
-- [ ] Handle `styles:i18nKeysResponse`: store `availableKeys` in state alongside `i18nText`.
-- [ ] Add `availableKeys?: string[]` to the hook return type.
+- [x] Read `client/lib/platform/hooks/useElementStyleData.ts`.
+- [x] After `i18nText` arrives with `kind === 'i18n'`, send `styles:fetchI18nKeys` with the same `elementId` and `componentPath`.
+- [x] Handle `styles:i18nKeysResponse`: store `availableKeys` in state alongside `i18nText`.
+- [x] Add `availableKeys?: string[]` to the hook return type.
 
 Acceptance: `useElementStyleData` returns `availableKeys` when element has i18n binding.
 
 ### Task 4: Wire RightSidebar
 
-- [ ] Read `client/components/RightSidebar/RightSidebar.tsx`.
-- [ ] Pass `availableKeys={data.availableKeys}` and `keyEditable={true}` to `I18nTextInspector`.
-- [ ] Verify the combobox now renders (not disabled).
+- [x] Read `client/components/RightSidebar/RightSidebar.tsx`.
+- [x] Pass `availableKeys={data.availableKeys}` and `keyEditable={true}` to `I18nTextInspector`.
+- [x] Verify the combobox now renders (not disabled).
 
 Acceptance: `I18nTextInspector` receives `availableKeys` and renders the Popover trigger (not a disabled input).
 
 ### Task 5: Write RED e2e Test, Then Make GREEN
 
-- [ ] Add test to `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`.
-- [ ] Test: select i18n element → click key combobox → list shows at least one key.
-- [ ] Confirm test FAILS before build (expected to fail = key list is empty/combobox not shown).
-- [ ] Build extension: `cd vscode-extension/hypercanvas-preview && npm run package`.
-- [ ] Install: `code --install-extension hypercanvas-preview-*.vsix --force`.
-- [ ] Reload VS Code: `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter`.
-- [ ] Run test — confirm GREEN.
+- [x] Add test to `ext-test-projects/e2e/tests/project-independent/i18n-inspector.spec.ts`.
+- [x] Test: select i18n element → click key combobox → list shows at least one key.
+- [x] Confirm test FAILS before build (expected to fail = key list is empty/combobox not shown).
+- [x] Build extension: `cd vscode-extension/hypercanvas-preview && npm run package`.
+- [x] Install: `code --install-extension hypercanvas-preview-*.vsix --force`.
+- [x] Reload VS Code: `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter`.
+- [x] Run test — confirm GREEN.
 
 Acceptance: Test passes, combobox shows keys from locale file.
 
