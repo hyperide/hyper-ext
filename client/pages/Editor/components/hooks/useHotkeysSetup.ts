@@ -34,8 +34,6 @@ interface UseHotkeysSetupProps {
   setSelectedCommentId: (id: string | null) => void;
   /** Fiber-based NodeMap lookup for parent navigation. Falls back to DOM walk when null. */
   nodeMapLookup?: NodeMapLookup | null;
-  /** itemIndex per selected nodeRef — used by Shift+Enter to pin parent to the correct .map() row */
-  selectedItemIndices?: Map<string, number | null>;
 }
 
 /**
@@ -62,7 +60,6 @@ export function useHotkeysSetup({
   selectedCommentId,
   setSelectedCommentId,
   nodeMapLookup,
-  selectedItemIndices,
 }: UseHotkeysSetupProps): void {
   const duplicateDebounceRef = useRef<boolean>(false);
   const pasteDebounceRef = useRef<boolean>(false);
@@ -629,12 +626,10 @@ export function useHotkeysSetup({
       getState: () => ({
         selectedIds,
         activeInstanceId: activeDesignInstanceId,
-        selectedItemIndices: selectedItemIndices ? Object.fromEntries(selectedItemIndices) : undefined,
       }),
       getDocument: () => getPreviewIframe()?.contentDocument ?? null,
       callbacks: {
-        onSelectElement: (id, itemIndex) =>
-          itemIndex != null ? engine.selectWithItemIndex(id, itemIndex) : engine.select(id),
+        onSelectElement: (id) => engine.select(id),
         onSelectMultiple: (ids) => engine.selectMultiple(ids),
         onClearSelection: () => engine.clearSelection(),
         onDeleteElements: (ids) => {

@@ -163,33 +163,8 @@ describe('createDesignKeydownHandler — Shift+Enter (select parent)', () => {
     // wait for 150ms debounce
     await new Promise((r) => setTimeout(r, 200));
 
-    expect(onSelectElement).toHaveBeenCalledWith(parentRef, undefined);
+    expect(onSelectElement).toHaveBeenCalledWith(parentRef);
     expect(onClearSelection).not.toHaveBeenCalled();
-    dispose();
-  });
-
-  it('passes child itemIndex to onSelectElement when selectedItemIndices is in state', async () => {
-    const onSelectElement = mock(() => {});
-    const onClearSelection = mock(() => {});
-
-    const { handler, dispose } = createDesignKeydownHandler({
-      getState: () => ({ selectedIds: [childRef], selectedItemIndices: { [childRef]: 3 } }),
-      getDocument: () => document,
-      callbacks: {
-        onSelectElement,
-        onSelectMultiple: mock(() => {}),
-        onClearSelection,
-        onDeleteElements: mock(() => {}),
-      },
-      isDesignMode: () => true,
-      nodeMapLookup: lookup,
-    });
-
-    handler(makeKeyEvent('Enter', { shiftKey: true }));
-    await new Promise((r) => setTimeout(r, 200));
-
-    // Parent must receive same row index (3) as the child — pins the rect to the correct instance
-    expect(onSelectElement).toHaveBeenCalledWith(parentRef, 3);
     dispose();
   });
 

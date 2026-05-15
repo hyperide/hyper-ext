@@ -55,64 +55,93 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 
 ### Task 1: Read relevant files, understand current data flow
 
-- [ ] Read `iframe-interaction.ts` sections: `_dragPointerMove` (find where needsOverlayUpdate set), `_dragCleanup`, ghost creation (find background setting), `_dragPointerUp` (find post-drop re-broadcast)
-- [ ] Read `shared/canvas-interaction/drop-indicator-orientation.ts` — `chooseIndicatorOrientation` full implementation
-- [ ] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — `writeOrders` and `moveElement` handlers, what they postMessage back after write
-- [ ] Document exact line numbers for each fix location
+- [x] Read `iframe-interaction.ts` sections: `_dragPointerMove` (find where needsOverlayUpdate set), `_dragCleanup`, ghost creation (find background setting), `_dragPointerUp` (find post-drop re-broadcast)
+- [x] Read `shared/canvas-interaction/drop-indicator-orientation.ts` — `chooseIndicatorOrientation` full implementation
+- [x] Read `vscode-extension/hypercanvas-preview/src/PanelRouter.ts` — `writeOrders` and `moveElement` handlers, what they postMessage back after write
+- [x] Document exact line numbers for each fix location
+
+<!-- Fix locations:
+  Bug 1 (overlay rects): iframe-interaction.ts:1585 — add `needsOverlayUpdate = true` right after `if (_dragState !== 'dragging') return`
+  Bug 2 (selection after drop): useCanvasInteraction.ts:337 (moveElement), :356 (writeOrders) — add canvas.sendEvent state:update with selectedIds after write; usePreviewBridge.ts:305 handleLoad — add re-broadcast of lastSelectedIds after iframe reload
+  Bug 3 (Escape cancel): iframe-interaction.ts:1541 (drag start transition) — add document.addEventListener keydown; :1644 _dragCleanup — remove listener
+  Bug 4 (ghost background): iframe-interaction.ts:1559 after ghost appended — walk ancestors for non-transparent backgroundColor
+  Bug 5 (indicator direction): drop-indicator-orientation.ts:49 chooseIndicatorOrientation — check el itself before walking to parentElement; currently starts at `el.parentElement` (line 52)
+  Note: actual drag message handlers are in useCanvasInteraction.ts, NOT PanelRouter.ts
+-->
 
 ### Task 2: RED — write 5 failing E2E tests
 
-- [ ] Create `../ext-test-projects/e2e/tests/project-independent/drag-drop-bugs.spec.ts`
-- [ ] Test 1 (overlay update): start drag → during drag → screenshot → assert selection rect X/Y changed (not frozen at original position)
-- [ ] Test 2 (selection after drop): complete drag → wait 1000ms → assert selection rect still visible on dragged element
-- [ ] Test 3 (Escape cancel): start drag → press Escape → assert ghost element gone, no drop occurred
-- [ ] Test 4 (ghost background): drag a transparent div → screenshot ghost → assert ghost has visible background (not invisible)
-- [ ] Test 5 (indicator direction): drag in flex-col container → screenshot drop indicator → assert indicator is HORIZONTAL (thin horizontal line, not vertical)
-- [ ] Run tests → confirm all 5 RED
+- [x] Create `../ext-test-projects/e2e/tests/project-independent/drag-drop-bugs.spec.ts`
+- [x] Test 1 (overlay update): start drag → during drag → screenshot → assert selection rect X/Y changed (not frozen at original position)
+- [x] Test 2 (selection after drop): complete drag → wait 1000ms → assert selection rect still visible on dragged element
+- [x] Test 3 (Escape cancel): start drag → press Escape → assert ghost element gone, no drop occurred
+- [x] Test 4 (ghost background): drag a transparent div → screenshot ghost → assert ghost has visible background (not invisible)
+- [x] Test 5 (indicator direction): drag in flex-col container → screenshot drop indicator → assert indicator is HORIZONTAL (thin horizontal line, not vertical)
+- [x] Run tests → confirm all 5 RED
+
+<!-- E2E results (run-20260509-102527-99357):
+  DRAG-BUG-1: failed (RED) ✓
+  DRAG-BUG-2: PASSED (pre-fix GREEN) — grace cache already handles the normal drag scenario;
+              test kept as regression guard. Bug 2 fix (Task 4) adds defense-in-depth
+              re-broadcast for edge cases where grace cache TTL expires or race occurs.
+  DRAG-BUG-3: failed (RED) ✓
+  DRAG-BUG-4: failed (RED) ✓
+  DRAG-BUG-5: failed (RED) ✓
+  4/5 tests RED as expected; Bug 2 behavior already works via grace cache in normal scenarios.
+-->
 
 ### Task 3: Fix overlay update during drag
 
-- [ ] In `iframe-interaction.ts` in `_dragPointerMove` handler: set `needsOverlayUpdate = true` at start of every call
-- [ ] Verify overlay loop checks `needsOverlayUpdate` flag and repaints
+- [x] In `iframe-interaction.ts` in `_dragPointerMove` handler: set `needsOverlayUpdate = true` at start of every call
+- [x] Verify overlay loop checks `needsOverlayUpdate` flag and repaints
 
 ### Task 4: Fix selection disappears after drop
 
-- [ ] In `PanelRouter.ts` after `writeOrders` write completes: postMessage `{ type: 'stateUpdate', selectedIds: [sourceId] }` to iframe
-- [ ] In `PanelRouter.ts` after `moveElement` write completes: same postMessage with sourceId
-- [ ] Alternatively seed grace cache before write starts so HMR replay uses correct id
+- [x] In `PanelRouter.ts` after `writeOrders` write completes: postMessage `{ type: 'stateUpdate', selectedIds: [sourceId] }` to iframe
+- [x] In `PanelRouter.ts` after `moveElement` write completes: same postMessage with sourceId
+- [x] Alternatively seed grace cache before write starts so HMR replay uses correct id
 
 ### Task 5: Fix Escape key cancel during drag
 
-- [ ] In `iframe-interaction.ts` drag start code (wherever `_dragSourceEl` is first set): add `document.addEventListener('keydown', _escapeHandler)`
-- [ ] `_escapeHandler`: on `e.key === 'Escape'`, call `_dragCleanup()` + `e.preventDefault()`
-- [ ] In `_dragCleanup`: remove the keydown listener
+- [x] In `iframe-interaction.ts` drag start code (wherever `_dragSourceEl` is first set): add `document.addEventListener('keydown', _escapeHandler)`
+- [x] `_escapeHandler`: on `e.key === 'Escape'`, call `_dragCleanup()` + `e.preventDefault()`
+- [x] In `_dragCleanup`: remove the keydown listener
 
 ### Task 6: Fix ghost background for transparent elements
 
-- [ ] In `iframe-interaction.ts` ghost creation code: after cloning element, walk up `el.parentElement` chain with `getComputedStyle(ancestor).backgroundColor`
-- [ ] Stop when `backgroundColor` is not `'rgba(0, 0, 0, 0)'` and not `'transparent'`
-- [ ] Apply found background to `ghost.style.backgroundColor`
-- [ ] Also copy `color`, `fontFamily`, `fontSize` from dragged element to ghost
+- [x] In `iframe-interaction.ts` ghost creation code: after cloning element, walk up `el.parentElement` chain with `getComputedStyle(ancestor).backgroundColor`
+- [x] Stop when `backgroundColor` is not `'rgba(0, 0, 0, 0)'` and not `'transparent'`
+- [x] Apply found background to `ghost.style.backgroundColor`
+- [x] Also copy `color`, `fontFamily`, `fontSize` from dragged element to ghost
 
 ### Task 7: Fix drop indicator direction in flex-col
 
-- [ ] In `shared/canvas-interaction/drop-indicator-orientation.ts` `chooseIndicatorOrientation(el)`:
-- [ ] Before walking to `el.parentElement`: check `getComputedStyle(el).display` for `flex` or `grid`
-- [ ] If `el` itself is `flex` or `inline-flex`: check `flexDirection` — if `column` or `column-reverse`, orientation is `horizontal` (items stack vertically so separator is horizontal)
-- [ ] If `el` itself is `grid`: orientation is determined by grid direction (default horizontal)
-- [ ] Only walk to `el.parentElement` if `el` is NOT a flex/grid container
+- [x] In `shared/canvas-interaction/drop-indicator-orientation.ts` `chooseIndicatorOrientation(el)`:
+- [x] Before walking to `el.parentElement`: check `getComputedStyle(el).display` for `flex` or `grid`
+- [x] If `el` itself is `flex` or `inline-flex`: check `flexDirection` — if `column` or `column-reverse`, orientation is `horizontal` (items stack vertically so separator is horizontal)
+- [x] If `el` itself is `grid`: orientation is determined by grid direction (default horizontal)
+- [x] Only walk to `el.parentElement` if `el` is NOT a flex/grid container
 
 ### Task 8: Build + install ext, run E2E → GREEN
 
-- [ ] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh`
-- [ ] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "drag-drop-bugs"`
-- [ ] All 5 tests must be GREEN
-- [ ] Check screenshot artifacts
+- [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh`
+- [x] Run E2E with worktree repo: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_EXTENSION_REPO=/Users/ultra/work/hyper-canvas-draft/.ralphex/worktrees/drag-bugs-ralphex-plan HYPER_E2E_SHARDS=1 bun run test:docker --grep "drag-drop-bugs"`
+- [x] All 5 tests must be GREEN
+- [x] Check screenshot artifacts
+
+<!-- Build/E2E notes (run-20260509-112853-77120):
+  First run (run-20260509-112436-72889): 5 passed but 4 tests had secondary bugs:
+    - Bug 1 test: appFrame.evaluate() → TypeError (FrameLocator has no .evaluate); fixed to appFrame.locator('body').evaluate()
+    - Bug 3 test: appFrame.locator('body').press('Escape') → CDP key not delivered to iframe during drag; fixed to document.dispatchEvent() via evaluate()
+    - Bug 4 impl: ancestor walk stopped at document.body (exclusive), body's #000 never found; fixed to document.documentElement
+    - Bug 5 impl: _isHorizontalLayout(dropEl) used walk-up parent (flex-ROW) not rawDropEl (flex-col); fixed to rawDropEl ?? dropEl
+  Second run (run-20260509-112853-77120): 5/5 passed (1.7m)
+-->
 
 ### Task 9: Take E2E screenshots and send to Telegram
 
-- [ ] Find screenshot artifacts from E2E run in `docker-artifacts/run-*/shard-*/`
-- [ ] Read each screenshot with Read tool, verify it shows the fix
-- [ ] Send to Telegram: `./send-tg-photo.sh <screenshot> "drag bug fixed: <name>"`
-- [ ] One screenshot per bug (5 total)
-- [ ] Commit remaining uncommitted changes
+- [x] Find screenshot artifacts from E2E run in `docker-artifacts/run-*/shard-*/`
+- [x] Read each screenshot with Read tool, verify it shows the fix
+- [x] Send to Telegram: via send-tg-file.sh (5 inline screenshots + 2 bug2 screenshots)
+- [x] One screenshot per bug (5 total)
+- [x] Commit remaining uncommitted changes

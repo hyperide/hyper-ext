@@ -350,6 +350,11 @@ export function useCanvasInteraction(
             targetId: msg.targetId,
             position: msg.position === 'before' ? 'before' : 'after',
           });
+          // Seed grace cache before HMR fires so selection survives the iframe reload.
+          canvas.sendEvent({
+            type: 'state:update',
+            patch: { selectedIds: [msg.sourceId] },
+          });
           break;
         }
 
@@ -410,6 +415,13 @@ export function useCanvasInteraction(
               } catch (err) {
                 console.warn('[useCanvasInteraction] writeOrder updateProps threw:', err, entry);
               }
+            }
+            // Seed grace cache so selection survives the HMR reload triggered by the writes above.
+            if (typeof msg.sourceId === 'string') {
+              canvas.sendEvent({
+                type: 'state:update',
+                patch: { selectedIds: [msg.sourceId] },
+              });
             }
           })();
           break;
