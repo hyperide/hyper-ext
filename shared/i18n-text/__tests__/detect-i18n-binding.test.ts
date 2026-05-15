@@ -236,4 +236,369 @@ describe('unsupported expressions', () => {
       expect(result.reason).toBe('unknown-wrapper');
     }
   });
+
+  it('returns dynamic-key for t("key", { ns: dynamicVariable }) — dynamic namespace', () => {
+    const source = `function Component({ ns }: { ns: string }) {
+  return <p>{t("habits.walks", { ns })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t("key", { ns: someVar }) — dynamic ns expression', () => {
+    const source = `function Component() {
+  const currentNs = getNamespace();
+  return <p>{t("habits.walks", { ns: currentNs })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t("key", opts) — variable second argument', () => {
+    const source = `function Component() {
+  const opts = { ns: 'common', count: 1 };
+  return <p>{t("habits.walks", opts)}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t("key", { ...opts }) — spread in options object, no static ns after', () => {
+    const source = `function Component() {
+  const opts = { ns: 'common' };
+  return <p>{t("habits.walks", { ...opts })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('detects static ns after spread — last-property-wins over spread', () => {
+    const source = `function Component() {
+  const opts = { count: 1 };
+  return <p>{t("habits.walks", { ...opts, ns: "common" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('habits.walks');
+      expect(result.namespace).toBe('common');
+    }
+  });
+
+  it('returns dynamic-key when spread comes after static ns — spread can override', () => {
+    const source = `function Component() {
+  const opts = { ns: 'admin' };
+  return <p>{t("habits.walks", { ns: "common", ...opts })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('still detects static ns option correctly after dynamic-ns fix', () => {
+    const source = `function Component() {
+  return <p>{t("habits.walks", { ns: "common" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('habits.walks');
+      expect(result.namespace).toBe('common');
+    }
+  });
+
+  it('uses last ns when duplicate ns keys present — last-property-wins', () => {
+    const source = `function Component() {
+  return <p>{t("habits.walks", { ns: "common", ns: "admin" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('habits.walks');
+      expect(result.namespace).toBe('admin');
+    }
+  });
+
+  it('returns dynamic-key when last ns is dynamic even if earlier ns is static', () => {
+    const source = `function Component() {
+  const currentNs = getNamespace();
+  return <p>{t("habits.walks", { ns: "common", ns: currentNs })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t("key", { [ns]: "common" }) — computed key could be ns at runtime', () => {
+    // { [ns]: "common" } — computed property, key is runtime value of variable ns.
+    // If ns === "ns" at runtime, this supplies a namespace. Must be rejected as dynamic.
+    const source = `function Component({ ns }: { ns: string }) {
+  return <p>{t("habits.walks", { [ns]: "common" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t({ [id]: "key" }) — computed id key in object form', () => {
+    const source = `function Component({ id }: { id: string }) {
+  return <p>{t({ [id]: "habits.walks" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't({ [id]: "habits.walks" })'),
+      library: 'lingui',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('non-string-id');
+    }
+  });
+
+  it('returns dynamic-key for formatMessage({ id: "safe", ...opts }) — spread after static id can override', () => {
+    const source = `function Component() {
+  const opts = { id: 'dynamic' };
+  return <p>{formatMessage({ id: "safe", ...opts })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ id: "safe"'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for formatMessage({ id: "safe", id: currentId }) — last id is dynamic', () => {
+    const source = `function Component({ currentId }: { currentId: string }) {
+  return <p>{formatMessage({ id: "safe", id: currentId })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ id: "safe"'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns non-string-id for <FormattedMessage id="safe" {...props} /> — spread after id attr can override', () => {
+    const source = `function Component(props: { id: string }) {
+  return <p><FormattedMessage id="safe" {...props} /></p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, '<FormattedMessage'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('non-string-id');
+    }
+  });
+
+  it('detects static id when spread comes before it — last id wins', () => {
+    const source = `function Component() {
+  const opts = { id: 'dynamic' };
+  return <p>{formatMessage({ ...opts, id: "safe" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ ...opts'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('safe');
+    }
+  });
+
+  it('returns unknown-wrapper for formatMessage with custom library — formatMessage is react-intl specific, not generic custom', () => {
+    const source = `function Component() {
+  return <p>{formatMessage({ id: "habits.walks" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ id: "habits.walks" })'),
+      library: 'custom',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('unknown-wrapper');
+    }
+  });
+
+  it('returns unknown-wrapper for <FormattedMessage> with custom library — library-specific JSX, not a custom wrapper', () => {
+    const source = `function Component() {
+  return <p><FormattedMessage id="habits.walks" /></p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, '<FormattedMessage'),
+      library: 'custom',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('unknown-wrapper');
+    }
+  });
+
+  it('returns unknown-wrapper for <Trans> with custom library — library-specific JSX, not a custom wrapper', () => {
+    const source = `function Component() {
+  return <p><Trans id="habits.walks" /></p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, '<Trans'),
+      library: 'custom',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('unknown-wrapper');
+    }
+  });
+
+  it('returns dynamic-key for t("key", { ns: "common", [key]: "admin" }) — computed after static ns can override', () => {
+    const source = `function Component({ key }: { key: string }) {
+  return <p>{t("habits.walks", { ns: "common", [key]: "admin" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for t("key", { ns: "common", ["ns"]: "admin" }) — computed string literal key overrides static ns', () => {
+    const source = `function Component() {
+  return <p>{t("habits.walks", { ns: "common", ["ns"]: "admin" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 't("habits.walks"'),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for formatMessage({ id: "safe", [key]: "other" }) — computed after static id can override', () => {
+    const source = `function Component({ key }: { key: string }) {
+  return <p>{formatMessage({ id: "safe", [key]: "other" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ id: "safe"'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
+
+  it('returns dynamic-key for formatMessage({ id: "safe", ["id"]: "other" }) — computed string literal key overrides static id', () => {
+    const source = `function Component() {
+  return <p>{formatMessage({ id: "safe", ["id"]: "other" })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, 'formatMessage({ id: "safe"'),
+      library: 'react-intl',
+    });
+    expect(result.kind).toBe('unsupported');
+    if (result.kind === 'unsupported') {
+      expect(result.reason).toBe('dynamic-key');
+    }
+  });
 });
