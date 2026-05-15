@@ -226,7 +226,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('const componentRegistry: Record<string, PreviewComponent> = {');
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-    lines.push(`  '${entry.componentPath}': toPreviewComponent(${alias}),`);
+    lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': toPreviewComponent(${alias}),`);
   }
   lines.push('};');
   lines.push('');
@@ -236,7 +236,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     if (entry.sampleExports.includes('SampleDefault')) {
       const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
-      lines.push(`  '${entry.componentPath}': ${alias}SampleDefault,`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': ${alias}SampleDefault,`);
     }
   }
   lines.push('};');
@@ -247,13 +247,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   for (const entry of registryEntries) {
     const alias = uniqueNames.get(entry.componentPath) ?? entry.componentName;
     if (entry.sampleExports.length > 0) {
-      lines.push(`  '${entry.componentPath}': {`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {`);
       for (const exp of entry.sampleExports) {
         lines.push(`    '${sampleExportToKey(exp)}': ${alias}${exp},`);
       }
       lines.push('  },');
     } else {
-      lines.push(`  '${entry.componentPath}': {},`);
+      lines.push(`  '${entry.componentPath.replace(/'/g, "\\'")}': {},`);
     }
   }
   lines.push('};');
@@ -683,17 +683,18 @@ if (root) {
 function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   const sampleImports = entry.sampleExports.map((exp) => `${exp} as ${alias}${exp}`);
 
+  const safePath = entry.importPath.replace(/'/g, "\\'");
   if (entry.exportStyle === 'default-named' || entry.exportStyle === 'default-anonymous') {
     if (sampleImports.length > 0) {
-      return `import ${alias}, { ${sampleImports.join(', ')} } from '${entry.importPath}';`;
+      return `import ${alias}, { ${sampleImports.join(', ')} } from '${safePath}';`;
     }
-    return `import ${alias} from '${entry.importPath}';`;
+    return `import ${alias} from '${safePath}';`;
   }
 
   // Named export — if alias differs from actual export name, rename it
   const componentImport = alias !== entry.componentName ? `${entry.componentName} as ${alias}` : alias;
   const allImports = [componentImport, ...sampleImports];
-  return `import { ${allImports.join(', ')} } from '${entry.importPath}';`;
+  return `import { ${allImports.join(', ')} } from '${safePath}';`;
 }
 
 function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
@@ -935,6 +936,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '          </div>',
     '        );',
     '      })}',
+    '      <_ComponentSuccessSignal componentPath={componentPath} />',
     '    </div>',
     `    </ComponentErrorBoundary>${wc}`,
     '  );',
