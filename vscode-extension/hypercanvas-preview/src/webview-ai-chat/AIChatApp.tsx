@@ -25,6 +25,7 @@ export function AIChatApp() {
 
     // Request key status from extension host — resolves race condition where
     // the host sends ai:keyStatus before the webview JS is ready to listen.
+    vscode.postMessage({ type: 'webview:ready' });
     vscode.postMessage({ type: 'ai:checkKey' });
 
     return () => window.removeEventListener('message', handler);

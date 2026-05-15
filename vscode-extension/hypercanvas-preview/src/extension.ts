@@ -805,8 +805,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Open AI Chat
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openAIChat', () => {
-      vscode.commands.executeCommand('hypercanvas.aiChatView.focus');
+    vscode.commands.registerCommand('hypercanvas.openAIChat', async () => {
+      await aiChatProvider?.focusAndEnsureReady();
     }),
   );
 
@@ -819,8 +819,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
   // Open Inspector panel
   context.subscriptions.push(
-    vscode.commands.registerCommand('hypercanvas.openInspector', () => {
-      vscode.commands.executeCommand('hypercanvas.inspectorView.focus');
+    vscode.commands.registerCommand('hypercanvas.openInspector', async () => {
+      await rightPanelProvider?.focusAndEnsureReady();
     }),
   );
 
@@ -2001,12 +2001,12 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
 
   try {
     const McpHttpServerDefinition = (vscode as Record<string, unknown>).McpHttpServerDefinition as
-      | (new (config: {
-          label: string;
-          uri: vscode.Uri;
-          headers?: Record<string, string>;
-          version?: string;
-        }) => unknown)
+      | (new (
+          label: string,
+          uri: vscode.Uri,
+          headers?: Record<string, string>,
+          version?: string,
+        ) => unknown)
       | undefined;
 
     if (!McpHttpServerDefinition) {
@@ -2022,11 +2022,12 @@ function registerCopilotMcp(context: vscode.ExtensionContext, port: number): voi
     const disposable = register('hypercanvas.mcpServer', {
       onDidChangeMcpServerDefinitions: didChangeEmitter.event,
       provideMcpServerDefinitions: async () => [
-        new McpHttpServerDefinition({
-          label: 'HyperCanvas',
-          uri: vscode.Uri.parse(`http://127.0.0.1:${port}/mcp`),
-          version: context.extension.packageJSON.version,
-        }),
+        new McpHttpServerDefinition(
+          'HyperCanvas',
+          vscode.Uri.parse(`http://127.0.0.1:${port}/mcp`),
+          undefined,
+          context.extension.packageJSON.version,
+        ),
       ],
     });
 

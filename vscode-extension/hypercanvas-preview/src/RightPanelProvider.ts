@@ -18,6 +18,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
 
   private _view?: vscode.WebviewView;
+  private _ready = false;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -46,6 +47,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   public async reset(): Promise<void> {
     if (!this._view) return;
     const webview = this._view.webview;
+    this._ready = false;
     const ready = new Promise<void>((resolve) => {
       const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
         if (msg?.type === 'webview:ready') {
@@ -62,12 +64,25 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     await ready;
   }
 
+  async focusAndEnsureReady(): Promise<void> {
+    await vscode.commands.executeCommand(`${RightPanelProvider.viewType}.focus`);
+    setTimeout(() => {
+      void this.resetIfNotReady();
+    }, 250);
+  }
+
+  async resetIfNotReady(): Promise<void> {
+    if (!this._view || this._ready) return;
+    await this.reset();
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
     this._view = webviewView;
+    this._ready = false;
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
@@ -88,6 +103,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       const msg = message as { type?: string };
 
       if (msg.type === 'webview:ready') {
+        this._ready = true;
         this._stateHub.sendInit(RightPanelProvider.viewType);
         // Send initial explorer visibility + component groups + capabilities
         this._sendExplorerState(webviewView.webview);
@@ -113,6 +129,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidDispose(() => {
+      this._view = undefined;
+      this._ready = false;
       this._stateHub.unregister(RightPanelProvider.viewType);
     });
   }
