@@ -46,6 +46,41 @@ function dbg(msg: string) {
   } catch {}
 }
 
+function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValue: string): boolean {
+  let changed = false;
+
+  const visit = (current: t.Node | null | undefined): void => {
+    if (!current) return;
+    if (t.isStringLiteral(current) && current.value === previousValue) {
+      current.value = nextValue;
+      changed = true;
+      return;
+    }
+    if (t.isTemplateLiteral(current) && current.expressions.length === 0) {
+      const raw = current.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('');
+      if (raw === previousValue) {
+        current.quasis = [t.templateElement({ raw: nextValue, cooked: nextValue }, true)];
+        changed = true;
+      }
+      return;
+    }
+
+    for (const value of Object.values(current)) {
+      if (!value) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item && typeof item === 'object' && 'type' in item) visit(item as t.Node);
+        }
+      } else if (typeof value === 'object' && 'type' in value) {
+        visit(value as t.Node);
+      }
+    }
+  };
+
+  visit(node);
+  return changed;
+}
+
 // ============================================
 // Response Types
 // ============================================
@@ -678,6 +713,47 @@ export class AstService {
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateText] Error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  async updateI18nKey(
+    filePath: string,
+    elementId: string,
+    previousKey: string,
+    nextKey: string,
+    nodeRef?: NodeRef,
+  ): Promise<AstOperationResult> {
+    await this.ensureInitialized();
+    try {
+      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
+
+      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
+      if (!resolved) {
+        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
+      }
+      const { result, ast, resolvedPath } = resolved;
+
+      let contentBeforeWrite: string | undefined;
+      if (resolvedPath !== absolutePath) {
+        try {
+          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
+        } catch {}
+      }
+
+      let changed = false;
+      for (const child of result.element.children) {
+        if (!t.isJSXExpressionContainer(child)) continue;
+        changed = replaceStringLiteralValue(child.expression, previousKey, nextKey) || changed;
+      }
+      if (!changed) return { success: false, error: 'i18n key literal not found in selected element' };
+
+      await this._fileParser.writeAST(ast, resolvedPath);
+      await this._updateNodeMap(resolvedPath);
+      return { success: true, resolvedPath, contentBeforeWrite };
+    } catch (error) {
+      console.error('[AstService.updateI18nKey] Error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }

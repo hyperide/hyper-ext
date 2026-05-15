@@ -724,14 +724,14 @@ export default function RightSidebar({
       // string passed to t(...). So the source-id stays valid and selection
       // survives without any re-dispatch trickery.
       // If the user typed a key that doesn't yet exist in the locale, treat this
-      // as "create new key" — also write the JSON resource so the next re-read
-      // returns editable=true and the user can immediately type the translation.
-      // Otherwise (existing key) skip the JSON write and only retarget JSX.
-      const isNewKey = !availableI18nKeys.includes(trimmedKey);
+      // as "create new key" — also write the translation resource. Otherwise (existing key)
+      // skip the resource write and only retarget JSX.
+      const knownI18nKeys = availableI18nKeys ?? [];
+      const isNewKey = !knownI18nKeys.includes(trimmedKey);
       // Defensive: even if a UI gate is bypassed, refuse to create a new key on a
-      // read-only locale file format. writeI18nResource would fail server-side anyway,
+      // non-editable binding. writeI18nResource would fail server-side anyway,
       // but bailing early avoids JSX rewrite without a corresponding resource entry.
-      if (isNewKey && !i18nText.writable) return;
+      if (isNewKey && !i18nText.editable) return;
       void (async () => {
         try {
           await astOps.writeI18nResource({
@@ -1263,19 +1263,11 @@ export default function RightSidebar({
                   localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
-                  // keyEditable: the keys list must have arrived (handleI18nKeyChange bails
-                  // on `availableI18nKeys === undefined` because it cannot tell rename-existing
-                  // from create-new without it). Then either:
-                  //   - the file already has keys → enable for switch-to-existing (JSX-only rewrite,
-                  //     works even on read-only TS/JS merged/per-locale layouts);
-                  //   - no keys yet → enable only if writable so the first-key creation path
-                  //     can write the JSON entry. canCreateKeys gates the Create affordance
-                  //     itself so read-only layouts hide the "+ Create key" branch even when
-                  //     keys are present.
-                  keyEditable={
-                    availableI18nKeys !== undefined && (availableI18nKeys.length > 0 || i18nText.writable)
-                  }
-                  canCreateKeys={i18nText.writable}
+                  // Existing keys can be selected even when text editing is disabled,
+                  // because that path only rewrites JSX. Editable bindings can create
+                  // keys inside the resolved dictionary.
+                  keyEditable={(availableI18nKeys?.length ?? 0) > 0 || i18nText.editable}
+                  canCreateKeys={i18nText.editable}
                 />
               );
             })()}

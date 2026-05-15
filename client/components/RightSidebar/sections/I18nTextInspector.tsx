@@ -17,8 +17,8 @@ export interface I18nTextInspectorProps {
   /** Whether the key field is editable. False until onKeyChange is wired server-side. */
   keyEditable?: boolean;
   /**
-   * Whether the user is allowed to create new keys (requires a writable locale file format).
-   * Independent of keyEditable: read-only TS/JS layouts can still switch JSX to an
+   * Whether the user is allowed to create new keys (requires an editable i18n binding).
+   * Independent of keyEditable: read-only layouts can still switch JSX to an
    * already-existing key (JSX-only rewrite, no resource write), but cannot create new ones.
    */
   canCreateKeys?: boolean;
@@ -120,8 +120,10 @@ export const I18nTextInspector = memo(function I18nTextInspector({
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
-        triggerRef.current && !triggerRef.current.contains(target) &&
-        popoverRef.current && !popoverRef.current.contains(target)
+        triggerRef.current &&
+        !triggerRef.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
       ) {
         setShowKeyDropdown(false);
         setKeySearch('');
@@ -140,14 +142,16 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   }
 
   const currentKey = i18nBinding.key;
-  const showCombobox = keyEditable && availableKeys && availableKeys.length > 0;
+  const showCombobox = keyEditable && ((availableKeys !== undefined && availableKeys.length > 0) || canCreateKeys);
   const trimmedSearch = keySearch.trim();
   const filteredKeys = showCombobox
     ? (availableKeys ?? []).filter((k) => k.toLowerCase().includes(trimmedSearch.toLowerCase()))
     : [];
   const isExactMatch = trimmedSearch.length > 0 && (availableKeys ?? []).includes(trimmedSearch);
-  // Create affordance gated on canCreateKeys: read-only TS/JS layouts can switch
+  // Create affordance gated on canCreateKeys: read-only layouts can switch
   // to an existing key (JSX-only rewrite) but cannot add a new translation entry.
+  // Missing/empty key lists still allow creation; the write path adds the key
+  // inside an already-resolved editable dictionary.
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
