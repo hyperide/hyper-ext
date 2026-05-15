@@ -645,10 +645,12 @@ export class AstBridge {
     const { filePath: i18nFilePath, elementId: i18nElementId } = message;
     const previousKey = message.previousKey;
     let newElementId: string | undefined;
+    _dbgBridge(`[writeI18nResource] key=${message.key} previousKey=${previousKey} filePath=${i18nFilePath} elementId=${i18nElementId} skipResourceWrite=${message.skipResourceWrite}`);
     if (i18nFilePath && i18nElementId && previousKey && previousKey !== message.key) {
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
       );
+      _dbgBridge(`[updateI18nKey] result=${JSON.stringify({ success: updateResult.success, error: (updateResult as { error?: string }).error })}`);
       if (!updateResult.success) {
         return {
           type: 'ast:response',
