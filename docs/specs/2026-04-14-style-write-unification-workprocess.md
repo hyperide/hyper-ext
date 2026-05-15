@@ -3673,3 +3673,30 @@ Machine resources: 14 CPUs, 24GB RAM — actual S3 usage is 0.4% CPU (mostly sle
 
 **Expected Run #23 outcome:** All previously observed failure categories should be fixed.
 Watch for any NEW failure categories not seen in Runs #21-22.
+
+---
+
+## 📍 2026-04-28 Run #23 Interim Status (~22:00 CEST)
+
+**Progress:** S1: 40 done / 0 failed | S2: 35 done / 0 failed | S3: 70 done / 3 failed
+
+**S3 failures (all known categories):**
+
+| Test | Duration | Root cause | Status |
+|------|----------|-----------|--------|
+| `open component → preview iframe loaded, no white screen` | 349651ms | First-test warmup overload: all 3 shards competed for shared NM volume → 14-min warmup serialization → first test ran while Vite still initializing | Infrastructure flake, no fix possible |
+| `component rendered — clickable elements found via fiber selection` | 69705ms | System-load cascade from 349s prior test: `isPreviewLoaded()` false for 62s, refresh-retry fired, test timed out | System recovery flake, no fix possible |
+| `Tamagui: style written as prop, not className` | 30690ms | `expect.poll` timeout 20s < actual write time ~23s under Docker load | **Fixed in ext-test-projects 49bd580 (45s)** |
+
+**S3 notable observation:**
+A SECOND `style written as prop` run (different Tamagui project) passed at 65268ms — setup took 65s total but the actual write completed within the old 20s poll window. Our 45s fix is correct and safe for both cases.
+
+**New fix for Run #24:**
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `49bd580` | ext-test-projects | Tamagui style-as-prop: poll timeout 20s → 45s |
+
+**Pending investigation (not blocking Run #24):**
+- `component rendered` 69705ms failure for `tamagui-fitness`: `isPreviewLoaded()` returned false for ~62s with fast Vite dev server (941ms). System under load from previous 349s test. Subsequent identical test for same project passed in 12595ms. Pattern: cascade flake, not product bug.
+- Warmup overload first-test failure: first test in each shard can fail if pre-warm serializes beyond test start. Root fix would require: (a) stagger shard starts or (b) wait for warmup confirmation before test run begins.
