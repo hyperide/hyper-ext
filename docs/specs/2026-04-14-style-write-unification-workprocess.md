@@ -69,6 +69,9 @@ Rules for agents:
 - Keep the canonical architecture in the spec files, not only in this log.
 - Update this file when a meaningful decision, split, follow-up, or verification
   result appears.
+- After every commit in this workstream, append a short entry with the commit
+  hash, subject, changed scope, validation run, and remaining follow-ups before
+  starting the next task.
 - Prefer appending dated entries over rewriting history.
 - If you restructure this file, preserve existing decisions unless they are
   explicitly superseded.
@@ -2933,4 +2936,167 @@ Focused E2E:
 Full E2E:
 Started 2026-04-21 from /Users/ultra/work/ext-test-projects/e2e with
 workers=1 and retries=0. Result pending in this session.
+```
+
+## VS Code E2E Undo Save Conflict Follow-Up 2026-04-21 author: codex
+
+Full E2E status:
+
+```text
+Run:
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --workers=1 --retries=0 \
+  --reporter=line --output=/tmp/hyper-e2e-full-20260421c
+
+Stopped after the first real [test-errors] group instead of continuing through
+log noise. First marker:
+
+PI-18-19: resize multiple selected elements scales all together
+[console.error] [text file model] handleSaveError(...) resulted in a save error:
+Unable to write file .../react-vite-tw4-twitter/src/App.tsx
+(Error: File Modified Since)
+
+The next test PI-18-20 printed the same class of save-conflict error.
+```
+
+Root cause:
+
+```text
+The style write path had already moved to VSCodeFileIO's disk-first strategy:
+workspace.fs.writeFile(...) followed by applyEdit(...) only to sync an already
+open text document.
+
+UndoRedoService still used the older WorkspaceEdit + doc.save() write path.
+Drag/resize tests perform inspector style writes and then undo. That sent undo
+through doc.save(), which can conflict with the disk-first write and VS Code's
+file watcher state, surfacing "File Modified Since" from the VS Code text model.
+```
+
+Fix in progress:
+
+```text
+Main extension:
+- UndoRedoService now writes undo/redo snapshots disk-first with
+  workspace.fs.writeFile(...).
+- If the target document is already open, it syncs the in-memory text model with
+  WorkspaceEdit but never calls doc.save().
+- AstBridge undo/redo tests were updated to assert the disk-first write path.
+
+Validation so far:
+bun test vscode-extension/hypercanvas-preview/src/__tests__/AstBridge.test.ts \
+  vscode-extension/hypercanvas-preview/src/__tests__/VSCodeFileIO.test.ts \
+  vscode-extension/hypercanvas-preview/src/services/__tests__/UndoRedoService.test.ts
+Result: 44 pass, 0 fail.
+
+bunx biome check on touched extension files: pass.
+git diff --check: pass.
+npm run build: pass (pre-existing Browserslist/Tailwind warnings still printed).
+build-and-install.sh: pass, extension 0.1.9 installed.
+
+Focused E2E:
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --project=independent \
+  tests/project-independent/drag-resize-advanced.spec.ts \
+  -g "PI-18-19|PI-18-20" --workers=1 --retries=0 --reporter=line \
+  --output=/tmp/hyper-e2e-drag-undo-20260421b
+Result: 2 passed, 0 failed. No [test-errors], no "File Modified Since".
+
+Next:
+- restart the full E2E run from the top;
+- commit the UndoRedoService fix atomically.
+```
+
+Claude review 2026-04-21 21:00:
+
+```text
+Review artifact: /tmp/claude-review-20260421-2100.md
+
+High:
+- PI-18-19 had been weakened around NaN width reads. Decision: fix, not
+  retry. The test now targets the explicit TestElements flex fixture and keeps
+  strict width > 0 assertions.
+
+Medium:
+- UndoRedoService swallowed applyEdit sync failures. Decision: log warning and
+  keep disk-first undo success because the snapshot was already written to disk;
+  document-model sync failure is observable but should not roll back disk state.
+- UndoRedoService may still race VS Code file watchers after disk writes.
+  Decision: accept the same residual risk as VSCodeFileIO for now and validate
+  through focused E2E; no doc.save path remains.
+- CommandPalette default retries=0 can expose VS Code command palette flake.
+  Decision: keep zero retries per user instruction; failures must be analyzed.
+- setup-preview component inference is title-based. Decision: defer as E2E
+  harness follow-up unless it fails in the full run.
+- _getPreviewAppFrame presence and command title sync were checked: both pass.
+
+Low:
+- Added byte-content assertion for UndoRedoService fs.writeFile.
+- AstBridge call-count fixture fragility remains a possible test cleanup.
+- Several E2E smoke-coverage reductions are noted for follow-up review after
+  the full run shows the next real failure.
+
+Validation after review responses:
+- bun test AstBridge + VSCodeFileIO + UndoRedoService: 44 pass, 0 fail.
+- bunx biome check on touched extension files: pass.
+- bunx tsc --noEmit --project vscode-extension/hypercanvas-preview/tsconfig.json:
+  pass.
+- git diff --check: pass.
+- Focused E2E rerun 20260421d: PI-18-20 passed; PI-18-19 skipped because the
+  generic selector picker could not find two numeric-width targets. This skip
+  is not sufficient coverage, so PI-18-19 is being rewritten to use the
+  dedicated TestElements flex fixture.
+- Focused E2E rerun 20260421f after rewriting PI-18-19 to use the dedicated
+  TestElements flex fixture: 2 passed, 0 failed, retries=0. Grep found no
+  [test-errors], no "File Modified Since", no handleSaveError, no failed save.
+- Commit 8edb48ac fix(ext): write undo snapshots disk-first.
+  Scope: production UndoRedoService write path and focused unit tests.
+  Commit hook validation: lefthook react-hooks-import, biome lint, typecheck
+  passed. Separate manual validation before commit: bun test focused suite,
+  biome, tsc, git diff --check, build/install, focused E2E.
+  Skipped nested codex review because the user explicitly forbade launching
+  Codex from inside Codex; Claude review artifact above was used instead.
+```
+
+Separate dev tooling follow-up (not part of the production extension fix):
+
+```text
+New incoming Telegram failure:
+Codex app-server bridge failed: RPC error -32600:
+thread not found: 019daf72-658b-7c60-93ae-abd83245fcef
+
+Working hypothesis: app-server-only mode is correct, but the bot stores a stale
+current thread/session id in ~/.codex-current-session.json. When that thread is
+no longer present in the current app-server process, current-session forwarding
+returns the raw RPC failure. This must be fixed by invalidating/rebinding stale
+app-server sessions and returning an actionable Telegram message, not by
+reintroducing codex exec fallback.
+
+Additional bridge bot requirement from 2026-04-21:
+When inbound current-session forwarding has no valid binding, bridge bot should
+discover live Codex processes itself. If exactly one live Codex process is
+eligible, bind to it automatically. If multiple live Codex processes are found,
+send an inline choice in Telegram instead of guessing. The bot must not launch
+Codex from inside Codex and must not reintroduce codex exec resume fallback.
+
+Implementation status:
+- Added WS discovery via thread/loaded/list + thread/read on the configured
+  app-server endpoint.
+- If the saved current binding is not among live loaded threads, the bot clears
+  it before forwarding.
+- If one live candidate remains, the bot auto-binds and forwards the pending
+  Telegram message.
+- If several live candidates remain, the bot stores the pending prompt and
+  sends Telegram inline buttons; choosing one binds it and forwards the
+  original prompt.
+- Added process parsing so the bot can report Codex app-server processes
+  without using codex exec.
+- Validation in /Users/ultra/xp/codex-tg-bot: bun test passed, bunx tsc
+  --noEmit passed, git diff --check passed.
+- Committed in /Users/ultra/xp/codex-tg-bot:
+  b4d8b57 fix: auto-discover current Codex sessions.
+- Restarted bridge bot after commit; running PID: 97007.
 ```
