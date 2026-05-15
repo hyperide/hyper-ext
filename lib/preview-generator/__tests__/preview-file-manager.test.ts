@@ -1466,6 +1466,43 @@ ReactDOM.createRoot(document.getElementById('root')!).render(React.createElement
     // Must use React.createElement instead
     expect(patched).toContain('React.createElement');
   });
+  it('falls back to appended conditional import for non-standard entries (ViteReactSSG)', async () => {
+    const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
+import App from "./App";
+export const createRoot = ViteReactSSG(<App />);
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx');
+    const patched = io.files.get('/project/src/main.tsx');
+    expect(patched).toBeDefined();
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview__');
+    expect(patched).toContain('test-preview');
+    expect(patched).toContain('import("');
+    // Original code preserved
+    expect(patched).toContain('ViteReactSSG');
+  });
+
+  it('revertEntryFile restores appended fallback form', async () => {
+    const viteReactSsgEntry = `import { ViteReactSSG } from "vite-react-ssg/single-page";
+import App from "./App";
+export const createRoot = ViteReactSSG(<App />);
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/main.tsx', viteReactSsgEntry);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/main.tsx');
+    await manager.revertEntryFile('/project/src/main.tsx');
+    const reverted = io.files.get('/project/src/main.tsx');
+    expect(reverted).toBeDefined();
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('test-preview');
+    expect(reverted).toContain('ViteReactSSG');
+  });
 });
 
 describe('PreviewFileManager.ensureStandaloneEntry', () => {

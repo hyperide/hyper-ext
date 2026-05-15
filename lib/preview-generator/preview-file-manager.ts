@@ -1247,7 +1247,11 @@ export class PreviewFileManager {
     });
 
     if (!patched) {
-      console.warn('[PreviewFileManager] Could not find createRoot().render() in entry file', entryFilePath);
+      // Fallback for non-standard entries (ViteReactSSG, custom bootstraps): append conditional
+      // import at end of file. The AST-based path only handles createRoot().render() calls.
+      const condition = `typeof location !== "undefined" && new URLSearchParams(location.search).get("component") && location.pathname.includes("test-preview")`;
+      const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { import("${importTarget}"); }\n`;
+      await this.io.writeFile(entryFilePath, appendedSource);
       return;
     }
 
@@ -1278,6 +1282,13 @@ export class PreviewFileManager {
       },
     });
 
-    await this.io.writeFile(filePath, recast.print(ast).code);
+    const reverted = recast.print(ast).code;
+    // If @hyperide-managed is still present (appended form without else-branch), truncate it
+    if (reverted.includes('@hyperide-managed')) {
+      const idx = reverted.lastIndexOf('\n// @hyperide-managed');
+      await this.io.writeFile(filePath, idx >= 0 ? reverted.slice(0, idx) : reverted);
+      return;
+    }
+    await this.io.writeFile(filePath, reverted);
   }
 }
