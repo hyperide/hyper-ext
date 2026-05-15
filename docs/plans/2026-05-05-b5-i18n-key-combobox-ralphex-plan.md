@@ -52,16 +52,16 @@ git -C /Users/ultra/work/hyper-canvas-draft worktree add \
 
 ### Task 1: Add `getAvailableKeys` to StyleReadService
 
-- [ ] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` fully.
-- [ ] Read `shared/i18n-text/resolve-i18n-resource.ts` — understand `discoverLayout` and `resolveKey`.
-- [ ] Add `getAvailableKeys(componentPath: string, syntheticRef: string, activeLocale?: string): Promise<string[]>` to `StyleReadService`.
+- [x] Read `vscode-extension/hypercanvas-preview/src/services/StyleReadService.ts` fully.
+- [x] Read `shared/i18n-text/resolve-i18n-resource.ts` — understand `discoverLayout` and `resolveKey`.
+- [x] Add `getAvailableKeys(componentPath: string, syntheticRef: string, activeLocale?: string): Promise<string[]>` to `StyleReadService`.
   - Call existing `_tryDetectI18n` to get library + namespace.
   - Call `discoverLayout` with the detected locale info.
   - If `mergedData`: extract all leaf keys from `mergedData[activeLocale]` recursively.
   - If flat JSON: read file, parse JSON, extract all leaf keys recursively.
   - Return empty array on any error.
-- [ ] Add unit test in `src/__tests__/StyleReadService.test.ts`: `getAvailableKeys` returns key list for i18n JSX with flat locale file.
-- [ ] Run `bun test vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts`.
+- [x] Add unit test in `src/__tests__/StyleReadService.test.ts`: `getAvailableKeys` returns key list for i18n JSX with flat locale file.
+- [x] Run `bun test vscode-extension/hypercanvas-preview/src/__tests__/StyleReadService.test.ts`.
 
 Acceptance: `getAvailableKeys` returns `['habits.walks', 'habits.runs', ...]` for the i18n fixture.
 
