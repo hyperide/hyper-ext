@@ -33,6 +33,7 @@ __pycache__/
 /data/
 .playwright-mcp/
 .claire/
+.ralphex/worktrees/
 .claude/worktrees
 .claude/state.json
 .claude/tmp/
