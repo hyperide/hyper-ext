@@ -62,12 +62,26 @@ describe('I18nTextInspector', () => {
         onKeyChange={mock(() => {})}
         onResolvedTextChange={mock(() => {})}
         onLocaleChange={onLocaleChange}
+        localeEditable
       />,
     );
     const ruButton = screen.getByText('ru');
     expect(ruButton).toBeTruthy();
     fireEvent.click(ruButton);
     expect(onLocaleChange).toHaveBeenCalledWith('ru');
+  });
+
+  it('disables locale buttons when localeEditable is false (default)', () => {
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={mock(() => {})}
+        onResolvedTextChange={mock(() => {})}
+        onLocaleChange={mock(() => {})}
+      />,
+    );
+    const ruButton = screen.getByText('ru') as HTMLButtonElement;
+    expect(ruButton.disabled).toBe(true);
   });
 
   it('fires onKeyChange when the key input is changed', () => {
@@ -78,10 +92,24 @@ describe('I18nTextInspector', () => {
         onKeyChange={onKeyChange}
         onResolvedTextChange={mock(() => {})}
         onLocaleChange={mock(() => {})}
+        keyEditable
       />,
     );
     fireEvent.change(screen.getByDisplayValue('habits.walks'), { target: { value: 'habits.runs' } });
     expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
+  });
+
+  it('disables key input when keyEditable is false (default)', () => {
+    render(
+      <I18nTextInspector
+        i18nBinding={supportedBinding}
+        onKeyChange={mock(() => {})}
+        onResolvedTextChange={mock(() => {})}
+        onLocaleChange={mock(() => {})}
+      />,
+    );
+    const keyInput = screen.getByDisplayValue('habits.walks') as HTMLInputElement;
+    expect(keyInput.disabled).toBe(true);
   });
 
   it('fires onResolvedTextChange when the text input is changed', () => {

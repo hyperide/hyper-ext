@@ -24,6 +24,7 @@ export interface I18nTextBinding {
   kind: 'i18n';
   library: I18nLibrary;
   key: string;
+  namespace?: string;
   activeLocale: string;
   availableLocales: string[];
   resolvedText: string | null;
@@ -51,6 +52,8 @@ export interface I18nBindingDetected {
   library: I18nLibrary;
   /** Static translation key extracted from the call/element. */
   key: string;
+  /** Namespace from explicit ns option, e.g. t('key', { ns: 'common' }). */
+  namespace?: string;
   /** Where the binding expression/element starts in the source file. */
   sourceLocation: { line: number; column: number };
 }

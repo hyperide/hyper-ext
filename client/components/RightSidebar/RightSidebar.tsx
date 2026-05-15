@@ -715,6 +715,7 @@ export default function RightSidebar({
             await astOps.writeI18nResource({
               library: i18nText.library,
               key: i18nText.key,
+              namespace: i18nText.namespace,
               activeLocale: i18nText.activeLocale,
               newText,
             });
