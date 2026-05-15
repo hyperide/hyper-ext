@@ -7,6 +7,7 @@
  * Uses fiber-based nodeRef resolution (via NodeMapService + findElementByPosition).
  */
 
+import * as fsSync from 'node:fs';
 import * as t from '@babel/types';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
@@ -27,6 +28,16 @@ import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor'
 import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
+
+// Debug log sink — written to /tmp/hyper-ast-debug.log during local repro runs
+const DEBUG_LOG = process.env.HYPERIDE_AST_DEBUG_LOG ?? '/tmp/hyper-ast-debug.log';
+function dbg(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  console.log(msg);
+  try {
+    fsSync.appendFileSync(DEBUG_LOG, line);
+  } catch {}
+}
 
 // ============================================
 // Response Types
@@ -178,7 +189,7 @@ export class AstService {
 
     this._initialized = true;
     if (allFiles.length > 0) {
-      console.log(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
+      dbg(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
     }
   }
 
@@ -211,6 +222,7 @@ export class AstService {
     _elementId: string | undefined,
     filePath?: string,
   ): FindElementResult | null {
+    dbg(`[AstService._resolveElement] nodeRef=${nodeRef} filePath=${filePath}`);
     if (nodeRef) {
       // Try nodeRef lookup first (format: "filePath:index")
       const entry = this._nodeMapService.resolveNodeRef(nodeRef);
@@ -227,8 +239,17 @@ export class AstService {
           entryFile === filePath ||
           filePath.endsWith(`/${entryFile}`) ||
           entryFile.endsWith(`/${filePath}`);
-        if (!entryFileMatchesAst) return null;
-        return findElementByPosition(ast, entry.loc.line, entry.loc.column);
+        if (!entryFileMatchesAst) {
+          dbg(
+            `[AstService._resolveElement] entryFile=${entryFile} != filePath=${filePath}, returning null (cross-file)`,
+          );
+          return null;
+        }
+        const posResult = findElementByPosition(ast, entry.loc.line, entry.loc.column);
+        dbg(
+          `[AstService._resolveElement] nodeMap hit: entryFile=${entryFile} line=${entry.loc.line} col=${entry.loc.column} found=${!!posResult}`,
+        );
+        return posResult;
       }
 
       // Fallback: parse as source location "filePath:line:column" (from React fiber _debugSource)
@@ -274,7 +295,7 @@ export class AstService {
         if (fileMatches) {
           const result = findElementByPosition(ast, line, column);
           if (result) {
-            console.log(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
+            dbg(`[AstService] Direct position fallback succeeded: ${nodeRef} → line ${line}:${column}`);
             return result;
           }
         }
@@ -344,11 +365,21 @@ export class AstService {
       const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
       const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
+      dbg(
+        `[AstService.updateProps] filePath=${filePath} absolutePath=${absolutePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${effectiveNodeRef} props=${JSON.stringify(props)}`,
+      );
+
       const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef, elementId);
       if (!resolved) {
+        dbg(
+          `[AstService.updateProps] _resolveElementInCorrectFile returned null for effectiveNodeRef=${effectiveNodeRef}`,
+        );
         return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
       }
       const { result, ast, resolvedPath } = resolved;
+      dbg(
+        `[AstService.updateProps] resolved element=${result.element.openingElement?.name && 'name' in result.element.openingElement.name ? result.element.openingElement.name.name : '?'} resolvedPath=${resolvedPath}`,
+      );
 
       for (const [propName, propValue] of Object.entries(props)) {
         setAttribute(result.element, propName, valueToJSXAttribute(propValue));
@@ -558,25 +589,43 @@ export class AstService {
     effectiveNodeRef: NodeRef | string,
     elementId: string | undefined,
   ): Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null> {
+    dbg(`[AstService._resolveElementInCorrectFile] absolutePath=${absolutePath} effectiveNodeRef=${effectiveNodeRef}`);
     const { ast } = await this._fileParser.readAndParseFile(absolutePath);
     const result = this._resolveElement(ast, effectiveNodeRef as NodeRef, elementId, absolutePath);
-    if (result) return { result, ast, resolvedPath: absolutePath };
+    if (result) {
+      dbg(`[AstService._resolveElementInCorrectFile] resolved in primary file=${absolutePath}`);
+      return { result, ast, resolvedPath: absolutePath };
+    }
 
-    // Cross-file fallback: nodeRef encodes "src/screens/Foo.tsx:line:col" while the
-    // caller supplied App.tsx as filePath.  Resolve the actual file and retry.
-    const nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
+    // Cross-file fallback: primary file miss.  Two ways to get the real source file:
+    // 1. Source-location nodeRef ("src/screens/Foo.tsx:10:5") — _extractFileFromNodeRef
+    // 2. Hash nodeRef ("abc123") — look up nodeMapEntry and read loc.fileName
+    let nodeRefFile = this._extractFileFromNodeRef(effectiveNodeRef);
+    if (!nodeRefFile) {
+      const entry = this._nodeMapService.resolveNodeRef(effectiveNodeRef as NodeRef);
+      if (entry?.loc?.fileName) {
+        nodeRefFile = resolveWorkspacePath(this._workspaceRoot, entry.loc.fileName);
+        dbg(
+          `[AstService._resolveElementInCorrectFile] nodeMap fallback: entry file=${entry.loc.fileName} → ${nodeRefFile}`,
+        );
+      }
+    }
+    dbg(`[AstService._resolveElementInCorrectFile] primary miss, nodeRefFile=${nodeRefFile}`);
     if (nodeRefFile && nodeRefFile !== absolutePath) {
       try {
         const { ast: childAst } = await this._fileParser.readAndParseFile(nodeRefFile);
         const childResult = this._resolveElement(childAst, effectiveNodeRef as NodeRef, elementId, nodeRefFile);
         if (childResult) {
+          dbg(`[AstService._resolveElementInCorrectFile] resolved in child file=${nodeRefFile}`);
           return { result: childResult, ast: childAst, resolvedPath: nodeRefFile };
         }
-      } catch {
+      } catch (e) {
+        dbg(`[AstService._resolveElementInCorrectFile] child file read failed: ${e}`);
         // File unreadable — fall through to null
       }
     }
 
+    dbg(`[AstService._resolveElementInCorrectFile] NOT FOUND, returning null`);
     return null;
   }
 
