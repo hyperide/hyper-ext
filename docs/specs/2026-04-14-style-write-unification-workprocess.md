@@ -1497,3 +1497,27 @@ s4 продолжает spotify cluster. Image bake auto-trigger готов на
 `docker image prune -f`: 0B (нет dangling). Reclaimable 4.3GB на
 старых hypercanvas-e2e слоях, но не безопасно пока контейнеры
 работают.
+
+## 📍 2026-04-27 00:25 CEST: s2 ЗАВЕРШИЛСЯ first
+
+**s2 final**: 41 failed / 33 flaky / 146 skipped / 280 passed (4.2h, 500 total).
+
+s1/s3/s4 продолжают. s4 жуёт spotify, ~120-150 min до конца при текущей
+скорости 0.83 tests/min.
+
+### Notable s2 кластеры из summary
+
+- **settings.spec.ts**: 8 fails на independent tests (autoStart, port, AI
+  provider change, model override, baseURL, scope etc.) — НЕ VSIX-related,
+  отдельный bug в settings handler. Кандидат на расследование.
+- **text-editing**: 4 fails (Double-click crash, type resilient, .map() Double-click,
+  JSX expressions) — текстовое редактирование сломано на independent.
+- **undo-redo**: 3 fails (single-style-undo, undo/redo preserves selection) —
+  возможно re-create связано.
+- **security**: XSS sanitization + CSP enforcement — реальные тесты.
+- **project-switching**: Twitter→Tamagui stale UI — может быть 0.1.10 fix.
+
+### Flaky 33
+
+Половина flaky на style-editing/css-adapters. Эти тесты часто упирались в
+re-create race. Ожидаю снижения после VSIX 0.1.10.
