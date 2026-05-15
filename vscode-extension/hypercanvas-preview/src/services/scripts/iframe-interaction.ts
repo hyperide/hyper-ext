@@ -833,6 +833,11 @@ const state = {
 // Change to `let` and sync via stateUpdate when instance support is added.
 const activeInstanceId: string | null = null;
 
+// Suppress the synthetic click that fires after a drag ends.
+// Must be registered BEFORE attachClickHandler so it fires first on the same node
+// and stopImmediatePropagation() can prevent handleClick from running.
+document.addEventListener('click', _dragClickSuppressor, true);
+
 // === Shared click handler (fiber-based via iframeResolver) ===
 attachClickHandler(
   document,
@@ -1135,14 +1140,15 @@ function _dragPointerUp(e: PointerEvent): void {
 function _dragClickSuppressor(e: MouseEvent): void {
   if (!_dragSuppressNextClick) return;
   _dragSuppressNextClick = false;
-  e.stopPropagation();
+  // stopImmediatePropagation prevents same-node listeners registered after this one
+  // (e.g. attachClickHandler's handleClick) from firing.
+  e.stopImmediatePropagation();
   e.preventDefault();
 }
 
 document.addEventListener('pointerdown', _dragPointerDown, true);
 document.addEventListener('pointermove', _dragPointerMove, true);
 document.addEventListener('pointerup', _dragPointerUp, true);
-document.addEventListener('click', _dragClickSuppressor, true);
 
 // === Focus prevention in design mode (mousedown, not focusin) ===
 const mousedownHandler = (e: MouseEvent) => {
