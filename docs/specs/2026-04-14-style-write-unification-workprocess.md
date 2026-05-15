@@ -3786,3 +3786,29 @@ Note: both 14365ms and 13360ms failures had passing retries. The 30690ms failure
 **Containers:** `hyper-e2e-20260429-002452-60989-s{1,2,3}`
 **Fixes vs run #23:** duplicate element child-file, redo HMR delay, 502/ERR_CACHE_RACE benign, error overlay poll 150→250s, Tamagui poll 20→45s, zombie container prevention, File Modified Since teardown
 **Expected improvements:** `hyper_duplicate_element` and `redo limit` should be hard failures no more; `canvas-bugs switching components` should be flaky→pass (retry works now); Tamagui and error overlay failures should not appear
+
+---
+
+## 📍 2026-04-29 Run #24 Interim Status (~01:00 CEST)
+
+**Progress at ~36 min:** S1: 170 passed, 0 failed | S2: 67 passed, 1 failed | S3: 124 passed, 4 failed
+
+### S2 failure: `component with error — error overlay appears` (257286ms)
+
+- Root cause: Vite error overlay poll timeout. The 257s total exactly hit the 250s assertion timeout.
+- Pattern is consistent across runs: 51s→97s→128s→159s→257s (run #20→21→22→23→24). Under Docker 3-shard CPU pressure, Vite rebuild after syntax error injection takes increasingly long.
+- **Fixed in ext-test-projects `17e6554`**: poll timeout 250s → 300s.
+
+### S3 failures: `Tamagui: style written as prop, not className` (×4 attempts)
+
+- Root cause: `revert-conflict` in `closeEditorsWithSave` used command ID `workbench.action.revertFile` which does not match quick-pick row text (VS Code shows display title `File: Revert File`). The locator `filter({ hasText: 'workbench.action.revertFile' })` found nothing, `runCommand` timed out at 2s, `.catch(() => {})` swallowed the error. `waitForNoDirtyEditors` then failed because `RecordScreen.tsx` was still dirty.
+- Note: the test BODY likely PASSED (style write worked), but teardown marked the test failed. This was masked in run #23 by passing retries — in run #24 the same teardown failure happened on ALL 4 attempts (2 projects × 2 retries), suggesting 100% reproducibility.
+- **Fixed in ext-test-projects `17e6554`**: switch to `File: Revert File` title; add 300ms tab-activation delay + `assertNoBlockingDialogs` after revert + 500ms settle wait.
+
+### New fixes for Run #25
+
+| Commit | Repo | Fix |
+|--------|------|-----|
+| `17e6554` | ext-test-projects | `File: Revert File` title + 300ms wait + dialog dismiss + error overlay 300s |
+
+**Run #24 still active** — containers running, S1 still at 0 failures, monitoring continues.
