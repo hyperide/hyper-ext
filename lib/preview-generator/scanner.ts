@@ -26,8 +26,12 @@ export function scanSampleExports(sourceCode: string): string[] {
 
     if (!node.declaration) {
       // Barrel re-exports: export { SampleFoo } or export { SampleFoo } from './samples'
+      // Skip type-only export statements: export type { SampleFoo }
+      if (node.exportKind === 'type') continue;
       for (const spec of node.specifiers) {
         if (spec.type === 'ExportSpecifier' && spec.exported.type === 'Identifier') {
+          // Skip inline type specifiers: export { type SampleFoo }
+          if (spec.exportKind === 'type') continue;
           if (SAMPLE_RE.test(spec.exported.name)) results.push(spec.exported.name);
         }
       }
@@ -187,12 +191,11 @@ function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'],
   return property.type === 'Identifier' && property.name === 'createContext';
 }
 
-const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set([
-  'BrowserRouter',
-  'HashRouter',
-  'MemoryRouter',
-  'StaticRouter',
-]);
+// MemoryRouter is intentionally excluded: it is a testing/in-memory router used
+// in SampleDefault wrappers, not a production app-shell router. Including it
+// would falsely exclude previewable components that wrap their samples in
+// MemoryRouter for isolated rendering.
+const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set(['BrowserRouter', 'HashRouter', 'StaticRouter']);
 
 const ROUTER_SHELL_SOURCES = new Set(['react-router-dom', 'react-router-dom/server', 'react-router']);
 

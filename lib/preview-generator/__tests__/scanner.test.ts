@@ -47,6 +47,26 @@ describe('scanSampleExports', () => {
     `;
     expect(scanSampleExports(source)).toEqual([]);
   });
+
+  it('should include barrel re-export of Sample*', () => {
+    const source = `export { SampleFoo } from './samples';`;
+    expect(scanSampleExports(source)).toEqual(['SampleFoo']);
+  });
+
+  it('should exclude type-only export statement: export type { SampleFoo }', () => {
+    const source = `export type { SampleFoo } from './types';`;
+    expect(scanSampleExports(source)).toEqual([]);
+  });
+
+  it('should exclude inline type specifier: export { type SampleFoo }', () => {
+    const source = `export { type SampleFoo } from './types';`;
+    expect(scanSampleExports(source)).toEqual([]);
+  });
+
+  it('should include value re-export but skip inline type among mixed specifiers', () => {
+    const source = `export { SampleBar, type SampleFoo } from './samples';`;
+    expect(scanSampleExports(source)).toEqual(['SampleBar']);
+  });
 });
 
 describe('extractComponentName', () => {
@@ -367,6 +387,19 @@ describe('detectRouterShell', () => {
     const source = `
       import { BrowserRouter } from 'my-custom-router';
       export default function App() { return <BrowserRouter><div /></BrowserRouter>; }
+    `;
+    expect(detectRouterShell(source)).toBe(false);
+  });
+
+  it('returns false when only MemoryRouter is imported (sample wrapper, not an app shell)', () => {
+    const source = `
+      import { MemoryRouter } from 'react-router-dom';
+      export default function FillPicker() { return <div />; }
+      export const SampleDefault = () => (
+        <MemoryRouter initialEntries={['/projects/proj-1']}>
+          <FillPicker />
+        </MemoryRouter>
+      );
     `;
     expect(detectRouterShell(source)).toBe(false);
   });
