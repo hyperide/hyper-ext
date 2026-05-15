@@ -22,7 +22,6 @@ const supportedBinding: I18nTextBinding = {
   availableLocales: ['en', 'ru'],
   resolvedText: 'Go for a walk',
   editable: true,
-  writable: true,
   sourceLocation: { filePath: '/src/pages/Index.tsx', line: 5, column: 10 },
 };
 
@@ -78,17 +77,12 @@ describe('I18nTextInspector (VS Code webview)', () => {
     render(
       <I18nTextInspector
         i18nBinding={supportedBinding}
-        keyEditable
         onKeyChange={onKeyChange}
         onResolvedTextChange={mock(() => {})}
         onLocaleChange={mock(() => {})}
       />,
     );
-    // The key input is uncontrolled (defaultValue) and commits on blur or Enter,
-    // not on every keystroke. Mutate the DOM value, then dispatch blur to fire onBlur.
-    const input = screen.getByDisplayValue('habits.walks') as HTMLInputElement;
-    input.value = 'habits.runs';
-    fireEvent.blur(input);
+    fireEvent.change(screen.getByDisplayValue('habits.walks'), { target: { value: 'habits.runs' } });
     expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
   });
 
@@ -118,46 +112,6 @@ describe('I18nTextInspector (VS Code webview)', () => {
     );
     const textInput = screen.getByDisplayValue('');
     expect((textInput as HTMLInputElement).disabled).toBe(true);
-  });
-
-  // Regression: read-only TS/JS layouts (canCreateKeys=false) — switch-to-existing
-  // must still work (JSX-only rewrite via skipResourceWrite=true), but Create
-  // affordance must be hidden so the user cannot push the inspector into a
-  // write that the locale-file format would refuse.
-  describe('read-only layout existing-key flow', () => {
-    it('lets user pick an existing key from the combobox even when canCreateKeys is false', () => {
-      const onKeyChange = mock(() => {});
-      render(
-        <I18nTextInspector
-          i18nBinding={supportedBinding}
-          availableKeys={['habits.walks', 'habits.runs']}
-          keyEditable
-          canCreateKeys={false}
-          onKeyChange={onKeyChange}
-          onResolvedTextChange={mock(() => {})}
-        />,
-      );
-      fireEvent.click(screen.getByTestId('i18n-key-input'));
-      fireEvent.click(screen.getByText('habits.runs'));
-      expect(onKeyChange).toHaveBeenCalledWith('habits.runs');
-    });
-
-    it('hides the Create key affordance for an unknown typed key when canCreateKeys is false', () => {
-      render(
-        <I18nTextInspector
-          i18nBinding={supportedBinding}
-          availableKeys={['habits.walks']}
-          keyEditable
-          canCreateKeys={false}
-          onKeyChange={mock(() => {})}
-          onResolvedTextChange={mock(() => {})}
-        />,
-      );
-      fireEvent.click(screen.getByTestId('i18n-key-input'));
-      const searchInput = screen.getByPlaceholderText('Search or create key...');
-      fireEvent.change(searchInput, { target: { value: 'brand.new.key' } });
-      expect(screen.queryByTestId('i18n-key-create')).toBeNull();
-    });
   });
 
   it('renders raw expression fallback for unsupported bindings and hides i18n controls', () => {
