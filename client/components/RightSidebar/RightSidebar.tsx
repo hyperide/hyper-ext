@@ -743,27 +743,19 @@ export default function RightSidebar({
 
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
-      // Trim before comparison so trailing whitespace from blur/Enter doesn't
-      // bypass the equality check and write a whitespace-padded key into JSX/JSON.
-      const trimmedKey = newKey.trim();
-      if (!trimmedKey || trimmedKey === i18nText.key) return;
+      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
-      // Without a loaded keys list we cannot tell "rename to existing" from
-      // "create new", and skipResourceWrite=false would silently overwrite the
-      // real translation under the target key with the current value. Bail.
-      if (availableI18nKeys === undefined) return;
       const previousSelectedId = selectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
       // as "create new key" — also write the JSON resource so the next re-read
       // returns editable=true and the user can immediately type the translation.
       // Otherwise (existing key) skip the JSON write and only retarget JSX.
-      const isNewKey = !availableI18nKeys.includes(trimmedKey);
+      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
       void (async () => {
         try {
           await astOps.writeI18nResource({
             library: i18nText.library,
-            key: trimmedKey,
+            key: newKey,
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
             newText: i18nText.resolvedText ?? '',

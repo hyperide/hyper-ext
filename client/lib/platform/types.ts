@@ -145,6 +145,21 @@ export type PlatformMessage =
       position: 'before' | 'after';
     }
   | {
+      /**
+       * Move a JSX element from any place to any place. Unlike `ast:reorderElement`,
+       * source and target need NOT share a JSX parent — same-file, cross-file,
+       * cross-component, and leaf-target moves are all supported by the extension's
+       * `AstService.moveElement`. SaaS has no handler yet (Task 7 wires the
+       * extension only); type lives here for `CanvasAdapter.sendEvent` typing.
+       */
+      type: 'ast:moveElement';
+      requestId: string;
+      filePath: string;
+      sourceId: string;
+      targetId: string;
+      position: 'before' | 'after';
+    }
+  | {
       type: 'ast:writeI18nResource';
       requestId: string;
       library: I18nLibrary;

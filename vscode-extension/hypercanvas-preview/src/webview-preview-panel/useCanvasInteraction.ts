@@ -348,6 +348,25 @@ export function useCanvasInteraction(
           break;
         }
 
+        case 'hypercanvas:moveElement': {
+          // New drop pipeline (Task 7 of move-any-to-any). Source and target
+          // arrive as raw NodeRefs from the iframe — no lift, no fallback.
+          // AstService.moveElement handles same-file, cross-file, cross-parent,
+          // cross-component, and leaf-target moves uniformly.
+          if (typeof msg.sourceId !== 'string' || typeof msg.targetId !== 'string') break;
+          const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
+          if (!filePath) break;
+          canvas.sendEvent({
+            type: 'ast:moveElement',
+            requestId: `move-${Date.now()}`,
+            filePath,
+            sourceId: msg.sourceId,
+            targetId: msg.targetId,
+            position: msg.position === 'before' ? 'before' : 'after',
+          });
+          break;
+        }
+
         case 'hypercanvas:keydown': {
           const isMod = msg.metaKey || msg.ctrlKey;
           const isZ = msg.code === 'KeyZ' || msg.key?.toLowerCase() === 'z';
