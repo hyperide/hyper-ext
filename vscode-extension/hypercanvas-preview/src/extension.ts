@@ -201,12 +201,8 @@ interface ThemeImport {
 async function detectFrontendRoot(root: string): Promise<string> {
   try {
     const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
-    for (const scriptTag of html.matchAll(/<script\b([^>]*)>/g)) {
-      const attrs = scriptTag[1];
-      if (!/\btype=["']module["']/.test(attrs)) continue;
-      const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/);
-      if (srcMatch && srcMatch[1] !== 'src') return srcMatch[1];
-    }
+    const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+    if (match && match[1] !== 'src') return match[1];
   } catch {
     /* no index.html */
   }

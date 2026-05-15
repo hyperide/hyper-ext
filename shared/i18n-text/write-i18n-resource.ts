@@ -51,20 +51,12 @@ function setKey(data: unknown, key: string, value: string): boolean {
     return true;
   }
 
-  // If the first segment already exists as an object, the file uses nested convention for
-  // that subtree — write nested even if other keys elsewhere use flat dot notation.
-  const [firstPart] = parts;
-  const firstSegmentIsObject =
-    parts.length > 1 && typeof obj[firstPart] === 'object' && obj[firstPart] !== null && !Array.isArray(obj[firstPart]);
-
-  if (!firstSegmentIsObject) {
-    // If any top-level key already contains dots, the file uses flat-key convention.
-    // Write new keys as flat literals to match the existing format.
-    const hasFlatDotKeys = Object.keys(obj).some((k) => k.includes('.'));
-    if (hasFlatDotKeys) {
-      obj[key] = value;
-      return true;
-    }
+  // If any top-level key already contains dots, the file uses flat-key convention.
+  // Write new keys as flat literals to match the existing format.
+  const hasFlatDotKeys = Object.keys(obj).some((k) => k.includes('.'));
+  if (hasFlatDotKeys) {
+    obj[key] = value;
+    return true;
   }
 
   // Dot-path traversal with intermediate object creation.
@@ -125,10 +117,7 @@ export async function writeI18nResource(params: WriteI18nResourceParams): Promis
     return { success: false, filePath: null, error: 'unsupported-format' };
   }
 
-  // Detect original indentation to avoid reformatting files that use tabs or 4-space indent
-  const indentMatch = content.match(/^(\t| {2,4})(?=\S)/m);
-  const indent = indentMatch ? indentMatch[1] : '  ';
-  const updated = `${JSON.stringify(data, null, indent)}\n`;
+  const updated = `${JSON.stringify(data, null, 2)}\n`;
   try {
     await fileIO.writeFile(filePath, updated);
   } catch (err) {
