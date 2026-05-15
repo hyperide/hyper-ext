@@ -3484,3 +3484,18 @@ All fixes are in ext-test-projects main. Run #22 should have 0 failures for thes
 3. App Shell boundingBox poll 30s (S3 tamagui food-delivery/whatsapp)
 4. settings: 3 race condition fixes
 5. style-editing: dirty tab activation + 5→15s poll (Tamagui nested components)
+
+## 📍 Run #21 Checkpoint 4 (2026-04-28 ~18:23 CEST, ~1h56m)
+
+| Shard | Done | Fail | Notes |
+|-------|------|------|-------|
+| s1    | 185  |   0  | PI-18-26 (margin tests) |
+| s2    | 272  |   1  | Tailwind whitespace tests |
+| s3    | 276  |   6  | fiber-selection tests |
+
+No new failure types since checkpoint 3. All 7 failures (1 in S2, 6 in S3) = same 4 root causes as before, all fixed.
+
+S1 clean run confirmed — drag, resize, Alt+hover, padding-vertical all pass.
+S2/S3 "useLoaderData() as null" pageerrors from Remix project = runtime noise, tests pass despite them.
+
+Run is ~50-60% complete. Next checkpoint ~19:00 CEST.
