@@ -28,6 +28,13 @@ interface VSCodeApi {
   setState(state: unknown): void;
 }
 
+interface HyperTestBridge {
+  selectElement(elementId: string): void;
+  selectElements(elementIds: string[]): void;
+  setCurrentComponent(componentPath: string): void;
+  executeCommand(command: string, args?: string[]): void;
+}
+
 // Declare the global function that VS Code injects
 declare function acquireVsCodeApi(): VSCodeApi;
 
@@ -45,18 +52,36 @@ function getVSCodeApi(): VSCodeApi {
 // Test bridge — allows E2E tests to send messages to extension host
 // ============================================================================
 
-(window as unknown as Record<string, unknown>).__hyperTestBridge = {
+const webviewWindow = window as Window & { __hyperTestBridge?: HyperTestBridge };
+
+webviewWindow.__hyperTestBridge = {
   selectElement(elementId: string) {
     getVSCodeApi().postMessage({
       type: 'state:update',
-      patch: { selectedIds: [elementId] },
+      patch: { selectedIds: [elementId], selectedItemIndices: {}, selectedElementRuntimeStyle: null },
     });
   },
   selectElements(elementIds: string[]) {
     getVSCodeApi().postMessage({
       type: 'state:update',
-      patch: { selectedIds: elementIds },
+      patch: { selectedIds: elementIds, selectedItemIndices: {}, selectedElementRuntimeStyle: null },
     });
+  },
+  setCurrentComponent(componentPath: string) {
+    const name = componentPath.replace(/^.*\//, '').replace(/\.\w+$/, '');
+    getVSCodeApi().postMessage({
+      type: 'state:update',
+      patch: {
+        currentComponent: { name, path: componentPath },
+      },
+    });
+  },
+  executeCommand(command: string, args?: string[]) {
+    getVSCodeApi().postMessage({
+      type: 'command:execute',
+      command,
+      args,
+    } satisfies PlatformMessage);
   },
 };
 

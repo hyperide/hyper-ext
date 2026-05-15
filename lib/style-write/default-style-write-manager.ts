@@ -8,6 +8,7 @@
 import { cssModulesAdapter } from '@lib/style-adapters/css-modules';
 import { inlineStyleAdapter } from '@lib/style-adapters/inline-style';
 import { tailwindV4Adapter } from '@lib/style-adapters/tailwind-v4';
+import { tamaGuiAdapter } from '@lib/style-adapters/tamagui';
 import { DefaultStyleWriteManager, type StyleWritePlanExecutor } from './style-write-manager';
 import { DefaultStyleWritePlanner } from './style-write-planner';
 import type { FrameworkStyleAdapter, StyleWriteManager } from './types';
@@ -18,7 +19,7 @@ export interface CreateDefaultStyleWriteManagerOptions {
 }
 
 export function createDefaultStyleWriteManager(options: CreateDefaultStyleWriteManagerOptions): StyleWriteManager {
-  const adapters = options.adapters ?? [tailwindV4Adapter, cssModulesAdapter, inlineStyleAdapter];
+  const adapters = options.adapters ?? [tailwindV4Adapter, cssModulesAdapter, tamaGuiAdapter, inlineStyleAdapter];
   return new DefaultStyleWriteManager({
     planner: new DefaultStyleWritePlanner(adapters),
     executor: options.executor,

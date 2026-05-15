@@ -54,6 +54,16 @@ export interface PrintOptions {
  * State shared across all VS Code webview panels (Preview, Left, Right).
  * Extension host is the source of truth; webviews sync via state:* messages.
  */
+/** Runtime computed style snapshot from the preview iframe for the selected element. */
+export interface SelectedElementRuntimeStyle {
+  componentPath: string | null;
+  elementId: string;
+  itemIndex?: number | null;
+  /** Monotonic counter originating in the iframe to discard stale snapshots. */
+  seq: number;
+  computedStyle: Record<string, string>;
+}
+
 export interface SharedEditorState {
   /** Currently selected element IDs */
   selectedIds: string[];
@@ -79,6 +89,10 @@ export interface SharedEditorState {
   styleVersion?: number;
   /** Preview render scope: full running app (App Shell) or standalone component (Isolated mode) */
   previewScope?: 'full-app' | 'component-only';
+  /** Computed style snapshot from the preview iframe for the currently selected element. */
+  selectedElementRuntimeStyle?: SelectedElementRuntimeStyle | null;
+  /** Trimmed innerText of the selected DOM element — used as i18n DOM-text search fallback. */
+  selectedElementDomText?: string | null;
 }
 
 // ============================================================================

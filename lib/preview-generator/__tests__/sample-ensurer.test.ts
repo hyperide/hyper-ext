@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { FileIO } from '../../ast/file-io';
 import { ensureSample } from '../sample-ensurer';
 
@@ -39,7 +39,48 @@ export const SampleDefault = () => <Button>Click me</Button>;
 const GENERATED_SAMPLE = `export const SampleDefault = () => <Button>Generated</Button>;`;
 const GENERATED_PRIMARY = `export const SamplePrimary = () => <Button>Primary</Button>;`;
 
+const ALERT_SOURCE = `import * as React from 'react';
+
+const Alert = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} role="alert" className={className} {...props} />
+));
+
+const AlertTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => <h5 ref={ref} className={className} {...props} />);
+
+const AlertDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => <div ref={ref} className={className} {...props} />);
+
+export { Alert, AlertTitle, AlertDescription };
+`;
+
 describe('ensureSample', () => {
+  let originalLog: typeof console.log;
+  let originalWarn: typeof console.warn;
+  let originalError: typeof console.error;
+
+  beforeEach(() => {
+    originalLog = console.log;
+    originalWarn = console.warn;
+    originalError = console.error;
+    console.log = mock();
+    console.warn = mock();
+    console.error = mock();
+  });
+
+  afterEach(() => {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  });
+
   it('should generate sample when it does not exist', async () => {
     const io = new InMemoryFileIO();
     io.files.set('/project/Button.tsx', BUTTON_SOURCE);
@@ -149,6 +190,31 @@ describe('ensureSample', () => {
 
     expect(result.generated).toBe(false);
     expect(result.exists).toBe(false);
+  });
+
+  it('should build deterministic sample for compound components before calling AI', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/Alert.tsx', ALERT_SOURCE);
+    const generate = mock(() => Promise.reject(new Error('AI should not be called')));
+
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/Alert.tsx',
+      componentName: 'Alert',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    expect(result.generated).toBe(true);
+    expect(result.exists).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+
+    const written = io.files.get('/project/Alert.tsx');
+    expect(written).toContain('export const SampleDefault');
+    expect(written).toContain('<AlertTitle>Preview title</AlertTitle>');
+    expect(written).toContain(
+      '<AlertDescription>This sample shows the component with visible content.</AlertDescription>',
+    );
   });
 
   it('should reject code with test utilities', async () => {

@@ -2,12 +2,11 @@
  * UndoRedoService unit tests.
  *
  * Tests stack management logic (recordEdit, canUndo, canRedo, max length, path
- * validation). The actual undo/redo execution (content write via WorkspaceEdit +
- * save) is tested via AstBridge integration tests where the global vscode mock
- * from test/mock-vscode.ts is reliably available.
+ * validation) plus the write path used by undo/redo.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import * as vscode from 'vscode';
 import { UndoRedoService } from '../UndoRedoService';
 
 describe('UndoRedoService', () => {
@@ -92,6 +91,55 @@ describe('UndoRedoService', () => {
       const svc = new UndoRedoService(workspaceRoot);
       const panel = { reveal: () => {} } as never;
       expect(await svc.redo(panel)).toBe(false);
+    });
+  });
+
+  describe('undo/redo writes', () => {
+    it('writes undo content disk-first and never saves the open document', async () => {
+      const save = mock(() => Promise.resolve(true));
+      const uri = vscode.Uri.file('/workspace/a.tsx');
+      const doc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt' | 'isDirty' | 'save'> = {
+        uri,
+        getText: () => 'after',
+        positionAt: (offset: number) => new vscode.Position(0, offset),
+        isDirty: true,
+        save,
+      };
+      vscode.workspace.textDocuments.push(doc as vscode.TextDocument);
+
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/workspace/a.tsx', 'before', 'after');
+
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      const [, content] = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls[0] as [
+        vscode.Uri,
+        Uint8Array,
+      ];
+      expect(Buffer.from(content).toString('utf-8')).toBe('before');
+      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it('does not apply WorkspaceEdit for clean open documents', async () => {
+      const uri = vscode.Uri.file('/workspace/a.tsx');
+      const doc: Pick<vscode.TextDocument, 'uri' | 'getText' | 'positionAt' | 'isDirty'> = {
+        uri,
+        getText: () => 'after',
+        positionAt: (offset: number) => new vscode.Position(0, offset),
+        isDirty: false,
+      };
+      vscode.workspace.textDocuments.push(doc as vscode.TextDocument);
+
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/workspace/a.tsx', 'before', 'after');
+
+      expect(await svc.undo({ reveal: mock(() => {}) } as vscode.WebviewPanel)).toBe(true);
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
   });
 });

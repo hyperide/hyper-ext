@@ -43,7 +43,7 @@ export function ContrastBadge({ hex, pairedHex, isTextColor }: ContrastBadgeProp
             level === 'Fail' && 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
           )}
         >
-          {level}
+          {level === 'Fail' ? 'Bad' : level}
         </span>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="end" className="w-56 p-2.5 text-xs">

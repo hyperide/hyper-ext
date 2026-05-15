@@ -82,11 +82,11 @@ export function insertElementIntoAST(
 export function duplicateElementInAST(result: FindElementResult): { inserted: boolean } {
   const clonedElement = cloneElement(result.element);
 
-  // Insert after original - handle JSXElement parent
+  // Insert after original — works for JSXElement and JSXFragment parents
   const parent = result.path.parent;
   let inserted = false;
 
-  if (t.isJSXElement(parent)) {
+  if (t.isJSXElement(parent) || t.isJSXFragment(parent)) {
     const children = parent.children;
     const index = children.indexOf(result.path.node);
     if (index !== -1) {

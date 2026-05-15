@@ -56,7 +56,7 @@ export const StateSelectorSection = memo(function StateSelectorSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('state-selector')}
-      className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-b border-border overflow-hidden"
     >
       <div className="relative flex items-center">
         {canScrollLeft && (

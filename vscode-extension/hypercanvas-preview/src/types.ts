@@ -3,6 +3,8 @@
  * Defines messages, project types, and shared interfaces
  */
 
+import type { I18nLibrary } from '../../../shared/i18n-text/types';
+
 // ============================================
 // Project Detection
 // ============================================
@@ -160,6 +162,40 @@ export type AstMessage =
       elementId: string;
       wrapperType: string;
       wrapperProps?: Record<string, unknown>;
+    }
+  | {
+      type: 'ast:reorderElement';
+      requestId: string;
+      filePath: string;
+      /** nodeRef of element to move */
+      sourceId: string;
+      /** nodeRef of element to move relative to */
+      targetId: string;
+      position: 'before' | 'after';
+    }
+  | {
+      /** Write a translated value for a given i18n key in the active locale resource file. */
+      type: 'ast:writeI18nResource';
+      requestId: string;
+      /** Ignored — extension uses its own workspace root */
+      projectRoot?: string;
+      library: I18nLibrary;
+      key: string;
+      namespace?: string;
+      activeLocale: string;
+      newText: string;
+      /**
+       * When the key itself changes (user picks a different key from the dropdown),
+       * provide the source file + element so the JSX child expression can be updated.
+       */
+      filePath?: string;
+      elementId?: string;
+      previousKey?: string;
+      /**
+       * When true, skip writing to the locale JSON file and only update the JSX expression.
+       * Used when switching to an existing key — we don't want to overwrite its translation.
+       */
+      skipResourceWrite?: boolean;
     };
 
 // AST response
@@ -200,6 +236,11 @@ export interface FileResponse {
   data?: unknown;
   error?: string;
 }
+
+// VS Code command execution (webview -> extension)
+export type CommandMessage =
+  | { type: 'command:execute'; command: string; args?: string[] }
+  | { type: 'command:fixUnsupportedProject' };
 
 // Dev server operations
 export type DevServerMessage =
@@ -360,6 +401,9 @@ export type StylesMessage = {
   requestId: string;
   elementId: string;
   componentPath: string;
+  /** When set, resolve i18n text for this locale instead of the default. */
+  activeLocale?: string;
+  domTextContent?: string;
 };
 
 export interface StylesResponse {
@@ -371,6 +415,8 @@ export interface StylesResponse {
   textContent?: string;
   tagType?: string;
   childrenLocation?: { line: number; column: number };
+  styleReadResult?: import('@lib/style-read/types').StyleReadResult;
+  i18nText?: import('@shared/i18n-text/types').I18nBindingResult;
   error?: string;
 }
 
@@ -380,6 +426,7 @@ export type PlatformMessage =
   | AstMessage
   | ComponentMessage
   | FileMessage
+  | CommandMessage
   | DevServerMessage
   | AIMessage
   | CompositionMessage
@@ -439,3 +486,5 @@ export type {
   PrintOptions,
   SharedEditorState,
 } from '@lib/types';
+
+export type { I18nBindingResult } from '@shared/i18n-text/types';

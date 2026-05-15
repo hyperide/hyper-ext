@@ -8,7 +8,7 @@
  */
 
 import fs from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 import { detectFramework } from './framework-routing';
 import { PreviewFileManager } from './preview-file-manager';
@@ -35,7 +35,21 @@ export interface PreviewModeManagerOptions {
    * Pass chokidarWatchFactory on SaaS (handles Docker volumes reliably).
    */
   watcherFactory?: WatcherFactory;
+  /**
+   * Called BEFORE a preview route or entry file write that requires dev-server HMR.
+   * Wire this to `DevServerManager.armRecompileGate()` so the iframe doesn't
+   * race the dev-server update and navigate to stale routing state.
+   */
+  onBeforeWebpackEntryPatch?: () => void;
+  /**
+   * Called after Vite SPA router/entry patches. Vite often applies HMR without a
+   * reliable stdout marker, so extension-side navigation waits on this short barrier
+   * instead of arming the long recompile gate.
+   */
+  waitForPreviewRouteUpdate?: () => Promise<void> | void;
 }
+
+const DEFAULT_PREVIEW_ROUTE_UPDATE_DELAY_MS = 4000;
 
 /** Default: node:fs.watch with debounce. Suitable for local extension use. */
 export function fsWatchFactory(projectRoot: string, onChange: () => void): () => void {
@@ -89,16 +103,29 @@ export class PreviewModeManager {
   private readonly _io: FileIO;
   private readonly _onModeChange?: (isolated: boolean) => void;
   private readonly _watcherFactory: WatcherFactory;
+  private readonly _onBeforeWebpackEntryPatch?: () => void;
+  private readonly _waitForPreviewRouteUpdate: () => Promise<void> | void;
 
   private _watcherDispose: (() => void) | null = null;
   private _modeUpdateInProgress = false;
   private _modeUpdatePending = false;
 
-  constructor({ projectRoot, io, onModeChange, watcherFactory }: PreviewModeManagerOptions) {
+  constructor({
+    projectRoot,
+    io,
+    onModeChange,
+    watcherFactory,
+    onBeforeWebpackEntryPatch,
+    waitForPreviewRouteUpdate,
+  }: PreviewModeManagerOptions) {
     this._projectRoot = projectRoot;
     this._io = io;
     this._onModeChange = onModeChange;
     this._watcherFactory = watcherFactory ?? fsWatchFactory;
+    this._onBeforeWebpackEntryPatch = onBeforeWebpackEntryPatch;
+    this._waitForPreviewRouteUpdate =
+      waitForPreviewRouteUpdate ??
+      (() => new Promise((resolve) => setTimeout(resolve, DEFAULT_PREVIEW_ROUTE_UPDATE_DELAY_MS)));
     this._fileManager = new PreviewFileManager({ projectRoot, io });
   }
 
@@ -133,25 +160,47 @@ export class PreviewModeManager {
       case 'nextjs-app-router':
       case 'nextjs-pages-router':
       case 'remix':
-      case 'vite-spa-file-based':
-        return this._fileManager.ensurePreviewFiles();
+      case 'vite-spa-file-based': {
+        // ensurePreviewFiles() is idempotent — returns 'ok-files-written' only when
+        // route files are freshly created or updated. Remix and Vite file-based
+        // routes use the short route-update barrier because their dev-server
+        // stdout markers are not reliable enough for the long webpack gate.
+        // Next.js still uses the recompile gate because it emits stable compile
+        // markers after file-based route creation.
+        // On 2nd+ tests the same files already exist (content identical) — _writeIfSafe
+        // skips writing → 'ok' returned → no gate armed → awaitRecompile is a no-op.
+        const fileResult = await this._fileManager.ensurePreviewFiles();
+        if (fileResult === 'ok-files-written') {
+          if (framework === 'vite-spa-file-based' || framework === 'remix') {
+            await this._waitForPreviewRouteUpdate();
+          } else {
+            this._onBeforeWebpackEntryPatch?.();
+          }
+        }
+        return fileResult === 'ok-files-written' ? 'ok' : fileResult;
+      }
       case 'vite-spa-jsx-router': {
         const routerFile = await this.detectRouterFile();
         if (routerFile) {
-          await this._fileManager.patchRouterConfig(routerFile);
+          const wrote = await this._fileManager.patchRouterConfig(routerFile);
+          if (wrote) await this._waitForPreviewRouteUpdate();
           return 'ok';
         }
-        // No JSX router found — patch entry file (same as webpack/parcel).
-        // Plain Vite SPA projects without React Router.
-        return this._patchEntryFile();
+        // No JSX router found — patch entry file and wait for HMR before navigation.
+        return this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
       }
+      case 'bun':
+        return this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
       case 'webpack':
+        return this._patchEntryFile();
       case 'parcel':
         return this._patchEntryFile();
       case 'unknown':
         return 'unsupported';
-      default:
-        return this._fileManager.ensurePreviewFiles();
+      default: {
+        const r = await this._fileManager.ensurePreviewFiles();
+        return r === 'ok-files-written' ? 'ok' : r;
+      }
     }
   }
 
@@ -200,19 +249,40 @@ export class PreviewModeManager {
     this._onModeChange?.(false);
   }
 
+  /**
+   * Detect the frontend root directory ('src', 'client', etc.) from index.html.
+   * Falls back to 'src' if index.html is absent or doesn't specify a different root.
+   */
+  private async _detectFrontendRoot(): Promise<string> {
+    try {
+      const html = await this._io.readFile(join(this._projectRoot, 'index.html'));
+      for (const tag of html.matchAll(/<script\b[^>]*>/g)) {
+        if (!/\btype=["']module["']/.test(tag[0])) continue;
+        const src = tag[0].match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/)?.[1];
+        if (src && src !== 'src') return src;
+      }
+    } catch {
+      /* no index.html */
+    }
+    return 'src';
+  }
+
   /** Override in tests to inject a known router file path. */
   async detectRouterFile(): Promise<string | null> {
-    const candidates = [
-      'src/App.tsx',
-      'src/app.tsx',
+    const frontendRoot = await this._detectFrontendRoot();
+    // Check the detected frontend root first, then fall back to src/
+    const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+    const suffixes = [
       'App.tsx',
-      'src/main.tsx',
-      'src/main.ts',
-      'src/router.tsx',
-      'src/router.ts',
-      'src/routes.tsx',
-      'src/routes.ts',
+      'app.tsx',
+      'main.tsx',
+      'main.ts',
+      'router.tsx',
+      'router.ts',
+      'routes.tsx',
+      'routes.ts',
     ];
+    const candidates = [...rootPrefixes.flatMap((r) => suffixes.map((s) => `${r}/${s}`)), 'App.tsx'];
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
@@ -233,7 +303,14 @@ export class PreviewModeManager {
   }
 
   private async _detectEntryFile(): Promise<string | null> {
-    const candidates = ['src/index.tsx', 'src/index.ts', 'src/main.tsx', 'src/main.ts'];
+    const htmlEntry = await this._detectHtmlEntryFile();
+    if (htmlEntry) return htmlEntry;
+
+    const frontendRoot = await this._detectFrontendRoot();
+    // Check the detected frontend root first, then fall back to src/
+    const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+    const suffixes = ['index.tsx', 'index.ts', 'main.tsx', 'main.ts'];
+    const candidates = rootPrefixes.flatMap((r) => suffixes.map((s) => `${r}/${s}`));
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
@@ -246,9 +323,49 @@ export class PreviewModeManager {
     return null;
   }
 
-  private async _patchEntryFile(): Promise<'ok'> {
+  private async _detectHtmlEntryFile(): Promise<string | null> {
+    const htmlFiles = ['index.html', 'src/index.html', 'client/index.html', 'app/index.html'];
+    for (const htmlRel of htmlFiles) {
+      let html: string;
+      try {
+        html = await this._io.readFile(join(this._projectRoot, htmlRel));
+      } catch {
+        continue;
+      }
+
+      const htmlDir = htmlRel.includes('/') ? htmlRel.slice(0, htmlRel.lastIndexOf('/')) : '';
+      const scriptTags = html.matchAll(/<script\b[^>]*>/g);
+      for (const match of scriptTags) {
+        const tag = match[0];
+        if (!/\btype=["']module["']/.test(tag)) continue;
+        const src = tag.match(/\bsrc=["']([^"']+)["']/)?.[1];
+        if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/@')) continue;
+
+        const rel = src.startsWith('/') ? src.slice(1) : posix.normalize(posix.join(htmlDir, src));
+        if (!/\.[cm]?[jt]sx?$/.test(rel)) continue;
+
+        const abs = join(this._projectRoot, rel);
+        try {
+          await this._io.readFile(abs);
+          return abs;
+        } catch {
+          /* script target not present */
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private async _patchEntryFile(options?: {
+    armRecompileGate?: boolean;
+    waitForPreviewRouteUpdate?: boolean;
+  }): Promise<'ok' | 'needs-patch'> {
     const entryFile = await this._detectEntryFile();
-    if (entryFile) await this._fileManager.patchEntryFile(entryFile);
+    if (!entryFile) return 'needs-patch';
+    const onBeforeWrite = options?.armRecompileGate === false ? undefined : this._onBeforeWebpackEntryPatch;
+    const wrote = await this._fileManager.patchEntryFile(entryFile, './__canvas_preview__', onBeforeWrite);
+    if (wrote && options?.waitForPreviewRouteUpdate) await this._waitForPreviewRouteUpdate();
     return 'ok';
   }
 
@@ -312,6 +429,8 @@ export class PreviewModeManager {
       await this._patchEntryFile();
     } else if (detection.framework === 'webpack' || detection.framework === 'parcel') {
       await this._patchEntryFile();
+    } else if (detection.framework === 'bun') {
+      await this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
     }
   }
 }

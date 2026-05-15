@@ -119,10 +119,7 @@ export const MarginSection = memo(function MarginSection({
   };
 
   return (
-    <div
-      data-testid={TID.inspector.sectionHeader('margin')}
-      className="px-4 pb-3 max-w-sidebar-section overflow-hidden"
-    >
+    <div data-testid={TID.inspector.sectionHeader('margin')} className="w-full px-4 pb-3 overflow-hidden">
       <span className="text-xs text-foreground mb-2 block">Margin</span>
       <div className="flex items-start gap-2 mb-2">
         <div className="grid grid-cols-2 gap-2 flex-1">
@@ -195,11 +192,13 @@ export const MarginSection = memo(function MarginSection({
           type="button"
           data-testid={TID.inspector.spacingLink('margin')}
           onClick={onMarginLinkedToggle}
-          className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
-            marginLinked ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+          className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+            marginLinked
+              ? 'bg-accent text-accent-foreground'
+              : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
           }`}
         >
-          <IconBorderSides className={`w-4 h-4 ${marginLinked ? 'text-[#3479DE]' : 'text-foreground'}`} stroke={1.5} />
+          <IconBorderSides className="w-4 h-4" stroke={1.5} />
         </button>
       </div>
     </div>

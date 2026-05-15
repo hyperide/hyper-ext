@@ -1,7 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
+import { type Layout, Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
 // SaaS-only imports — conditionally used when engine is available
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { useAnimatedPanelCollapse } from '@/hooks/useAnimatedPanelCollapse';
@@ -27,6 +27,18 @@ import {
 } from './hooks';
 import { ComponentsSection, ElementsTreeSection, PagesSection, TestsSection } from './sections';
 import type { LeftSidebarProps } from './types';
+
+const LEFT_SIDEBAR_PANEL_IDS = ['pages', 'components', 'elements-tree', 'tests'] as const;
+const LEFT_SIDEBAR_PANEL_IDS_WITH_SOURCE_CONTROL = ['source-control', ...LEFT_SIDEBAR_PANEL_IDS] as const;
+
+function isUsablePanelLayout(layout: Layout | undefined, panelIds: readonly string[]): layout is Layout {
+  if (!layout) return false;
+  if (Object.keys(layout).length !== panelIds.length) return false;
+  return panelIds.every((id) => {
+    const size = layout[id];
+    return typeof size === 'number' && Number.isFinite(size) && size >= 0;
+  });
+}
 
 export default function LeftSidebar({
   onElementPosition,
@@ -121,10 +133,26 @@ export default function LeftSidebar({
 
   // --- Local UI state ---
 
-  const { defaultLayout, onLayoutChange } = useDefaultLayout({
+  const expectedPanelIds = isVSCode ? LEFT_SIDEBAR_PANEL_IDS : LEFT_SIDEBAR_PANEL_IDS_WITH_SOURCE_CONTROL;
+
+  const { defaultLayout: storedDefaultLayout, onLayoutChange: persistLayout } = useDefaultLayout({
     groupId: 'left-sidebar-panels',
     storage: panelLayoutStorage,
   });
+
+  const defaultLayout = useMemo(
+    () => (isUsablePanelLayout(storedDefaultLayout, expectedPanelIds) ? storedDefaultLayout : undefined),
+    [storedDefaultLayout, expectedPanelIds],
+  );
+
+  const onLayoutChange = useCallback(
+    (layout: Layout) => {
+      if (isUsablePanelLayout(layout, expectedPanelIds)) {
+        persistLayout(layout);
+      }
+    },
+    [persistLayout, expectedPanelIds],
+  );
 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isRunnerModalOpen, setIsRunnerModalOpen] = useState(false);
@@ -253,29 +281,32 @@ export default function LeftSidebar({
         onLayoutChange={onLayoutChange}
         groupRef={groupRef as unknown as React.Ref<import('react-resizable-panels').GroupImperativeHandle>}
       >
-        {/* Source Control — SaaS only */}
-        <Panel
-          id="source-control"
-          panelRef={sourceControlPanelRef}
-          defaultSize={isPushPopoverOpen ? '30%' : '0px'}
-          minSize={isPushPopoverOpen ? '24px' : '0px'}
-          maxSize={isPushPopoverOpen ? undefined : '0px'}
-          collapsible
-          collapsedSize={isPushPopoverOpen ? '24px' : '0px'}
-        >
-          {isPushPopoverOpen && !isVSCode && (
-            <SourceControlSection
-              collapsed={sourceControlCollapsed}
-              onToggleCollapse={sourceControlPanel.toggle}
-              isCodeMode={false}
+        {!isVSCode && (
+          <>
+            <Panel
+              id="source-control"
+              panelRef={sourceControlPanelRef}
+              defaultSize={isPushPopoverOpen ? '30%' : '0px'}
+              minSize={isPushPopoverOpen ? '24px' : '0px'}
+              maxSize={isPushPopoverOpen ? undefined : '0px'}
+              collapsible
+              collapsedSize={isPushPopoverOpen ? '24px' : '0px'}
+            >
+              {isPushPopoverOpen && (
+                <SourceControlSection
+                  collapsed={sourceControlCollapsed}
+                  onToggleCollapse={sourceControlPanel.toggle}
+                  isCodeMode={false}
+                />
+              )}
+            </Panel>
+            <ResizeHandle
+              onPointerUp={() => {
+                if (isPushPopoverOpen) handleResizeEnd(['source-control', 'pages']);
+              }}
             />
-          )}
-        </Panel>
-        <ResizeHandle
-          onPointerUp={() => {
-            if (isPushPopoverOpen) handleResizeEnd(['source-control', 'pages']);
-          }}
-        />
+          </>
+        )}
 
         {/* Pages */}
         <Panel

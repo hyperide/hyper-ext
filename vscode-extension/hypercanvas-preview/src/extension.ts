@@ -15,7 +15,15 @@
 import { execFile } from 'node:child_process';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
+import {
+  ensureSample,
+  isUiPrimitive,
+  PreviewFileManager,
+  PreviewModeManager,
+  parseExistingPreview,
+  type SSRMockConfig,
+} from '@lib/preview-generator';
+import { detectFramework } from '@lib/preview-generator/framework-routing';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
@@ -23,11 +31,12 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
+import { isForeignExtensionError } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
-import { PreviewPanel } from './PreviewPanel';
+import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
 import { detectBrowserForPlaywright } from './playwright-chrome';
 import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
@@ -146,8 +155,39 @@ async function detectPreviewProviders(
       }
     }
 
+    // Detect GalleryProvider — local/aliased gallery context (e.g. @/components/Gallery).
+    // GalleryLightbox is placed after children inside GalleryProvider, as App.tsx uses it.
+    if (appContent.includes('GalleryProvider')) {
+      const galleryImportLine = contextFiles
+        .flatMap((f) => f.content.split('\n'))
+        .find((line) => line.includes('GalleryProvider') && line.trimStart().startsWith('import'));
+      if (galleryImportLine) {
+        const pathMatch = galleryImportLine.match(/from\s+['"]([^'"]+)['"]/);
+        if (pathMatch) {
+          const galleryPath = pathMatch[1];
+          const hasLightbox = appContent.includes('GalleryLightbox');
+          if (hasLightbox) {
+            pushImport(`import { GalleryProvider, GalleryLightbox } from '${galleryPath}';`);
+            appendWrapper('<GalleryProvider>', '<GalleryLightbox /></GalleryProvider>');
+          } else {
+            pushImport(`import { GalleryProvider } from '${galleryPath}';`);
+            appendWrapper('<GalleryProvider>', '</GalleryProvider>');
+          }
+        }
+      }
+    }
+
     if (imports.length === 0) return undefined;
     return { imports, wrapOpen, wrapClose };
+  } catch {
+    return undefined;
+  }
+}
+
+async function detectSSRMockConfig(root: string): Promise<SSRMockConfig | undefined> {
+  try {
+    const { framework } = await detectFramework(root, new VSCodeFileIO());
+    return framework === 'remix' ? { framework: 'remix' } : undefined;
   } catch {
     return undefined;
   }
@@ -165,30 +205,48 @@ interface ThemeImport {
   defaultImport: boolean;
 }
 
+async function detectFrontendRoot(root: string): Promise<string> {
+  try {
+    const html = await readFile(join(root, 'index.html'), 'utf-8'); // nosemgrep: path-join-resolve-traversal
+    for (const scriptTag of html.matchAll(/<script\b([^>]*)>/g)) {
+      const attrs = scriptTag[1];
+      if (!/\btype=["']module["']/.test(attrs)) continue;
+      const srcMatch = attrs.match(/\bsrc=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      if (srcMatch && srcMatch[1] !== 'src') return srcMatch[1];
+    }
+  } catch {
+    /* no index.html */
+  }
+  return 'src';
+}
+
 async function getPreviewDir(root: string): Promise<string> {
   try {
     await access(join(root, 'apps/next')); // nosemgrep: path-join-resolve-traversal
     return join(root, 'apps/next'); // nosemgrep: path-join-resolve-traversal
   } catch {
-    return join(root, 'src'); // nosemgrep: path-join-resolve-traversal
+    const frontendRoot = await detectFrontendRoot(root);
+    return join(root, frontendRoot); // nosemgrep: path-join-resolve-traversal
   }
 }
 
 async function readProviderContextFiles(root: string): Promise<ProviderContextFile[]> {
   const result: ProviderContextFile[] = [];
+  const frontendRoot = await detectFrontendRoot(root);
+  const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+  const fileNames = ['main.tsx', 'main.ts', 'App.web.tsx', 'App.tsx', 'app.tsx'];
   const candidates = [
-    'src/main.tsx',
-    'src/main.ts',
-    'main.tsx',
-    'main.ts',
+    ...rootPrefixes.flatMap((r) => fileNames.map((f) => `${r}/${f}`)),
     'App.web.tsx',
     'App.tsx',
-    'src/App.web.tsx',
-    'src/App.tsx',
-    'src/app.tsx',
+    'main.tsx',
+    'main.ts',
   ];
 
+  const seen = new Set<string>();
   for (const relativePath of candidates) {
+    if (seen.has(relativePath)) continue;
+    seen.add(relativePath);
     try {
       const content = await readFile(join(root, relativePath), 'utf-8'); // nosemgrep: path-join-resolve-traversal
       result.push({ relativePath, content });
@@ -273,6 +331,29 @@ function rebaseImportPath(root: string, previewDir: string, sourceRelativePath: 
 export function activate(context: vscode.ExtensionContext) {
   console.log('[HyperIDE] Extension activating...');
 
+  // Initialize right-panel input-focus guard to false so the keybinding
+  // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
+  void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
+
+  // Catch unhandled rejections inside the extension host process so they
+  // don't bubble up as VS Code ".error" notification toasts containing
+  // "Unhandled rejection ...". A specific known source was already fixed
+  // (extension.ts:537 showTextDocument chain, extension.ts:778 autoStart
+  // .then without .catch); this is a safety net for anything we missed
+  // and for VS Code core / library promises that escape in a hot path.
+  // Logged so real issues are still discoverable in the Output channel.
+  // Foreign extension rejections are filtered out — they must not be
+  // logged as [HyperIDE] when the stack points to another extension dir.
+  const unhandledHandler = (reason: unknown) => {
+    if (!isForeignExtensionError(reason)) {
+      console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+    }
+  };
+  process.on('unhandledRejection', unhandledHandler);
+  context.subscriptions.push({
+    dispose: () => process.off('unhandledRejection', unhandledHandler),
+  });
+
   // Get workspace root
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) {
@@ -320,34 +401,42 @@ export function activate(context: vscode.ExtensionContext) {
     aiChatProvider?.sendAIPrompt(prompt);
   });
 
+  let detectionSeq = 0;
+  const runProjectDetection = (root: string): void => {
+    const seq = ++detectionSeq;
+    readPackageJson(root)
+      .then(async (pkg) => {
+        const kit = await detectUIKit(root, pkg);
+        const cssSystem = await detectCssSystem(root, pkg);
+        const projectType = await detectProjectType(root);
+        const projectError = await detectUnsupportedProject(root, pkg);
+        if (seq !== detectionSeq) return;
+
+        stateHub?.applyUpdate({ projectUIKit: kit });
+
+        const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType);
+        console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
+
+        // Send capabilities to preview panel (readonly badge, style write guard)
+        previewPanel?.notifyCapabilities(capabilities);
+
+        // Send capabilities to inspector panel (readonly inputs)
+        rightPanelProvider?.notifyCapabilities(capabilities);
+
+        // Always send projectError — null clears the unsupported-project screen
+        // when switching from an unsupported workspace to a supported one.
+        previewPanel?.notifyUnsupportedProject(projectError ?? null);
+        if (projectError) {
+          console.log('[HyperIDE] Unsupported project detected:', projectError.type);
+        }
+      })
+      .catch((err) => {
+        console.warn('[HyperIDE] Failed to detect project info:', err);
+      });
+  };
+
   // Read package.json once and run all detectors against it
-  readPackageJson(workspaceRoot)
-    .then(async (pkg) => {
-      const kit = await detectUIKit(workspaceRoot, pkg);
-      stateHub?.applyUpdate({ projectUIKit: kit });
-
-      const cssSystem = await detectCssSystem(workspaceRoot, pkg);
-      const projectType = await detectProjectType(workspaceRoot);
-      const projectError = await detectUnsupportedProject(workspaceRoot, pkg);
-
-      const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType);
-      console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
-
-      // Send capabilities to preview panel (readonly badge, style write guard)
-      previewPanel?.notifyCapabilities(capabilities);
-
-      // Send capabilities to inspector panel (readonly inputs)
-      rightPanelProvider?.notifyCapabilities(capabilities);
-
-      // Legacy: still send projectError for unsupported-project screen
-      if (projectError) {
-        console.log('[HyperIDE] Unsupported project detected:', projectError.type);
-        previewPanel?.notifyUnsupportedProject(projectError);
-      }
-    })
-    .catch((err) => {
-      console.warn('[HyperIDE] Failed to detect project info:', err);
-    });
+  runProjectDetection(workspaceRoot);
 
   // Flush .hyperide/ to disk on first component open (deferred write).
   // Only unsubscribe after flush actually writes — scan may still be in progress.
@@ -373,6 +462,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Wire DiagnosticHub to logs panel and AI chat
   logsProvider.setDiagnosticHub(diagnosticHub);
   aiChatProvider.setDiagnosticHub(diagnosticHub);
+
+  // Retry counter for componentMissing self-healing — declared at activate() scope so it is
+  // accessible both inside if (devServerManager) (onComponentMissing callback) and in the
+  // stateHub.onChange callback where it is cleared on component switch. Declaring it after
+  // either closure would create a TDZ risk if activate() ever short-circuits.
+  const componentMissingRetries = new Map<string, number>();
 
   if (devServerManager) {
     aiChatProvider.setDevServerManager(devServerManager);
@@ -407,6 +502,50 @@ export function activate(context: vscode.ExtensionContext) {
     previewPanel.onConsoleCapture((entries) => {
       diagnosticHub?.handleConsoleCapture(entries);
     });
+
+    // Self-healing: when the generated preview doesn't have the requested component,
+    // re-run ensureComponent so the preview file is regenerated with the missing entry.
+    // Retry guard prevents an infinite loop if ensureComponent keeps failing.
+    // Do NOT skip UI primitives here: those with SampleDefault must be addable via this path
+    // (preview-file-manager filters out primitives without SampleDefault, and the diff-before-write
+    // check in _initPreviewFile prevents HMR when the generated content is unchanged).
+    previewPanel.onComponentMissing((componentPath) => {
+      const count = componentMissingRetries.get(componentPath) ?? 0;
+      if (count >= 2) return;
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
+      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+      const relPath = relative(currentWorkspaceRoot, absPath);
+      componentMissingRetries.set(componentPath, count + 1);
+      // Capture current component so a stale resolve doesn't snap the preview back
+      // if the user switched to a different component while ensureComponent was running.
+      const capturedCurrentPath = stateHub?.state.currentComponent?.path;
+      previewManager
+        .ensureComponent([relPath])
+        .then((content) => {
+          if (isUiPrimitive(relPath)) {
+            const normalizedRelPath = relPath.replace(/\\/g, '/');
+            const entries = parseExistingPreview(content);
+            const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
+            if (!inRegistry) {
+              // Primitive without SampleDefault will never be added to the registry.
+              // Don't call setComponentParam — the same-value React state bail-out would
+              // leave the preview stuck on "Loading…" indefinitely. Keep the retry count
+              // so repeated _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+              vscode.window.showInformationMessage(
+                `Hyper Canvas: "${relPath}" is a UI primitive without a SampleDefault export — preview not available.`,
+              );
+              return;
+            }
+          }
+          componentMissingRetries.delete(componentPath);
+          if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
+            previewPanel?.setComponentParam(relPath);
+          }
+        })
+        .catch((err) => {
+          console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
+        });
+    });
   }
 
   context.subscriptions.push(
@@ -425,36 +564,84 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Deterministic preview file manager (no AI, no network)
   const vsCodeIO = new VSCodeFileIO();
-  const providerWrapPromise = detectPreviewProviders(workspaceRoot);
-  const previewManager = new PreviewFileManager({
-    projectRoot: workspaceRoot,
-    io: vsCodeIO,
-  });
-  // Provider detection runs async; ensureComponent/rebuild will await it before generating
-  previewManager.setProviderWrapAsync(providerWrapPromise);
 
-  // Mode manager: orchestrates App Shell ↔ Isolated transitions via FSWatch
-  const modeManager = new PreviewModeManager({
-    projectRoot: workspaceRoot,
-    io: vsCodeIO,
-    onModeChange: (isolated) => {
-      devServerManager?.setIsolatedMode(isolated);
-      previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
-      // Force iframe reload on every mode change.
-      // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
-      // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
-      // the iframe fetches fresh content from the proxy in its new mode.
-      previewPanel?.refresh();
-    },
-  });
+  const createPreviewFileManager = (projectRoot: string): PreviewFileManager => {
+    const manager = new PreviewFileManager({
+      projectRoot,
+      io: vsCodeIO,
+    });
+    // Provider and SSR mock detection run async; ensureComponent/rebuild await both before generating
+    manager.setProviderWrapAsync(detectPreviewProviders(projectRoot));
+    manager.setSSRMockAsync(detectSSRMockConfig(projectRoot));
+    return manager;
+  };
+
+  const createPreviewModeManager = (projectRoot: string): PreviewModeManager =>
+    new PreviewModeManager({
+      projectRoot,
+      io: vsCodeIO,
+      onModeChange: (isolated) => {
+        devServerManager?.setIsolatedMode(isolated);
+        previewPanel?.setPreviewScope(isolated ? 'component-only' : 'full-app');
+        // Force iframe reload on every mode change.
+        // App Shell ↔ Isolated transitions swap what the proxy serves at the same URL.
+        // HMR alone is unreliable across entry-point boundaries — a hard reload ensures
+        // the iframe fetches fresh content from the proxy in its new mode.
+        previewPanel?.refresh();
+      },
+      onBeforeWebpackEntryPatch: () => {
+        // Webpack rewrites the entry file → triggers a 20–40s second compile.
+        // Arming the gate here forces iframe loaders to await the post-patch
+        // `compiled successfully` instead of racing it. See HYP-363.
+        devServerManager?.armRecompileGate();
+      },
+    });
+
+  let activeWorkspaceRoot = workspaceRoot;
+  let previewManager = createPreviewFileManager(activeWorkspaceRoot);
+  let modeManager = createPreviewModeManager(activeWorkspaceRoot);
   modeManager.startWatching();
-  context.subscriptions.push({ dispose: () => modeManager.stopWatching() });
+
+  const syncWorkspaceRuntime = (): string => {
+    const currentRoot = getWorkspaceRoot() ?? activeWorkspaceRoot;
+    if (currentRoot === activeWorkspaceRoot) return activeWorkspaceRoot;
+
+    modeManager.stopWatching();
+    activeWorkspaceRoot = currentRoot;
+    previewManager = createPreviewFileManager(activeWorkspaceRoot);
+    modeManager = createPreviewModeManager(activeWorkspaceRoot);
+    modeManager.startWatching();
+
+    previewPanel?.setWorkspaceRoot(activeWorkspaceRoot);
+    rightPanelProvider?.notifyCapabilities(null);
+    void devServerManager?.setProjectPath(activeWorkspaceRoot);
+    stateHub?.applyUpdate({ projectUIKit: undefined });
+    runProjectDetection(activeWorkspaceRoot);
+    return activeWorkspaceRoot;
+  };
+
+  context.subscriptions.push({
+    dispose: () => modeManager.stopWatching(),
+  });
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => syncWorkspaceRuntime()));
+
+  previewPanel.onSampleCreated(async (componentPath) => {
+    const currentWorkspaceRoot = syncWorkspaceRuntime();
+    const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+    const relativePath = relative(currentWorkspaceRoot, absComponentPath);
+    // No isUiPrimitive guard here: onSampleCreated fires only after SampleDefault is written,
+    // meaning the primitive is now previewable and must be registered in __canvas_preview__.tsx.
+    await previewManager.ensureComponent([relativePath]);
+    await devServerManager?.awaitRecompile();
+    previewPanel?.setComponentParam(relativePath);
+    previewPanel?.refresh();
+  });
 
   // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
   previewPanel.setScopeChangeHandler(async (scope) => {
-    const wrapperPath = join(workspaceRoot, '.hyperide/preview.tsx');
+    const currentWorkspaceRoot = syncWorkspaceRuntime();
+    const wrapperPath = join(currentWorkspaceRoot, '.hyperide/preview.tsx');
     if (scope === 'component-only') {
       // Check if wrapper already exists (user may have written it manually)
       const exists = await vsCodeIO
@@ -462,9 +649,9 @@ export function activate(context: vscode.ExtensionContext) {
         .then(() => true)
         .catch(() => false);
       if (!exists) {
-        const content = await generatePreviewWrapper(workspaceRoot, context);
+        const content = await generatePreviewWrapper(currentWorkspaceRoot, context);
         if (content) {
-          await writePreviewWrapper(workspaceRoot, content);
+          await writePreviewWrapper(currentWorkspaceRoot, content);
           // FSWatch picks up the file and calls modeManager.onWrapperCreated() → setIsolatedMode(true)
         } else {
           void vscode.window.showInformationMessage(
@@ -490,31 +677,50 @@ export function activate(context: vscode.ExtensionContext) {
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
       const componentPath = patch.currentComponent.path;
       const componentName = patch.currentComponent.name;
+      const sampleComponentName = normalizeSampleComponentName(componentName);
 
-      // Auto-open Preview Panel if not already visible
-      previewPanel?.createOrShow(vscode.ViewColumn.Beside);
+      // Auto-open Preview Panel if not already visible.
+      // ViewColumn.Two (not Beside): in single-column E2E setups, ViewColumn.Beside
+      // resolves to column 2 which doesn't exist yet — VS Code places the webview
+      // off-screen. ViewColumn.Two forces a visible split in any layout.
+      previewPanel?.createOrShow(vscode.ViewColumn.Two);
 
       // Open the component file in the left editor group (ViewColumn.One)
       // so the user can see the code alongside the preview.
       // Uses preview mode (italic tab) — consistent with single-click Explorer UX.
-      const absPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
-      vscode.workspace.openTextDocument(vscode.Uri.file(absPath)).then(
-        (doc) =>
+      const absPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+      // .then(onFulfilled, onRejected) only catches openTextDocument's rejection.
+      // showTextDocument can also reject (disposed editor / workspace switch /
+      // race with another panel closing all editors), and that rejection
+      // becomes an unhandled promise rejection which VS Code surfaces as a
+      // ".error" notification toast containing "Unhandled rejection ..." —
+      // tripping every preview-render "renders without errors" assertion that
+      // greps for /fatal|crash|unhandled/i. Use a trailing .then().catch()
+      // chain so both stages funnel into the same handler.
+      vscode.workspace
+        .openTextDocument(vscode.Uri.file(absPath))
+        .then((doc) =>
           vscode.window.showTextDocument(doc, {
             viewColumn: vscode.ViewColumn.One,
             preserveFocus: true,
             preview: true,
           }),
-        (err) => console.error('[HyperIDE] Failed to open component file:', err),
-      );
+        )
+        .then(undefined, (err) => {
+          console.error('[HyperIDE] Failed to open component file:', err);
+        });
 
       // Parse component structure
+      const capturedComponentPath = componentPath;
       panelRouter?.componentService
-        .parseStructure(componentPath)
+        .parseStructure(capturedComponentPath)
         .then((structure) => {
-          stateHub?.applyUpdate({ astStructure: structure });
+          if (stateHub?.state.currentComponent?.path === capturedComponentPath) {
+            stateHub.applyUpdate({ astStructure: structure });
+          }
         })
         .catch((err) => {
           console.error('[HyperIDE] Failed to inject UUIDs / parse structure:', err);
@@ -524,9 +730,20 @@ export function activate(context: vscode.ExtensionContext) {
       previewAbortController?.abort();
       const ac = new AbortController();
       previewAbortController = ac;
+      componentMissingRetries.clear();
 
       // Normalize: currentComponent.path may be relative or absolute
-      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(workspaceRoot, componentPath);
+      const absComponentPath = isAbsolute(componentPath) ? componentPath : join(currentWorkspaceRoot, componentPath);
+      const relativePath = relative(currentWorkspaceRoot, absComponentPath);
+
+      // UI primitives without SampleDefault are excluded from __canvas_preview__.tsx.
+      // Skipping ensureComponent here avoids triggering HMR on every Explorer click for
+      // the ~46 shadcn primitives that don't have SampleDefault. If a UI primitive WITH
+      // SampleDefault is missing from the registry, onComponentMissing below handles recovery.
+      if (isUiPrimitive(relativePath)) {
+        previewPanel?.setComponentParam(relativePath);
+        return;
+      }
 
       // Skip source-file mutation entirely when the harness disables it.
       // E2E tests set hypercanvas.preview.autoSampleGeneration=false so
@@ -542,7 +759,7 @@ export function activate(context: vscode.ExtensionContext) {
         ? ensureSample({
             io: vsCodeIO,
             absolutePath: absComponentPath,
-            componentName,
+            componentName: sampleComponentName,
             sampleName: 'SampleDefault',
             generate: sampleGenerator,
           })
@@ -553,10 +770,9 @@ export function activate(context: vscode.ExtensionContext) {
           if (ac.signal.aborted) return;
           const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
           if (previewPanel && shouldCreateNoPropsSample(sampleResult, props)) {
-            await previewPanel.ensureDefaultSampleForNoProps(componentPath, componentName);
+            await previewPanel.ensureDefaultSampleForNoProps(componentPath, sampleComponentName);
           }
           // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic)
-          const relativePath = relative(workspaceRoot, absComponentPath);
           return previewManager.ensureComponent([relativePath]);
         })
         .then(async () => {
@@ -581,7 +797,7 @@ export function activate(context: vscode.ExtensionContext) {
               )
               .then(async (choice) => {
                 if (choice === 'Auto fix') {
-                  const prompt = await buildNeedsPatchPrompt(workspaceRoot, vsCodeIO);
+                  const prompt = await buildNeedsPatchPrompt(currentWorkspaceRoot, vsCodeIO);
                   aiChatProvider?.sendAIPrompt(prompt);
                 }
               });
@@ -589,10 +805,14 @@ export function activate(context: vscode.ExtensionContext) {
           }
           return result;
         })
-        .then((result) => {
+        .then(async (result) => {
           if (ac.signal.aborted || result === 'aborted' || result === 'unsupported' || result === 'needs-patch') return;
-          // 4. Update iframe component URL param — no hard reload needed
-          const relativePath = relative(workspaceRoot, absComponentPath);
+          // 4. If webpack armed the recompile gate (via onBeforeWebpackEntryPatch),
+          // wait for the post-patch `compiled successfully` so the iframe doesn't
+          // race a half-built bundle. No-op for vite/remix/next.
+          await devServerManager?.awaitRecompile();
+          if (ac.signal.aborted) return;
+          // 5. Update iframe component URL param — no hard reload needed
           previewPanel?.setComponentParam(relativePath);
         })
         .catch((err) => {
@@ -725,11 +945,21 @@ export function activate(context: vscode.ExtensionContext) {
   const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
 
   if (autoStart) {
-    devServerManager.start().then((state) => {
-      if (state.status === 'running' && state.url) {
-        previewPanel?.setPreviewUrl(state.url);
-      }
-    });
+    devServerManager
+      .start()
+      .then((state) => {
+        if (state.status === 'running' && state.url) {
+          previewPanel?.setPreviewUrl(state.url);
+        }
+      })
+      .catch((err) => {
+        // Without this catch, devServerManager.start() rejecting (port in use,
+        // failed package-manager detection, missing scripts) becomes an
+        // unhandled rejection that VS Code surfaces as ".error" toast
+        // ("Unhandled rejection ..."), tripping every test that asserts no
+        // /fatal|crash|unhandled/i in the error toast list.
+        console.error('[HyperIDE] Auto-start dev server failed:', err);
+      });
   }
 
   console.log('[HyperIDE] Extension activated successfully');
@@ -789,10 +1019,35 @@ function getWorkspaceRoot(): string | null {
  * Register all commands
  */
 function registerCommands(context: vscode.ExtensionContext, workspaceRoot: string): void {
+  const getCurrentRoot = () => getWorkspaceRoot() ?? workspaceRoot;
   // Open preview
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openPreview', () => {
-      previewPanel?.createOrShow(vscode.ViewColumn.Beside);
+      // ViewColumn.Two — see the auto-open comment above for why not ViewColumn.Beside.
+      previewPanel?.createOrShow(vscode.ViewColumn.Two);
+      // Sync current dev-server state into the just-created panel. The
+      // hypercanvas.startDevServer command path calls setPreviewUrl(state.url)
+      // when the dev server starts, but if the user opens the preview AFTER
+      // the dev server is already running (e.g. e2e test order:
+      // start dev server → Hyper: Open Preview), that initial setPreviewUrl
+      // happened while previewPanel was null and was lost. Pull current state
+      // here so the panel's iframe gets a URL on first paint.
+      const state = devServerManager?.getState();
+      if (state?.status === 'running' && state.url) {
+        previewPanel?.setPreviewUrl(state.url);
+      }
+    }),
+  );
+
+  // Test/project-switch helper: open a folder in the current VS Code window
+  // without relying on the external `code --reuse-window` process targeting the
+  // correct Extension Development Host.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.openFolderPath', async (folderPath: string) => {
+      if (typeof folderPath !== 'string' || folderPath.length === 0) return;
+      await devServerManager?.stop();
+      previewPanel?.dispose();
+      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(folderPath), false);
     }),
   );
 
@@ -800,6 +1055,13 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openLogs', () => {
       vscode.commands.executeCommand('hypercanvas.logsView.focus');
+    }),
+  );
+
+  // Clear diagnostics
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.clearDiagnostics', () => {
+      diagnosticHub?.clear();
     }),
   );
 
@@ -857,7 +1119,11 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
     vscode.commands.registerCommand('hypercanvas.canvasRedo', () => previewPanel?.redo()),
     vscode.commands.registerCommand('hypercanvas.canvasDelete', () => previewPanel?.deleteSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasDuplicate', () => previewPanel?.duplicateSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasGoToCode', () => previewPanel?.goToCodeSelected()),
     vscode.commands.registerCommand('hypercanvas.canvasWrap', () => previewPanel?.wrapSelected()),
+    vscode.commands.registerCommand('hypercanvas.canvasInsertElement', () =>
+      previewPanel?.openInsertPanelForSelection(),
+    ),
     vscode.commands.registerCommand('hypercanvas.canvasSelectChildren', () => previewPanel?.selectChildren()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectParent', () => previewPanel?.selectParent()),
     vscode.commands.registerCommand('hypercanvas.canvasSelectNextSibling', () => previewPanel?.selectNextSibling()),
@@ -890,7 +1156,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       const line = position.line + 1;
       const column = position.character + 1;
 
-      const astService = new AstService(workspaceRoot, new VSCodeFileIO());
+      const astService = new AstService(getCurrentRoot(), new VSCodeFileIO());
       const result = await astService.findElementAtPosition(filePath, line, column);
 
       if (result?.nodeRef) {
@@ -954,7 +1220,8 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
-      const pkgManager = await detectPackageManager(workspaceRoot);
+      const root = getCurrentRoot();
+      const pkgManager = await detectPackageManager(root);
       const installCmd =
         pkgManager === 'bun'
           ? 'bun add'
@@ -975,7 +1242,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       // Detect if this is a Next.js project
       let isNextJs = false;
       try {
-        const pkgRaw = await readFile(join(workspaceRoot, 'package.json'), 'utf-8');
+        const pkgRaw = await readFile(join(root, 'package.json'), 'utf-8');
         const pkg = JSON.parse(pkgRaw);
         isNextJs = !!(pkg.dependencies?.next || pkg.devDependencies?.next);
       } catch {
@@ -986,7 +1253,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       let isTamaguiOne = false;
       if (!isNextJs) {
         try {
-          const viteRaw = await readFile(join(workspaceRoot, 'vite.config.ts'), 'utf-8');
+          const viteRaw = await readFile(join(root, 'vite.config.ts'), 'utf-8');
           isTamaguiOne =
             /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
         } catch {
@@ -1008,7 +1275,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1022,7 +1289,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               let existingConfigPath: string | null = null;
               let existingConfigContent = '';
               for (const variant of configVariants) {
-                const candidate = join(workspaceRoot, variant);
+                const candidate = join(root, variant);
                 try {
                   existingConfigContent = await readFile(candidate, 'utf-8');
                   existingConfigPath = candidate;
@@ -1032,7 +1299,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                 }
               }
 
-              const targetConfigPath = existingConfigPath ?? join(workspaceRoot, 'next.config.ts');
+              const targetConfigPath = existingConfigPath ?? join(root, 'next.config.ts');
               const isTypeScript = targetConfigPath.endsWith('.ts');
 
               // Check if config already has tamagui transpilePackages and turbo alias
@@ -1099,7 +1366,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1119,7 +1386,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing react-native-web...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${installCmd} react-native-web`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1129,7 +1396,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               progress.report({ message: 'Installing vite + plugins...' });
               await new Promise<void>((resolve, reject) => {
                 const [cmd, ...args] = `${devInstallCmd} vite @vitejs/plugin-react @tamagui/vite-plugin`.split(' ');
-                execFile(cmd, args, { cwd: workspaceRoot, shell: process.platform === 'win32' }, (err) => {
+                execFile(cmd, args, { cwd: root, shell: process.platform === 'win32' }, (err) => {
                   if (err) reject(err);
                   else resolve();
                 });
@@ -1140,7 +1407,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // alias, overwrite it — a bare vite.config without these won't work
               // for Tamagui web builds.
               progress.report({ message: 'Configuring Vite for Tamagui...' });
-              const viteConfigPath = join(workspaceRoot, 'vite.config.ts');
+              const viteConfigPath = join(root, 'vite.config.ts');
               let existingViteConfig = '';
               try {
                 existingViteConfig = await readFile(viteConfigPath, 'utf-8');
@@ -1159,7 +1426,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   !existingViteConfig.includes('react-native-web'));
               if (needsViteConfig) {
                 // Create stub files for deep react-native imports that rolldown can't resolve
-                const stubsDir = join(workspaceRoot, 'src', 'stubs');
+                const stubsDir = join(root, 'src', 'stubs');
                 await mkdir(stubsDir, { recursive: true });
                 const codegenStub = join(stubsDir, 'codegenNativeComponent.ts');
                 const appContainerStub = join(stubsDir, 'AppContainer.tsx');
@@ -1214,7 +1481,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               }
 
               // Step 4: Create index.html if it doesn't exist
-              const indexHtmlPath = join(workspaceRoot, 'index.html');
+              const indexHtmlPath = join(root, 'index.html');
               let indexHtmlExists = false;
               try {
                 await readFile(indexHtmlPath);
@@ -1244,7 +1511,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // Step 5: Update package.json scripts — set "dev": "vite" if currently using expo/metro
               progress.report({ message: 'Updating package.json scripts...' });
               try {
-                const pkgJsonPath = join(workspaceRoot, 'package.json');
+                const pkgJsonPath = join(root, 'package.json');
                 const pkgRaw = await readFile(pkgJsonPath, 'utf-8');
                 const pkg = JSON.parse(pkgRaw);
                 const scripts = (pkg.scripts ?? {}) as Record<string, string>;
@@ -1265,7 +1532,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
               // but replaces native-stack navigator with direct screen render.
               progress.report({ message: 'Creating web entry point...' });
               try {
-                const appPath = join(workspaceRoot, 'App.tsx');
+                const appPath = join(root, 'App.tsx');
                 const appContent = await readFile(appPath, 'utf-8');
                 const hasNativeImports = /expo-status-bar|@react-navigation\/native-stack|react-native-screens/.test(
                   appContent,
@@ -1285,7 +1552,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   // Find first screen in src/screens/
                   let screenName = 'HomeScreen';
                   try {
-                    const files = await readdir(join(workspaceRoot, 'src', 'screens'));
+                    const files = await readdir(join(root, 'src', 'screens'));
                     const home = files.find((f) => /^HomeScreen\.(tsx|jsx)$/.test(f));
                     const feed = files.find((f) => /^FeedScreen\.(tsx|jsx)$/.test(f));
                     const chat = files.find((f) => /^ChatListScreen\.(tsx|jsx)$/.test(f));
@@ -1299,10 +1566,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   // Check if screen uses useNavigation hook
                   let needsNavContainer = false;
                   try {
-                    const screenSrc = await readFile(
-                      join(workspaceRoot, 'src', 'screens', `${screenName}.tsx`),
-                      'utf-8',
-                    );
+                    const screenSrc = await readFile(join(root, 'src', 'screens', `${screenName}.tsx`), 'utf-8');
                     needsNavContainer = /useNavigation\s*[<(]/.test(screenSrc);
                   } catch {
                     /* can't read screen — skip nav container */
@@ -1368,7 +1632,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
                   lines.push('}');
                   lines.push('');
 
-                  await writeFile(join(workspaceRoot, 'App.web.tsx'), lines.join('\n'), 'utf-8');
+                  await writeFile(join(root, 'App.web.tsx'), lines.join('\n'), 'utf-8');
                 }
               } catch {
                 // App.tsx doesn't exist or can't be read — skip
@@ -1377,7 +1641,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
           );
         }
         // Re-check to confirm the package was recorded in package.json
-        const stillUnsupported = await detectUnsupportedProject(workspaceRoot);
+        const stillUnsupported = await detectUnsupportedProject(root);
         if (stillUnsupported) {
           vscode.window.showWarningMessage(
             'HyperIDE: react-native-web may not have been added to package.json. Try running the install manually.',
@@ -1516,7 +1780,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
   // Open/create project structure config file
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.openProjectStructure', async () => {
-      const configDir = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.hyperide');
+      const configDir = vscode.Uri.joinPath(vscode.Uri.file(getCurrentRoot()), '.hyperide');
       const configFile = vscode.Uri.joinPath(configDir, 'project-structure.json');
 
       try {
@@ -1556,7 +1820,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
         agentId: 'copilot' | 'claude-code' | 'codex' | 'opencode';
       }
 
-      const configured = await detectConfiguredAgents(workspaceRoot);
+      const configured = await detectConfiguredAgents(getCurrentRoot());
 
       const agents: AgentItem[] = [
         {
@@ -1595,15 +1859,16 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
 
       const url = mcpServer.url;
 
+      const configRoot = getCurrentRoot();
       for (const agent of picked) {
         if (agent.agentId === 'copilot') {
-          await writeVsCodeMcpJson(workspaceRoot, url);
+          await writeVsCodeMcpJson(configRoot, url);
         } else if (agent.agentId === 'claude-code') {
-          await writeMcpJson(workspaceRoot, url);
+          await writeMcpJson(configRoot, url);
         } else if (agent.agentId === 'codex') {
-          await writeCodexConfig(workspaceRoot, url);
+          await writeCodexConfig(configRoot, url);
         } else if (agent.agentId === 'opencode') {
-          await writeOpenCodeJson(workspaceRoot, url);
+          await writeOpenCodeJson(configRoot, url);
         }
       }
 
@@ -1666,7 +1931,7 @@ function registerCommands(context: vscode.ExtensionContext, workspaceRoot: strin
       const agentIds = picked.map((a) => a.agentId);
 
       if (companionConfigs.length > 0) {
-        await writeCompanionServers(workspaceRoot, agentIds, companionConfigs);
+        await writeCompanionServers(configRoot, agentIds, companionConfigs);
       }
 
       const allNames = [...picked.map((a) => a.label), ...(pickedCompanions ?? []).map((c) => c.label)];
