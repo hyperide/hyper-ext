@@ -39,6 +39,7 @@
     "@octokit/rest": "^22.0.1",
     "@opencode-ai/sdk": "^1.0.134",
     "@playwright/mcp": "^0.0.68",
+    "@scelar/nodepod": "^1.8.2",
     "@tanstack/react-virtual": "^3.13.19",
     "@types/turndown": "^5.0.6",
     "ansi_up": "^6.0.6",
