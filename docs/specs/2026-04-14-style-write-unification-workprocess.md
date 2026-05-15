@@ -161,6 +161,8 @@ or undo parallel edits.
   agent coordination and handoff.
   Update for meaningful workstream changes, validation results, or unresolved
   coordination issues.
+  After every commit in this workstream, append a short commit/status entry
+  here before moving on.
 
 ## Agent Workstreams
 
@@ -3059,6 +3061,11 @@ Validation after review responses:
   biome, tsc, git diff --check, build/install, focused E2E.
   Skipped nested codex review because the user explicitly forbade launching
   Codex from inside Codex; Claude review artifact above was used instead.
+- Commit a7ee3172 docs(workprocess): record undo and bridge review follow-up.
+  Scope: workprocess report for Claude review, focused E2E result, and bridge
+  bot follow-up. Validation before commit: markdownlint-cli2 on this file and
+  git diff --check passed; lefthook skipped non-code checks for markdown-only
+  commit.
 ```
 
 Separate dev tooling follow-up (not part of the production extension fix):
@@ -3099,4 +3106,132 @@ Implementation status:
 - Committed in /Users/ultra/xp/codex-tg-bot:
   b4d8b57 fix: auto-discover current Codex sessions.
 - Restarted bridge bot after commit; running PID: 97007.
+```
+
+Full VS Code extension E2E rerun status 2026-04-21:
+
+```text
+Command:
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --workers=1 --retries=0 \
+  --reporter=line --output=/tmp/hyper-e2e-full-20260421d
+
+Status at 21:37 CEST:
+- Running, 102/2209 tests reached.
+- Harness is using the extension E2E setup, not browser MCP.
+- Current window is an isolated VS Code extension host launched by the E2E
+  harness with the Hyper Canvas preview extension loaded.
+- Error grep currently has no matches for [test-errors], AssertionError,
+  TimeoutError, "File Modified Since", handleSaveError, failed save, or
+  Unhandled.
+- Retries are disabled with --retries=0. Any failure must be analyzed instead
+  of hidden by retrying.
+
+Status at 21:40 CEST:
+- Stopped the full run at the first real monitoring signal instead of
+  continuing blindly.
+- Signal: [test-errors] for coverage-gaps "preview recovers after syntax error
+  is fixed"; the test itself passed, but the fixture reported Vite HMR errors
+  from the intentionally injected syntax error.
+- Analysis: this is an expected runtime-error phase of that test. The shared
+  fixture already supports `expected-runtime-errors`; this test was missing the
+  annotation, so monitoring saw it as an unexpected test error.
+- Fix in /Users/ultra/work/ext-test-projects:
+  e2e/tests/project-independent/coverage-gaps.spec.ts now annotates this test
+  with `expected-runtime-errors` and explains that it intentionally injects a
+  Vite syntax error.
+- Focused validation:
+  coverage-gaps "preview recovers after syntax error is fixed" passed with
+  --retries=0.
+- Full run result before interruption:
+  135 passed, 1 interrupted, 2073 not run. The interruption was intentional
+  after the first analyzed monitoring signal.
+```
+
+Full VS Code extension E2E rerun 20260421e:
+
+```text
+Command:
+cd /Users/ultra/work/ext-test-projects/e2e
+EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/\
+hypercanvas-preview \
+  ./node_modules/.bin/playwright test --workers=1 --retries=0 \
+  --reporter=line --output=/tmp/hyper-e2e-full-20260421e
+
+Status at 21:50 CEST:
+- Running, 126/2209 tests reached.
+- The previously noisy coverage-gaps syntax recovery test passed in the full
+  run after the annotation fix.
+- No [test-errors] entry appeared for that test in this run.
+- Global error grep currently has no matches for [test-errors], AssertionError,
+  TimeoutError, "File Modified Since", handleSaveError, failed save, or
+  Unhandled.
+
+Status at 21:56 CEST:
+- Running, 189/2209 tests reached.
+- PI-18-19 passed in the full run.
+- PI-18-20 passed in the full run.
+- Grep found no "File Modified Since", handleSaveError, failed save, or
+  [test-errors] around the drag/resize undo-save coverage.
+```
+
+Follow-up after stopping 20260421e on the next analyzed signals:
+
+```text
+Signals found:
+- "missing dependency import is reported as an error" passed, but emitted Vite
+  500/import-analysis diagnostics. This is an expected runtime-error phase of
+  that test, not a product regression.
+- "stale cache is cleared after project switch" failed because the test used
+  Command Palette "File: Close Folder", which is not reliably present in the
+  isolated VS Code E2E host. The test was validating a stale cache behavior but
+  depended on a brittle VS Code command.
+- "PI-4-1: component list loads on activation" passed, but emitted
+  [pageerror] Invalid 5 panel layout. Analysis showed the VS Code webview was
+  rendering a hidden SaaS-only source-control panel, so react-resizable-panels
+  observed five panels while the active persisted layout had four entries.
+
+Fixes:
+- e2e/tests/project-independent/error-handling.spec.ts now marks the
+  intentional missing-dependency/Vite diagnostics with expected-runtime-errors.
+- The stale cache test now validates explorer component cache rebuild after
+  extension reload, comparing the actual Explorer component list before and
+  after reload instead of relying on "File: Close Folder".
+- client/components/LeftSidebar/LeftSidebar.tsx now renders the source-control
+  panel only outside VS Code webviews and filters persisted layouts so only a
+  layout matching the currently rendered panel set is passed to
+  react-resizable-panels or saved back to storage.
+
+Validation:
+- bunx tsc --noEmit --pretty false passed in the main repo.
+- npm run build passed in vscode-extension/hypercanvas-preview.
+- ./build-and-install.sh passed and installed hypercanvas-preview 0.1.9.
+- vscmd workbench.action.reloadWindow ran for react-vite-tw4-twitter.
+- Focused E2E with --retries=0 passed:
+  "missing dependency import is reported as an error" and
+  "explorer component cache is rebuilt after extension reload": 2 passed.
+- Focused E2E with --retries=0 passed:
+  "PI-4-1: component list loads on activation": 1 passed.
+- Grep of the focused logs found no [test-errors], Invalid 5 panel layout,
+  AssertionError, TimeoutError, "File Modified Since", handleSaveError,
+  failed save, or Unhandled.
+- Pre-commit checks after the final import-order adjustment:
+  bunx biome check client/components/LeftSidebar/LeftSidebar.tsx passed;
+  bunx tsc --noEmit --pretty false passed; markdownlint on this file passed;
+  git diff --check passed.
+- Required bunx knip was run and still fails on the existing repository-wide
+  unused-file report. This diff does not add a new knip-specific finding beyond
+  the already known repo configuration issue.
+- Nested codex review is intentionally skipped for this commit because the user
+  explicitly forbade launching Codex from inside Codex.
+```
+
+Standing workflow note:
+
+```text
+After every commit in this branch, append a short workprocess entry with the
+commit hash, scope, validation, and any remaining risk before moving on to the
+next work item. This file is the coordination ledger for humans and agents.
 ```
