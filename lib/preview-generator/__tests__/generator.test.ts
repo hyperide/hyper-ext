@@ -80,6 +80,19 @@ describe('deriveUniquePrefix', () => {
     expect(result.get('packages/ui/components/Button.tsx')).toBe('UiComponentsButton');
     expect(result.get('packages/admin/components/Button.tsx')).toBe('AdminComponentsButton');
   });
+
+  it('should disambiguate platform-suffixed files (App.tsx vs App.web.tsx) via filename segments', () => {
+    // Both at root: parent dir is '.', so parent-prefix gives RootApp for both → hasDupes.
+    // Platform suffix in filename resolves it: App.web.tsx → AppWeb, App.tsx → App.
+    const entries: PreviewComponentEntry[] = [makeEntry('App.tsx', 'App'), makeEntry('App.web.tsx', 'App')];
+    const result = deriveUniquePrefix(entries);
+    expect(result.get('App.tsx')).toBe('App');
+    expect(result.get('App.web.tsx')).toBe('AppWeb');
+    // Both must be valid JS identifiers
+    for (const [, name] of result) {
+      expect(name).toMatch(/^[A-Za-z_$][A-Za-z0-9_$]*$/);
+    }
+  });
 });
 
 describe('generatePreviewContent', () => {

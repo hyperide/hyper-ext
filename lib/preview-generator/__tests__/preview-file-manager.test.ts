@@ -710,6 +710,26 @@ export default function CanvasPreview() { return null; }
     expect(content).toContain("from './components/Navbar'");
     expect(isValidTypeScript(content)).toBe(true);
   });
+
+  it('keeps App.web.tsx (web entry) and assigns AppWeb alias to avoid collision with App.tsx', async () => {
+    // .web suffix must NOT be treated as a platform-exclusion suffix (unlike .native/.ios/.android).
+    // App.web.tsx is the web entry for Expo/Tamagui projects and must appear in componentRegistry.
+    // deriveUniquePrefix should resolve the App/App collision via platform-suffix: App.tsx→App, App.web.tsx→AppWeb.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/App.tsx', `export function App() { return <div>App</div>; }`);
+    io.files.set('/project/App.web.tsx', `export function App() { return <div>AppWeb</div>; }`);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['App.tsx', 'App.web.tsx']);
+    // Both files must be registered in componentRegistry
+    expect(content).toContain("'App.tsx'");
+    expect(content).toContain("'App.web.tsx'");
+    // App.web.tsx gets AppWeb alias, App.tsx gets App alias
+    expect(content).toContain('AppWeb');
+    // No duplicate identifier
+    expect(isValidTypeScript(content)).toBe(true);
+  });
 });
 
 describe('PreviewFileManager — buildEntry non-PascalCase guard', () => {

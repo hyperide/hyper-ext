@@ -98,7 +98,9 @@ function isPreviewIneligibleByName(fileName: string): boolean {
   const segments = base.split('.');
   // Last segment after the leading PascalCase name (e.g. `native` in `Foo.native`).
   const tail = segments.slice(1);
-  const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android', 'web']);
+  // '.web' is intentionally excluded: App.web.tsx is the web entry and must be
+  // previewable. Alias collision with App.tsx is resolved in deriveUniquePrefix.
+  const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android']);
   const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
   return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg));
 }

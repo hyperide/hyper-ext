@@ -83,6 +83,28 @@ export function deriveUniquePrefix(entries: PreviewComponentEntry[]): Map<string
     const hasDupes = new Set(names).size !== names.length;
 
     if (hasDupes) {
+      // Try platform-suffix disambiguation before grandparent escalation.
+      // App.web.tsx → AppWeb, App.tsx stays App (no extra dot segments → no suffix).
+      const platformResolved = new Map<string, string>();
+      for (const entry of group) {
+        const fileBase = basename(entry.componentPath).replace(/\.(tsx?|jsx?)$/, '');
+        const dotIdx = fileBase.indexOf('.');
+        if (dotIdx !== -1) {
+          const platformSegments = fileBase
+            .slice(dotIdx + 1)
+            .split('.')
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+          platformResolved.set(entry.componentPath, `${entry.componentName}${platformSegments.join('')}`);
+        }
+      }
+      const platformAliases = group.map((e) => platformResolved.get(e.componentPath) ?? e.componentName);
+      if (new Set(platformAliases).size === group.length) {
+        for (const entry of group) {
+          result.set(entry.componentPath, platformResolved.get(entry.componentPath) ?? entry.componentName);
+        }
+        continue;
+      }
+
       // Escalate to grandparent/parent prefix
       for (const entry of group) {
         const parts = dirname(entry.componentPath)
