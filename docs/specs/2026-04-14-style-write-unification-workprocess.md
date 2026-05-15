@@ -39,7 +39,7 @@
 ## Current State
 
 - **Branch**: `ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e`
-- **Run #36** (2026-04-30) — **IN PROGRESS** (Docker image rebuilding after .gitignore + style-editing.spec.ts changes; 3 shards when memory permits, 1 shard otherwise). Previous old run #35 containers were lingering (killed manually).
+- **Run #36** (`run-20260430-015616-91690`, 2026-04-30 01:56 CEST) — **IN PROGRESS** (1 shard, memory-constrained: avail_mb≈4.4GB vs 6GB/shard). Validates fix `3287880` (Tamagui disk fallback). Image pre-built (`BUILD_IMAGE=0`), tests rsync'd from host.
 
 - **Run #35** (`run-20260430-003332-21049`) — COMPLETE: "Tamagui: style written as prop" HARD FAIL (×6: 3 projects × 2 attempts). Root cause confirmed from screenshot: `editor.getActiveEditorContent()` reads `.view-lines` DOM which returns `''` when Hyper Canvas preview webview is frontmost. The write to App.tsx DID happen (file dirty in teardown), but poll never matched. Fixed in `3287880` (disk-based fallback: `readFileSync(App.tsx)` when DOM returns empty).
 
