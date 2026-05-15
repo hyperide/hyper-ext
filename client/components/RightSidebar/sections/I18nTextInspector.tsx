@@ -45,6 +45,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   // state naturally resets on binding identity change without a useEffect.
   const [localText, setLocalText] = useState(i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '');
   const textInputRef = useRef<HTMLInputElement>(null);
+  const isFocusedRef = useRef(false);
   const resolvedText = i18nBinding.kind === 'i18n' ? (i18nBinding.resolvedText ?? '') : '';
 
   // Combobox state for key picker
@@ -64,7 +65,10 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   useEffect(() => {
     const isRollback = rollbackKey !== prevRollbackKeyRef.current;
     prevRollbackKeyRef.current = rollbackKey;
-    if (!isRollback && textInputRef.current && document.activeElement === textInputRef.current) return;
+    // Use isFocusedRef instead of document.activeElement — in VS Code WebviewView
+    // (sidebar iframe) document.activeElement may not reliably reflect the input focus
+    // state, causing snap-back while the user is actively typing.
+    if (!isRollback && isFocusedRef.current) return;
     setLocalText(resolvedText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedText, rollbackKey]);
@@ -169,6 +173,12 @@ export const I18nTextInspector = memo(function I18nTextInspector({
           onChange={(e) => {
             setLocalText(e.target.value);
             onResolvedTextChange(e.target.value);
+          }}
+          onFocus={() => {
+            isFocusedRef.current = true;
+          }}
+          onBlur={() => {
+            isFocusedRef.current = false;
           }}
           disabled={!i18nBinding.editable}
           className="h-6 w-full rounded bg-muted px-2 text-[11px] text-foreground border-0 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
