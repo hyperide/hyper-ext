@@ -153,7 +153,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   }
 
   const currentKey = i18nBinding.key;
-  const showCombobox = keyEditable && ((availableKeys !== undefined && availableKeys.length > 0) || canCreateKeys);
+  const showCombobox = canCreateKeys || (keyEditable && availableKeys !== undefined && availableKeys.length > 0);
   const trimmedSearch = keySearch.trim();
   const filteredKeys = showCombobox
     ? (availableKeys ?? []).filter((k) => k.toLowerCase().includes(trimmedSearch.toLowerCase()))

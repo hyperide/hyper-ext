@@ -1393,6 +1393,7 @@ export default function RightSidebar({
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
                   keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
+                  canCreateKeys={i18nText.writable}
                 />
               );
             })()}
