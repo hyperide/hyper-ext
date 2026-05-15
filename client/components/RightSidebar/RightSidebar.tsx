@@ -217,6 +217,7 @@ export default function RightSidebar({
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
   const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
+  const writeInProgress = useSharedEditorState((s) => s.writeInProgress);
   const selectedElementDomText = useSharedEditorState((s) => s.selectedElementDomText);
   const {
     parsedStyles,
@@ -1394,7 +1395,7 @@ export default function RightSidebar({
                   availableKeys={availableI18nKeys}
                   keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                   canCreateKeys={i18nText.writable}
-                  keyBusy={loading}
+                  keyBusy={loading || (!!i18nDispatch && !!writeInProgress)}
                 />
               );
             })()}
