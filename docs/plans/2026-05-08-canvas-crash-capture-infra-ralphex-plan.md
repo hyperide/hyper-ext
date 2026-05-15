@@ -26,18 +26,18 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ### Task 1: Add `unhandledRejection` capture to extension `activate()`
 
-- [x] In `vscode-extension/hypercanvas-preview/src/extension.ts` `activate()`,
+- [ ] In `vscode-extension/hypercanvas-preview/src/extension.ts` `activate()`,
       register `process.on('unhandledRejection', (reason) => { ... })`.
-- [x] Reason is typed `unknown` — log:
+- [ ] Reason is typed `unknown` — log:
       - reason if instanceof Error: `{ name, message, stack }`
       - reason as string otherwise: `JSON.stringify(reason)`
-- [x] Always write to `OutputChannel('HyperIDE Diagnostics')`. If the env var
+- [ ] Always write to `OutputChannel('HyperIDE Diagnostics')`. If the env var
       `HYPERIDE_DIAGNOSTIC_ERROR_SINK` is set (a file path), also append-write
       `JSON.stringify({ ts, kind: 'unhandledRejection', reason: serialized })`
       followed by `\n`.
-- [x] Mirror the same for `process.on('uncaughtException', ...)`.
-- [x] Remove handler on `deactivate()`.
-- [x] Unit test the serializer with a few Error/object/primitive cases in
+- [ ] Mirror the same for `process.on('uncaughtException', ...)`.
+- [ ] Remove handler on `deactivate()`.
+- [ ] Unit test the serializer with a few Error/object/primitive cases in
       `vscode-extension/.../src/__tests__/`.
 
 ### Task 2: Add user-facing capture command
