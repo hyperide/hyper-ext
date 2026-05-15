@@ -70,6 +70,7 @@ let stateHub: StateHub | null = null;
 let panelRouter: PanelRouter | null = null;
 let diagnosticHub: DiagnosticHub | null = null;
 let diagnosticsChannel: vscode.OutputChannel | null = null;
+let _prevDiagnosticSinkPath: string | undefined;
 
 /**
  * Detect project-specific providers needed by preview components.
@@ -371,14 +372,11 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   const unhandledHandler = (reason: unknown) => logProcessError('unhandledRejection', reason);
-  // Re-throw after logging to preserve Node.js crash semantics — a registered
-  // uncaughtException listener suppresses the default crash, which would leave
-  // the extension host running in a potentially corrupt state.
+  // Log and swallow — do NOT re-throw. The extension host is a shared Node.js
+  // process; re-throwing inside an uncaughtException handler terminates the
+  // entire host, taking all other extensions down with it.
   const uncaughtHandler = (error: unknown) => {
     logProcessError('uncaughtException', error);
-    // Only re-throw for HyperIDE's own errors — foreign extension errors must not
-    // be escalated by our handler, since doing so would crash the shared extension host.
-    if (!isForeignExtensionError(error)) throw error;
   };
   process.on('unhandledRejection', unhandledHandler);
   process.on('uncaughtException', uncaughtHandler);
@@ -400,6 +398,7 @@ export function activate(context: vscode.ExtensionContext) {
         validateInput: (v: string) => (v.trim().length === 0 ? 'Path cannot be empty' : undefined),
       });
       if (!filePath) return;
+      _prevDiagnosticSinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
       process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = filePath.trim();
       void vscode.window.showInformationMessage(
         "Diagnostic capture active. Reproduce the bug, then run 'Stop Diagnostic Capture' to finish.",
@@ -414,8 +413,15 @@ export function activate(context: vscode.ExtensionContext) {
         void vscode.window.showWarningMessage('No active diagnostic capture session.');
         return;
       }
-      // Stop capture immediately; events after this point are intentionally excluded.
-      delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+      // Stop capture: restore the previous sink path (e.g. E2E harness path) rather
+      // than deleting the key entirely, so the harness stays functional for the rest
+      // of the worker session.
+      if (_prevDiagnosticSinkPath !== undefined) {
+        process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK = _prevDiagnosticSinkPath;
+      } else {
+        delete process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+      }
+      _prevDiagnosticSinkPath = undefined;
 
       let rejections = 0;
       let exceptions = 0;
