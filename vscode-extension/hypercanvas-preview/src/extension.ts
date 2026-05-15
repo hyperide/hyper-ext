@@ -13,6 +13,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
@@ -31,7 +32,7 @@ import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../..
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { goToCode } from './EditorBridge';
-import { isForeignExtensionError } from './extension-utils';
+import { isForeignExtensionError, serializeRejectionReason } from './extension-utils';
 import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
@@ -335,23 +336,42 @@ export function activate(context: vscode.ExtensionContext) {
   // `!hypercanvas.rightPanelInputFocused` condition is defined from the start.
   void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
 
-  // Catch unhandled rejections inside the extension host process so they
-  // don't bubble up as VS Code ".error" notification toasts containing
-  // "Unhandled rejection ...". A specific known source was already fixed
-  // (extension.ts:537 showTextDocument chain, extension.ts:778 autoStart
-  // .then without .catch); this is a safety net for anything we missed
-  // and for VS Code core / library promises that escape in a hot path.
-  // Logged so real issues are still discoverable in the Output channel.
-  // Foreign extension rejections are filtered out — they must not be
-  // logged as [HyperIDE] when the stack points to another extension dir.
-  const unhandledHandler = (reason: unknown) => {
-    if (!isForeignExtensionError(reason)) {
-      console.error('[HyperIDE] Unhandled rejection in extension host:', reason);
+  // Catch unhandled rejections and uncaught exceptions inside the extension
+  // host process. Extension host is shared across all installed extensions, so
+  // foreign-extension errors are filtered out via isForeignExtensionError.
+  // Events are written to the 'HyperIDE Diagnostics' output channel (always)
+  // and optionally to HYPERIDE_DIAGNOSTIC_ERROR_SINK (a file path) so E2E
+  // harnesses and debug sessions can tail the structured log.
+  const diagnosticsChannel = vscode.window.createOutputChannel('HyperIDE Diagnostics');
+  context.subscriptions.push(diagnosticsChannel);
+
+  const makeProcessErrorHandler = (kind: 'unhandledRejection' | 'uncaughtException') => (reason: unknown) => {
+    if (isForeignExtensionError(reason)) return;
+    const serialized = serializeRejectionReason(reason);
+    const label = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(serialized);
+    diagnosticsChannel.appendLine(`[HyperIDE] ${kind}: ${label}`);
+    if (reason instanceof Error && reason.stack) {
+      diagnosticsChannel.appendLine(reason.stack);
+    }
+    const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
+    if (sinkPath) {
+      try {
+        appendFileSync(sinkPath, `${JSON.stringify({ ts: Date.now(), kind, reason: serialized })}\n`);
+      } catch {
+        // best effort — never crash extension host on logging failure
+      }
     }
   };
+
+  const unhandledHandler = makeProcessErrorHandler('unhandledRejection');
+  const uncaughtHandler = makeProcessErrorHandler('uncaughtException');
   process.on('unhandledRejection', unhandledHandler);
+  process.on('uncaughtException', uncaughtHandler);
   context.subscriptions.push({
-    dispose: () => process.off('unhandledRejection', unhandledHandler),
+    dispose: () => {
+      process.off('unhandledRejection', unhandledHandler);
+      process.off('uncaughtException', uncaughtHandler);
+    },
   });
 
   // Get workspace root
