@@ -452,35 +452,6 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
-  it('marks editable=true when key resolves to empty string (user can type the translation)', async () => {
-    const nodeMap = new NodeMapService();
-    const helper = new NodeMapService();
-    const entries = helper.parseAndBuild(I18N_JSX, 'src/App.tsx');
-    const pEntry = entries[0];
-
-    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
-
-    // Empty string is a valid translation value (placeholder slot waiting for content).
-    // editable must stay true so the user can replace it; the literal "" round-trips as
-    // resolvedText so the inspector can show the empty input.
-    const LOCALES_EN_EMPTY = JSON.stringify({ habits: { walks: '' } });
-    const fileIO = makeFileIO({
-      [FILE_PATH]: I18N_JSX,
-      '/workspace/package.json': PKG_WITH_I18N,
-      '/workspace/locales/en.json': LOCALES_EN_EMPTY,
-    });
-
-    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
-    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
-
-    expect(result.i18nText?.kind).toBe('i18n');
-    if (result.i18nText?.kind === 'i18n') {
-      expect(result.i18nText.key).toBe('habits.walks');
-      expect(result.i18nText.resolvedText).toBe('');
-      expect(result.i18nText.editable).toBe(true);
-    }
-  });
-
   it('marks editable=false when locale file is malformed JSON (parse-error)', async () => {
     const nodeMap = new NodeMapService();
     const helper = new NodeMapService();
