@@ -158,7 +158,7 @@ export const ColorInfoPanel = React.forwardRef<HTMLDivElement, ColorInfoPanelPro
                   contrast.level === 'Fail' && 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
                 )}
               >
-                {contrast.level}
+                {contrast.level === 'Fail' ? 'Bad' : contrast.level}
               </span>
               {tabFixTarget && <kbd className="ml-auto text-[9px] text-muted-foreground">Ctrl×2 → {tabFixTarget}</kbd>}
             </div>
