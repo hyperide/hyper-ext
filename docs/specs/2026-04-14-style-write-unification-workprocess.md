@@ -5077,3 +5077,54 @@ Bridge bot page-callback await follow-up, 2026-04-22 19:49 CEST:
     command-panel smoke region without blank VS Code windows, save dialogs, or
     fail markers.
 ```
+
+E2E throughput retrospective, 2026-04-22 20:03 CEST:
+
+```text
+- Trigger:
+  * User asked why a full day of work produced only ~200 visible E2E tests of
+    progress.
+- What actually happened:
+  * The current clean full run started at 19:40 CEST, not 24 hours ago; by this
+    checkpoint it reached about 270/2209 with no real fail markers.
+  * The day was lost to repeated full-suite restarts after harness and runtime
+    failures: empty VS Code windows, save dialogs, diagnostics/log residue,
+    command-palette focus, stale webviews, bridge-bot delivery, and Telegram
+    pagination.
+  * I let the full E2E suite function as a debugging tool. That is wrong for a
+    2209-test VS Code suite because every harness failure discards tens or
+    hundreds of already-passed tests.
+  * I mixed two critical paths: bridge-bot repair and extension E2E recovery.
+    Both were useful, but context-switching delayed first-failure analysis and
+    made status reporting look like progress.
+  * I did not enforce explicit run gates early enough. The save-dialog and
+    blank-window checks became reliable only after the user repeatedly noticed
+    the issue from screenshots.
+- Lessons:
+  * Full E2E is a verification artifact, not the place to discover harness
+    defects.
+  * A clean full run may start only after focused smoke guards pass:
+    command-palette input visibility, openAIChat/openInspector/openExplorer,
+    setupPreview with a selected component, save-dialog sentinel, diagnostics
+    clear/check, and log filter check.
+  * On the first non-pristine marker, stop the full run, inspect artifacts, run
+    the smallest focused repro, fix, commit atomically, update this workfile,
+    then restart from a meaningful shard/checkpoint.
+  * Do not hide failures with retries. Retries are only diagnostic evidence,
+    never a green result.
+  * Keep bridge-bot work out of the E2E critical path unless the user explicitly
+    changes priority. Bot fixes must be committed/reported separately.
+  * Monitor system health during E2E: VS Code dialog state, `hvsc` process count
+    and RSS, memory pressure, swapouts, and CPU/load. Stop before reboot risk,
+    not after the machine is already unstable.
+  * Progress reports must say both test count and what was fixed/aborted. A high
+    number of commits does not equal E2E progress.
+- Revised approach from now:
+  * Current full run continues only while it has no real fail markers and no
+    memory-pressure stop condition.
+  * Every E2E restart must have a named reason and log path in this workfile.
+  * Prefer focused spec/slice runs for fixes; reserve `2209` full run for the
+    final verification pass.
+  * Record exact command, start time, progress checkpoints, first failure, and
+    stop reason. No silent restarts.
+```
