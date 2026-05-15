@@ -3317,3 +3317,31 @@ These are product fixes only; Run #20 containers run unaffected extension code (
 
 Current position: PI inspector keyboard/width/arrow-key tests.
 All project-independent suites progressing cleanly through: canvas-bugs, ai-chat, elements-tree, explorer, SCM, resize, spacing, drag, inspector.
+
+## 📍 Run #20 Checkpoint 3 (2026-04-28 ~15:50 CEST, ~2h6m)
+
+| Shard | Total | Pass | Fail | Skip | Done% |
+|-------|-------|------|------|------|-------|
+| s1    | 2189  | 590  |   2  |  16  | 27.0% |
+
+**2 failures confirmed** — both on same test:
+- `hyper_duplicate_element — copy appears` on `react-vite-tw4-twitter`
+  - 2 attempts × ~27s each — fails at final `getElementCount()` poll (10s timeout)
+  - Root cause: tw4-twitter HMR after file write takes >10s under Docker CPU
+  - Fix committed: `c56053e` in `ext-test-projects` main — poll extended 10_000→30_000
+
+### Fix applied (c56053e)
+
+```
+fix(e2e): extend hyper_duplicate_element post-HMR poll to 30s
+
+tw4-twitter HMR after a file write takes >10s under shared Docker CPU;
+same reasoning as the 30s clickable-elements poll already in this test.
+```
+
+File: `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts:341`
+
+These 2 failures will remain in Run #20 (containers use pre-fix image).
+Run #21 will pick up the fix from the mounted ext-test-projects directory.
+
+### Run #20 still active, ~73% remaining.
