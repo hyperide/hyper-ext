@@ -1575,3 +1575,40 @@ Build cache распух до 19GB (бейк), диск свалился до 6.
    Подозрение: `webview:ready` race vs dev-server-running gate.
 2. **XSS overlay sanitized + CSP enforced** (s2) — мелкие test-logic
    issues, требуют отдельного смотра.
+
+## 📍 2026-04-27 01:50 CEST: 0.1.10 прогон ~1h
+
+| shard | done | pass | fail | skip |
+|-------|------|------|------|------|
+| s1    | 195  | 179  | 5    | 9    |
+| s2    | 157  | 146  | 7    | 2    |
+| s3    | 143  | 96   | 5    | 41   |
+| s4    | 92   | 55   | 15   | 19   |
+| **Σ** | 587  | 476  | 32   | 71   |
+
+**Pass rate 93.7%**. Диск 22GB free, стабилен.
+
+### Top failing (по уникальным титлам)
+
+| count | test |
+|-------|------|
+| 6 | empty component (`<div/>`) — renders without errors |
+| 2 | undo reverts opacity on re-selected element |
+| 2 | multiple components — switch between them |
+| 2 | insert/delete element command |
+| 2 | ExportNamedDeclaration |
+| 2 | fiber-based selection |
+| 2 | CSP is enforced |
+| 2 | autoStart false |
+
+Большинство по 1 разу = single-shot fails. По 2 = первый fail + retry
+fail на одном сценарии. Сравни старый прогон: spotify cluster был
+21+ fails на одном проекте — теперь 0 на s2/s3, и s4 разгребает
+оставшийся cluster с проходными результатами между fails.
+
+### Оставшиеся приоритеты
+
+1. `empty component` 6 fails — повторяющийся; нужно понять real bug
+   vs stale toast race.
+2. First-on-worker cold-start race — отдельная проблема, не закрыта 0.1.10.
+3. Тесты с retry pattern (×2) — flaky, можно пометить retries=2.
