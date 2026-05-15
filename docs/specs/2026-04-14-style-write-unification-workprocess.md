@@ -117,23 +117,52 @@ increase dirty tab `isVisible` timeout 500ms → 2000ms.
 
 **Commit**: `ext-test-projects:1522602`
 
-### 2. ⚠️ ast-operations 606s timeouts — S3 OOM-induced (run #28)
+### 2. ⚠️ ast-operations 600s timeouts — NOT OOM, root cause: slow patched-entry compile
 
-**Root cause**: `setupPreviewWithDevServer()` polls up to 600s for dev server ready.
-Under OOM-induced memory pressure (workers 63-68 in S3), webpack page-thrashed for 600s
-without ever completing compilation → preview never loaded → timeout.
+**Run #29 finding (2026-04-29)**: `--memory-swap -1` did NOT fix these tests.
+S3 memory at failure point: 1.5GiB (well under 6GiB limit). Memory is not the cause.
 
-**Tests**: `ast-operations.spec.ts:58/89/106`:
-- "elements identifiable via fiber-based selection (replaces data-uniq-id)"
-- "nested components — multiple selectors found"
-- "ExportNamedDeclaration — correct traversal order"
+**True root cause**: `_patchEntryFile()` in the extension modifies `src/App.tsx` to inject
+`__canvas_preview__` imports AFTER the dev server starts. This triggers a SECOND webpack
+compilation. The second compile takes >567s even with filesystem cache because `__canvas_preview__`
+references many components not in the pre-warm cache.
 
-Both attempts failed at ~606s (HARD FAIL in run #28 S3).
+**Pre-warm does NOT help** because:
+- Pre-warm: `webpack build` compiles original App.tsx → cache populated
+- Test: extension patches App.tsx → webpack recompiles with new imports → cache partially
+  invalid (new `__canvas_preview__` + its deps are not cached)
 
-**Expected fix**: run #29 with `--memory-swap -1` prevents OOM → webpack compiles normally.
-These tests should pass in run #29. If they still fail → investigate separately.
+**Evidence from run #29 S3 logs**:
+```
+[setupPreview +801ms] devServer:start
+[setupPreview +4515ms] preview:tab-activate
+[setupPreview +567388ms] preview:refresh-retry  ← waited 562s, preview never loaded
+[test-done] "elements identifiable via fiber-based selection" 604592ms — failed
+```
+S3 memory stable at 1.5GiB throughout.
 
-**Status**: monitoring in run #29.
+**Tests**: `ast-operations.spec.ts` on `webpack-react-tw3-kanban`:
+- "elements identifiable via fiber-based selection (replaces data-uniq-id)" — FAILED at 604s
+- "nested components — multiple selectors found" — RUNNING (attempt 2, may pass from running dev server)
+- "ExportNamedDeclaration — correct traversal order" — pending
+
+**Required fix** (NEEDS LINEAR for proper solution):
+- In `DevServerManager`: after `_patchEntryFile()` writes, await a fresh 'compiled successfully'
+  before resolving readiness for that mode. Preview should only load after patched compile completes.
+  This is the same root cause noted in MEMORY.md DevServerManager re-gate issue.
+- Quick workaround: increase webpack poll budget from 600s to 900s (may buy enough time for patched compile)
+
+**Run #29 update**: attempt 1 FAILS (600s), attempt 2 PASSES (webpack cache now warm from attempt 1).
+Pattern: first test per webpack project takes 600s (compiling new `__canvas_preview__` deps), subsequent
+attempts use filesystem cache (2.4s). With `--retries=1`, these tests now show as FLAKY (fail+retry-pass),
+not HARD FAIL. Acceptable per green definition.
+
+**Fix to reduce flakiness** (implement next): pre-warm should include `__canvas_preview__` compilation:
+generate `__canvas_preview__.tsx` before test run and include in webpack pre-warm. Then first attempt
+would also be fast. Alternatively: after `_patchEntryFile()`, the DevServerManager should await
+the second webpack `compiled successfully` before exposing the preview URL.
+
+**Status**: FLAKY (not HARD FAIL). Monitoring run #29 for full confirmation.
 
 ### 3. "component with error" 607s timeout — Vite watcher degradation
 
