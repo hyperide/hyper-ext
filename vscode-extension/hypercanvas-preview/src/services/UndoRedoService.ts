@@ -24,6 +24,11 @@ export class UndoRedoService {
   private _redoStack: UndoEntry[] = [];
   private _maxLength = 50;
   private _inProgress = false;
+  // Tracks active _withUndoTracking() calls. While > 0, redo is blocked:
+  // a new edit is being recorded and recordEdit() hasn't cleared the redo
+  // stack yet — allowing redo to fire in that window would be a no-op at
+  // best, or replay a stale entry at worst.
+  private _trackingCount = 0;
 
   constructor(private readonly _workspaceRoot: string) {}
 
@@ -102,12 +107,20 @@ export class UndoRedoService {
     }
   }
 
+  beginTracking(): void {
+    this._trackingCount++;
+  }
+
+  endTracking(): void {
+    if (this._trackingCount > 0) this._trackingCount--;
+  }
+
   canUndo(): boolean {
     return this._undoStack.length > 0;
   }
 
   canRedo(): boolean {
-    return this._redoStack.length > 0;
+    return this._redoStack.length > 0 && this._trackingCount === 0;
   }
 
   /** Write content disk-first, then sync an already-open VS Code document. */

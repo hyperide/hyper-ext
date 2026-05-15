@@ -122,28 +122,36 @@ export class AstBridge {
       console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
       return operation();
     }
-    const result = await operation();
-    if (result.success) {
-      let contentAfter: string;
-      try {
-        // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
-        contentAfter = await this._fileIO.readFileFromDisk(absolutePath);
-      } catch {
+    // Block redo until recordEdit() clears the redo stack. Without this guard,
+    // CMD_REDO can fire after the file write (which wakes watchers) but before
+    // recordEdit() runs — replaying a stale redo entry.
+    this._undoRedoService.beginTracking();
+    try {
+      const result = await operation();
+      if (result.success) {
+        let contentAfter: string;
         try {
-          contentAfter = await this._fileIO.readFile(absolutePath);
+          // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
+          contentAfter = await this._fileIO.readFileFromDisk(absolutePath);
         } catch {
-          contentAfter = contentBefore;
+          try {
+            contentAfter = await this._fileIO.readFile(absolutePath);
+          } catch {
+            contentAfter = contentBefore;
+          }
+        }
+        if (contentBefore !== contentAfter) {
+          this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
+        } else {
+          console.warn(
+            `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(absolutePath)}`,
+          );
         }
       }
-      if (contentBefore !== contentAfter) {
-        this._undoRedoService.recordEdit(absolutePath, contentBefore, contentAfter);
-      } else {
-        console.warn(
-          `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(absolutePath)}`,
-        );
-      }
+      return result;
+    } finally {
+      this._undoRedoService.endTracking();
     }
-    return result;
   }
 
   // === Public mutation methods (with undo tracking, for PreviewPanel direct calls) ===
