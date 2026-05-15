@@ -1662,6 +1662,43 @@ function _dragClickSuppressor(e: MouseEvent): void {
   e.preventDefault();
 }
 
+// Block native HTML5 drag-and-drop in design mode. Browsers default
+// `<img>` and `<a>` to draggable=true; once Chromium establishes a native
+// drag candidate at pointerdown, subsequent pointer events are consumed
+// by the drag tracker before our document-capture listener sees them,
+// so img-source drags silently fail (PI-5-DR-EK-IMG repro:
+// 0 pointerdowns / 8 stale pointerups in run-20260507-130145).
+//
+// Two-layer fix: (1) CSS `-webkit-user-drag: none` in design mode (see
+// style-injector.ts) prevents Chromium from establishing the drag
+// candidate. (2) Walk every img/a/[draggable] node and explicitly set
+// `draggable = false` — belt and braces for elements where the CSS
+// property isn't enough (some Chromium versions still establish a drag
+// candidate when `el.draggable === true`, regardless of CSS).
+// (3) Keep the dragstart preventDefault as a final guard for any element
+// that slipped past (1) and (2) — e.g. user code calling el.draggable=true
+// after our walk.
+const _nativeDragSuppressor = (e: DragEvent): void => {
+  if (state.engineMode !== 'design') return;
+  e.preventDefault();
+};
+document.addEventListener('dragstart', _nativeDragSuppressor, true);
+
+function _disableNativeDraggableIn(root: ParentNode): void {
+  // Disable native drag on every element that can default to draggable=true.
+  // Includes elements with an explicit `draggable="true"` attribute set by
+  // user code (e.g. custom drag-and-drop libraries) — they would otherwise
+  // re-establish the drag candidate on pointerdown.
+  const candidates = root.querySelectorAll('img, a, [draggable="true"], [draggable=""]');
+  for (const el of candidates) {
+    if (el instanceof HTMLElement) el.draggable = false;
+  }
+  // The root itself may match if it was just inserted as a single img/a node.
+  if (root instanceof HTMLElement && (root.tagName === 'IMG' || root.tagName === 'A')) {
+    root.draggable = false;
+  }
+}
+
 document.addEventListener('pointerdown', _dragPointerDown, true);
 document.addEventListener('pointermove', _dragPointerMove, true);
 document.addEventListener('pointerup', _dragPointerUp, true);
@@ -1945,14 +1982,26 @@ function scheduleThrottledOverlayUpdate(): void {
 // Mark overlays dirty when DOM/layout changes
 const overlayMutationObserver =
   typeof MutationObserver !== 'undefined'
-    ? new MutationObserver(() => {
+    ? new MutationObserver((mutations) => {
         invalidateSourceCache();
         scheduleThrottledOverlayUpdate();
+        // Disable native drag on freshly-added img/a nodes. Bounded scan: only
+        // walks the subtrees that just changed, not the whole document.
+        for (const m of mutations) {
+          if (m.type !== 'childList') continue;
+          for (const node of m.addedNodes) {
+            if (node instanceof HTMLElement) _disableNativeDraggableIn(node);
+          }
+        }
       })
     : null;
 
 function setupBodyObservers(): void {
   if (!document.body) return;
+  // One-time initial sweep so existing img/a nodes have draggable=false
+  // before the user can interact with them. Subsequent additions are
+  // handled by the mutation observer above.
+  _disableNativeDraggableIn(document.body);
   if (overlayMutationObserver) {
     overlayMutationObserver.observe(document.body, {
       attributes: true,
@@ -2066,6 +2115,7 @@ window.addEventListener('unload', () => {
   document.removeEventListener('keydown', keydownForwardingHandler, true);
   document.removeEventListener('contextmenu', contextMenuHandler, true);
   document.removeEventListener('mousedown', mousedownHandler, true);
+  document.removeEventListener('dragstart', _nativeDragSuppressor, true);
   document.removeEventListener('pointerdown', _dragPointerDown, true);
   document.removeEventListener('pointermove', _dragPointerMove, true);
   document.removeEventListener('pointerup', _dragPointerUp, true);
@@ -2090,6 +2140,9 @@ function updateDesignStyles(mode: string): void {
 
   if (mode !== 'interact') {
     document.documentElement.classList.add('design-mode');
+    // Mode flip → re-sweep. The CSS rule covers most cases; the JS sweep
+    // handles elements where the browser ignores `-webkit-user-drag`.
+    if (document.body) _disableNativeDraggableIn(document.body);
   } else {
     document.documentElement.classList.remove('design-mode');
   }

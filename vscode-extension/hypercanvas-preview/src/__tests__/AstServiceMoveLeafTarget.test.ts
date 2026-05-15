@@ -192,8 +192,12 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
     });
   });
 
-  describe('different-parent move using a leaf as the landing reference', () => {
-    it('drop <p className="lede"> from <main> AFTER <img className="hero-art" /> leaf in <header>', async () => {
+  // Different-parent moves use server-side lift (Task 4 of move-any-intermittent
+  // plan). When source and target sit in different cards, the OUTER cards
+  // reorder — the leaf is just a landing reference, not a nesting target.
+  // The leaf-self-closing invariant must survive that lift.
+  describe('different-parent move with lift: leaf stays self-closing', () => {
+    it('source from <main> AFTER <img className="hero-art" /> in <header> swaps containers, leaf preserved', async () => {
       const { service, fileIO, absPath, relPath } = await makePageService();
       const sourceRef = refByClass(service, absPath, relPath, 'p', 'lede', PAGE_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'img', 'hero-art', PAGE_FIXTURE);
@@ -203,28 +207,27 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <p className="lede"> must now live INSIDE <header>, after <img className="hero-art" />.
-      const headerOpenIdx = content.indexOf('"hdr"');
-      const headerCloseIdx = content.indexOf('</header>');
-      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
-      expect(insideHeader.includes('"lede"')).toBe(true);
-      // and <p> sits AFTER the leaf inside header.
-      expect(insideHeader.indexOf('"hero-art"')).toBeLessThan(insideHeader.indexOf('"lede"'));
+      // Lift: source-lifted = <main>, target-lifted = <header>; common parent
+      // = <div className="page">. Position 'after': move <main> after
+      // <header> (which is the original layout — net change is the AST
+      // round-trip; ordering invariant still holds).
+      const headerOpenIdx = content.indexOf('<header');
+      const mainOpenIdx = content.indexOf('<main');
+      expect(headerOpenIdx).toBeLessThan(mainOpenIdx);
 
-      // <main> no longer hosts <p className="lede"> — it lives in <header> now.
-      const mainOpenIdx = content.indexOf('"main"');
-      const mainCloseIdx = content.indexOf('</main>');
-      const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
-      expect(insideMain.includes('"lede"')).toBe(false);
-      // <aside> still in <main>.
-      expect(insideMain.includes('"aside"')).toBe(true);
-
-      // <img className="hero-art" /> still self-closing.
+      // The leaf <img className="hero-art" /> stays self-closing — lift
+      // operates on outer containers, never on the leaf itself.
       expect(/<img\s+className="hero-art"[^>]*\/>/.test(content)).toBe(true);
       expect(content.includes('</img>')).toBe(false);
+
+      // <p className="lede"> still inside <main> (lift moves containers,
+      // not their inner content).
+      const mainCloseIdx = content.indexOf('</main>');
+      const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
+      expect(insideMain.includes('"lede"')).toBe(true);
     });
 
-    it('drop <span className="badge"> from <aside> BEFORE <img className="hero-art" /> leaf in <header>', async () => {
+    it('source from <aside> BEFORE <img className="hero-art" /> swaps cards, leaf preserved', async () => {
       const { service, fileIO, absPath, relPath } = await makePageService();
       const sourceRef = refByClass(service, absPath, relPath, 'span', 'badge', PAGE_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'img', 'hero-art', PAGE_FIXTURE);
@@ -234,22 +237,21 @@ describe('AstService.moveElement — drop on a non-container leaf (Task 6)', () 
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <span className="badge"> must now live INSIDE <header>, BEFORE <img className="hero-art" />.
-      const headerOpenIdx = content.indexOf('"hdr"');
-      const headerCloseIdx = content.indexOf('</header>');
-      const insideHeader = content.slice(headerOpenIdx, headerCloseIdx);
-      expect(insideHeader.includes('"badge"')).toBe(true);
-      expect(insideHeader.indexOf('"badge"')).toBeLessThan(insideHeader.indexOf('"hero-art"'));
+      // Lift: source-lifted = <main>, target-lifted = <header>. Position
+      // 'before': <main> moves BEFORE <header> at the page-div level.
+      const headerOpenIdx = content.indexOf('<header');
+      const mainOpenIdx = content.indexOf('<main');
+      expect(mainOpenIdx).toBeLessThan(headerOpenIdx);
 
-      // <aside> survives (it only contained <span className="badge">) but is now empty.
-      // <span> no longer in <main>.
-      const mainOpenIdx = content.indexOf('"main"');
+      // Leaf still self-closing.
+      expect(/<img\s+className="hero-art"[^>]*\/>/.test(content)).toBe(true);
+      expect(content.includes('</img>')).toBe(false);
+
+      // <span className="badge"> still inside <main> (still wrapped by
+      // <aside>) — lift never extracts inner nodes out of their container.
       const mainCloseIdx = content.indexOf('</main>');
       const insideMain = content.slice(mainOpenIdx, mainCloseIdx);
-      expect(insideMain.includes('"badge"')).toBe(false);
-
-      // <img> still self-closing.
-      expect(/<img\s+className="hero-art"[^>]*\/>/.test(content)).toBe(true);
+      expect(insideMain.includes('"badge"')).toBe(true);
     });
   });
 
