@@ -4201,3 +4201,119 @@ E2E save-dialog prevention finalization, 2026-04-22 13:07 CEST:
   * Commit this workfile update in the main repo.
   * Restart full E2E from scratch with the pushed ext-test fix.
 ```
+
+E2E save-dialog prevention hardening, 2026-04-22 13:33 CEST:
+
+```text
+- User provided another screenshot showing the VS Code save dialog for App.tsx,
+  so the previous setup-only cleanup was insufficient. Root cause: a test can
+  leave a dirty VS Code editor and the worker can close the VS Code window
+  before the next test's setup cleanup runs.
+- ext-test-projects hardening in progress:
+  * Move the dirty-editor prevention into teardown as well as setup.
+  * Before each test teardown and worker teardown: close Hyper Canvas preview,
+    detect all dirty editor tabs, run "File: Save All", poll until dirty markers
+    disappear, then run "View: Close All Editors".
+  * Run git checkout after teardown editor cleanup, so disk changes saved only
+    to avoid VS Code modal prompts are immediately restored.
+  * Keep save dialogs as explicit failures; do not auto-dismiss them.
+- Regression validation:
+  * Temporary focused spec intentionally left App.tsx dirty. Result:
+    /tmp/hyper-e2e-save-dialog-teardown-20260422j passed 1/1 with --retries=0.
+    The log shows teardown saved App.tsx, waited for dirty markers to clear,
+    closed all editors, and worker close completed without a save dialog.
+  * The temporary spec was removed after validation.
+- While validating a real keybinding slice, found and fixed two additional E2E
+  blockers instead of retrying:
+  * WebviewFrame.getPreviewPanelContent now activates the Hyper Canvas tab when
+    it finds a loaded-but-offscreen preview webview, then retries lookup.
+  * Cmd/Ctrl+S while Hyper Canvas is active now maps to
+    workbench.action.files.saveAll via package.json keybinding. The webview code
+    also routes Save shortcuts to command:execute as a direct fallback.
+- Focused validation after those fixes:
+  * /tmp/hyper-e2e-keybindings-save-20260422o passed 1/1 with --retries=0:
+    "Cmd+S from iframe -> forwarded to VS Code save".
+  * The same log shows teardown skipped Save All because there were no dirty
+    editors left, then closed all editors and worker teardown closed VS Code
+    without a dialog.
+- Static checks passed:
+  * ext-test-projects: bunx biome check and git diff --check for
+    e2e/fixtures/base.fixture.ts, e2e/page-objects/vscode/WebviewFrame.ts, and
+    e2e/helpers/vscode-cleanup.ts.
+  * main repo: bunx biome check and git diff --check for
+    client/lib/platform/types.ts, vscode-extension/hypercanvas-preview/package.json,
+    vscode-extension/hypercanvas-preview/src/types.ts, and
+    vscode-extension/hypercanvas-preview/src/webview-preview-panel/useCanvasInteraction.ts.
+  * npm run build passed in vscode-extension/hypercanvas-preview; only existing
+    Browserslist/Tailwind warnings were emitted.
+- Next required steps:
+  * Run Claude review before commits because this work is outside 15:00-21:00.
+  * Commit as separate atomic changes: extension Save shortcut / message typing,
+    ext-test teardown/offscreen hardening, then this workfile update.
+  * Push, then restart full E2E from scratch with --retries=0.
+```
+
+E2E save-dialog prevention current pass, 2026-04-22 13:50 CEST:
+
+```text
+- Re-read CODEX.md and .claude/commands/commit.md. Codex-specific rule applies:
+  skip nested `codex exec review` and do self-review/Claude review instead.
+- Re-read ext-test-projects/CLAUDE.md before running extension E2E.
+- Focused E2E validation:
+  * /tmp/hyper-e2e-keybindings-save-current passed 1/1 with --retries=0:
+    tests/project-independent/keybindings.spec.ts
+    "Cmd+S from iframe -> forwarded to VS Code save".
+  * The run used a fresh isolated hvsc harness window.
+  * Teardown logs show no dirty editors after Cmd+S, then Close All Editors and
+    closeVSCode completed without a save dialog.
+  * No stray hvsc/extensionDevelopmentPath/Playwright test processes remained
+    after the run.
+- Claude review:
+  * Main extension scoped review found no blockers. It specifically verified
+    that package.json Save All keybinding and iframe command fallback cannot
+    double-execute on one keypress, and that PlatformMessage typing is coherent.
+  * First E2E fixture scoped review found four prevention risks:
+    dirty Untitled editors must not trigger File: Save All/native Save As,
+    setup cleanup failures could cascade, worker teardown should restore files
+    before closeVSCode, and Hyper: Close Preview needed an immediate dialog
+    assertion.
+  * Fixed those by failing before Save All when dirty Untitled-* editors exist,
+    asserting no dialog after Hyper: Close Preview, moving worker git checkout
+    before closeVSCode, and force-closing the isolated hvsc process by
+    userDataDir when cleanup fails.
+  * Follow-up E2E fixture review found that test-scoped force-close would leave
+    the worker-scoped VS Code instance dead for later tests. Fixed by moving
+    force-close after teardown artifacts, marking the shared instance, and
+    relaunching a fresh isolated VS Code at the start of the next test when
+    that marker is present.
+  * Untitled detection now covers both "Untitled" and "Untitled-N".
+  * Final E2E fixture quick review found no blocking bugs and explicitly
+    approved the setup/teardown force-close -> marker -> relaunch chain.
+- Static checks:
+  * main repo: biome check, markdownlint, git diff --check, and extension
+    npm run build passed. Build emitted only existing Browserslist/Tailwind
+    warnings.
+  * ext-test-projects: biome check and git diff --check passed for the touched
+    fixture/page-object/helper files.
+  * bunx knip still fails with the existing repo-wide unused-file report
+    (hundreds of unrelated files); no new issue from this change was isolated.
+- Re-validation after the Claude-requested E2E fixture fixes:
+  * /tmp/hyper-e2e-keybindings-save-current-2 passed 1/1 with --retries=0.
+  * Later runs exposed two test bugs instead of save-dialog regressions:
+    the test typed into a random Monaco position and corrupted className into
+    classN, then strict dirty-tab assertion failed when VS Code had two App.tsx
+    editor groups.
+  * Fixed the test to move to file end with Cmd+ArrowDown before typing a
+    trailing comment and to assert dirty App.tsx tabs by count instead of a
+    strict single active tab.
+  * /tmp/hyper-e2e-keybindings-save-current-7 passed 1/1 with --retries=0,
+    no test-errors diagnostics, no dirty editors after Cmd+S, and no save dialog.
+  * /tmp/hyper-e2e-keybindings-save-current-8 passed 1/1 with --retries=0
+    after the setup-error force-close patch.
+  * No stray hvsc/extensionDevelopmentPath/Playwright test processes remained
+    after the focused validation.
+- Commits:
+  * main repo: a986e077 fix(extension): save from Hyper Canvas webview (HYP-363)
+  * ext-test-projects: 3e4e330 test(e2e): prevent save dialogs during VS Code
+    cleanup (HYP-363)
+```
