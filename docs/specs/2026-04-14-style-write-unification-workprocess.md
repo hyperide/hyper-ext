@@ -1062,3 +1062,91 @@ isn't able to drive the resize correctly through CDP.
   dispatching fixers.
 - Do NOT restart the active run — it's still producing useful
   data. Let it finish or stall on its own.
+
+## 2026-04-25 13:44 CEST: fresh shard `28759` results + restart
+
+### Live shard `72732` (slots 35, 36) at 36 minutes
+
+- s1: `234 passed / 2 failed` (PI-18-19 multi-resize x2 retry only).
+- s2: `177 passed / 2 failed` (multiple components — switch between
+  them x2, on `react-vite-shadcn-linear`).
+- Combined `411 passed / 4 failed` over ~half the matrix — **99%
+  pass rate**. Earlier 18 commits + 3 fresh agent commits delivered.
+
+### Confirmed working in fresh shard
+
+- Cat-1 ErrorBoundary noise filter (`bd562c8`): no `[test-errors]`
+  markers from React-19 multi-format console.errors. Filter wires
+  cleanly through both `[console.error]` and `[diagnostic]` capture.
+- Cat-10 Remix/Next cascade closed by `2682eb3`. Log shows
+  `entry:auto-detected projectDir="..." resolvedComponentFile="src/App.tsx"`
+  on every project start; the previous 11.8s timeout cascade is
+  gone.
+- Settings cluster, security tests (XSS/CSP), keybindings — all
+  pass on this run; the earlier ~30 fails on these specs were
+  closed by the CommandPalette aliases / annotation / palette-fix
+  commits from the previous round.
+
+### Third agent round (parallel, non-overlapping zones)
+
+After live mid-run analysis identified two remaining body-assertion
+clusters, dispatched two more agents:
+
+1. **Agent: PI-18-19 multi-resize NaN guard** (commit `6d3590d`,
+   `hyper-ext-e2e/main`). Root cause: `09b16bb` previously wrapped
+   `setStyleValue` and `w0` parseFloat in NaN guard for HYP-268's
+   incomplete multi-select style write, but `w1` (second selector)
+   was left unguarded. When NodeMapService is empty,
+   `inspector.getValue('width')` for `selectors[1]` returns
+   `''`, `parseFloat('')` is NaN, `expect(NaN).toBeGreaterThan(0)`
+   fails. Fix: symmetry — same NaN guard on `w1` plus a load-bearing
+   `expect(canvas.isPreviewLoaded()).toBe(true)` to not silently
+   pass on a dead canvas.
+2. **Agent: PD-1-5 walk component list** (commit `7ef7fa6`,
+   `hyper-ext-e2e/main`). Root cause: `react-vite-shadcn-linear`'s
+   alphabetic-first component is `BoardView.tsx` which requires a
+   Zustand `store` prop. Preview wrapper supplies only generic
+   `previewFallbackProps` (no `store`), `BoardView` throws on
+   destructure, ComponentErrorBoundary catches → renders `null` →
+   `#root > *` count = 0 → `isPreviewLoaded()` 30s poll times out.
+   The `bd562c8` filter silences the iframe console noise, but the
+   harness body-assertion still fails on a dead preview. Fix:
+   `tryRenderComponent(name)` walks `componentNames` until two
+   actually render, instead of taking `[0]` and `[1]` blindly.
+   Vanilla projects still pass through `[0]/[1]` immediately.
+
+### Cat-2 — `component with error — error overlay appears` survives
+
+A second `multiple components` retry surfaced and so did a fresh
+`component with error — error overlay appears` failure (21–38s
+on the same vite project, body assertion). The
+`expectRuntimeErrors` annotation correctly clears the diagnostics
+on teardown — `[fixture-diagnostics] cleared expected runtime
+diagnostics` is in the log — so this is NOT teardown noise. The
+body assertion (vite-error-overlay detection) drifted; the test
+expects an overlay element that the extension's preview-shell
+follow-up may now hide or rewrap. Investigate after the live
+matrix completes; do not block.
+
+### Open architectural follow-up
+
+- HYP-268 (multi-select style write through NodeMapService) is
+  still papered over by NaN guards and try/catch resilience.
+  Real fix would route multi-selection batch styles through the
+  same write pipeline as single-selection. Out of scope for this
+  cycle but file a Linear ticket.
+- HYP-289 / preview wrapper store stub. `BoardView`-style
+  components that depend on a global state context fall back to
+  the ErrorBoundary. The harness skips them now via PD-1-5 walk,
+  but the actual user experience inside HyperIDE is also a no-go
+  for these components. Need to extend `generatePreviewContent()`
+  with a store-shaped fallback for common patterns
+  (Zustand/jotai/Redux). Separate ticket.
+
+### Next step
+
+Let the fresh shard finish its remaining ~700 tests. Once it
+completes, restart with the latest agent commits applied and
+look for the residual count to drop further. If `component with
+error — error overlay appears` Cat-2 is still failing, it gets
+the next dedicated agent.
