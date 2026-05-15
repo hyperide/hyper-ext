@@ -440,6 +440,12 @@ export function activate(context: vscode.ExtensionContext) {
   logsProvider.setDiagnosticHub(diagnosticHub);
   aiChatProvider.setDiagnosticHub(diagnosticHub);
 
+  // Retry counter for componentMissing self-healing — declared at activate() scope so it is
+  // accessible both inside if (devServerManager) (onComponentMissing callback) and in the
+  // stateHub.onChange callback where it is cleared on component switch. Declaring it after
+  // either closure would create a TDZ risk if activate() ever short-circuits.
+  const componentMissingRetries = new Map<string, number>();
+
   if (devServerManager) {
     aiChatProvider.setDevServerManager(devServerManager);
 
@@ -608,8 +614,6 @@ export function activate(context: vscode.ExtensionContext) {
   // Serial queue prevents race conditions on rapid component switching:
   // each new switch cancels the previous ensureSample/ensureComponent chain.
   let previewAbortController: AbortController | null = null;
-  // Retry counter for componentMissing self-healing — reset on every component switch.
-  const componentMissingRetries = new Map<string, number>();
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
     if (patch.currentComponent?.path) {

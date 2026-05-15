@@ -152,7 +152,15 @@ export class AstBridge {
 
         // For cross-file writes the operation captures contentBeforeWrite before the mutation.
         // For same-file writes contentBefore (read above) is authoritative.
-        const contentBeforeActual = needsSnapshot ? (result.contentBeforeWrite ?? '') : contentBefore;
+        const contentBeforeActual = needsSnapshot ? result.contentBeforeWrite : contentBefore;
+        if (contentBeforeActual === undefined) {
+          // contentBeforeWrite read failed in AstService — skip undo snapshot rather
+          // than recording an empty string which would erase the file on undo.
+          console.warn(
+            `[AstBridge] _withUndoTracking: contentBeforeWrite unavailable for cross-file write to ${path.basename(actualPath)}, skipping undo snapshot`,
+          );
+          return result;
+        }
 
         let contentAfter: string;
         try {

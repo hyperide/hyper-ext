@@ -286,6 +286,10 @@ export class PreviewPanel {
 
     // Cleanup on dispose
     panel.onDidDispose(() => {
+      if (this._reEmitTimer) {
+        clearTimeout(this._reEmitTimer);
+        this._reEmitTimer = null;
+      }
       for (const d of this._disposables) d.dispose();
       this._disposables = [];
       this._syncService?.dispose();

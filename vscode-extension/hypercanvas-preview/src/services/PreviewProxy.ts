@@ -213,8 +213,10 @@ export class PreviewProxy {
         retryCount < 90
       ) {
         proxyRes.resume(); // drain response
-        const delay = Math.min(200 * 1.7 ** retryCount, 4000);
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
+        if (!clientReq.destroyed && !clientRes.headersSent) {
+          const delay = Math.min(200 * 1.7 ** retryCount, 4000);
+          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
+        }
         return;
       }
 

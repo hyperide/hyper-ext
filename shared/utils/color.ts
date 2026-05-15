@@ -201,7 +201,7 @@ export function normalizeComputedColor(value: string): string | null {
     const g = Number.parseInt(rgbaMatch[2], 10);
     const b = Number.parseInt(rgbaMatch[3], 10);
     const a = Number.parseFloat(rgbaMatch[4]);
-    if (a === 0) return null;
+    if (a === 0 || Number.isNaN(a)) return null;
     const hex = rgbToHex(r, g, b);
     if (a >= 1) return hex;
     const alphaHex = Math.round(a * 255)
