@@ -37,8 +37,13 @@ export function resolveDragSource(
   getSourceLocation: (el: HTMLElement) => SourceLocation | null,
   renderedComponentPath: string | null,
 ): DragSourceResult | null {
-  // Step 1: try source-map-aware resolution on the target itself.
-  let source = getSourceLocation(target);
+  // Decorative elements (aria-hidden="true") should never be the drag target themselves —
+  // they carry no meaningful structure and their source points to a sub-element that users
+  // cannot meaningfully reorder on its own. Always delegate to the nearest ancestor.
+  const isDecorative = target.getAttribute?.('aria-hidden') === 'true';
+
+  // Step 1: try source-map-aware resolution on the target itself (skip for decorative elements).
+  let source = isDecorative ? null : getSourceLocation(target);
   let el: HTMLElement = target;
 
   // Step 2: walk up to the nearest ancestor with a source (handles decorative children:
@@ -59,12 +64,14 @@ export function resolveDragSource(
   // Step 3: fallback to direct _debugSource read (React 18 Babel / Vite) when
   // source maps are cold or unavailable. This always works for projects compiled
   // with the React Babel plugin — no async warm-up needed.
+  // For decorative elements, prefer the parent's fiber to avoid dragging the span itself.
   if (!source) {
-    const fiber = getFiberFromDOM(target);
+    const fiberTarget = isDecorative ? (target.parentElement ?? target) : target;
+    const fiber = getFiberFromDOM(fiberTarget);
     const directLoc = findNearestSourceLocation(fiber);
     if (directLoc) {
       source = resolveCallSiteSource(directLoc, fiber, renderedComponentPath);
-      el = target;
+      el = fiberTarget;
     }
   }
 

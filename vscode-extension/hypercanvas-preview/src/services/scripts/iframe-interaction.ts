@@ -983,11 +983,11 @@ const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').No
     const source = parseSourceRef(nodeRef);
     if (source === null) return null;
 
-    let elements = getSourceIndex().findDOMElements(source);
-    if (elements.length === 0) {
-      elements = getSourceIndex().findClosestLineDOMElements(source);
-    }
-    const el = elements[0];
+    // Use findElementsByRef so the filename-agnostic line:col fallback applies.
+    // Without this, tree-clicked elements (absolute path nodeRef) fail the exact
+    // and closest-line lookups (both compare fileName), so getEntry returns null
+    // and Shift+Enter clears selection instead of navigating to parent.
+    const el = findElementsByRef(nodeRef, 0)[0];
     if (!el) return null;
 
     const parent = findTraceableParent(el);

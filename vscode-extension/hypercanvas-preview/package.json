@@ -234,13 +234,13 @@
         "command": "hypercanvas.canvasDelete",
         "key": "backspace",
         "mac": "backspace",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && focusedView != 'hypercanvas.inspectorView'"
       },
       {
         "command": "hypercanvas.canvasDelete",
         "key": "delete",
         "mac": "delete",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && focusedView != 'hypercanvas.inspectorView'"
       },
       {
         "command": "hypercanvas.canvasSelectChildren",

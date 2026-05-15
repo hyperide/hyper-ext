@@ -396,6 +396,9 @@ export type StylesMessage = {
   requestId: string;
   elementId: string;
   componentPath: string;
+  /** When set, resolve i18n text for this locale instead of the default. */
+  activeLocale?: string;
+  domTextContent?: string;
 };
 
 export interface StylesResponse {
@@ -407,6 +410,7 @@ export interface StylesResponse {
   textContent?: string;
   tagType?: string;
   childrenLocation?: { line: number; column: number };
+  styleReadResult?: import('@lib/style-read/types').StyleReadResult;
   i18nText?: import('@shared/i18n-text/types').I18nBindingResult;
   error?: string;
 }

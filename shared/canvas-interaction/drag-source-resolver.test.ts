@@ -18,10 +18,14 @@ import { resolveDragSource } from './drag-source-resolver';
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
-function makeEl(overrides: Partial<HTMLElement & { __reactFiber$test?: unknown }> = {}): HTMLElement {
+function makeEl(
+  overrides: Partial<HTMLElement & { __reactFiber$test?: unknown }> = {},
+  attrs: Record<string, string> = {},
+): HTMLElement {
   const el = {
     tagName: 'SPAN',
     parentElement: null,
+    getAttribute: (name: string) => attrs[name] ?? null,
     ...overrides,
   } as unknown as HTMLElement;
   return el;
@@ -78,6 +82,38 @@ describe('resolveDragSource', () => {
     expect(result).not.toBeNull();
     expect(result?.source).toEqual(SOURCE_P);
     expect(result?.el).toBe(parent); // drag el is the ancestor
+  });
+
+  /**
+   * BUG REGRESSION: aria-hidden span where source maps ARE warm (getSourceLocation
+   * returns the span's own source) should still delegate to the parent — not become
+   * the drag target itself. Previously, step 1 would resolve the span directly and
+   * return el=span, making a tiny emoji visually "drag" while the real intent was to
+   * move the parent container.
+   */
+  it('skips aria-hidden element even when getSourceLocation returns a source for it', () => {
+    const SOURCE_SPAN: SourceLocation = { fileName: '/src/Index.tsx', line: 307, column: 4 };
+    const SOURCE_DIV: SourceLocation = { fileName: '/src/Index.tsx', line: 293, column: 6 };
+
+    const parent = makeEl({ tagName: 'DIV' });
+    const emojiSpan = makeEl({ tagName: 'SPAN', parentElement: parent }, { 'aria-hidden': 'true' });
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    // Source maps are warm — both span and parent resolve, but span should be skipped
+    const getSourceLocation = mock((el: HTMLElement) => {
+      if (el === emojiSpan) return SOURCE_SPAN;
+      if (el === parent) return SOURCE_DIV;
+      return null;
+    });
+
+    const result = resolveDragSource(emojiSpan, getSourceLocation, '/src/Index.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toEqual(SOURCE_DIV); // parent's source, not the span's
+    expect(result?.el).toBe(parent); // parent element dragged, not the emoji span
   });
 
   /**
