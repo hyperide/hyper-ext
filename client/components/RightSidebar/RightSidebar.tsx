@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -48,14 +48,7 @@ import {
 } from './sections';
 import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import {
-  computeNumericArrowValue,
-  cssToPosition,
-  findNodeById,
-  mapShadowSizeToValues,
-  parseHexWithAlpha,
-  positionToCss,
-} from './utils';
+import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
 
 // ============================================================================
 // Component quick-list (Inspector empty state, VS Code only)
@@ -445,6 +438,9 @@ export default function RightSidebar({
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set to true on unmount so any in-flight i18n write callbacks bail out instead of
+  // dispatching selection / writeInProgress updates to a detached component.
+  const i18nWriteAbortedRef = useRef(false);
   // Guard: prevent external data refresh from overriding text the user is actively typing
   const isEditingTextRef = useRef(false);
   const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -461,18 +457,49 @@ export default function RightSidebar({
       styleKey?: string,
       defaultValue?: string,
     ) => {
-      const newValue = computeNumericArrowValue({
-        key: e.key,
-        currentValue,
-        styleKey,
-        defaultValue,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-      });
-      if (newValue === null) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
         return;
       }
+
       e.preventDefault();
+
+      const isUnitless =
+        styleKey === 'opacity' || styleKey === 'gridTemplateColumns' || styleKey === 'gridTemplateRows';
+      const trimmed = currentValue.replace(' Auto', '').trim();
+      const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+
+      if (!match) {
+        const defaultMatch = defaultValue?.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
+        const baseNum = defaultMatch ? Number.parseFloat(defaultMatch[1]) : 0;
+        const baseUnit = defaultMatch ? defaultMatch[2] || '' : '';
+
+        const increment = e.key === 'ArrowUp' ? 1 : -1;
+        const step = e.shiftKey || e.altKey ? 10 : 1;
+        let newNum = baseNum + increment * step;
+
+        if (styleKey === 'opacity') {
+          newNum = Math.max(0, Math.min(100, newNum));
+        }
+
+        const unit = isUnitless ? '' : baseUnit || 'px';
+        const newValue = `${newNum}${unit}`;
+        setValue(newValue);
+        if (styleKey) syncStyleChange(styleKey, newValue);
+        return;
+      }
+
+      const num = Number.parseFloat(match[1]);
+      const unit = match[2] || (isUnitless ? '' : 'px');
+
+      const increment = e.key === 'ArrowUp' ? 1 : -1;
+      const step = e.shiftKey || e.altKey ? 10 : 1;
+      let newNum = num + increment * step;
+
+      if (styleKey === 'opacity') {
+        newNum = Math.max(0, Math.min(100, newNum));
+      }
+
+      const newValue = `${newNum}${unit}`;
       setValue(newValue);
       if (styleKey) syncStyleChange(styleKey, newValue);
     },
@@ -711,32 +738,59 @@ export default function RightSidebar({
     // Re-read is triggered automatically via activeLocale in useElementStyleData deps
   }, []);
 
+  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
+  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
+  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
+  // is no longer attached to the same DOM node.
+  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
-      // Trim before comparison so trailing whitespace from blur/Enter doesn't
-      // bypass the equality check and write a whitespace-padded key into JSX/JSON.
-      const trimmedKey = newKey.trim();
-      if (!trimmedKey || trimmedKey === i18nText.key) return;
+      if (!i18nText || i18nText.kind !== 'i18n' || newKey === i18nText.key) return;
       if (!selectedId || !componentPath) return;
-      // The JSX node we're editing is THE SAME node before and after — its loc
-      // (filename:line:col) does not change because we only rewrite the argument
-      // string passed to t(...). So the source-id stays valid and selection
-      // survives without any re-dispatch trickery.
+      const previousSelectedId = selectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
-      // as "create new key" — also write the translation resource. Otherwise (existing key)
-      // skip the resource write and only retarget JSX.
-      const knownI18nKeys = availableI18nKeys ?? [];
-      const isNewKey = !knownI18nKeys.includes(trimmedKey);
-      // Defensive: even if a UI gate is bypassed, refuse to create a new key on a
-      // non-editable binding. writeI18nResource would fail server-side anyway,
-      // but bailing early avoids JSX rewrite without a corresponding resource entry.
-      if (isNewKey && !i18nText.editable) return;
+      // as "create new key" — also write the JSON resource so the next re-read
+      // returns editable=true and the user can immediately type the translation.
+      // Otherwise (existing key) skip the JSON write and only retarget JSX.
+      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
       void (async () => {
+        const writeId = crypto.randomUUID();
+        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
+        // Only track navigation in VS Code mode (where i18nDispatch is available and HMR fires).
+        let navigationAway = false;
+        let unsubscribeNavigation: (() => void) | undefined;
+        if (i18nDispatch) {
+          // Detect if user navigates to a different element during the write window.
+          // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
+          unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
+            if (i18nWriteAbortedRef.current) {
+              unsubscribeNavigation?.();
+              return;
+            }
+            if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
+              navigationAway = true;
+              unsubscribeNavigation?.();
+            }
+          });
+        }
+        // Guard: only restore selection if user hasn't navigated to a different element
+        // and the component is still mounted.
+        // navigationAway is set if the user explicitly selected a different element;
+        // HMR-induced transient selectedIds:[] does not set it.
+        // Defined before try so catch can call it too (partial write may have triggered
+        // HMR even when writeI18nResource throws, e.g. JSON wrote → JSX update failed).
+        const restoreIfCurrent = () => {
+          if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
+          const cur = useSharedEditorState.getState().selectedIds;
+          if (cur.length === 0 || cur[0] === previousSelectedId) {
+            i18nDispatch({ selectedIds: [previousSelectedId] });
+          }
+        };
         try {
           await astOps.writeI18nResource({
             library: i18nText.library,
-            key: trimmedKey,
+            key: newKey,
             namespace: i18nText.namespace,
             activeLocale: i18nText.activeLocale,
             newText: i18nText.resolvedText ?? '',
@@ -745,22 +799,78 @@ export default function RightSidebar({
             elementId: selectedId,
             skipResourceWrite: !isNewKey,
           });
+          // Restore selection — JSX rewrite triggers HMR reload which rebuilds the
+          // fiber tree, dropping the iframe's previous selection. Re-broadcast both
+          // immediately and after a short delay to outrun the HMR window.
+          // Clear writeInProgress in the last timeout (after HMR window) — NOT in finally,
+          // because HMR fires async ~100-500ms after writeI18nResource resolves.
+          if (i18nDispatch) {
+            restoreIfCurrent();
+            setTimeout(restoreIfCurrent, 250);
+            setTimeout(() => {
+              restoreIfCurrent();
+              unsubscribeNavigation?.();
+              // Guard: only clear if this write is still the active one — concurrent writes
+              // would overwrite writeId, and the earlier timeout must not clear the later write.
+              if (useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+                i18nDispatch({ writeInProgress: null });
+              }
+            }, 800);
+          }
         } catch {
+          // Restore selection in case the write partially succeeded (e.g., JSON wrote and
+          // triggered HMR, but the JSX update then threw). Harmless if HMR never fired.
+          restoreIfCurrent();
+          unsubscribeNavigation?.();
           // key change failed — no rollback needed (source file unchanged)
+          if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+            i18nDispatch({ writeInProgress: null });
+          }
         } finally {
           setStyleRefreshKey((k) => k + 1);
         }
       })();
     },
-    [i18nText, astOps, selectedId, componentPath, availableI18nKeys],
+    [i18nText, astOps, selectedId, componentPath, i18nDispatch, availableI18nKeys],
   );
 
   const handleI18nResolvedTextChange = useCallback(
     (newText: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
+      if (!i18nText || i18nText.kind !== 'i18n' || !selectedId) return;
+      const previousSelectedId = selectedId;
       if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
       debouncedI18nWriteRef.current = setTimeout(() => {
+        const writeId = crypto.randomUUID();
+        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
         void (async () => {
+          // Only track navigation in VS Code mode (where i18nDispatch is available and HMR fires).
+          let navigationAway = false;
+          let unsubscribeNavigation: (() => void) | undefined;
+          if (i18nDispatch) {
+            // Detect if user navigates to a different element during the write window.
+            // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
+            unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
+              if (i18nWriteAbortedRef.current) {
+                unsubscribeNavigation?.();
+                return;
+              }
+              if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
+                navigationAway = true;
+                unsubscribeNavigation?.();
+              }
+            });
+          }
+          // Guard: only restore selection if user hasn't navigated away mid-write and
+          // the component is still mounted. Defined before try so catch can call it too
+          // (partial write may have triggered HMR even when writeI18nResource throws,
+          // e.g. JSON wrote → JSX update failed).
+          const restoreIfCurrent = () => {
+            if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
+            const cur = useSharedEditorState.getState().selectedIds;
+            if (cur.length === 0 || cur[0] === previousSelectedId) {
+              i18nDispatch({ selectedIds: [previousSelectedId] });
+            }
+          };
           try {
             await astOps.writeI18nResource({
               library: i18nText.library,
@@ -769,7 +879,27 @@ export default function RightSidebar({
               activeLocale: i18nText.activeLocale,
               newText,
             });
+            // Restore selection — locale JSON rewrite triggers HMR which rebuilds the
+            // fiber tree, dropping the iframe selection. Mirror key-change pattern.
+            if (i18nDispatch) {
+              restoreIfCurrent();
+              setTimeout(restoreIfCurrent, 250);
+              setTimeout(() => {
+                restoreIfCurrent();
+                unsubscribeNavigation?.();
+                if (useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+                  i18nDispatch({ writeInProgress: null });
+                }
+              }, 800);
+            }
           } catch {
+            // Restore selection in case the write partially succeeded (e.g., JSON wrote and
+            // triggered HMR, but something else then threw). Harmless if HMR never fired.
+            restoreIfCurrent();
+            unsubscribeNavigation?.();
+            if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
+              i18nDispatch({ writeInProgress: null });
+            }
             // write failed — rollback scoped to this binding so other visible bindings are not affected
             const bindingId = `${i18nText.library}|${i18nText.key}`;
             setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
@@ -780,7 +910,7 @@ export default function RightSidebar({
         })();
       }, 300);
     },
-    [i18nText, astOps],
+    [i18nText, astOps, selectedId, i18nDispatch],
   );
 
   // ========================================================================
@@ -1048,6 +1178,29 @@ export default function RightSidebar({
     };
   }, []);
 
+  // Clear writeInProgress if component unmounts while a write is in flight.
+  // Without this the iframe stays frozen and Zustand retains stale writeInProgress state.
+  // Also set the abort flag so any pending post-write callbacks (restoreIfCurrent,
+  // navigation subscriptions) bail out instead of dispatching to a detached component.
+  useEffect(() => {
+    return () => {
+      i18nWriteAbortedRef.current = true;
+      if (i18nDispatch && useSharedEditorState.getState().writeInProgress) {
+        i18nDispatch({ writeInProgress: null });
+      }
+    };
+  }, [i18nDispatch]);
+
+  // Cancel pending i18n text write when selection changes — prevents a stale write
+  // from element A firing (and setting writeInProgress) after user has moved to element B.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional cancel on element change only
+  useEffect(() => {
+    if (debouncedI18nWriteRef.current) {
+      clearTimeout(debouncedI18nWriteRef.current);
+      debouncedI18nWriteRef.current = null;
+    }
+  }, [selectedId]);
+
   // Get frame type for display
   const getFrameType = useCallback(() => {
     // VS Code mode: use tagType from style data
@@ -1263,11 +1416,7 @@ export default function RightSidebar({
                   localeEditable={i18nText.availableLocales.length > 1}
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
-                  // Existing keys can be selected even when text editing is disabled,
-                  // because that path only rewrites JSX. Editable bindings can create
-                  // keys inside the resolved dictionary.
-                  keyEditable={(availableI18nKeys?.length ?? 0) > 0 || i18nText.editable}
-                  canCreateKeys={i18nText.editable}
+                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                 />
               );
             })()}

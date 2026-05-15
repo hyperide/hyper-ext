@@ -93,6 +93,9 @@ export interface SharedEditorState {
   selectedElementRuntimeStyle?: SelectedElementRuntimeStyle | null;
   /** Trimmed innerText of the selected DOM element — used for i18n DOM-text search. */
   selectedElementDomText?: string | null;
+  /** Active i18n write operation. Set by RightSidebar before writeI18nResource, cleared in finally.
+   * Stored in StateHub so it survives panel reloads and reaches the iframe via state:init. */
+  writeInProgress?: { writeId: string; startedAt: number } | null;
 }
 
 // ============================================================================

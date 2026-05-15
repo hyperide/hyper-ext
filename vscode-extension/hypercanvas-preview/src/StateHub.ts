@@ -17,6 +17,7 @@ export class StateHub {
     astStructure: null,
     canvasMode: 'single',
     engineMode: 'design',
+    writeInProgress: null,
   };
 
   /** Registered panels by id */
