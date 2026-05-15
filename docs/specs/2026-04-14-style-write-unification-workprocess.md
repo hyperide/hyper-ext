@@ -1226,3 +1226,79 @@ resolve order — preemptive coverage).
 Commit lands in `ext-test-projects` only; no `hyper-canvas-draft`
 change required (root cause is in test-project config + test
 assumption, not in extension code).
+
+## 2026-04-25 19:20 CEST: s2 killed early + fresh-run dispatch
+
+### Why s2 was stopped at 743/2211
+
+The shard 2 container had been running ~3.5 hours and was at
+`743 done / 441 passed / 82 failed / ~220 skipped`. Pace dropped
+to ~1 test/min because cumulative 90s timeouts on several entire
+projects (`remix-tw4-twitter`, `remix-cssmodules-spotify`,
+`webpack-react-tw3-kanban`) were eating the wall clock. ETA to
+completion was ~6h.
+
+All actionable harness fixes for that failure set were already
+committed to `hyper-ext-e2e/main` HEAD but were NOT applied to
+the running container — the rsync-snapshot model freezes
+`/workspace` at start. So letting the container finish would only
+re-confirm pre-fixed problems.
+
+Decision: kill s2 now, start fresh shards with the queued fixes
+applied.
+
+### Fixes that will apply to the next run
+
+`hyperide/hyper-ext-e2e` since `4058943` (5 commits):
+
+1. `b1483cb` — poll for clickable elements in `hyper_duplicate_element`
+   body before assertion. Fixes tw4-twitter race.
+2. `9e42bad` — skip `component with error — error overlay appears`
+   on `cssSystem === 'tamagui'`. Closes 4 tamagui projects' Cat-2
+   cluster (root cause: `App.web.tsx` shadow makes the corrupted
+   `App.tsx` invisible to Vite).
+3. `520f5cf` — poll for clickable elements in
+   `elements identifiable via fiber-based selection`. Mirrors b1483cb.
+4. `0d62205` — root-cause fix in PreviewCanvas helper:
+   `getClickableSelectors` now `waitFor({state:'visible',timeout:10s})`
+   instead of `state:'attached',5s`. Eliminates a class of
+   "empty visible set on RN-web" races for free across all callers.
+   Also adds explicit poll in `component rendered — clickable
+   elements found via fiber selection` body.
+5. `67e64dd` — extend `body > :not(style)...` visibility timeout
+   from 10s to 20s in App Shell non-zero dimensions test, for
+   tamagui RN-web slow-paint.
+
+### Final s2 inventory before kill (failure markers, not unique
+tests)
+
+| count | test |
+|-------|------|
+| 4 | empty component (<div/>) — renders without errors |
+| 4 | elements identifiable via fiber-based selection |
+| 4 | component with ternary — both branches accessible |
+| 4 | component with error — error overlay appears |
+| 4 | component rendered — clickable elements found via fiber selection |
+| 3 | multiple components — switch between them |
+| 3 | HMR — edit file, preview updates without full reload |
+| 2× | many others (`wrap element`, `pseudo-selectors`, `nested components`, `inline styles`, etc.) |
+
+Most 2-counts are double-fail of one test on one project. The
+4-counts are double-fail on two projects. With retries=1 in
+config, "≥2 fails on same title" = unique fails. The dominant
+project clusters are `tamagui-whatsapp` (whole-project
+non-paint-by-deadline cluster, addressed by `0d62205`) and
+`remix-cssmodules-spotify` + `remix-tw4-twitter` (cold-start
+ComposeBox/PlayerBar 90s timeouts — these are likely Remix dev
+server cold-compile slowness, not test logic).
+
+### Next-run plan
+
+1. Kick off fresh sharded run from current ext-test-projects HEAD
+   (`67e64dd`) — `bun run test:docker` with `HYPER_E2E_SHARDS=2`.
+2. Re-arm Monitor on the new container names.
+3. Wait for an hour-long-ish first checkpoint.
+4. If `0d62205` closed the tamagui-whatsapp cluster as expected,
+   focus next round on remaining residuals (HYP-289 BoardView,
+   remix cold-start). Otherwise dispatch focused agent on
+   tamagui-whatsapp paint timing.
