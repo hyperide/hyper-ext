@@ -90,12 +90,14 @@ git commit -m "feat(db): add client_side_runtime column to users"
 
 ## Task 2: Serve NodePod Service Worker script
 
-The SW must be available at `/__sw__.js` for `Nodepod.boot()` to register it.
-The `@scelar/nodepod/vite` plugin handles this in Vite projects; in Bun we serve it manually.
+`Nodepod.boot()` registers a Service Worker at `/__sw__.js` on the SaaS's origin.
+The SaaS host must serve this script. `@scelar/nodepod/server` provides `serveSW()` —
+a Fetch-API handler designed exactly for this, with a first-class Hono example in the docs:
+`app.get('/__sw__.js', () => serveSW())`.
 
 **Files:**
 - Modify: `package.json` — add `@scelar/nodepod` dependency
-- Modify: `server/main.ts` — add `/__sw__.js` Bun static route
+- Modify: `server/index.ts` — add `/__sw__.js` Hono route
 
 - [ ] Add the package:
 
@@ -105,25 +107,18 @@ bun add @scelar/nodepod@latest
 
 Expected: package appears in `package.json` dependencies and `bun.lock` updated.
 
-- [ ] In `server/main.ts`, add a `/__sw__.js` entry to the static `routes:` object.
-  Place it BEFORE the `'/*'` wildcard catch-all. The route reads the SW source from the
-  installed package and serves it with the headers NodePod requires:
+- [ ] In `server/index.ts`, add the import at the top:
 
 ```typescript
-'/__sw__.js': async () => {
-  const { readFileSync } = await import('node:fs');
-  const { resolve } = await import('node:path');
-  // Resolve package root relative to the process CWD (repo root)
-  const pkgDir = resolve('./node_modules/@scelar/nodepod');
-  const source = readFileSync(`${pkgDir}/dist/__sw__.js`, 'utf-8');
-  return new Response(source, {
-    headers: {
-      'Content-Type': 'application/javascript; charset=utf-8',
-      'Service-Worker-Allowed': '/',
-      'Cache-Control': 'no-cache',
-    },
-  });
-},
+import { DEFAULT_SW_PATH, serveSW } from '@scelar/nodepod/server';
+```
+
+Then add the route. It doesn't require auth — place it before the `authMiddleware` block,
+near the other unprotected routes (e.g. after the cors setup):
+
+```typescript
+// NodePod Service Worker — no auth, must be accessible by the browser before boot
+app.get(DEFAULT_SW_PATH, () => serveSW());
 ```
 
 - [ ] Verify manually: start the dev server, then:
@@ -132,16 +127,15 @@ Expected: package appears in `package.json` dependencies and `bun.lock` updated.
 curl -s http://localhost:8080/__sw__.js | head -3
 ```
 
-Expected: JavaScript output (first line starts with something like `"use strict"` or
-a variable declaration from the NodePod SW bundle).
+Expected: JavaScript output. Also check response headers include `Service-Worker-Allowed: /`.
 
 - [ ] Codex review, fix findings.
 
 - [ ] Commit:
 
 ```bash
-git add package.json bun.lock server/main.ts
-git commit -m "feat(server): serve NodePod SW at /__sw__.js via Bun static route"
+git add package.json bun.lock server/index.ts
+git commit -m "feat(server): serve NodePod SW via @scelar/nodepod/server serveSW() in Hono"
 ```
 
 ---

@@ -244,7 +244,7 @@ title: E2E harness lifecycle ownership, shard isolation, and observability requi
 statement_type: duty
 claim_layer: description
 owner: human
-status: draft
+status: active
 valid_until: "2027-05-12"
 depends_on: [ES.CMP.001]
 supersedes: []
@@ -285,3 +285,77 @@ Each RuntimeRun MUST produce:
 - `docker-artifacts/run-<id>/shard-N/screenshots/` — failure screenshots (captured via `screenshot: 'only-on-failure'`)
 
 After the run: pass/fail/skip counts sent to Telegram. Failing tests re-run as a subset (`--grep` / `--project`) to validate fixes before a new full run is launched.
+
+## ES.EVP.001 Evidence policy — admissible kinds, congruence floors, and refresh triggers
+
+```yaml spec-section
+id: ES.EVP.001
+spec: enabling-system
+kind: enabling.evidence_policy
+title: Admissible evidence kinds, minimum congruence per claim class, and refresh triggers
+statement_type: duty
+claim_layer: description
+owner: human
+status: active
+valid_until: "2027-05-12"
+depends_on: [ES.RTP.001, ES.WORK.001]
+supersedes: []
+terms: [HyperCanvas, Evidence]
+target_refs: [TS.BOUNDARY.001, ES.ARCH.001, ES.RTP.001]
+evidence_required:
+  - kind: E2E
+    description: all shards exit 0 and docker.log shows named tests pass for each claim class
+  - kind: L1
+    description: bun test passes for L1 core engine (lib/, server/) for each structural claim
+  - kind: manual
+    description: human reviewer confirms evidence record is representative (screenshot read, not just present)
+```
+
+**Admissible evidence kinds:**
+
+| Kind | Description | Produced by |
+|---|---|---|
+| `E2E` | Playwright+Electron test result against real VS Code Extension or SaaS browser. Artifacts: `docker.log` (named `[test-done]` lines), `ast-debug.log` (AST trace), `screenshots/` (failure captures). | Docker harness (`HYPER_E2E_SHARDS=3 bash scripts/docker-parallel-run.sh`) |
+| `L1` | `bun test` unit test result on L1 core engine (`lib/`, `server/`). Covers AST read/write, StyleWritePlanner, i18n read/write in isolation. | Local or CI: `bun test` in `lib/` or `server/` |
+| `typecheck` | `tsc --noEmit` passing on the affected layer. Evidence for structural type invariants only — not for runtime behavior. | `bun run typecheck` in `vscode-extension/hypercanvas-preview/` or root |
+| `manual:agent` | Agent reads each screenshot with the Read tool, describes literally what is visible, and sends validated screenshots to Telegram. Agent also produces a test-suite summary: which tests ran, what each test checks, and what the CTO should look for visually. This step is mandatory for every behavioral fix — not optional when E2E passes. | Agent (Read tool + `send-tg-file.sh --photo`) |
+| `manual:cto` | CTO acceptance: explicit sign-off after reviewing the agent's Telegram report and screenshots. A fix is not done until the CTO has seen and approved the visual evidence. | CTO via Telegram |
+
+Both `manual` sub-kinds are unified under guard location `manual` in evidence_required.
+
+**Minimum congruence floor per claim class:**
+
+| Claim class | Minimum evidence | Guard location |
+|---|---|---|
+| L1 structural write (AstService, StyleWritePlanner, i18n) | L1 unit test (RED→GREEN) + E2E + manual:agent + manual:cto | `L1` + `E2E` + `manual` |
+| L3 canvas UI behavior (selection, overlay, inspector) | E2E + manual:agent + manual:cto | `E2E` + `manual` |
+| L4 extension command / lifecycle | E2E + manual:agent + manual:cto | `E2E` + `manual` |
+| Agent policy / commission scope claims | manual:cto (human review of spec section) | `manual` |
+| Type-level structural invariants | typecheck | `type` |
+
+**Congruence floor rule:** the effective confidence of a multi-evidence claim equals the confidence of its weakest component — not the average. Passing E2E without CTO sign-off is not sufficient for any behavioral claim.
+
+**Manual evidence protocol (mandatory for every behavioral fix):**
+
+The agent duty is two-stage:
+
+1. **Agent validation** — after E2E passes, for each relevant test:
+   - Read the failure/pass screenshot with the Read tool
+   - Describe literally what is visible (not what was expected)
+   - Check representativeness: empty preview, "No element selected", raw `{t("...")}` literal, blank canvas, mismatched component — if any of these are present, the screenshot is **invalid**. Stop, identify which fix step produced the bad state, apply the fix, re-run the test, restart this protocol from the beginning. Loop until the screenshot shows the actual feature under test in a meaningful state.
+   - Send the valid screenshot to Telegram via `send-tg-file.sh --photo`
+   - Describe the test suite: what each test name covers, what the CTO should look for
+
+2. **CTO acceptance** — CTO reviews the Telegram message and screenshots, gives explicit sign-off. The agent marks the commission retired only after this sign-off is received.
+
+A screenshot is valid evidence when it is representative: it shows the actual feature under test in a meaningful state. A non-representative screenshot is not evidence and triggers a new fix cycle. A file path in a chat message is not evidence.
+
+**Refresh triggers (VER-07):**
+
+An evidence record becomes stale when any of the following hold:
+
+1. **E2E staleness**: any commit to the spec area (L1 AST/i18n engine at `lib/` or `server/`, L3 `client/`, L4 `vscode-extension/`) that post-dates the first `sharedVSCode setup START` timestamp in `docker.log`. Run must be relaunched; the old result is not admissible.
+2. **L1 unit test staleness**: any commit to `lib/` or `server/` that modifies the tested module's source, even if the test file itself is unchanged.
+3. **Typecheck staleness**: any commit to the affected layer that modifies a public type declaration (`interface`, `type`, `class`, function signature) visible to its callers.
+4. **Manual review staleness**: any commit that touches the visual behavior of the claimed UI component (L3 canvas, inspector, overlay). Manual evidence expires with the code it observed.
+5. **Clock expiry**: `valid_until` reached — regardless of whether any commit has been made.
