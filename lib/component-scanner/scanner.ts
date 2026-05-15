@@ -96,13 +96,22 @@ export class ComponentScanner {
    */
   async getComponentsData(projectRoot: string): Promise<ComponentsData> {
     let paths = await this.store.load(projectRoot);
+    const loadedPaths = paths;
 
-    if (!paths || (paths.atomComponentsPaths.length === 0 && paths.compositeComponentsPaths.length === 0)) {
+    if (paths) {
+      paths = this.normalizeProjectPaths(paths, projectRoot);
+    }
+
+    if (
+      !paths ||
+      (paths.atomComponentsPaths.length === 0 && paths.compositeComponentsPaths.length === 0) ||
+      (loadedPaths !== null && this.shouldAnalyzeConfiguredPaths(loadedPaths, paths, projectRoot))
+    ) {
       const structure = await this.analyze(projectRoot);
       paths = {
-        atomComponentsPaths: structure.atomComponentsPaths ?? [],
-        compositeComponentsPaths: structure.compositeComponentsPaths ?? [],
-        pagesPaths: structure.pagesPaths ?? [],
+        atomComponentsPaths: this.normalizePathList(structure.atomComponentsPaths ?? [], projectRoot),
+        compositeComponentsPaths: this.normalizePathList(structure.compositeComponentsPaths ?? [], projectRoot),
+        pagesPaths: this.normalizePathList(structure.pagesPaths ?? [], projectRoot),
       };
       const hasData =
         paths.atomComponentsPaths.length > 0 ||
@@ -114,6 +123,80 @@ export class ComponentScanner {
     }
 
     return this.buildComponentsData(paths, projectRoot);
+  }
+
+  private normalizeProjectPaths(paths: ProjectStructurePaths, projectRoot: string): ProjectStructurePaths {
+    return {
+      atomComponentsPaths: this.normalizePathList(paths.atomComponentsPaths, projectRoot),
+      compositeComponentsPaths: this.normalizePathList(paths.compositeComponentsPaths, projectRoot),
+      pagesPaths: this.normalizePathList(paths.pagesPaths, projectRoot),
+    };
+  }
+
+  private normalizePathList(paths: string[], projectRoot: string): string[] {
+    return paths.map((rawPath) => this.normalizeProjectPath(rawPath, projectRoot));
+  }
+
+  private normalizeProjectPath(rawPath: string, projectRoot: string): string {
+    if (!path.isAbsolute(rawPath)) return rawPath;
+
+    const relativeToRoot = path.relative(projectRoot, rawPath);
+    if (relativeToRoot && !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)) {
+      return relativeToRoot;
+    }
+
+    const remapped = this.remapForeignAbsolutePath(rawPath, projectRoot);
+    return remapped ?? rawPath;
+  }
+
+  private remapForeignAbsolutePath(rawPath: string, projectRoot: string): string | null {
+    const projectName = path.basename(projectRoot);
+    const parts = rawPath.split(/[\\/]+/).filter(Boolean);
+    const projectIndex = parts.lastIndexOf(projectName);
+
+    if (projectIndex !== -1 && projectIndex < parts.length - 1) {
+      const relative = parts.slice(projectIndex + 1).join(path.sep);
+      if (this.projectPathExists(projectRoot, relative)) return relative;
+    }
+
+    const sourceRootIndex = parts.findIndex((part) => part === 'src' || part === 'app');
+    if (sourceRootIndex !== -1) {
+      const relative = parts.slice(sourceRootIndex).join(path.sep);
+      if (this.projectPathExists(projectRoot, relative)) return relative;
+    }
+
+    return null;
+  }
+
+  private projectPathExists(projectRoot: string, relativePath: string): boolean {
+    return fs.existsSync(path.join(projectRoot, relativePath));
+  }
+
+  private hasExistingConfiguredPath(paths: ProjectStructurePaths, projectRoot: string): boolean {
+    return [...paths.atomComponentsPaths, ...paths.compositeComponentsPaths, ...paths.pagesPaths].some((rawPath) => {
+      const resolved = path.isAbsolute(rawPath) ? rawPath : path.join(projectRoot, rawPath);
+      return fs.existsSync(resolved);
+    });
+  }
+
+  private shouldAnalyzeConfiguredPaths(
+    loadedPaths: ProjectStructurePaths,
+    normalizedPaths: ProjectStructurePaths,
+    projectRoot: string,
+  ): boolean {
+    const configuredPaths = [
+      ...loadedPaths.atomComponentsPaths,
+      ...loadedPaths.compositeComponentsPaths,
+      ...loadedPaths.pagesPaths,
+    ];
+    if (configuredPaths.length === 0) return false;
+    if (!configuredPaths.every((rawPath) => path.isAbsolute(rawPath))) return false;
+    const hasForeignAbsolutePath = configuredPaths.some((rawPath) => {
+      const relativeToRoot = path.relative(projectRoot, rawPath);
+      return relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot);
+    });
+    if (!hasForeignAbsolutePath) return false;
+    return !this.hasExistingConfiguredPath(normalizedPaths, projectRoot);
   }
 
   /**

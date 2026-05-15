@@ -6,6 +6,8 @@
 import { basename, dirname } from 'node:path';
 import type { ExportStyle } from './scanner';
 
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v5';
+
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
   componentPath: string;
@@ -100,6 +102,7 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   const lines: string[] = [];
 
   // 1. React import + InstanceEntry type for multi-instance mode
+  lines.push(`// ${PREVIEW_GENERATOR_SCHEMA_MARKER}`);
   lines.push("import React from 'react';");
 
   // Next.js pages router import
@@ -178,10 +181,174 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push("  onBlur: () => console.log('[Preview] onBlur'),");
   lines.push("  onFocus: () => console.log('[Preview] onFocus'),");
   lines.push("  onNavChange: (value: unknown) => console.log('[Preview] onNavChange', value),");
+  lines.push("  onNavigate: (value: unknown) => console.log('[Preview] onNavigate', value),");
+  lines.push("  onNext: () => console.log('[Preview] onNext'),");
+  lines.push("  onOpen: (value: unknown) => console.log('[Preview] onOpen', value),");
+  lines.push("  onClose: (value: unknown) => console.log('[Preview] onClose', value),");
+  lines.push("  onAddToCart: (...args: unknown[]) => console.log('[Preview] onAddToCart', args),");
+  lines.push("  onCreateEvent: () => console.log('[Preview] onCreateEvent'),");
+  lines.push("  onDateSelect: (value: unknown) => console.log('[Preview] onDateSelect', value),");
+  lines.push("  onFilterChange: (value: unknown) => console.log('[Preview] onFilterChange', value),");
+  lines.push("  onFiltersChange: (value: unknown) => console.log('[Preview] onFiltersChange', value),");
+  lines.push("  onPlayPause: () => console.log('[Preview] onPlayPause'),");
+  lines.push("  onPlayAll: () => console.log('[Preview] onPlayAll'),");
+  lines.push("  onPlaySong: (value: unknown) => console.log('[Preview] onPlaySong', value),");
+  lines.push("  onPrevious: () => console.log('[Preview] onPrevious'),");
+  lines.push("  onPress: (value: unknown) => console.log('[Preview] onPress', value),");
+  lines.push("  onQuickView: (value: unknown) => console.log('[Preview] onQuickView', value),");
+  lines.push("  onSearchChange: (value: unknown) => console.log('[Preview] onSearchChange', value),");
+  lines.push("  onSeek: (value: unknown) => console.log('[Preview] onSeek', value),");
+  lines.push("  onSectionChange: (value: unknown) => console.log('[Preview] onSectionChange', value),");
+  lines.push("  onSelect: (value: unknown) => console.log('[Preview] onSelect', value),");
+  lines.push("  onToggleCalendar: (value: unknown) => console.log('[Preview] onToggleCalendar', value),");
+  lines.push("  onVolumeChange: (value: unknown) => console.log('[Preview] onVolumeChange', value),");
+  lines.push("  onViewChange: (value: unknown) => console.log('[Preview] onViewChange', value),");
   lines.push('};');
   lines.push('');
 
-  // 7. Fallback props for components without SampleDefault.
+  // 7. Shared fallback data for prop-required components without SampleDefault.
+  lines.push('const previewSong = {');
+  lines.push('  id: "preview-song",');
+  lines.push('  title: "Preview Song",');
+  lines.push('  artist: "Preview Artist",');
+  lines.push('  album: "Preview Album",');
+  lines.push('  duration: "3:24",');
+  lines.push('  durationSeconds: 204,');
+  lines.push('  coverUrl: "https://picsum.photos/seed/hyper-preview-song/96/96",');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewPlaylist = {');
+  lines.push('  id: "preview-playlist",');
+  lines.push('  name: "Preview Playlist",');
+  lines.push('  description: "Preview playlist for isolated component rendering.",');
+  lines.push('  coverUrl: "https://picsum.photos/seed/hyper-preview-playlist/300/300",');
+  lines.push('  songs: [previewSong],');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewFileItem = {');
+  lines.push('  id: "preview-folder",');
+  lines.push('  name: "Preview Folder",');
+  lines.push('  type: "folder",');
+  lines.push('  modified: "Today",');
+  lines.push('  owner: "Preview",');
+  lines.push('  starred: false,');
+  lines.push('  shared: false,');
+  lines.push('  parentId: null,');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewLocation = { id: "preview-location", name: "Preview Location", address: "1 Preview St" };');
+  lines.push('const previewRideType = { id: "preview-ride", name: "Preview Ride", eta: 4, price: "$12.00" };');
+  lines.push('const previewTrip = {');
+  lines.push('  id: "preview-trip",');
+  lines.push('  pickup: previewLocation,');
+  lines.push('  destination: { ...previewLocation, id: "preview-destination", name: "Preview Destination" },');
+  lines.push('  rideType: previewRideType,');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewListing = {');
+  lines.push('  id: "preview-listing",');
+  lines.push('  title: "Preview Stay",');
+  lines.push('  location: "Preview City",');
+  lines.push('  country: "Preview Country",');
+  lines.push('  distance: "1 km away",');
+  lines.push('  dates: "Apr 24-29",');
+  lines.push('  price: 120,');
+  lines.push('  currency: "USD",');
+  lines.push('  rating: 4.9,');
+  lines.push('  reviewCount: 12,');
+  lines.push('  images: ["#B7D5E8", "#D5E8B7"],');
+  lines.push('  isFavorite: false,');
+  lines.push('  isGuestFavorite: true,');
+  lines.push('  guests: 2,');
+  lines.push('  bedrooms: 1,');
+  lines.push('  beds: 1,');
+  lines.push('  baths: 1,');
+  lines.push('  description: "Preview listing description.",');
+  lines.push('  amenities: ["Wifi", "Kitchen"],');
+  lines.push('  host: { name: "Preview Host", avatar: "#82A8C4", isSuperhost: true, joinedDate: "2024" },');
+  lines.push(
+    '  reviews: [{ id: "preview-review", author: "Preview Guest", avatar: "#A8C482", date: "Today", rating: 5, comment: "Preview review." }],',
+  );
+  lines.push('  category: "Preview",');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewProduct = {');
+  lines.push('  id: 1,');
+  lines.push('  name: "Preview Product",');
+  lines.push('  price: 29.99,');
+  lines.push('  originalPrice: 39.99,');
+  lines.push('  category: "sale",');
+  lines.push('  image: "#B7D5E8",');
+  lines.push('  rating: 4.5,');
+  lines.push('  reviewCount: 24,');
+  lines.push('  description: "Preview product description.",');
+  lines.push('  sizes: ["M"],');
+  lines.push('  colors: ["Blue"],');
+  lines.push('  brand: "Preview Brand",');
+  lines.push('  onSale: true,');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewFilters = {');
+  lines.push('  search: "",');
+  lines.push('  status: "all",');
+  lines.push('  device: "all",');
+  lines.push('  country: "all",');
+  lines.push('  selectedBrands: [],');
+  lines.push('  selectedColor: null,');
+  lines.push('  priceRange: [0, 100],');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewProject = {');
+  lines.push('  id: "preview-project",');
+  lines.push('  title: "Preview Project",');
+  lines.push('  description: "Preview project description.",');
+  lines.push('  tags: ["React", "TypeScript"],');
+  lines.push('  image: "#B7D5E8",');
+  lines.push('  url: "https://example.com",');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewChartData = [');
+  lines.push(
+    '  { date: "Mon", pageViews: 1000, uniqueVisitors: 700, bounceRate: 32, avgSessionDuration: 180, conversions: 24, revenue: 1200 },',
+  );
+  lines.push(
+    '  { date: "Tue", pageViews: 1200, uniqueVisitors: 840, bounceRate: 30, avgSessionDuration: 190, conversions: 28, revenue: 1500 },',
+  );
+  lines.push('];');
+  lines.push('');
+  lines.push('const previewData = previewChartData.map((row, index) => ({');
+  lines.push('  ...row,');
+  lines.push('  id: "preview-row-" + (index + 1),');
+  lines.push('  title: row.date,');
+  lines.push('  name: row.date,');
+  lines.push('  label: row.date,');
+  lines.push('  value: row.pageViews,');
+  lines.push('  status: "active",');
+  lines.push('  items: [],');
+  lines.push('  children: [],');
+  lines.push('}));');
+  lines.push('');
+  lines.push('const previewWeatherDetails = {');
+  lines.push('  uvIndex: 4,');
+  lines.push('  uvLabel: "Moderate",');
+  lines.push('  windSpeed: 12,');
+  lines.push('  windDirection: "NW",');
+  lines.push('  humidity: 55,');
+  lines.push('  dewPoint: 8,');
+  lines.push('  pressure: 1013,');
+  lines.push('  visibility: 10,');
+  lines.push('};');
+  lines.push('');
+  lines.push('const previewDate = new Date("2026-04-24T09:00:00Z");');
+  lines.push('const previewCalendars = [');
+  lines.push('  { type: "work", label: "Work", color: "#4285F4", enabled: true },');
+  lines.push('  { type: "personal", label: "Personal", color: "#0B8043", enabled: true },');
+  lines.push('  { type: "birthdays", label: "Birthdays", color: "#F4511E", enabled: true },');
+  lines.push('  { type: "holidays", label: "Holidays", color: "#F6BF26", enabled: true },');
+  lines.push('];');
+  lines.push('');
+
+  // 8. Fallback props for components without SampleDefault.
   // Extra props are harmless for React components that do not read them, and
   // they keep prop-required leaf components renderable in the preview.
   lines.push('const previewFallbackProps: Record<string, unknown> = {');
@@ -189,12 +356,67 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('  activeNav: "dashboard",');
   lines.push('  activeSection: "dashboard",');
   lines.push('  count: 1,');
-  lines.push('  data: [],');
+  lines.push('  chartData: previewChartData,');
+  lines.push('  calendars: previewCalendars,');
+  lines.push('  currentDate: previewDate,');
+  lines.push('  data: previewData,');
+  lines.push('  description: "Preview description",');
+  lines.push('  details: previewWeatherDetails,');
+  lines.push('  driver: { id: "preview-driver", name: "Preview Driver", rating: 4.9, vehicle: "Preview Car" },');
+  lines.push('  events: previewChartData,');
+  lines.push('  files: [previewFileItem],');
+  lines.push('  filters: previewFilters,');
   lines.push('  headings: [],');
+  lines.push('  hours: previewChartData,');
   lines.push('  index: 1,');
   lines.push('  items: [],');
   lines.push('  label: "Preview",');
+  lines.push('  listing: previewListing,');
+  lines.push('  listings: [previewListing],');
+  lines.push('  currentSongId: "preview-song",');
+  lines.push('  navigation: {');
+  lines.push("    navigate: (...args: unknown[]) => console.log('[Preview] navigation.navigate', args),");
+  lines.push("    goBack: () => console.log('[Preview] navigation.goBack'),");
+  lines.push("    back: () => console.log('[Preview] navigation.back'),");
+  lines.push("    push: (...args: unknown[]) => console.log('[Preview] navigation.push', args),");
+  lines.push("    popTo: (...args: unknown[]) => console.log('[Preview] navigation.popTo', args),");
+  lines.push("    reset: (value: unknown) => console.log('[Preview] navigation.reset', value),");
+  lines.push("    replace: (...args: unknown[]) => console.log('[Preview] navigation.replace', args),");
+  lines.push("    setOptions: (options: unknown) => console.log('[Preview] navigation.setOptions', options),");
+  lines.push("    dispatch: (action: unknown) => console.log('[Preview] navigation.dispatch', action),");
+  lines.push('  },');
+  lines.push('  path: [previewFileItem],');
+  lines.push('  playerState: { currentSong: previewSong, isPlaying: false, progress: 0.25, volume: 0.8 },');
+  lines.push('  playlist: previewPlaylist,');
+  lines.push('  playlists: [previewPlaylist],');
+  lines.push('  product: previewProduct,');
+  lines.push('  products: [previewProduct],');
+  lines.push('  project: previewProject,');
+  lines.push('  projects: [previewProject],');
   lines.push('  rows: [],');
+  lines.push('  route: {');
+  lines.push('    key: "preview-route",');
+  lines.push('    name: "Preview",');
+  lines.push('    params: {');
+  lines.push('      id: "preview-id",');
+  lines.push('      activityId: "preview-activity",');
+  lines.push('      contactId: "preview-contact",');
+  lines.push('      conversationId: "preview-conversation",');
+  lines.push('      destination: { ...previewLocation, id: "preview-destination", name: "Preview Destination" },');
+  lines.push('      itemId: "preview-item",');
+  lines.push('      menuItemId: "preview-menu-item",');
+  lines.push('      pickup: previewLocation,');
+  lines.push('      restaurantId: "preview-restaurant",');
+  lines.push('      rideType: previewRideType,');
+  lines.push('      transactionId: "preview-transaction",');
+  lines.push('      trip: previewTrip,');
+  lines.push('    },');
+  lines.push('  },');
+  lines.push('  searchQuery: "",');
+  lines.push('  selectedDate: previewDate,');
+  lines.push('  song: previewSong,');
+  lines.push('  songs: [previewSong],');
+  lines.push('  tags: ["React", "TypeScript"],');
   lines.push('  title: "Preview",');
   lines.push('  value: "Preview",');
   lines.push('  block: { id: "preview-block", type: "paragraph", content: "Preview block", checked: false },');
@@ -215,13 +437,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
-  // 8. Error boundary to catch component render crashes (e.g. missing required props)
+  // 9. Error boundary to catch component render crashes (e.g. missing required props)
   // Without this, a crash in one component kills the entire React tree and all subsequent
   // component switches via postMessage silently fail (black canvas).
   lines.push(...buildErrorBoundary());
   lines.push('');
 
-  // 9. CanvasPreview component
+  // 10. CanvasPreview component
   if (options?.isNextPagesRouter) {
     lines.push(...buildCanvasPreviewNextPages(options?.providerWrap));
   } else {

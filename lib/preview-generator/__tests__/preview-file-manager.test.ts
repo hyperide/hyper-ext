@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { FileIO } from '../../ast/file-io';
+import { PREVIEW_GENERATOR_SCHEMA_MARKER } from '../generator';
 import {
   isValidTypeScript,
   PreviewFileManager,
@@ -682,6 +683,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     expect(content).toContain('Button');
   });
 
+  it('regenerates when existing file has wrong path casing from a case-insensitive filesystem', async () => {
+    const stalePreview = `import React from 'react';
+import Sidebar from './components/Sidebar';
+import SRCApp from '../SRC/App';
+const componentRegistry = {
+  'src/components/Sidebar.tsx': Sidebar,
+  'SRC/App.tsx': SRCApp,
+};
+const sampleRenderMap = {};
+const sampleRenderersMap = {};
+const callbackStubs = {};
+export default function CanvasPreview() { return null; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/__canvas_preview__.tsx', stalePreview);
+    io.files.set('/project/src/App.tsx', 'export default function App() { return <div />; }');
+    io.files.set('/project/src/components/Sidebar.tsx', 'export default function Sidebar() { return <nav />; }');
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/components/Sidebar.tsx']);
+
+    expect(content).not.toContain('SRC/App');
+    expect(content).not.toContain("'SRC/App.tsx'");
+    expect(content).toContain("'src/App.tsx'");
+    expect(content).toContain("from './App'");
+    expect(content).toContain("'src/components/Sidebar.tsx'");
+  });
+
   it('excludes layout.tsx when explicitly requested via ensureComponent', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
@@ -1032,7 +1062,7 @@ describe('ensureComponent — fast path', () => {
     io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
       '/project/src/__canvas_preview__.tsx',
-      "// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = {};\nexport default function CanvasPreview() {}",
+      `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}\n// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = {};\nexport default function CanvasPreview() {}`,
     );
     let writeCount = 0;
     const origWrite = io.writeFile.bind(io);
@@ -1045,6 +1075,21 @@ describe('ensureComponent — fast path', () => {
     await manager.ensureComponent(['src/components/Button.tsx']);
 
     expect(writeCount).toBe(0); // fast path — no write
+  });
+
+  it('regenerates when generated schema marker is stale', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      "// @hyperide-managed\nimport Button from './components/Button';\nconst previewFallbackProps = { data: [] };\nexport default function CanvasPreview() {}",
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+
+    expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
+    expect(content).toContain('data: previewData');
   });
 
   it('AST-inserts missing import without full regeneration', async () => {

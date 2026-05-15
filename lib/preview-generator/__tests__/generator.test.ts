@@ -4,6 +4,7 @@ import {
   deriveUniquePrefix,
   generatePreviewContent,
   generateStandaloneEntry,
+  PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
   sampleExportToKey,
 } from '../generator';
@@ -119,6 +120,68 @@ describe('generatePreviewContent', () => {
     expect(content).toContain('componentRegistry');
     expect(content).toContain('sampleRenderMap');
     expect(content).toContain('sampleRenderersMap');
+  });
+
+  it('should include the preview generator schema marker', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Button.tsx', 'Button')];
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain(PREVIEW_GENERATOR_SCHEMA_MARKER);
+  });
+
+  it('should include React Navigation fallback props', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'src/screens/ActivityDetailScreen.tsx',
+        componentName: 'ActivityDetailScreen',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './screens/ActivityDetailScreen',
+      },
+    ];
+
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain('navigation: {');
+    expect(content).toContain('route: {');
+    expect(content).toContain('activityId: "preview-activity"');
+  });
+
+  it('should include fallback data for prop-required leaf components', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'src/components/PlaylistView.tsx',
+        componentName: 'PlaylistView',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './components/PlaylistView',
+      },
+    ];
+
+    const content = generatePreviewContent(entries);
+
+    expect(content).toContain('const previewSong = {');
+    expect(content).toContain('const previewPlaylist = {');
+    expect(content).toContain('const previewProduct = {');
+    expect(content).toContain('const previewListing = {');
+    expect(content).toContain('const previewFilters = {');
+    expect(content).toContain('const previewProject = {');
+    expect(content).toContain('const previewData = previewChartData.map');
+    expect(content).toContain('songs: [previewSong]');
+    expect(content).toContain('playlist: previewPlaylist');
+    expect(content).toContain('playerState: { currentSong: previewSong');
+    expect(content).toContain('data: previewData');
+    expect(content).toContain('path: [previewFileItem]');
+    expect(content).toContain('product: previewProduct');
+    expect(content).toContain('listing: previewListing');
+    expect(content).toContain('filters: previewFilters');
+    expect(content).toContain('project: previewProject');
+    expect(content).toContain('tags: ["React", "TypeScript"]');
+    expect(content).toContain('pickup: previewLocation');
+    expect(content).toContain("popTo: (...args: unknown[]) => console.log('[Preview] navigation.popTo', args)");
+    expect(content).toContain("onPlaySong: (value: unknown) => console.log('[Preview] onPlaySong', value)");
+    expect(content).toContain("onSearchChange: (value: unknown) => console.log('[Preview] onSearchChange', value)");
+    expect(content).toContain("onPlayPause: () => console.log('[Preview] onPlayPause')");
   });
 
   it('should generate named import for named export', () => {
@@ -289,6 +352,18 @@ describe('generatePreviewContent', () => {
     expect(content).toContain('function toPreviewComponent<P>(');
     expect(content).toContain("'src/components/Tweet.tsx': toPreviewComponent(Tweet),");
     expect(content).toContain("'src/components/UserSuggestion.tsx': toPreviewComponent(UserSuggestion),");
+  });
+
+  it('provides calendar fallback props for standalone calendar components', () => {
+    const content = generatePreviewContent([makeEntry('src/components/CalendarSidebar.tsx', 'CalendarSidebar')]);
+
+    expect(content).toContain('const previewCalendars = [');
+    expect(content).toContain('calendars: previewCalendars,');
+    expect(content).toContain('currentDate: previewDate,');
+    expect(content).toContain('selectedDate: previewDate,');
+    expect(content).toContain('onDateSelect: (value: unknown) => console.log');
+    expect(content).toContain('onToggleCalendar: (value: unknown) => console.log');
+    expect(content).toContain('onCreateEvent: () => console.log');
   });
 });
 

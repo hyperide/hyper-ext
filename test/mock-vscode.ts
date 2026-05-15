@@ -221,5 +221,6 @@ beforeEach(() => {
   window.activeTextEditor = undefined;
   window.visibleTextEditors = [];
   window.tabGroups = { all: [] as unknown[] };
+  workspace.workspaceFolders = [{ uri: MockUri.file('/test-workspace'), name: 'test', index: 0 }];
   workspace.textDocuments.length = 0;
 });

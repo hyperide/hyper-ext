@@ -21,7 +21,12 @@ import {
   generateRouteFileContent,
   getRouteFilePaths,
 } from './framework-routing';
-import { generatePreviewContent, type PreviewComponentEntry, type ProviderWrapConfig } from './generator';
+import {
+  generatePreviewContent,
+  PREVIEW_GENERATOR_SCHEMA_MARKER,
+  type PreviewComponentEntry,
+  type ProviderWrapConfig,
+} from './generator';
 import { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
 
 /**
@@ -290,6 +295,10 @@ function stripExtension(name: string): string {
   return name.replace(/\.\w+$/, '');
 }
 
+function pathCaseKey(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
+}
+
 /** Attribute shape of a recast JSX element (used in revertRouterPatch) */
 type RouteAttr = { name?: { name?: string }; value?: { value?: string } };
 
@@ -388,39 +397,61 @@ export class PreviewFileManager {
       // since the file was last written (e.g. detectPreviewProviders resolved after initial gen).
       const needsProviderUpdate =
         this.providerWrap?.imports.length && !this.providerWrap.imports.every((imp) => existingContent.includes(imp));
-      // Regenerate once when an older generated preview predates fallback props.
-      // Otherwise fast path keeps stale __canvas_preview__.tsx forever because
-      // all requested imports already exist.
-      const needsGeneratorUpdate = !existingContent.includes('previewFallbackProps');
+      const hasCurrentGeneratorMarker = existingContent
+        .split('\n')
+        .some((line) => line.trim() === `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}`);
+      const needsGeneratorUpdate = !hasCurrentGeneratorMarker;
       // Validate the existing file for stale entries: non-PascalCase names, Next.js App Router
       // reserved files (layout.tsx exports metadata — breaks Client Component chain), or
       // @hyperide-managed files (extension's own generated route files).
       const existingEntries = parseExistingPreview(existingContent);
+      const discoveredPaths = await this._scanAllComponents();
+      const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
       const isStale = (e: { componentName: string; componentPath: string }) =>
-        !/^[A-Z]/.test(e.componentName) || isFrameworkReserved(basename(e.componentPath));
+        !/^[A-Z]/.test(e.componentName) ||
+        isFrameworkReserved(basename(e.componentPath)) ||
+        this.hasPathCaseMismatch(e.componentPath, canonicalPaths);
       if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate) return existingContent;
 
       // Stale entries found — regenerate excluding reserved files
-      const cleanPaths = existingEntries.filter((e) => !isStale(e)).map((e) => e.componentPath);
-      return this._initPreviewFile(previewPath, previewDir, [...new Set([...cleanPaths, ...componentPaths])]);
+      const cleanPaths = existingEntries
+        .filter((e) => !isStale(e))
+        .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
+      return this._initPreviewFile(
+        previewPath,
+        previewDir,
+        [...new Set([...cleanPaths, ...componentPaths])],
+        discoveredPaths,
+      );
     }
 
     // Full regen when new components are added — ensures componentRegistry and sampleRenderMap
     // are updated alongside imports. Preserve existing components by parsing the registry via AST,
     // excluding reserved filenames that must not be in the Client Component bundle.
     const existingEntries = parseExistingPreview(existingContent);
+    const discoveredPaths = await this._scanAllComponents();
+    const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
     const existingPaths = existingEntries
       .filter((e) => !isFrameworkReserved(basename(e.componentPath)))
-      .map((e) => e.componentPath);
+      .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
-    return this._initPreviewFile(previewPath, previewDir, allPaths);
+    return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
   }
 
   /** Init: scan all TSX/TS files and generate a complete preview file. */
-  private async _initPreviewFile(previewPath: string, previewDir: string, requestedPaths: string[]): Promise<string> {
+  private async _initPreviewFile(
+    previewPath: string,
+    previewDir: string,
+    requestedPaths: string[],
+    knownDiscoveredPaths?: string[],
+  ): Promise<string> {
+    const discoveredPaths = knownDiscoveredPaths ?? (await this._scanAllComponents());
+    const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
+    const canonicalRequestedPaths = requestedPaths.map((path) => this.canonicalizeComponentPath(path, canonicalPaths));
+
     // Build entries for explicitly requested paths first
     const requestedEntries: PreviewComponentEntry[] = [];
-    for (const compPath of requestedPaths) {
+    for (const compPath of canonicalRequestedPaths) {
       const entry = await this.buildEntry(compPath, previewDir);
       if (entry) requestedEntries.push(entry);
     }
@@ -428,8 +459,7 @@ export class PreviewFileManager {
     // Supplement with all other components discovered in project (init-time full scan).
     // Always runs so that stale-entry cleanup can salvage real components even when
     // all explicitly requested paths are non-component files (e.g. only main.tsx passed).
-    const discoveredPaths = await this._scanAllComponents();
-    const requestedPathSet = new Set(requestedPaths);
+    const requestedPathSet = new Set(canonicalRequestedPaths);
     const extraEntries: PreviewComponentEntry[] = [];
     for (const compPath of discoveredPaths) {
       if (requestedPathSet.has(compPath)) continue;
@@ -500,6 +530,23 @@ export class PreviewFileManager {
         );
       })
       .map((abs) => relative(this.projectRoot, abs));
+  }
+
+  private buildCanonicalPathMap(paths: string[]): Map<string, string> {
+    const canonicalPaths = new Map<string, string>();
+    for (const path of paths) {
+      canonicalPaths.set(pathCaseKey(path), path);
+    }
+    return canonicalPaths;
+  }
+
+  private canonicalizeComponentPath(componentPath: string, canonicalPaths: Map<string, string>): string {
+    return canonicalPaths.get(pathCaseKey(componentPath)) ?? componentPath;
+  }
+
+  private hasPathCaseMismatch(componentPath: string, canonicalPaths: Map<string, string>): boolean {
+    const canonical = canonicalPaths.get(pathCaseKey(componentPath));
+    return canonical !== undefined && canonical !== componentPath;
   }
 
   /**

@@ -6,12 +6,16 @@ import type { ProjectStructurePaths, ProjectStructureStore } from './types';
 
 const TMP_DIR = path.join(import.meta.dir, '__test_fixtures__');
 
-function createMockStore(data: ProjectStructurePaths | null): ProjectStructureStore & { saved: boolean } {
+function createMockStore(
+  data: ProjectStructurePaths | null,
+): ProjectStructureStore & { saved: boolean; savedPaths: ProjectStructurePaths | null } {
   return {
     saved: false,
+    savedPaths: null,
     load: async () => data,
-    save: async function () {
+    save: async function (_projectRoot: string, paths: ProjectStructurePaths) {
       this.saved = true;
+      this.savedPaths = paths;
     },
     flush: async () => false,
   };
@@ -232,6 +236,40 @@ describe('ComponentScanner.getComponentsData', () => {
     const names = result.atomGroups[0].components.map((c) => c.name);
     expect(names).toContain('button.tsx');
     expect(names).toContain('card.tsx');
+  });
+
+  it('should remap cached absolute paths from a different project root', async () => {
+    const foreignRoot = path.join('/workspace', path.basename(projectRoot));
+    const store = createMockStore({
+      atomComponentsPaths: [path.join(foreignRoot, 'src', 'components', 'ui')],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(projectRoot);
+
+    expect(result.atomGroups).toHaveLength(1);
+    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
+    const names = result.atomGroups[0].components.map((c) => c.name);
+    expect(names).toContain('button.tsx');
+    expect(names).toContain('card.tsx');
+  });
+
+  it('should re-analyze when cached paths point outside the current project', async () => {
+    const store = createMockStore({
+      atomComponentsPaths: [path.join('/missing-cache-root', 'configured-components')],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(projectRoot);
+
+    expect(result.atomGroups).toHaveLength(1);
+    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
+    expect(store.saved).toBe(true);
+    expect(store.savedPaths?.atomComponentsPaths).toEqual(['src/components/ui']);
   });
 });
 
