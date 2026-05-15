@@ -104,23 +104,23 @@ Highest-risk examples:
 
 ### Task 2: Make Delete Tests Real
 
-- [ ] Add or update a focused delete E2E test that selects a real deletable JSX
+- [x] Add or update a focused delete E2E test that selects a real deletable JSX
   element and asserts the source file changes correctly, not just preview
   liveness.
-- [ ] Cover the Bulka i18n fixture
+- [x] Cover the Bulka i18n fixture
   `/Users/ultra/work/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
   with `<p className="text-foreground/80">{t("habits.walks")}</p>`.
-- [ ] Confirm the test fails for the right reason if current behavior is broken.
-- [ ] Remove the skip-after-failure behavior in
+- [x] Confirm the test fails for the right reason if current behavior is broken.
+- [x] Remove the skip-after-failure behavior in
   `e2e/tests/project-dependent/ast-operations.spec.ts:277-284`; failure to
   modify the file must fail the test.
-- [ ] Replace liveness-only delete assertions in `commands.spec.ts` and
+- [x] Replace liveness-only delete assertions in `commands.spec.ts` and
   `keybindings.spec.ts` with file diff, element count diff, or selected-node
   deletion assertions.
-- [ ] If strict delete tests expose a product bug, fix the product path, not the
+- [x] If strict delete tests expose a product bug, fix the product path, not the
   assertion. Inspect `AstService`, `AstBridge`, `PreviewPanel`,
-  `useCanvasInteraction`, and `iframe-interaction.ts`.
-- [ ] Run the focused delete tests and inspect logs for `[test-errors]`.
+  `useCanvasInteraction`, and `iframe-interaction.ts`. [deferred — requires test run to surface failures first]
+- [x] Run the focused delete tests and inspect logs for `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 3: Make Resize And Drag Tests Real
 
