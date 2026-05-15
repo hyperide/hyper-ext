@@ -843,6 +843,13 @@ attachClickHandler(
   document,
   {
     onElementClick: (nodeRef, el, _e, itemIndex, source) => {
+      // Optimistic local update so keyboard shortcuts (Cmd+D, Delete) work immediately
+      // without waiting for the state round-trip: iframe → extension host → StateHub → iframe.
+      if (nodeRef) {
+        state.selectedIds = [nodeRef];
+        if (itemIndex != null) state.selectedItemIndices = { [nodeRef]: itemIndex };
+      }
+
       // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
       window.parent.postMessage(
         {
