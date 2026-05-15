@@ -1607,14 +1607,23 @@ let pendingHydratedSelectedIds: string[] = [];
  */
 let pendingHydratedItemIndices: Record<string, number | null> = {};
 
-function persistSelectionGraceCache(): void {
+// Throttle for the per-paint persist call. Lifecycle hooks (beforeunload,
+// vite:beforeFullReload, vite:beforePrune) call persistSelectionGraceCache(true)
+// to bypass the throttle for the actual teardown flush.
+const SELECTION_GRACE_PERSIST_THROTTLE_MS = 250;
+let lastPersistAtMs = 0;
+
+function persistSelectionGraceCache(force = false): void {
   try {
     if (typeof sessionStorage === 'undefined') return;
+    const nowMs = Date.now();
+    if (!force && nowMs - lastPersistAtMs < SELECTION_GRACE_PERSIST_THROTTLE_MS) return;
+    lastPersistAtMs = nowMs;
     if (selectionGraceCache.rectsByElementId.size === 0) {
       sessionStorage.removeItem(SELECTION_GRACE_PERSIST_KEY);
       return;
     }
-    const payload = serializeSelectionGraceCache(selectionGraceCache, Date.now());
+    const payload = serializeSelectionGraceCache(selectionGraceCache, nowMs);
     sessionStorage.setItem(SELECTION_GRACE_PERSIST_KEY, JSON.stringify(payload));
   } catch {
     // sessionStorage may throw (private mode, quota exceeded, sandboxed iframe).
@@ -1717,9 +1726,9 @@ function sendOverlayRects(): void {
   if (graced.inGracePeriod) {
     scheduleSelectionGraceRetry();
   }
-  // Persist after every paint so a sudden iframe teardown (Vite full reload often
-  // skips beforeunload) still has a fresh snapshot. JSON.stringify on a tiny map
-  // costs microseconds; cheap relative to the layout work above.
+  // Persist on paint as a backstop in case Vite's beforeFullReload / beforePrune
+  // and beforeunload all fail to fire (sudden navigation, sandboxed teardown).
+  // Throttled to 250 ms so scroll/hover paints don't hammer sessionStorage.
   persistSelectionGraceCache();
 
   const rects = result.overlayRects.map((r) => ({
@@ -1868,13 +1877,13 @@ for (const evt of VITE_LIFECYCLE_EVENTS) {
     // Vite full reload typically fires before any further paint runs — flush the
     // grace cache to sessionStorage now so the post-reload IIFE can hydrate it.
     if (evt === 'vite:beforeFullReload' || evt === 'vite:beforePrune') {
-      persistSelectionGraceCache();
+      persistSelectionGraceCache(true);
     }
   });
 }
 window.addEventListener('beforeunload', () => {
   logSelsurvLifecycle('beforeunload');
-  persistSelectionGraceCache();
+  persistSelectionGraceCache(true);
 });
 document.addEventListener('readystatechange', () => {
   logSelsurvLifecycle('readystatechange');
