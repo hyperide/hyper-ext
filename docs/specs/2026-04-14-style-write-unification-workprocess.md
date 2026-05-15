@@ -2355,4 +2355,41 @@ tree. Контейнеры получили старый `playwright.config.ts` 
 ### Run #12 старт
 
 `bun run test:docker` из `/Users/ultra/work/ext-test-projects/e2e`.
-VSIX: авто-select `hypercanvas-preview-0.1.17.vsix`.
+VSIX: авто-select `hypercanvas-preview-0.1.18.vsix`.
+
+## 📍 2026-04-27 ~21:40 CEST: Run #12 checkpoint @ ~10min
+
+Run #12 `20260427-212925-91349` active, все 4 шарда running.
+
+| shard | pass | fail | notes |
+|-------|------|------|-------|
+| s1    | 121  | 0    | excellent |
+| s2    | 70   | 0    | excellent |
+| s3    | 36   | 0    | notion slow-start (not stuck), recovered |
+| s4    | 13   | 2    | 2 cold-compile first-test Remix fails |
+
+Pass rate (so far): 240/242 = **99.2%**.
+
+### S4 cold-compile analysis
+
+S4 first 2 tests on remix-tw4-twitter took 258s/254s and FAILED. Root cause:
+PreviewProxy retry budget (~46s from 16 retries) < Remix cold compile (~155s).
+After retry budget exhausted, iframe got 403 → preview never loaded → poll-loaded
+timeout (250s) expired.
+
+Fix: `682fdf22` — increase retry budget from 16 to 60 retries (~222s total).
+VSIX 0.1.19 built and committed. Will apply in Run #13.
+
+After first-test failures, all subsequent remix-tw4-twitter tests pass quickly
+(7-25s) because dev server is already warmed up.
+
+### VSIX 0.1.19 changes vs 0.1.18
+
+1. PreviewProxy retry count: 16 → 60 retries (~222s budget vs ~46s)
+2. Covers Remix cold compile (90-155s) with margin for 250s poll-loaded
+
+### Next
+
+Let Run #12 complete. Analyze full failure inventory. If only s4 cold-compile
+failures remain (≤2 per shard), that's effectively green for this VSIX.
+Run #13 with 0.1.19 expected to close remaining failures.
