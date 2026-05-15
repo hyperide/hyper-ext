@@ -38,14 +38,106 @@ wrapping CarouselContent + CarouselItem + Prev/Next).
 
 ### Task 1: Inventory the existing sample generation logic
 
-- [ ] Read `lib/preview-generator/sample-scaffold.ts` and understand its
+- [x] Read `lib/preview-generator/sample-scaffold.ts` and understand its
       input/output contract.
-- [ ] Find every callsite — how is it currently invoked when a regular
+
+      Findings (`lib/preview-generator/sample-scaffold.ts`):
+      - `buildSampleScaffold({ sourceCode, componentName, exportName, propEntries })`
+        → string. Used for the manual "Create Sample" overlay (PreviewPanel).
+        Emits a JSX export. With prop entries → self-closing `<Comp prop={…} />`.
+        Without prop entries → tries compound children, then `children`-accepting
+        single child, else self-closing.
+      - `buildDeterministicContainerSampleScaffold({ sourceCode, componentName,
+        exportName })` → string | null. Returns null unless `buildCompoundChildLines`
+        finds at least one nested export. Used by `ensureSample` as the deterministic
+        path before falling through to AI.
+      - `buildCompoundChildLines` greps for exports starting with `componentName`
+        and filters them by a hardcoded suffix allow-list:
+        `['Header', 'Title', 'Description', 'Content', 'Body', 'Text', 'Footer', 'Label']`.
+      - For `carousel.tsx` exports (`Carousel`, `CarouselContent`, `CarouselItem`,
+        `CarouselPrevious`, `CarouselNext`) only `CarouselContent` matches.
+        Output is `<Carousel><CarouselContent>Sample content</CarouselContent></Carousel>`
+        — Item / Previous / Next are dropped. This is the scaffold-side gap.
+
+- [x] Find every callsite — how is it currently invoked when a regular
       component is opened? Document the gap that prevents it from being
       invoked for files without an existing `SampleDefault`.
-- [ ] Read `vscode-extension/hypercanvas-preview/src/services/PreviewModeManager.ts`
+
+      Callsites of `buildSampleScaffold`:
+      - `vscode-extension/hypercanvas-preview/src/PreviewPanel.ts:17,569` —
+        `_handleCreateSampleFromError` writes an explicit `SampleDefault` to the
+        component file when the user clicks "Create Sample" on the error overlay.
+        Manual entry only — not part of the auto-load flow.
+
+      Callsites of `buildDeterministicContainerSampleScaffold`:
+      - `lib/preview-generator/sample-ensurer.ts:69` — only callsite. `ensureSample`
+        first tries the deterministic path; if null, falls through to the AI
+        generator callback.
+
+      Callsites of `ensureSample`:
+      - `server/routes/parseComponent.ts:1086-1097` — SaaS path. Always runs for
+        any selected component on the Hyper Canvas SaaS server.
+      - `vscode-extension/hypercanvas-preview/src/extension.ts:758-766` —
+        extension path. Runs on `stateHub.onChange` when `currentComponent.path`
+        changes, with `sampleName: 'SampleDefault'`.
+
+      The gap (extension flow for `client/components/ui/carousel.tsx`):
+      1. `extension.ts:743` early-returns for any path matched by
+         `isUiPrimitive` (`/(\/|\\|^)components[/\\]ui[/\\]/i` — see
+         `lib/preview-generator/generator.ts:168`). The early return:
+         ```ts
+         if (isUiPrimitive(relativePath)) {
+           previewPanel?.setComponentParam(relativePath);
+           return;
+         }
+         ```
+         skips `ensureSample` AND `previewManager.ensureComponent` entirely.
+         So a shadcn `ui/carousel.tsx` selection never invokes the deterministic
+         scaffold at all in the extension.
+      2. Even if `ensureSample` did run, `buildDeterministicContainerSampleScaffold`
+         would currently return null for any compound that doesn't have at least
+         one suffix from the allow-list (carousel only matches `Content`,
+         producing a degenerate scaffold).
+      3. `generatePreviewContent` (`generator.ts:174-178`) and
+         `preview-file-manager.ts:497,518` filter UI primitives out of the
+         registry unless `sampleExports.includes('SampleDefault')`. So even if
+         the file is registered, the registry omits it until SampleDefault is
+         actually written.
+      4. The iframe loads `?component=client/components/ui/carousel.tsx`,
+         hits `client/__canvas_preview__.tsx:89-104` where
+         `SampleDefaultMap[componentPath]` is undefined → renders the
+         "Component not found" branch (or stays at "Loading…" before mount,
+         which is what the user reported).
+      5. `onComponentMissing` self-healing in `extension.ts:512-548` calls
+         `previewManager.ensureComponent([relPath])` and re-checks the registry.
+         For UI primitives without SampleDefault, the entry is filtered out by
+         the `generatePreviewContent` registry filter, so `inRegistry === false`
+         → the recovery path shows an information toast and bails. Hence
+         "stuck on Loading…".
+
+- [x] Read `vscode-extension/hypercanvas-preview/src/services/PreviewModeManager.ts`
       (or whatever patches the entry file) to see what it does when a
       component has no SampleDefault — does it bail, log, send error?
+
+      Findings (`lib/preview-generator/preview-mode-manager.ts` — the manager
+      lives in `lib/`, not the extension `services/` dir; the extension just
+      instantiates it via `createPreviewModeManager` in `extension.ts:580`):
+      - `PreviewModeManager.onComponentSelected()` only deals with framework
+        routing / entry-file patching. It doesn't know or care whether the
+        component has `SampleDefault`.
+      - `_patchEntryFile()` rewrites the entry file to import `__canvas_preview__`
+        for webpack/parcel/bun/jsx-router cases. It returns `'ok'` or
+        `'needs-patch'`. No SampleDefault awareness.
+      - Sample generation is intentionally orchestrated in `extension.ts`,
+        upstream of the mode manager. `PreviewModeManager` is the wrong layer
+        to plug the auto-sample fallback into.
+
+      Conclusion: the fix in Task 2 lands in `extension.ts` (drop or refine the
+      `isUiPrimitive` early return) and in `lib/preview-generator/sample-scaffold.ts`
+      (extend `buildCompoundChildLines` to include all PascalCase named exports
+      that start with the component name, not only the suffix allow-list, with
+      sensible defaults for `Item` / `Previous` / `Next` / `Trigger` etc.).
+      `PreviewModeManager` itself does not need changes for this feature.
 
 ### Task 2: Add fallback sample generation in the preview entry path
 
