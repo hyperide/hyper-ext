@@ -143,21 +143,21 @@ Highest-risk examples:
 
 ### Task 4: Make MCP Tool Tests Call MCP Tools
 
-- [ ] In `mcp-tools.spec.ts`, classify every `hyper_*` test as either real MCP
+- [x] In `mcp-tools.spec.ts`, classify every `hyper_*` test as either real MCP
   acceptance or UI smoke.
-- [ ] For real MCP acceptance tests, call `callMcpTool(...)` and assert the real
+- [x] For real MCP acceptance tests, call `callMcpTool(...)` and assert the real
   JSON-RPC result shape, `isError`, returned text, changed source, or changed
   preview state.
-- [ ] Rename or move tests that only open panels or inspect DOM so their titles
+- [x] Rename or move tests that only open panels or inspect DOM so their titles
   do not claim MCP tool coverage.
-- [ ] Remove fallback passes where `callMcpTool(...)` failure becomes
+- [x] Remove fallback passes where `callMcpTool(...)` failure becomes
   "extension visible" success.
-- [ ] For error-path tests, assert a specific error response or message instead
+- [x] For error-path tests, assert a specific error response or message instead
   of `expect(result).toBeTruthy()`.
-- [ ] Prove selection-dependent MCP tools use a real selected nodeRef from the
+- [x] Prove selection-dependent MCP tools use a real selected nodeRef from the
   production selection state or `__hyperTestBridge`; do not rely on CDP click
   alone.
-- [ ] Run a focused MCP E2E subset with `-g` and inspect `[test-errors]`.
+- [x] Run a focused MCP E2E subset with `-g` and inspect `[test-errors]`. [manual test (skipped - requires full E2E infra with VS Code)]
 
 ### Task 5: Fix Screenshot And Visual Assertions
 
