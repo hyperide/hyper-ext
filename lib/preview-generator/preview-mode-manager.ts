@@ -227,19 +227,37 @@ export class PreviewModeManager {
     this._onModeChange?.(false);
   }
 
+  /**
+   * Detect the frontend root directory ('src', 'client', etc.) from index.html.
+   * Falls back to 'src' if index.html is absent or doesn't specify a different root.
+   */
+  private async _detectFrontendRoot(): Promise<string> {
+    try {
+      const html = await this._io.readFile(join(this._projectRoot, 'index.html'));
+      const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']\/([^/"']+)\/main\.[jt]sx?["']/);
+      if (match && match[1] !== 'src') return match[1];
+    } catch {
+      /* no index.html */
+    }
+    return 'src';
+  }
+
   /** Override in tests to inject a known router file path. */
   async detectRouterFile(): Promise<string | null> {
-    const candidates = [
-      'src/App.tsx',
-      'src/app.tsx',
+    const frontendRoot = await this._detectFrontendRoot();
+    // Check the detected frontend root first, then fall back to src/
+    const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+    const suffixes = [
       'App.tsx',
-      'src/main.tsx',
-      'src/main.ts',
-      'src/router.tsx',
-      'src/router.ts',
-      'src/routes.tsx',
-      'src/routes.ts',
+      'app.tsx',
+      'main.tsx',
+      'main.ts',
+      'router.tsx',
+      'router.ts',
+      'routes.tsx',
+      'routes.ts',
     ];
+    const candidates = [...rootPrefixes.flatMap((r) => suffixes.map((s) => `${r}/${s}`)), 'App.tsx'];
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
@@ -260,7 +278,11 @@ export class PreviewModeManager {
   }
 
   private async _detectEntryFile(): Promise<string | null> {
-    const candidates = ['src/index.tsx', 'src/index.ts', 'src/main.tsx', 'src/main.ts'];
+    const frontendRoot = await this._detectFrontendRoot();
+    // Check the detected frontend root first, then fall back to src/
+    const rootPrefixes = frontendRoot !== 'src' ? [frontendRoot, 'src'] : ['src'];
+    const suffixes = ['index.tsx', 'index.ts', 'main.tsx', 'main.ts'];
+    const candidates = rootPrefixes.flatMap((r) => suffixes.map((s) => `${r}/${s}`));
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
@@ -273,9 +295,10 @@ export class PreviewModeManager {
     return null;
   }
 
-  private async _patchEntryFile(): Promise<'ok'> {
+  private async _patchEntryFile(): Promise<'ok' | 'needs-patch'> {
     const entryFile = await this._detectEntryFile();
-    if (entryFile) await this._fileManager.patchEntryFile(entryFile);
+    if (!entryFile) return 'needs-patch';
+    await this._fileManager.patchEntryFile(entryFile);
     return 'ok';
   }
 

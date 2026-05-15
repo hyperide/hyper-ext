@@ -59,13 +59,13 @@ describe('PreviewModeManager — onComponentSelected (app-shell)', () => {
     expect(result).toBe('unsupported');
   });
 
-  it('falls back to entry patching for vite-spa-jsx-router without router file', async () => {
+  it('returns needs-patch for vite-spa-jsx-router when no router and no entry file found', async () => {
     const io = makeIO({
       [`${root}/package.json`]: JSON.stringify({ dependencies: { vite: '^5' } }),
     });
     const m = new PreviewModeManager({ projectRoot: root, io, watcherFactory: noopWatcher });
     const result = await m.onComponentSelected();
-    expect(result).toBe('ok');
+    expect(result).toBe('needs-patch');
   });
 });
 

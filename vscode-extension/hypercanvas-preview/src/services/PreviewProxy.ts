@@ -281,8 +281,10 @@ export class PreviewProxy {
               }
             }
             if (userScript) {
-              html = html.replace(`src="${userScript}"`, 'src="/src/__canvas_preview_standalone__.tsx"');
-              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → /src/__canvas_preview_standalone__.tsx`); // nosemgrep: unsafe-formatstring
+              // Derive standalone path from the user script's directory (handles client/, src/, etc.)
+              const standalonePath = userScript.replace(/\/[^/]+\.[jt]sx?$/, '/__canvas_preview_standalone__.tsx');
+              html = html.replace(`src="${userScript}"`, `src="${standalonePath}"`);
+              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → ${standalonePath}`); // nosemgrep: unsafe-formatstring
             } else {
               console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
             }
