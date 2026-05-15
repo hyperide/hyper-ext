@@ -2529,8 +2529,73 @@ preview shell regardless of dev-server state.
 
 VSIX 0.1.22 built at 00:21 CEST 2026-04-28. Copied to ext-test-projects/.
 
+## 📍 Run #13 Partial Inventory + New Fixes (2026-04-28 01:00 CEST)
+
+### Extension VSIX 0.1.23
+
+Built and deployed during run #13 (committed `b1efe150`, `6320d7e1`).
+
+New fixes in 0.1.23 relative to 0.1.22:
+
+**Fix A — PreviewProxy socket retry on GET errors**
+File: `vscode-extension/hypercanvas-preview/src/services/PreviewProxy.ts`
+Problem: After HTML loads with 200 OK (Origin/Referer stripped), Vite's keep-alive
+pool drops the connection. Subsequent `@vite/client` and module fetches hit stale
+sockets and returned 502 immediately (no retry). React never mounted → rootChildren=0
+poll-loop for 320s.
+Fix: `proxyReq.on('error', ...)` now retries GET requests up to 5 times with 300ms×N
+backoff. On retry, `clientReq` is already consumed so `proxyReq.end()` is called
+directly (no body for GET anyway). `clientRes.headersSent` guard prevents double-write.
+
+**Fix B — UndoRedoService.beginTracking() eager redo clear**
+File: `vscode-extension/hypercanvas-preview/src/services/UndoRedoService.ts`
+Problem: If `result.success=false` in `_withUndoTracking()`, `recordEdit()` was
+skipped so the redo stack was NOT cleared. `endTracking()` still ran → `_trackingCount=0`
+→ CMD_REDO could execute stale redo entries from before the failed write.
+Fix: `beginTracking()` now eagerly clears `_redoStack` before incrementing counter.
+This is safe: the user's intent was a new action; redo history should not survive.
+
+**Fix C — undo-redo.spec.ts post-edit wait 500ms → 2000ms** (ext-test-projects commit `014f5dc`)
+Docker I/O + Vite HMR warmup can delay `readFileFromDisk()` beyond 500ms on loaded
+shards. Extended to 2000ms so the redo-stack clear propagates before CMD_REDO fires.
+
+### Run #13 Current State (still active as of 01:00 CEST)
+
+- Shard-1: **HUNG** at `warmup-delay:start ms=1000` for 25+ minutes.
+  Test: "dev server finds an available port when default port is busy" on `react-vite-tw4-twitter`.
+  Root cause: Playwright event loop blocked (setTimeout never fires). Container alive, no output.
+  Known failures so far: `Select Next Sibling does not crash` (28s, react-vite-tw4-twitter, fiber click timeout),
+  `concurrent start/stop` ×2 (131-137s, old test code), `resize grid child` (88s, PI-18-14 persistent).
+- Shard-2: 288 tests done, 5 failures. Active but last log update 6 min ago (busy test running).
+- Shard-3: 437 tests done, 8 failures. Active.
+- Shard-4: 101 tests done, 15 failures — mostly 320s timeouts (Remix/Tailwind v4 proxy issues).
+
+### Run #13 Failure Classification (partial)
+
+**A. Fixed in ext-test-projects (apply in run #14):**
+- `concurrent start/stop race condition` ×2 (shard-1) → ef8612a fix in ext-test-projects
+- `redo limit — no redo after new edit` ×2 (shard-2) → 2000ms wait + UndoRedoService fix
+
+**B. Fixed in VSIX 0.1.23 (apply in run #14):**
+- `elements identifiable via fiber-based selection` ×3 (shard-2 ×2, shard-3 ×1) → socket hang-up
+- Most shard-4 ~320s failures (remix-tw4-twitter, other Remix/Vite projects) → socket hang-up after HTML 200 OK
+
+**C. Persistent / need investigation:**
+- `resize grid child stays within grid cell` PI-18-14 (shard-1, 88s) — persistent
+- `Tailwind: padding-horizontal input is available in inspector` (shard-3, 63s) — new
+- `delete element — removed from file, cascade to children` (shard-3, 88s) — new
+- `Tamagui: style written as prop, not className` ×2 (shard-3, 11s) — Tamagui-banking project, wrote CryptoScreen.tsx but assertion failed; likely Tamagui style writer producing wrong format
+- `Select Next Sibling does not crash` (shard-1, 29s) — react-vite-tw4-twitter, click doesn't produce fiber selection within 8s
+- `styles applied correctly / component has non-zero dimensions` (shard-3) — render issue
+- `Port fallback when busy` (shard-2, 42s) — transient (Open Logs timeout in diagnostics capture)
+
+**D. Infrastructure / environment:**
+- Shard-1 hang: react-vite-tw4-twitter causes Playwright event loop block during port-fallback test
+  This is the same project that caused `PI-18-23` to take 105s. Tailwind v4 + Remix combo is unstable.
+
 ## Next Step
 
-- Wait for run #13 to complete (shard-2 still active at ~106% CPU).
+- Wait for shards 2-4 to complete run #13.
 - Collect full failure inventory.
-- Start run #14 with VSIX 0.1.22 and ext-test-projects commit ef8612a.
+- Start run #14 with VSIX 0.1.23 + ext-test-projects commits (014f5dc, ef8612a).
+- Investigate category C failures in parallel (Tamagui style writer, Select Next Sibling click, delete element).
