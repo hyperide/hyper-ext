@@ -333,8 +333,11 @@ Status:
 - `PreviewPanel`, `PanelRouter`, `DevServerManager`: preview shell stability (b0339a18)
 - Inspector sidebar width normalization (00274b67)
 
-Run #21 started at: (fill after start)
+Run #21 started at: 2026-04-28 17:27 CEST
+Run ID: `run-20260428-172708-72773`
+Containers: `hyper-e2e-20260428-172708-72773-s{1,2,3}`
 Target: `HYPER_E2E_SHARDS=3` to cover more of the 2189-test matrix.
+Log: `/tmp/hyper-e2e-run21.log`
 
 ## Latest Verified Progress
 
