@@ -335,6 +335,109 @@ describe('namespaced layout — locales/en/common.json', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Layout: public/locales/en.json (next-i18next flat — most common missing layout)
+// ---------------------------------------------------------------------------
+
+describe('public/locales/en.json layout — next-i18next flat', () => {
+  const fileIO = new MemoryFileIO({
+    [`${ROOT}/public/locales/en.json`]: JSON.stringify({
+      conditions: { communication: 'Communication policy' },
+      greeting: 'Hello',
+    }),
+    [`${ROOT}/public/locales/ru.json`]: JSON.stringify({
+      conditions: { communication: 'Политика коммуникаций' },
+      greeting: 'Привет',
+    }),
+  });
+
+  it('resolves a dot-path key from public/locales flat layout', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'conditions.communication',
+      activeLocale: 'en',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Communication policy');
+    expect(result.availableLocales.sort()).toEqual(['en', 'ru']);
+  });
+
+  it('resolves the same key in Russian locale', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'conditions.communication',
+      activeLocale: 'ru',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Политика коммуникаций');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout: public/locales/en/common.json (next-i18next namespaced)
+// ---------------------------------------------------------------------------
+
+describe('public/locales/en/common.json layout — next-i18next namespaced', () => {
+  const fileIO = new MemoryFileIO({
+    [`${ROOT}/public/locales/en/common.json`]: JSON.stringify({
+      conditions: { communication: 'Communication policy' },
+    }),
+    [`${ROOT}/public/locales/fr/common.json`]: JSON.stringify({
+      conditions: { communication: 'Politique de communication' },
+    }),
+  });
+
+  it('resolves a namespaced dot-path key', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'conditions.communication',
+      namespace: 'common',
+      activeLocale: 'en',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Communication policy');
+    expect(result.availableLocales.sort()).toEqual(['en', 'fr']);
+  });
+
+  it('resolves in non-primary locale', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'conditions.communication',
+      namespace: 'common',
+      activeLocale: 'fr',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Politique de communication');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout: src/locales/en.json
+// ---------------------------------------------------------------------------
+
+describe('src/locales/en.json layout', () => {
+  const fileIO = new MemoryFileIO({
+    [`${ROOT}/src/locales/en.json`]: JSON.stringify({ hello: 'Hello from src/locales' }),
+    [`${ROOT}/src/locales/de.json`]: JSON.stringify({ hello: 'Hallo aus src/locales' }),
+  });
+
+  it('resolves a key from src/locales layout', async () => {
+    const result = await resolveI18nResource({
+      projectRoot: ROOT,
+      library: 'react-i18next',
+      key: 'hello',
+      activeLocale: 'en',
+      fileIO,
+    });
+    expect(result.resolvedText).toBe('Hello from src/locales');
+    expect(result.availableLocales.sort()).toEqual(['de', 'en']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // messages/en.ts — TypeScript export (unsupported format)
 // ---------------------------------------------------------------------------
 

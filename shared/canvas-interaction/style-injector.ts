@@ -81,31 +81,40 @@ body.design-mode fieldset:disabled {
 }`);
   }
 
-  // Drop indicator for drag/reorder visual feedback
+  // Drop indicator for drag/reorder visual feedback (data-dir="h" = horizontal line, "v" = vertical line)
   parts.push(`
 .hyper-drop-indicator {
   position: fixed !important;
-  left: 4px !important;
-  right: 4px !important;
-  height: 2px !important;
   background: #3b82f6 !important;
   z-index: 2147483646 !important;
   pointer-events: none !important;
   border-radius: 2px !important;
 }
+.hyper-drop-indicator[data-dir="h"] { height: 2px !important; }
+.hyper-drop-indicator[data-dir="v"] { width: 2px !important; }
 .hyper-drop-indicator::before,
 .hyper-drop-indicator::after {
   content: '' !important;
   position: absolute !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
   width: 6px !important;
   height: 6px !important;
   border-radius: 50% !important;
   background: #3b82f6 !important;
 }
-.hyper-drop-indicator::before { left: -3px !important; }
-.hyper-drop-indicator::after  { right: -3px !important; }`);
+.hyper-drop-indicator[data-dir="h"]::before,
+.hyper-drop-indicator[data-dir="h"]::after {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+.hyper-drop-indicator[data-dir="h"]::before { left: -3px !important; }
+.hyper-drop-indicator[data-dir="h"]::after  { right: -3px !important; }
+.hyper-drop-indicator[data-dir="v"]::before,
+.hyper-drop-indicator[data-dir="v"]::after {
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+.hyper-drop-indicator[data-dir="v"]::before { top: -3px !important; }
+.hyper-drop-indicator[data-dir="v"]::after  { top: auto !important; bottom: -3px !important; }`);
 
   return parts.join('\n');
 }

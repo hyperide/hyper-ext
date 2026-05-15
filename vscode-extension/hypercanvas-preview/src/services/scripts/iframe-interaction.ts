@@ -1091,6 +1091,26 @@ document.addEventListener('contextmenu', contextMenuHandler, true);
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
 const DRAG_THRESHOLD_PX = 5;
 
+function _dragEffectiveBg(el: HTMLElement): string {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const bg = getComputedStyle(node).backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    node = node.parentElement;
+  }
+  return '#ffffff';
+}
+
+function _isHorizontalLayout(el: HTMLElement): boolean {
+  const parent = el.parentElement;
+  if (!parent) return false;
+  const s = getComputedStyle(parent);
+  const d = s.display;
+  if (d === 'flex' || d === 'inline-flex') return s.flexDirection === 'row' || s.flexDirection === 'row-reverse';
+  if (d === 'grid' || d === 'inline-grid') return s.gridAutoFlow.includes('column');
+  return false;
+}
+
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
 let _dragSourceId: string | null = null;
 let _dragSourceFilePath: string | null = null;
@@ -1123,6 +1143,10 @@ function _dragPointerMove(e: PointerEvent): void {
       if (_dragSourceEl) {
         _dragOrigStyleAttr = _dragSourceEl.getAttribute('style') ?? '';
         const s = _dragSourceEl.style;
+        const computedBg = getComputedStyle(_dragSourceEl).backgroundColor;
+        if (computedBg === 'rgba(0, 0, 0, 0)' || computedBg === 'transparent') {
+          s.backgroundColor = _dragEffectiveBg(_dragSourceEl);
+        }
         s.transition = 'box-shadow 0.12s ease';
         s.transform = 'scale(1.03)';
         s.boxShadow = '0 8px 32px rgba(0,0,0,0.22), 0 0 0 2px rgba(59,130,246,0.5)';
@@ -1153,8 +1177,23 @@ function _dragPointerMove(e: PointerEvent): void {
     const dropSrc = dropEl ? iframeResolver.getSourceLocation(dropEl) : null;
     if (dropSrc && dropEl && `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}` !== _dragSourceId) {
       const r = dropEl.getBoundingClientRect();
-      _dragIndicatorEl.style.top = `${(e.clientY < r.top + r.height / 2 ? r.top : r.bottom) - 1}px`;
-      _dragIndicatorEl.style.display = 'block';
+      const ind = _dragIndicatorEl;
+      if (_isHorizontalLayout(dropEl)) {
+        ind.dataset.dir = 'v';
+        const lineX = (e.clientX < r.left + r.width / 2 ? r.left : r.right) - 1;
+        ind.style.left = `${lineX}px`;
+        ind.style.top = `${r.top}px`;
+        ind.style.height = `${r.height}px`;
+        ind.style.width = '';
+      } else {
+        ind.dataset.dir = 'h';
+        const lineY = (e.clientY < r.top + r.height / 2 ? r.top : r.bottom) - 1;
+        ind.style.top = `${lineY}px`;
+        ind.style.left = `${r.left}px`;
+        ind.style.width = `${r.width}px`;
+        ind.style.height = '';
+      }
+      ind.style.display = 'block';
     } else {
       _dragIndicatorEl.style.display = 'none';
     }
@@ -1189,7 +1228,13 @@ function _dragPointerUp(e: PointerEvent): void {
   if (targetId === sourceId) return;
 
   const rect = dropEl.getBoundingClientRect();
-  const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  const position: 'before' | 'after' = _isHorizontalLayout(dropEl)
+    ? e.clientX < rect.left + rect.width / 2
+      ? 'before'
+      : 'after'
+    : e.clientY < rect.top + rect.height / 2
+      ? 'before'
+      : 'after';
 
   _dragSuppressNextClick = true;
   // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
