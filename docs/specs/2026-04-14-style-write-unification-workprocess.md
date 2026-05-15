@@ -5618,3 +5618,168 @@ E2E commit gate after clean MCP shard, 2026-04-22 23:25 CEST:
   * Do not claim the E2E code commit is complete until a Claude review result
     exists or the user explicitly waives that gate.
 ```
+
+Review Session 2026-04-22 23:31 CEST author: claude:
+
+```text
+- Command:
+  `claude -p --no-session-persistence --model sonnet`
+  reviewing the uncommitted changes in:
+  * `e2e/setup/electron-app.ts`
+  * `e2e/setup/electron-app.test.ts`
+  * `e2e/tests/project-independent/mcp-setup.spec.ts`
+  * `e2e/tests/project-independent/mcp-tools.spec.ts`
+- Claude findings:
+  * HIGH: `mcp-tools.spec.ts` still contains an older
+    `[data-uniq-id]` locator path in PI-9-408, hidden by `.catch(() => {})`
+    and a weak fallback assertion. This is a real test-quality issue, but it
+    is outside the new changed hunks for JSON-RPC parsing and launch guard.
+  * HIGH: PI-9-450 compares full screenshot buffers byte-for-byte, which is
+    too brittle for VS Code/Electron rendering.
+  * HIGH: `runSetupMcp` still uses `waitForTimeout(500)` after setup writes;
+    this should become an observable file/notification wait.
+  * MEDIUM: `callMcpTool` uses `localhost` while `getMcpPort` extracts
+    `127.0.0.1`; change to a single host before broadening the MCP shard.
+  * MEDIUM: `electron-app.ts` has an older dynamic `import('node:child_process')`
+    for `execSync`, even though child process helpers are already statically
+    imported.
+  * MEDIUM: review output mentioned a hardcoded `--port 10200` unit-test
+    pattern. Codex had already observed the macOS `pgrep` option-parsing
+    failure during E2E and fixed it to `[-][-]port ${ports.devServer}` before
+    recording this review.
+  * MEDIUM: `selectAllAndConfirmQuickPick` now requires exactly four AI-agent
+    rows; this keeps today's setup deterministic but will intentionally fail
+    if the agent list changes.
+  * LOW: several `if (port) ... else ...` branches are unreachable after
+    `expect.poll(...).not.toBeNull()`.
+  * LOW: PI-9-416 contains an unreachable fallback after repeating the same
+    selector lookup.
+  * LOW: several tests still destructure unused `cmd`.
+  * LOW: `getMcpPort` contains an implicit 300ms timer inside `window.evaluate`.
+- Claude explicitly accepted the malformed JSON change: network failures now
+  throw and the test asserts a real HTTP 400.
+- Claude explicitly accepted the launch guard shape: conflict detection runs
+  after best-effort stray cleanup and prevents same-worker/port contamination.
+- Codex follow-up completed immediately:
+  * Fixed the macOS `pgrep` issue by using regex pattern
+    `[-][-]port ${ports.devServer}` so the pattern no longer starts with `-`.
+  * Re-ran `bun test e2e/setup/electron-app.test.ts`: 3 passed.
+  * Re-ran focused E2E:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts -g "malformed JSON input"`
+    `--retries=0 --workers=1 --reporter=line`
+    from `/Users/ultra/work/ext-test-projects/e2e`: 1 passed, no `pgrep`
+    option error.
+- Commit gate:
+  * Do not commit until the remaining HIGH review findings are either fixed in
+    atomic E2E-test commits or explicitly deferred with tracked follow-up.
+  * The reviewed malformed JSON and launch guard changes are validated, but the
+    broader `mcp-tools.spec.ts` review uncovered pre-existing test debt that
+    should not be hidden by the successful shard run.
+```
+
+Review Session 2026-04-22 23:52 CEST author: claude:
+
+```text
+- Command:
+  `claude -p --no-session-persistence --model sonnet`
+  reviewing the final uncommitted main-repo and ext-test changes for:
+  * `AstService.ts`
+  * `ast-tools.ts`
+  * `AstServiceDuplicate.test.ts`
+  * this workprocess file
+  * `e2e/setup/electron-app.ts`
+  * `e2e/setup/electron-app.test.ts`
+  * `e2e/tests/project-independent/mcp-setup.spec.ts`
+  * `e2e/tests/project-independent/mcp-tools.spec.ts`
+- Claude accepted:
+  * `duplicateElement` now correctly treats a source-location `elementId` as
+    the fallback nodeRef.
+  * `hyper_duplicate_element` no longer returns misleading `{}` from an
+    undefined `newId`.
+  * The earlier E2E findings were addressed: deprecated `data-uniq-id` path,
+    byte-exact screenshot compare, setup `waitForTimeout(500)`, host mismatch,
+    dynamic child-process import, brittle QuickPick traversal, hidden hover
+    timer, and non-JSON-RPC MCP calls.
+- Claude findings fixed in this pass:
+  * `wrapElement` had the same source-location fallback bug as
+    `duplicateElement`; fixed by resolving `nodeRef ?? elementId`.
+  * The new duplicate regression test used a formatting-sensitive JSX string
+    assertion; replaced it with an occurrence count.
+  * Added a wrap regression test for source-location `elementId`.
+  * The optional MCP hover port path used `expect.poll(...).catch(() => {})`;
+    replaced it with an explicit optional hover-widget read so assertion
+    failures are not silently swallowed.
+- Claude findings intentionally not changed in this pass:
+  * Launch guard throws on same-worker VS Code/dev-server conflicts. This is
+    intentional for this task: after the high-memory incident, reusing a dirty
+    worker is worse than failing loudly before opening another VS Code window.
+  * `setup-preview.ts` title inference is a pre-existing staged change outside
+    the files owned by this pass; do not mix it into the E2E commit.
+- Validation after fixes:
+  * `bun test vscode-extension/hypercanvas-preview/src/__tests__/AstServiceDuplicate.test.ts`
+    `vscode-extension/hypercanvas-preview/src/__tests__/HyperMcpServer.test.ts`
+    passed 12/12. Existing Tailwind color rename warnings still appear.
+  * `npm run build` in `vscode-extension/hypercanvas-preview` passed. Existing
+    Browserslist and `duration-[233ms]` Tailwind warnings still appear.
+  * `bun test e2e/setup/electron-app.test.ts` passed 3/3.
+  * Focused E2E from `/Users/ultra/work/ext-test-projects/e2e`:
+    `EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+    `./node_modules/.bin/playwright test --project=independent`
+    `tests/project-independent/mcp-tools.spec.ts`
+    `-g`
+    `"hyper_duplicate_element — copy appears|`
+    `hyper_wrap_element — wrapper added|`
+    `hyper_screenshot_preview — stable screenshot output|`
+    `malformed JSON input|concurrent MCP requests handled|`
+    `hyper_list_color_tokens|MCP tool list|health check"`
+    `--retries=0 --workers=1 --reporter=line`
+    passed 10/10 in 26.9s.
+  * The malformed JSON diagnostic was expected, annotated, and cleared by the
+    fixture after assertion.
+  * `pgrep -fl "playwright test|hvsc-|bun run dev"` returned no active E2E
+    processes after the run.
+  * `git diff --check` passed in the main repo and for the four intended
+    ext-test files.
+- Commit gate:
+  * Claude review requirement is satisfied for these changes.
+  * Next commit work must remain atomic and must not include unrelated staged
+    ext-test files.
+```
+
+Commit Log 2026-04-23 00:04 CEST:
+
+```text
+- Main repo commit:
+  * `6e23eb4a fix(ext): resolve MCP nodeRef ast operations`
+  * Scope:
+    `AstService.duplicateElement`,
+    `AstService.wrapElement`,
+    `hyper_duplicate_element` MCP response,
+    `AstServiceDuplicate.test.ts`.
+  * Pre-commit hooks ran normally: react-hooks-import, lint, typecheck passed.
+- Ext-test repo commit:
+  * `df5e060 test(e2e): harden MCP extension flows`
+  * Scope:
+    `e2e/setup/electron-app.ts`,
+    `e2e/setup/electron-app.test.ts`,
+    `e2e/tests/project-independent/mcp-setup.spec.ts`,
+    `e2e/tests/project-independent/mcp-tools.spec.ts`.
+  * The first ext-test commit attempt accidentally included the repo's existing
+    staged index. It was immediately amended before reporting as complete.
+  * Final `df5e060` contains only the four intended E2E files.
+  * The pre-existing staged ext-test hunks were restored after the amend:
+    setup-preview/page-object/command/keybinding/position changes, route-file
+    deletions, and the delete-command rename hunks in `mcp-tools.spec.ts`.
+- Gates:
+  * Claude review completed and recorded above.
+  * `bunx knip` was run before the main commit and still fails on the existing
+    repo-wide unused-file report: 582 unused files, dominated by docs/.next,
+    templates, and broad client/server entries. This was not introduced by the
+    current files and was not mixed into the atomic fixes.
+  * `markdownlint-cli2` passed for this workprocess file before the code/docs
+    commit split.
+  * `git diff --check` passed for the main repo and for the intended ext-test
+    files.
+```
