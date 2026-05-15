@@ -2726,8 +2726,94 @@ Unit test verification: `bun test vscode-extension/.../UndoRedoService.test.ts` 
 Start fresh 4-shard Docker run with all fixes applied.
 Expected improvement: ~25–30 fewer failures vs run #14.
 
+## 📍 Run #15 Results + 3 Fixes Applied (2026-04-28)
+
+### Run #15 summary
+
+Run ID: `run-20260428-030533-24975` | 4 shards, 5 workers each
+
+| Shard | Passed | Failed |
+|-------|--------|--------|
+| 1     | 199    | 0      |
+| 2     | 170    | 10     |
+| 3     | 197    | 3      |
+| 4     | 60     | 7      |
+| **Total** | **626** | **20** |
+
+### Failure inventory
+
+**Shard 2 — 8 settings tests** (~36–68s each):
+- "Setting in multi-root workspace", "autoStart true → server starts on activation",
+  "autoStart false → no auto start", "Model override" (68s), "Custom baseURL",
+  "Backend for proxy/opencode", "Settings UI in VS Code settings editor",
+  "Settings default values correct"
+
+**Shard 2 — 2 redo limit tests** (~28–30s each):
+- "redo limit — no redo after new edit" × 2
+
+**Shard 3 — 3 inspector/fiber tests**:
+- "inspector fill section is visible after element selection" 72248ms
+- "elements identifiable via fiber-based selection (replaces data-uniq-id)" 54497ms
+- "nested components — multiple selectors found" 45960ms
+
+**Shard 4 — 7 Remix cold compile timeouts** (323–355s each):
+- Various tests on `remix-tw4-twitter` project timed out in the 320s poll
+
+### Root cause analysis
+
+**Root cause A: CommandPalette focus — preview webview absorbs F1**
+
+After `setupPreviewWithDevServer` loads the preview, the preview WebviewPanel iframe
+can have focus. When the next `cmd.runCommand(...)` calls `CommandPalette.open()`, the
+activity bar click returns DOM focus to VS Code chrome, but VS Code's keyboard routing
+can send F1 back into the last-focused webview. The preview webview receives F1 but
+doesn't forward it to VS Code's command system → command palette never opens → 15s
+timeout × 2 retries = 30–50s wasted per test.
+
+Affects two test clusters:
+- Settings tests (shard-2): Inspector sidebar webview had focus after cursor-sync tests
+- Fiber/inspector tests (shard-3): Preview WebviewPanel had focus on tamagui-banking
+
+**Root cause B: Remix cold compile — 320s poll not enough**
+
+`remix-tw4-twitter` cold compile measured at 323–355s in Docker. The 320s poll budget
+is exhausted before the compile finishes. All tests on workers doing a cold Remix compile
+fail their first test (7 total in shard-4).
+
+**Root cause C: Stale extension.js (redo limit)**
+
+`hyper-canvas-draft` was rebuilt in the previous session but `out/extension.js` was NOT
+rebuilt before run #15 started. The `beginTracking()` fix (`d713171f`) was in TypeScript
+source but not in the compiled output. Confirmed by timestamp comparison: source at
+1777337860, compiled at 1777330450.
+
+### Fixes committed
+
+**ext-test-projects commit `00879f3`**:
+- `CommandPalette.ts`: blur focused iframe element before pressing F1/Cmd+Shift+P.
+  `document.activeElement.blur()` when `activeElement.tagName === 'IFRAME'` returns
+  keyboard control to VS Code's native UI layer.
+
+**ext-test-projects commit `a3f9bcb`**:
+- `setup-preview.ts`: `isRemixProject = resolvedComponentFile.startsWith('app/')` detection.
+  Poll timeout extended to 420s (65s buffer over worst 355s observed).
+  `test.setTimeout(600_000)` overrides `test.slow()` 360s cap to allow the full 420s poll.
+
+**Extension rebuild** (not committed — gitignored):
+- `bun run build` in `vscode-extension/hypercanvas-preview/`.
+- Verified: `beginTracking` call order correct in `out/extension.js`, timestamp 1777340963.
+
+### Run #16 target
+
+Run ID: `run-20260428-040917-4781` — started immediately after fixes.
+Expected improvement: all 20 remaining failures resolved.
+- 11 CommandPalette failures → fixed by iframe.blur
+- 7 Remix timeouts → fixed by 420s/600s extension
+- 2 redo limit → fixed by rebuilt extension.js
+
 ## Next Step
 
-- Run #15 with all 4 fixes from run #14 analysis.
-- Collect full failure inventory from run #15.
+- Monitor run #16 (ID: `run-20260428-040917-4781`).
+- Collect full failure inventory from run #16.
 - Fix any new persistent failures found.
+- Target: 0 failures across 2211 tests.
