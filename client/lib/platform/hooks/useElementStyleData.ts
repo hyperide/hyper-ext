@@ -408,7 +408,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
       clearTimeout(timer);
     };
-  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, refreshKey]);
+  }, [elementId, componentPath, canvas, engine, styleAdapter, activeInstanceId, itemIndex, refreshKey]);
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.
