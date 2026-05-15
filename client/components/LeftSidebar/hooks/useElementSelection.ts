@@ -173,11 +173,11 @@ export function useElementSelection(
           dispatchId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
         }
         dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
-        // Tell the canvas iframe to scroll the element into view.
-        // Path: LeftPanel webview → extension host → StateHub.broadcast → PreviewPanel
-        //       webview → iframe (`hypercanvas:scrollToElement` postMessage).
-        // SaaS uses the engine.select branch above and never reaches this code path.
         canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: dispatchId });
+        // Also notify preview panel locally to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — complements the bus event
+        // for environments where the extension-host round-trip echo is not enough.
+        window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },
     [engine, dispatch, elementsTree, canvas, currentComponent],

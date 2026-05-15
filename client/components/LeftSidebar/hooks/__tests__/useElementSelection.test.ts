@@ -102,10 +102,7 @@ describe('handleSelect — VS Code path', () => {
     });
 
     expect(dispatchMock).toHaveBeenCalledTimes(1);
-    // handleSelect also resets selectedElementRuntimeStyle / selectedItemIndices
-    // as part of the selection-change payload. We only pin selectedIds here —
-    // the reset fields are an implementation detail of useSelectionDispatcher.
-    expect(dispatchMock.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedIds: [expectedRef] }));
+    expect(dispatchMock.mock.calls[0][0]).toEqual({ selectedIds: [expectedRef] });
   });
 
   it('sends iframe:scrollToElement with nodeRef after selection', () => {
@@ -130,14 +127,14 @@ describe('handleSelect — VS Code path', () => {
       result.current.handleSelect('uuid-noloc', makeClickEvent());
     });
 
-    expect(dispatchMock.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedIds: ['uuid-noloc'] }));
+    expect(dispatchMock.mock.calls[0][0]).toEqual({ selectedIds: ['uuid-noloc'] });
     expect(sendEventMock).toHaveBeenCalledWith({
       type: 'iframe:scrollToElement',
       elementId: 'uuid-noloc',
     });
   });
 
-  it('falls back to UUID for scroll event when no currentComponent path', () => {
+  it('does NOT send scroll event when no currentComponent path', () => {
     mockState.currentComponent = null;
     const { result } = renderHook(() => useElementSelection(TREE));
 
@@ -145,9 +142,9 @@ describe('handleSelect — VS Code path', () => {
       result.current.handleSelect('uuid-button', makeClickEvent());
     });
 
-    // dispatch happens with UUID fallback (no nodeRef synthesizable without component path)
+    // dispatch happens with UUID fallback
     expect(dispatchMock).toHaveBeenCalledTimes(1);
-    // scroll still sent — the iframe handler resolves UUID via its source cache
+    // scroll still sent (with UUID)
     expect(sendEventMock).toHaveBeenCalledWith({
       type: 'iframe:scrollToElement',
       elementId: 'uuid-button',

@@ -65,6 +65,45 @@ export function buildDeterministicContainerSampleScaffold({
   return buildScaffold(jsxComponentName, exportName, [], childLines);
 }
 
+/**
+ * JSX expression body (no `export const Sample = …` wrapper) plus the list of
+ * component identifiers it references. Used by the preview generator to embed
+ * a synthetic SampleDefault inline in the generated __canvas_preview__.tsx
+ * for compound shadcn-style modules that don't ship their own SampleDefault.
+ */
+export interface ContainerSampleJsxBody {
+  /** Multi-line JSX expression, e.g. "<Alert>\n  <AlertTitle>…</AlertTitle>\n</Alert>" */
+  body: string;
+  /** All component identifiers referenced in `body`, in source order. */
+  referencedNames: string[];
+}
+
+export function buildContainerSampleJsxBody({
+  sourceCode,
+  componentName,
+}: Omit<SampleScaffoldConfig, 'propEntries' | 'exportName'>): ContainerSampleJsxBody | null {
+  const jsxComponentName = normalizeSampleComponentName(componentName);
+  const childLines = buildCompoundChildLines(sourceCode, jsxComponentName);
+  if (childLines.length === 0) return null;
+
+  const lines = [`<${jsxComponentName}>`, ...childLines, `</${jsxComponentName}>`];
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const line of lines) {
+    const matches = line.match(/<\/?\s*([A-Z][\w]*)/g) ?? [];
+    for (const raw of matches) {
+      const name = raw.replace(/<\/?\s*/, '');
+      if (!seen.has(name)) {
+        seen.add(name);
+        ordered.push(name);
+      }
+    }
+  }
+
+  return { body: lines.join('\n'), referencedNames: ordered };
+}
+
 function buildScaffold(
   jsxComponentName: string,
   exportName: string,
@@ -121,12 +160,42 @@ function buildVisibleChildLines(sourceCode: string, componentName: string): stri
 
 function buildCompoundChildLines(sourceCode: string, componentName: string): string[] {
   const exportedNames = scanRenderableExportNames(sourceCode);
-  const suffixPriority = ['Header', 'Title', 'Description', 'Content', 'Body', 'Text', 'Footer', 'Label'];
+  // Known compound-part suffixes ordered by visual layout (header/body/footer +
+  // common shadcn primitives). Unknown PascalCase suffixes (e.g. RootProvider,
+  // SubMenu) are still included — appended after the known ones, in source
+  // order — so shadcn-style modules like `carousel.tsx` (Item/Previous/Next)
+  // get a useful scaffold instead of being dropped on the floor.
+  const suffixPriority = [
+    'Header',
+    'Title',
+    'Description',
+    'Trigger',
+    'List',
+    'Content',
+    'Body',
+    'Text',
+    'Item',
+    'Action',
+    'Cancel',
+    'Previous',
+    'Next',
+    'Footer',
+    'Label',
+  ];
+
   const candidates = exportedNames
     .filter((name) => name !== componentName && name.startsWith(componentName))
-    .map((name) => ({ name, suffix: name.slice(componentName.length) }))
-    .filter(({ suffix }) => suffixPriority.includes(suffix))
-    .sort((a, b) => suffixPriority.indexOf(a.suffix) - suffixPriority.indexOf(b.suffix));
+    .map((name, index) => ({ name, suffix: name.slice(componentName.length), index }))
+    .filter(({ suffix }) => /^[A-Z][\w$]*$/.test(suffix));
+
+  candidates.sort((a, b) => {
+    const ai = suffixPriority.indexOf(a.suffix);
+    const bi = suffixPriority.indexOf(b.suffix);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.index - b.index;
+  });
 
   return candidates.map(({ name, suffix }) => `    <${name}>${sampleTextForSuffix(suffix)}</${name}>`);
 }
@@ -136,6 +205,12 @@ function sampleTextForSuffix(suffix: string): string {
   if (suffix === 'Description') return 'This sample shows the component with visible content.';
   if (suffix === 'Footer') return 'Preview footer';
   if (suffix === 'Label') return 'Preview label';
+  if (suffix === 'Trigger') return 'Open';
+  if (suffix === 'Item') return 'Sample item';
+  if (suffix === 'Previous') return 'Prev';
+  if (suffix === 'Next') return 'Next';
+  if (suffix === 'Action') return 'Action';
+  if (suffix === 'Cancel') return 'Cancel';
   return 'Sample content';
 }
 

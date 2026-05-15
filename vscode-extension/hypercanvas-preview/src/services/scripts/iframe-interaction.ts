@@ -1339,7 +1339,8 @@ function _dragPointerUp(e: PointerEvent): void {
   // pre-lift element if the parent layer has no own source.
   const finalSourceSrc =
     _resolveSourceWithFallback(finalSourceEl)?.source ?? _resolveSourceWithFallback(dragEl)?.source;
-  const finalDropSrc = _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
+  const finalDropSrc =
+    _resolveSourceWithFallback(finalDropEl)?.source ?? dropResolved.source;
   if (!finalSourceSrc || !finalDropSrc) return;
   const finalSourceId = `${finalSourceSrc.fileName}:${finalSourceSrc.line}:${finalSourceSrc.column}`;
   const targetId = `${finalDropSrc.fileName}:${finalDropSrc.line}:${finalDropSrc.column}`;
