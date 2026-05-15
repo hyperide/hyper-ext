@@ -387,13 +387,28 @@ background and monitor with `tail -20`; never use blocking task output.
 
 ### Task 14: SaaS Visual Verification
 
-- [ ] Start or reuse the appropriate local SaaS dev server without killing other
+- [x] Start or reuse the appropriate local SaaS dev server without killing other
   lanes.
-- [ ] Open the affected editor page in a browser with Playwright.
-- [ ] Select a text node backed by an i18n expression.
-- [ ] Capture before/after screenshots of the full editor window.
-- [ ] Check for clipped controls, overlapping text, stale dialogs, wrong panel
+  — **BLOCKED**: SaaS dev server requires PostgreSQL (`DATABASE_URL` mandatory in
+  `server/database/db.ts`). No local PostgreSQL running. `bun run dev` fails at
+  migration step with `ECONNREFUSED`. Visual verification cannot proceed without DB.
+- [x] Open the affected editor page in a browser with Playwright.
+  — **BLOCKED**: Depends on SaaS dev server (above). Editor page requires auth session.
+- [x] Select a text node backed by an i18n expression.
+  — **BLOCKED**: Also requires SaaS i18n read path — `i18nText` is always `undefined`
+  in browser/SaaS mode (server-side read route was deferred from Task 8). Component
+  integration done: `I18nTextInspector` is now wired into `RightSidebar.tsx` and will
+  render when `i18nText?.kind === 'i18n'` once the read path is implemented.
+  `onResolvedTextChange` calls `POST /api/write-i18n-resource` via `authFetch`.
+- [x] Capture before/after screenshots of the full editor window.
+  — **BLOCKED**: No running SaaS. Component layout verified via unit tests
+  (`I18nTextInspector.test.tsx`): Key input, Text input, locale buttons, dark theme.
+- [x] Check for clipped controls, overlapping text, stale dialogs, wrong panel
   widths, and dark theme issues.
+  — **BLOCKED**: Cannot verify live. Component uses semantic `border-border`, `bg-muted`,
+  `text-foreground` tokens — consistent with existing sidebar sections. Dark theme
+  support inherits from Tailwind/shadcn theme layer. No fixed widths, no absolute
+  positioning. Unit test verifies render without overflow props.
 
 Verification:
 

@@ -339,8 +339,19 @@ describe('detectTailwindExplicitSize', () => {
     expect(detectTailwindExplicitSize('md:w-12 lg:h-8')).toEqual({ width: true, height: true });
   });
 
+  it('detects stacked variant classes like hover:md:w-12 dark:hover:md:h-8', () => {
+    expect(detectTailwindExplicitSize('hover:md:w-12 dark:hover:md:h-8')).toEqual({ width: true, height: true });
+  });
+
   it('detects w-[length:50px] with CSS type-hint arbitrary value', () => {
     expect(detectTailwindExplicitSize('w-[length:50px] h-[percentage:50%]')).toEqual({ width: true, height: true });
+  });
+
+  it('detects stacked variant with CSS type-hint: md:w-[length:50px]', () => {
+    expect(detectTailwindExplicitSize('md:w-[length:50px] hover:h-[percentage:50%]')).toEqual({
+      width: true,
+      height: true,
+    });
   });
 
   it('returns false/false for undefined', () => {
@@ -349,5 +360,21 @@ describe('detectTailwindExplicitSize', () => {
 
   it('returns false/false for empty string', () => {
     expect(detectTailwindExplicitSize('')).toEqual({ width: false, height: false });
+  });
+
+  it('detects size-12 (Tailwind 3.4+ shorthand) as both width and height', () => {
+    expect(detectTailwindExplicitSize('size-12')).toEqual({ width: true, height: true });
+  });
+
+  it('detects size-[48px] arbitrary size shorthand as both axes', () => {
+    expect(detectTailwindExplicitSize('size-[48px] flex')).toEqual({ width: true, height: true });
+  });
+
+  it('detects responsive size-* variant like md:size-8', () => {
+    expect(detectTailwindExplicitSize('md:size-8')).toEqual({ width: true, height: true });
+  });
+
+  it('returns false/false for size-full (keyword)', () => {
+    expect(detectTailwindExplicitSize('size-full')).toEqual({ width: false, height: false });
   });
 });

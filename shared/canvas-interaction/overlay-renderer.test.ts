@@ -1,13 +1,4 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Window } from 'happy-dom';
-
-// Set up global DOM APIs from happy-dom
-const win = new Window({ url: 'http://localhost' });
-globalThis.document = win.document as unknown as Document;
-globalThis.HTMLElement = win.HTMLElement as unknown as typeof HTMLElement;
-globalThis.HTMLDivElement = win.HTMLDivElement as unknown as typeof HTMLDivElement;
-globalThis.MouseEvent = win.MouseEvent as unknown as typeof MouseEvent;
-
 import { clearOverlays, renderOverlayRects, renderPlaceholderOverlays } from './overlay-renderer';
 import type { OverlayRect, PlaceholderRect } from './types';
 

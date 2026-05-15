@@ -37,6 +37,7 @@ import {
   EffectsSection,
   FillSection,
   HeaderSection,
+  I18nTextInspector,
   LayoutSection,
   MarginSection,
   PositionSection,
@@ -214,6 +215,7 @@ export default function RightSidebar({
     loading,
     childrenLocation,
     styleReadResult,
+    i18nText,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -694,6 +696,24 @@ export default function RightSidebar({
     goToCode(componentPath, childrenLocation.line, childrenLocation.column);
   }, [componentPath, childrenLocation, goToCode]);
 
+  const handleI18nResolvedTextChange = useCallback(
+    async (newText: string) => {
+      if (!i18nText || i18nText.kind !== 'i18n') return;
+      await authFetch('/api/write-i18n-resource', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          library: i18nText.library,
+          key: i18nText.key,
+          activeLocale: i18nText.activeLocale,
+          newText,
+        }),
+      });
+      setStyleRefreshKey((k) => k + 1);
+    },
+    [i18nText],
+  );
+
   // ========================================================================
   // Populate UI state from parsedStyles
   // ========================================================================
@@ -1149,6 +1169,16 @@ export default function RightSidebar({
                 </div>
               )}
             </div>
+          )}
+
+          {/* i18n Text Inspector */}
+          {i18nText?.kind === 'i18n' && (
+            <I18nTextInspector
+              i18nBinding={i18nText}
+              onKeyChange={() => {}}
+              onResolvedTextChange={handleI18nResolvedTextChange}
+              onLocaleChange={() => {}}
+            />
           )}
 
           {/* Style Source Tabs */}

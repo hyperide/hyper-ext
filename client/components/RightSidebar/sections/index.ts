@@ -4,6 +4,7 @@ export { CommentsSectionContainer } from './CommentsSectionContainer';
 export { EffectsSection } from './EffectsSection';
 export { FillSection } from './FillSection';
 export { HeaderSection } from './HeaderSection';
+export { I18nTextInspector } from './I18nTextInspector';
 export { LayoutSection } from './LayoutSection';
 export { MarginSection } from './MarginSection';
 export { PositionSection } from './PositionSection';
