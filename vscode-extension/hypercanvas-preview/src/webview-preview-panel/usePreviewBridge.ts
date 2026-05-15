@@ -294,6 +294,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
       const e = event as CustomEvent<{ elementId: string }>;
       const elementId = e.detail?.elementId;
       if (!elementId) return;
+      console.debug('[tree-scroll] leg2 hypercanvas:treeSelect → iframe goToVisual', { elementId });
       // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
       iframeElRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId }, '*');
     }
@@ -523,6 +524,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
         case 'iframe:scrollToElement':
           // Scroll canvas (iframe) to the specified element without changing selection
+          console.debug('[tree-scroll] leg3 webview iframe:scrollToElement → iframe scrollToElement', {
+            elementId: msg.elementId,
+          });
           // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
           break;
