@@ -430,11 +430,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
 
       const fullStyles = classNameToStyles(response.className || '');
 
-      // Preserve previous i18nText when the response omits it but the element hasn't changed.
-      // This prevents the I18nTextInspector from unmounting (and resetting localText) during the
-      // brief window between a debounced write and the subsequent re-read — the file may not have
-      // flushed yet, so StyleReadService returns undefined i18nText for one cycle.
-      setData((prev) => ({
+      setData(() => ({
         parsedStyles: fullStyles,
         childrenType: response.childrenType,
         textContent: response.textContent || '',
@@ -442,7 +438,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         loading: false,
         childrenLocation: response.childrenLocation,
         styleReadResult: response.styleReadResult,
-        i18nText: response.i18nText ?? prev.i18nText,
+        i18nText: response.i18nText,
       }));
     });
 
