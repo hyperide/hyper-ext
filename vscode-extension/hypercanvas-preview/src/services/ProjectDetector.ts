@@ -332,13 +332,6 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  */
 const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
 
-/**
- * Bundlers where preview renders but AST writes may not persist
- * (SSR re-renders, server components, different file conventions).
- * Show readonly badge but allow preview interaction.
- */
-const READONLY_BUNDLERS: import('../types').ProjectType[] = ['remix'];
-
 // 'unknown' and 'bun' → unsupported (no dev server management)
 
 /**
@@ -358,7 +351,6 @@ export function computeCapabilities(
 ): import('../types').ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
-  const bundlerReadonly = projectType ? READONLY_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;
   return {
