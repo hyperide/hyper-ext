@@ -1086,6 +1086,10 @@ const contextMenuHandler = (e: MouseEvent) => {
 };
 document.addEventListener('contextmenu', contextMenuHandler, true);
 
+// === Resize live-preview state ===
+// Maps elementId → original inline width/height so cancel can restore.
+const _previewResizeOrig = new Map<string, { width: string; height: string }>();
+
 // === Element drag/reorder state machine ===
 // Tracks pointerdown → threshold → drag → drop to post hypercanvas:reorderElement.
 // Suppresses the click event that fires after pointerup to prevent accidental deselect.
@@ -1581,6 +1585,33 @@ window.addEventListener('message', (event: MessageEvent) => {
       },
       '*',
     );
+    return;
+  }
+
+  // Live resize preview — apply inline size to element so user sees instant feedback
+  if (msg.type === 'hypercanvas:previewResize') {
+    const id = msg.elementId as string;
+    const el = findElementsByRef(id, 0)[0] ?? null;
+    if (el) {
+      if (!_previewResizeOrig.has(id)) {
+        _previewResizeOrig.set(id, { width: el.style.width, height: el.style.height });
+      }
+      if (typeof msg.width === 'number') el.style.width = `${msg.width}px`;
+      if (typeof msg.height === 'number') el.style.height = `${msg.height}px`;
+    }
+    return;
+  }
+
+  // Restore inline size on cancel (no AST write)
+  if (msg.type === 'hypercanvas:clearPreviewResize') {
+    const id = msg.elementId as string;
+    const el = findElementsByRef(id, 0)[0] ?? null;
+    const orig = _previewResizeOrig.get(id);
+    if (el && orig) {
+      el.style.width = orig.width;
+      el.style.height = orig.height;
+    }
+    _previewResizeOrig.delete(id);
     return;
   }
 

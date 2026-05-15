@@ -420,6 +420,7 @@ export function useCanvasInteraction(
         if (dragFinished) return;
         dragFinished = true;
 
+        ghost.removeEventListener('pointermove', onPointerMove);
         ghost.removeEventListener('pointerup', onPointerUp);
         ghost.removeEventListener('pointercancel', onPointerCancel);
         ghost.remove();
@@ -471,6 +472,7 @@ export function useCanvasInteraction(
       function onPointerCancel() {
         if (dragFinished) return;
         dragFinished = true;
+        ghost.removeEventListener('pointermove', onPointerMove);
         ghost.removeEventListener('pointerup', onPointerUp);
         ghost.removeEventListener('pointercancel', onPointerCancel);
         ghost.remove();
@@ -480,12 +482,28 @@ export function useCanvasInteraction(
         capturedHandle.removeEventListener('pointercancel', onPointerCancel);
         document.removeEventListener('pointerup', onDocPointerUp);
         activeDocPointerUp = null;
+        // Restore original size in iframe
+        // nosemgrep: wildcard-postmessage-configuration -- parent webview → nested iframe, restore on cancel
+        frame.contentWindow?.postMessage({ type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId }, '*');
       }
 
-      // pointermove listener kept for cross-browser compatibility with older WebKit builds
-      function onPointerMove(_e: PointerEvent) {}
+      function onPointerMove(e: PointerEvent) {
+        const dX = e.clientX - startX;
+        const dY = e.clientY - startY;
+        // nosemgrep: wildcard-postmessage-configuration -- parent webview → nested iframe, live resize preview
+        frame.contentWindow?.postMessage(
+          {
+            type: 'hypercanvas:previewResize',
+            elementId: capturedElementId,
+            width: axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : undefined,
+            height: axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : undefined,
+          },
+          '*',
+        );
+      }
 
       activeDocPointerUp = onDocPointerUp;
+      ghost.addEventListener('pointermove', onPointerMove);
       ghost.addEventListener('pointerup', onPointerUp);
       ghost.addEventListener('pointercancel', onPointerCancel);
       capturedHandle.addEventListener('pointermove', onPointerMove);
