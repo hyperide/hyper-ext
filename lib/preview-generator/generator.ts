@@ -18,6 +18,14 @@ export interface PreviewComponentEntry {
   sampleExports: string[];
   /** Resolved import path relative to preview file, e.g. './components/Button' */
   importPath: string;
+  /** True if component imports SSR data hooks (useLoaderData, useRouteLoaderData) that require router context */
+  isSSRRoute?: boolean;
+}
+
+/** Configuration for SSR framework mock wrapping in generated preview. */
+export interface SSRMockConfig {
+  /** Framework whose data hooks need mock router context */
+  framework: 'remix';
 }
 
 export interface ProviderWrapConfig {
@@ -33,6 +41,8 @@ export interface GeneratePreviewOptions {
   isNextPagesRouter?: boolean;
   /** Wrap rendered components with project-specific providers (theme, safe area, navigation) */
   providerWrap?: ProviderWrapConfig;
+  /** When set, SSR route components are wrapped in a mock router instead of rendered directly */
+  ssrMock?: SSRMockConfig;
 }
 
 /** Convert 'SampleDefault' → 'default', 'SamplePrimary' → 'primary' */
@@ -108,6 +118,13 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   // Next.js pages router import
   if (options?.isNextPagesRouter) {
     lines.push("import { useRouter } from 'next/router';");
+  }
+
+  // Remix SSR mock: import createMemoryRouter + RouterProvider when any entry uses loader data hooks
+  const ssrRoutes = new Set(entries.filter((e) => e.isSSRRoute).map((e) => e.componentPath));
+  const needsRemixMock = options?.ssrMock?.framework === 'remix' && ssrRoutes.size > 0;
+  if (needsRemixMock) {
+    lines.push("import { createMemoryRouter, RouterProvider } from 'react-router-dom';");
   }
 
   // Provider imports for project-specific wrapping (theme, safe area, navigation)
@@ -497,17 +514,30 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
   lines.push('};');
   lines.push('');
 
-  // 9. Error boundary to catch component render crashes (e.g. missing required props)
+  // 9. SSR route set + RemixMockWrapper (emitted only for Remix projects with SSR route components)
+  lines.push('const ssrRouteSet = new Set<string>([');
+  for (const path of ssrRoutes) {
+    lines.push(`  '${path}',`);
+  }
+  lines.push(']);');
+  lines.push('');
+
+  if (needsRemixMock) {
+    lines.push(...buildRemixMockWrapper());
+    lines.push('');
+  }
+
+  // 10. Error boundary to catch component render crashes (e.g. missing required props)
   // Without this, a crash in one component kills the entire React tree and all subsequent
   // component switches via postMessage silently fail (black canvas).
   lines.push(...buildErrorBoundary());
   lines.push('');
 
-  // 10. CanvasPreview component
+  // 11. CanvasPreview component
   if (options?.isNextPagesRouter) {
-    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap));
+    lines.push(...buildCanvasPreviewNextPages(options?.providerWrap, ssrRoutes));
   } else {
-    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap));
+    lines.push(...buildCanvasPreviewURLParams(options?.providerWrap, ssrRoutes));
   }
 
   return `${lines.join('\n')}\n`;
@@ -559,7 +589,7 @@ function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   return `import { ${allImports.join(', ')} } from '${entry.importPath}';`;
 }
 
-function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig): string[] {
+function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   return [
     'interface CanvasPreviewProps {',
     '  component?: string | null;',
@@ -602,13 +632,13 @@ function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig): string[
     "    return () => window.removeEventListener('message', onMessage);",
     '  }, []);',
     '',
-    ...buildCanvasPreviewBody(providerWrap),
+    ...buildCanvasPreviewBody(providerWrap, ssrRoutes),
     '}',
     '',
   ];
 }
 
-function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig): string[] {
+function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   return [
     'export default function CanvasPreview() {',
     '  const router = useRouter();',
@@ -637,7 +667,7 @@ function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig): string[
     "    return () => window.removeEventListener('message', onMessage);",
     '  }, []);',
     '',
-    ...buildCanvasPreviewBody(providerWrap),
+    ...buildCanvasPreviewBody(providerWrap, ssrRoutes),
     '}',
     '',
   ];
@@ -678,9 +708,41 @@ function buildErrorBoundary(): string[] {
   ];
 }
 
-function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
+function buildRemixMockWrapper(): string[] {
+  return [
+    'function RemixMockWrapper({ Component }: { Component: React.ComponentType<Record<string, unknown>> }) {',
+    '  const router = createMemoryRouter([',
+    '    {',
+    "      id: 'root',",
+    "      path: '/',",
+    '      loader: () => ({}),',
+    '      Component: React.Fragment,',
+    '      children: [{',
+    "        path: 'preview',",
+    '        Component: Component as React.ComponentType,',
+    '        loader: () => ({}),',
+    '      }],',
+    '    },',
+    "  ], { initialEntries: ['/preview'] });",
+    '  return <RouterProvider router={router} />;',
+    '}',
+  ];
+}
+
+function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   const wo = providerWrap?.wrapOpen ?? '';
   const wc = providerWrap?.wrapClose ?? '';
+  const hasSSR = ssrRoutes && ssrRoutes.size > 0;
+  // Runtime fallback render: use RemixMockWrapper for SSR routes, direct render otherwise
+  const singleRender = hasSSR
+    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} />}`
+    : `{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} />}`;
+  const multiRender = hasSSR
+    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} />}`
+    : `<Component {...previewFallbackProps} />`;
+  const multiMergedRender = hasSSR
+    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...mergedProps} />}`
+    : `<Component {...mergedProps} />`;
   return [
     '  if (!componentPath) {',
     "    return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>",
@@ -700,7 +762,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '        <p>Component &quot;{componentPath}&quot; is not available</p>',
     '      </div>;',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} />}</div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>${singleRender}</div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
@@ -716,7 +778,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '          return (',
     '            <div key={id} data-canvas-instance-id={id}',
     "                 style={{ position: 'absolute', left: x, top: y }}>",
-    '              <Component {...mergedProps} />',
+    `              ${multiMergedRender}`,
     '            </div>',
     '          );',
     '        }',
@@ -727,7 +789,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig): string[] {
     '            return (',
     '              <div key={id} data-canvas-instance-id={id}',
     "                   style={{ position: 'absolute', left: x, top: y }}>",
-    '                <Component {...previewFallbackProps} />',
+    `                ${multiRender}`,
     '              </div>',
     '            );',
     '          }',

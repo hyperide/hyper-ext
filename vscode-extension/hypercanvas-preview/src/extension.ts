@@ -15,7 +15,8 @@
 import { execFile } from 'node:child_process';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { ensureSample, PreviewFileManager, PreviewModeManager } from '@lib/preview-generator';
+import { ensureSample, PreviewFileManager, PreviewModeManager, type SSRMockConfig } from '@lib/preview-generator';
+import { detectFramework } from '@lib/preview-generator/framework-routing';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
@@ -148,6 +149,15 @@ async function detectPreviewProviders(
 
     if (imports.length === 0) return undefined;
     return { imports, wrapOpen, wrapClose };
+  } catch {
+    return undefined;
+  }
+}
+
+async function detectSSRMockConfig(root: string): Promise<SSRMockConfig | undefined> {
+  try {
+    const { framework } = await detectFramework(root, new VSCodeFileIO());
+    return framework === 'remix' ? { framework: 'remix' } : undefined;
   } catch {
     return undefined;
   }
@@ -447,8 +457,9 @@ export function activate(context: vscode.ExtensionContext) {
       projectRoot,
       io: vsCodeIO,
     });
-    // Provider detection runs async; ensureComponent/rebuild will await it before generating
+    // Provider and SSR mock detection run async; ensureComponent/rebuild await both before generating
     manager.setProviderWrapAsync(detectPreviewProviders(projectRoot));
+    manager.setSSRMockAsync(detectSSRMockConfig(projectRoot));
     return manager;
   };
 

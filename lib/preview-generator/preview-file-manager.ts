@@ -26,8 +26,15 @@ import {
   PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
   type ProviderWrapConfig,
+  type SSRMockConfig,
 } from './generator';
-import { detectExportStyle, type ExportStyle, extractComponentName, scanSampleExports } from './scanner';
+import {
+  detectExportStyle,
+  detectSSRHooks,
+  type ExportStyle,
+  extractComponentName,
+  scanSampleExports,
+} from './scanner';
 
 /**
  * Next.js App Router special file names that must not be added to the preview registry.
@@ -102,6 +109,8 @@ export interface PreviewFileManagerConfig {
   isNextPagesRouter?: boolean;
   /** Wrap preview components with project-specific providers (theme, safe area, etc.) */
   providerWrap?: ProviderWrapConfig;
+  /** SSR mock config — when set, route components using data hooks are wrapped in a mock router */
+  ssrMock?: SSRMockConfig;
 }
 
 export class PreviewGenerationError extends Error {
@@ -345,6 +354,7 @@ export class PreviewFileManager {
   private io: FileIO;
   private isNextPagesRouter: boolean;
   private providerWrap?: ProviderWrapConfig;
+  private ssrMock?: SSRMockConfig;
   private _providerWrapPromise: Promise<void> | null = null;
 
   constructor(config: PreviewFileManagerConfig) {
@@ -352,6 +362,7 @@ export class PreviewFileManager {
     this.io = config.io;
     this.isNextPagesRouter = config.isNextPagesRouter ?? false;
     this.providerWrap = config.providerWrap;
+    this.ssrMock = config.ssrMock;
   }
 
   /**
@@ -363,6 +374,20 @@ export class PreviewFileManager {
     this._providerWrapPromise = promise.then((wrap) => {
       if (wrap) this.providerWrap = wrap;
     });
+  }
+
+  /**
+   * Register an async SSR mock config detection promise.
+   * Awaited alongside provider wrap before any content generation.
+   */
+  setSSRMockAsync(promise: Promise<SSRMockConfig | null | undefined>): void {
+    const ssrPromise = promise.then((cfg) => {
+      if (cfg) this.ssrMock = cfg;
+    });
+    // Chain onto existing provider promise so both are awaited together
+    this._providerWrapPromise = this._providerWrapPromise
+      ? Promise.all([this._providerWrapPromise, ssrPromise]).then(() => undefined)
+      : ssrPromise;
   }
 
   /** Block until provider detection completes (no-op if none pending). */
@@ -511,6 +536,7 @@ export class PreviewFileManager {
     const content = generatePreviewContent(allEntries, {
       isNextPagesRouter: this.isNextPagesRouter,
       providerWrap: this.providerWrap,
+      ssrMock: this.ssrMock,
     });
 
     const valid = await isValidTypeScript(content);
@@ -626,6 +652,7 @@ export class PreviewFileManager {
     const content = generatePreviewContent(entries, {
       isNextPagesRouter: this.isNextPagesRouter,
       providerWrap: this.providerWrap,
+      ssrMock: this.ssrMock,
     });
 
     const valid = await isValidTypeScript(content);
@@ -678,10 +705,14 @@ export class PreviewFileManager {
     let componentName: string;
     let sampleExports: string[];
     let exportStyle: ExportStyle;
+    let isSSRRoute = false;
     try {
       componentName = extractComponentName(sourceCode, fileName);
       sampleExports = scanSampleExports(sourceCode);
       exportStyle = detectExportStyle(sourceCode, componentName);
+      if (this.ssrMock?.framework === 'remix') {
+        isSSRRoute = detectSSRHooks(sourceCode).size > 0;
+      }
     } catch {
       // Source has syntax errors (e.g. mid-edit). Don't generate a bogus entry —
       // any guess at exportStyle will produce broken imports and break the dev
@@ -706,6 +737,7 @@ export class PreviewFileManager {
       exportStyle,
       sampleExports,
       importPath,
+      ...(isSSRRoute && { isSSRRoute: true }),
     };
   }
 

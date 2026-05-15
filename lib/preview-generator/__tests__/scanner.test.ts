@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { detectExportStyle, escapeRegex, extractComponentName, scanSampleExports } from '../scanner';
+import { detectExportStyle, detectSSRHooks, escapeRegex, extractComponentName, scanSampleExports } from '../scanner';
 
 describe('scanSampleExports', () => {
   it('should find exported const Sample* functions', () => {
@@ -210,6 +210,72 @@ export default React.memo(MyButton);`;
   it('should extract from re-export syntax', () => {
     const source = `export { default as Button } from './BaseButton';`;
     expect(extractComponentName(source, 'index.tsx')).toBe('Button');
+  });
+});
+
+describe('detectSSRHooks', () => {
+  it('detects useLoaderData from @remix-run/react', () => {
+    const source = `
+      import { useLoaderData, Link } from "@remix-run/react";
+      export default function Route() {
+        const { tweets } = useLoaderData<typeof loader>();
+        return <div>{tweets.map(t => t.id)}</div>;
+      }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useLoaderData')).toBe(true);
+    expect(hooks.has('useRouteLoaderData')).toBe(false);
+    expect(hooks.size).toBe(1);
+  });
+
+  it('detects useRouteLoaderData from @remix-run/react', () => {
+    const source = `
+      import { useRouteLoaderData } from "@remix-run/react";
+      export default function Child() {
+        const data = useRouteLoaderData("root");
+        return <div>{data.user}</div>;
+      }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useRouteLoaderData')).toBe(true);
+    expect(hooks.size).toBe(1);
+  });
+
+  it('detects both hooks when both imported', () => {
+    const source = `
+      import { useLoaderData, useRouteLoaderData, Link } from "@remix-run/react";
+      export default function Route() { return null; }
+    `;
+    const hooks = detectSSRHooks(source);
+    expect(hooks.has('useLoaderData')).toBe(true);
+    expect(hooks.has('useRouteLoaderData')).toBe(true);
+    expect(hooks.size).toBe(2);
+  });
+
+  it('returns empty set when no SSR hooks imported', () => {
+    const source = `
+      import { Link, Form } from "@remix-run/react";
+      export default function Route() { return <Link to="/">Home</Link>; }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
+  });
+
+  it('returns empty set when useLoaderData imported from wrong package', () => {
+    const source = `
+      import { useLoaderData } from "react-router-dom";
+      export default function Route() { return null; }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
+  });
+
+  it('returns empty set for plain React component', () => {
+    const source = `
+      import React from "react";
+      export default function Button({ label }: { label: string }) {
+        return <button>{label}</button>;
+      }
+    `;
+    expect(detectSSRHooks(source).size).toBe(0);
   });
 });
 

@@ -153,3 +153,33 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
 export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export type SSRHook = 'useLoaderData' | 'useRouteLoaderData';
+
+const SSR_HOOK_SOURCE = '@remix-run/react';
+const SSR_HOOKS: ReadonlySet<string> = new Set<SSRHook>(['useLoaderData', 'useRouteLoaderData']);
+
+/**
+ * Detect SSR data hooks imported from Remix in the given source code.
+ * Returns the set of hook names found (empty if none).
+ * Only inspects import declarations — does not traverse call sites.
+ */
+export function detectSSRHooks(sourceCode: string): Set<SSRHook> {
+  const ast = parseSource(sourceCode);
+  const found = new Set<SSRHook>();
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.source.value !== SSR_HOOK_SOURCE) continue;
+
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ImportSpecifier') continue;
+      const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
+      if (name && SSR_HOOKS.has(name)) {
+        found.add(name as SSRHook);
+      }
+    }
+  }
+
+  return found;
+}

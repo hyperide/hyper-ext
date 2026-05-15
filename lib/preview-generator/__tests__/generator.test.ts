@@ -6,6 +6,7 @@ import {
   generateStandaloneEntry,
   PREVIEW_GENERATOR_SCHEMA_MARKER,
   type PreviewComponentEntry,
+  type SSRMockConfig,
   sampleExportToKey,
 } from '../generator';
 
@@ -391,6 +392,75 @@ describe('generatePreviewContent', () => {
     expect(content).toContain('onDateSelect: (value: unknown) => console.log');
     expect(content).toContain('onToggleCalendar: (value: unknown) => console.log');
     expect(content).toContain('onCreateEvent: () => console.log');
+  });
+});
+
+describe('generatePreviewContent — SSR mock (Remix)', () => {
+  const ssrMock: SSRMockConfig = { framework: 'remix' };
+
+  function makeSSREntry(path: string, name: string): PreviewComponentEntry {
+    return {
+      componentPath: path,
+      componentName: name,
+      exportStyle: 'default-named',
+      sampleExports: [],
+      importPath: `./${path.replace('app/routes/', '').replace('.tsx', '')}`,
+      isSSRRoute: true,
+    };
+  }
+
+  it('imports createMemoryRouter and RouterProvider from react-router-dom when SSR routes present', () => {
+    const entry = makeSSREntry('app/routes/_index.tsx', 'Index');
+    const content = generatePreviewContent([entry], { ssrMock });
+    expect(content).toContain("import { createMemoryRouter, RouterProvider } from 'react-router-dom'");
+  });
+
+  it('emits ssrRouteSet with correct paths', () => {
+    const entry = makeSSREntry('app/routes/explore.tsx', 'Explore');
+    const content = generatePreviewContent([entry], { ssrMock });
+    expect(content).toContain("'app/routes/explore.tsx'");
+    expect(content).toContain('const ssrRouteSet = new Set<string>');
+  });
+
+  it('emits RemixMockWrapper function', () => {
+    const entry = makeSSREntry('app/routes/_index.tsx', 'Index');
+    const content = generatePreviewContent([entry], { ssrMock });
+    expect(content).toContain('function RemixMockWrapper');
+    expect(content).toContain('createMemoryRouter');
+    expect(content).toContain('RouterProvider');
+  });
+
+  it('uses RemixMockWrapper in single-mode render when ssrRouteSet.has(componentPath)', () => {
+    const entry = makeSSREntry('app/routes/_index.tsx', 'Index');
+    const content = generatePreviewContent([entry], { ssrMock });
+    expect(content).toContain('ssrRouteSet.has(componentPath)');
+    expect(content).toContain('<RemixMockWrapper Component={Component} />');
+  });
+
+  it('does NOT import react-router-dom when no SSR route entries', () => {
+    const entry = makeEntry('src/Button.tsx', 'Button');
+    const content = generatePreviewContent([entry], { ssrMock });
+    expect(content).not.toContain('react-router-dom');
+    expect(content).not.toContain('RemixMockWrapper');
+  });
+
+  it('empty ssrRouteSet when no entries have isSSRRoute', () => {
+    const entry = makeEntry('src/Button.tsx', 'Button');
+    const content = generatePreviewContent([entry], { ssrMock });
+    // ssrRouteSet should be present but empty
+    expect(content).toMatch(/const ssrRouteSet = new Set<string>\(\[\s*\]\)/);
+  });
+
+  it('mixed entries: only SSR routes in ssrRouteSet', () => {
+    const ssrEntry = makeSSREntry('app/routes/explore.tsx', 'Explore');
+    const regularEntry = makeEntry('src/Button.tsx', 'Button');
+    const content = generatePreviewContent([ssrEntry, regularEntry], { ssrMock });
+    // ssrRouteSet contains the SSR route
+    const ssrSetMatch = content.match(/const ssrRouteSet = new Set<string>\(\[([\s\S]*?)\]\)/);
+    expect(ssrSetMatch).toBeTruthy();
+    const ssrSetBody = ssrSetMatch?.[1] ?? '';
+    expect(ssrSetBody).toContain("'app/routes/explore.tsx'");
+    expect(ssrSetBody).not.toContain("'src/Button.tsx'");
   });
 });
 

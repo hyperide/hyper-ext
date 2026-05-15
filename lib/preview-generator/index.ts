@@ -5,6 +5,7 @@ export {
   generateStandaloneEntry,
   type PreviewComponentEntry,
   type ProviderWrapConfig,
+  type SSRMockConfig,
   sampleExportToKey,
 } from './generator';
 export {
