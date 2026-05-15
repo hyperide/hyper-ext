@@ -991,6 +991,9 @@ export default function RightSidebar({
       if (debouncedI18nWriteRef.current) {
         clearTimeout(debouncedI18nWriteRef.current);
       }
+      if (editingTextResetRef.current) {
+        clearTimeout(editingTextResetRef.current);
+      }
     };
   }, []);
 
@@ -1205,7 +1208,6 @@ export default function RightSidebar({
                 />
               );
             })()}
-
           {/* Style Source Tabs */}
           {canInspectStyles && (
             <StyleSourceTabsSection
