@@ -492,6 +492,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
+        case 'iframe:scrollToElement':
+          // Scroll canvas (iframe) to the specified element without changing selection
+          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
+          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
+          break;
+
         case 'ast:response':
         case 'editor:activeFileChanged':
           // Forward to iframe

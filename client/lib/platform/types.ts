@@ -234,7 +234,10 @@ export type PlatformMessage =
 
   // VS Code commands triggered from preview webview
   | { type: 'command:fixUnsupportedProject' }
-  | { type: 'command:execute'; command: string; args?: string[] };
+  | { type: 'command:execute'; command: string; args?: string[] }
+
+  // Scroll iframe to element (tree click → canvas scroll, no selection change)
+  | { type: 'iframe:scrollToElement'; elementId: string };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;
