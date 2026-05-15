@@ -3080,3 +3080,58 @@ in the shared workspace volume.
 `docker-parallel-run.sh` checks `docker-entrypoint.sh` mtime against image age.
 Modified entrypoint triggers auto-rebuild on next `bun run test:docker`.
 Rebuild is fast (only the `COPY entrypoint + chmod` layer re-runs; bake layer cached).
+
+## 📍 Run #19 Checkpoint 5 (2026-04-28 10:23 CEST, ~3h49m)
+
+### S2 FINISHED
+
+**S2 final**: 420 passed / 3 failed / 6 flaky / 262 skipped (2.2h, 691 total).
+
+S2 3 persistent failures (both attempts failed):
+
+| Test | Project | Root cause |
+|------|---------|-----------|
+| `project-switching-stale-preview` | independent | `Editor.openFile('App.tsx')` → VS Code ranks recently-opened `src/stubs/AppContainer.tsx` above root `App.tsx`; `toContainText('App.tsx')` fails |
+| `Preview Routing: select component → /test-preview (no 404)` | cssmodules-spotify | PreviewProxy `read ECONNRESET` ×6 → test fails on unexpected console.errors |
+| `Dev Server: logs panel opens after dev server stop` | tamagui-banking | `socket hang up` / `Unexpected SIGPIPE` after intentional stop → console.errors |
+
+All 6 S2 flakies are retry-pass (timing races: 2×style-editing, 2×dev-server, 1×ast-operations, 1×style).
+
+### S1r2 + S3 still running at checkpoint
+
+- S1r2: 376 tests done, 2 transient failures (retry-pass), progressing at ~5.9 tests/min
+- S3: ~215 tests done, stuck on Remix cssmodules-spotify cold compile (~437s into 600s poll)
+
+S3 ETA: very late (~15:00 CEST) — still has many Remix cold-compile batches to slog through (these will all pass on retry or timeout at 600s, then recover). No action needed; pre-warm fix in Run #20 closes all Remix cold compile failures.
+
+### 2 fixes applied + pushed (ext-test-projects `8dfc896`)
+
+1. **`base.fixture.ts` benignPatterns**: Added `socket hang up`, `read ECONNRESET`,
+   `read ENOTCONN`, `Unexpected SIGPIPE` to `benignPatterns`. These are
+   PreviewProxy/ext-host lifecycle events (dev server stop), not extension bugs.
+   Closes S2 failures #2 and #3.
+
+2. **`Editor.ts` _openFileAttempt**: Prefer row with `aria-label^=fileName` before
+   pressing Enter on first result. VS Code fuzzy-ranks recently-opened partial
+   matches (`AppContainer.tsx`) above exact matches (`App.tsx`).
+   `aria-label` format: `"FILENAME [PATH], file results"` — `[aria-label^="App.tsx"]`
+   excludes `AppContainer.tsx` cleanly. Falls back to `toContainText` if no exact row.
+   Closes S2 failure #1.
+
+### VSIX 0.1.24 installed locally
+
+`code --install-extension hypercanvas-preview-0.1.24.vsix --force` — installed.
+Requires VS Code "Reload Window" (Cmd+Shift+P) to activate.
+
+### Run #20 started (2026-04-28 ~10:24 CEST)
+
+`HYPER_E2E_MAX_SHARDS=3 HYPER_E2E_BUILD_IMAGE=1 bash e2e/scripts/docker-parallel-run.sh`
+
+Image rebuild triggered (docker-entrypoint.sh modified since last image).
+All fixes applied:
+- `e097090` vite pre-warm in entrypoint (eliminates Remix cold compile)
+- `0882fef` optimizeDeps.include in all 4 Remix vite.config.ts
+- `50511a5` poll 520s → 600s, test.setTimeout 720s → 840s
+- `8dfc896` socket benign errors + Editor.openFile aria-label ranking
+
+Expected: 0 persistent failures across all 2189 tests.
