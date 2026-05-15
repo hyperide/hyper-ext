@@ -2471,3 +2471,66 @@ Remaining risks after Run #13:
 1. `react-vite-emotion-cssmodules-calendar` → 2 tests still expected to fail
 2. `remix-cssmodules-spotify` 403 proxy → duplicate/delete tests may still fail
 3. Other transient failures → retries=1 should absorb them
+
+## 📍 Run #13 Partial Results (2026-04-28 00:22 CEST, still running)
+
+Run #13 started with VSIX 0.1.20. During the run VSIX 0.1.21 was built (Origin/Referer
+stripping in PreviewProxy) but was NOT applied to running containers.
+
+Confirmed failures so far (shards still running):
+- `elements identifiable via fiber-based selection` (shard-2, 130678ms; shard-3, 145678ms):
+  preview loaded but test body failed — proxy 502/socket-hangup errors in shard-3;
+  likely an overloaded Docker worker for shard-2 (dev server took 39s to start).
+- `nested components — multiple selectors found` (shard-4, 352121ms):
+  `remix-cssmodules-spotify` — 403 for sub-resources from Remix dev server proxy;
+  rootChildren=0 after 352s → `preview:poll-loaded` never completed.
+- `PI-18-14: resize grid child stays within grid cell` (shard-1): 1 iframe error,
+  cleanup error — likely transient.
+
+Root cause analysis:
+- 403 Forbidden for Remix: VSIX 0.1.20 did NOT have Origin/Referer stripping; 0.1.21
+  added it but was not deployed to #13 containers.
+- `preview:poll-loaded` timeout for Remix: even with Origin/Referer stripped (0.1.21),
+  if `refresh()` doesn't re-push state, `shellScreen='start'` and the iframe never
+  renders (doRefresh no-ops on null frame).
+
+## 📍 VSIX 0.1.22 Fixes (2026-04-28)
+
+Three changes targeting the core preview timeout and test correctness:
+
+### Fix 1 — PreviewPanel.ts refresh() re-pushes full state
+File: `vscode-extension/hypercanvas-preview/src/PreviewPanel.ts`
+Commit: `524e5f1d`
+Problem: `refresh()` only sent `{ type: 'refresh' }`. `doRefresh()` in the webview
+exits early if `iframeElRef.current === null` (shellScreen='start'). Race: if
+`devserver:statusChanged` from `webview:ready` handler was dropped, devServerRunning
+stayed false in React → shellScreen='start' → iframe never renders → poll-loaded
+never completes (320s timeout).
+Fix: call `_pushFullStateToWebview()` before the refresh message. This re-syncs
+devServerRunning, component, and preview URL from extension state into the webview.
+
+### Fix 2 — PreviewCanvas.ts isPreviewLoaded() removes fast-exit
+File: `ext-test-projects/e2e/page-objects/hypercanvas/PreviewCanvas.ts`
+Commit: `ef8612a`
+Problem: `isPreviewPanelVisible()` early-exit returned false both when
+`shellScreen='start'` (no iframe) and when the webview was offscreen. Using
+`getAppFrame()` directly triggers `getPreviewPanelContent()` which has offscreen
+recovery (calls `activatePreviewTab()`).
+
+### Fix 3 — dev-server-lifecycle: concurrent start/stop check
+File: `ext-test-projects/e2e/tests/project-independent/dev-server-lifecycle.spec.ts`
+Commit: `ef8612a`
+Problem: `getPreviewPanelContent()` requires `iframe[data-testid="preview-iframe"]`
+which only exists when `shellScreen='preview'`. After concurrent start/stop where
+`stop()` wins, `devServerRunning=false` → `shellScreen='start'` → no preview-iframe
+→ poll times out in 130s.
+Fix: use `getWebviewByTestId(TID.preview.startServerButton, 130_000)` — finds the
+preview shell regardless of dev-server state.
+
+VSIX 0.1.22 built at 00:21 CEST 2026-04-28. Copied to ext-test-projects/.
+
+## Next Step
+
+- Wait for run #13 to complete (shard-2 still active at ~106% CPU).
+- Collect full failure inventory.
+- Start run #14 with VSIX 0.1.22 and ext-test-projects commit ef8612a.
