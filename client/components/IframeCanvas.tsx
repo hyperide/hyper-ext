@@ -47,8 +47,6 @@ interface IframeCanvasProps {
   onRuntimeError?: (error: RuntimeError | null) => void;
   // Error state change callback for rendering overlays outside pan&zoom
   onErrorChange?: (error: string | null, retryCount: number) => void;
-  /** When set, uses this URL as iframe src instead of the built /project-preview proxy URL */
-  overrideSrc?: string;
 }
 
 export default function IframeCanvas({
@@ -70,7 +68,6 @@ export default function IframeCanvas({
   onGatewayError,
   onRuntimeError,
   onErrorChange,
-  overrideSrc,
 }: IframeCanvasProps) {
   const { meta } = useComponentMeta();
   const engine = useCanvasEngine();
@@ -392,12 +389,6 @@ export default function IframeCanvas({
 
   // Recovery: reload iframe when server comes back online (serverOffline: true → false)
   const prevServerOfflineRef = useRef(serverOffline);
-
-  // Browser-internal errors that are harmless noise — don't surface to the user
-  const isIgnorableRuntimeError = (message: string) =>
-    message.includes('ResizeObserver loop completed with undelivered notifications') ||
-    message.includes('ResizeObserver loop limit exceeded');
-
   // Tracks whether current runtime error came from overlay polling or postMessage.
   // Must be a ref (not local variable) to survive useEffect re-runs on iframeLoadedCounter change.
   const errorSourceRef = useRef<'overlay' | 'postMessage' | null>(null);
@@ -916,8 +907,6 @@ export default function IframeCanvas({
         const messageEl = shadowRoot.querySelector('.message-body');
         const errorMessage = messageEl?.textContent?.trim() || 'Unknown error';
 
-        if (isIgnorableRuntimeError(errorMessage)) return null;
-
         // Extract file info
         const fileEl = shadowRoot.querySelector('.file');
         const file = fileEl?.textContent?.trim() || undefined;
@@ -1012,7 +1001,7 @@ export default function IframeCanvas({
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type !== 'hypercanvas:runtimeError') return;
       const error = event.data.error as RuntimeError;
-      if (error && !isIgnorableRuntimeError(error.message)) {
+      if (error) {
         errorSourceRef.current = 'postMessage';
         postMessageTimeRef.current = Date.now();
         onRuntimeError(error);
@@ -1169,7 +1158,6 @@ export default function IframeCanvas({
         src={
           previewReady
             ? (() => {
-                if (overrideSrc) return overrideSrc;
                 const baseUrl = `/project-preview/${meta.projectId}/test-preview`;
                 const params = new URLSearchParams();
                 params.set('component', componentPath);
