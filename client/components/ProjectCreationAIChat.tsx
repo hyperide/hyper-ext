@@ -149,7 +149,7 @@ export default function ProjectCreationAIChat({
   }, [refetchInstallations]);
 
   // Load saved form data from localStorage on mount
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect, existingProject is stable prop
+  /* eslint-disable react-hooks/exhaustive-deps -- mount-only effect, existingProject is stable prop */
   useEffect(() => {
     if (existingProject) return; // Skip for continuing projects
 
@@ -187,6 +187,7 @@ export default function ProjectCreationAIChat({
       // Ignore parse errors
     }
   }, [existingProject, personalRepos, selectedRepo]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Save form data to localStorage when fields change
   useEffect(() => {

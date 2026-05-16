@@ -444,7 +444,7 @@ export default function IframeCanvas({
   }, [previewReady, boardModeActive, editorMode, canvasMode]);
 
   // Apply instance sizes to DOM elements
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
   useEffect(() => {
     if (!instanceSizes) return;
 
@@ -477,6 +477,7 @@ export default function IframeCanvas({
     const timeoutId = setTimeout(applyInstanceSizes, 100);
     return () => clearTimeout(timeoutId);
   }, [instanceSizes, iframeLoadedCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Setup event handlers - re-runs when boardModeActive or activeInstanceId changes
   useEffect(() => {
@@ -833,7 +834,7 @@ export default function IframeCanvas({
   }, [activeInstanceId, boardModeActive]);
 
   // Toggle design-mode class on iframe body based on editor mode
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentDocument) return;
@@ -847,11 +848,12 @@ export default function IframeCanvas({
       body.classList.remove('design-mode');
     }
   }, [editorMode, iframeLoadedCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Poll iframe for runtime errors (Next.js, Vite, Bun error overlays)
   // Also listens for postMessage-based errors from iframe-console-capture.js
   // (catches module SyntaxErrors that don't produce framework overlays)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-check after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-check after iframe reload */
   useEffect(() => {
     if (!onRuntimeError) return;
 
@@ -1063,6 +1065,7 @@ export default function IframeCanvas({
       window.removeEventListener('message', handleRuntimeMessage);
     };
   }, [onRuntimeError, iframeLoadedCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Calculate iframe size for multi mode: quantized to 10000, min padding 5000
   const iframeSize = useMemo(() => {
@@ -1123,7 +1126,7 @@ export default function IframeCanvas({
   }, [canvasMode, canvasComposition]);
 
   // Sync iframe body dimensions with iframe element size
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
   useEffect(() => {
     const body = iframeRef.current?.contentDocument?.body;
     if (!body) return;
@@ -1136,6 +1139,7 @@ export default function IframeCanvas({
       body.style.minHeight = '';
     }
   }, [iframeSize, iframeLoadedCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Require projectId - don't render iframe without it
   if (!meta?.projectId) {

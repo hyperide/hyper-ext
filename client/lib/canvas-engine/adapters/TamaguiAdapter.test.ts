@@ -23,7 +23,7 @@ function createAstOpsRecorder() {
     },
     renameElement: async () => undefined,
     updateText: async () => undefined,
-    writeI18nResource: async () => undefined,
+    writeI18nResource: async () => ({}),
   };
 
   return { astOps, updatePropsCalls };
@@ -95,7 +95,7 @@ describe('TamaguiAdapter.writeOrder', () => {
       },
       renameElement: async () => undefined,
       updateText: async () => undefined,
-      writeI18nResource: async () => undefined,
+      writeI18nResource: async () => ({}),
     };
     const adapter = new TamaguiAdapter(astOps);
 

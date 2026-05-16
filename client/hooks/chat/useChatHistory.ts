@@ -24,7 +24,7 @@ export function useChatHistory({
   const currentChat = useMemo(() => chats.find((c) => c.id === currentChatId), [chats, currentChatId]);
 
   // Load chats on mount
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only, chatAdapter is stable
+  /* eslint-disable react-hooks/exhaustive-deps -- mount-only, chatAdapter is stable */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -47,6 +47,7 @@ export function useChatHistory({
       cancelled = true;
     };
   }, [chatAdapter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Load messages when currentChatId changes
   useEffect(() => {

@@ -20,7 +20,7 @@ function mockFiber(overrides: Partial<Fiber> = {}): Fiber {
 /** Attach a fake React fiber property to a plain object so getFiberFromDOM works. */
 function withFiber(fiber: Fiber): HTMLElement {
   const el: Record<string, unknown> = {};
-  // biome-ignore lint/complexity/useLiteralKeys: key contains $ — cannot use dot notation
+  // eslint-disable-next-line dot-notation -- key contains $ — cannot use dot notation
   el['__reactFiber$test'] = fiber;
   return el as unknown as HTMLElement;
 }
@@ -118,7 +118,7 @@ describe('ReactAdapter', () => {
 
       // Make li2.stateNode look like a React DOM element backed by li2
       const stateNodeRecord = li2.stateNode as Record<string, unknown>;
-      // biome-ignore lint/complexity/useLiteralKeys: key contains $ — cannot use dot notation
+      // eslint-disable-next-line dot-notation -- key contains $ — cannot use dot notation
       stateNodeRecord['__reactFiber$test'] = li2;
 
       expect(adapter.getItemIndex(li2.stateNode as HTMLElement)).toBe(1);

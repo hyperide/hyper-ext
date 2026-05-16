@@ -340,7 +340,7 @@ const LogLine = memo(function LogLine({
           </span>
           {sourceTag}
           {levelPrefix}
-          {/* biome-ignore lint/security/noDangerouslySetInnerHtml: ansi_up escapes HTML entities; highlightSearchInHtml only wraps text nodes. */}
+          {/* eslint-disable-next-line react/no-danger -- ansi_up escapes HTML entities; highlightSearchInHtml only wraps text nodes. */}
           <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
         </span>
       </div>

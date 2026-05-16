@@ -121,7 +121,7 @@ export function useSidebarPanelLayout({
   }, [isPushPopoverOpen]);
 
   // Unified auto-layout: expand panels with content, collapse empty ones, redistribute space
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency
+  /* eslint-disable react-hooks/exhaustive-deps -- ref.current is not a reactive dependency */
   useEffect(() => {
     if (!componentsLoaded) return;
     if (!groupRef.current) return;
@@ -238,6 +238,7 @@ export function useSidebarPanelLayout({
     hasTestsContent,
     isPushPopoverOpen,
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return {
     // Panel refs

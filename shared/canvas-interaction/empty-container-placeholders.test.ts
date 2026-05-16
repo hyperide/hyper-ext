@@ -70,32 +70,32 @@ function mkEl(
 
 function createDoc(bodyChildren: MockChild[] = []) {
   const body = mkEl('body', {}, bodyChildren);
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
   return { body } as any as Document;
 }
 
 describe('isContainerEmpty', () => {
   it('returns true for element with no children', () => {
     const el = mkEl('div');
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
     expect(isContainerEmpty(el as any)).toBe(true);
   });
 
   it('returns false for element with element children', () => {
     const el = mkEl('div', {}, [mkEl('span')]);
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
     expect(isContainerEmpty(el as any)).toBe(false);
   });
 
   it('returns true for element with whitespace-only text', () => {
     const el = mkEl('div', {}, [new MockTextNode('   \n  ')]);
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
     expect(isContainerEmpty(el as any)).toBe(true);
   });
 
   it('returns false for element with non-empty text', () => {
     const el = mkEl('div', {}, [new MockTextNode('Hello')]);
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
     expect(isContainerEmpty(el as any)).toBe(false);
   });
 });
@@ -115,7 +115,7 @@ function createTreeNode(overrides: {
     name: overrides.name ?? 'div',
     source: overrides.source ?? null,
     children: overrides.children ?? [],
-    // biome-ignore lint/suspicious/noExplicitAny: test mock — MockElement duck-types HTMLElement
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock — MockElement duck-types HTMLElement
     domElement: (overrides.domElement ?? null) as any,
     fiberTag: overrides.fiberTag,
   };

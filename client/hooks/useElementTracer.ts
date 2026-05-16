@@ -77,9 +77,14 @@ export function useElementTracer({
   componentPath,
 }: UseElementTracerOptions): UseElementTracerResult {
   const tracerRef = useRef<ElementTracer | null>(null);
+  // The init effect's setTimeout retry chain (up to 3s for React detection) can
+  // outlive multiple prop changes. Reading the live value through a ref avoids
+  // capturing a stale `componentPath` in the closure when tryInit finally fires.
+  const componentPathRef = useRef(componentPath);
+  componentPathRef.current = componentPath;
   const [ready, setReady] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadCounter forces re-init when iframe reloads (new document)
+  /* eslint-disable react-hooks/exhaustive-deps -- loadCounter forces re-init when iframe reloads (new document) */
   useEffect(() => {
     if (!iframe || !enabled || !projectId) {
       // Tear down if conditions no longer met
@@ -91,6 +96,10 @@ export function useElementTracer({
       return;
     }
 
+    // Local const preserves null-narrowing across the nested tryInit declaration
+    // (TS would widen `iframe` back to `HTMLIFrameElement | null` inside a function
+    // declaration captured by closure).
+    const iframeEl = iframe;
     let disposed = false;
     let detectTimer: ReturnType<typeof setTimeout> | null = null;
     let unhookCommits: (() => void) | null = null;
@@ -105,8 +114,8 @@ export function useElementTracer({
     function tryInit(attempt: number): void {
       if (disposed) return;
 
-      const doc = iframe.contentDocument;
-      const iframeWindow = iframe.contentWindow;
+      const doc = iframeEl.contentDocument;
+      const iframeWindow = iframeEl.contentWindow;
       if (!doc || !iframeWindow) {
         if (attempt < MAX_DETECT_ATTEMPTS) {
           detectTimer = setTimeout(() => tryInit(attempt + 1), DETECT_INTERVAL_MS);
@@ -163,7 +172,7 @@ export function useElementTracer({
       // Hook into React commit cycle inside the iframe to invalidate FiberSourceIndex
       unhookCommits = hookIntoReactCommits(sourceIndex, iframeWindow as unknown as typeof globalThis);
 
-      tracer.renderedFile = componentPath ?? null;
+      tracer.renderedFile = componentPathRef.current ?? null;
       tracerRef.current = tracer;
       setActiveTracer(tracer);
       if (!disposed) {
@@ -187,6 +196,7 @@ export function useElementTracer({
       setReady(false);
     };
   }, [iframe, projectId, enabled, loadCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return { tracer: tracerRef.current, ready };
 }

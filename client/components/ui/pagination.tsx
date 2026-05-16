@@ -78,8 +78,8 @@ export const SampleDefault = ({ currentPage = 8, totalPages = 12 }: { currentPag
   // Helper to generate pagination links
   const getVisiblePages = (current: number, total: number) => {
     const delta = 1;
-    const range = [];
-    const rangeWithDots = [];
+    const range: number[] = [];
+    const rangeWithDots: (number | string)[] = [];
     let l: number | undefined;
 
     for (let i = 1; i <= total; i++) {
@@ -117,7 +117,7 @@ export const SampleDefault = ({ currentPage = 8, totalPages = 12 }: { currentPag
                   <PaginationPrevious href={currentPage > 1 ? `?page=${currentPage - 1}` : '#'} />
                 </PaginationItem>
                 {visiblePages.map((page, index) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: shadcn generated component, pages mix numbers and "..." strings
+                  // eslint-disable-next-line react/no-array-index-key -- shadcn generated component, pages mix numbers and "..." strings
                   <PaginationItem key={index}>
                     {page === '...' ? (
                       <PaginationEllipsis />

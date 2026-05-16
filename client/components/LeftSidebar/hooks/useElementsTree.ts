@@ -35,13 +35,14 @@ export function useElementsTree(componentName: string | undefined): TreeNode[] {
   // Always subscribe to shared state (VS Code path)
   const stateResult = useSharedEditorState((s) => s.astStructure);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: componentName and updateCounter trigger re-render when engine AST changes
+  /* eslint-disable react-hooks/exhaustive-deps -- componentName and updateCounter trigger re-render when engine AST changes */
   return useMemo<TreeNode[]>(() => {
     if (engine && store) {
       return buildTreeFromEngine(engine, store);
     }
     return (stateResult as TreeNode[] | null) ?? EMPTY_TREE;
   }, [engine, store, componentName, updateCounter, stateResult]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }
 
 // --------------------------------------------------------------------------

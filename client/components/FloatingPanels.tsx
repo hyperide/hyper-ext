@@ -261,7 +261,7 @@ function NestedComponentField({ label, value, onChange, depth = 0 }: NestedCompo
             {value.map((item, index) => {
               if (isNestedComponent(item)) {
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: nested components have no stable unique id
+                  // eslint-disable-next-line react/no-array-index-key -- nested components have no stable unique id
                   <div key={index} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-600">

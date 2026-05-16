@@ -109,7 +109,7 @@ export const TextElement = memo(function TextElement({
         style={{ overflow: 'visible' }}
       >
         {isEditing ? (
-          // biome-ignore lint/a11y/useSemanticElements: contentEditable requires div, not input/textarea
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- contentEditable requires div, not input/textarea
           <div
             ref={editableRef}
             contentEditable

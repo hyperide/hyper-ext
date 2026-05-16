@@ -211,9 +211,9 @@ export function AnnotationsLayer({
       const instanceIds: string[] = [];
       for (const [instanceId, pos] of Object.entries(instances)) {
         const instLeft = pos.x;
-        const instRight = pos.x + pos.width;
+        const instRight = pos.x + (pos.width ?? 0);
         const instTop = pos.y;
-        const instBottom = pos.y + pos.height;
+        const instBottom = pos.y + (pos.height ?? 0);
         const intersects = !(instRight < minX || instLeft > maxX || instBottom < minY || instTop > maxY);
         if (intersects) {
           instanceIds.push(instanceId);
@@ -226,7 +226,7 @@ export function AnnotationsLayer({
   );
 
   // Handle mouse down - start potential drag or drawing
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency; instances identity changes on every render, would cause infinite loop
+  /* eslint-disable react-hooks/exhaustive-deps -- ref.current is not a reactive dependency; instances identity changes on every render, would cause infinite loop */
   const handleMouseDown = useCallback(
     (e: MouseEvent) => {
       // Only handle left click
@@ -348,7 +348,7 @@ export function AnnotationsLayer({
 
         // Also check if clicking inside an instance area
         const clickedOnInstance = Object.entries(instances).some(([, pos]) => {
-          return x >= pos.x && x <= pos.x + pos.width && y >= pos.y && y <= pos.y + pos.height;
+          return x >= pos.x && x <= pos.x + (pos.width ?? 0) && y >= pos.y && y <= pos.y + (pos.height ?? 0);
         });
 
         if (clickedOnInstance) {
@@ -667,7 +667,7 @@ export function AnnotationsLayer({
 
         // Also check if double-clicking inside an instance area
         const clickedOnInstance = Object.entries(instances).some(([, pos]) => {
-          return x >= pos.x && x <= pos.x + pos.width && y >= pos.y && y <= pos.y + pos.height;
+          return x >= pos.x && x <= pos.x + (pos.width ?? 0) && y >= pos.y && y <= pos.y + (pos.height ?? 0);
         });
 
         if (clickedOnInstance) {
@@ -736,6 +736,7 @@ export function AnnotationsLayer({
       window.removeEventListener('click', handleClick);
     };
   }, [handleMouseDown, handleMouseMove, handleMouseUp, handleDoubleClick, handleClick]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Handle keyboard shortcuts
   useEffect(() => {

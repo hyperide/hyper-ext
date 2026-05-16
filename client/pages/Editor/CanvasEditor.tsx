@@ -824,7 +824,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   }, [meta?.relativeFilePath]);
 
   // Listen for scroll events in iframe to update comment positions (updates ref, not state - no re-render)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dependencies are triggers to re-attach listener on iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- dependencies are triggers to re-attach listener on iframe reload */
   useEffect(() => {
     const iframe = getPreviewIframe();
     if (!iframe?.contentDocument) return;
@@ -851,6 +851,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     // Re-attach listener when iframe reloads or project status changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeLoadedCounter, activeProject?.status]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Listen for external file changes (AI agent, code-server, Monaco, chokidar) → record in undo/redo history
   useEffect(() => {
@@ -872,7 +873,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   // Build OverlayElementResolver from the active tracer (fiber-based DOM lookup).
   // Depends on both iframeLoadedCounter (new iframe = new tracer) and tracerVersion
   // (tracer ready after async React detection).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter forces re-creation when iframe reloads (new tracer)
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter forces re-creation when iframe reloads (new tracer) */
   const elementResolver: OverlayElementResolver | undefined = useMemo(() => {
     const tracer = getActiveTracer();
     if (!tracer) return undefined;
@@ -919,6 +920,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeLoadedCounter, tracerVersion]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Selection overlays (hover + selection rectangles + empty container placeholders) via RAF
   useSelectionOverlays({
@@ -1217,16 +1219,14 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       </div>
                     </div>
                   )
-                ) : activeProject?.status === 'error' || runtime.status === 'error' ? (
+                ) : activeProject && (activeProject.status === 'error' || runtime.status === 'error') ? (
                   <div className="h-full flex flex-col bg-slate-100 dark:bg-slate-900">
                     <div className="flex-1 flex items-center justify-center">
                       <IframeFailed
-                        {...{
-                          activeProject,
-                          setIsStarting,
-                          setActiveProject,
-                          onOpenSettings,
-                        }}
+                        activeProject={activeProject}
+                        setIsStarting={setIsStarting}
+                        setActiveProject={setActiveProject}
+                        onOpenSettings={onOpenSettings}
                       />
                     </div>
                   </div>
@@ -1418,8 +1418,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
         {!isCodeEditorMode && !sidebarsHidden && (
           <div className="flex-shrink-0" style={{ width: rightSidebarWidth }}>
             <div className="flex-1 flex flex-col h-full">
-              {isAIChatDocked && isAIChatOpen ? // Spacer content is empty — AI chat renders as fixed overlay
-              null : (
+              {isAIChatDocked && isAIChatOpen ? null : ( // Spacer content is empty — AI chat renders as fixed overlay
                 // Regular RightSidebar
                 <RightSidebar
                   onOpenSettings={onOpenSettings}
@@ -1439,7 +1438,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       return undefined;
                     }
                     // Multi mode: find first instance that has width and height defined
-                    const instanceWithSize = Object.values(instances).find((inst) => inst?.width && inst?.height);
+                    const instanceWithSize = Object.values(instances).find(
+                      (inst): inst is typeof inst & { width: number; height: number } =>
+                        !!(inst?.width && inst?.height),
+                    );
                     if (instanceWithSize) {
                       return {
                         width: instanceWithSize.width,

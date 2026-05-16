@@ -100,7 +100,7 @@ export function EditFileDiff({ path, oldContent, newContent, contextLines = 3 }:
       <div className="bg-muted/30 rounded overflow-x-auto">
         {segments.map((segment, i) => (
           <DiffSegment
-            // biome-ignore lint/suspicious/noArrayIndexKey: diff segments have no stable id
+            // eslint-disable-next-line react/no-array-index-key -- diff segments have no stable id
             key={i}
             segment={segment}
             onExpand={() => segment.originalIndex !== undefined && toggleExpand(segment.originalIndex)}
@@ -133,7 +133,7 @@ function DiffSegment({ segment, onExpand }: DiffSegmentProps) {
     <>
       {segment.lines.map((line, i) => (
         <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have no stable id
+          // eslint-disable-next-line react/no-array-index-key -- diff lines have no stable id
           key={i}
           className={cn(
             'px-2 py-px',

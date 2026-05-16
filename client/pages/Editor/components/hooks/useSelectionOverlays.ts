@@ -39,7 +39,7 @@ export function useSelectionOverlays({
   onPlaceholderClick,
   elementResolver,
 }: UseSelectionOverlaysOptions) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-attach after iframe reload */
   useEffect(() => {
     if (!enabled) {
       if (overlayContainerRef.current) {
@@ -98,4 +98,5 @@ export function useSelectionOverlays({
     onPlaceholderClick,
     elementResolver,
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }

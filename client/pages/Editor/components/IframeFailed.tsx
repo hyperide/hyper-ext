@@ -3,8 +3,8 @@ import { authFetch } from '@/utils/authFetch';
 
 type Props = {
   activeProject: ProjectData;
-  setIsStarting: (starting: boolean) => void;
-  setActiveProject: (project: ProjectData) => void;
+  setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
+  setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   onOpenSettings: () => void;
 };
 

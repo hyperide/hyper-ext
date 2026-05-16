@@ -105,7 +105,7 @@ export function CodeServerIDE({
   });
 
   // Start IDE
-  // biome-ignore lint/correctness/useExhaustiveDependencies: startPolling is stable (same deps as startIDE), accessToken not needed (authFetch handles auth)
+  /* eslint-disable react-hooks/exhaustive-deps -- startPolling is stable (same deps as startIDE), accessToken not needed (authFetch handles auth) */
   const startIDE = useCallback(async () => {
     if (!projectId || startRequestedRef.current) return;
     startRequestedRef.current = true;
@@ -139,6 +139,7 @@ export function CodeServerIDE({
       startRequestedRef.current = false;
     }
   }, [projectId, onError, resolvedTheme]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Polling fallback (in case SSE doesn't work)
   const startPolling = useCallback(() => {

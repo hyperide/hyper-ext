@@ -190,7 +190,7 @@ export function SharedChatPanel({
     }
   }, [initialPrompt]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: handleSendMessages is stable
+  /* eslint-disable react-hooks/exhaustive-deps -- handleSendMessages is stable */
   useEffect(() => {
     if (initialPrompt && !history.isLoadingChats && !stream.isStreamingRef.current && !initialPromptSentRef.current) {
       initialPromptSentRef.current = true;
@@ -199,6 +199,7 @@ export function SharedChatPanel({
       onPromptSent?.();
     }
   }, [initialPrompt, history.isLoadingChats]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // --- Auto-save messages (for ext where server doesn't persist) ---
   const savedMessageCountRef = useRef(0);
@@ -210,11 +211,12 @@ export function SharedChatPanel({
   }, [history.currentChatId, history.messages, chatAdapter]);
 
   // Reset saved count on chat switch
-  // biome-ignore lint/correctness/useExhaustiveDependencies: currentChatId triggers reset intentionally
+  /* eslint-disable react-hooks/exhaustive-deps -- currentChatId triggers reset intentionally */
   useEffect(() => {
     savedMessageCountRef.current = 0;
     input.resetInputState();
   }, [history.currentChatId, input.resetInputState]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // --- Auto-title from first user message ---
   useEffect(() => {

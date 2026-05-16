@@ -13,7 +13,7 @@ export function highlightSearch(text: string, query: string): ReactNode {
   const lower = query.toLowerCase();
   return parts.map((part, i) =>
     part.toLowerCase().includes(lower) ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: stable split order from regex, no reordering
+      // eslint-disable-next-line react/no-array-index-key -- stable split order from regex, no reordering
       <mark key={i} className="bg-yellow-500/30 dark:bg-yellow-400/20 text-inherit rounded-sm">
         {part}
       </mark>

@@ -9,7 +9,7 @@ interface UseProjectRuntimeOptions {
   accessToken: string | null;
   setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
-  setProjectRole: (role: 'owner' | 'editor' | 'viewer') => void;
+  setProjectRole: (role: 'editor' | 'viewer') => void;
   reloadComposition?: () => Promise<void>;
 }
 

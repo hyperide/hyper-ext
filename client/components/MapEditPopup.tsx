@@ -34,10 +34,11 @@ export function MapEditPopup({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: parentMapId is an intentional trigger to reset expression when a different map is selected
+  /* eslint-disable react-hooks/exhaustive-deps -- parentMapId is an intentional trigger to reset expression when a different map is selected */
   useEffect(() => {
     setExpression(boundary.expression);
   }, [boundary.parentMapId, boundary.expression]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const handleSave = () => {
     onSave(boundary.parentMapId, expression);
@@ -90,13 +91,13 @@ export function MapEditPopup({
   return createPortal(
     <>
       {/* Backdrop */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop dismiss pattern */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop dismiss pattern */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- backdrop dismiss pattern */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop dismiss pattern */}
       <div className="fixed inset-0 bg-black/20 z-[60]" onClick={onClose} />
 
       {/* Popup - centered */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation on popup container */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation on popup container */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- stopPropagation on popup container */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- stopPropagation on popup container */}
       <div
         className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] bg-background rounded-lg shadow-lg border border-border p-4 min-w-[300px]"
         onClick={(e) => e.stopPropagation()}

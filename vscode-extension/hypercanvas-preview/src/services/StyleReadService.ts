@@ -155,7 +155,9 @@ export class StyleReadService {
       const tagName = getJSXTagName(element);
 
       // Analyze children to determine childrenType and textContent
-      let { childrenType, textContent } = analyzeJSXChildren(element);
+      const jsxChildren = analyzeJSXChildren(element);
+      const { childrenType } = jsxChildren;
+      let textContent = jsxChildren.textContent;
 
       // For input/textarea with no children, fall back to placeholder attribute
       if (!textContent && (tagName === 'input' || tagName === 'textarea')) {

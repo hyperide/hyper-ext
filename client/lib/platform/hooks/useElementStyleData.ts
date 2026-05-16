@@ -283,7 +283,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
   // Prevents leaked i18nText from element A appearing on element B while B's RPC is in-flight.
   const prevElementIdRef = useRef<string | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is an intentional trigger to force style re-read after external changes
+  /* eslint-disable react-hooks/exhaustive-deps -- refreshKey is an intentional trigger to force style re-read after external changes */
   useEffect(() => {
     if (!elementId) {
       setData(EMPTY_DATA);
@@ -510,6 +510,7 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
       unsub();
     };
   }, [canvas, classData.i18nText]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Apply runtime style merge reactively — updates whenever runtimeStyle changes
   // without triggering a new RPC. Only fills fields that Tailwind parsing left empty.

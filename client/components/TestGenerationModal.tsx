@@ -535,7 +535,7 @@ export function TestGenerationModal({
               className="text-xs font-mono bg-slate-900 text-slate-300 rounded-lg p-3 h-36 overflow-y-auto whitespace-pre-wrap"
             >
               {logs.map((log, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only with no stable unique ID
+                // eslint-disable-next-line react/no-array-index-key -- log lines are append-only with no stable unique ID
                 <div key={index}>{log}</div>
               ))}
             </div>

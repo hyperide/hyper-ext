@@ -10,7 +10,7 @@ import { CONSOLE_CAPTURE_EVENT } from '@shared/diagnostic-types';
 import type { RuntimeError } from '@shared/runtime-error';
 import type { ProjectStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
+import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiagnosticStore } from '@/stores/diagnosticStore';
 import { authFetch } from '@/utils/authFetch';
@@ -253,7 +253,7 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
       }
     }, [setConnected, addSystemEvent]),
     onStatusChange: useCallback(
-      (status) => {
+      (status: SSEStatus) => {
         setConnected(status === 'connected');
       },
       [setConnected],
@@ -345,7 +345,7 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
   const prevLogsLenRef = useRef(0);
 
   // Reset persistence state on project change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projectId is the trigger — resets refs when project changes
+  /* eslint-disable react-hooks/exhaustive-deps -- projectId is the trigger — resets refs when project changes */
   useEffect(() => {
     persistedFetchedRef.current = false;
     persistedReadyRef.current = false;
@@ -353,6 +353,7 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
     batchBufferRef.current = [];
     clearTimeout(batchTimerRef.current);
   }, [projectId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Load persisted logs on mount (before SSE starts delivering)
   useEffect(() => {

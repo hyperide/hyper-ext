@@ -15,8 +15,7 @@
       "@/*": ["../../client/*"],
       "@shared/*": ["../../shared/*"],
       "@lib/*": ["../../lib/*"]
-    },
-    "baseUrl": "."
+    }
   },
   "include": ["src/**/*", "../../shared/**/*", "../../lib/**/*"],
   "exclude": [

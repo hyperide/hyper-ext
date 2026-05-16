@@ -220,7 +220,7 @@ export default function Projects() {
     }
   }, [currentWorkspace]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projects intentionally omitted — only used to check initial load, not as a trigger
+  /* eslint-disable react-hooks/exhaustive-deps -- projects intentionally omitted — only used to check initial load, not as a trigger */
   useEffect(() => {
     if (currentWorkspace) {
       // Only show loading spinner on initial load, not on soft-refresh
@@ -230,6 +230,7 @@ export default function Projects() {
       loadProjects();
     }
   }, [currentWorkspace, loadProjects]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Reload projects when returning via browser back button (bfcache)
   useEffect(() => {
@@ -297,7 +298,7 @@ export default function Projects() {
   );
 
   // Subscribe to SSE for real-time status updates with polling fallback
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshAuth is stable zustand action, adding it would needlessly recreate EventSource
+  /* eslint-disable react-hooks/exhaustive-deps -- refreshAuth is stable zustand action, adding it would needlessly recreate EventSource */
   useEffect(() => {
     if (!currentWorkspace || !accessToken || loading) return;
 
@@ -390,6 +391,7 @@ export default function Projects() {
       }
     };
   }, [currentWorkspace, accessToken, loading, usePolling]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Polling fallback (every 3 seconds)
   useEffect(() => {

@@ -443,7 +443,7 @@ describe('detectRouterShell', () => {
 
 describe('escapeRegex', () => {
   it('should escape all regex metacharacters', () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: regex metacharacters test, not template interpolation
+    // eslint-disable-next-line no-template-curly-in-string -- regex metacharacters test, not template interpolation
     const input = '.*+?^${}()|[]\\';
     const escaped = escapeRegex(input);
     // Every metacharacter should be preceded by backslash

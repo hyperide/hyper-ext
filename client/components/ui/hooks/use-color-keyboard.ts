@@ -80,7 +80,7 @@ export function useColorKeyboard(params: ColorKeyboardParams): void {
   });
 
   // Global keydown listener — reads state via refs to avoid re-attach on hover/search changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are intentionally used to avoid re-attaching the listener
+  /* eslint-disable react-hooks/exhaustive-deps -- refs are intentionally used to avoid re-attaching the listener */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Enter: apply contrast-fix focused color
@@ -110,6 +110,7 @@ export function useColorKeyboard(params: ColorKeyboardParams): void {
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [handleContrastKey, handleCopyKey, setOpen, tooltip]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Arrow nav tooltip — show tooltip when arrow keys navigate Command items
   useEffect(() => {

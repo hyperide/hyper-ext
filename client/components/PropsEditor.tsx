@@ -99,7 +99,7 @@ export function PropsEditor() {
   }, [getSelectedElementFromAST]);
 
   // Load props schema from API
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIds and engine are intentional triggers; getFilePath/getSelectedElementType/getSelectedElementFromAST are derived from them and not memoized stably
+  /* eslint-disable react-hooks/exhaustive-deps -- selectedIds and engine are intentional triggers; getFilePath/getSelectedElementType/getSelectedElementFromAST are derived from them and not memoized stably */
   useEffect(() => {
     console.log('[PropsEditor] useEffect triggered');
     const filePath = getFilePath();
@@ -169,6 +169,7 @@ export function PropsEditor() {
         setLoading(false);
       });
   }, [selectedIds, engine]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Sync prop change to file
   const syncPropToFile = useCallback(

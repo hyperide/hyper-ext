@@ -88,7 +88,7 @@ export function CanvasElementContextMenu({
   // ========================================================================
   // Setup iframe context menu handler (SaaS only — needs engine)
   // ========================================================================
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadCounter triggers re-attach after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadCounter triggers re-attach after iframe reload */
   useEffect(() => {
     if (!engine) return;
 
@@ -142,6 +142,7 @@ export function CanvasElementContextMenu({
       window.removeEventListener('component-loaded', handleComponentLoaded);
     };
   }, [engine, iframeLoadCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // ========================================================================
   // Setup instance overlay context menu handler (SaaS board mode only)

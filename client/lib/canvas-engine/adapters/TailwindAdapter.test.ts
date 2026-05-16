@@ -128,7 +128,7 @@ describe('TailwindAdapter', () => {
         },
         renameElement: async () => undefined,
         updateText: async () => undefined,
-        writeI18nResource: async () => undefined,
+        writeI18nResource: async () => ({}),
       };
       const adapter = new TailwindAdapter(astOps);
 
