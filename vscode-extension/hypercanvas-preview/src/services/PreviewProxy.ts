@@ -204,6 +204,24 @@ export class PreviewProxy {
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
+      // Retry GET requests that return 504 — Vite's on-demand transform timeout (10s
+      // default) fires when optimizeDeps hasn't run yet (cold Docker start). By the
+      // next retry the .vite/deps cache is warm and transforms complete instantly.
+      // Applies to all paths (module files, HTML, assets) to cover any cold-start 504.
+      if (
+        proxyRes.statusCode === 504 &&
+        clientReq.method === 'GET' &&
+        retryCount < 5 &&
+        !clientRes.headersSent &&
+        !clientReq.destroyed
+      ) {
+        proxyRes.resume();
+        const delay = 500 * (retryCount + 1);
+        console.log(`[PreviewProxy] 504 on GET, retry ${retryCount + 1}/5 in ${delay}ms: ${proxyPath}`); // nosemgrep: unsafe-formatstring
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
+        return;
+      }
+
       // Retry for /test-preview 404/403/503 — handles dev server FSWatch lag after
       // route file creation AND webpack-dev-server's second-compile gap (after
       // _patchEntryFile, webpack rebuilds while iframe requests; retry budget
