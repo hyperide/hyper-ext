@@ -51,6 +51,7 @@ import {
 import { getPreviewIframe } from '@/lib/dom-utils';
 import { getActiveTracer, subscribeToTracer } from '@/lib/element-tracing/active-tracer';
 import { resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
+import { useProjectRuntime } from '@/lib/project-runtime';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -79,8 +80,7 @@ import { useLogsPanelState } from './components/hooks/useLogsPanelState';
 import { useOffscreenIndicators } from './components/hooks/useOffscreenIndicators';
 import { useOverlayMapCondHighlightComponents } from './components/hooks/useOverlayMapCondHighlightComponents';
 import { usePanelManagement } from './components/hooks/usePanelManagement';
-import { type ProjectData, useProjectControl } from './components/hooks/useProjectControl';
-import { useProjectSSE } from './components/hooks/useProjectSSE';
+import type { ProjectData } from './components/hooks/useProjectControl';
 import { useSelectionOverlays } from './components/hooks/useSelectionOverlays';
 import { useViewportControls } from './components/hooks/useViewportControls';
 import { IframeFailed } from './components/IframeFailed';
@@ -300,24 +300,23 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     leftSidebarWidth,
     setLeftSidebarWidth,
   } = useEditorStore();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const serverOffline = useConnectionStore((s) => s.status !== 'connected');
 
-  // Project control (start/stop/restart, auto-start logic)
-  const { handleStartProject, handleRestartProject, handleProjectUpdate, wasRunningRef } = useProjectControl({
-    activeProject,
+  // Project runtime — selects Docker or NodePod based on user flag + framework
+  const runtime = useProjectRuntime(activeProject, user, {
+    accessToken,
     setActiveProject,
     setIsStarting,
     setProjectRole,
   });
 
-  // SSE subscriptions and network status (project stream, file watcher, polling)
-  const { pollStatus } = useProjectSSE({
-    accessToken,
-    activeProject,
-    setActiveProject,
-    handleProjectUpdate,
-  });
+  // Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
+  useEffect(() => {
+    if (runtime.mode === 'nodepod') {
+      setIsStarting(runtime.status === 'starting');
+    }
+  }, [runtime.mode, runtime.status]);
 
   // Comments for current component
   const {
@@ -1071,7 +1070,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                     onDismiss={() => setConfigErrorDismissed(true)}
                     onOpenSettings={onOpenSettings}
                   />
-                ) : activeProject && (activeProject.status === 'running' || wasRunningRef.current) ? (
+                ) : activeProject && (runtime.status === 'running' || runtime.hasBeenRunning) ? (
                   availableComponents.isLoaded &&
                   availableComponents.atoms.length === 0 &&
                   availableComponents.composites.length === 0 ? (
@@ -1153,6 +1152,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                           onGatewayError={handleGatewayError}
                           onRuntimeError={setRuntimeError}
                           onErrorChange={handleIframeErrorChange}
+                          overrideSrc={runtime.previewUrl ?? undefined}
                         />
                         {/* Instance overlay container - inside transform to zoom with content (multi mode) */}
                         {canvasMode === 'multi' && (
@@ -1217,7 +1217,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       </div>
                     </div>
                   )
-                ) : activeProject?.status === 'error' ? (
+                ) : activeProject?.status === 'error' || runtime.status === 'error' ? (
                   <div className="h-full flex flex-col bg-slate-100 dark:bg-slate-900">
                     <div className="flex-1 flex items-center justify-center">
                       <IframeFailed
@@ -1234,9 +1234,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   <ProjectStartOverlay
                     project={activeProject}
                     isStarting={isStarting}
-                    onRestart={handleRestartProject}
-                    onStart={handleStartProject}
-                    pollStatus={pollStatus}
+                    onRestart={runtime.restart}
+                    onStart={runtime.start}
+                    pollStatus={runtime.pollStatus}
                   />
                 )}
               </div>

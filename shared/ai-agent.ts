@@ -51,6 +51,8 @@ export type ToolName =
   // Web tools
   | 'brave_web_search'
   | 'url_fetch'
+  // Package management
+  | 'add_dependency'
   // Extension-only tools
   | 'check_build_status';
 

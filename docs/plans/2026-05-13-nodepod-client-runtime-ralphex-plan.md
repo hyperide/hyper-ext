@@ -11,7 +11,7 @@ Spec: `docs/specs/2026-05-13-nodepod-client-runtime-design.md`
 Architecture:
 - `ProjectRuntime` TS interface unifies Docker and NodePod paths — no mode branching in CanvasEditor
 - `useDockerRuntime` wraps existing `useProjectControl` + `useProjectSSE` into the interface
-- `useNodePodRuntime` boots NodePod, fetches project files from server, runs npm install + vite dev
+- `useNodePodRuntime` boots NodePod, reads files from `client-file-store` (OPFS), runs npm install + vite dev
 - `useProjectRuntime` factory: picks Docker vs NodePod based on flag + framework check
 - CanvasEditor uses `runtime.*` uniformly for both paths
 
@@ -150,7 +150,7 @@ git commit -m "feat(server): serve NodePod SW via @scelar/nodepod/server serveSW
 
 ---
 
-## Task 3: Server — expose clientSideRuntime + new /files endpoint
+## Task 3: Server — expose clientSideRuntime; Client — client-file-store
 
 ### 3a — Expose clientSideRuntime in GET /api/user
 
@@ -175,174 +175,221 @@ columns: {
 - [ ] Manual verification: call `GET /api/user` (logged in), confirm `clientSideRuntime`
   appears in the response JSON with value `false`.
 
-### 3b — New GET /api/projects/:id/files endpoint
+- [ ] Commit:
+
+```bash
+git add server/routes/user-settings.ts
+git commit -m "feat(server): expose clientSideRuntime in GET /api/user"
+```
+
+### 3b — client-file-store (OPFS-backed per-project file cache)
+
+NodePod reads files from OPFS, not from the server. This module is the single I/O point.
 
 **Files:**
-- Create: `server/routes/project-files.ts`
-- Modify: `server/index.ts` — mount the router
+- Create: `client/lib/client-file-store/opfs.ts`
+- Create: `client/lib/client-file-store/index.ts`
+- Create: `test/client-file-store.test.ts`
 
-- [ ] Write a unit test first. Create `test/readProjectFiles.test.ts`:
+- [ ] Write a failing test first. Create `test/client-file-store.test.ts`:
 
 ```typescript
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { expect, test } from 'bun:test';
-import { readProjectFiles } from '../server/routes/project-files';
+import { expect, test, beforeEach } from 'bun:test';
 
-test('returns text files, skips node_modules and .git', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'nptest-'));
-  await writeFile(join(dir, 'package.json'), '{"name":"test"}');
-  await mkdir(join(dir, 'node_modules/foo'), { recursive: true });
-  await writeFile(join(dir, 'node_modules/foo/index.js'), 'module');
-  await mkdir(join(dir, '.git'), { recursive: true });
-  await writeFile(join(dir, '.git/config'), '[core]');
+// OPFS is browser-only; in Bun we test the pure logic layer using an in-memory Map as backend.
+// Import the internal helpers we'll extract (see implementation below).
+import { makeStore } from '../client/lib/client-file-store/opfs';
 
-  const files = await readProjectFiles(dir);
+let store: ReturnType<typeof makeStore>;
+beforeEach(() => { store = makeStore(); });
 
+test('writeFile and readFiles round-trip', async () => {
+  await store.writeFile('proj1', 'src/App.tsx', 'export default function App() {}');
+  const files = await store.readFiles('proj1');
+  expect(files['src/App.tsx']).toBe('export default function App() {}');
+});
+
+test('readFiles returns empty object when project not seeded', async () => {
+  const files = await store.readFiles('unknown-proj');
+  expect(files).toEqual({});
+});
+
+test('seedFiles bulk-writes and readFiles returns all', async () => {
+  await store.seedFiles('proj2', {
+    'package.json': '{"name":"test"}',
+    'src/main.tsx': 'import React from "react"',
+  });
+  const files = await store.readFiles('proj2');
+  expect(Object.keys(files)).toHaveLength(2);
   expect(files['package.json']).toBe('{"name":"test"}');
-  expect(files['node_modules/foo/index.js']).toBeUndefined();
-  expect(files['.git/config']).toBeUndefined();
-
-  await rm(dir, { recursive: true });
 });
 
-test('skips files over 500KB', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'nptest-'));
-  await writeFile(join(dir, 'small.ts'), 'export const x = 1;');
-  await writeFile(join(dir, 'large.ts'), 'x'.repeat(501 * 1024));
-
-  const files = await readProjectFiles(dir);
-
-  expect(files['small.ts']).toBe('export const x = 1;');
-  expect(files['large.ts']).toBeUndefined();
-
-  await rm(dir, { recursive: true });
+test('writeFile overwrites existing file', async () => {
+  await store.seedFiles('proj3', { 'a.ts': 'v1' });
+  await store.writeFile('proj3', 'a.ts', 'v2');
+  const files = await store.readFiles('proj3');
+  expect(files['a.ts']).toBe('v2');
 });
 
-test('skips binary extensions', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'nptest-'));
-  await writeFile(join(dir, 'image.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-  await writeFile(join(dir, 'app.ts'), 'const x = 1;');
-
-  const files = await readProjectFiles(dir);
-
-  expect(files['app.ts']).toBe('const x = 1;');
-  expect(files['image.png']).toBeUndefined();
-
-  await rm(dir, { recursive: true });
+test('clearProject removes all files for a project', async () => {
+  await store.seedFiles('proj4', { 'a.ts': 'x', 'b.ts': 'y' });
+  await store.clearProject('proj4');
+  const files = await store.readFiles('proj4');
+  expect(files).toEqual({});
 });
 ```
 
-- [ ] Run test to confirm it fails (function doesn't exist yet):
+- [ ] Run test — should fail with "Cannot find module":
 
 ```bash
-bun test test/readProjectFiles.test.ts
+bun test test/client-file-store.test.ts
 ```
 
-Expected: `Cannot find module '../server/routes/project-files'` or similar.
+Expected: module not found error.
 
-- [ ] Create `server/routes/project-files.ts`:
+- [ ] Create `client/lib/client-file-store/opfs.ts`:
 
 ```typescript
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import { Hono } from 'hono';
-import { authMiddleware } from '../middleware/auth';
-import { errors } from '../lib/errors';
-import { requireProjectAccess } from '../middleware/projectRole';
+// In-memory store used in tests (makeStore) + OPFS adapter for browser (opfsStore).
+// useNodePodRuntime uses opfsStore at runtime; tests use makeStore.
 
-const SKIP_DIRS = new Set([
-  '.git', 'node_modules', '.hyperide', 'dist', '.next',
-  'build', '.cache', 'out', '.turbo',
-]);
-
-const BINARY_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
-  '.woff', '.woff2', '.ttf', '.eot', '.otf',
-  '.pdf', '.zip', '.tar', '.gz', '.bz2',
-  '.mp4', '.webm', '.mp3', '.wav', '.ogg',
-  '.exe', '.dll', '.so', '.dylib',
-  '.sqlite', '.db',
-]);
-
-const MAX_FILE_BYTES = 500 * 1024;        // 500 KB per file
-const MAX_TOTAL_BYTES = 10 * 1024 * 1024; // 10 MB total response
-
-export async function readProjectFiles(projectPath: string): Promise<Record<string, string>> {
-  const files: Record<string, string> = {};
-  let totalBytes = 0;
-
-  async function walk(dir: string): Promise<void> {
-    const entries = await readdir(dir, { withFileTypes: true });
-    // Sort for deterministic output (easier to test and diff)
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) await walk(full);
-      } else if (entry.isFile()) {
-        const dotIdx = entry.name.lastIndexOf('.');
-        const ext = dotIdx !== -1 ? entry.name.slice(dotIdx).toLowerCase() : '';
-        if (BINARY_EXTENSIONS.has(ext)) continue;
-        const s = await stat(full);
-        if (s.size > MAX_FILE_BYTES) continue;
-        if (totalBytes + s.size > MAX_TOTAL_BYTES) continue;
-        const content = await readFile(full, 'utf-8').catch(() => null);
-        if (content === null) continue; // binary content that slipped through extension check
-        totalBytes += s.size;
-        // NodePod VFS uses POSIX paths regardless of host OS
-        const rel = relative(projectPath, full).split(sep).join('/');
-        files[rel] = content;
-      }
-    }
-  }
-
-  await walk(projectPath);
-  return files;
+export interface FileStore {
+  readFiles(projectId: string): Promise<Record<string, string>>
+  writeFile(projectId: string, path: string, content: string): Promise<void>
+  seedFiles(projectId: string, files: Record<string, string>): Promise<void>
+  clearProject(projectId: string): Promise<void>
 }
 
-export const projectFilesRouter = new Hono();
-projectFilesRouter.use('*', authMiddleware);
+/** In-memory implementation — for unit tests and SSR environments without OPFS. */
+export function makeStore(): FileStore {
+  const data = new Map<string, Map<string, string>>();
 
-projectFilesRouter.get('/:id/files', requireProjectAccess, async (c) => {
-  const project = c.get('checkedProject');
-  if (!project.path) throw errors.validation('Project has no path configured');
-  const files = await readProjectFiles(project.path);
-  return c.json({ files });
-});
+  function project(id: string) {
+    if (!data.has(id)) data.set(id, new Map());
+    return data.get(id)!;
+  }
+
+  return {
+    async readFiles(projectId) {
+      return Object.fromEntries(project(projectId));
+    },
+    async writeFile(projectId, path, content) {
+      project(projectId).set(path, content);
+    },
+    async seedFiles(projectId, files) {
+      const p = project(projectId);
+      for (const [k, v] of Object.entries(files)) p.set(k, v);
+    },
+    async clearProject(projectId) {
+      data.delete(projectId);
+    },
+  };
+}
+
+/** OPFS-backed implementation — used at browser runtime. */
+function makeOpfsStore(): FileStore {
+  async function projectDir(projectId: string, create = false) {
+    const root = await navigator.storage.getDirectory();
+    const nodepod = await root.getDirectoryHandle('hyper-nodepod', { create: true });
+    return nodepod.getDirectoryHandle(projectId, { create });
+  }
+
+  async function readDir(dir: FileSystemDirectoryHandle, prefix = ''): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for await (const [name, handle] of dir) {
+      const path = prefix ? `${prefix}/${name}` : name;
+      if (handle.kind === 'directory') {
+        Object.assign(out, await readDir(handle as FileSystemDirectoryHandle, path));
+      } else {
+        const file = await (handle as FileSystemFileHandle).getFile();
+        out[path] = await file.text();
+      }
+    }
+    return out;
+  }
+
+  return {
+    async readFiles(projectId) {
+      try {
+        const dir = await projectDir(projectId);
+        return readDir(dir);
+      } catch {
+        return {};
+      }
+    },
+    async writeFile(projectId, path, content) {
+      const dir = await projectDir(projectId, true);
+      const parts = path.split('/');
+      let cur = dir;
+      for (const part of parts.slice(0, -1)) {
+        cur = await cur.getDirectoryHandle(part, { create: true });
+      }
+      const fh = await cur.getFileHandle(parts.at(-1)!, { create: true });
+      const writable = await fh.createWritable();
+      await writable.write(content);
+      await writable.close();
+    },
+    async seedFiles(projectId, files) {
+      await Promise.all(
+        Object.entries(files).map(([path, content]) =>
+          this.writeFile(projectId, path, content)
+        )
+      );
+    },
+    async clearProject(projectId) {
+      try {
+        const root = await navigator.storage.getDirectory();
+        const nodepod = await root.getDirectoryHandle('hyper-nodepod', { create: false });
+        await nodepod.removeEntry(projectId, { recursive: true });
+      } catch {}
+    },
+  };
+}
+
+export const opfsStore: FileStore = typeof navigator !== 'undefined' && 'storage' in navigator
+  ? makeOpfsStore()
+  : makeStore();
 ```
 
-- [ ] Run tests — all three should be GREEN:
+- [ ] Create `client/lib/client-file-store/index.ts`:
+
+```typescript
+import { opfsStore } from './opfs';
+
+export async function readFiles(projectId: string): Promise<Record<string, string>> {
+  return opfsStore.readFiles(projectId);
+}
+
+export async function writeFile(projectId: string, path: string, content: string): Promise<void> {
+  return opfsStore.writeFile(projectId, path, content);
+}
+
+export async function seedFiles(projectId: string, files: Record<string, string>): Promise<void> {
+  return opfsStore.seedFiles(projectId, files);
+}
+
+export async function clearProject(projectId: string): Promise<void> {
+  return opfsStore.clearProject(projectId);
+}
+```
+
+- [ ] Run tests — all 5 should be GREEN:
 
 ```bash
-bun test test/readProjectFiles.test.ts
+bun test test/client-file-store.test.ts
 ```
 
-Expected: 3 passing.
-
-- [ ] Mount in `server/index.ts`. Add import at top:
-
-```typescript
-import { projectFilesRouter } from './routes/project-files';
-```
-
-After the existing `app.route('/api/projects', subscriptionsRouter);` line, add:
-
-```typescript
-app.route('/api/projects', projectFilesRouter);
-```
+Expected: 5 passing.
 
 - [ ] Codex review, fix findings.
 
 - [ ] Commit:
 
 ```bash
-git add server/routes/user-settings.ts \
-        server/routes/project-files.ts \
-        server/index.ts \
-        test/readProjectFiles.test.ts
-git commit -m "feat(server): expose clientSideRuntime in /api/user + add /api/projects/:id/files"
+git add client/lib/client-file-store/opfs.ts \
+        client/lib/client-file-store/index.ts \
+        test/client-file-store.test.ts
+git commit -m "feat(client): client-file-store — OPFS-backed per-project file cache for NodePod"
 ```
 
 ---
@@ -564,8 +611,10 @@ git commit -m "feat(client): useDockerRuntime — wrap Docker control+SSE into P
 **Files:**
 - Create: `client/lib/project-runtime/useNodePodRuntime.ts`
 
-NodePod implementation of `ProjectRuntime`. Boots NodePod, fetches files from server,
-mounts into virtual FS, runs npm install then vite dev, sets previewUrl on server ready.
+NodePod implementation of `ProjectRuntime`. Boots NodePod, reads files from `client-file-store`
+(OPFS), mounts into virtual FS, runs npm install then vite dev, sets previewUrl on server ready.
+If OPFS is empty for this project (first boot), bootstraps from the existing project files API
+then seeds OPFS — subsequent starts skip the server round-trip entirely.
 
 - [ ] Create `client/lib/project-runtime/useNodePodRuntime.ts`:
 
@@ -573,6 +622,7 @@ mounts into virtual FS, runs npm install then vite dev, sets previewUrl on serve
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
 import { authFetch } from '@/utils/authFetch';
+import * as clientFileStore from '@/lib/client-file-store';
 import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseNodePodRuntimeOptions {
@@ -662,11 +712,20 @@ export function useNodePodRuntime(
       podRef.current = pod;
       appendLog('[nodepod] runtime booted');
 
-      // Fetch project files from server
-      appendLog('[files] fetching project files...');
-      const res = await authFetch(`/api/projects/${project.id}/files`);
-      if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
-      const { files } = await res.json() as { files: Record<string, string> };
+      // Read files from OPFS; bootstrap from server on first boot for this project
+      appendLog('[files] loading from OPFS...');
+      let files = await clientFileStore.readFiles(project.id);
+      if (Object.keys(files).length === 0) {
+        appendLog('[files] OPFS empty — bootstrapping from server...');
+        const res = await authFetch(`/api/projects/${project.id}/files`);
+        if (!res.ok) throw new Error(`Failed to bootstrap files: ${res.status}`);
+        const { files: serverFiles } = await res.json() as { files: Record<string, string> };
+        await clientFileStore.seedFiles(project.id, serverFiles);
+        files = serverFiles;
+        appendLog(`[files] seeded ${Object.keys(files).length} files into OPFS`);
+      } else {
+        appendLog(`[files] ${Object.keys(files).length} files from OPFS`);
+      }
       if (isStale()) return;
 
       // Mount files into NodePod virtual FS

@@ -194,6 +194,13 @@ function mapSSEEvent(event: { type: string; data: Record<string, unknown> }, cha
         options: event.data.options as string[] | undefined,
       };
 
+    case 'tool_progress':
+      return {
+        type: 'tool_progress',
+        toolUseId: String(event.data.toolUseId ?? ''),
+        output: String(event.data.output ?? ''),
+      };
+
     case 'chat_title_updated':
       return {
         type: 'chat_title_updated',

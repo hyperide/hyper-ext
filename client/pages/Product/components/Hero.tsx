@@ -7,11 +7,9 @@ import { screenshotSrc } from '../screenshotSrc';
 
 const VSCODE_MARKETPLACE_URL = 'https://marketplace.visualstudio.com/itemdetails?itemName=hyperide.hypercanvas-preview';
 const OPEN_VSX_URL = 'https://open-vsx.org/extension/hyperide/hypercanvas-preview';
-const ADMIN_EMAIL = 'invntrm@gmail.com';
 
 export default function Hero() {
-  const userEmail = useAuthStore((s) => s.user?.email);
-  const isAdmin = userEmail === ADMIN_EMAIL;
+  const hasSaasAccess = useAuthStore((s) => s.user?.clientSideRuntime ?? false);
 
   return (
     <section className="relative overflow-hidden py-20 sm:py-32">
@@ -72,7 +70,7 @@ export default function Hero() {
                   GitHub
                 </a>
               </Button>
-              {isAdmin ? (
+              {hasSaasAccess ? (
                 <Button size="lg" variant="outline" className="gap-2" asChild>
                   <Link to="/projects">
                     <IconCloud className="h-5 w-5" />

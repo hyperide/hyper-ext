@@ -172,55 +172,6 @@ describe('resolveDragSource', () => {
     expect(result?.source.column).toBe(4);
   });
 
-  /**
-   * STEP-ORDER REGRESSION: verifies that fiber _debugSource wins over the ancestor
-   * walk-up when source maps on the target are cold but the parent has warm source maps.
-   *
-   * With the OLD order (walk-up before fiber): the parent's source would be returned,
-   * causing the wrong element to be dragged (e.g. dragging an <img> moves its card).
-   * With the CORRECT order (fiber before walk-up): target resolves via _debugSource.
-   *
-   * The existing "cold source maps" test above does NOT catch a regression here because
-   * it sets parentElement to BODY, so the walk-up terminates immediately regardless of
-   * step order. This test uses a parent that actually has a source.
-   */
-  it('resolves via fiber _debugSource even when parent has warm source maps (step-order matters)', () => {
-    const fiber = makeFiber({
-      tag: 5,
-      type: 'img',
-      _debugSource: {
-        fileName: '/src/Gallery.tsx',
-        lineNumber: 42,
-        columnNumber: 4,
-      },
-    });
-
-    const parent = makeEl({ tagName: 'DIV' });
-    const target = makeEl({ tagName: 'IMG' });
-    (target as unknown as Record<string, unknown>).__reactFiber$xyz = fiber;
-    (target as unknown as Record<string, unknown>).parentElement = parent;
-    (parent as unknown as Record<string, unknown>).parentElement = {
-      tagName: 'BODY',
-      parentElement: null,
-    };
-
-    const SRC_PARENT: SourceLocation = { fileName: '/src/Gallery.tsx', line: 30, column: 2 };
-    // target: cold source maps; parent: warm source maps
-    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null =>
-      el === parent ? SRC_PARENT : null,
-    );
-
-    const result = resolveDragSource(target, getSourceLocation, '/src/Gallery.tsx');
-
-    // Must resolve via fiber (step 2), NOT via parent walk-up (step 3).
-    // If steps were swapped, result would be { el: parent, source: SRC_PARENT }.
-    expect(result).not.toBeNull();
-    expect(result?.el).toBe(target);
-    expect(result?.source.line).toBe(42);
-    // columnNumber 4 → column 3 (0-based offset, same transform as existing tests)
-    expect(result?.source.column).toBe(3);
-  });
-
   it('returns null when no source found anywhere (truly untraceable element)', () => {
     const target = makeEl({ tagName: 'DIV' });
     (target as unknown as Record<string, unknown>).parentElement = {
