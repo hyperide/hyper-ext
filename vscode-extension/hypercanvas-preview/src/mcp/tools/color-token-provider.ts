@@ -282,6 +282,12 @@ class TailwindStyleAdapter implements StyleAdapter {
     for (const [k, v] of Object.entries(parsed)) {
       if (v !== undefined) styles[k] = String(v);
     }
+    if (Object.keys(styles).length === 0) {
+      return {
+        success: false,
+        error: `No styles found for className: "${params.className}". Ensure it contains valid Tailwind classes (e.g. 'flex gap-4 bg-blue-500').`,
+      };
+    }
     return { success: true, styles };
   }
 

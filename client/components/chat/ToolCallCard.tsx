@@ -46,6 +46,8 @@ export function getToolSummary(name: string, input: Record<string, unknown>): st
       return str(input.query);
     case 'url_fetch':
       return str(input.url);
+    case 'add_dependency':
+      return Array.isArray(input.packages) ? (input.packages as string[]).join(', ') : '';
     case 'ask_user':
       return '';
     default: {
@@ -112,7 +114,9 @@ export function ToolCallCard({ toolCall, onViewResult }: ToolCallCardProps) {
             {toolCall.result.success ? 'Done' : 'Failed'}
           </span>
         )}
-        {!toolCall.result && <IconLoader2 size={12} className="inline-block ml-1 animate-spin text-amber-500" />}
+        {!toolCall.result && !toolCall.liveOutput && (
+          <IconLoader2 size={12} className="inline-block ml-1 animate-spin text-amber-500" />
+        )}
       </button>
       {/* Compact argument summary — always visible */}
       {toolSummary && (
@@ -130,6 +134,13 @@ export function ToolCallCard({ toolCall, onViewResult }: ToolCallCardProps) {
             </pre>
           )}
         </div>
+      )}
+
+      {/* Live streaming output (while tool is in progress) */}
+      {toolCall.liveOutput && !toolCall.result && (
+        <pre className="text-[10px] whitespace-pre-wrap font-mono text-foreground/70 overflow-hidden max-h-40 mt-1">
+          {toolCall.liveOutput}
+        </pre>
       )}
 
       {/* Output preview + view full button */}

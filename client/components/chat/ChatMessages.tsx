@@ -85,6 +85,9 @@ function isAuthError(msg: DisplayMessage): boolean {
     text.includes('API error 403') ||
     text.includes('authentication_error') ||
     text.includes('invalid_api_key') ||
-    text.includes('Unauthorized')
+    text.includes('Unauthorized') ||
+    text.includes('token expired') ||
+    text.includes('token incorrect') ||
+    /Error: 4(01|03)/.test(text)
   );
 }

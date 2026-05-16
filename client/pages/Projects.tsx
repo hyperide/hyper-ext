@@ -117,6 +117,13 @@ export default function Projects() {
   const [showCreateSidebar, setShowCreateSidebar] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [continueProject, setContinueProject] = useState<Project | null>(null);
+  const [restoredCreationProject, setRestoredCreationProject] = useState<{
+    id: string;
+    path: string;
+    framework: string;
+    packageManager: string;
+    name: string;
+  } | null>(null);
   const [gitUrlPopoverOpen, setGitUrlPopoverOpen] = useState(false);
   const gitUrlInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +145,20 @@ export default function Projects() {
       setShowCreateSidebar(true);
     }
   }, [continueProject]);
+
+  // Restore in-progress AI project creation after page reload
+  useEffect(() => {
+    const stored = localStorage.getItem('projectCreationInProgress');
+    if (stored) {
+      try {
+        const p = JSON.parse(stored);
+        if (p?.id && p?.path) {
+          setRestoredCreationProject(p);
+          setShowCreateSidebar(true);
+        }
+      } catch {}
+    }
+  }, []);
 
   // GitHub App installation URL
   const { getInstallUrl } = useGitHubAppInstallations();
@@ -950,11 +971,12 @@ export default function Projects() {
       </div>
       {/* AI Project Creation Sidebar */}
       {showCreateSidebar && (
-        <div className="fixed top-0 right-0 h-screen w-[450px] z-50 shadow-2xl">
+        <div className="fixed top-0 right-0 h-screen w-full sm:w-[450px] z-50 shadow-2xl">
           <ProjectCreationAIChat
             onClose={() => {
               setShowCreateSidebar(false);
               setContinueProject(null);
+              setRestoredCreationProject(null);
             }}
             onProjectCreated={handleProjectCreated}
             existingProject={
@@ -966,7 +988,7 @@ export default function Projects() {
                     packageManager: continueProject.packageManager,
                     name: continueProject.name,
                   }
-                : undefined
+                : (restoredCreationProject ?? undefined)
             }
           />
         </div>

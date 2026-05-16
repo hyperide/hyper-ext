@@ -128,6 +128,16 @@ export function useChatStream({
             }
             break;
 
+          case 'tool_progress':
+            {
+              const toolCall = currentToolCallsRef.current.get(event.toolUseId);
+              if (toolCall) {
+                toolCall.liveOutput = (toolCall.liveOutput ?? '') + event.output;
+                setCurrentToolCalls(new Map(currentToolCallsRef.current));
+              }
+            }
+            break;
+
           case 'ask_user':
             setPendingAskUser({
               toolUseId: event.toolUseId,
