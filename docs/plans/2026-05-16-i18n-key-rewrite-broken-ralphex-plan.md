@@ -48,22 +48,14 @@ the write RPC and the JSX source is updated within 2 seconds.
 
 ### Task 1: Reproduce and diagnose
 
-- [x] Read the current `commitKey` implementation in `RightSidebar.tsx`
-  - `commitKey` is in `I18nTextInspector.tsx` (not `RightSidebar.tsx`). Guard: `key === currentKey` where `currentKey = optimisticKey ?? realKey`.
-- [x] Check if `optimisticKey` is set to a non-null value before `commitKey('test.farewell')` fires
-  - If first write RPC returns `success: true` but file unchanged (e.g., `i18nFilePath` falsy or JSX update silently skipped in AstBridge), rollback is NOT triggered (catch never fires). `optimisticKey` stays as `'test.farewell'` while `realKey = 'test.greeting'` (file unchanged). Safety net `realKey === optimisticKey` never fires → `optimisticKey` stuck.
-  - On retry: `currentKey = optimisticKey = 'test.farewell'` → guard `key === currentKey` blocks the write.
-  - Leading candidate: RPC returns success silently without writing (AstBridge guard `if (i18nFilePath && i18nElementId && previousKey)` could be false if `filePath` is falsy — unlikely, but possible edge case).
-  - Secondary candidate: `pendingKeyWrite` in `keyBusy` creates a first-attempt issue: if cross-test `pendingKeyWrite` is non-null and `elementId === selectedId`, `keyBusy` stays true, test eventually clicks option through a still-open dropdown (but `onKeyChange` fires `handleI18nKeyChange` which bails early if `i18nText` is momentarily null during the `pendingKeyWrite`/loading transition).
-- [x] Check the `assertI18nInspector` helper — does it set `optimisticKey`?
-  - No. `assertI18nInspector` only calls `getInspectorContent()` and checks visibility of existing elements. Does not interact with the key combobox.
-- [x] Check if `setPendingKeyWrite(null)` in `finally` might cause `useEffect` cleanup to run before the RPC write completes (race condition)
-  - No. `finally` runs AFTER `await astOps.writeI18nResource(...)`. The `useEffect([i18nText, selectedId, pendingKeyWrite])` clears `pendingKeyWrite` when `i18nText.key === pendingKeyWrite.key`, which only happens post-HMR (after file is written). No race here.
-- [x] Run the test locally to see console output (skipped — Docker E2E not available from this environment)
-
-Root cause identified: two candidates.
-1. **Guard issue** (leading): `optimisticKey` gets stuck after a write where RPC returns success without writing the file. The guard `key === currentKey` then blocks retries.
-2. **pendingKeyWrite keyBusy** (secondary): if `pendingKeyWrite` is non-null from a cross-test leak (RightSidebar does not unmount between tests), `keyBusy` stays true and `handleI18nKeyChange` might receive stale `i18nText = undefined` during the transition.
+- [ ] Read the current `commitKey` implementation in `RightSidebar.tsx`
+- [ ] Check if `optimisticKey` is set to a non-null value before `commitKey('test.farewell')` fires
+  - If `optimisticKey === 'test.farewell'` when the test clicks, `currentKey = 'test.farewell'` and the guard `key === currentKey` blocks the write
+  - Hypothesis: `optimisticKey` stays set from a previous run attempt in the same test worker
+- [ ] Check the `assertI18nInspector` helper — does it set `optimisticKey`?
+- [ ] Check if `setPendingKeyWrite(null)` in `finally` might cause `useEffect` cleanup to run
+  before the RPC write completes (race condition)
+- [ ] Run the test locally to see console output
 
 Acceptance: Root cause identified.
 
