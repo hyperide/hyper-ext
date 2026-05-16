@@ -38,7 +38,7 @@ Two separate issues may stack:
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-9\|hero.title\|translations.ts"`.
 - Main worktree: `/Users/ultra/work/hyper-canvas-draft`.
 
-## Task 1 — Isolate: does the test load the right project?
+### Task 1 — Isolate: does the test load the right project?
 
 Run the three pi7-9 tests in isolation with extra diagnostics:
 
@@ -54,7 +54,7 @@ Check:
 - Does `h1#hero-title` check pass or skip?
 - If it skips: the project loading is wrong → fix is same as bulka-discard plan Task 1 (pass component path explicitly to `setupPreviewWithDevServer`).
 
-## Task 2 — If canvas loads bulka: check editability
+### Task 2 — If canvas loads bulka: check editability
 
 If the canvas correctly loads bulka but the i18n text input is disabled:
 
@@ -63,7 +63,7 @@ If the canvas correctly loads bulka but the i18n text input is disabled:
 - [ ] If `writable: false`: the merged-TS write adapter returns `readonly` for the file. Find the `isFileWritable()` check in `writeI18nResource` or the read path and fix.
 - [ ] After fix: run test in isolation, confirm input is enabled.
 
-## Task 3 — If canvas loads bulka and input is enabled: check write path
+### Task 3 — If canvas loads bulka and input is enabled: check write path
 
 If the test gets past "not.toBeDisabled()" but `translations.ts` doesn't update:
 
@@ -72,13 +72,13 @@ If the test gets past "not.toBeDisabled()" but `translations.ts` doesn't update:
 - [ ] Check if HMR re-reads the updated file and updates the preview h1.
 - [ ] Add `console.log` diagnostics in the write path, run again, read output.
 
-## Task 4 — Confirm GREEN
+### Task 4 — Confirm GREEN
 
 Run `HYPER_E2E_SHARDS=1 bun run test:docker -- --project="dep:bulka-the-dog" tests/project-dependent/bulka-i18n-pi7-9.spec.ts` and confirm all three tests PASS (not skip, not fail).
 
 Screenshot the GREEN result.
 
-## Task 5 — TG report
+### Task 5 — TG report
 
 Send via `cd /Users/ultra/xp/codex-tg-bot && bash scripts/send-tg-report.sh`:
 - Which task fixed it (project load or editability or write path)
