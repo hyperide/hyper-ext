@@ -25,11 +25,6 @@ export interface ParsedTailwindStyles {
   gap?: string;
   rowGap?: string;
   columnGap?: string;
-  paddingTop?: string;
-  paddingRight?: string;
-  paddingBottom?: string;
-  paddingLeft?: string;
-  color?: string;
 }
 
 // Tailwind spacing scale (0-96 + auto)
@@ -237,8 +232,6 @@ const TAILWIND_TEXT_NON_COLOR_CLASSES = new Set([
   'text-justify',
   'text-start',
   'text-end',
-  'text-ellipsis',
-  'text-clip',
 ]);
 
 const TAILWIND_TEXT_SIZE_CLASSES = new Set([
@@ -420,20 +413,16 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
   const result: ParsedTailwindStyles = {};
 
   for (const cls of classes) {
-    // Skip state modifier classes (hover:, focus:, etc.) — base styles only
-    const { modifier, baseClass } = extractModifier(cls);
-    if (modifier !== null) continue;
-
     // Position type
-    if (baseClass === 'static') result.position = 'static';
-    else if (baseClass === 'relative') result.position = 'relative';
-    else if (baseClass === 'absolute') result.position = 'absolute';
-    else if (baseClass === 'fixed') result.position = 'fixed';
-    else if (baseClass === 'sticky') result.position = 'sticky';
+    if (cls === 'static') result.position = 'static';
+    else if (cls === 'relative') result.position = 'relative';
+    else if (cls === 'absolute') result.position = 'absolute';
+    else if (cls === 'fixed') result.position = 'fixed';
+    else if (cls === 'sticky') result.position = 'sticky';
 
-    // Position values (support negative: -top-4)
-    const isNegative = baseClass.startsWith('-');
-    const cleanCls = isNegative ? baseClass.slice(1) : baseClass;
+    // Position values
+    const isNegative = cls.startsWith('-');
+    const cleanCls = isNegative ? cls.slice(1) : cls;
 
     if (cleanCls.startsWith('top-')) {
       const value = cleanCls.slice(4);
@@ -458,17 +447,17 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
     }
 
     // Width and height
-    if (baseClass.startsWith('w-')) {
-      const value = baseClass.slice(2);
-      const arbValue = extractArbitraryValue(baseClass);
+    if (cls.startsWith('w-')) {
+      const value = cls.slice(2);
+      const arbValue = extractArbitraryValue(cls);
       result.width = arbValue || SPACING_SCALE[value] || value;
-    } else if (baseClass.startsWith('h-')) {
-      const value = baseClass.slice(2);
-      const arbValue = extractArbitraryValue(baseClass);
+    } else if (cls.startsWith('h-')) {
+      const value = cls.slice(2);
+      const arbValue = extractArbitraryValue(cls);
       result.height = arbValue || SPACING_SCALE[value] || value;
     }
 
-    // Margin (negative support via cleanCls)
+    // Margin
     if (cleanCls.startsWith('mt-')) {
       const value = cleanCls.slice(3);
       const arbValue = extractArbitraryValue(cleanCls);
@@ -495,148 +484,87 @@ export function parseTailwindClasses(className: string): ParsedTailwindStyles {
       result.marginLeft = cssValue;
     }
 
-    // Padding
-    if (cleanCls.startsWith('p-')) {
-      const value = cleanCls.slice(2);
-      const arbValue = extractArbitraryValue(cleanCls);
-      const cssValue = arbValue || SPACING_SCALE[value] || value;
-      result.paddingTop = cssValue;
-      result.paddingRight = cssValue;
-      result.paddingBottom = cssValue;
-      result.paddingLeft = cssValue;
-    } else if (cleanCls.startsWith('px-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      const cssValue = arbValue || SPACING_SCALE[value] || value;
-      result.paddingLeft = cssValue;
-      result.paddingRight = cssValue;
-    } else if (cleanCls.startsWith('py-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      const cssValue = arbValue || SPACING_SCALE[value] || value;
-      result.paddingTop = cssValue;
-      result.paddingBottom = cssValue;
-    } else if (cleanCls.startsWith('pt-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      result.paddingTop = arbValue || SPACING_SCALE[value] || value;
-    } else if (cleanCls.startsWith('pr-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      result.paddingRight = arbValue || SPACING_SCALE[value] || value;
-    } else if (cleanCls.startsWith('pb-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      result.paddingBottom = arbValue || SPACING_SCALE[value] || value;
-    } else if (cleanCls.startsWith('pl-')) {
-      const value = cleanCls.slice(3);
-      const arbValue = extractArbitraryValue(cleanCls);
-      result.paddingLeft = arbValue || SPACING_SCALE[value] || value;
-    }
-
-    // Background image: bg-[url('/path/to/image.png')]
-    if (baseClass.startsWith('bg-[url(')) {
-      const urlMatch = baseClass.match(/bg-\[url\(['"]?([^'")\]]+)['"]?\)\]/);
+    // Background image: bg-\[url('/path/to/image.png')\]
+    if (cls.startsWith('bg-[url(')) {
+      // Extract URL from bg-\[url('...')\] or bg-\[url("...")\] or bg-\[url(...)\]
+      const urlMatch = cls.match(/bg-\[url\(['"]?([^'")\]]+)['"]?\)\]/);
       if (urlMatch) {
         result.backgroundImage = urlMatch[1];
       }
     }
-    // Background color: arbitrary value
-    else if (baseClass.startsWith('bg-[')) {
-      const arbValue = extractArbitraryValue(baseClass);
+    // Background color (arbitrary values only for now)
+    else if (cls.startsWith('bg-[')) {
+      const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.backgroundColor = arbValue;
     }
-    // Background color: named Tailwind color or custom token
-    else if (
-      baseClass.startsWith('bg-') &&
-      !TAILWIND_BG_NON_COLOR_CLASSES.has(baseClass) &&
-      !baseClass.startsWith('bg-gradient-') &&
-      !baseClass.startsWith('bg-opacity-')
-    ) {
-      result.backgroundColor = baseClass.slice(3);
-    }
 
-    // Border color (arbitrary values)
+    // Border color (arbitrary values only for now)
     if (
-      baseClass.startsWith('border-[') &&
-      !baseClass.startsWith('border-t') &&
-      !baseClass.startsWith('border-r') &&
-      !baseClass.startsWith('border-b') &&
-      !baseClass.startsWith('border-l')
+      cls.startsWith('border-[') &&
+      !cls.startsWith('border-t') &&
+      !cls.startsWith('border-r') &&
+      !cls.startsWith('border-b') &&
+      !cls.startsWith('border-l')
     ) {
-      const arbValue = extractArbitraryValue(baseClass);
+      const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.borderColor = arbValue;
     }
 
     // Border radius
-    if (baseClass === 'rounded') {
+    if (cls === 'rounded') {
       result.borderRadius = '0.25rem';
-    } else if (baseClass === 'rounded-none') {
+    } else if (cls === 'rounded-none') {
       result.borderRadius = '0px';
-    } else if (baseClass === 'rounded-sm') {
+    } else if (cls === 'rounded-sm') {
       result.borderRadius = '0.125rem';
-    } else if (baseClass === 'rounded-md') {
+    } else if (cls === 'rounded-md') {
       result.borderRadius = '0.375rem';
-    } else if (baseClass === 'rounded-lg') {
+    } else if (cls === 'rounded-lg') {
       result.borderRadius = '0.5rem';
-    } else if (baseClass === 'rounded-xl') {
+    } else if (cls === 'rounded-xl') {
       result.borderRadius = '0.75rem';
-    } else if (baseClass === 'rounded-2xl') {
-      result.borderRadius = '1rem';
-    } else if (baseClass === 'rounded-3xl') {
-      result.borderRadius = '1.5rem';
-    } else if (baseClass === 'rounded-full') {
-      result.borderRadius = '9999px';
-    } else if (baseClass.startsWith('rounded-[')) {
-      const arbValue = extractArbitraryValue(baseClass);
+    } else if (cls.startsWith('rounded-[')) {
+      const arbValue = extractArbitraryValue(cls);
       if (arbValue) result.borderRadius = arbValue;
     }
 
-    // Text color: named, custom token, or arbitrary
-    if (isTailwindTextColorClass(baseClass)) {
-      if (baseClass.startsWith('text-[')) {
-        const arbValue = extractArbitraryValue(baseClass);
-        if (arbValue) result.color = arbValue;
-      } else {
-        result.color = baseClass.slice(5);
-      }
-    }
-
     // Overflow
-    if (baseClass === 'overflow-visible') {
+    if (cls === 'overflow-visible') {
       result.overflow = 'visible';
-    } else if (baseClass === 'overflow-hidden') {
+    } else if (cls === 'overflow-hidden') {
       result.overflow = 'hidden';
-    } else if (baseClass === 'overflow-scroll') {
+    } else if (cls === 'overflow-scroll') {
       result.overflow = 'scroll';
-    } else if (baseClass === 'overflow-auto') {
+    } else if (cls === 'overflow-auto') {
       result.overflow = 'auto';
     }
 
     // Display & Flexbox
-    if (baseClass === 'flex') {
+    if (cls === 'flex') {
       result.display = 'flex';
-    } else if (baseClass === 'block') {
+    } else if (cls === 'block') {
       result.display = 'block';
-    } else if (baseClass === 'grid') {
+    } else if (cls === 'grid') {
       result.display = 'grid';
     }
 
-    if (baseClass === 'flex-col') {
+    if (cls === 'flex-col') {
       result.flexDirection = 'column';
-    } else if (baseClass === 'flex-row') {
+    } else if (cls === 'flex-row') {
       result.flexDirection = 'row';
-    } else if (baseClass.startsWith('space-y-')) {
+    } else if (cls.startsWith('space-y-')) {
+      // space-y-* implies flex column direction with gap
       result.display = 'flex';
       result.flexDirection = 'column';
-      const value = baseClass.slice(8);
-      const arbValue = extractArbitraryValue(baseClass);
+      const value = cls.slice(8);
+      const arbValue = extractArbitraryValue(cls);
       result.gap = arbValue || SPACING_SCALE[value] || value;
-    } else if (baseClass.startsWith('space-x-')) {
+    } else if (cls.startsWith('space-x-')) {
+      // space-x-* implies flex row direction with gap
       result.display = 'flex';
       result.flexDirection = 'row';
-      const value = baseClass.slice(8);
-      const arbValue = extractArbitraryValue(baseClass);
+      const value = cls.slice(8);
+      const arbValue = extractArbitraryValue(cls);
       result.gap = arbValue || SPACING_SCALE[value] || value;
     }
   }
