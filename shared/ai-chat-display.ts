@@ -16,6 +16,7 @@ export interface DisplayToolCall {
   name: ToolName | (string & {});
   input: Record<string, unknown>;
   result?: DisplayToolResult;
+  liveOutput?: string;
 }
 
 export interface DisplayMessage {
@@ -65,6 +66,11 @@ export type ChatStreamEvent =
       toolUseId: string;
       question: string;
       options?: string[];
+    }
+  | {
+      type: 'tool_progress';
+      toolUseId: string;
+      output: string;
     }
   | { type: 'chat_title_updated'; chatId: string; title: string }
   | { type: 'error'; error: string }

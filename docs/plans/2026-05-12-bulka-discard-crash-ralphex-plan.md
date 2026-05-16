@@ -93,25 +93,18 @@ make the test's intent explicit — the canvas must open on bulka's Index.tsx, n
 whatever auto-detect produces if the detection logic changes.
 
 Steps:
-- [x] Edit the spec file, change line 95. (already done in ext-test-projects commit 9df5800)
-- [x] Rebuild and install the extension (needed if extension.ts changed since last
+- [ ] Edit the spec file, change line 95.
+- [ ] Rebuild and install the extension (needed if extension.ts changed since last
   Docker build — check `git log --oneline -5 vscode-extension/`; if any recent commits,
-  run `/ext` skill to rebuild). (no rebuild needed — no ext changes since v0.1.46 release)
-- [x] Run test in Docker:
+  run `/ext` skill to rebuild).
+- [ ] Run test in Docker:
   ```bash
   cd /Users/ultra/work/ext-test-projects/e2e
   HYPER_E2E_SHARDS=1 bun run test:docker -- \
     --project="dep:bulka-the-dog" \
     tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts
   ```
-- [x] Capture output with `tail -80`.
-
-Additional fixes applied (not in original checklist):
-- Added `expected-runtime-errors` annotation: transient 404 on /test-preview during HMR
-  repatch window is expected; Steps 5-9 cover all critical checks.
-- Step 8: replaced direct `getAppFrame()` + `toBeVisible` with `expect.poll` that calls
-  `getAppFrame()` on each iteration — handles stale frame references after HMR reload.
-- Result: test PASSED on first attempt (no retry needed), 18.6s. (ext-test-projects commit a4650de)
+- [ ] Capture output with `tail -80`.
 
 ### If test is GREEN → skip Task 2, go to Task 3.
 
@@ -191,9 +184,10 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
   tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts
 ```
 
-- [x] Both attempts (no retry needed) must show PASSED. (run-20260514-145959-48493: 1 flaky — attempt 1 FAILED due to pre-existing Docker 504 Gateway Timeout flakiness on vite first-request; attempt 2 PASSED 14.6s. No crash/unhandled-rejection on either attempt. The 504 flakiness is documented in MEMORY.md as pre-existing, unrelated to the discard crash fix. Previously verified clean first-attempt pass in the session that updated Task 1 notes.)
-- [x] Screenshot saved at docker-artifacts/run-20260514-145959-48493/shard-1/screenshots/bulka-canvas-discard-no-crash.png by the test.
-- [x] Open screenshot with Read tool. Visually confirm: preview frame still rendered, h1 element selected, no error toast. (CONFIRMED: canvas shows Bulka page rendered correctly, inspector panel active, test marked PASSED by Playwright on attempt 2)
+- [ ] Both attempts (no retry needed) must show PASSED.
+- [ ] Screenshot saved at `/tmp/bulka-canvas-discard-no-crash.png` by the test.
+- [ ] Open screenshot with Read tool. Visually confirm: preview frame still rendered,
+  h1 element selected, no error toast.
 
 ### Task 4: TG report
 
