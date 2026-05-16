@@ -212,10 +212,6 @@ export default function RightSidebar({
   // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
   // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
   const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
-  // Keeps keyBusy=true until i18nText.key confirms the new key after a write.
-  // Unlike pendingTextKeyRef (a ref used by debounced text-write), this is React state so it
-  // triggers re-renders and keeps the combobox disabled during the i18nText re-read window.
-  const [pendingKeyWrite, setPendingKeyWrite] = useState<{ key: string; elementId: string } | null>(null);
   // Locale selected by the user in the i18n inspector. Resets when element/binding changes.
   const [i18nActiveLocale, setI18nActiveLocale] = useState<string | undefined>(undefined);
   // External refresh trigger (e.g. undo/redo from extension host)
@@ -283,9 +279,6 @@ export default function RightSidebar({
 
   // Reset i18n locale selection and last-written key when the selected element changes.
   // This prevents a stale locale or stale previousKey from carrying over to a different element.
-  // Note: pendingKeyWrite is NOT cleared here — HMR transiently sets selectedId to null, which
-  // would prematurely drop the pending guard. The pendingKeyWrite useEffect handles cleanup when
-  // selectedId is non-null and different from pendingKeyWrite.elementId.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
   useEffect(() => {
     setI18nActiveLocale(undefined);
@@ -777,22 +770,6 @@ export default function RightSidebar({
     }
   }
 
-  // Clear pendingKeyWrite (React state) when i18nText.key confirms the written key or element changes.
-  // This is the state-based counterpart to pendingTextKeyRef: drives re-renders so keyBusy updates.
-  // Guard: only clear on genuine element switch (non-null selectedId), not on HMR-induced transient
-  // selectedId=null. A null selectedId during HMR would otherwise drop the pending guard early,
-  // letting the inspector show a stale realKey and causing commitKey to abort the second write.
-  useEffect(() => {
-    if (pendingKeyWrite === null) return;
-    if (selectedId != null && pendingKeyWrite.elementId !== selectedId) {
-      setPendingKeyWrite(null);
-      return;
-    }
-    if (i18nText?.kind === 'i18n' && i18nText.key === pendingKeyWrite.key) {
-      setPendingKeyWrite(null);
-    }
-  }, [i18nText, selectedId, pendingKeyWrite]);
-
   const handleI18nKeyChange = useCallback(
     (newKey: string) => {
       if (!i18nText || i18nText.kind !== 'i18n') return;
@@ -801,9 +778,6 @@ export default function RightSidebar({
       // Set before the async IIFE so debounced text writes use the new key
       // during the RPC round-trip window (i18nText.key still stale until re-read).
       pendingTextKeyRef.current = { key: newKey, elementId: effectiveSelectedId };
-      // Also set React state so keyBusy stays true until i18nText.key confirms the write.
-      // pendingTextKeyRef alone doesn't trigger re-renders — this state does.
-      setPendingKeyWrite({ key: newKey, elementId: effectiveSelectedId });
       const previousSelectedId = effectiveSelectedId;
       // If the user typed a key that doesn't yet exist in the locale, treat this
       // as "create new key" — also write the JSON resource so the next re-read
@@ -868,10 +842,6 @@ export default function RightSidebar({
           if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
             i18nDispatch({ writeInProgress: null });
           }
-          // Release keyBusy on both success and failure — clearing here rather than only
-          // in catch avoids the case where newElementId === elementId (selectedId unchanged)
-          // which would otherwise keep keyBusy=true for the full NodeMapService rebuild (~20s).
-          setPendingKeyWrite(null);
           setStyleRefreshKey((k) => k + 1);
         }
       })();
@@ -1466,11 +1436,7 @@ export default function RightSidebar({
                   availableKeys={availableI18nKeys}
                   keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
                   canCreateKeys={i18nText.writable}
-                  keyBusy={
-                    loading ||
-                    (!!i18nDispatch && !!writeInProgress) ||
-                    (pendingKeyWrite !== null && pendingKeyWrite.elementId === selectedId)
-                  }
+                  keyBusy={loading || (!!i18nDispatch && !!writeInProgress)}
                 />
               );
             })()}

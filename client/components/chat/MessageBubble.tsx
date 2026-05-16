@@ -11,7 +11,7 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, onViewToolResult }: MessageBubbleProps) {
   if (message.role === 'user') {
     return (
-      <div data-testid="MessageBubble" className="bg-primary/10 rounded-lg p-3 ml-4 sm:ml-8">
+      <div data-testid="MessageBubble" className="bg-primary/10 rounded-lg p-3 ml-8">
         <div className="text-[10px] font-semibold text-muted-foreground mb-1">You</div>
         <div className="text-sm whitespace-pre-wrap break-words">{message.content}</div>
       </div>
@@ -19,7 +19,7 @@ export function MessageBubble({ message, onViewToolResult }: MessageBubbleProps)
   }
 
   return (
-    <div data-testid="MessageBubble" className="bg-muted/50 rounded-lg p-3 mr-4 sm:mr-8">
+    <div data-testid="MessageBubble" className="bg-muted/50 rounded-lg p-3 mr-8">
       {message.content && (
         <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>

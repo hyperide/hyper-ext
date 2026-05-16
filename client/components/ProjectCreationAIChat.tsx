@@ -29,7 +29,6 @@ type UIKit = 'tamagui' | 'shadcn';
 type CreationStep = 'setup' | 'creating' | 'chatting' | 'completed' | 'error';
 
 const STORAGE_KEY = 'projectCreationForm';
-const INPROGRESS_KEY = 'projectCreationInProgress';
 
 interface SavedFormData {
   repoName: string;
@@ -296,11 +295,7 @@ export default function ProjectCreationAIChat({
         setChatId(newChatId);
       }
 
-      // Persist so reload can resume this session
-      localStorage.setItem(
-        INPROGRESS_KEY,
-        JSON.stringify({ id: data.projectId, path: data.projectPath, framework, packageManager, name: repoName }),
-      );
+      // AIAgentChat will handle initial prompt via initialPrompt prop
       localStorage.removeItem(STORAGE_KEY);
       setCurrentStep('chatting');
     } catch (err) {
@@ -321,7 +316,6 @@ export default function ProjectCreationAIChat({
         throw new Error('Failed to finalize project');
       }
 
-      localStorage.removeItem(INPROGRESS_KEY);
       setCurrentStep('completed');
       onProjectCreated?.(projectId);
     } catch (err) {
@@ -467,7 +461,7 @@ export default function ProjectCreationAIChat({
                 {/* Framework */}
                 <div>
                   <span className="block text-xs font-medium text-foreground mb-2">Framework *</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     {(['nextjs', 'vite', 'remix', 'bun'] as Framework[]).map((fw) => (
                       <button
                         key={fw}
@@ -499,7 +493,7 @@ export default function ProjectCreationAIChat({
                       <span className="ml-1 text-muted-foreground font-normal">(Tamagui requires Yarn)</span>
                     )}
                   </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     {(['npm', 'yarn', 'pnpm', 'bun'] as PackageManager[]).map((pm) => {
                       const isDisabledByTamagui = uiKit === 'tamagui' && pm !== 'yarn';
                       return (
