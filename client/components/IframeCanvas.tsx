@@ -392,6 +392,12 @@ export default function IframeCanvas({
 
   // Recovery: reload iframe when server comes back online (serverOffline: true → false)
   const prevServerOfflineRef = useRef(serverOffline);
+
+  // Browser-internal errors that are harmless noise — don't surface to the user
+  const isIgnorableRuntimeError = (message: string) =>
+    message.includes('ResizeObserver loop completed with undelivered notifications') ||
+    message.includes('ResizeObserver loop limit exceeded');
+
   // Tracks whether current runtime error came from overlay polling or postMessage.
   // Must be a ref (not local variable) to survive useEffect re-runs on iframeLoadedCounter change.
   const errorSourceRef = useRef<'overlay' | 'postMessage' | null>(null);
@@ -910,6 +916,8 @@ export default function IframeCanvas({
         const messageEl = shadowRoot.querySelector('.message-body');
         const errorMessage = messageEl?.textContent?.trim() || 'Unknown error';
 
+        if (isIgnorableRuntimeError(errorMessage)) return null;
+
         // Extract file info
         const fileEl = shadowRoot.querySelector('.file');
         const file = fileEl?.textContent?.trim() || undefined;
@@ -1004,7 +1012,7 @@ export default function IframeCanvas({
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type !== 'hypercanvas:runtimeError') return;
       const error = event.data.error as RuntimeError;
-      if (error) {
+      if (error && !isIgnorableRuntimeError(error.message)) {
         errorSourceRef.current = 'postMessage';
         postMessageTimeRef.current = Date.now();
         onRuntimeError(error);
