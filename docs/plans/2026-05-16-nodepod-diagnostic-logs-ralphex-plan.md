@@ -42,7 +42,7 @@ Key design decisions:
 
 ---
 
-## Task 1: Create `useNodePodDiagnosticSync`
+### Task 1: Create `useNodePodDiagnosticSync`
 
 **Files:**
 - Create: `client/hooks/useNodePodDiagnosticSync.ts`
@@ -156,7 +156,7 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 
 ---
 
-## Task 2: Refactor `LogsPanel` — remove internal sync, accept `onClear` prop
+### Task 2: Refactor `LogsPanel` — remove internal sync, accept `onClear` prop
 
 **Files:**
 - Modify: `client/pages/Editor/components/LogsPanel.tsx`
@@ -254,7 +254,7 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 
 ---
 
-## Task 3: Wire both adapters in `CanvasEditor`
+### Task 3: Wire both adapters in `CanvasEditor`
 
 **Files:**
 - Modify: `client/pages/Editor/CanvasEditor.tsx`
@@ -377,7 +377,7 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 
 ---
 
-## Task 4: Push to develop
+### Task 4: Push to develop
 
 - [ ] Push branch commits to develop for staging:
 
