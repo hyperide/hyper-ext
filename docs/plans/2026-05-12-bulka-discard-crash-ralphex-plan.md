@@ -72,7 +72,7 @@ actual root cause.
 
 Main worktree: `/Users/ultra/work/hyper-canvas-draft`
 
-### Task 1: Fix test infrastructure — pass explicit component path
+## Task 1: Fix test infrastructure — pass explicit component path
 
 **File**: `/Users/ultra/work/ext-test-projects/e2e/tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts`
 
@@ -119,7 +119,7 @@ Note which assertion failed:
 - Step 8 ("h1#hero-title clickable"): element not found → either canvas shows wrong
   page, or canvas is dead.
 
-### Task 2: Diagnose if Task 1 didn't fix it
+## Task 2: Diagnose if Task 1 didn't fix it
 
 If test still fails, add diagnostic logging BEFORE re-running:
 
@@ -174,7 +174,7 @@ Based on findings:
 
 After fix: rebuild + re-run.
 
-### Task 3: Verify GREEN in Docker
+## Task 3: Verify GREEN in Docker
 
 Run one final clean Docker run with `HYPER_E2E_SHARDS=1`:
 ```bash
@@ -189,7 +189,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 - [ ] Open screenshot with Read tool. Visually confirm: preview frame still rendered,
   h1 element selected, no error toast.
 
-### Task 4: TG report
+## Task 4: TG report
 
 Send to Telegram via `send-tg-report.sh`:
 - What failed (test infrastructure / watcher / rejection).

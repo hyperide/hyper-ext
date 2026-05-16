@@ -269,6 +269,8 @@ MAX_REOPEN="${ORCHESTRATOR_MAX_REOPEN:-3}"
 WORKPROCESS="${ORCHESTRATOR_WORKPROCESS}"
 FINDINGS="${ORCHESTRATOR_FINDINGS}"
 
+source ~/xp/hypercalendarbot/.env   # BOT_TOKEN, BOT_ADMIN_ID
+
 # ── Helpers ─────────────────────────────────────────────────
 
 count_open() {
@@ -394,6 +396,8 @@ ORCHESTRATOR_MAX_QUIET=3         # quiet cycles before convergence
 ORCHESTRATOR_MAX_REOPEN=3        # max reopens before stuck escalation
 ORCHESTRATOR_WORKPROCESS=docs/specs/YYYY-MM-DD-*-workprocess.md
 ORCHESTRATOR_FINDINGS=docs/specs/YYYY-MM-DD-*-findings.yaml
+BOT_TOKEN from ~/xp/hypercalendarbot/.env
+BOT_ADMIN_ID from ~/xp/hypercalendarbot/.env
 ```
 
 Note: `ORCHESTRATOR_WORKPROCESS` and `ORCHESTRATOR_FINDINGS` must resolve to

@@ -47,10 +47,6 @@ public/monaco-workers/
 
 # VSCode extension build artifacts
 vscode-extension/hypercanvas-preview/out
-
-# Extension-managed runtime files (auto-generated, not for version control)
-.hyperide/
-src/__canvas_preview__.tsx
 vscode-extension/hypercanvas-code-server/out
 *.vsix
 

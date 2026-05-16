@@ -53,25 +53,8 @@ export function resolveDragSource(
   let source = isDecorative ? null : getSourceLocation(target);
   let el: HTMLElement = target;
 
-  // Step 2: fallback to direct _debugSource read (React 18 Babel / Vite) when
-  // source maps are cold or unavailable. This always works for projects compiled
-  // with the React Babel plugin — no async warm-up needed.
-  // Must run BEFORE the ancestor walk-up (step 3), otherwise non-decorative
-  // elements like <img> incorrectly resolve to their parent's source location.
-  // For decorative elements, prefer the parent's fiber to avoid dragging the span itself.
-  if (!source) {
-    const fiberTarget = isDecorative ? (target.parentElement ?? target) : target;
-    const fiber = getFiberFromDOM(fiberTarget);
-    const directLoc = findNearestSourceLocation(fiber);
-    if (directLoc) {
-      source = resolveCallSiteSource(directLoc, fiber, renderedComponentPath);
-      el = fiberTarget;
-    }
-  }
-
-  // Step 3: walk up to the nearest ancestor with a source — last resort for
-  // elements with no fiber source (aria-hidden wrappers, expression-only text nodes
-  // that slipped past steps 1 and 2).
+  // Step 2: walk up to the nearest ancestor with a source (handles decorative children:
+  // emoji spans, aria-hidden wrappers, expression-only text nodes).
   if (!source) {
     const bodyEl = typeof document !== 'undefined' ? document.body : null;
     let cur = target.parentElement;
@@ -83,6 +66,20 @@ export function resolveDragSource(
         break;
       }
       cur = cur.parentElement;
+    }
+  }
+
+  // Step 3: fallback to direct _debugSource read (React 18 Babel / Vite) when
+  // source maps are cold or unavailable. This always works for projects compiled
+  // with the React Babel plugin — no async warm-up needed.
+  // For decorative elements, prefer the parent's fiber to avoid dragging the span itself.
+  if (!source) {
+    const fiberTarget = isDecorative ? (target.parentElement ?? target) : target;
+    const fiber = getFiberFromDOM(fiberTarget);
+    const directLoc = findNearestSourceLocation(fiber);
+    if (directLoc) {
+      source = resolveCallSiteSource(directLoc, fiber, renderedComponentPath);
+      el = fiberTarget;
     }
   }
 
