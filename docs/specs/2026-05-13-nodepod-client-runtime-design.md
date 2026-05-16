@@ -36,17 +36,37 @@ No new API endpoint for setting this flag — set directly in DB per user.
 
 Existing route in `server/routes/user-settings.ts` already returns the `user` object. Add `clientSideRuntime` to the columns selected in the GET handler.
 
-### 3. Server — `GET /api/projects/:id/files`
+### 3. Client — `client/lib/client-file-store`
 
-New endpoint. Returns the project's source file tree as a flat JSON map `{ [relativePath: string]: string }`. Used by NodePod runtime to populate its virtual FS.
+New module providing OPFS-backed per-project file storage. NodePod reads from it — no server round-trip on runtime start. The server is not involved in NodePod file I/O.
 
 ```
-GET /api/projects/:id/files
-→ 200 { files: { "package.json": "...", "src/App.tsx": "...", ... } }
+client/lib/client-file-store/
+  index.ts    ← public API
+  opfs.ts     ← OPFS read/write primitives
 ```
 
-Access control: same `requireProjectAccess` middleware as other project routes.  
-Scope: reads `project.path` from filesystem, returns text files only (skip `node_modules`, `.git`, binary files). Size cap: skip files > 500KB, total response cap 10MB.
+Public API:
+
+```typescript
+/** All files for a project currently in OPFS. Returns {} if not yet seeded. */
+export async function readFiles(projectId: string): Promise<Record<string, string>>
+
+/** Write one file (called by editor on save). */
+export async function writeFile(projectId: string, path: string, content: string): Promise<void>
+
+/** Bulk-seed OPFS from a flat file map (one-time bootstrap on first NodePod start). */
+export async function seedFiles(projectId: string, files: Record<string, string>): Promise<void>
+
+/** Remove all cached files for a project. */
+export async function clearProject(projectId: string): Promise<void>
+```
+
+`useNodePodRuntime.start()` calls `readFiles(projectId)`. If the result is empty (first boot for this project), it bootstraps by fetching the project's file tree via the existing project API, then calls `seedFiles()` to persist to OPFS. Subsequent starts read OPFS directly.
+
+The web editor's save handler calls `writeFile()` so NodePod restarts after edits see the latest state without a server round-trip.
+
+OPFS key layout: `hyper-nodepod/<projectId>/<relative-path>`. Text files only; binary files excluded (same filter as the file tree walker).
 
 ### 4. Client — `User` type gains `clientSideRuntime`
 
@@ -96,7 +116,7 @@ This hook replaces the separate `useProjectControl` + `useProjectSSE` call sites
 
 Implements `ProjectRuntime` for the NodePod path:
 
-1. `start()` — boots NodePod, fetches files from `/api/projects/:id/files`, mounts into virtual FS, runs `npm install` then `vite dev`
+1. `start()` — boots NodePod, reads files from `client-file-store` (OPFS), mounts into virtual FS, runs `npm install` then `vite dev`
 2. `onServerReady` → sets `previewUrl` to SW proxy URL
 3. `stop()` — calls `pod.teardown()` (NodePod v1.8 API) and clears the ref
 4. `restart()` → `stop()` then `start()`
@@ -165,15 +185,18 @@ If in future `worker_threads` Atomics sync is needed (Webpack support), COOP/COE
 client/lib/project-runtime/
   types.ts                  ← ProjectRuntime interface, RuntimeStatus, RuntimeMode
   useDockerRuntime.ts       ← Docker impl (wraps useProjectControl + useProjectSSE)
-  useNodePodRuntime.ts      ← NodePod impl
+  useNodePodRuntime.ts      ← NodePod impl (reads from client-file-store)
   useProjectRuntime.ts      ← factory hook
   isViteProject.ts          ← framework check utility
+
+client/lib/client-file-store/
+  index.ts                  ← readFiles, writeFile, seedFiles, clearProject
+  opfs.ts                   ← OPFS primitives
 
 server/database/schema/auth.ts          ← add clientSideRuntime column
 server/database/migrations/XXXX_*.sql   ← ALTER TABLE migration
 server/routes/user-settings.ts          ← expose clientSideRuntime in GET /api/user
-server/routes/project-files.ts          ← new: GET /api/projects/:id/files
-server/index.ts                         ← mount project-files route
+server/index.ts                         ← add serveSW() route (no project-files route)
 
 client/stores/authStore.ts              ← add clientSideRuntime to User type
 client/pages/Editor/CanvasEditor.tsx    ← use useProjectRuntime, remove old hooks
@@ -181,6 +204,6 @@ client/pages/Editor/CanvasEditor.tsx    ← use useProjectRuntime, remove old ho
 
 ## Open Questions (deferred)
 
-- HMR for file edits made in HyperIDE while NodePod is running: NodePod watches its virtual FS, but edits from HyperIDE write to server disk. Syncing disk→NodePod VFS is not in scope now. First version: NodePod loads files once on start.
+- HMR for file edits made in HyperIDE while NodePod is running: editor calls `writeFile()` on save → OPFS updated, but NodePod VFS not live-synced. First version: NodePod loads once on start; user must restart to pick up edits.
 - `npm install` cold start (~14s) UX: show log panel during install. NodePod v1.8 has `pod.snapshot()` / `pod.restore()` which can serialize the entire virtual FS including `node_modules` — caching this in OPFS for repeat opens is deferred but the API is available.
 - Vite 8 HMR WebSocket bug in NodePod v1.8.2 — pin Vite to `7.3.1` in the files served to NodePod.

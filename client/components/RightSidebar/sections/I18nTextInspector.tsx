@@ -32,8 +32,7 @@ export interface I18nTextInspectorProps {
   /**
    * When true, the key combobox trigger is disabled.
    * Set by the parent while a write is in flight or while the style re-read is loading.
-   * Prevents a second key change from firing before the inspector remounts with the
-   * updated key (which would cause commitKey to abort via `key === currentKey`).
+   * Prevents rapid double-writes while the RPC is in flight (before optimisticKey is set).
    */
   keyBusy?: boolean;
 }
@@ -192,7 +191,12 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
-    if (!key || key === realKey) {
+    // Compare against currentKey (optimisticKey ?? realKey) rather than realKey alone.
+    // When the re-read is slow (NodeMapService rebuild takes >10s after recast), realKey
+    // stays stale at the pre-write value. A second click on a *different* key must not be
+    // blocked just because realKey hasn't caught up yet — the optimisticKey already tracks
+    // "what the inspector last committed", so this is the correct "current" state to compare.
+    if (!key || key === currentKey) {
       setShowKeyDropdown(false);
       setKeySearch('');
       return;

@@ -35,7 +35,7 @@ Two separate issues may stack:
 - TDD: tests exist, goal is GREEN.
 - Write progress to `.ralphex/progress/progress-2026-05-12-bulka-pi7-9.txt`.
 - TG heartbeat every 15 min.
-- E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-9\|hero.title\|translations.ts"`.
+- E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-9\|hero.title\|translations.ts"`.
 - Main worktree: `/Users/ultra/work/hyper-canvas-draft`.
 
 ### Task 1: Isolate: does the test load the right project?
@@ -58,28 +58,23 @@ Check:
 
 If the canvas correctly loads bulka but the i18n text input is disabled:
 
-- [x] In extension source: `grep -n "writable\|editable\|translations\.ts" lib/style-read-service/` — find where `writable` is determined for TypeScript locale files.
-- [x] Check `StyleReadService.getI18nText()` return value for bulka's `translations.ts`. Does it set `writable: true`?
-- [x] If `writable: false`: the merged-TS write adapter returns `readonly` for the file. Find the `isFileWritable()` check in `writeI18nResource` or the read path and fix.
-- [x] After fix: run test in isolation, confirm input is enabled.
+- [ ] In extension source: `grep -n "writable\|editable\|translations\.ts" lib/style-read-service/` — find where `writable` is determined for TypeScript locale files.
+- [ ] Check `StyleReadService.getI18nText()` return value for bulka's `translations.ts`. Does it set `writable: true`?
+- [ ] If `writable: false`: the merged-TS write adapter returns `readonly` for the file. Find the `isFileWritable()` check in `writeI18nResource` or the read path and fix.
+- [ ] After fix: run test in isolation, confirm input is enabled.
 
 ### Task 3: If canvas loads bulka and input is enabled: check write path
 
 If the test gets past "not.toBeDisabled()" but `translations.ts` doesn't update:
 
-- [x] Read the write adapter for merged-TS format (`writeI18nResource` in `lib/i18n-write-service/`).
-- [x] Verify the update is targeting the right key (`hero.title`).
-- [x] Check if HMR re-reads the updated file and updates the preview h1.
-- [x] Add `console.log` diagnostics in the write path, run again, read output.
+- [ ] Read the write adapter for merged-TS format (`writeI18nResource` in `lib/i18n-write-service/`).
+- [ ] Verify the update is targeting the right key (`hero.title`).
+- [ ] Check if HMR re-reads the updated file and updates the preview h1.
+- [ ] Add `console.log` diagnostics in the write path, run again, read output.
 
 ### Task 4: Confirm GREEN
 
 Run `HYPER_E2E_SHARDS=1 bun run test:docker -- --project="dep:bulka-the-dog" tests/project-dependent/bulka-i18n-pi7-9.spec.ts` and confirm all three tests PASS (not skip, not fail).
-
-- [x] Run the spec, capture output with `tail -80`.
-- [x] All three tests show PASSED (not skipped, not failed).
-- [x] Screenshot saved at `/tmp/bulka-i18n-pi7-9-GREEN.png` or equivalent path.
-- [x] Open screenshot with Read tool. Visually confirm: all 3 tests green, no skip markers.
 
 Screenshot the GREEN result.
 

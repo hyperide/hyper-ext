@@ -40,7 +40,7 @@ export function shouldRetryAssetResponse(statusCode: number | undefined, isHtml:
   // (before the dev server has compiled routes). Worker ordering races cause this for
   // the first worker to start on a project: assets return 403 briefly, JS bundle can't
   // load, React never executes and the SSR initial state persists.
-  return isHtml || statusCode === 503 || statusCode === 403;
+  return isHtml || statusCode === 503 || statusCode === 403 || statusCode === 504;
 }
 
 export function shouldReturnEmptyAssetResponse(statusCode: number | undefined, isHtml: boolean): boolean {
