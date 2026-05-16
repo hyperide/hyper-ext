@@ -37,14 +37,15 @@ Do NOT change production code. Do NOT change other tests.
 
 ### Task 1: Read the test
 
-- [ ] Read `ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts` lines 410-480 (the `I18N-OPTIMISTIC-KEY-ROLLBACK` test)
-- [ ] Identify: which exact `toBeDisabled` block to remove, what remains after removal
+- [x] Read `ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts` lines 410-480 (the `I18N-OPTIMISTIC-KEY-ROLLBACK` test)
+- [x] Identify: which exact `toBeDisabled` block to remove, what remains after removal
 
 Acceptance: exact line range identified, fix plan confirmed.
 
 ### Task 2: Confirm RED
 
-Run the specific test:
+- [x] Run the specific test and observe failure due to `toBeDisabled` timeout
+
 ```bash
 cd /Users/ultra/work/ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
@@ -55,13 +56,15 @@ Acceptance: test fails due to `toBeDisabled` timeout.
 
 ### Task 3: Apply fix
 
-Remove lines 452-458 (`toBeDisabled` block) from the test. Keep everything else.
+- [x] Remove lines 456-457 (`toBeDisabled` comment + assertion) from the test, keep everything else
+- [x] Verify file saved correctly
 
 Acceptance: file saved with toBeDisabled removed.
 
 ### Task 4: Confirm GREEN
 
-Run the same test again:
+- [x] Run the same test again and confirm it passes
+
 ```bash
 cd /Users/ultra/work/ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
@@ -72,6 +75,8 @@ Acceptance: test passes consistently. The rollback assertion still verifies the 
 
 ### Task 5: Commit
 
+- [x] Commit fix to ext-test-projects
+
 ```bash
 git add ext-test-projects/e2e/tests/project-independent/bulka-i18n-key-bugs.spec.ts
 git commit -m "fix(e2e): remove flaky toBeDisabled assertion from I18N-OPTIMISTIC-KEY-ROLLBACK test"
@@ -79,7 +84,7 @@ git commit -m "fix(e2e): remove flaky toBeDisabled assertion from I18N-OPTIMISTI
 
 ### Task 6: TG Report
 
-Send via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
-- Commit hash
-- Why assertion was flaky (<50ms window, 430ms polling)
-- Screenshot showing GREEN test
+- [x] Send TG report via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+  - Commit hash
+  - Why assertion was flaky (<50ms window, 430ms polling)
+  - Screenshot showing GREEN test
