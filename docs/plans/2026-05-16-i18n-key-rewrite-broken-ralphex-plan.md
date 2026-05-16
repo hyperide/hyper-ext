@@ -1,0 +1,91 @@
+# Plan: PI-7-I18N-6 — i18n key combobox selection does not rewrite JSX source
+
+## Context
+
+**Date:** 2026-05-16  
+**Run evidence:** run-20260516-011946-55078, S1  
+**Reported by:** E2E loop monitor
+
+E2E test `PI-7-I18N-6: B5 — key change rewrites JSX source` fails with:
+
+```
+Expected substring: "t('test.farewell')"
+Received string:    "/** * TestElements — provides DOM structures needed by E2E tests. ..."
+```
+
+The test:
+1. Opens `TestElements.tsx` with i18n element `{t("test.greeting")}`
+2. Opens key combobox → sees `test.greeting`, `test.farewell` etc.
+3. Clicks `test.farewell` in the dropdown
+4. Waits 2 seconds
+5. Reads file from disk — expects `t('test.farewell')` in content
+6. File is UNCHANGED — no rewrite happened
+
+The received content is the original TestElements.tsx without any modification.
+This means `commitKey` either never fired or the write RPC was blocked.
+
+**Candidates introduced before run-20260516 start (23:19 UTC May 15):**
+- `0c3a4558 fix(i18n): clear pendingKeyWrite in finally + fix commitKey guard`
+  - Changed guard: `key === realKey` → `key === currentKey` where `currentKey = optimisticKey ?? realKey`
+  - Cleared `pendingKeyWrite` in `finally` instead of only in `catch`
+- `21d003e8 fix(iframe): suppress ResizeObserver loop error from runtime error overlay`
+  - Might affect inspector webview rendering
+
+The test was NOT present in run-20260515-215913 failure output, suggesting it was passing.
+
+## Scope
+
+Fix `commitKey` in `RightSidebar.tsx` so that selecting a key from the combobox triggers
+the write RPC and the JSX source is updated within 2 seconds.
+
+**Acceptance criteria:**
+- `PI-7-I18N-6` passes in a Docker E2E run
+- No regression in PI-7-I18N-7, PI-7-I18N-8 (text edit + create key)
+
+**Out of scope:**
+- Changes to combobox UI
+- New i18n features
+
+### Task 1: Reproduce and diagnose
+
+- [ ] Read the current `commitKey` implementation in `RightSidebar.tsx`
+- [ ] Check if `optimisticKey` is set to a non-null value before `commitKey('test.farewell')` fires
+  - If `optimisticKey === 'test.farewell'` when the test clicks, `currentKey = 'test.farewell'` and the guard `key === currentKey` blocks the write
+  - Hypothesis: `optimisticKey` stays set from a previous run attempt in the same test worker
+- [ ] Check the `assertI18nInspector` helper — does it set `optimisticKey`?
+- [ ] Check if `setPendingKeyWrite(null)` in `finally` might cause `useEffect` cleanup to run
+  before the RPC write completes (race condition)
+- [ ] Run the test locally to see console output
+
+Acceptance: Root cause identified.
+
+### Task 2: Fix
+
+Based on diagnosis:
+- **If guard issue:** compare against `realKey` directly for the initial combobox selection
+  (or ensure `optimisticKey` is cleared on element reselect / inspector open)
+- **If pendingKeyWrite race:** delay `setPendingKeyWrite(null)` until after RPC resolves
+  (move back to the `.then()` clause, not `finally`)
+- **If test isolation:** ensure test afterEach or beforeEach resets inspector state
+
+Write fix with minimal scope — do not refactor the surrounding i18n write pipeline.
+
+Acceptance: `commitKey('test.farewell')` fires the write RPC and TestElements.tsx is modified.
+
+### Task 3: Verify via E2E
+
+- [ ] Run PI-7-I18N-6 in a targeted Docker run:
+  ```bash
+  cd /Users/ultra/work/ext-test-projects/e2e
+  HYPER_E2E_SHARDS=1 bun run test:docker -- \
+    --project=independent \
+    tests/project-independent/i18n-inspector.spec.ts \
+    --grep "PI-7-I18N-6"
+  ```
+- [ ] Confirm GREEN
+- [ ] Also run PI-7-I18N-7 + PI-7-I18N-8 to ensure no regression
+
+### Task 4: Telegram Handoff
+
+- [ ] Send summary: root cause, what changed, which tests verified
+- [ ] Include before/after screenshots
