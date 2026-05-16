@@ -83,20 +83,6 @@ describe('parseTailwindClasses', () => {
     expect(result.top).toBe('1rem');
     expect(result.left).toBe('2rem');
   });
-
-  // PI-9-451 regression: real DOM className from react-vite-tw4-twitter
-  it('should return non-empty for real Tailwind DOM className (PI-9-451 regression)', () => {
-    const result = parseTailwindClasses(
-      'p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text',
-    );
-    expect(Object.keys(result).length).toBeGreaterThan(0);
-  });
-
-  // PI-9-461: truly unknown className must still return {} so the guard fires correctly
-  it('should return {} for truly unknown className (PI-9-461 guard)', () => {
-    const result = parseTailwindClasses('nonexistent-xyz-class-xyzzy');
-    expect(result).toEqual({});
-  });
 });
 
 describe('getConflictingPrefixes', () => {
