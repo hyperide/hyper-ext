@@ -536,6 +536,32 @@ describe('I18nTextInspector', () => {
     expect((screen.getByTestId('i18n-key-input') as HTMLInputElement).value).toBe('new.key');
   });
 
+  it('fires onKeyChange on retry when optimisticKey is set but realKey differs (silent write failure)', () => {
+    // Scenario: first write returns success but file is unchanged (silent failure).
+    // optimisticKey = 'habits.farewell', realKey still = 'habits.greeting' (props not updated).
+    // Guard must use realKey, not currentKey — otherwise retry is silently blocked.
+    const onKeyChange = mock(() => {});
+    render(
+      <I18nTextInspector
+        i18nBinding={{ ...supportedBinding, key: 'habits.greeting' }}
+        availableKeys={['habits.greeting', 'habits.farewell']}
+        onKeyChange={onKeyChange}
+        onResolvedTextChange={mock(() => {})}
+        keyEditable
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-habits.farewell'));
+    expect(onKeyChange).toHaveBeenCalledTimes(1);
+
+    // optimisticKey = 'habits.farewell', props still show key='habits.greeting' (no re-render).
+    // Retry: select 'habits.farewell' again. key !== realKey → must fire.
+    fireEvent.click(screen.getByTestId('i18n-key-input'));
+    fireEvent.click(screen.getByTestId('i18n-key-option-habits.farewell'));
+    expect(onKeyChange).toHaveBeenCalledTimes(2);
+  });
+
   it('does not fire onKeyChange when selecting the current key in combobox', () => {
     const onKeyChange = mock(() => {});
     render(

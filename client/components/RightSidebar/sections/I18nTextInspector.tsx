@@ -300,7 +300,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             type="text"
             defaultValue={currentKey}
             key={currentKey}
-            disabled={!keyEditable}
+            disabled={!keyEditable || keyBusy}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
