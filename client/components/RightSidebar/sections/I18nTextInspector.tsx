@@ -191,13 +191,12 @@ export const I18nTextInspector = memo(function I18nTextInspector({
   const showCreateAffordance = trimmedSearch.length > 0 && !isExactMatch && canCreateKeys;
 
   const commitKey = (key: string) => {
-    // Compare against realKey, not currentKey (optimisticKey ?? realKey).
-    // optimisticKey can leak across E2E test boundaries: when the test fixture resets the
-    // source file back to the original key, realKey reverts but optimisticKey stays set
-    // (component not remounted because bindingKey unchanged). Using currentKey would block
-    // the write for the new test. Using realKey always allows the write when the file state
-    // differs from the requested key, which is the correct guard.
-    if (!key || key === realKey) {
+    // Compare against currentKey (optimisticKey ?? realKey) rather than realKey alone.
+    // When the re-read is slow (NodeMapService rebuild takes >10s after recast), realKey
+    // stays stale at the pre-write value. A second click on a *different* key must not be
+    // blocked just because realKey hasn't caught up yet — the optimisticKey already tracks
+    // "what the inspector last committed", so this is the correct "current" state to compare.
+    if (!key || key === currentKey) {
       setShowKeyDropdown(false);
       setKeySearch('');
       return;
@@ -300,7 +299,7 @@ export const I18nTextInspector = memo(function I18nTextInspector({
             type="text"
             defaultValue={currentKey}
             key={currentKey}
-            disabled={!keyEditable || keyBusy}
+            disabled={!keyEditable}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();

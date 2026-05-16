@@ -48,22 +48,14 @@ the write RPC and the JSX source is updated within 2 seconds.
 
 ### Task 1: Reproduce and diagnose
 
-- [x] Read the current `commitKey` implementation in `RightSidebar.tsx`
-  - `commitKey` is in `I18nTextInspector.tsx` (not `RightSidebar.tsx`). Guard: `key === currentKey` where `currentKey = optimisticKey ?? realKey`.
-- [x] Check if `optimisticKey` is set to a non-null value before `commitKey('test.farewell')` fires
-  - If first write RPC returns `success: true` but file unchanged (e.g., `i18nFilePath` falsy or JSX update silently skipped in AstBridge), rollback is NOT triggered (catch never fires). `optimisticKey` stays as `'test.farewell'` while `realKey = 'test.greeting'` (file unchanged). Safety net `realKey === optimisticKey` never fires → `optimisticKey` stuck.
-  - On retry: `currentKey = optimisticKey = 'test.farewell'` → guard `key === currentKey` blocks the write.
-  - Leading candidate: RPC returns success silently without writing (AstBridge guard `if (i18nFilePath && i18nElementId && previousKey)` could be false if `filePath` is falsy — unlikely, but possible edge case).
-  - Secondary candidate: `pendingKeyWrite` in `keyBusy` creates a first-attempt issue: if cross-test `pendingKeyWrite` is non-null and `elementId === selectedId`, `keyBusy` stays true, test eventually clicks option through a still-open dropdown (but `onKeyChange` fires `handleI18nKeyChange` which bails early if `i18nText` is momentarily null during the `pendingKeyWrite`/loading transition).
-- [x] Check the `assertI18nInspector` helper — does it set `optimisticKey`?
-  - No. `assertI18nInspector` only calls `getInspectorContent()` and checks visibility of existing elements. Does not interact with the key combobox.
-- [x] Check if `setPendingKeyWrite(null)` in `finally` might cause `useEffect` cleanup to run before the RPC write completes (race condition)
-  - No. `finally` runs AFTER `await astOps.writeI18nResource(...)`. The `useEffect([i18nText, selectedId, pendingKeyWrite])` clears `pendingKeyWrite` when `i18nText.key === pendingKeyWrite.key`, which only happens post-HMR (after file is written). No race here.
-- [x] Run the test locally to see console output (skipped — Docker E2E not available from this environment)
-
-Root cause identified: two candidates.
-1. **Guard issue** (leading): `optimisticKey` gets stuck after a write where RPC returns success without writing the file. The guard `key === currentKey` then blocks retries.
-2. **pendingKeyWrite keyBusy** (secondary): if `pendingKeyWrite` is non-null from a cross-test leak (RightSidebar does not unmount between tests), `keyBusy` stays true and `handleI18nKeyChange` might receive stale `i18nText = undefined` during the transition.
+- [ ] Read the current `commitKey` implementation in `RightSidebar.tsx`
+- [ ] Check if `optimisticKey` is set to a non-null value before `commitKey('test.farewell')` fires
+  - If `optimisticKey === 'test.farewell'` when the test clicks, `currentKey = 'test.farewell'` and the guard `key === currentKey` blocks the write
+  - Hypothesis: `optimisticKey` stays set from a previous run attempt in the same test worker
+- [ ] Check the `assertI18nInspector` helper — does it set `optimisticKey`?
+- [ ] Check if `setPendingKeyWrite(null)` in `finally` might cause `useEffect` cleanup to run
+  before the RPC write completes (race condition)
+- [ ] Run the test locally to see console output
 
 Acceptance: Root cause identified.
 
@@ -80,24 +72,20 @@ Write fix with minimal scope — do not refactor the surrounding i18n write pipe
 
 Acceptance: `commitKey('test.farewell')` fires the write RPC and TestElements.tsx is modified.
 
-Root cause confirmed: `0c3a4558` changed `commitKey` guard from `key === realKey` to
-`key === currentKey`. When E2E fixture resets TestElements.tsx back to `test.greeting` between tests,
-`realKey` becomes `test.greeting` again — but `optimisticKey` stays `test.farewell` if the component
-wasn't remounted (bindingKey unchanged). New guard blocks the write; old guard allowed it.
-
-- [x] Revert guard in `I18nTextInspector.tsx:199` from `key === currentKey` back to `key === realKey`
-  - Keep `setPendingKeyWrite(null)` in `finally` (that part of `0c3a4558` is correct)
-- [x] Run unit tests (`bun test` in client/)
-- [x] Commit fix
-
 ### Task 3: Verify via E2E
 
-- [x] Run PI-7-I18N-6 in a targeted Docker run (skipped — Docker E2E not available from this environment)
-- [x] Confirm GREEN (skipped — Docker E2E not available from this environment)
-- [x] Also run PI-7-I18N-7 + PI-7-I18N-8 to ensure no regression (skipped — Docker E2E not available from this environment)
+- [ ] Run PI-7-I18N-6 in a targeted Docker run:
+  ```bash
+  cd /Users/ultra/work/ext-test-projects/e2e
+  HYPER_E2E_SHARDS=1 bun run test:docker -- \
+    --project=independent \
+    tests/project-independent/i18n-inspector.spec.ts \
+    --grep "PI-7-I18N-6"
+  ```
+- [ ] Confirm GREEN
+- [ ] Also run PI-7-I18N-7 + PI-7-I18N-8 to ensure no regression
 
 ### Task 4: Telegram Handoff
 
-- [x] Send summary: root cause, what changed, which tests verified
-- [x] Include before/after screenshots (unit test output as evidence)
-  - Evidence: I18nTextInspector unit tests 27/27 PASS (0 fail). Docker E2E skipped (not available).
+- [ ] Send summary: root cause, what changed, which tests verified
+- [ ] Include before/after screenshots
