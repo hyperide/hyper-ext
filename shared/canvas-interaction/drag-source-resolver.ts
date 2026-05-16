@@ -7,10 +7,11 @@
  *
  * Resolves the draggable element and its source location using three strategies:
  * 1. Primary: TracingResolver.getSourceLocation (source-map-aware, may be cold).
- * 2. Walk-up for DECORATIVE-only children (aria-hidden spans, emoji) that have no
- *    source of their own — walk up to the nearest ancestor with a source.
- * 3. Fallback: direct _debugSource read via findNearestSourceLocation (always
+ * 2. Fallback: direct _debugSource read via findNearestSourceLocation (always
  *    available in React 18 Babel / Vite projects; no source maps required).
+ *    Runs BEFORE step 3 — see inline comment.
+ * 3. Last resort: walk up to the nearest ancestor with a source (aria-hidden
+ *    wrappers, expression-only text nodes that slipped past steps 1 and 2).
  *
  * IMPORTANT: we DO NOT walk further up "to a meaningful draggable / outer card".
  * Doing so makes drag-handle behaviour confusing — when the user drags an inner
