@@ -64,7 +64,7 @@ Do NOT change MCP tool interface, test expectations, or test fixture.
 - TG heartbeat every 15 min.
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker`.
 
-## Task 1: Read the test and parser
+### Task 1: Read the test and parser
 
 - [ ] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1177–1300 (PI-9-451)
 - [ ] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1427–1470 (PI-9-461)
@@ -73,7 +73,7 @@ Do NOT change MCP tool interface, test expectations, or test fixture.
 
 Acceptance: understand exactly what className string PI-9-451 uses and what `parseTailwindClasses` returns for it.
 
-## Task 2: Confirm RED
+### Task 2: Confirm RED
 
 Run the two specific tests in isolation:
 
@@ -87,7 +87,7 @@ Confirm PI-9-451 fails, PI-9-461 passes.
 
 Acceptance: RED confirmed — PI-9-451 fails with `isError` related error.
 
-## Task 3: Extend parseTailwindClasses
+### Task 3: Extend parseTailwindClasses
 
 In `lib/tailwind/parser.ts`, add support for at minimum:
 
@@ -117,7 +117,7 @@ Don't parse `hover:*`, `focus:*` etc — modifier prefixes should be stripped be
 Acceptance: `parseTailwindClasses` returns non-empty object for a string like
 `"p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text"`.
 
-## Task 4: Confirm GREEN
+### Task 4: Confirm GREEN
 
 ```bash
 cd /Users/ultra/work/ext-test-projects
@@ -136,14 +136,14 @@ where `isLikelyTailwindClassName` checks if any token matches a Tailwind prefix 
 
 Acceptance: both tests GREEN in <60s each.
 
-## Task 5: Commit
+### Task 5: Commit
 
 ```bash
 git add lib/tailwind/parser.ts
 git commit -m "fix(tailwind): extend parseTailwindClasses — padding, named colors, rounded variants"
 ```
 
-## Task 6: TG Report
+### Task 6: TG Report
 
 Send via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
 - Commit hash
