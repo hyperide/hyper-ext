@@ -66,14 +66,18 @@ Do NOT change MCP tool interface, test expectations, or test fixture.
 
 ### Task 1: Read the test and parser
 
-- [ ] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1177–1300 (PI-9-451)
-- [ ] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1427–1470 (PI-9-461)
-- [ ] Read `lib/tailwind/parser.ts` — full file
-- [ ] Read `vscode-extension/hypercanvas-preview/src/mcp/tools/color-token-provider.ts` — find the guard
+- [x] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1177–1300 (PI-9-451)
+- [x] Read `ext-test-projects/e2e/tests/project-independent/mcp-tools.spec.ts` lines 1427–1470 (PI-9-461)
+- [x] Read `lib/tailwind/parser.ts` — full file
+- [x] Read `vscode-extension/hypercanvas-preview/src/mcp/tools/color-token-provider.ts` — find the guard
 
 Acceptance: understand exactly what className string PI-9-451 uses and what `parseTailwindClasses` returns for it.
 
 ### Task 2: Confirm RED
+
+- [x] Confirm `parseTailwindClasses("p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text")` returns `{}`
+- [x] Add unit test asserting expected (non-empty) behavior — fails RED
+- [x] Run `bun test lib/tailwind/parser.test.ts` and confirm RED
 
 Run the two specific tests in isolation:
 
@@ -88,6 +92,16 @@ Confirm PI-9-451 fails, PI-9-461 passes.
 Acceptance: RED confirmed — PI-9-451 fails with `isError` related error.
 
 ### Task 3: Extend parseTailwindClasses
+
+- [x] Add `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft` to `ParsedTailwindStyles` interface
+- [x] Add `color` to `ParsedTailwindStyles` interface
+- [x] Parse padding classes: `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*`
+- [x] Strip hover/focus modifiers before parsing (so `hover:bg-twitter-hover` gets stripped to `bg-twitter-hover`)
+- [x] Parse named bg colors: `bg-{color}-{shade}` and custom tokens like `bg-twitter-hover`
+- [x] Parse named text colors: `text-{color}` and custom tokens like `text-twitter-text`
+- [x] Parse `rounded-full`, `rounded-2xl`, `rounded-3xl`
+- [x] Verify `parseTailwindClasses("p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text")` returns non-empty
+- [x] All existing unit tests still pass
 
 In `lib/tailwind/parser.ts`, add support for at minimum:
 
@@ -119,6 +133,11 @@ Acceptance: `parseTailwindClasses` returns non-empty object for a string like
 
 ### Task 4: Confirm GREEN
 
+- [x] Run `bun test lib/tailwind/parser.test.ts` — all tests GREEN including new regression test
+- [x] Run full E2E docker test `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "hyper_get_element_styles"` from `/Users/ultra/work/ext-test-projects`
+- [x] PI-9-451 passes
+- [x] PI-9-461 passes
+
 ```bash
 cd /Users/ultra/work/ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
@@ -138,12 +157,18 @@ Acceptance: both tests GREEN in <60s each.
 
 ### Task 5: Commit
 
+- [x] `git add lib/tailwind/parser.ts lib/tailwind/parser.test.ts`
+- [x] `git commit -m "fix(tailwind): extend parseTailwindClasses — padding, named colors, rounded variants"`
+
 ```bash
 git add lib/tailwind/parser.ts
 git commit -m "fix(tailwind): extend parseTailwindClasses — padding, named colors, rounded variants"
 ```
 
 ### Task 6: TG Report
+
+- [x] Send TG report via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`
+- [x] Include: commit hash, which classes were added to parser, both test results (PI-9-451 GREEN + PI-9-461 GREEN), screenshot
 
 Send via `bash /Users/ultra/xp/codex-tg-bot/scripts/send-tg-report.sh`:
 - Commit hash
