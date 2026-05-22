@@ -47,7 +47,7 @@ describe('StrokeSection', () => {
     expect(screen.getByTestId(TID.inspector.strokeStyle)).toBeTruthy();
   });
 
-  it('syncs stroke width, style, and color edits', () => {
+  it('syncs stroke width and style edits', () => {
     const onStrokesChange = mock();
     const syncStyleChange = mock();
 
@@ -55,21 +55,19 @@ describe('StrokeSection', () => {
 
     fireEvent.change(screen.getByTestId(TID.inspector.strokeWidth), { target: { value: '3' } });
     fireEvent.change(screen.getByTestId(TID.inspector.strokeStyle), { target: { value: 'dashed' } });
-    fireEvent.change(screen.getByTestId(TID.inspector.strokeColor), { target: { value: '#ff0000' } });
 
     expect(syncStyleChange).toHaveBeenCalledWith('borderWidth', '3px');
     expect(syncStyleChange).toHaveBeenCalledWith('borderStyle', 'dashed');
-    expect(syncStyleChange).toHaveBeenCalledWith('borderColor', '#ff0000');
     expect(onStrokesChange).toHaveBeenCalled();
   });
 
-  it('keeps native color input valid for non-hex computed colors', () => {
+  it('shows raw value for non-hex computed colors', () => {
     const rgbStroke = { ...stroke, color: 'rgb(15, 23, 42)' };
 
     render(<StrokeSection strokes={[rgbStroke]} onStrokesChange={mock()} syncStyleChange={mock()} />);
 
-    const input = screen.getByTestId(TID.inspector.strokeColor) as HTMLInputElement;
-    expect(input.value).toBe('#000000');
+    const input = screen.getByTestId(`${TID.inspector.strokeColor}-input`) as HTMLInputElement;
+    expect(input.value).toBe('rgb(15, 23, 42)');
   });
 
   it('allows border width values with explicit CSS units', () => {

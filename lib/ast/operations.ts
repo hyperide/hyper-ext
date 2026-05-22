@@ -12,8 +12,7 @@ import { calculateRealIndex } from './element-builder';
 import { cloneElement, makeNotSelfClosing, valueToJSXAttribute } from './mutator';
 import { parseCode } from './parser';
 
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /**
  * Insert a JSX element into an AST at the given parent or at root return.

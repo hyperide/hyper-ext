@@ -9,8 +9,7 @@ import _traverse, { type NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 
-// @ts-expect-error - babel/traverse ESM/CJS
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /**
  * Find a JSX element at the given source position (1-based line, 0-based column).

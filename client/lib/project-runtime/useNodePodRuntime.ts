@@ -192,9 +192,11 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
 
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       runIdRef.current++;
-      if (podRef.current) {
-        podRef.current.teardown();
+      const pod = podRef.current;
+      if (pod) {
+        pod.teardown();
         podRef.current = null;
       }
     };

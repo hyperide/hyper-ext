@@ -9,8 +9,7 @@ import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import type { NodeMapEntry, NodeRef, SourceLocation } from '../../shared/element-tracing/types';
 
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = (_traverse.default || _traverse) as typeof _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /** Convert Babel SourceLocation to our SourceLocation type */
 function toSourceLocation(loc: t.SourceLocation | null | undefined, fileName: string, isEnd = false): SourceLocation {

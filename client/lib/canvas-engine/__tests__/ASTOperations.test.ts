@@ -44,7 +44,7 @@ function createFakeElement(initial: Record<string, string> = {}): Record<string,
   return {
     className: initial.className ?? '',
     textContent: initial.textContent ?? '',
-    style: { ...(initial.style ? {} : {}) },
+    style: {},
     getAttribute: (name: string) => attrs.get(name) ?? null,
     setAttribute: (name: string, value: string) => {
       attrs.set(name, value);
@@ -84,8 +84,8 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('insertElement')).toBe(1);
       const call = api.getLastCall('insertElement');
-      expect((call?.args[0] as Record<string, unknown>).parentId).toBe('parent-1');
-      expect((call?.args[0] as Record<string, unknown>).componentType).toBe('Button');
+      expect((call!.args[0] as Record<string, unknown>).parentId).toBe('parent-1');
+      expect((call!.args[0] as Record<string, unknown>).componentType).toBe('Button');
     });
 
     it('should store insertedId from response', async () => {
@@ -184,7 +184,7 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('insertElement')).toBe(1);
       const insertCall = api.getLastCall('insertElement');
-      expect((insertCall?.args[0] as Record<string, unknown>).componentType).toBe('Button');
+      expect((insertCall!.args[0] as Record<string, unknown>).componentType).toBe('Button');
     });
 
     it('should return error on undo without stored element', () => {
@@ -249,7 +249,7 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('deleteElements')).toBe(1);
       const call = api.getLastCall('deleteElements');
-      expect((call?.args[0] as Record<string, unknown>).elementIds).toEqual(['elem-1', 'elem-2']);
+      expect((call!.args[0] as Record<string, unknown>).elementIds).toEqual(['elem-1', 'elem-2']);
     });
 
     it('should restore all elements on undo', async () => {
@@ -398,7 +398,7 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('pasteElement')).toBe(1);
       const call = api.getLastCall('pasteElement');
-      expect((call?.args[0] as Record<string, unknown>).tsx).toBe('<Button>Click me</Button>');
+      expect((call!.args[0] as Record<string, unknown>).tsx).toBe('<Button>Click me</Button>');
     });
 
     it('should store newElementId from response', async () => {
@@ -436,7 +436,7 @@ describe('AST Operations', () => {
       // Should batch-delete all pasted elements
       expect(api.getCallCount('deleteElements')).toBe(1);
       const deleteCall = api.getLastCall('deleteElements');
-      expect((deleteCall?.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
+      expect((deleteCall!.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
     });
 
     it('should return error on undo without newElementIds', () => {
@@ -510,7 +510,7 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('restoreFileSnapshot')).toBe(1);
       const call = api.getLastCall('restoreFileSnapshot');
-      expect(call?.args[0]).toBe(42); // undoSnapshotId
+      expect(call!.args[0]).toBe(42); // undoSnapshotId
     });
 
     it('should return error on undo without snapshotId', () => {
@@ -773,7 +773,7 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('updatePropsBatch')).toBe(1);
       const call = api.getLastCall('updatePropsBatch');
-      const syncedProps = (call?.args[0] as Record<string, unknown>).props as Record<string, unknown>;
+      const syncedProps = (call!.args[0] as Record<string, unknown>).props as Record<string, unknown>;
       expect(syncedProps.className).toBe('original');
     });
 
@@ -810,8 +810,8 @@ describe('AST Operations', () => {
 
       expect(api.getCallCount('editCondition')).toBe(1);
       const call = api.getLastCall('editCondition');
-      expect((call?.args[0] as Record<string, unknown>).newExpression).toBe('isVisible && isActive');
-      expect((call?.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible');
+      expect((call!.args[0] as Record<string, unknown>).newExpression).toBe('isVisible && isActive');
+      expect((call!.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible');
     });
 
     it('should call editCondition with old expression on undo', async () => {
@@ -828,8 +828,8 @@ describe('AST Operations', () => {
       expect(api.getCallCount('editCondition')).toBe(1);
       const call = api.getLastCall('editCondition');
       // On undo: old becomes new, new becomes old (swapped)
-      expect((call?.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
-      expect((call?.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
+      expect((call!.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
+      expect((call!.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
     });
 
     it('should use correct endpoint for condition type', async () => {
@@ -838,8 +838,8 @@ describe('AST Operations', () => {
       await op._pendingPromise;
 
       const call = api.getLastCall('editCondition');
-      expect((call?.args[0] as Record<string, unknown>).endpoint).toBe('/api/edit-condition');
-      expect((call?.args[0] as Record<string, unknown>).idKey).toBe('condId');
+      expect((call!.args[0] as Record<string, unknown>).endpoint).toBe('/api/edit-condition');
+      expect((call!.args[0] as Record<string, unknown>).idKey).toBe('condId');
     });
 
     it('should use correct endpoint for map type', async () => {
@@ -851,8 +851,8 @@ describe('AST Operations', () => {
       await op._pendingPromise;
 
       const call = api.getLastCall('editCondition');
-      expect((call?.args[0] as Record<string, unknown>).endpoint).toBe('/api/edit-map');
-      expect((call?.args[0] as Record<string, unknown>).idKey).toBe('parentMapId');
+      expect((call!.args[0] as Record<string, unknown>).endpoint).toBe('/api/edit-map');
+      expect((call!.args[0] as Record<string, unknown>).idKey).toBe('parentMapId');
     });
 
     it('should reload component after execute and undo', async () => {

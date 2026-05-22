@@ -1,7 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type Layout, Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
+import { type GroupImperativeHandle, type Layout, Panel, Group as PanelGroup, useDefaultLayout } from 'react-resizable-panels';
 // SaaS-only imports — conditionally used when engine is available
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { useAnimatedPanelCollapse } from '@/hooks/useAnimatedPanelCollapse';
@@ -279,7 +279,7 @@ export default function LeftSidebar({
         className="flex-1"
         defaultLayout={defaultLayout}
         onLayoutChange={onLayoutChange}
-        groupRef={groupRef as unknown as React.Ref<import('react-resizable-panels').GroupImperativeHandle>}
+        groupRef={groupRef as unknown as React.Ref<GroupImperativeHandle>}
       >
         {!isVSCode && (
           <>

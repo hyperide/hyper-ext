@@ -21,7 +21,7 @@ export function IframeFailed({ activeProject, setIsStarting, setActiveProject, o
               const res = await authFetch(`/api/docker/logs/${activeProject.id}?lines=50`);
               const data = await res.json();
               alert(`Docker Logs:\n\n${data.logs}`);
-            } catch (_err) {
+            } catch {
               alert('Failed to fetch logs');
             }
           }}

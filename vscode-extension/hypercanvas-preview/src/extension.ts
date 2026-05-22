@@ -23,6 +23,7 @@ import {
   PreviewFileManager,
   PreviewModeManager,
   parseExistingPreview,
+  type ProviderWrapConfig,
   type SSRMockConfig,
 } from '@lib/preview-generator';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
@@ -80,7 +81,7 @@ let _diagnosticCaptureActive = false;
  */
 async function detectPreviewProviders(
   root: string,
-): Promise<import('@lib/preview-generator').ProviderWrapConfig | undefined> {
+): Promise<ProviderWrapConfig | undefined> {
   try {
     const previewDir = await getPreviewDir(root);
     const contextFiles = await readProviderContextFiles(root);

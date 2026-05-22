@@ -23,9 +23,7 @@ import * as nodePath from 'node:path';
 import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 
-// @ts-expect-error - babel/traverse has ESM/CJS interop quirks; this matches
-// the same shim used in lib/ast/operations.ts.
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /**
  * Walk a JSX subtree and collect every identifier name it references from the

@@ -103,6 +103,7 @@ export const StrokeSection = memo(function StrokeSection({
           onChange={(color) => updateStroke({ color }, [['borderColor', color]])}
           tokenSystem="tailwind"
           testId={TID.inspector.strokeColor}
+          inputTestId={`${TID.inspector.strokeColor}-input`}
           className="h-7"
         />
         <label

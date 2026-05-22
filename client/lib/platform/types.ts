@@ -10,6 +10,7 @@ import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
+import type { RuntimeError } from '../../../shared/runtime-error';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -248,7 +249,7 @@ export type PlatformMessage =
 
   // Diagnostics (cross-webview sync in ext, local in SaaS)
   | { type: 'diagnostic:log'; entries: DiagnosticLogEntry[] }
-  | { type: 'diagnostic:runtimeError'; error: import('../../../shared/runtime-error').RuntimeError | null }
+  | { type: 'diagnostic:runtimeError'; error: RuntimeError | null }
   | { type: 'diagnostic:buildStatus'; status: DiagnosticState['buildStatus'] }
   | { type: 'diagnostic:clear' }
   | { type: 'diagnostic:state'; state: DiagnosticState }

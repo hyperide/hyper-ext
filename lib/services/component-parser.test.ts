@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, it } from 'bun:test';
+import type { JSXElement } from '@babel/types';
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import {
@@ -12,8 +13,7 @@ import {
   parseJSXElement,
 } from './component-parser';
 
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 function createTestAST(code: string) {
   return parse(code, {
@@ -22,11 +22,11 @@ function createTestAST(code: string) {
   });
 }
 
-function findRootJSXElement(ast: ReturnType<typeof createTestAST>): import('@babel/types').JSXElement {
-  let rootElement: import('@babel/types').JSXElement | null = null;
+function findRootJSXElement(ast: ReturnType<typeof createTestAST>): JSXElement {
+  let rootElement: JSXElement | null = null;
 
   traverse(ast, {
-    JSXElement(path: { node: import('@babel/types').JSXElement; skip: () => void }) {
+    JSXElement(path: { node: JSXElement; skip: () => void }) {
       if (!rootElement) {
         rootElement = path.node;
         path.skip();

@@ -1188,8 +1188,7 @@ export default function IframeCanvas({
             : 'about:blank'
         }
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
-        // @ts-expect-error allowtransparency is non-standard but needed for transparent background
-        allowtransparency="true"
+        allowTransparency
         className={iframeSize ? 'border-0' : 'w-full h-full border-0'}
         style={{
           width: iframeSize?.width,

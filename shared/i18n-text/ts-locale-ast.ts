@@ -13,8 +13,7 @@ import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 
 const generate = (_generate as { default?: typeof _generate }).default ?? _generate;
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 const DICTIONARY_NAMES = new Set(['translations', 'messages']);
 const FORBIDDEN_KEY_PARTS = new Set(['__proto__', 'constructor', 'prototype']);

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
 import type { TokenSystem } from '../color-utils';
 import { type ColorEntry, extractColorsFromPreview, extractComponentColors } from '../extract-component-colors';
@@ -36,7 +37,7 @@ export function useComponentColors(
     if (!engine || !componentPath) return [];
 
     const root = engine.getRoot();
-    const astStructure = root?.metadata?.astStructure as import('@/lib/canvas-engine/types/ast').ASTNode[] | undefined;
+    const astStructure = root?.metadata?.astStructure as ASTNode[] | undefined;
 
     // Primary: extract from rendered preview iframe (pass AST for line numbers)
     const previewColors = extractColorsFromPreview(tokenSystem, astStructure);

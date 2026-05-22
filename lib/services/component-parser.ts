@@ -13,8 +13,7 @@ import * as t from '@babel/types';
 import { analyzeJSXChildren } from '../ast/traverser';
 
 const generate = (_generate as { default?: typeof _generate }).default ?? _generate;
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 // ============================================
 // Types
@@ -291,7 +290,7 @@ export function parseLocalComponentBody(
           }
         },
       },
-      { noScope: true } as unknown as t.Node,
+      undefined,
     );
   }
 
@@ -407,7 +406,7 @@ export function parseLocalFunctionBody(
           }
         },
       },
-      { noScope: true } as unknown as t.Node,
+      undefined,
     );
   }
 

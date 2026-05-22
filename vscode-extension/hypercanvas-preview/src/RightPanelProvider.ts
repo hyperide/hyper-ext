@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import type { LeftPanelProvider } from './LeftPanelProvider';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
+import type { ProjectCapabilities } from './types';
 import type { ScanResult } from './services/ComponentService';
 
 export class RightPanelProvider implements vscode.WebviewViewProvider {
@@ -28,14 +29,14 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     private readonly _getComponentGroups?: () => Promise<ScanResult>,
   ) {}
 
-  private _capabilities: import('./types').ProjectCapabilities | null = null;
+  private _capabilities: ProjectCapabilities | null = null;
 
   /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Pass null to clear capabilities on workspace switch.
    * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities | null): void {
+  public notifyCapabilities(capabilities: ProjectCapabilities | null): void {
     this._capabilities = capabilities;
     this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities: capabilities ?? null });
   }

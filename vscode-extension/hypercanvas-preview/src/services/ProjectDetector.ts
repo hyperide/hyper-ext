@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
+import type { CssSystem, ProjectCapabilities, ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
 import { WRITABLE_CSS_SYSTEMS } from '../types';
 
 /**
@@ -251,7 +251,7 @@ export async function detectUIKit(
 export async function detectCssSystem(
   projectPath: string,
   packageJson?: Record<string, unknown> | null,
-): Promise<import('../types').CssSystem> {
+): Promise<CssSystem> {
   const pkg = packageJson ?? (await readPackageJson(projectPath));
   if (!pkg) return 'unknown';
 
@@ -290,7 +290,7 @@ export async function detectCssSystem(
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).
-  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as import('../types').CssSystem;
+  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as CssSystem;
 
   // CSS Modules have no package.json dependency — detect by scanning src/
   // for *.module.css / *.module.scss / *.module.less files.
@@ -330,7 +330,7 @@ async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
  * works for the common client-component case. Promoted to full-edit; the
  * readonly badge stays available for genuine non-writable systems.
  */
-const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
+const FULL_EDIT_BUNDLERS: ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
 
 // 'unknown' and 'bun' → unsupported (no dev server management)
 
@@ -344,11 +344,11 @@ const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'we
  * Readonly = preview renders but either CSS or bundler is limited
  */
 export function computeCapabilities(
-  cssSystem: import('../types').CssSystem,
+  cssSystem: CssSystem,
   uiKit: 'tailwind' | 'tamagui' | 'none',
-  projectError: import('../types').UnsupportedProjectError | null,
-  projectType?: import('../types').ProjectType,
-): import('../types').ProjectCapabilities {
+  projectError: UnsupportedProjectError | null,
+  projectType?: ProjectType,
+): ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;

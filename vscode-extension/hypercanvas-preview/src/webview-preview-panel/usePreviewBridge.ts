@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
-import type { UnsupportedProjectError } from '../types';
+import type { ProjectCapabilities, UnsupportedProjectError } from '../types';
 import type { SimplePropInfo } from './PropsForm';
 
 interface UsePreviewBridgeOptions {
@@ -40,7 +40,7 @@ interface UsePreviewBridgeResult {
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
   /** Detected project capabilities — CSS system, readonly mode, etc. */
-  projectCapabilities: import('../types').ProjectCapabilities | null;
+  projectCapabilities: ProjectCapabilities | null;
   /** Set when iframe ErrorBoundary catches a component render error */
   componentError: ComponentError | null;
   /** Current value of hypercanvas.devServer.autoStart setting */
@@ -111,7 +111,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
-  const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
+  const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
   const [autoStart, setAutoStart] = useState(false);
   // Track whether we were previously connected (for reconnecting banner)
@@ -587,7 +587,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'projectCapabilities':
           // Extension detected CSS system and computed read/write capabilities
           setProjectCapabilities(
-            (msg as { capabilities?: import('../types').ProjectCapabilities }).capabilities ?? null,
+            (msg as { capabilities?: ProjectCapabilities }).capabilities ?? null,
           );
           break;
 

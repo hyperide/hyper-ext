@@ -162,9 +162,7 @@ export class DiagnosticHub {
     if (this._runtimeError) {
       const e = this._runtimeError;
       parts.push(
-        `Runtime Error (${e.framework}): ${e.type}: ${e.message}` +
-          (e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : '') +
-          (e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''),
+        `Runtime Error (${e.framework}): ${e.type}: ${e.message}${e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : ''}${e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''}`,
       );
     }
 

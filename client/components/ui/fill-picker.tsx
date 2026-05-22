@@ -3,6 +3,7 @@ import cn from 'clsx';
 import { useEffect } from 'react';
 import { ColorCombobox } from './color-combobox';
 import type { TokenSystem } from './color-utils';
+import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
 import { ImageBackgroundPicker } from './image-background-picker';
 
 export type FillMode = 'color' | 'image';
@@ -65,7 +66,7 @@ interface FillPickerProps {
   /** data-testid on the color hex input */
   inputTestId?: string;
   /** Canvas engine instance for extracting component colors */
-  engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
+  engine?: CanvasEngine | null;
   /** Path to the currently open component file */
   componentPath?: string | null;
   /** Current opacity value (0-100) */

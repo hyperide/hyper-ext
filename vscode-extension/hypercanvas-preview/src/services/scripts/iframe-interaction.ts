@@ -14,7 +14,7 @@ import {
   findTraceableParent as findTraceableParentIndexAware,
   type TraceableParentStep,
 } from '@shared/canvas-interaction/find-traceable-parent';
-import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import { createDesignKeydownHandler, type NodeMapLookup } from '@shared/canvas-interaction/keyboard-handler';
 import {
   computeOrderWritePlan,
   type OrderWritePlan,
@@ -986,7 +986,7 @@ function logSelsurvLifecycle(event: string, extra?: Record<string, unknown>): vo
     t: Math.round(performance.now()),
     event,
     readyState: typeof document !== 'undefined' ? document.readyState : 'n/a',
-    ...(extra ?? {}),
+    ...extra,
   });
 }
 let lastFindMissLogKey = '';
@@ -1200,7 +1200,7 @@ function findTraceableChildren(el: HTMLElement): string[] {
   return refs;
 }
 
-const domNodeMapLookup: import('@shared/canvas-interaction/keyboard-handler').NodeMapLookup = {
+const domNodeMapLookup: NodeMapLookup = {
   getEntry(nodeRef: string) {
     const source = parseSourceRef(nodeRef);
     if (source === null) return null;

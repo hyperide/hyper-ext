@@ -1,6 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import { memo } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
+import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
 import { type FillMode, FillPicker } from '../../ui/fill-picker';
 import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
@@ -30,7 +31,7 @@ interface FillSectionProps {
     styleKey?: string,
     defaultValue?: string,
   ) => void;
-  engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
+  engine?: CanvasEngine | null;
   componentPath?: string | null;
   textOpacity?: string;
   onTextOpacityChange?: (value: string) => void;

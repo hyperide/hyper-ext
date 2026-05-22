@@ -96,7 +96,11 @@ export function ComponentGroupList({
                     <ContextMenuItem
                       data-testid="hyper-explorer-ctx-go-to-visual"
                       onSelect={() => {
-                        onGoToVisual?.(component) ?? onComponentClick(component);
+                        if (onGoToVisual) {
+                          onGoToVisual(component);
+                        } else {
+                          onComponentClick(component);
+                        }
                       }}
                     >
                       <IconEye className="w-3.5 h-3.5 mr-2" stroke={1.5} />
@@ -105,7 +109,11 @@ export function ComponentGroupList({
                     <ContextMenuItem
                       data-testid="hyper-explorer-ctx-open-in-editor"
                       onSelect={() => {
-                        onOpenInEditor?.(component) ?? onComponentClick(component);
+                        if (onOpenInEditor) {
+                          onOpenInEditor(component);
+                        } else {
+                          onComponentClick(component);
+                        }
                       }}
                     >
                       <IconFileCode className="w-3.5 h-3.5 mr-2" stroke={1.5} />

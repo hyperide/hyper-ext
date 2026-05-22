@@ -144,6 +144,8 @@ export function useCanvasInteraction(
     if (!iframeEl || !overlayEl) return;
     const frame = iframeEl;
     const container = overlayEl;
+    const overlays = overlayElements.current;
+    const placeholders = placeholderElements.current;
 
     iframeOriginRef.current = getIframeOrigin(frame);
 
@@ -675,8 +677,8 @@ export function useCanvasInteraction(
         activeGhost.remove();
         activeGhost = null;
       }
-      clearOverlays(overlayElements.current);
-      clearOverlays(placeholderElements.current);
+      clearOverlays(overlays);
+      clearOverlays(placeholders);
     };
   }, [canvas, iframeEl, overlayEl]);
 

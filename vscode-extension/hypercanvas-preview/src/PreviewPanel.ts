@@ -20,7 +20,7 @@ import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } f
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
+import type { DevServerRuntimeError, ProjectCapabilities, UnsupportedProjectError } from './types';
 
 export { normalizeSampleComponentName };
 
@@ -65,7 +65,7 @@ export class PreviewPanel {
   private _projectError: UnsupportedProjectError | null = null;
 
   // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
-  private _capabilities: import('./types').ProjectCapabilities | null = null;
+  private _capabilities: ProjectCapabilities | null = null;
 
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
@@ -1222,7 +1222,7 @@ export class PreviewPanel {
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Sent after CSS system detection completes during activation.
    */
-  public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
+  public notifyCapabilities(capabilities: ProjectCapabilities): void {
     this._capabilities = capabilities;
     this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
   }

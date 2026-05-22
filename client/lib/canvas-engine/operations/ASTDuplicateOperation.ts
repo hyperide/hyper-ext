@@ -163,7 +163,7 @@ export class ASTDuplicateOperation extends BaseOperation {
     }
     try {
       return await this.duplicatePromise;
-    } catch (_error) {
+    } catch {
       return null;
     }
   }

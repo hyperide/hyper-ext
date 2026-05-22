@@ -87,8 +87,7 @@ export function resolveCalleeOrigin(source: string, calleeName: string): CalleeO
   return importResult ?? hookResult ?? localResult ?? { kind: 'unknown' };
 }
 
-// @ts-expect-error - babel/traverse ESM/CJS interop
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 // Names accepted for any recognized library (including react-intl's formatMessage).
 const KNOWN_CALL_NAMES = new Set(['t', 'translate', 'msg', 'i18n', 'formatMessage']);

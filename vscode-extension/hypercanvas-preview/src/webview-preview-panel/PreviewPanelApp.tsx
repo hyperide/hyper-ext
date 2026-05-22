@@ -10,6 +10,7 @@ import cn from 'clsx';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import type { PlatformMessage } from '@/lib/platform/types';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
@@ -18,9 +19,9 @@ import {
   useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
-import type { PlatformMessage } from '@/lib/platform/types';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import type { SimplePropInfo } from './PropsForm';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
 import { PropsForm } from './PropsForm';
@@ -261,12 +262,12 @@ function PreviewContent() {
               componentPath: componentError.componentPath,
               sampleName,
               propValues,
-            } as unknown as import('@/lib/platform/types').PlatformMessage);
+            } as unknown as PlatformMessage);
           }}
           onConfigureAIKey={() => {
             canvas.sendEvent({
               type: 'errorBoundary:configureAIKey',
-            } as unknown as import('@/lib/platform/types').PlatformMessage);
+            } as unknown as PlatformMessage);
           }}
           onClose={clearComponentError}
         />
@@ -507,7 +508,7 @@ interface ComponentErrorOverlayProps {
   componentPath: string;
   errorSeq?: number;
   error: string;
-  propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
+  propsSchema?: SimplePropInfo[] | null;
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
   onClose: () => void;

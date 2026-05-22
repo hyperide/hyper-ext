@@ -363,7 +363,7 @@ function getElementCssSystems(
 
   // Detect Tamagui/RN-style elements: style properties written as direct JSX props
   // (e.g. <YStack backgroundColor={...}> uses backgroundColor as a prop, not className/style)
-  if (requestedStyleKeys.length > 0 && requestedStyleKeys.some((key) => getAttribute(element, key) !== null)) {
+  if (requestedStyleKeys.some((key) => getAttribute(element, key) !== null)) {
     systems.push('tamagui');
   }
 

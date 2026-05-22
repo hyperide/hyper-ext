@@ -743,6 +743,7 @@ export function useHotkeysSetup({
     };
   }, [
     selectedIds,
+    selectedItemIndices,
     engine,
     meta,
     activeDesignInstanceId,

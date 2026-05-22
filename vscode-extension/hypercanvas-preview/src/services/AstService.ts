@@ -8,6 +8,7 @@
  */
 
 import * as fsSync from 'node:fs';
+import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
@@ -257,14 +258,14 @@ function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: 
  *     child of a fragment).
  */
 function liftToCommonJsxParent(
-  sourcePath: import('@babel/traverse').NodePath<t.JSXElement>,
-  targetPath: import('@babel/traverse').NodePath<t.JSXElement>,
+  sourcePath: NodePath<t.JSXElement>,
+  targetPath: NodePath<t.JSXElement>,
 ): {
   sourceLifted: t.JSXElement;
   targetLifted: t.JSXElement;
   commonParent: t.JSXElement | t.JSXFragment;
 } | null {
-  type AnyPath = import('@babel/traverse').NodePath;
+  type AnyPath = NodePath;
   const buildChain = (start: AnyPath): t.Node[] => {
     const chain: t.Node[] = [];
     let p: AnyPath | null = start;

@@ -9,9 +9,7 @@ import * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 
 const generate = (_generate as unknown as { default: typeof _generate }).default || _generate;
-
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
 
 /**
  * Find all JSX elements in AST

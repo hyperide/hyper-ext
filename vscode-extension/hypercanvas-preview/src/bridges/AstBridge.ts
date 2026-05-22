@@ -597,7 +597,7 @@ export class AstBridge {
     // regex `/\{([^}]+)\}/g`, which is naïve about string literals — a `}` inside
     // the key prematurely closes the expression and the rest leaks into JSXText.
     const keyLen = message.key.length;
-    if (keyLen === 0 || keyLen > 256 || /[\n\r\0{}<>]/.test(message.key)) {
+    if (keyLen === 0 || keyLen > 256 || /[\n\r{}<>]/.test(message.key) || message.key.includes('\0')) {
       return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
     }
 
