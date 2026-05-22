@@ -84,7 +84,7 @@ export function useElementTracer({
   componentPathRef.current = componentPath;
   const [ready, setReady] = useState(false);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- loadCounter forces re-init when iframe reloads (new document) */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadCounter forces re-init when iframe reloads (new document)
   useEffect(() => {
     if (!iframe || !enabled || !projectId) {
       // Tear down if conditions no longer met
@@ -196,7 +196,17 @@ export function useElementTracer({
       setReady(false);
     };
   }, [iframe, projectId, enabled, loadCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+
+  // Propagate componentPath changes onto an already-initialized tracer without
+  // tearing the tracer down. The init effect above intentionally keeps
+  // componentPath out of its deps (it would re-detect React + reopen the WS on
+  // every component switch); this lightweight sync effect carries the prop
+  // through instead.
+  useEffect(() => {
+    if (tracerRef.current) {
+      tracerRef.current.renderedFile = componentPath ?? null;
+    }
+  }, [componentPath]);
 
   return { tracer: tracerRef.current, ready };
 }

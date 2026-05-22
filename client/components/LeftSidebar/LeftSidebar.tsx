@@ -114,7 +114,7 @@ export default function LeftSidebar({
     reload: reloadTests,
   } = useTestGroups(currentComponentPath, meta?.projectId);
 
-  const elementsTree = useElementsTree(meta?.componentName);
+  const elementsTree = useElementsTree();
 
   const {
     selectedIds,

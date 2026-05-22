@@ -31,7 +31,7 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
   const [publicDirExists, setPublicDirExists] = useState(false);
   const [configError, setConfigError] = useState<ConfigError | null>(null);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- intentionally keyed on activeProject?.id — avoid re-fetching when name/publicDir change without id change */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps tracked via id+name+publicDir; bare `activeProject` would re-run on every parent re-render
   useEffect(() => {
     // Reset when project changes
     setConfigError(null);
@@ -45,6 +45,10 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
       setPublicDirExists(false);
       return;
     }
+
+    // Cancel any in-flight state writes when deps change or component unmounts —
+    // otherwise a slow superseded request can overwrite the fresh result.
+    let cancelled = false;
 
     const checkUIKit = async () => {
       try {
@@ -61,11 +65,14 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
             const detectResponse = await authFetch(`/api/projects/${activeProject.id}/detect-public-dir`, {
               method: 'POST',
             });
+            if (cancelled) return;
             if (detectResponse.ok) {
               const detectResult = await detectResponse.json();
+              if (cancelled) return;
               setPublicDirExists(!!detectResult.publicDir);
             }
           } catch (err) {
+            if (cancelled) return;
             console.error('[useProjectUIKit] Failed to detect public dir:', err);
           }
         }
@@ -74,17 +81,20 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
         const depsResponse = await authFetch(
           `/api/projects/${activeProject.id}/dependencies?names=tamagui,@tamagui/core,@tamagui/cli,tailwindcss`,
         );
+        if (cancelled) return;
         if (!depsResponse.ok) {
           console.error('[useProjectUIKit] Failed to check dependencies');
           // Set error for CanvasEditor to show overlay
           try {
             const errorData = await depsResponse.json();
+            if (cancelled) return;
             setConfigError({
               error: errorData.error || 'Failed to check dependencies',
               projectId: activeProject.id,
               projectName: activeProject.name,
             });
           } catch {
+            if (cancelled) return;
             setConfigError({
               error: 'Failed to read package.json',
               projectId: activeProject.id,
@@ -95,6 +105,7 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
         }
 
         const deps = await depsResponse.json();
+        if (cancelled) return;
         console.log('[useProjectUIKit] Dependencies:', deps);
 
         // Determine UI kit
@@ -109,13 +120,19 @@ export function useProjectUIKit(activeProject: ActiveProjectParam | null): UsePr
           console.log('[useProjectUIKit] Project has no UI kit');
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('[useProjectUIKit] Error checking UI kit:', error);
       }
     };
 
     checkUIKit();
-  }, [activeProject?.id]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+
+    return () => {
+      cancelled = true;
+    };
+    // biome-ignore lint/correctness/useExhaustiveDependencies: deps tracked via id+name+publicDir; bare `activeProject` would re-run on every parent re-render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id, activeProject?.name, activeProject?.publicDir]);
 
   return { projectUIKit, activeProjectId, activeProjectName, publicDirExists, configError };
 }
