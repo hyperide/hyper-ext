@@ -2,106 +2,112 @@
 
 ## Context
 
-`oxlint` found 15 warnings in chat-related hooks across:
-- `client/components/chat/SharedChatPanel.tsx` — 13 issues
-- `client/hooks/chat/useChatHistory.ts` — 1 issue (missing `initialChatId`)
-- `client/hooks/chat/useAutoScroll.ts` — 1 issue (spread in deps array — REAL BUG)
+oxlint found 15 hook issues in chat components. Two root causes:
 
-### Root causes
-
-**1. useAutoScroll — `[...dependencies]` spread (REAL BUG)**
-```ts
-useEffect(() => { ... }, [...dependencies]);
-```
-Spreading in dep array is not valid React — oxlint correctly flags this. The hook takes `dependencies: unknown[]` and spreads into the effect dep. React ignores array identity changes so this won't work as expected. The effect will fire every render.
+**1. useAutoScroll — `[...dependencies]` spread in dep array (REAL BUG)**
+`client/hooks/chat/useAutoScroll.ts:17`: `useEffect(() => { ... }, [...dependencies])` — spreading an array into deps is invalid React. Each render creates a new array, the effect fires every render regardless of whether the values changed.
 
 **2. SharedChatPanel — object method deps pattern**
-`history` comes from `useChatHistory(...)` — returns plain object (not useMemo-wrapped). Each render creates a new object reference, so `history` itself is unstable. Pattern like `[history.setMessages]` was used to reference the stable state setter, but violates exhaustive-deps rule because `history` isn't in the dep array.
+`client/components/chat/SharedChatPanel.tsx`: `history`/`stream`/`input` are plain objects returned from hooks (not useMemo-wrapped), so they're unstable. Pattern like `[history.setMessages]` tries to reference a stable state setter but violates exhaustive-deps.
+Fix: extract each callback into a custom hook that takes the stable primitive (the setter itself, destructured).
 
-Current pattern (broken):
-```ts
-const history = useChatHistory({...}); // new object each render
-const onMessagesAppend = useCallback((msgs) => {
-  history.setMessages(prev => [...prev, ...msgs]);
-}, [history.setMessages]); // oxlint: missing 'history'
-```
+**3. useChatHistory — missing initialChatId dep**
+`client/hooks/chat/useChatHistory.ts:49`: effect uses `initialChatId` but dep array only has `[chatAdapter]`.
 
-Correct pattern: destructure stable values at call site OR extract to a hook that takes stable primitives.
-
-**3. useChatHistory — `initialChatId` missing dep**
-```ts
-useEffect(() => {
-  if (initialChatId) setCurrentChatId(initialChatId);
-  ...
-}, [chatAdapter]); // missing: initialChatId
-```
-If `initialChatId` changes after mount, the effect won't re-run. This is likely a real bug.
-
-## Scope
-
-### 1. Fix useAutoScroll (unit test first)
-
-Write unit test in `client/hooks/chat/useAutoScroll.test.ts` that:
-- Verifies the effect fires when dep values change
-- Verifies it does NOT fire spuriously on every render
-
-Then fix: replace spread pattern with proper dep tracking. The correct approach:
-```ts
-// Accept explicit deps array and use it directly — but React needs static deps
-// Better: let callers pass a stable callback instead of deps
-export function useAutoScroll(
-  scrollCallback: () => void,
-  trigger: unknown  // stable trigger value, not a spread
-)
-```
-Evaluate the actual usage in `SharedChatPanel.tsx` to find the right fix.
-
-### 2. Fix useChatHistory — initialChatId dep
-
-Write unit test that verifies `setCurrentChatId` is called when `initialChatId` changes post-mount.
-Fix: add `initialChatId` to dep array, or if truly mount-only, add `// eslint-disable-next-line react-hooks/exhaustive-deps` with explanation comment.
-
-### 3. Stabilize history/stream/input in SharedChatPanel
-
-**Architectural fix**: wrap `useChatHistory`, `useChatStream`, `useChatInput` return values with `useMemo` inside their respective hooks so the returned objects are stable. This is the cleanest fix.
-
-OR: extract each useCallback/useEffect in SharedChatPanel that references history/stream/input into dedicated custom hooks that take destructured stable values:
-
-```ts
-// NEW: client/hooks/chat/useMessagesAppend.ts
-export function useMessagesAppend(
-  setMessages: Dispatch<SetStateAction<DisplayMessage[]>>
-) {
-  return useCallback((newMessages: DisplayMessage[]) => {
-    setMessages(prev => [...prev, ...newMessages]);
-  }, [setMessages]);
-}
-```
-
-Each extracted hook:
-- `useMessagesAppend(setMessages)` — from SharedChatPanel:86
-- `useStreamingSync(setIsStreaming, isStreaming)` — from SharedChatPanel:107
-- `useSendMessages(currentChatId, createNewChat, setIsStreaming, sendMessage, onMessagesAppend, forceNewChat)` — from SharedChatPanel:116-159
-- `useHandleStop(stopStreaming, restoreQueueToInput)` — from SharedChatPanel:179-183
-- `useInitialPromptEffect(...)` — from SharedChatPanel:194-201
-
-### 4. Unit tests for each extracted hook
-
-Each new hook in `client/hooks/chat/` gets a `*.test.ts` file:
-- Test with React Testing Library's `renderHook`
-- Test stable references (useCallback result doesn't change between renders)
-- Test correct behavior
-
-### 5. E2E test (if existing chat e2e exists)
-
-Check `tests/` for existing chat e2e tests. If they exist, run them after the change to confirm no regression. Do NOT write new e2e tests from scratch — only verify existing ones pass.
+Architecture: `history = useChatHistory(...)`, `stream = useChatStream(...)`, `input = useChatInput(...)` — each returns a plain object. These stay as-is. We extract the callbacks FROM SharedChatPanel into new custom hooks that take stable destructured values.
 
 ## Hard Rules
 
-- Work in a NEW worktree. Create: `hooks-chat-refactor`.
-- TDD: write failing unit test FIRST, then implement the fix, then verify GREEN.
-- Do NOT change behavior — only stabilize deps.  
-- Do NOT use `// eslint-disable-next-line` as a fix unless the suppression has a clear comment explaining WHY (e.g., "initialChatId is intentionally mount-only because...").
-- Read `ext-test-projects/CLAUDE.md` before any E2E work.
-- Keep the architecture: `useChatHistory`, `useChatStream`, `useChatInput` remain as is — only stabilize their outputs.
-- Commit after each hook extraction with test GREEN.
+- TDD: write failing unit test FIRST, then fix, then verify GREEN.
+- Do NOT change the interface of useChatHistory, useChatStream, useChatInput.
+- Do NOT use `// eslint-disable-next-line` as a fix unless it's a genuine intentional mount-only effect with explanation.
+- Use `bun test <specific-file>` to verify, not full suite.
+- Work in the ralphex-created worktree.
+
+### Task 1: Read the affected files
+
+- [x] Read `client/hooks/chat/useAutoScroll.ts` — full file
+- [x] Read `client/hooks/chat/useChatHistory.ts` — full file (focus on lines 35–50 and return value)
+- [x] Read `client/components/chat/SharedChatPanel.tsx` — full file
+- [x] Check if `client/hooks/chat/useAutoScroll.test.ts` exists (does NOT exist)
+- [x] Check if `client/hooks/chat/useChatHistory.test.ts` exists (does NOT exist)
+
+Acceptance: understand what `dependencies` is in useAutoScroll, what the return shape of useChatHistory is, and the full callback pattern in SharedChatPanel.
+
+### Task 2: Fix useAutoScroll — write test first
+
+- [x] Create `client/hooks/chat/useAutoScroll.test.ts` (if not exists)
+- [x] Write test: render a component using useAutoScroll, verify effect does NOT fire on every render when trigger value hasn't changed
+- [x] Run `bun test client/hooks/chat/useAutoScroll.test.ts` — confirm RED (old single-array signature throws on positional-arg calls; 6 fail)
+- [x] Read how useAutoScroll is called in SharedChatPanel — `[history.messages, stream.currentAssistantMessage, stream.currentToolCalls]`
+- [x] Fix useAutoScroll: changed signature to three positional `unknown` triggers; effect deps now a literal `[triggerA, triggerB, triggerC]` (statically analyzable), with a biome-ignore explaining the sentinel-dep pattern (effect body intentionally doesn't read the triggers)
+- [x] Run `bun test client/hooks/chat/useAutoScroll.test.ts` — GREEN (6 pass)
+- [x] Verify SharedChatPanel call site still compiles (tsc + biome clean)
+
+Acceptance: test GREEN, effect does not fire spuriously.
+
+### Task 3: Fix useChatHistory — initialChatId dep
+
+- [x] Write test in `client/hooks/chat/useChatHistory.test.ts` — 3 cases: mount with id, null→id, id→id
+- [x] Run test — GREEN immediately (no RED phase): existing "Sync initialChatId prop changes" effect (lines 79–83) already propagates prop changes; the missing dep on the mount-only chat-list effect is intentional, not a bug
+- [x] Read line 39 comment: "Don't auto-select first chat — start with 'New Chat' (null)" — confirms mount-effect should NOT reload the chat list when initialChatId changes (that would re-call listChats unnecessarily)
+- [x] Decision: chat-list effect stays mount-only (re-running `listChats` per prop change is wrong); the dedicated sync effect at lines 79–83 carries the responsibility of propagating later `initialChatId` changes
+- [x] Apply fix: replaced the misleading biome-ignore comment ("mount-only, chatAdapter is stable") with a 3-line block explaining WHY `initialChatId` is excluded and pointing to the sync effect that handles later changes
+- [x] Run test — GREEN (3 pass, biome + oxlint clean)
+
+Acceptance: test GREEN, decision documented.
+
+### Task 4: Extract useMessagesAppend from SharedChatPanel
+
+SharedChatPanel lines 83–87: `onMessagesAppend` callback uses `history.setMessages`.
+
+- [x] Create `client/hooks/chat/useMessagesAppend.ts`
+- [x] Create `client/hooks/chat/useMessagesAppend.test.ts` with test: verify callback appends messages to previous state
+- [x] Run test — RED (module not found)
+- [x] Implement: `export function useMessagesAppend(setMessages: Dispatch<SetStateAction<DisplayMessage[]>>) { return useCallback((msgs) => setMessages(prev => [...prev, ...msgs]), [setMessages]); }`
+- [x] Run test — GREEN (4 pass: append, multi-call functional form, stable ref, empty-array no-op)
+- [x] Replace inline callback in SharedChatPanel:82–87 with `useMessagesAppend(history.setMessages)`; export added to `client/hooks/chat/index.ts`; unused `DisplayMessage` import removed from SharedChatPanel; tsc, biome, oxlint clean; full chat hooks suite GREEN (13 pass)
+
+Acceptance: test GREEN, SharedChatPanel compiles.
+
+### Task 5: Extract useHandleStop from SharedChatPanel
+
+SharedChatPanel lines 179–183: uses `stream.stopStreaming` and `input.restoreQueueToInput`.
+
+- [x] Create `client/hooks/chat/useHandleStop.ts`
+- [x] Create `client/hooks/chat/useHandleStop.test.ts`: 4 cases — ordering (stop→restore), stable ref across re-renders, ref changes when stopStreaming identity changes, no-throw on no-op fns
+- [x] Run test — RED (`Cannot find module './useHandleStop'`)
+- [x] Implement: `useCallback(() => { stopStreaming(); restoreQueueToInput(); }, [stopStreaming, restoreQueueToInput])` — both inputs are stable `useCallback`s from useChatStream/useChatInput
+- [x] Run test — GREEN (4 pass)
+- [x] Replace inline callback in SharedChatPanel:174–177 with `useHandleStop(stream.stopStreaming, input.restoreQueueToInput)`; export added to `client/hooks/chat/index.ts`; biome + oxlint clean; full chat hooks suite GREEN (17 pass across 4 files)
+
+Acceptance: test GREEN, SharedChatPanel compiles.
+
+### Task 6: Fix remaining SharedChatPanel deps
+
+For remaining exhaustive-deps warnings in SharedChatPanel (lines 107, 152, 201, 217, 229):
+
+- [x] For each warning: read the code, understand if it's a real bug or stable-ref pattern (oxlint --react-plugin reported 8 sub-warnings across 5 sites — all rooted in member access on the unstable `history`/`stream`/`input` objects forcing the parent into deps)
+- [x] Line 107 (`history.setIsStreaming`): destructured `setIsStreaming` from `useChatHistory`; effect deps now `[isStreaming, setIsStreaming]` — both stable primitives
+- [x] Line 152 (sendMessages callback): destructured `currentChatId, createNewChat, setIsStreaming` from history and `sendMessage` from stream; useCallback deps now reference local bindings only
+- [x] Line 201 (initialPrompt effect): replaced `biome-ignore` with full deps list `[initialPrompt, isLoadingChats, isStreamingRef, resetScrollFlag, handleSendMessages, onPromptSent]`; `initialPromptSentRef` guards against re-firing on stable-dep churn
+- [x] Line 217 (`input.resetInputState`): destructured `resetInputState` from `useChatInput`; kept `biome-ignore` with clearer wording because biome (not oxlint) now flags `currentChatId` as a sentinel-only dep
+- [x] Line 229 (`history` missing): destructured `messages, chats, updateChatTitle` from history; effect body uses bare locals; deps are stable refs and reactive primitives
+- [x] Approach: destructure all stable callbacks/setters AND reactive values from `history`, `stream`, `input` once at the top of the component so the rest of the component (effects, callbacks, JSX) references locals; no `history.X` / `stream.X` / `input.X` access remains in the function body. No new re-render loops: deps are either stable useCallback refs, useRef objects, useState setters, or reactive primitives the effect *should* respond to.
+
+Acceptance: `bunx oxlint --react-plugin client/components/chat/SharedChatPanel.tsx` reports 0 warnings (verified). Biome check clean. tsc shows no chat-related errors. All 17 chat hook unit tests pass.
+
+### Task 7: Run full unit test suite for chat hooks
+
+- [ ] `bun test client/hooks/chat/ client/components/chat/`
+- [ ] All tests GREEN
+
+Acceptance: 0 failures in chat hook/component tests.
+
+### Task 8: Commit
+
+- [ ] `git add client/hooks/chat/ client/components/chat/SharedChatPanel.tsx`
+- [ ] `git diff --cached --stat`
+- [ ] `git commit -m "refactor(chat): extract custom hooks from SharedChatPanel, fix exhaustive-deps"`
+
+Acceptance: clean commit.
