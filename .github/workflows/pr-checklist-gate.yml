@@ -1,0 +1,71 @@
+name: PR Checklist
+
+# Custom merge gate: GitHub has no built-in "block merge until every PR-body
+# checkbox is ticked", so we parse the PR body and fail if any unchecked
+# `- [ ]` remains. Passes when all are `- [x]`/`[X]` or there are no checkboxes.
+#
+# To make this a HARD merge block: Settings -> Branches -> branch protection
+# rule for `main` -> "Require status checks to pass before merging" -> add the
+# check named "PR Checklist" (the job `name:` below). That toggle is admin-only
+# and cannot be set from inside the repo. See docs/rules/development.md.
+#
+# Trigger: `pull_request_target`. The workflow file AND the checked-out parser
+# both come from the BASE branch (main), never from the PR head — so a PR that
+# edits this workflow or `.github/scripts/checklist-gate.*` is still evaluated
+# by the trusted base version. This is the tamper-resistant form.
+#
+# Safety property of `pull_request_target`: the job runs with a write-scoped
+# token and base-branch context, so it MUST NEVER check out or execute PR code.
+# We don't: the only checkout uses the default ref (base), and the only input
+# is the PR body taken from the event payload (never the PR's files/scripts).
+# `permissions: contents: read` keeps the token minimal as belt-and-suspenders.
+#
+# Caveat: because the workflow runs from base, it does NOT run on the PR that
+# first introduces it (main has no gate yet) — it goes live from the next PR.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  checklist:
+    name: PR Checklist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (base branch — default ref under pull_request_target)
+        # No `ref:` — under pull_request_target the default checkout is the
+        # BASE branch (trusted main), NOT the PR head. We deliberately do NOT
+        # set `ref: github.event.pull_request.head.sha`: that would run
+        # PR-controlled parser code and defeat the whole point of this trigger.
+        uses: actions/checkout@v6
+
+      - name: Verify acceptance-criteria checkboxes are all checked
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Import the SAME parser the self-check test
+            // (.github/scripts/checklist-gate.test.mjs) exercises, so a green
+            // test proves this gate's logic — no duplicated regex. Under
+            // pull_request_target the workspace holds the BASE (trusted)
+            // version of this module, so the PR cannot tamper with it.
+            const { parseUnchecked } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/checklist-gate.mjs`
+            )
+            // context.payload — the PR body from the event payload, never the
+            // PR's checked-out files, and never string-interpolated into the
+            // script, so a malicious PR body cannot inject shell/JS and no
+            // PR-controlled code is executed.
+            const body = context.payload.pull_request?.body ?? ''
+            const unchecked = parseUnchecked(body)
+            if (unchecked.length > 0) {
+              core.setFailed(
+                'Unchecked acceptance criteria remain — all must be checked ' +
+                  'before merge:\n' +
+                  unchecked.map((l) => `  • ${l}`).join('\n'),
+              )
+              return
+            }
+            core.info('All acceptance-criteria checkboxes are checked (or none present). ✓')
