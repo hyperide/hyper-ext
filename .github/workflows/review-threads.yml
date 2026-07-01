@@ -1,0 +1,82 @@
+# Merge gate: block the PR while it has UNRESOLVED review threads.
+#
+# GitHub's native equivalent is the branch-protection toggle "Require conversation
+# resolution before merging" — but that's admin-only and can't be set from inside the repo.
+# This workflow gives you the same gate as a required STATUS CHECK that any maintainer can
+# add to branch protection (Settings -> Branches -> required checks -> "review-threads").
+#
+# INSTALL: copy to .github/workflows/review-threads.yml AND keep the gate script at
+# ci/review-threads/review-threads.sh (vendor the ci/ dir, or copy the script and adjust
+# the run: path). To make it a HARD block, add the check "review-threads" to branch
+# protection (admin-only, one-time).
+#
+# TAMPER-RESISTANCE — why `pull_request_target`:
+#   A merge-BLOCKING gate must not run a script the PR itself can edit (a PR could weaken the
+#   very gate it has to pass). Under `pull_request_target` the BASE-branch (trusted) copy of
+#   this workflow AND of the checked-out gate script run — the PR's version is ignored. The
+#   job reads ONLY the PR NUMBER from the event payload; it never checks out or executes
+#   PR-head code, and `permissions` stay read-only.
+#   Caveat: like any base-run gate, it does NOT run on the PR that first introduces it.
+#
+# Re-evaluates: the gate queries LIVE thread state, so it must re-run on any event that can
+# change that state, or a stale green check lets branch protection merge with open threads.
+#   • `pull_request_target` (opened/synchronize/reopened/ready_for_review) — push activity.
+#   • `pull_request_review` (submitted/edited/dismissed) — a reviewer ADDS threads via a
+#     review AFTER the last push; without this the prior green check goes stale.
+#   • `pull_request_review_comment` (created/edited/deleted) — a single review-comment thread
+#     added/changed after the last push.
+#   All three payloads carry `github.event.pull_request.number`, so PR_NUMBER still resolves.
+#
+# Why the implicit Actions check run is enough here (no explicit commit-status post needed):
+# on a review/review_comment trigger GITHUB_SHA is the PR's TEST MERGE COMMIT (refs/pull/N/
+# merge), not the head sha — but for an OPEN PR with a test merge commit, branch protection
+# evaluates the MERGE commit's checks ("If the test merge commit has a status, the test merge
+# commit must pass" — GitHub "Troubleshooting required status checks"). So the re-run's check
+# named "review-threads" lands on the sha branch protection actually reads. We deliberately do
+# NOT also POST a same-named commit status: GitHub treats a check and a status of the SAME name
+# as TWO separate required checks ("both the check and the status are required" — same doc), so
+# a same-named status would create a second, conflicting requirement, not refresh the first.
+#
+#   Caveat: RESOLVING a thread emits no webhook — so a resolve does NOT re-run this gate. To
+#   flip a once-red check green, push again (synchronize), or use the manual `workflow_dispatch`
+#   (REQUIRES a pr_number input — no PR in the event payload on a manual run), or the ship-time
+#   preflight in ci/ship. The events above only guarantee the gate can never stay GREEN while a
+#   newly-added thread is open — which is the property branch protection needs.
+
+name: review-threads
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to re-check (required — manual runs have no PR in the event payload)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  review-threads:
+    name: review-threads
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (base branch — trusted; default ref under pull_request_target)
+        # No `ref:` — under pull_request_target the default checkout is the BASE branch, so
+        # the gate script that runs is the trusted base copy, NOT the PR's version.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Fail on unresolved review threads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR number: from the event on pull_request_target/_review/_review_comment, else
+          # the manual input.
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: bash ci/review-threads/review-threads.sh
