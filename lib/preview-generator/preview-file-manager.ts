@@ -1041,15 +1041,36 @@ export class PreviewFileManager {
     // Relative path from src/__canvas_preview_standalone__.tsx to .hyperide/preview
     const wrapperImportPath = join(relative(previewDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
 
+    // Detect the app's root element ID from index.html. Many projects use 'app-root',
+    // 'main', or similar instead of the React default 'root'. Fall back to 'root' if
+    // index.html is absent or doesn't contain a recognizable mount point.
+    let rootElementId = 'root';
+    try {
+      const indexHtml = await this.io.readFile(join(this.projectRoot, 'index.html'));
+      const divMatch = indexHtml.match(/<div\s+id="([^"]+)"/);
+      if (divMatch?.[1]) rootElementId = divMatch[1];
+    } catch {
+      // index.html not present — keep 'root'
+    }
+
     const bootstrap = [
       '',
       '// @hyperide-managed',
       "import { createRoot } from 'react-dom/client';",
       `import { PreviewWrapper } from '${wrapperImportPath}';`,
       '',
-      "const root = document.getElementById('root');",
-      'if (root) {',
-      '  createRoot(root).render(',
+      `const _rootEl = document.getElementById('${rootElementId}');`,
+      'if (_rootEl) {',
+      '  // Reuse root across HMR to avoid calling createRoot on the same container twice.',
+      '  // Cast to any so TypeScript in Webpack/Parcel projects (no Vite types) does not error.',
+      '  const _hot = (import.meta as any).hot as { data: Record<string, unknown>; accept: () => void } | undefined;',
+      '  const _existingRoot = _hot?.data?.root as ReturnType<typeof createRoot> | undefined;',
+      '  const _root = _existingRoot ?? createRoot(_rootEl);',
+      '  if (_hot) {',
+      '    _hot.data.root = _root;',
+      '    _hot.accept();',
+      '  }',
+      '  _root.render(',
       '    <PreviewWrapper>',
       '      <CanvasPreview />',
       '    </PreviewWrapper>',
