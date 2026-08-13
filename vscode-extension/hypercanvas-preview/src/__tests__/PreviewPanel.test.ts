@@ -253,6 +253,31 @@ describe('PreviewPanel component selection', () => {
     });
   });
 
+  it('re-syncs StateHub when repoPath already matches but StateHub has drifted (null)', () => {
+    // _updateComponentFromEditor's guard ORs `stateHub.currentComponent?.path !== component`,
+    // so _setCurrentComponent is called with _currentComponent === component while StateHub
+    // is behind. The lifecycle must still broadcast to re-sync StateHub (legacy behavior).
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string }, { _currentComponent: 'src/App.tsx' });
+
+    (panel as PreviewPanel & { _setCurrentComponent: (c: string) => void })._setCurrentComponent('src/App.tsx');
+
+    expect(stateHub.applyUpdate).toHaveBeenCalledWith({
+      currentComponent: { name: 'App', path: 'src/App.tsx' },
+    });
+  });
+
+  it('does not re-broadcast when StateHub already holds the identical component (host dedup)', () => {
+    const stateHub = createStateHub({ name: 'App', path: 'src/App.tsx' });
+    const { panel } = createPanel(stateHub);
+    Object.assign(panel as PreviewPanel & { _currentComponent: string }, { _currentComponent: 'src/App.tsx' });
+
+    (panel as PreviewPanel & { _setCurrentComponent: (c: string) => void })._setCurrentComponent('src/App.tsx');
+
+    expect(stateHub.applyUpdate).not.toHaveBeenCalled();
+  });
+
   it('does not overwrite an already-set currentComponent when re-attaching panel', () => {
     const stateHub = createStateHub();
     const { panel, postMessage } = createPanel(stateHub);
@@ -564,6 +589,59 @@ export { Alert, AlertTitle, AlertDescription };
       running: false,
       url: null,
     });
+  });
+
+  // Spec HYP-369 Sub-ticket B acceptance: the StateHub.onChange feedback loop must NOT
+  // re-fire applyUpdate for a no-op change. Uses a StateHub mock whose applyUpdate actually
+  // invokes registered onChange listeners (the default createStateHub mock does not), so the
+  // recursion the guard prevents is observable.
+  it('StateHub.onChange listener does NOT re-fire applyUpdate on a component broadcast (loop guard)', () => {
+    const listeners: Array<(state: unknown, patch: Record<string, unknown>) => void> = [];
+    const state = { currentComponent: null as unknown, insertTargetId: null, selectedIds: [] as string[] };
+    const applyUpdate = mock((patch: Record<string, unknown>) => {
+      Object.assign(state, patch);
+      // Broadcast to listeners exactly like the real StateHub.applyUpdate does.
+      for (const listener of listeners) listener(state, patch);
+    });
+    const stateHub = {
+      state,
+      applyUpdate,
+      register: mock(),
+      unregister: mock(),
+      sendInit: mock(),
+      onChange: mock((listener: (s: unknown, p: Record<string, unknown>) => void) => {
+        listeners.push(listener);
+        return () => {};
+      }),
+    };
+
+    const mockPanel = createMockPreviewWebviewPanel();
+    Object.assign(vscode.window, {
+      createWebviewPanel: mock(() => mockPanel),
+      onDidChangeActiveTextEditor: mock(() => ({ dispose: mock() })),
+    });
+    Object.assign(vscode.workspace, {
+      onDidChangeConfiguration: mock(() => ({ dispose: mock() })),
+      workspaceFolders: [{ uri: vscode.Uri.file('/workspace'), name: 'workspace', index: 0 }],
+    });
+
+    const panel = new PreviewPanel(
+      vscode.Uri.file('/extension'),
+      '/workspace',
+      stateHub as never,
+      { astBridge: { astService: {} }, setAstResponseTarget: mock() } as never,
+      { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
+    );
+    panel.createOrShow(vscode.ViewColumn.Two);
+
+    // Simulate a cross-panel component selection broadcast (e.g. from the Left Panel list).
+    applyUpdate({ currentComponent: { name: 'Feed', path: 'src/Feed.tsx' } });
+    const callsAfterFirst = applyUpdate.mock.calls.length;
+
+    // Re-broadcast the SAME component: the listener adopts it (drops navigability) but must
+    // NOT call applyUpdate again — otherwise the broadcast loops back into itself.
+    applyUpdate({ currentComponent: { name: 'Feed', path: 'src/Feed.tsx' } });
+    expect(applyUpdate.mock.calls.length).toBe(callsAfterFirst + 1); // only the one we just made
   });
 
   it('uses the real default export name (Home) instead of the filename (page) for Next.js page.tsx', async () => {

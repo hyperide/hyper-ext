@@ -28,12 +28,16 @@ import {
   canNavigate,
   createComponentState,
   needsNavigationWait,
-  selectComponentParam,
-  withCurrentComponent,
   withNavigable,
   withNeedsRegeneration,
   type PreviewComponentState,
 } from './PreviewComponentState';
+import {
+  reduce as reduceLifecycle,
+  type LifecycleContext,
+  type LifecycleEffect,
+  type LifecycleEvent,
+} from './PreviewLifecycle';
 import { VSCodeFileIO } from './vscode-file-io';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
@@ -126,6 +130,33 @@ export class PreviewPanel {
     this._componentState = withNeedsRegeneration(this._componentState, needsRegeneration);
   }
 
+  /**
+   * Snapshot the backing fields (`_panel`, `_devServerRunning`, `_componentState`) into
+   * the pure-reducer's input shape (HYP-369 Sub-ticket B). The lifecycle NAME stays
+   * derived (deriveLifecycle) — never stored — so it can never desync from direct field
+   * writes. See PreviewLifecycle.ts.
+   */
+  private _lifecycleContext(): LifecycleContext {
+    return {
+      attached: this._panel !== undefined,
+      devServerRunning: this._devServerRunning,
+      component: this._componentState,
+    };
+  }
+
+  /**
+   * Route a lifecycle transition through the one pure reducer (PreviewLifecycle.reduce),
+   * write the reduced component/devserver state back onto the backing fields, and hand the
+   * effects to the caller. The reducer is the single decision authority for the HYP-363
+   * guards (resurrection re-emit, same-path no-op); the host only executes the effects.
+   */
+  private _dispatch(event: LifecycleEvent): readonly LifecycleEffect[] {
+    const { context, effects } = reduceLifecycle(this._lifecycleContext(), event);
+    this._componentState = context.component;
+    this._devServerRunning = context.devServerRunning;
+    return effects;
+  }
+
   private _defaultComponent?: string;
   private _disposables: vscode.Disposable[] = [];
 
@@ -195,13 +226,12 @@ export class PreviewPanel {
     if (workspaceRoot === this._workspaceRoot) return;
     this.clearSelection();
     this._workspaceRoot = workspaceRoot;
-    this._currentComponent = undefined;
-    this._navigableComponent = undefined;
-    this._previewComponent = undefined;
+    // Full reset: clear the entire component record (repoPath/previewPath/navigable/
+    // needsRegeneration) and the devserver axis through the lifecycle reducer, returning
+    // the panel to Attached_NoComponent (PreviewLifecycle `workspaceReset`).
+    this._dispatch({ type: 'workspaceReset' });
     this._panelRouter.setSubProjectPrefix?.('');
-    this._requiresPreviewRegeneration = false;
     this._defaultComponent = undefined;
-    this._devServerRunning = false;
     this._previewBaseUrl = 'http://localhost:3000';
     // Clear shared StateHub state so _initializeComponent() re-derives from the
     // active editor instead of picking up the previous workspace's component.
@@ -367,8 +397,12 @@ export class PreviewPanel {
       if (patch.currentComponent !== undefined) {
         const component = patch.currentComponent;
         if (component && this._currentComponent !== component.path) {
-          this._currentComponent = component.path;
-          this._navigableComponent = undefined;
+          // Route the change through the reducer to update `_componentState` (drops
+          // navigability so the iframe waits for setComponentParam), but DISCARD the
+          // emitSelection effect: re-emitting here would feed StateHub.applyUpdate back
+          // into this same listener — the feedback loop the HYP-363 guards exist to break
+          // (PreviewPanel.ts onChange seam / no-op regression).
+          this._dispatch({ type: 'componentChanged', repoPath: component.path });
           console.log('[HyperIDE] Component changed via state:', component.path);
         }
       }
@@ -383,8 +417,11 @@ export class PreviewPanel {
         clearTimeout(this._reEmitTimer);
         this._reEmitTimer = null;
       }
-      this._navigableComponent = undefined;
-      this._requiresPreviewRegeneration = true;
+      // Lifecycle dispose: retain the component record but drop navigability and mark
+      // regeneration so the next attach re-derives a fresh, navigable preview
+      // (PreviewLifecycle `dispose`). `_panel` is nulled below — the derived lifecycle
+      // becomes Detached once it is.
+      this._dispatch({ type: 'dispose' });
       for (const d of this._disposables) d.dispose();
       this._disposables = [];
       this._sampleWatcher?.dispose();
@@ -1219,9 +1256,17 @@ export class PreviewPanel {
    */
   private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
     if (this._currentComponent) {
+      // Attach with a retained component: route through the lifecycle reducer. Its `attach`
+      // case emits a re-selection effect (and clears needsRegeneration) only on the
+      // resurrection seed — a re-attach after dispose (regression for f33e5ff0). A plain
+      // re-attach of a still-live panel emits nothing.
       const stateComponent = this._stateHub.state.currentComponent;
-      if (this._requiresPreviewRegeneration && stateComponent?.path === this._currentComponent) {
-        this._requiresPreviewRegeneration = false;
+      const effects = this._dispatch({ type: 'attach' });
+      const resurrected = effects.some((e) => e.type === 'emitSelection');
+      // Re-apply the SAME stateComponent to re-trigger onChange listeners (this is the
+      // one re-emit the legacy guard fired). Only when StateHub still holds that exact
+      // path; otherwise StateHub drifted and we just re-push existing webview state.
+      if (resurrected && stateComponent?.path === this._currentComponent) {
         this._stateHub.applyUpdate({ currentComponent: stateComponent });
         return;
       }
@@ -1359,21 +1404,30 @@ export class PreviewPanel {
   }
 
   private _setCurrentComponent(component: string): void {
-    // Changing the component drops navigability and the stale sub-project preview
-    // path; the extension re-supplies the preview path via setComponentParam when
-    // this component is (re)selected through the pipeline.
-    this._componentState = withCurrentComponent(this._componentState, component);
-    const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-    const current = this._stateHub.state.currentComponent;
+    // Route through the lifecycle reducer: `componentChanged` drops navigability and the
+    // stale sub-project preview path on a real change (the extension re-supplies the
+    // preview path via setComponentParam when this component is (re)selected through the
+    // pipeline) and decides — via the single `emitSelection` rule — whether this is a
+    // real selection or the same-path no-op that must NOT re-fire onChange listeners.
+    const effects = this._dispatch({ type: 'componentChanged', repoPath: component });
+    this._runSelectionEffects(effects);
+  }
 
-    if (current?.path === component && current.name === name) {
-      return;
+  /**
+   * Execute `emitSelection` effects from the lifecycle reducer: broadcast the selected
+   * component to StateHub so Inspector and other panels sync. The StateHub guard (skip
+   * when it already holds the identical name+path) preserves the legacy no-op check at
+   * the StateHub seam (the reducer already suppressed the same-repoPath case).
+   */
+  private _runSelectionEffects(effects: readonly LifecycleEffect[]): void {
+    for (const effect of effects) {
+      if (effect.type !== 'emitSelection') continue;
+      const component = effect.repoPath;
+      const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
+      const current = this._stateHub.state.currentComponent;
+      if (current?.path === component && current.name === name) continue;
+      this._stateHub.applyUpdate({ currentComponent: { name, path: component } });
     }
-
-    // Dispatch to StateHub so Inspector and other panels sync.
-    this._stateHub.applyUpdate({
-      currentComponent: { name, path: component },
-    });
   }
 
   /**
@@ -1418,7 +1472,7 @@ export class PreviewPanel {
    */
   public setPreviewUrl(url: string): void {
     this._previewBaseUrl = url;
-    this._devServerRunning = true;
+    this._dispatch({ type: 'devserverStatusChanged', running: true });
 
     // Notify React webview of devserver status change
     this._panel?.webview.postMessage({
@@ -1434,7 +1488,7 @@ export class PreviewPanel {
    * Notify webview that the dev server has stopped.
    */
   public notifyDevServerStopped(): void {
-    this._devServerRunning = false;
+    this._dispatch({ type: 'devserverStatusChanged', running: false });
     this._panel?.webview.postMessage({
       type: 'devserver:statusChanged',
       running: false,
@@ -1488,8 +1542,10 @@ export class PreviewPanel {
    */
   public dispose(): void {
     this.clearSelection();
-    this._navigableComponent = undefined;
-    this._requiresPreviewRegeneration = true;
+    // Drop navigability + mark regeneration via the lifecycle reducer before tearing the
+    // panel down. `_panel.dispose()` fires onDidDispose, which also dispatches `dispose`
+    // (idempotent) and nulls `_panel`, moving the derived lifecycle to Detached.
+    this._dispatch({ type: 'dispose' });
     this._panel?.dispose();
   }
 
@@ -1504,7 +1560,9 @@ export class PreviewPanel {
    *   to componentPath when the project and repo roots coincide.
    */
   public setComponentParam(componentPath: string, previewComponentPath: string = componentPath): void {
-    this._componentState = selectComponentParam(this._componentState, componentPath, previewComponentPath);
+    // Pending -> Live: the preview is generated and the registry is ready, so the
+    // component becomes navigable (PreviewLifecycle `selectComponentParam`).
+    this._dispatch({ type: 'selectComponentParam', repoPath: componentPath, previewPath: previewComponentPath });
 
     // Re-root iframe-driven AST edits for monorepo sub-projects. The iframe sees
     // sub-project-relative paths (previewComponentPath form) but the repo-rooted
