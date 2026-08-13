@@ -128,13 +128,162 @@ export interface UrlFetchInput {
   selector?: string; // Optional CSS selector to extract specific content
 }
 
+// ── Canvas tool inputs (mirror schemas in shared/ai-agent-tools.ts) ──
+
+/** @public */
+export interface CanvasCreateInstanceInput {
+  componentPath: string;
+  instanceId: string;
+  x: number;
+  y: number;
+  props: Record<string, unknown>;
+  label?: string;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Updatable fields of an instance (mirrors CANVAS_UPDATE_INSTANCE.updates schema).
+ * @public — part of the `canvas_update_instance` contract surface.
+ */
+export interface CanvasInstanceUpdates {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  props?: Record<string, unknown>;
+  label?: string;
+}
+
+/** @public */
+export interface CanvasUpdateInstanceInput {
+  componentPath: string;
+  instanceId: string;
+  updates: CanvasInstanceUpdates;
+}
+
+/** @public */
+export interface CanvasDeleteInstanceInput {
+  componentPath: string;
+  instanceId: string;
+}
+
+/** @public */
+export interface CanvasListInstancesInput {
+  componentPath: string;
+}
+
+/** @public */
+export interface CanvasConnectInstancesInput {
+  componentPath: string;
+  fromInstanceId: string;
+  toInstanceId: string;
+  label?: string;
+}
+
+/** @public */
+export interface CanvasAddAnnotationInput {
+  componentPath: string;
+  x: number;
+  y: number;
+  text: string;
+}
+
+/** @public */
+export interface CanvasModifyMapItemsInput {
+  componentPath: string;
+  instanceId: string;
+  arrayPropName: string;
+  targetCount: number;
+}
+
+/** @public */
+export interface CanvasModifyCondItemInput {
+  componentPath: string;
+  instanceId: string;
+  booleanPropName: string;
+  value: boolean;
+}
+
+/** @public */
+export interface CanvasAutoGenerateVariantsInput {
+  componentPath: string;
+  strategy?: 'minimal' | 'comprehensive';
+  layout?: 'grid' | 'horizontal' | 'vertical';
+  spacing?: number;
+}
+
+/** @public */
+export interface AnalyzeComponentPropsInput {
+  componentPath: string;
+}
+
+/** @public */
+export interface SuggestFlowStatesInput {
+  componentPath: string;
+  context?: string;
+}
+
+// ── Browser tool inputs (mirror Playwright MCP schemas) ──
+
+/** @public */
+export interface BrowserNavigateInput {
+  url: string;
+}
+
+/** @public */
+export interface BrowserTakeScreenshotInput {
+  filename?: string;
+  element?: string;
+  ref?: string;
+  fullPage?: boolean;
+}
+
+/** @public */
+export interface BrowserClickInput {
+  element: string;
+  ref: string;
+}
+
+/** @public */
+export interface BrowserTypeInput {
+  element: string;
+  ref: string;
+  text: string;
+}
+
+/** @public */
+export type BrowserSnapshotInput = Record<string, never>;
+
+/** @public */
+export interface BrowserHoverInput {
+  element: string;
+  ref: string;
+}
+
+// ── Test tool inputs (mirror schemas in shared/ai-agent-tools.ts) ──
+
+/** @public */
+export interface GenerateTestsInput {
+  componentPath: string;
+  types?: Array<'unit' | 'e2e' | 'variants' | 'demo'>;
+  force?: boolean;
+}
+
+/** @public */
+export interface AnalyzeComponentTestsInput {
+  componentPath: string;
+}
+
 /**
  * Maps every tool that has a typed input contract to its `*Input` shape.
  *
  * This is the single source of truth wiring the contract interfaces above to
- * the executor in `server/services/ai-agent.ts`. Tools without an entry
- * (canvas_*, browser_*, generate_tests, analyze_component_tests, etc.) have no
- * static input contract yet — their handlers narrow fields ad hoc.
+ * the executor in `server/services/ai-agent.ts`. Each `*Input` shape mirrors
+ * the authoritative tool JSON schema in `shared/ai-agent-tools.ts` (required vs
+ * optional, field types). Tools without an entry (`restart_dev_server`,
+ * `get_diagnostics`, `add_dependency`, etc.) narrow fields ad hoc in their
+ * handlers.
  *
  * Keyed by `ToolName` so a typo in a tool key fails to compile.
  */
@@ -149,6 +298,28 @@ export interface ToolInputMap {
   run_tests: RunTestsInput;
   brave_web_search: BraveWebSearchInput;
   url_fetch: UrlFetchInput;
+  // Canvas tools
+  canvas_create_instance: CanvasCreateInstanceInput;
+  canvas_update_instance: CanvasUpdateInstanceInput;
+  canvas_delete_instance: CanvasDeleteInstanceInput;
+  canvas_list_instances: CanvasListInstancesInput;
+  canvas_connect_instances: CanvasConnectInstancesInput;
+  canvas_add_annotation: CanvasAddAnnotationInput;
+  canvas_modify_map_items: CanvasModifyMapItemsInput;
+  canvas_modify_cond_item: CanvasModifyCondItemInput;
+  canvas_auto_generate_variants: CanvasAutoGenerateVariantsInput;
+  analyze_component_props: AnalyzeComponentPropsInput;
+  suggest_flow_states: SuggestFlowStatesInput;
+  // Browser tools
+  browser_navigate: BrowserNavigateInput;
+  browser_take_screenshot: BrowserTakeScreenshotInput;
+  browser_click: BrowserClickInput;
+  browser_type: BrowserTypeInput;
+  browser_snapshot: BrowserSnapshotInput;
+  browser_hover: BrowserHoverInput;
+  // Test tools
+  generate_tests: GenerateTestsInput;
+  analyze_component_tests: AnalyzeComponentTestsInput;
 }
 
 /**
