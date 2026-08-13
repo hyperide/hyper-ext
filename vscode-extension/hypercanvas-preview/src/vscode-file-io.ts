@@ -14,6 +14,7 @@
  */
 
 import type { FileIO } from '@lib/ast/file-io';
+import { SCAN_EXCLUDE_DIRS } from '@shared/fs/scan-excludes';
 import * as vscode from 'vscode';
 
 export class VSCodeFileIO implements FileIO {
@@ -84,7 +85,10 @@ export class VSCodeFileIO implements FileIO {
       for (const [name, type] of entries) {
         const childUri = vscode.Uri.joinPath(dir, name);
         if (type === vscode.FileType.Directory) {
-          if (name === 'node_modules' || name === '.next' || name === 'dist' || name === '.git') continue;
+          // Skip build/tooling/VCS dirs via the shared exclude list (single source of
+          // truth, also used by NodeFileIO + the content-first i18n grep). Previously
+          // an inline 4-dir chain (node_modules/.next/dist/.git).
+          if (SCAN_EXCLUDE_DIRS.has(name)) continue;
           await walk(childUri);
         } else if (type === vscode.FileType.File && exts.some((ext) => name.endsWith(ext))) {
           results.push(childUri.fsPath);

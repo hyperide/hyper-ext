@@ -5,25 +5,7 @@
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-
-const IGNORED_DIRS = [
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '.next',
-  'out',
-  '.cache',
-  'coverage',
-  '.vscode',
-  '.idea',
-  'tmp',
-  'temp',
-  'logs',
-  '.turbo',
-  '.vercel',
-  '.parcel-cache',
-];
+import { SCAN_EXCLUDE_DIRS } from '../../shared/fs/scan-excludes';
 
 const CODE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js'];
 
@@ -45,7 +27,7 @@ export async function getDirectoryTree(
     let dirCount = 0;
 
     for (const entry of entries) {
-      if (IGNORED_DIRS.includes(entry.name)) continue;
+      if (SCAN_EXCLUDE_DIRS.has(entry.name)) continue;
 
       const indent = '  '.repeat(currentDepth);
 

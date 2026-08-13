@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { SCAN_EXCLUDE_SCANNER } from '../../shared/fs/scan-excludes';
 import type {
   ComponentGroup,
   ComponentListItem,
@@ -30,25 +31,13 @@ const NEXTJS_APP_ROUTER_FILES = new Set([
   'route',
 ]);
 
-/** Directories to always skip during heuristic scanning */
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.next',
-  '.remix',
-  'dist',
-  'build',
-  '.hyperide',
-  'project-preview',
-  'public',
-  'assets',
-  '__tests__',
-  'test',
-  'tests',
-  'coverage',
-  '.turbo',
-  '.cache',
-]);
+/**
+ * Directories to always skip during heuristic scanning.
+ * Shared single source of truth (see shared/fs/scan-excludes); the scanner variant
+ * additionally skips static-asset dirs (public, assets), test dirs, and the
+ * .hyperide/project-preview runtime dirs on top of the standard build/tooling set.
+ */
+const SKIP_DIRS = SCAN_EXCLUDE_SCANNER;
 
 /** Non-component directories that live alongside components */
 const NON_COMPONENT_DIRS = new Set([

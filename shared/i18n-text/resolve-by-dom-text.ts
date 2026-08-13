@@ -1,34 +1,34 @@
 /**
- * @file i18n key resolution by DOM text content.
+ * @file i18n key resolution by DOM text content (CONTENT-FIRST).
  *
  * Accessed via: StyleReadService i18n text inspection and key creation flows.
  * Assumptions: static TS/JS dictionaries are object literals; dynamic dictionary builders are read-only.
  *
- * Algorithm:
- *   1. List known JSON/TS/JS dictionary locations.
- *   2. Search each dictionary for domText as a VALUE → extract the dot-path key.
- *   3. If not found as value, search for domText as a KEY (covers mock/passthrough t = k => k).
- *   4. Derive locale and namespace from the dictionary shape or file path.
+ * Algorithm (path no longer gates discovery — content does):
+ *   1. GREP the project for files whose CONTENT contains domText, recursively over
+ *      .json/.ts/.js, skipping the shared scan-exclude dirs (node_modules, .git, …).
+ *   2. For each hit, classify whether the file is an i18n DICTIONARY and in which FORM
+ *      (flat / namespaced / app-router / merged-TS / single-TS).
+ *   3. Search the dictionary for domText as a VALUE → dot-path key; else as a KEY
+ *      (covers mock/passthrough t = k => k).
+ *   4. Derive locale + namespace generically from the hit path (locale-code gated) or
+ *      the dictionary shape (merged TS).
  *   5. Collect all matching locale dictionaries → availableLocales.
+ *
+ * When listFiles is unavailable (host with no recursive enumeration), fall back to a
+ * conventional-path PROBE over FLAT_LOCALE_DIRS — a hint, not the primary mechanism.
  */
 
 import type { FileIO } from '../../lib/ast/file-io';
+import { isLocaleCode } from './locale-code';
+import { isExcludedScanPath } from '../fs/scan-excludes';
 import { findTsDomTextHit, parseTsLocaleObject, resolveLocaleKey } from './ts-locale-ast';
 
-/** Locale directories probed in priority order. */
+/** Conventional locale directories — kept ONLY as a fast-path hint / no-listFiles fallback. */
 const LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'];
-const MERGED_FILE_CANDIDATES = [
-  'src/translations.ts',
-  'src/lib/translations.ts',
-  'client/lib/translations.ts',
-  'lib/translations.ts',
-  'src/i18n.ts',
-  'src/translations.js',
-  'src/lib/translations.js',
-  'client/lib/translations.js',
-  'lib/translations.js',
-  'src/i18n.js',
-];
+
+/** Extensions a translation dictionary can live in. */
+const DICT_EXTENSIONS = ['.json', '.ts', '.js'];
 
 export interface DomTextI18nMatch {
   key: string;
@@ -40,6 +40,38 @@ export interface DomTextI18nMatch {
   availableLocales: string[];
   /** 'value' = domText was a dictionary value; 'key' = domText was the key itself (passthrough mock). */
   matchType: 'value' | 'key';
+}
+
+/**
+ * Cheap pre-filter for the content grep: is this file WORTH parsing as a dictionary
+ * for `domText`? A plain `content.includes(domText)` is too strict and drops valid
+ * dictionaries in two cases the downstream parse-based search handles correctly:
+ *
+ *   1. Passthrough KEY text (`common.greeting` shown verbatim): the raw file stores the
+ *      key as nested JSON props (`"common": { "greeting": … }`), so the dotted string is
+ *      never present — but the LAST segment (`greeting`) is.
+ *   2. JSON/TS-escaped VALUES (`Click "OK"` stored as `Click \"OK\"`, or `\n`, unicode
+ *      escapes): the cooked text isn't a substring of the raw source.
+ *
+ * This returns true for any file that PLAUSIBLY contains the text; the authoritative
+ * gate is still the JSON.parse / parseTsLocaleObject + findByValue/findByKey downstream
+ * (which compares against the COOKED string). Erring toward inclusion only costs an
+ * extra parse of a small dictionary file; a false exclude would lose a real binding.
+ */
+function fileMightContain(content: string, domText: string): boolean {
+  if (content.includes(domText)) return true;
+  // Passthrough nested key: look for the deepest segment as a quoted-or-bare token.
+  if (domText.includes('.')) {
+    const last = domText.slice(domText.lastIndexOf('.') + 1);
+    if (last && content.includes(last)) return true;
+  }
+  // Escaped value: normalize BOTH sides by removing the characters that differ between
+  // a cooked string and its raw JSON/TS source (quotes, backslashes, whitespace), then
+  // substring-test. This catches `Click "OK"` stored as `Click \"OK\"`, `\n`, etc.
+  const strip = (s: string): string => s.replace(/["'`\\\s]/g, '');
+  const looseText = strip(domText);
+  if (looseText && looseText !== domText && strip(content).includes(looseText)) return true;
+  return false;
 }
 
 /**
@@ -80,46 +112,80 @@ function findByKey(obj: unknown, key: string): string | null {
   return typeof cur === 'string' ? cur : null;
 }
 
-/**
- * Parse locale and namespace from a file path.
- *
- * Patterns:
- *   {dir}/{locale}.{json,ts,js}          → locale=locale, namespace=undefined
- *   {dir}/{locale}/{ns}.{json,ts,js}     → locale=locale, namespace=ns
- *   {root}/app/{locale}/messages/{file}.json → locale=locale, namespace=undefined
- */
-function parseLocaleFromPath(filePath: string, dirPrefix: string): { locale: string; namespace?: string } | null {
-  const rel = filePath.startsWith(`${dirPrefix}/`) ? filePath.slice(dirPrefix.length + 1) : null;
-  if (!rel) return null;
-  const parts = rel.split('/');
-
-  const localeFileExt = ['.json', '.ts', '.js'].find((ext) => parts.length === 1 && parts[0].endsWith(ext));
-  if (localeFileExt) {
-    // {dir}/{locale}.{json,ts,js}
-    const locale = parts[0].slice(0, -localeFileExt.length);
-    if (locale) return { locale };
-  }
-  const namespaceFileExt = ['.json', '.ts', '.js'].find((ext) => parts.length === 2 && parts[1].endsWith(ext));
-  if (namespaceFileExt) {
-    // {dir}/{locale}/{ns}.{json,ts,js}
-    const locale = parts[0];
-    const namespace = parts[1].slice(0, -namespaceFileExt.length);
-    if (locale && namespace) return { locale, namespace };
+function stripExt(name: string): { base: string; ext: string } | null {
+  for (const ext of DICT_EXTENSIONS) {
+    if (name.endsWith(ext)) return { base: name.slice(0, -ext.length), ext };
   }
   return null;
 }
 
 /**
- * Parse locale from app/{locale}/messages/{file}.json paths.
+ * Derive {locale, namespace?} from ANY hit path by recognizing a locale-code segment.
+ * Path is no longer trusted by directory NAME (no `locales/` assumption) — instead a
+ * BCP-47-ish segment is located and the surrounding shape determines the form:
+ *
+ *   …/{locale}.{json,ts,js}                  → flat            (locale = basename)
+ *   …/{locale}/{ns}.{json,ts,js}             → namespaced      (locale = dir, ns = basename)
+ *   …/{locale}/messages/{file}.json          → app-router flat (locale = dir, no ns)
+ *   …/{locale}/{seg…}/{leaf}.json            → namespaced      (ns = last dir before leaf)
+ *
+ * Returns null when no segment is a valid locale code (so a random `config/settings.json`
+ * or `components/Button.json` is NOT mislabeled as a locale dictionary).
  */
-function parseAppRouterLocale(filePath: string, appDir: string): string | null {
-  const rel = filePath.startsWith(`${appDir}/`) ? filePath.slice(appDir.length + 1) : null;
-  if (!rel) return null;
-  const parts = rel.split('/');
-  if (parts.length === 3 && parts[1] === 'messages' && parts[2].endsWith('.json')) {
-    return parts[0];
+function deriveLocaleFromPath(filePath: string): { locale: string; namespace?: string } | null {
+  const parts = filePath.split(/[/\\]/).filter(Boolean);
+  if (parts.length === 0) return null;
+  const fileName = parts[parts.length - 1];
+  const stripped = stripExt(fileName);
+  if (!stripped) return null;
+
+  // Case A — flat: basename itself is a locale code → …/{locale}.ext
+  if (isLocaleCode(stripped.base)) {
+    return { locale: stripped.base };
   }
+
+  // Case B/C — a directory segment is the locale code.
+  // Walk from the deepest dir upward; the first locale-coded dir wins.
+  const dirSegments = parts.slice(0, -1);
+  for (let i = dirSegments.length - 1; i >= 0; i--) {
+    if (!isLocaleCode(dirSegments[i])) continue;
+    const after = dirSegments.slice(i + 1); // segments between {locale} and the file
+    // app-router: {locale}/messages/{file}.json → flat (no namespace)
+    if (after.length === 1 && after[0] === 'messages') {
+      return { locale: dirSegments[i] };
+    }
+    // namespaced: {locale}/…/{ns-leaf}.ext — namespace is the file basename when the
+    // locale dir directly parents the file, else the deepest dir under the locale.
+    if (after.length === 0) {
+      return { locale: dirSegments[i], namespace: stripped.base };
+    }
+    return { locale: dirSegments[i], namespace: after[after.length - 1] };
+  }
+
   return null;
+}
+
+/** True when the hit path is the app-router shape …/{locale}/messages/{file}.json. */
+function isAppRouterHit(filePath: string): boolean {
+  const parts = filePath.split(/[/\\]/).filter(Boolean);
+  if (parts.length < 3) return false;
+  // file is at parts[-1]; messages dir at parts[-2]; locale at parts[-3]
+  return parts[parts.length - 2] === 'messages' && isLocaleCode(parts[parts.length - 3]);
+}
+
+/**
+ * For a namespaced/app-router hit where {locale} is a directory, return the directory
+ * that PARENTS the {locale} dir (so its siblings de/, fr/, … can be enumerated).
+ * Returns null when the locale segment can't be located.
+ */
+function parentLocaleRoot(filePath: string, locale: string | undefined): string | null {
+  if (!locale) return null;
+  const sep = filePath.includes('\\') ? '\\' : '/';
+  const parts = filePath.split(/[/\\]/).filter(Boolean);
+  const idx = parts.lastIndexOf(locale);
+  if (idx <= 0) return null;
+  const prefix = filePath.startsWith('/') ? '/' : '';
+  return prefix + parts.slice(0, idx).join(sep);
 }
 
 export async function resolveI18nByDomText(
@@ -131,48 +197,51 @@ export async function resolveI18nByDomText(
 
   const listFiles = fileIO.listFiles?.bind(fileIO);
 
-  // Collect candidate dictionaries with enough path context to derive locale metadata.
-  const candidates: Array<{ filePath: string; dirPrefix: string; isAppRouter: boolean; kind: 'json' | 'ts' }> = [];
+  // CONTENT-FIRST candidate collection. A "candidate" is a dictionary file we will
+  // parse and search; `kind` is derived from extension, locale/ns from path shape.
+  type Candidate = { filePath: string; kind: 'json' | 'ts' };
+  const candidatePaths = new Set<string>();
+  const candidates: Candidate[] = [];
+  const pushCandidate = (filePath: string): void => {
+    if (candidatePaths.has(filePath)) return;
+    candidatePaths.add(filePath);
+    candidates.push({ filePath, kind: filePath.endsWith('.json') ? 'json' : 'ts' });
+  };
+
+  // The directories that produced a content hit — used afterwards to enumerate
+  // sibling locale files for availableLocales (path no longer assumed conventional).
+  const hitDirs = new Set<string>();
 
   if (listFiles) {
-    for (const relDir of LOCALE_DIRS) {
-      const dir = `${projectRoot}/${relDir}`;
-      const files = await listFiles(dir, ['.json']).catch(() => [] as string[]);
-      for (const f of files) candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'json' });
-      const tsFiles = await listFiles(dir, ['.ts', '.js']).catch(() => [] as string[]);
-      for (const f of tsFiles) candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'ts' });
-    }
-    for (const relPath of MERGED_FILE_CANDIDATES) {
-      const filePath = `${projectRoot}/${relPath}`;
+    // GREP: enumerate every dict-extension file under the project, skip excluded dirs,
+    // and keep files whose CONTENT contains the DOM text. This REPLACES the old
+    // LOCALE_DIRS / MERGED_FILE_CANDIDATES / app-router PROBE as the primary mechanism.
+    const allFiles = await listFiles(projectRoot, DICT_EXTENSIONS).catch(() => [] as string[]);
+    for (const filePath of allFiles) {
+      if (isExcludedScanPath(filePath.slice(projectRoot.length))) continue;
+      let content: string;
       try {
-        await fileIO.access(filePath);
-        candidates.push({ filePath, dirPrefix: projectRoot, isAppRouter: false, kind: 'ts' });
+        content = await fileIO.readFile(filePath);
       } catch {
-        // not found
+        continue;
       }
-    }
-    // App Router: app/{locale}/messages/*.json
-    const appDir = `${projectRoot}/app`;
-    const appFiles = await listFiles(appDir, ['.json']).catch(() => [] as string[]);
-    for (const f of appFiles) {
-      const parts = f.slice(appDir.length + 1).split('/');
-      if (parts.length === 3 && parts[1] === 'messages') {
-        candidates.push({ filePath: f, dirPrefix: appDir, isAppRouter: true, kind: 'json' });
-      }
+      if (!fileMightContain(content, domText)) continue;
+      pushCandidate(filePath);
+      hitDirs.add(filePath.slice(0, Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))));
     }
   } else {
-    // No listFiles: probe well-known paths for active locale
+    // No listFiles (host without recursive enumeration): fall back to the conventional
+    // PROBE — a hint, not the gate. Probe well-known dirs for a small locale set.
     for (const relDir of LOCALE_DIRS) {
       const dir = `${projectRoot}/${relDir}`;
-      for (const ext of ['.json']) {
-        for (const locale of ['en', 'de', 'fr', 'es', 'ru', 'pl', 'zh', 'ja', 'pt']) {
-          const f = `${dir}/${locale}${ext}`;
-          try {
-            await fileIO.access(f);
-            candidates.push({ filePath: f, dirPrefix: dir, isAppRouter: false, kind: 'json' });
-          } catch {
-            // not found
-          }
+      for (const locale of ['en', 'de', 'fr', 'es', 'ru', 'pl', 'zh', 'ja', 'pt']) {
+        const f = `${dir}/${locale}.json`;
+        try {
+          await fileIO.access(f);
+          pushCandidate(f);
+          hitDirs.add(dir);
+        } catch {
+          // not found
         }
       }
     }
@@ -180,7 +249,8 @@ export async function resolveI18nByDomText(
 
   if (candidates.length === 0) return null;
 
-  // Search candidates — two passes: value then key
+  // Search candidates — value then key. Each file is classified as a dictionary FORM
+  // before its locale/namespace is trusted (deriveLocaleFromPath + parseTsLocaleObject).
   interface Hit {
     key: string;
     locale: string;
@@ -190,7 +260,7 @@ export async function resolveI18nByDomText(
   }
   const hits: Hit[] = [];
 
-  for (const { filePath, dirPrefix, isAppRouter, kind } of candidates) {
+  for (const { filePath, kind } of candidates) {
     let content: string;
     try {
       content = await fileIO.readFile(filePath);
@@ -199,14 +269,19 @@ export async function resolveI18nByDomText(
     }
 
     if (kind === 'ts') {
+      // TS/JS dictionary gate: must parse to a recognized dictionary object literal.
+      // Merged dicts carry their own locales; single dicts need a path-derived locale.
       const parsed = parseTsLocaleObject(content);
       if (!parsed) continue;
-      const info = parseLocaleFromPath(filePath, dirPrefix);
-      const hit = findTsDomTextHit(parsed, domText, filePath, info?.locale);
+      const pathInfo = deriveLocaleFromPath(filePath);
+      // A single-locale TS dict with no locale-coded path is not a usable locale file.
+      if (parsed.kind === 'single' && !pathInfo) continue;
+      const hit = findTsDomTextHit(parsed, domText, filePath, pathInfo?.locale);
       if (hit) {
         hits.push({
           key: hit.key,
           locale: hit.locale,
+          namespace: pathInfo?.namespace,
           resolvedText: hit.resolvedText,
           matchType: hit.matchType,
         });
@@ -214,21 +289,14 @@ export async function resolveI18nByDomText(
       continue;
     }
 
+    // JSON dictionary gate: must JSON.parse AND sit at a locale-coded path.
     let data: unknown;
     try {
       data = JSON.parse(content);
     } catch {
       continue;
     }
-
-    const info = isAppRouter
-      ? (() => {
-          const appDir = dirPrefix;
-          const locale = parseAppRouterLocale(filePath, appDir);
-          return locale ? { locale, namespace: undefined } : null;
-        })()
-      : parseLocaleFromPath(filePath, dirPrefix);
-
+    const info = deriveLocaleFromPath(filePath);
     if (!info) continue;
 
     // Pass 1: value search
@@ -269,16 +337,38 @@ export async function resolveI18nByDomText(
 
   const best = hits[0];
 
-  // Second pass: find all locales that contain the same key (even if their value wasn't the search term).
-  // This fills availableLocales for multi-locale projects where the DOM showed only one locale's text.
+  // Second pass — availableLocales: the content grep only surfaced the ONE file holding
+  // the visible text, so enumerate SIBLING dictionary files (same dirs as the hits, plus
+  // the parents of any {locale} dir for namespaced/app-router layouts) and check which
+  // locales carry the same key. Merged TS dicts already enumerate their own locales.
+  const siblingPaths = new Set<string>(candidatePaths);
+  if (listFiles) {
+    const enumDirs = new Set<string>(hitDirs);
+    // For a namespaced/app-router hit (locale lives in a dir, not the basename), the
+    // sibling locales live under the locale dir's PARENT — add it so de/, fr/, … surface.
+    for (const c of candidates) {
+      const info = deriveLocaleFromPath(c.filePath);
+      if (!info?.namespace && !isAppRouterHit(c.filePath)) continue;
+      const parent = parentLocaleRoot(c.filePath, info?.locale);
+      if (parent) enumDirs.add(parent);
+    }
+    for (const dir of enumDirs) {
+      const files = await listFiles(dir, DICT_EXTENSIONS).catch(() => [] as string[]);
+      for (const f of files) {
+        if (!isExcludedScanPath(f.slice(projectRoot.length))) siblingPaths.add(f);
+      }
+    }
+  }
+
   const extraLocales: string[] = [];
-  for (const { filePath, dirPrefix, isAppRouter, kind } of candidates) {
+  for (const filePath of siblingPaths) {
     let content: string;
     try {
       content = await fileIO.readFile(filePath);
     } catch {
       continue;
     }
+    const kind: 'json' | 'ts' = filePath.endsWith('.json') ? 'json' : 'ts';
     if (kind === 'ts') {
       const parsed = parseTsLocaleObject(content);
       if (!parsed) continue;
@@ -287,8 +377,8 @@ export async function resolveI18nByDomText(
           if (resolveLocaleKey(parsed.data[locale], best.key) !== null) extraLocales.push(locale);
         }
       } else if (resolveLocaleKey(parsed.data, best.key) !== null) {
-        const info = parseLocaleFromPath(filePath, dirPrefix);
-        extraLocales.push(info?.locale ?? best.locale);
+        const info = deriveLocaleFromPath(filePath);
+        if (info) extraLocales.push(info.locale);
       }
       continue;
     }
@@ -298,12 +388,7 @@ export async function resolveI18nByDomText(
     } catch {
       continue;
     }
-    const info = isAppRouter
-      ? (() => {
-          const locale = parseAppRouterLocale(filePath, dirPrefix);
-          return locale ? { locale, namespace: undefined } : null;
-        })()
-      : parseLocaleFromPath(filePath, dirPrefix);
+    const info = deriveLocaleFromPath(filePath);
     if (!info) continue;
     if (info.namespace !== best.namespace) continue;
     // Check if this locale has the same key

@@ -5,6 +5,7 @@
 
 import * as fs from 'node:fs/promises';
 import { join } from 'node:path';
+import { SCAN_EXCLUDE_DIRS } from '../../shared/fs/scan-excludes';
 import type { FileIO } from './file-io';
 
 export class NodeFileIO implements FileIO {
@@ -48,6 +49,10 @@ export class NodeFileIO implements FileIO {
       }
 
       if (stat.isDirectory()) {
+        // Skip build/tooling/VCS dirs (node_modules, .git, dist, …) — a recursive
+        // scan that descended into node_modules would read the entire dependency
+        // tree. Shared with VSCodeFileIO via SCAN_EXCLUDE_DIRS (single source of truth).
+        if (SCAN_EXCLUDE_DIRS.has(name)) continue;
         await this._collectFiles(fullPath, extensions, results);
       } else if (stat.isFile()) {
         if (!extensions || extensions.some((ext) => name.endsWith(ext))) {
