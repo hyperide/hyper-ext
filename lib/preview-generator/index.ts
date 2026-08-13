@@ -1,3 +1,4 @@
+export { buildFrameworkInstructions } from './framework-instructions';
 export { isUiPrimitive, type SSRMockConfig } from './generator';
 export {
   classifyNonPreviewable,

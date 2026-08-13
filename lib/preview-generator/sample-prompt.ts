@@ -2,7 +2,9 @@
  * Shared prompt builder and response extractor for AI sample generation.
  *
  * Used by both server (parseComponent.ts) and VS Code extension (SampleAIGenerator.ts).
- * Server appends framework-specific instructions via the optional parameter.
+ * BOTH realms append framework-specific instructions via the optional parameter: each runs the
+ * shared `detectFramework` (master spec §5.6 — the ProjectDetector is shared across realms) and
+ * `buildFrameworkInstructions`. (HYP-795 — the extension has workspace FS access too.)
  */
 
 /**
@@ -11,8 +13,9 @@
  * and container/wrapper component handling.
  *
  * @param frameworkInstructions - Optional framework-specific block (routing, providers, etc.)
- *   The server adds instructions for Next.js App/Pages Router, React Router, Remix, Solito.
- *   The extension passes nothing (framework detection happens at the server level).
+ *   Both the server AND the extension pass this, built from the shared detector via
+ *   `buildFrameworkInstructions` — instructions for Next.js App/Pages Router, React Router,
+ *   Remix, Solito. Omitted only when no project root is resolvable (graceful base-prompt fallback).
  */
 export function buildSamplePrompt(sourceCode: string, sampleName: string, frameworkInstructions?: string): string {
   const frameworkBlock = frameworkInstructions ? `\n${frameworkInstructions}\n` : '';

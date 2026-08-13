@@ -1035,8 +1035,12 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // AI-powered sample generator (uses extension's API key config)
-  const sampleGenerator = createExtensionSampleGenerator(context);
+  // AI-powered sample generator (uses extension's API key config). Pass the workspace-folder
+  // root so framework detection (HYP-795) runs against the project, matching the server which
+  // detects at the project root.
+  const sampleGenerator = createExtensionSampleGenerator(context, {
+    getProjectRoot: () => getWorkspaceRoot() ?? workspaceRoot,
+  });
 
   // Auto-inject UUIDs and parse component structure when currentComponent changes.
   // Serial queue prevents race conditions on rapid component switching:
