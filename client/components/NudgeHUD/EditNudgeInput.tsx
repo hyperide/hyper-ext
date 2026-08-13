@@ -39,7 +39,9 @@ export function EditNudgeInput({ target, value, onDone }: EditNudgeInputProps) {
     if (e.key === 'Enter') {
       e.preventDefault();
       applyValue();
-    } else if (e.code === 'KeyS') {
+    } else if (e.code === 'KeyS' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Mirror the modifier guard from useNudgeKeyboard exactly: Cmd/Ctrl/Alt+S must reach
+      // the editor save handler unchanged. Only plain S (no modifier) triggers apply+save here.
       e.preventDefault();
       applyValue();
       saveForLater();

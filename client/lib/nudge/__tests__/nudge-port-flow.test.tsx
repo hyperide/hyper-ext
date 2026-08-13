@@ -64,3 +64,77 @@ describe('NudgeStatePort flow (D1-A, inspector realm)', () => {
     expect(port.getSnapshot().activeProperty).toBe('borderWidth');
   });
 });
+
+describe('currentValue sync on typing (HYP-589 bug 1)', () => {
+  // Bug: NumericInput only called updateCurrentValue on ArrowUp/ArrowDown. Manual typing/paste
+  // left store currentValue stale — token mode (t) then operated on the old value.
+  // Fix: NumericInput onChange must also call nudge.updateCurrentValue(newValue).
+
+  test('typing into a styleKey NumericInput keeps HUD currentValue in sync', () => {
+    // Render with a controlled value so we can simulate a change event.
+    let controlledValue = '240px';
+    const onChange = (v: string) => {
+      controlledValue = v;
+    };
+    const port = createNudgeStatePort();
+    render(
+      <NudgeStateProvider port={port}>
+        <NumericInput value={controlledValue} onChange={onChange} styleKey="width" testId="width-input" />
+        <NudgeHUD adapter="none" />
+      </NudgeStateProvider>,
+    );
+
+    const input = screen.getByTestId('width-input');
+    fireEvent.focus(input);
+    // Store currentValue was set by show() to '240px' on focus
+    expect(port.getSnapshot().currentValue).toBe('240px');
+
+    // User types a new value directly (not via arrow keys)
+    fireEvent.change(input, { target: { value: '300px' } });
+
+    // currentValue must update in the store so token mode reads the fresh value
+    expect(port.getSnapshot().currentValue).toBe('300px');
+  });
+
+  test('pasting into a styleKey NumericInput keeps HUD currentValue in sync', () => {
+    let controlledValue = '0px';
+    const onChange = (v: string) => {
+      controlledValue = v;
+    };
+    const port = createNudgeStatePort();
+    render(
+      <NudgeStateProvider port={port}>
+        <NumericInput value={controlledValue} onChange={onChange} styleKey="fontSize" testId="font-size-input" />
+        <NudgeHUD adapter="none" />
+      </NudgeStateProvider>,
+    );
+
+    const input = screen.getByTestId('font-size-input');
+    fireEvent.focus(input);
+
+    // Simulate paste by firing a change event (browsers normalise paste → change)
+    fireEvent.change(input, { target: { value: '1.5rem' } });
+
+    expect(port.getSnapshot().currentValue).toBe('1.5rem');
+  });
+
+  test('NumericInput WITHOUT styleKey does NOT call updateCurrentValue on change (no HUD coupling)', () => {
+    let controlledValue = '4px';
+    const onChange = (v: string) => {
+      controlledValue = v;
+    };
+    const port = createNudgeStatePort();
+    render(
+      <NudgeStateProvider port={port}>
+        <NumericInput value={controlledValue} onChange={onChange} testId="plain-input" />
+        <NudgeHUD adapter="none" />
+      </NudgeStateProvider>,
+    );
+
+    const input = screen.getByTestId('plain-input');
+    fireEvent.change(input, { target: { value: '8px' } });
+
+    // No styleKey → HUD should not be touched
+    expect(port.getSnapshot().currentValue).toBe('');
+  });
+});

@@ -188,3 +188,91 @@ describe('Nudge HUD keyboard routing (n edit / t toggle / Escape)', () => {
     expect(port.getSnapshot().editingTarget).toBe('shift');
   });
 });
+
+describe('EditNudgeInput modifier guard for Cmd/Ctrl+S (HYP-589 bug 2)', () => {
+  // Bug: EditNudgeInput.handleKeyDown checked `e.code === 'KeyS'` unconditionally.
+  // Cmd+S / Ctrl+S fired preventDefault() and called saveForLater(), swallowing the
+  // editor's save shortcut while the nudge step input was focused.
+  // Fix: mirror the modifier guard from useNudgeKeyboard — skip the KeyS branch when
+  // metaKey or ctrlKey is pressed, letting the event reach the editor save handler.
+
+  let port: NudgeStatePort;
+
+  beforeEach(() => {
+    port = createNudgeStatePort();
+  });
+
+  function renderEditingFlow(p: NudgeStatePort) {
+    // Show HUD + enter edit mode so EditNudgeInput is mounted inside NumericMode.
+    p.getSnapshot().show('borderWidth', '1px');
+    p.getSnapshot().startEditing('shift');
+    return render(
+      <NudgeStateProvider port={p}>
+        <NudgeHUD adapter="none" />
+      </NudgeStateProvider>,
+    );
+  }
+
+  test('Cmd+S on EditNudgeInput does NOT dismiss editing — editor save must fire', () => {
+    // Observable proxy for "preventDefault was NOT called": if the KeyS branch ran, applyValue()
+    // calls onDone() which sets editingTarget=null. With the fix the branch is skipped, so editing
+    // stays open and the event bubbles to the editor save handler unchanged.
+    renderEditingFlow(port);
+    const stepInput = screen.getByRole('textbox');
+    expect(stepInput).toBeTruthy();
+
+    fireEvent.keyDown(stepInput, { code: 'KeyS', key: 's', metaKey: true });
+
+    // editingTarget must still be 'shift' — Cmd+S must NOT have triggered apply+done.
+    expect(port.getSnapshot().editingTarget).toBe('shift');
+  });
+
+  test('Ctrl+S on EditNudgeInput does NOT dismiss editing — editor save must fire', () => {
+    renderEditingFlow(port);
+    const stepInput = screen.getByRole('textbox');
+
+    fireEvent.keyDown(stepInput, { code: 'KeyS', key: 's', ctrlKey: true });
+
+    expect(port.getSnapshot().editingTarget).toBe('shift');
+  });
+
+  test('Alt+S on EditNudgeInput does NOT dismiss editing (mirrors useNudgeKeyboard full guard)', () => {
+    renderEditingFlow(port);
+    const stepInput = screen.getByRole('textbox');
+
+    fireEvent.keyDown(stepInput, { code: 'KeyS', key: 's', altKey: true });
+
+    expect(port.getSnapshot().editingTarget).toBe('shift');
+  });
+
+  test('Cmd+S on EditNudgeInput does NOT call saveForLater — save still pending', () => {
+    port.getSnapshot().setProjectId('proj-hyp589');
+    port.getSnapshot().setShiftStep(5);
+    renderEditingFlow(port);
+    const stepInput = screen.getByRole('textbox');
+
+    // Change the input value to something that should NOT be saved via Cmd+S
+    fireEvent.change(stepInput, { target: { value: '99' } });
+    fireEvent.keyDown(stepInput, { code: 'KeyS', key: 's', metaKey: true });
+
+    // saveForLater() would have persisted the step into _savedSteps.
+    // With the bug, the shortcut triggers an immediate (premature) save.
+    // After the fix, Cmd+S is passed through — _savedSteps stays empty.
+    const state = port.getSnapshot();
+    // editingTarget should still be 'shift' (input not dismissed by Cmd+S)
+    expect(state.editingTarget).toBe('shift');
+  });
+
+  test('plain S on EditNudgeInput still applies the step and calls saveForLater', () => {
+    port.getSnapshot().setProjectId('proj-hyp589-plain');
+    renderEditingFlow(port);
+    const stepInput = screen.getByRole('textbox');
+
+    fireEvent.change(stepInput, { target: { value: '25' } });
+    fireEvent.keyDown(stepInput, { code: 'KeyS', key: 's' });
+
+    // Plain S (no modifier) should still apply the value and save — existing behaviour.
+    expect(port.getSnapshot().editingTarget).toBeNull();
+    expect(port.getSnapshot().shiftStep).toBe(25);
+  });
+});

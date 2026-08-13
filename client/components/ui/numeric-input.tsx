@@ -72,10 +72,22 @@ export const NumericInput = function NumericInput({
     }, 150);
   }, [styleKey, nudge]);
 
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      onChange(newValue);
+      // Sync HUD currentValue on every edit (typing/paste), not just arrow-key nudges.
+      // Token mode reads currentValue from the store — without this, switching to token
+      // mode (t) after typing operates on the value that was set when the field gained focus.
+      if (styleKey) nudge.updateCurrentValue(newValue);
+    },
+    [onChange, styleKey, nudge],
+  );
+
   return (
     <Input
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={handleChange}
       onKeyDown={handleKeyDown}
       onFocus={styleKey ? handleFocus : undefined}
       onBlur={styleKey ? handleBlur : undefined}
