@@ -131,6 +131,58 @@ export function applyAppRouteChanged(prev: AppModeState | null, route: string): 
   return { ...prev, currentRoute: route };
 }
 
+/**
+ * Selection / interaction fields forwarded into the iframe as `hypercanvas:stateUpdate`. These are
+ * the only fields the iframe bridge reads from that message (see iframe-interaction.ts), so they are
+ * the complete payload to replay when the bridge announces it is ready (#51).
+ */
+export interface ForwardedIframeState {
+  selectedIds?: string[];
+  hoveredId?: string | null;
+  hoveredItemIndex?: number | null;
+  selectedItemIndices?: Record<string, number | null>;
+  engineMode?: string;
+}
+
+const FORWARDED_STATE_KEYS: ReadonlyArray<keyof ForwardedIframeState> = [
+  'selectedIds',
+  'hoveredId',
+  'hoveredItemIndex',
+  'selectedItemIndices',
+  'engineMode',
+];
+
+/**
+ * Accumulate the latest selection / interaction state forwarded into the iframe (#51).
+ *
+ * Each `state:init` / `state:update` (and tree `goToVisual`) forwards a `hypercanvas:stateUpdate`
+ * to the iframe, applying only the fields it carries (last-write-wins per field). We mirror that
+ * here so we hold the current effective state and can re-send it once the late-loading Remix bridge
+ * announces `hypercanvas:bridgeReady` — replaying a selection that was issued before the bridge's
+ * message listener existed. A `null`/undefined patch leaves the accumulator unchanged; an absent
+ * field is preserved (it was not part of this patch), matching the iframe's `!== undefined` guards.
+ */
+export function mergeForwardedState(
+  prev: ForwardedIframeState | null,
+  patch: Record<string, unknown> | null | undefined,
+): ForwardedIframeState | null {
+  if (!patch || typeof patch !== 'object') return prev;
+  let next: ForwardedIframeState | null = prev;
+  for (const key of FORWARDED_STATE_KEYS) {
+    if (!(key in patch)) continue;
+    if (next === prev) next = { ...prev };
+    // The value originates from our own StateHub patch (controlled shape), spread verbatim into
+    // the iframe message — so we store it verbatim too.
+    (next as Record<string, unknown>)[key] = patch[key];
+  }
+  return next;
+}
+
+/** True when the accumulated state has at least one selection/interaction field worth replaying. */
+export function hasForwardableState(state: ForwardedIframeState | null): state is ForwardedIframeState {
+  return state != null && FORWARDED_STATE_KEYS.some((key) => key in state);
+}
+
 export function canUpdatePreviewComponentInPlace(
   currentSrc: string | null | undefined,
   nextSrc: string | null | undefined,
@@ -185,6 +237,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // Cached so we can re-forward them into the iframe after a (re)load, when the
   // iframe's message listener was not yet registered the first time around.
   const generatedPropsByPathRef = useRef<Record<string, Record<string, unknown>>>({});
+  // #51 — latest selection / interaction state forwarded into the iframe. Mirrors every
+  // hypercanvas:stateUpdate we send so we can replay it when the late-loading Remix bridge
+  // posts hypercanvas:bridgeReady (its listener mounts several async hops after hydration, so
+  // a selection issued before then would otherwise be dropped with no replay).
+  const lastForwardedStateRef = useRef<ForwardedIframeState | null>(null);
   // Keep iframeEl in a ref so callbacks stay stable.
   // Direct assignment during render is intentional — this is the standard React pattern
   // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
@@ -346,6 +403,19 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // this in useAppPreviewMode; this is the VS Code-panel counterpart.)
           if (typeof msg.route === 'string') {
             setAppMode((prev) => applyAppRouteChanged(prev, msg.route));
+          }
+        } else if (msg.type === 'hypercanvas:bridgeReady') {
+          // #51 — the iframe bridge finished mounting its message listener and announced itself.
+          // For Remix the bridge loads several async hops after hydration (a post-mount useEffect
+          // in the generated route), so any selection forwarded before this point was dropped with
+          // no replay. Re-send the latest selection / interaction state now that the bridge can
+          // receive it. Idempotent and harmless for the non-Remix synchronous path (the bridge is
+          // already up, the ready fires immediately, and the re-send just re-applies current state).
+          if (hasForwardableState(lastForwardedStateRef.current)) {
+            postToPreviewIframe(iframeEl, {
+              type: 'hypercanvas:stateUpdate',
+              ...lastForwardedStateRef.current,
+            });
           }
         }
         return;
@@ -511,6 +581,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             // when the workspace changes; keeping the old component would navigate
             // the next dev server to a stale path before the new component is ready.
             currentComponentRef.current = null;
+            // The replay state is scoped to the current component — drop it with the session so a
+            // later bridgeReady can't replay the previous component's selection (#51).
+            lastForwardedStateRef.current = null;
             setComponentError(null);
             setShowNoComponentHint(false);
             setStoredPreviewUrl(null);
@@ -616,6 +689,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             selectedIds: [msg.elementId],
             selectedItemIndices: {},
           });
+          // Record the selection so a late-mounting bridge can have it replayed (#51).
+          // goToVisual selects exactly this element; iframe's goToVisual handler sets the
+          // same selectedIds/selectedItemIndices, so a hypercanvas:stateUpdate replay matches.
+          lastForwardedStateRef.current = mergeForwardedState(lastForwardedStateRef.current, {
+            selectedIds: [msg.elementId],
+            selectedItemIndices: {},
+          });
           // Forward to iframe (state sync + scroll to element)
           postToPreviewIframe(iframeEl, { type: 'hypercanvas:goToVisual', elementId: msg.elementId });
           break;
@@ -626,6 +706,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             const component = (msg.patch as { currentComponent?: { path?: unknown } | null }).currentComponent;
             if (component === null) {
               currentComponentRef.current = null;
+              lastForwardedStateRef.current = null; // selection is component-scoped (#51)
             }
             if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
               currentComponentRef.current = component.path;
@@ -637,6 +718,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Iframe handler expects `hypercanvas:stateUpdate` with fields directly on the message
           // (not nested under `patch`). Forwarding raw `state:update` was silently ignored.
           if (msg.patch) {
+            lastForwardedStateRef.current = mergeForwardedState(lastForwardedStateRef.current, msg.patch);
             postToPreviewIframe(iframeEl, { type: 'hypercanvas:stateUpdate', ...msg.patch });
           }
           break;
@@ -647,12 +729,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             const component = (msg.state as { currentComponent?: { path?: unknown } | null }).currentComponent;
             if (component === null) {
               currentComponentRef.current = null;
+              lastForwardedStateRef.current = null; // selection is component-scoped (#51)
             }
             if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
               currentComponentRef.current = component.path;
               syncComponentToFrame(component.path);
             }
             onStateUpdateRef.current(msg.state);
+            lastForwardedStateRef.current = mergeForwardedState(lastForwardedStateRef.current, msg.state);
             // Forward to iframe as stateUpdate — same pattern as state:update above.
             postToPreviewIframe(iframeEl, { type: 'hypercanvas:stateUpdate', ...msg.state });
           }

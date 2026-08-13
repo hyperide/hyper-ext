@@ -15,7 +15,9 @@ import {
   buildComponentPreviewUrl,
   canUpdatePreviewComponentInPlace,
   getComponentFromPreviewUrl,
+  hasForwardableState,
   hasNavigatedPreviewSource,
+  mergeForwardedState,
   shouldNavigateFrameToComponent,
   shouldNavigateFromSharedStateMessage,
   usePreviewBridge,
@@ -312,6 +314,250 @@ describe('iframe:scrollToElement → iframe forwarding', () => {
       // Must NOT echo the host-side type — iframe handler keys on the hypercanvas:* prefix.
       const wrongCall = calls.find((args) => (args[0] as Record<string, unknown>).type === 'iframe:scrollToElement');
       expect(wrongCall).toBeUndefined();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('mergeForwardedState (#51 — selection replay accumulator)', () => {
+  it('returns prev unchanged for a null/empty patch (no needless allocation)', () => {
+    const prev = { selectedIds: ['a'] };
+    expect(mergeForwardedState(prev, null)).toBe(prev);
+    expect(mergeForwardedState(prev, undefined)).toBe(prev);
+    expect(mergeForwardedState(prev, {})).toBe(prev);
+    // A patch with only unrelated fields is also a no-op.
+    expect(mergeForwardedState(prev, { currentComponent: { path: 'x' } })).toBe(prev);
+  });
+
+  it('captures selection fields from the first patch', () => {
+    const next = mergeForwardedState(null, { selectedIds: ['node-1'], selectedItemIndices: {} });
+    expect(next).toEqual({ selectedIds: ['node-1'], selectedItemIndices: {} });
+  });
+
+  it('merges last-write-wins per field, preserving fields absent from the new patch', () => {
+    const first = mergeForwardedState(null, { selectedIds: ['node-1'], engineMode: 'design' });
+    const second = mergeForwardedState(first, { selectedIds: ['node-2'] });
+    // selectedIds updated, engineMode preserved from the earlier patch.
+    expect(second).toEqual({ selectedIds: ['node-2'], engineMode: 'design' });
+  });
+
+  it('only mirrors the fields the iframe bridge reads (ignores StateHub-only keys)', () => {
+    const next = mergeForwardedState(null, {
+      selectedIds: ['node-1'],
+      hoveredId: 'node-9',
+      hoveredItemIndex: 2,
+      selectedItemIndices: { 'node-1': 0 },
+      engineMode: 'interact',
+      // Not part of hypercanvas:stateUpdate — must be dropped.
+      currentComponent: { path: 'src/App.tsx' },
+      route: '/whatever',
+    });
+    expect(next).toEqual({
+      selectedIds: ['node-1'],
+      hoveredId: 'node-9',
+      hoveredItemIndex: 2,
+      selectedItemIndices: { 'node-1': 0 },
+      engineMode: 'interact',
+    });
+  });
+});
+
+describe('hasForwardableState (#51)', () => {
+  it('is false for null / empty state', () => {
+    expect(hasForwardableState(null)).toBe(false);
+    expect(hasForwardableState({})).toBe(false);
+  });
+
+  it('is true once any selection/interaction field exists — even an empty selection', () => {
+    // An explicit deselect (empty array) is still a replayable state, not "nothing known".
+    expect(hasForwardableState({ selectedIds: [] })).toBe(true);
+    expect(hasForwardableState({ selectedIds: ['a'] })).toBe(true);
+    expect(hasForwardableState({ hoveredId: null })).toBe(true);
+  });
+});
+
+// === Bridge-ready handshake (#51) — the Remix selection round-trip race ===
+// A selection forwarded BEFORE the late-loading Remix bridge mounts its message listener
+// is dropped. When the bridge finishes setup it posts `hypercanvas:bridgeReady` (from the
+// iframe, so event.source === iframe.contentWindow); the parent must replay the current
+// selection as `hypercanvas:stateUpdate` so the late bridge still receives it.
+
+interface HandshakeProbe {
+  spy: PostMessageSpy;
+  iframe: HTMLIFrameElement;
+}
+
+function BridgeWithHandshakeProbe({ onProbe }: { onProbe: (probe: HandshakeProbe) => void }) {
+  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
+  const spy = mock();
+  usePreviewBridge({
+    iframeEl,
+    canvas: createCanvasAdapter(),
+    onStateUpdate: () => {},
+  });
+
+  const refCallback = (el: HTMLIFrameElement | null) => {
+    if (el?.contentWindow) {
+      // @ts-expect-error -- override for test spy
+      el.contentWindow.postMessage = spy;
+      onProbe({ spy, iframe: el });
+    }
+    setIframeEl(el);
+  };
+
+  return createElement('iframe', {
+    ref: refCallback,
+    title: 'preview',
+    src: 'http://localhost:5173/test-preview?component=src%2FApp.tsx',
+  });
+}
+
+function renderBridgeWithHandshakeProbe(onProbe: (probe: HandshakeProbe) => void) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => {
+    root.render(createElement(BridgeWithHandshakeProbe, { onProbe }));
+  });
+  return () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+}
+
+/** Dispatch a message that LOOKS like it came from the iframe (passes the event.source guard). */
+function postIframeMessage(iframe: HTMLIFrameElement, data: Record<string, unknown>): void {
+  window.dispatchEvent(new window.MessageEvent('message', { data, source: iframe.contentWindow as unknown as Window }));
+}
+
+describe('hypercanvas:bridgeReady handshake → selection replay (#51)', () => {
+  it('re-sends the current selection as hypercanvas:stateUpdate when the bridge announces ready', async () => {
+    let probe: HandshakeProbe | null = null;
+    const cleanup = renderBridgeWithHandshakeProbe((p) => {
+      probe = p;
+    });
+
+    try {
+      expect(probe).not.toBeNull();
+      const { spy, iframe } = probe as HandshakeProbe;
+
+      // 1. A selection is forwarded BEFORE the (late Remix) bridge is ready. The first
+      //    hypercanvas:stateUpdate the iframe never sees because its listener isn't mounted yet.
+      await act(async () => {
+        postHostMessage({
+          type: 'state:update',
+          patch: { selectedIds: ['src/App.tsx:10:4'], selectedItemIndices: {} },
+        });
+      });
+
+      const callsBefore = spy.mock.calls.length;
+
+      // 2. The bridge finishes setup and announces itself (from the iframe → event.source matches).
+      await act(async () => {
+        postIframeMessage(iframe, { type: 'hypercanvas:bridgeReady' });
+      });
+
+      // 3. The parent replays the selection so the now-mounted bridge receives it.
+      const replay = spy.mock.calls
+        .slice(callsBefore)
+        .map((args) => args[0] as Record<string, unknown>)
+        .find((m) => m.type === 'hypercanvas:stateUpdate');
+      expect(replay).toBeDefined();
+      expect(replay?.selectedIds).toEqual(['src/App.tsx:10:4']);
+      expect(replay?.selectedItemIndices).toEqual({});
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not replay when no selection has been issued yet (nothing to replay)', async () => {
+    let probe: HandshakeProbe | null = null;
+    const cleanup = renderBridgeWithHandshakeProbe((p) => {
+      probe = p;
+    });
+
+    try {
+      const { spy, iframe } = probe as HandshakeProbe;
+      const callsBefore = spy.mock.calls.length;
+
+      await act(async () => {
+        postIframeMessage(iframe, { type: 'hypercanvas:bridgeReady' });
+      });
+
+      const stateUpdateAfter = spy.mock.calls
+        .slice(callsBefore)
+        .some((args) => (args[0] as Record<string, unknown>).type === 'hypercanvas:stateUpdate');
+      expect(stateUpdateAfter).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not replay a previous component selection after the iframe session is dropped (component-scoped)', async () => {
+    let probe: HandshakeProbe | null = null;
+    const cleanup = renderBridgeWithHandshakeProbe((p) => {
+      probe = p;
+    });
+
+    try {
+      const { spy, iframe } = probe as HandshakeProbe;
+
+      // Select an element in component A.
+      await act(async () => {
+        postHostMessage({
+          type: 'state:update',
+          patch: { selectedIds: ['src/A.tsx:1:1'] },
+        });
+      });
+
+      // The dev server stops → the iframe session is dropped; the replay state must go with it
+      // so the next component's bridge never inherits A's selection.
+      await act(async () => {
+        postHostMessage({ type: 'devserver:statusChanged', running: false, url: null });
+      });
+
+      const callsBefore = spy.mock.calls.length;
+      await act(async () => {
+        postIframeMessage(iframe, { type: 'hypercanvas:bridgeReady' });
+      });
+
+      const replayed = spy.mock.calls
+        .slice(callsBefore)
+        .some((args) => (args[0] as Record<string, unknown>).type === 'hypercanvas:stateUpdate');
+      expect(replayed).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('ignores a bridgeReady that is NOT from the iframe (source guard)', async () => {
+    let probe: HandshakeProbe | null = null;
+    const cleanup = renderBridgeWithHandshakeProbe((p) => {
+      probe = p;
+    });
+
+    try {
+      const { spy } = probe as HandshakeProbe;
+
+      await act(async () => {
+        postHostMessage({
+          type: 'state:update',
+          patch: { selectedIds: ['src/App.tsx:10:4'] },
+        });
+      });
+      const callsBefore = spy.mock.calls.length;
+
+      // bridgeReady WITHOUT a matching source (postHostMessage → source is null) must be ignored
+      // by the iframe→parent handler's event.source check; no replay.
+      await act(async () => {
+        postHostMessage({ type: 'hypercanvas:bridgeReady' });
+      });
+
+      const replayed = spy.mock.calls
+        .slice(callsBefore)
+        .some((args) => (args[0] as Record<string, unknown>).type === 'hypercanvas:stateUpdate');
+      expect(replayed).toBe(false);
     } finally {
       cleanup();
     }

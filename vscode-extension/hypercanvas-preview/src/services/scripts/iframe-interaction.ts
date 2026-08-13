@@ -1290,3 +1290,13 @@ updateDesignStyles(state.engineMode);
 if (state.engineMode !== 'interact' && document.body) {
   _disableNativeDraggableIn(document.body);
 }
+
+// Bridge-ready handshake (#51). By this point the message listener (above) is mounted and
+// __hyperCanvasState exists, so the bridge can safely receive a re-sent selection. Non-Remix
+// previews inject this script synchronously after <head> (PreviewProxy), so the parent is
+// already up and the re-send is a harmless no-op. Remix injects it post-hydration from the
+// generated route's HyperCanvasScripts effect (framework-routing.ts) — several async hops
+// late — so a tree selection issued before this point would otherwise be dropped with no
+// replay. Announcing readiness lets the parent (usePreviewBridge) re-forward the current
+// selection state once, closing the round-trip race regardless of framework.
+window.parent.postMessage({ type: 'hypercanvas:bridgeReady' }, '*');
