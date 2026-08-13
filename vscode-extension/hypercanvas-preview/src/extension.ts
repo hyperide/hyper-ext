@@ -375,6 +375,15 @@ export function activate(context: vscode.ExtensionContext) {
     (request) => previewPanel?.requestProbeColorCandidates(request) ?? Promise.resolve([]),
   );
 
+  // HYP-901: write-verify RPC. When a style-write candidate targets a custom component that
+  // doesn't forward style/className, the auto-wrap retry candidate uses this to confirm it
+  // actually changed something visible before keeping it — the same no-circular-dep wiring as
+  // the two providers above. Resolves null → the candidate is kept best-effort, unverified.
+  panelRouter.setVerifyComputedStyleProvider(
+    (elementId, cssProperties) =>
+      previewPanel?.requestComputedStyleSnapshot(elementId, cssProperties) ?? Promise.resolve(null),
+  );
+
   // Register serializer for cross-restart persistence
   context.subscriptions.push(
     vscode.window.registerWebviewPanelSerializer(PreviewPanel.viewType, {

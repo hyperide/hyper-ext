@@ -4,7 +4,7 @@
  * (initialization, resolution, and cross-file move logic).
  */
 
-import * as t from '@babel/types';
+import type * as t from '@babel/types';
 import type { NodeRef } from '@shared/element-tracing/types';
 import type { FileIO } from '@lib/ast/file-io';
 import type { ColorProbeCandidate } from './color-probe-types';
@@ -31,6 +31,10 @@ export interface MutationWrapperDeps {
     nodeRef: NodeRef,
   ) => Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null>;
   resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) => FindElementResult | null;
+  /** HYP-901 — tsconfig path-alias map lookup for the non-forwarding-component pre-write check. */
+  getAliasMap?: (importerFilePath: string) => Record<string, string>;
+  /** HYP-901 — B1-lite runtime computed-style verify for the auto-wrap retry candidate. */
+  verifyComputedStyle?: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>;
 }
 
 export async function updateStylesWrapper(
@@ -43,6 +47,7 @@ export async function updateStylesWrapper(
   selectedSourceTabId: string | undefined,
   domClasses: string | undefined,
   probeDriving: ColorProbeCandidate[] | undefined,
+  verifyElementId?: string,
 ): Promise<UpdateStylesResult> {
   try {
     const result = await updateStyles(filePath, elementId, styles, state, nodeRef, selectedSourceTabId, domClasses, {
@@ -51,6 +56,9 @@ export async function updateStylesWrapper(
       resolveElementInCorrectFile: (absolutePath, nr) => deps.resolveElementInCorrectFile(absolutePath, nr),
       updateNodeMap: (fp) => deps.updateNodeMap(fp),
       probeDriving,
+      getAliasMap: deps.getAliasMap,
+      verifyComputedStyle: deps.verifyComputedStyle,
+      verifyElementId,
     });
     return result;
   } catch (error) {

@@ -304,6 +304,29 @@ describe('TailwindStyleAdapter', () => {
     expect(result.result).toContain('flex');
   });
 
+  it('HYP-987 P1 (codex) — surfaces the non-forwarding warning instead of reporting "Styles updated"', async () => {
+    const adapter = getStyleAdapter('tailwind');
+    // updateStyles returns success:true WITH a warning when the write was rolled back (the
+    // component does not forward style/className and no safe wrapper landed).
+    const mockAstService = {
+      updateStyles: async () => ({
+        success: true,
+        warning: { componentName: 'HostRoutePage', message: "<HostRoutePage> doesn't forward this prop to the DOM." },
+      }),
+      updateProps: async () => ({ success: true }),
+    };
+
+    const result = await adapter.applyStyles(mockAstService as unknown as AstService, 'src/App.tsx', 'elem-1', {
+      'bg-red-500': '',
+    });
+
+    expect(result.success).toBe(true);
+    // Must NOT claim the style was applied.
+    expect(result.result).not.toContain('Styles updated');
+    expect(result.result).toContain('not applied');
+    expect(result.warning).toContain("doesn't forward");
+  });
+
   it('should normalize Tailwind prefix inputs', async () => {
     const adapter = getStyleAdapter('tailwind');
     let capturedStyles: Record<string, string> = {};

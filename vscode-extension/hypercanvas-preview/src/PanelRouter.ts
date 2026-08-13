@@ -74,6 +74,17 @@ export class PanelRouter {
    */
   private _colorProbeProvider?: (request: ColorProbeRequest) => Promise<ColorProbeCandidate[]>;
   /**
+   * HYP-901 B1-lite write-verify. Wired to `previewPanel.requestComputedStyleSnapshot(...)` (same
+   * no-circular-dep pattern as the other two providers above). Re-applied onto the CURRENT
+   * `AstService` on every `ast:updateStyles` message (see routeMessage) rather than injected once
+   * at construction, because `_ensureCurrentWorkspace()` can rebuild `AstService` on a workspace
+   * switch — a one-time setter call would silently go stale on the OLD instance.
+   */
+  private _verifyComputedStyleProvider?: (
+    elementId: string,
+    cssProperties: string[],
+  ) => Promise<Record<string, string> | null>;
+  /**
    * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
    * `targets/conloca-app/`), empty for single-package projects. The dev server
    * runs inside the sub-project, so every source path the iframe emits is
@@ -258,18 +269,21 @@ export class PanelRouter {
 
     // AST operations — route response back to the requesting webview
     if (type.startsWith('ast:')) {
+      // The PRE-re-root (iframe-relative) elementId. The preview iframe's findElementsByRef
+      // matches the id it emitted (sub-project-relative in a monorepo), while the AST write
+      // below uses the re-rooted `message`. Every iframe RPC keyed on the target element — the
+      // live-className fetch AND the HYP-901 write-verify — must address the iframe by THIS id.
+      const rawElementId = (rawMessage as { elementId?: unknown }).elementId;
+      const probeElementId = typeof rawElementId === 'string' && rawElementId ? rawElementId : null;
+
       // HYP-544: live write-time className RPC for color writes. When the inspector
       // (right-panel webview, no preview iframe of its own) sends ast:updateStyles with
       // an empty domClasses, fetch the element's LIVE applied className from the
       // preview-panel iframe and await it, so the DOM-anchored twMerge escalation anchors
-      // on reality. Use the PRE-re-root (iframe-relative) elementId: the iframe's
-      // findElementsByRef matches the id it emitted (sub-project-relative in a monorepo),
-      // while the AST write below uses the re-rooted `message`. Degrades to static behavior
-      // on a null result; never throws / never blocks the write.
+      // on reality. Degrades to static behavior on a null result; never throws / never
+      // blocks the write.
       if (type === 'ast:updateStyles' && (this._liveClassNameProvider || this._colorProbeProvider)) {
         const styleMsg = message as Extract<AstMessage, { type: 'ast:updateStyles' }>;
-        const rawElementId = (rawMessage as { elementId?: unknown }).elementId;
-        const probeElementId = typeof rawElementId === 'string' && rawElementId ? rawElementId : null;
         // Item index of the selected occurrence at a repeated JSX site (.map() row), keyed by the
         // iframe-relative id (same space as the raw elementId). Lets the iframe anchor on the
         // element the user is editing, not always the first.
@@ -297,7 +311,24 @@ export class PanelRouter {
         // inline-style override); a tailwind-class driver is a no-op there → existing twMerge path.
         await this._maybeProbeColorCandidates(styleMsg, probeElementId, itemIndex);
       }
-      await this._astBridge.handleMessage(message as AstMessage, webview);
+      // HYP-901: re-apply the STABLE (id-agnostic) provider on every call (not just once at
+      // construction) — `_astBridge`/its AstService can be rebuilt by `_ensureCurrentWorkspace()`
+      // above on a workspace switch, and a stale setter call from extension.ts startup would
+      // otherwise silently stop verifying. HYP-987 P1 #3: the provider must NOT bake in the
+      // per-call elementId — `AstService.updateStyles` awaits `ensureInitialized()` before it
+      // reads the provider, so two overlapping edits that each rebound a per-id closure onto the
+      // shared AstService could race (the second edit's binding wins for the first edit's still-
+      // pending verify). Instead the id-agnostic provider is set once and the iframe-relative id
+      // is threaded PER CALL through `handleMessage` (see verifyElementId below).
+      if (type === 'ast:updateStyles' && this._verifyComputedStyleProvider) {
+        this._astBridge.astService.setVerifyComputedStyleProvider(this._verifyComputedStyleProvider);
+      }
+      // Thread the iframe-relative (pre-re-root) id per call: AstService drives the write-verify
+      // with the RE-ROOTED elementId (correct for the AST write, but the iframe's
+      // findElementsByRef only knows the pre-re-root id), so a re-rooted lookup would resolve
+      // nothing in a monorepo and the verify would silently no-op. Mirrors the live-className path.
+      const verifyElementId = type === 'ast:updateStyles' && probeElementId ? probeElementId : undefined;
+      await this._astBridge.handleMessage(message as AstMessage, webview, verifyElementId);
       return true;
     }
 
@@ -692,6 +723,18 @@ export class PanelRouter {
    */
   setColorProbeProvider(provider: (request: ColorProbeRequest) => Promise<ColorProbeCandidate[]>): void {
     this._colorProbeProvider = provider;
+  }
+
+  /**
+   * Wire the HYP-901 write-verify provider. Backed by `previewPanel.requestComputedStyleSnapshot(...)`
+   * — same no-circular-dep pattern as the other two providers. Lets the style-write auto-wrap
+   * retry candidate confirm it actually changed something visible before keeping it, instead of
+   * warning on the first attempt.
+   */
+  setVerifyComputedStyleProvider(
+    provider: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>,
+  ): void {
+    this._verifyComputedStyleProvider = provider;
   }
 
   /**

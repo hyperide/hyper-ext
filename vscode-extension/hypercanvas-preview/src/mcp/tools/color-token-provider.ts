@@ -46,7 +46,7 @@ export interface StyleAdapter {
     filePath: string,
     elementId: string,
     styles: Record<string, string>,
-  ): Promise<{ success: boolean; result?: string; warning?: string; error?: string }>;
+  ): Promise<{ success: boolean; result?: string; warning?: string; error?: string; applied?: boolean }>;
 
   resolveStyles(params: ResolveInput): ResolveResult;
 }
@@ -292,6 +292,18 @@ class TailwindStyleAdapter implements StyleAdapter {
     const result = await astService.updateStyles(filePath, elementId, normalized);
     if (!result.success) {
       return { success: false, error: result.error };
+    }
+    // HYP-987 P1 (codex) — updateStyles returns success:true WITH a warning when the write was
+    // rolled back (non-forwarding component, no safe wrapper landed). Report `applied:false` +
+    // the warning so the MCP handler surfaces it as an error, DISTINCT from advisory warnings
+    // (arbitrary/raw colors below) which accompany a write that DID apply.
+    if (result.warning) {
+      return {
+        success: true,
+        applied: false,
+        result: 'Style change was not applied.',
+        warning: result.warning.message,
+      };
     }
 
     const resultText = result.className ? `className="${result.className}"` : 'Styles updated';

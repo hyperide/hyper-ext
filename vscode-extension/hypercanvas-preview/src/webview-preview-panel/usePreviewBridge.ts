@@ -445,6 +445,14 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             requestId: msg.requestId,
             driving: msg.driving,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:computedStyleSnapshotResult') {
+          // HYP-901: iframe answered the write-verify computed-style request — forward to the
+          // extension host, which resolves the pending requestComputedStyleSnapshot promise.
+          canvas.sendEvent({
+            type: 'computedStyleSnapshotResult',
+            requestId: msg.requestId,
+            computedStyle: msg.computedStyle,
+          } as unknown as PlatformMessage);
         } else if (msg.type === 'hypercanvas:resolveServerSourceMap') {
           // Approach B: iframe requests server-side source map resolution from extension host.
           // Forward to extension host which reads the .map file from the local filesystem.
@@ -998,6 +1006,19 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             cssProp: msg.cssProp,
             requestedColor: msg.requestedColor,
             requestClass: msg.requestClass,
+            requestId: msg.requestId,
+          });
+          break;
+
+        // HYP-901: extension host requests a live computed-style snapshot of an element from the
+        // iframe, at write-verify time (did the style-write candidate actually land?). Forward to
+        // the iframe; the result returns via 'hypercanvas:computedStyleSnapshotResult'.
+        case 'requestComputedStyleSnapshot':
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:requestComputedStyleSnapshot',
+            elementId: msg.elementId,
+            itemIndex: msg.itemIndex,
+            cssProperties: msg.cssProperties,
             requestId: msg.requestId,
           });
           break;

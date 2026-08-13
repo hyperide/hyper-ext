@@ -14,7 +14,7 @@ function createAstOpsRecorder() {
   const updatePropsCalls: Parameters<AstOperations['updateProps']>[0][] = [];
 
   const astOps: AstOperations = {
-    updateStyles: async () => undefined,
+    updateStyles: async () => ({}),
     insertElement: async () => ({ success: true }),
     deleteElements: async () => undefined,
     duplicateElement: async () => ({ success: true }),
@@ -86,7 +86,7 @@ describe('TamaguiAdapter.writeOrder', () => {
 
   it('reports updateProps failure as error', async () => {
     const astOps: AstOperations = {
-      updateStyles: async () => undefined,
+      updateStyles: async () => ({}),
       insertElement: async () => ({ success: true }),
       deleteElements: async () => undefined,
       duplicateElement: async () => ({ success: true }),

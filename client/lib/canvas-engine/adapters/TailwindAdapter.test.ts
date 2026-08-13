@@ -16,6 +16,7 @@ function createAstOpsRecorder() {
   const astOps: AstOperations = {
     updateStyles: async (params) => {
       updateStylesCalls.push(params);
+      return {};
     },
     insertElement: async () => ({ success: true }),
     deleteElements: async () => undefined,
@@ -119,7 +120,7 @@ describe('TailwindAdapter', () => {
 
     it('reports updateProps failure as error', async () => {
       const astOps: AstOperations = {
-        updateStyles: async () => undefined,
+        updateStyles: async () => ({}),
         insertElement: async () => ({ success: true }),
         deleteElements: async () => undefined,
         duplicateElement: async () => ({ success: true }),

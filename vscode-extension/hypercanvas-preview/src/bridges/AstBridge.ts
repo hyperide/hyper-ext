@@ -101,7 +101,7 @@ export class AstBridge {
     this._undoRedoService.setAdditionalWorkspaceRoot(root);
   }
 
-  async handleMessage(message: AstMessage, targetWebview?: vscode.Webview): Promise<void> {
+  async handleMessage(message: AstMessage, targetWebview?: vscode.Webview, verifyElementId?: string): Promise<void> {
     // Path re-rooting for monorepo sub-projects happens upstream in
     // PanelRouter.routeMessage (the single ingress for ast:/editor:/styles:),
     // so `message` already carries repo-relative paths here. The public
@@ -114,7 +114,7 @@ export class AstBridge {
     try {
       switch (message.type) {
         case 'ast:updateStyles':
-          response = await this._handleUpdateStyles(message);
+          response = await this._handleUpdateStyles(message, verifyElementId);
           break;
 
         case 'ast:updateProps':
@@ -203,6 +203,11 @@ export class AstBridge {
       }
       const result = await operation();
       if (result.success) {
+        // HYP-987 P1 (codex) — the op took a warn-and-roll-back path and does NOT own the final
+        // content (a concurrent edit may have landed in the verify window and been preserved by
+        // the CAS rollback). Recording an undo entry here would let Undo erase that concurrent
+        // edit. Skip tracking entirely for this op.
+        if (result.skipUndoTracking) return result;
         // For cross-file writes (e.g. twitter: requested App.tsx but wrote to Feed.tsx),
         // the operation returns resolvedPath pointing to the actual mutated file.
         const actualPath = result.resolvedPath ?? absolutePath;
@@ -382,7 +387,10 @@ export class AstBridge {
   /**
    * Handle updateStyles message
    */
-  private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
+  private async _handleUpdateStyles(
+    message: Extract<AstMessage, { type: 'ast:updateStyles' }>,
+    verifyElementId?: string,
+  ): Promise<AstResponse> {
     _dbgBridge(
       `[AstBridge._handleUpdateStyles] filePath=${message.filePath} elementId=${message.elementId} styles=${JSON.stringify(message.styles)}`,
     );
@@ -398,14 +406,21 @@ export class AstBridge {
         message.selectedSourceTabId,
         message.domClasses,
         message.probeDriving,
+        // HYP-987 P1 #3 — the iframe-relative id for the write-verify RPC, threaded per call
+        // (not baked into a shared-mutable provider) so overlapping edits can't race.
+        verifyElementId,
       ),
     );
 
     return {
       type: 'ast:response',
       requestId: message.requestId,
+      // HYP-901: spread `warning` only when present so a clean write's response shape
+      // (`{ className }`) is unchanged — never `{ className, warning: undefined }`.
       success: result.success,
-      data: result.success ? { className: result.className } : undefined,
+      data: result.success
+        ? { className: result.className, ...(result.warning ? { warning: result.warning } : {}) }
+        : undefined,
       error: result.error,
     };
   }

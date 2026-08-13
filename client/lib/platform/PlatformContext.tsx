@@ -7,6 +7,7 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { RETARGET_ROUTE, type RetargetRequest } from '@shared/i18n-text/retarget/contract';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import { authFetch } from '@/utils/authFetch';
 import { createBrowserAdapters } from './BrowserAdapter';
 import { getActiveRuntime } from './nodepod/nodepodRuntimeStore';
@@ -324,6 +325,10 @@ function createBrowserAstOperations(): AstOperations {
         const error = await response.json();
         throw new Error(error.error || response.statusText);
       }
+      // No non-forwarding-component static analysis wired for the browser/SaaS route yet
+      // (HYP-901 scoped to VS Code, where the write path can resolve the component's own
+      // source file) — always returns no warning.
+      return {};
     },
 
     async insertElement(params) {
@@ -484,7 +489,7 @@ function createBrowserAstOperations(): AstOperations {
 function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
   return {
     async updateStyles(params) {
-      const result = await canvasRPC(
+      const result = await canvasRPC<{ className?: string; warning?: StyleForwardingWarning }>(
         canvas,
         {
           type: 'ast:updateStyles',
@@ -503,6 +508,7 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
       if (!result.success) {
         throw new Error(result.error || 'Failed to update styles');
       }
+      return { warning: result.data?.warning };
     },
 
     async insertElement(params) {

@@ -80,6 +80,8 @@ export interface MessageRouterDeps {
   handleLiveClassNameResult(msg: { [key: string]: unknown }): void;
   // HYP-544 Phase 3: the iframe's reply to an empirical color-probe RPC (driving candidates).
   handleProbeColorCandidatesResult(msg: { [key: string]: unknown }): void;
+  // HYP-901: the iframe's reply to a write-time computed-style verify RPC (auto-wrap retry).
+  handleComputedStyleSnapshotResult(msg: { [key: string]: unknown }): void;
 }
 
 export async function routeMessage(deps: MessageRouterDeps, message: unknown, webview: vscode.Webview): Promise<void> {
@@ -363,6 +365,12 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
   // === Color-probe result (HYP-544 Phase 3 empirical driving-candidate round-trip) ===
   if (msg.type === 'probeColorCandidatesResult') {
     deps.handleProbeColorCandidatesResult(msg);
+    return;
+  }
+
+  // === Computed-style snapshot result (HYP-901 B1-lite write-time verify round-trip) ===
+  if (msg.type === 'computedStyleSnapshotResult') {
+    deps.handleComputedStyleSnapshotResult(msg);
     return;
   }
 

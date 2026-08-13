@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComponentNavigatorPanel } from '@/components/FloatingPanels';
 import { NudgeHUD } from '@/components/NudgeHUD/NudgeHUD';
 import RightSidebar from '@/components/RightSidebar/RightSidebar';
+import { Toaster } from '@/components/ui/toaster';
 import { createNudgeStatePort, NudgeStateProvider } from '@/lib/nudge';
 import { PlatformProvider, usePlatformAst, usePlatformCanvas } from '@/lib/platform';
 import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/shared-editor-state';
@@ -165,6 +166,11 @@ function RightPanelContent() {
 
   return (
     <NudgeStateProvider port={nudgePort}>
+      {/* HYP-901: without this, every `toast()` call in RightSidebar (onStyleNotApplied, the
+          style-forwarding last-resort warning, …) renders nothing — this webview never mounted
+          a Toaster, unlike client/App.tsx's SaaS realm, which does. Radix's ToastViewport portals
+          to document.body, so placement here (vs. deeper in the tree) doesn't matter. */}
+      <Toaster />
       <div data-testid={TID.inspector.root} className="relative flex flex-col h-full overflow-hidden">
         <div className={showInsertPanel ? 'flex-1 min-h-0 overflow-y-auto' : 'h-full overflow-y-auto'}>
           <RightSidebar

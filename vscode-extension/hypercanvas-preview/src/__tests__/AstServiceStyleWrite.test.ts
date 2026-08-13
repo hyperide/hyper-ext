@@ -91,7 +91,7 @@ export default function App() {
 
     expect(result).toEqual(expect.objectContaining({ success: true }));
     // The change must land in RecordScreen.tsx, not App.tsx
-    expect(fileIO.content(screenPath)).toContain('backgroundColor="$red10"');
+    expect(fileIO.content(screenPath)).toContain("backgroundColor='$red10'");
     expect(fileIO.content(appPath)).toBe(appSource); // App.tsx unchanged
   });
 
@@ -130,5 +130,29 @@ export default function App() {
     expect(fileIO.content(cardPath)).toContain('red');
     expect(fileIO.content(cardPath)).not.toContain('blue');
     expect(fileIO.content(appPath)).toBe(appSource); // App.tsx unchanged
+  });
+
+  // HYP-901 verify-and-retry tests live in AstServiceStyleWriteHyp901.test.ts — a SEPARATE file,
+  // not just a separate describe block. See that file's header comment for why: those tests were
+  // found to corrupt each other's AST output when run as `it()` siblings alongside the tests in
+  // THIS file (a happy-dom/bun:test preload interaction, not a bug in the actual style-write
+  // code — confirmed via a plain `bun run` reproduction with no corruption). `bun test --isolate`
+  // isolates BETWEEN files, which is exactly the boundary that fixes it.
+
+  it('updateStyles does not warn when the write lands on a native DOM element', async () => {
+    const cardPath = '/workspace/src/components/Card.tsx';
+    const cardSource = `export function Card() {
+  return <div>content</div>;
+}
+`;
+    const fileIO = new InMemoryFileIO({ [cardPath]: cardSource });
+    const service = new AstService('/workspace', fileIO);
+    const nodeRef = syntheticRefFor(cardSource, 'src/components/Card.tsx');
+
+    const result = await service.updateStyles('src/components/Card.tsx', nodeRef, { color: 'red' }, undefined, nodeRef);
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    if (!result.success) throw new Error('expected success');
+    expect(result.warning).toBeUndefined();
   });
 });

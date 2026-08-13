@@ -17,6 +17,7 @@ import type { ComponentService } from '../services/ComponentService';
 function createFakeAstService(): AstService {
   return {
     ensureInitialized: mock(() => Promise.resolve()),
+    setVerifyComputedStyleProvider: mock(),
     updateStyles: mock(() => Promise.resolve({ success: true, className: 'c' })),
     updateProps: mock(() => Promise.resolve({ success: true })),
     insertElement: mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 })),
@@ -481,6 +482,42 @@ describe('PanelRouter', () => {
       expect(provider).toHaveBeenCalledWith('src/app/page.tsx:9:2', null);
       // The AST write still receives the re-rooted id.
       expect(updateStylesArgs(router)?.[1]).toBe('targets/conloca-app/src/app/page.tsx:9:2');
+    });
+
+    it('threads the iframe-relative verify id per call (not baked into the provider) in a monorepo', async () => {
+      // HYP-987 P1 #3 — the write-verify provider installed on AstService is the STABLE,
+      // id-agnostic RPC (no per-call elementId baked in, so two overlapping edits can't race a
+      // shared-mutable binding). The iframe-relative (pre-re-root) id is threaded PER CALL through
+      // handleMessage → updateStyles instead. AstService drives the AST write with the RE-ROOTED
+      // id, but the preview iframe's findElementsByRef only knows the pre-re-root id, so the verify
+      // must receive that one or the computed-style read resolves nothing and silently no-ops.
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const underlying = mock((_id: string, cssProperties: string[]) =>
+        Promise.resolve(Object.fromEntries(cssProperties.map((p) => [p, 'rgb(0, 0, 0)']))),
+      );
+      router.setVerifyComputedStyleProvider(underlying);
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-verify',
+          filePath: 'src/app/page.tsx',
+          elementId: 'src/app/page.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+
+      // The provider installed on AstService is the raw, id-agnostic one — never a per-id closure.
+      const setVerify = router.astBridge.astService.setVerifyComputedStyleProvider as ReturnType<typeof mock>;
+      expect(setVerify.mock.calls.at(-1)?.[0]).toBe(underlying);
+
+      // The AST write receives the RE-ROOTED id (arg 1); the verify receives the iframe-relative
+      // id threaded as the trailing verifyElementId arg (arg 8).
+      const args = updateStylesArgs(router);
+      expect(args?.[1]).toBe('targets/conloca-app/src/app/page.tsx:9:2');
+      expect(args?.[8]).toBe('src/app/page.tsx:9:2');
     });
 
     it('strips Vite @fs/ from a cross-package elementId when the sub-project prefix is empty', async () => {

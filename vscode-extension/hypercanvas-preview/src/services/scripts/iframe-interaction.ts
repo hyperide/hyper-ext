@@ -25,7 +25,7 @@ import {
 import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { type Fiber, getFiberFromDOM } from '@shared/element-tracing/fiber-internals';
 import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
-import { scrollIntoViewCenterSmooth, extractComputedStyle } from './dom-utils';
+import { scrollIntoViewCenterSmooth, extractComputedStyle, extractComputedStyleForProperties } from './dom-utils';
 import { parseSourceRef, buildMapUrl, isViteSourceUrl } from './source-map-utils';
 import { sendOverlayRects } from './iframe-overlay';
 import { handleScreenshotRequest } from './iframe-screenshot';
@@ -1155,6 +1155,24 @@ window.addEventListener('message', (event: MessageEvent) => {
         '*',
       );
     }
+    return;
+  }
+  // HYP-901: host-initiated, requestId-correlated write-verify read (distinct from the click-driven
+  // pair above — arbitrary caller-specified property list, always replies so a pending host promise
+  // never leaks). null computedStyle = element not found (still resolves the pending request).
+  if (msg.type === 'hypercanvas:requestComputedStyleSnapshot') {
+    const elementId = msg.elementId as string;
+    const itemIndex = (msg.itemIndex as number | null | undefined) ?? null;
+    const cssProperties = Array.isArray(msg.cssProperties) ? (msg.cssProperties as string[]) : [];
+    const el = findElementsByRef(elementId, itemIndex)[0] ?? null;
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:computedStyleSnapshotResult',
+        requestId: msg.requestId,
+        computedStyle: el ? extractComputedStyleForProperties(el, cssProperties) : null,
+      },
+      '*',
+    );
     return;
   }
   if (msg.type === 'hypercanvas:scrollToElement') {

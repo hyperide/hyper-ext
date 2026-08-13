@@ -185,3 +185,15 @@ export function describeJsxName(el: t.JSXElement): string {
   }
   return 'unknown';
 }
+
+/**
+ * Leftmost JSX identifier of a tag name (`<Foo.Bar>` → `Foo`, `<Foo.Bar.Baz>` → `Foo`). Used
+ * where callers need the base component/tag identity (e.g. "is this a custom component" /
+ * "is this a structurally-constrained host tag"), unlike {@link describeJsxName} which returns
+ * the full dotted path for display.
+ */
+export function jsxOpeningTagName(name: t.JSXOpeningElement['name']): string | null {
+  let current = name;
+  while (t.isJSXMemberExpression(current)) current = current.object;
+  return t.isJSXIdentifier(current) ? current.name : null;
+}

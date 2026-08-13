@@ -55,7 +55,7 @@ function createEngine() {
 
 describe('useStyleSync', () => {
   it('cancels trailing style writes when the component file changes', async () => {
-    const updateStyles = mock(async () => {});
+    const updateStyles = mock(async () => ({}));
     const astOps = createAstOps(updateStyles);
 
     const { result, rerender } = renderHook(
@@ -85,7 +85,7 @@ describe('useStyleSync', () => {
   });
 
   it('flushes trailing style writes while selection and component file remain stable', async () => {
-    const updateStyles = mock(async () => {});
+    const updateStyles = mock(async () => ({}));
     const astOps = createAstOps(updateStyles);
 
     const { result } = renderHook(
@@ -119,7 +119,7 @@ describe('useStyleSync', () => {
 
   it('clears the injected fast-patch when the selection changes mid-sync (HYP-650)', async () => {
     const { engine, applyPatch, clearPatch } = createEngine();
-    const astOps = createAstOps(mock(async () => {}));
+    const astOps = createAstOps(mock(async () => ({})));
 
     const { rerender, result } = renderHook(
       ({ filePath, selectedIds }) => useStyleSync({ selectedIds, filePath, styleAdapter, astOps, engine }),
@@ -157,7 +157,7 @@ describe('useStyleSync', () => {
 
   it('threads the selected map item index into the fast patch (HYP-651)', () => {
     const { engine, applyPatch } = createEngine();
-    const astOps = createAstOps(mock(async () => {}));
+    const astOps = createAstOps(mock(async () => ({})));
 
     const { result } = renderHook(() =>
       useStyleSync({
@@ -190,7 +190,7 @@ describe('useStyleSync', () => {
         selectedIds: ['el-a', 'el-b', 'el-c'],
         filePath: 'src/components/Card.tsx',
         styleAdapter,
-        astOps: createAstOps(mock(async () => {})),
+        astOps: createAstOps(mock(async () => ({}))),
         engine,
       }),
     );
@@ -231,7 +231,7 @@ describe('useStyleSync', () => {
         selectedIds: ['el-a', 'el-b'],
         filePath: 'src/components/Card.tsx',
         styleAdapter,
-        astOps: createAstOps(mock(async () => {})),
+        astOps: createAstOps(mock(async () => ({}))),
         engine,
       }),
     );
@@ -263,7 +263,7 @@ describe('useStyleSync', () => {
         selectedIds: ['el-a', 'el-b'],
         filePath: 'src/components/Card.tsx',
         styleAdapter,
-        astOps: createAstOps(mock(async () => {})),
+        astOps: createAstOps(mock(async () => ({}))),
         engine,
         onSyncError,
       }),
@@ -292,7 +292,7 @@ describe('useStyleSync', () => {
         selectedIds: ['el-a'],
         filePath: 'src/components/Card.tsx',
         styleAdapter,
-        astOps: createAstOps(mock(async () => {})),
+        astOps: createAstOps(mock(async () => ({}))),
         engine,
       }),
     );

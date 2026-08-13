@@ -86,10 +86,26 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
       }
 
       const adapter = getStyleAdapter(stateHub.state.projectUIKit);
-      const { success, result, warning, error } = await adapter.applyStyles(astService, resolved, elementId, styles);
+      const { success, result, warning, error, applied } = await adapter.applyStyles(
+        astService,
+        resolved,
+        elementId,
+        styles,
+      );
 
       if (!success) {
         return { content: [{ type: 'text' as const, text: `Error: ${error}` }], isError: true };
+      }
+
+      // HYP-987 P1 (codex) — distinguish a NOT-APPLIED warning (`applied === false`: the style was
+      // rolled back on a non-forwarding component) from an ADVISORY warning that accompanies a
+      // write that DID apply (e.g. arbitrary/raw-color notices). Only the former is an MCP error;
+      // an advisory warning must not be misreported as a failure.
+      if (applied === false) {
+        return {
+          content: [{ type: 'text' as const, text: `${result}${warning ? `\n\nWarning: ${warning}` : ''}` }],
+          isError: true,
+        };
       }
 
       const text = warning ? `${result}\n\nWarning: ${warning}` : (result ?? 'Styles updated');

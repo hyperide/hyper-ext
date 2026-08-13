@@ -24,6 +24,7 @@ import { useNodePodLocaleKeys } from '@/lib/platform/hooks/useNodePodLocaleKeys'
 import { useNodePodRuntimeStore } from '@/lib/platform/nodepod/nodepodRuntimeStore';
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import type { StyleSourceTab } from '@lib/style-read/types';
 import {
   describeLandedReason,
@@ -479,8 +480,18 @@ export default function RightSidebar({
   // Sync toast lifecycle — show "Applying styles..." only if sync takes >600ms
   const syncToastRef = useRef<{ dismiss: () => void } | null>(null);
   const syncToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // HYP-987 P1 #8 — the non-forwarding-component warning lives in its OWN ref, NOT `syncToastRef`.
+  // `onNonForwardingComponent` fires right before `finishSync()` (the ext host's verify-and-retry
+  // already ran; there's no HMR round-trip to await), and `handleSyncEnd` dismisses `syncToastRef`
+  // — so a warning stored there was created and instantly dismissed (the live "no toast" symptom).
+  // A separate ref + `duration: Infinity` makes it persist until the user dismisses it or a later
+  // edit attempt (`handleSyncStart`) supersedes it.
+  const warningToastRef = useRef<{ dismiss: () => void } | null>(null);
 
   const handleSyncStart = useCallback(() => {
+    // A new edit attempt supersedes any standing "could not apply" warning from a previous one.
+    warningToastRef.current?.dismiss();
+    warningToastRef.current = null;
     // Timer already running — don't duplicate
     if (syncToastTimerRef.current) return;
     // Dismiss any stale toast (e.g. "Style may not have taken effect") before scheduling new one
@@ -528,6 +539,53 @@ export default function RightSidebar({
     [openAIChat],
   );
 
+  // HYP-901, VS Code only — the extension host's verify-and-retry chain (direct write, then
+  // auto-wrap) is exhausted: the target is a custom component that doesn't forward
+  // style/className, and no safe wrapper could be inserted automatically. By the time this
+  // fires, the file is unchanged from before the edit — unlike handleStyleNotApplied above
+  // (which waits on an HMR round-trip), this fires immediately with the RPC response.
+  const handleNonForwardingComponent = useCallback(
+    (warning: StyleForwardingWarning) => {
+      // The write was rolled back / never applied, but the inspector inputs were set optimistically
+      // before syncStyleChange. Re-read from the source of truth so they revert to the real baseline
+      // — same idiom as handleSyncError above (bumping styleRefreshKey), otherwise the controls keep
+      // showing a value that isn't in the file.
+      setStyleRefreshKey((k) => k + 1);
+      // Dismiss the transient "Applying styles..." toast (its own ref) AND any prior warning, then
+      // raise a PERSISTENT warning in warningToastRef (duration: Infinity) so the imminent
+      // handleSyncEnd — which only clears syncToastRef — cannot dismiss it (HYP-987 P1 #8).
+      syncToastRef.current?.dismiss();
+      syncToastRef.current = null;
+      warningToastRef.current?.dismiss();
+      warningToastRef.current = toast({
+        duration: Infinity,
+        title: 'Style could not be applied',
+        description: warning.message,
+        // HYP-987 Milestone 1 — the persistent warning carries an "Auto fix via AI" affordance.
+        // The AI is instructed to first DIAGNOSE why the edit didn't visibly land, then either
+        // propose the best way to make it apply and ask the user to confirm, or offer to revert.
+        // (Milestone 2 will turn this into a structured inspect->propose->confirm/cancel flow;
+        // the button + diagnostic prompt is the Milestone 1 affordance.)
+        action: (
+          <ToastAction
+            altText="Auto fix via AI"
+            onClick={() =>
+              openAIChat({
+                prompt: `A style change I made in the visual editor did not visibly apply on <${warning.componentName}>${
+                  componentPath ? ` (in ${componentPath})` : ''
+                }, and the editor rolled it back.\n\nReason detected: ${warning.message}\n\nPlease:\n1. Inspect WHY it didn't apply (the component doesn't forward className/style to a DOM node, an opaque root covers an inserted wrapper, or the wrong element was targeted).\n2. Then EITHER propose the best way to make this style actually render — e.g. forward style/className through <${warning.componentName}> to its root DOM element, or target a native DOM element inside it — and ask me to confirm the approach, OR offer to leave the change reverted.\nDon't apply anything until I confirm the approach.`,
+                forceNewChat: true,
+              })
+            }
+          >
+            Auto fix via AI
+          </ToastAction>
+        ),
+      });
+    },
+    [openAIChat, componentPath],
+  );
+
   // Style sync hook
   const { syncStyleChange, syncTextChange, isStyleSyncing } = useStyleSync({
     selectedIds,
@@ -546,6 +604,7 @@ export default function RightSidebar({
     onSyncStart: handleSyncStart,
     onSyncEnd: handleSyncEnd,
     onStyleNotApplied: handleStyleNotApplied,
+    onNonForwardingComponent: handleNonForwardingComponent,
   });
 
   // Position state
@@ -1237,6 +1296,18 @@ export default function RightSidebar({
     };
   }, []);
 
+  // HYP-987 P1/P2 (codex) — the non-forwarding warning is scoped to the exact element it fired for.
+  // RightSidebar stays MOUNTED as the user selects a different element (even within the SAME file),
+  // so dismiss the persistent (duration:Infinity) warning whenever the selected element identity OR
+  // the component file changes; otherwise a warning about element A lingers over element B's
+  // inspector with stale context.
+  useEffect(() => {
+    return () => {
+      warningToastRef.current?.dismiss();
+      warningToastRef.current = null;
+    };
+  }, [componentPath, selectedId]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1246,6 +1317,11 @@ export default function RightSidebar({
       if (syncToastTimerRef.current) {
         clearTimeout(syncToastTimerRef.current);
       }
+      // HYP-987 P1 (codex) — the non-forwarding warning is a duration:Infinity toast; dismiss it
+      // on unmount / project switch so it can't outlive the sidebar that owns it.
+      syncToastRef.current?.dismiss();
+      warningToastRef.current?.dismiss();
+      warningToastRef.current = null;
       if (debouncedI18nWriteRef.current) {
         clearTimeout(debouncedI18nWriteRef.current);
       }

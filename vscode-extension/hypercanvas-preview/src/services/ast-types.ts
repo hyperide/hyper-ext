@@ -1,3 +1,5 @@
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
+
 export interface AstOperationResult {
   success: boolean;
   error?: string;
@@ -8,10 +10,22 @@ export interface AstOperationResult {
   contentBeforeWrite?: string;
   /** All cross-file paths mutated, with pre-write content — for multi-file undo tracking in batch operations */
   allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
+  /**
+   * HYP-987 P1 (codex) — the operation did NOT end up owning the file's final content (it took a
+   * verify-failed / warn-and-roll-back path). `_withUndoTracking` MUST NOT record an undo entry
+   * in that case: if a concurrent edit landed in the (multi-second) verify window and the CAS
+   * rollback therefore left that foreign content in place, recording the diff would attribute the
+   * concurrent edit to THIS operation and Undo would erase it. A verified-landed write leaves this
+   * unset so it still gets a proper undo entry.
+   */
+  skipUndoTracking?: boolean;
 }
 
 export interface UpdateStylesResult extends AstOperationResult {
   className?: string;
+  /** HYP-901 — present ONLY once the direct write + auto-wrap retry are both tried/excluded and
+   *  rolled back; the file is unchanged from before this edit. See ast-update-utils.ts. */
+  warning?: StyleForwardingWarning;
 }
 
 export interface MoveResult {

@@ -92,6 +92,19 @@ export class AstService {
   // Maps "absolutePath:oldLine:oldCol" → new position + fingerprint after recast reformatting.
   // fingerprint guards against stale entries when the file is restored between writes.
   private readonly _positionForwardingCache = new Map<string, { line: number; column: number; fingerprint: string }>();
+  /**
+   * HYP-901 — B1-lite runtime computed-style verify, wired from extension.ts to
+   * `previewPanel.requestComputedStyleSnapshot(...)` the same way `setLiveClassNameProvider`
+   * wires PanelRouter (mirrors that no-circular-dep pattern). Undefined in every realm/test that
+   * doesn't set it — `updateStyles`'s auto-wrap retry then runs best-effort, unverified.
+   */
+  private _verifyComputedStyle?: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>;
+
+  setVerifyComputedStyleProvider(
+    provider: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>,
+  ): void {
+    this._verifyComputedStyle = provider;
+  }
 
   /** Convert relative nodeRef (src/foo.tsx:10:5) to absolute (/workspace/src/foo.tsx:10:5) */
   private _normalizeNodeRef(nodeRef: string): string {
@@ -266,6 +279,10 @@ export class AstService {
       fileParser: this._fileParser,
       updateNodeMap: (fp: string) => this._updateNodeMap(fp),
       resolveElementInCorrectFile: (ap: string, nr: NodeRef) => this._resolveElementInCorrectFile(ap, nr),
+      // HYP-901 — same alias-map cache "Go to main component" (HYP-563) uses, reused so the
+      // non-forwarding-component pre-write check resolves imported components identically.
+      getAliasMap: (importerFilePath: string) => this._loadAliasMap(importerFilePath),
+      verifyComputedStyle: this._verifyComputedStyle,
       resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
         this._resolveElement(ast, nodeRef, filePath),
     };
@@ -424,6 +441,7 @@ export class AstService {
     selectedSourceTabId?: string,
     domClasses?: string,
     probeDriving?: ColorProbeCandidate[],
+    verifyElementId?: string,
   ): Promise<UpdateStylesResult> {
     dbg(
       `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
@@ -439,6 +457,7 @@ export class AstService {
       selectedSourceTabId,
       domClasses,
       probeDriving,
+      verifyElementId,
     );
   }
 

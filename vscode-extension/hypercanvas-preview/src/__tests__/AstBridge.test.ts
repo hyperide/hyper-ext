@@ -202,6 +202,9 @@ describe('AstBridge', () => {
       'p-2 text-blue',
       // HYP-544 Phase 3: 8th arg is probeDriving (the empirical color-probe result); absent here.
       undefined,
+      // HYP-987 P1 #3: 9th arg is verifyElementId (iframe-relative id threaded per call); absent
+      // here because this direct handleMessage call passes no verifyElementId.
+      undefined,
     );
   });
 

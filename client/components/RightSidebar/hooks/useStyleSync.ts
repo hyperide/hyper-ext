@@ -10,6 +10,7 @@ import {
   type StyleNotAppliedContext,
   startStyleVerification,
 } from '@/lib/style-change-detector';
+import type { StyleForwardingWarning } from '@shared/types/style-forwarding-warning';
 import { STYLE_DEBOUNCE_MS } from '../constants';
 
 interface UseStyleSyncOptions {
@@ -58,6 +59,14 @@ interface UseStyleSyncOptions {
   onSyncEnd?: () => void;
   /** Called when computed styles didn't change after write + HMR */
   onStyleNotApplied?: (context: StyleNotAppliedContext) => void;
+  /**
+   * HYP-901, VS Code only — called ONLY once the extension host's verify-and-retry chain
+   * (direct write, then auto-wrap) is exhausted for a custom-component target that doesn't
+   * forward `style`/`className` to the DOM. By the time this fires, the file is unchanged
+   * from before the edit — this is the last-resort "couldn't apply" notice, not a "may not
+   * apply" hedge on a write that already landed.
+   */
+  onNonForwardingComponent?: (warning: StyleForwardingWarning) => void;
 }
 
 interface SyncStyleOptions {
@@ -88,6 +97,7 @@ export function useStyleSync({
   onSyncStart,
   onSyncEnd,
   onStyleNotApplied,
+  onNonForwardingComponent,
 }: UseStyleSyncOptions): UseStyleSyncReturn {
   const [isStyleSyncing, setIsStyleSyncing] = useState(false);
   const styleQueueRef = useRef<Map<string, string>>(new Map());
@@ -98,6 +108,12 @@ export function useStyleSync({
   const lastFastPatchIdRef = useRef<string | null>(null);
   const selectedKey = selectedIds.join('\0');
   const previousSyncScopeRef = useRef({ filePath, selectedKey });
+  // HYP-987 P1 (codex) — always-latest selected element id, used to REJECT a stale non-forwarding
+  // warning: a VS Code style write awaits the ext-host verify-and-retry, and the user may have
+  // selected a different element before it resolves. Firing the (element-A) warning while element B
+  // is selected would show a persistent warning with stale context over B. Updated every render.
+  const currentSelectedIdRef = useRef<string | undefined>(selectedIds[0]);
+  currentSelectedIdRef.current = selectedIds[0];
 
   const cancelPendingStyleSync = useCallback(() => {
     styleQueueRef.current.clear();
@@ -308,7 +324,7 @@ export function useStyleSync({
             props: rnProps,
           });
         } else {
-          await astOps.updateStyles({
+          const { warning } = await astOps.updateStyles({
             elementId: selectedId,
             filePath,
             styles,
@@ -319,6 +335,14 @@ export function useStyleSync({
             state: currentState,
             selectedSourceTabId,
           });
+          // HYP-901 — fires immediately (the ext host's verify-and-retry chain already ran
+          // before this RPC resolved; there's no separate HMR round-trip to wait for like SaaS's
+          // onStyleNotApplied above). By the time `warning` is set, direct write + auto-wrap have
+          // both been tried and rolled back — this is the last resort, not a hedge.
+          // HYP-987 P1 (codex) — drop a STALE warning: if the user selected a different element
+          // while this write's verify was in flight, the warning is for the wrong (no-longer-
+          // selected) element; do not raise a persistent warning with stale context over it.
+          if (warning && currentSelectedIdRef.current === selectedId) onNonForwardingComponent?.(warning);
         }
 
         finishSync();
@@ -343,6 +367,7 @@ export function useStyleSync({
     onSyncError,
     onSyncStart,
     onStyleNotApplied,
+    onNonForwardingComponent,
     finishSync,
   ]);
 

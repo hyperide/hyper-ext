@@ -11,6 +11,7 @@ import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
 import type { RuntimeError } from '../../../shared/runtime-error';
+import type { StyleForwardingWarning } from '../../../shared/types/style-forwarding-warning';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -408,6 +409,15 @@ export type PlatformContext = 'browser' | 'vscode-webview';
  */
 export interface AstOperations {
   /** Update Tailwind/style classes on an element */
+  /**
+   * Update Tailwind/style classes on an element.
+   *
+   * The resolved `warning` (HYP-901, VS Code only for now) is present ONLY once the
+   * verify-and-retry chain (direct write, then auto-wrap) is exhausted for a custom-
+   * component target that doesn't forward `style`/`className` to the DOM — by then the
+   * file is unchanged from before this edit. The browser adapter never sets it (no
+   * static analysis wired there yet).
+   */
   updateStyles(params: {
     elementId: string;
     filePath: string;
@@ -417,7 +427,7 @@ export interface AstOperations {
     instanceId?: string;
     state?: string;
     selectedSourceTabId?: string;
-  }): Promise<void>;
+  }): Promise<{ warning?: StyleForwardingWarning }>;
 
   /** Insert a new JSX element */
   insertElement(params: {

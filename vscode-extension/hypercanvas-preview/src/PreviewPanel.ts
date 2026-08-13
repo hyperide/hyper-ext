@@ -212,6 +212,12 @@ export class PreviewPanel {
   // Pending empirical color-probe requests (HYP-544 Phase 3 — which candidate drives the color)
   private _pendingProbeRequests = new Map<string, (result: { driving: ColorProbeCandidate[] }) => void>();
 
+  // Pending computed-style snapshot requests (HYP-901 B1-lite write-time verify round-trip)
+  private _pendingComputedStyleRequests = new Map<
+    string,
+    (result: { computedStyle: Record<string, string> | null }) => void
+  >();
+
   // Preview URL (set dynamically when dev server starts)
   private _previewBaseUrl = 'http://localhost:3000';
 
@@ -475,6 +481,7 @@ export class PreviewPanel {
       handleScreenshotResult: (msg) => this._handleScreenshotResult(msg),
       handleLiveClassNameResult: (msg) => this._handleLiveClassNameResult(msg),
       handleProbeColorCandidatesResult: (msg) => this._handleProbeColorCandidatesResult(msg),
+      handleComputedStyleSnapshotResult: (msg) => this._handleComputedStyleSnapshotResult(msg),
     };
   }
   // === ErrorBoundary handlers ===
@@ -637,6 +644,63 @@ export class PreviewPanel {
       callback({ driving });
       this._pendingProbeRequests.delete(requestId);
     }
+  }
+
+  private _handleComputedStyleSnapshotResult(msg: { [key: string]: unknown }): void {
+    const requestId = msg.requestId as string | undefined;
+    if (!requestId) return;
+
+    const callback = this._pendingComputedStyleRequests.get(requestId);
+    if (callback) {
+      const computedStyle =
+        msg.computedStyle && typeof msg.computedStyle === 'object'
+          ? (msg.computedStyle as Record<string, string>)
+          : null;
+      callback({ computedStyle });
+      this._pendingComputedStyleRequests.delete(requestId);
+    }
+  }
+
+  /**
+   * Read live computed style for `cssProperties` on an element from the preview iframe (HYP-901
+   * B1-lite write-verify). Same request/response + 800ms-timeout shape as `requestLiveClassName` —
+   * resolves null on no-panel / element-not-found / timeout, and the caller (ast-update-utils.ts)
+   * then treats the write as unverified (kept best-effort), never blocked.
+   */
+  requestComputedStyleSnapshot(elementId: string, cssProperties: string[]): Promise<Record<string, string> | null> {
+    const webview = this._liveWebview();
+    if (!webview || !elementId || cssProperties.length === 0) return Promise.resolve(null);
+
+    const requestId = `computedstyle-${Date.now()}-${this._generateRandomId(6)}`;
+
+    return new Promise((resolve) => {
+      this._pendingComputedStyleRequests.set(requestId, (result) => {
+        resolve(result.computedStyle);
+      });
+
+      const posted = this._postToWebview({
+        type: 'requestComputedStyleSnapshot',
+        elementId,
+        itemIndex: null,
+        cssProperties,
+        requestId,
+      });
+      // Webview disposed mid-flight: no iframe will ever answer, so resolve now instead of
+      // leaking the pending entry until the timeout below fires.
+      if (!posted) {
+        this._pendingComputedStyleRequests.delete(requestId);
+        resolve(null);
+        return;
+      }
+
+      // Timeout: resolve null if the iframe doesn't answer (e.g. mid-HMR reload).
+      setTimeout(() => {
+        if (this._pendingComputedStyleRequests.has(requestId)) {
+          this._pendingComputedStyleRequests.delete(requestId);
+          resolve(null);
+        }
+      }, 800);
+    });
   }
 
   /**
