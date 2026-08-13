@@ -602,3 +602,104 @@ describe('unsupported expressions', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hook-level namespace: useTranslation('ns') and useTranslation({ ns: 'ns' })
+// ---------------------------------------------------------------------------
+
+describe('hook-level namespace via useTranslation', () => {
+  it("picks up namespace from useTranslation('common') string argument", () => {
+    const source = `import { useTranslation } from 'react-i18next';
+function Component() {
+  const { t } = useTranslation('common');
+  return <p>{t('hello')}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, "t('hello')"),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('hello');
+      expect(result.namespace).toBe('common');
+    }
+  });
+
+  it("picks up namespace from useTranslation({ ns: 'common' }) object argument", () => {
+    const source = `import { useTranslation } from 'react-i18next';
+function Component() {
+  const { t } = useTranslation({ ns: 'common' });
+  return <p>{t('hello')}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, "t('hello')"),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('hello');
+      expect(result.namespace).toBe('common');
+    }
+  });
+
+  it("inline t('key', { ns: 'admin' }) wins over hook-level useTranslation('common')", () => {
+    const source = `import { useTranslation } from 'react-i18next';
+function Component() {
+  const { t } = useTranslation('common');
+  return <p>{t('hello', { ns: 'admin' })}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, "t('hello'"),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('hello');
+      expect(result.namespace).toBe('admin');
+    }
+  });
+
+  it('namespace is undefined when useTranslation() called without arguments', () => {
+    const source = `import { useTranslation } from 'react-i18next';
+function Component() {
+  const { t } = useTranslation();
+  return <p>{t('hello')}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, "t('hello')"),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('hello');
+      expect(result.namespace).toBeUndefined();
+    }
+  });
+
+  it('namespace is undefined when useTranslation receives a dynamic variable', () => {
+    const source = `import { useTranslation } from 'react-i18next';
+function Component({ ns }: { ns: string }) {
+  const { t } = useTranslation(ns);
+  return <p>{t('hello')}</p>;
+}`;
+    const result = detectI18nBinding({
+      source,
+      filePath: 'Component.tsx',
+      location: loc(source, "t('hello')"),
+      library: 'react-i18next',
+    });
+    expect(result.kind).toBe('i18n');
+    if (result.kind === 'i18n') {
+      expect(result.key).toBe('hello');
+      expect(result.namespace).toBeUndefined();
+    }
+  });
+});

@@ -158,11 +158,14 @@ export function detectI18nBinding(params: DetectI18nBindingParams): I18nBindingD
           found = { kind: 'unsupported', reason: 'dynamic-key' };
           return;
         }
-        const namespace = secondArg !== undefined ? extractNsFromObject(secondArg as t.ObjectExpression) : undefined;
-        if (namespace === null) {
+        const inlineNamespace =
+          secondArg !== undefined ? extractNsFromObject(secondArg as t.ObjectExpression) : undefined;
+        if (inlineNamespace === null) {
           found = { kind: 'unsupported', reason: 'dynamic-key' };
           return;
         }
+        // Inline namespace wins; fall back to hook-level namespace when absent.
+        const namespace = inlineNamespace ?? (calleeName ? resolveHookNamespace(source, calleeName) : undefined);
         found = makeDetected(library, firstArg.value, nodeLoc.start, namespace);
         return;
       }
@@ -347,6 +350,88 @@ function extractIdFromObject(obj: t.ObjectExpression): string | false | null {
 
   if (lastIdProp.value.type !== 'StringLiteral') return false;
   return lastIdProp.value.value;
+}
+
+/** Hook function names that accept a namespace as their first argument. */
+const HOOK_NS_PROVIDERS = new Set([
+  'useTranslation', // react-i18next
+  'useI18n', // vue-i18n (sometimes used in TS/TSX projects)
+]);
+
+/**
+ * Resolve the namespace declared at the hook level for a given local binding name.
+ *
+ * Handles both:
+ *   const { t } = useTranslation('namespace')          → 'namespace'
+ *   const { t } = useTranslation({ ns: 'namespace' })  → 'namespace'
+ *   const { t } = useTranslation()                     → undefined
+ *   const { t } = useTranslation(dynamicVar)            → undefined (treat as unresolvable)
+ *
+ * Only flat-file scanning — no scope analysis. If the same local name is declared
+ * multiple times in different scopes, the first matching declarator wins.
+ *
+ * Returns undefined when the hook takes no first argument, has a dynamic first
+ * argument, or when `calleeName` is not found as a hook destructure.
+ */
+export function resolveHookNamespace(source: string, calleeName: string): string | undefined {
+  let ast: t.File;
+  try {
+    ast = parse(source, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    }) as t.File;
+  } catch {
+    return undefined;
+  }
+
+  let result: string | undefined;
+
+  try {
+    traverse(ast, {
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
+        if (result !== undefined) return;
+        const { id, init } = path.node;
+
+        if (id.type !== 'ObjectPattern' || init?.type !== 'CallExpression') return;
+
+        // Check that the hook is a recognized namespace-providing hook.
+        const hookCallee = init.callee;
+        const hookName = hookCallee.type === 'Identifier' ? hookCallee.name : null;
+        if (!hookName || !HOOK_NS_PROVIDERS.has(hookName)) return;
+
+        // Check that calleeName is destructured from this hook.
+        const hasCallee = id.properties.some(
+          (prop) =>
+            prop.type === 'ObjectProperty' &&
+            prop.value.type === 'Identifier' &&
+            (prop.value as t.Identifier).name === calleeName,
+        );
+        if (!hasCallee) return;
+
+        // Extract namespace from the hook's first argument.
+        const firstArg = init.arguments[0];
+        if (!firstArg) return; // useTranslation() — no namespace
+
+        if (firstArg.type === 'StringLiteral') {
+          result = firstArg.value;
+          return;
+        }
+
+        if (firstArg.type === 'ObjectExpression') {
+          const ns = extractNsFromObject(firstArg);
+          // null = dynamic ns (spread/computed), undefined = no ns prop — either way: undefined
+          result = typeof ns === 'string' ? ns : undefined;
+          return;
+        }
+
+        // Dynamic first argument (variable, template literal, etc.) — leave as undefined.
+      },
+    });
+  } catch {
+    // ignore traverse errors
+  }
+
+  return result;
 }
 
 /**
