@@ -7,6 +7,7 @@
  * fallback (unique t(oldKey) → ambiguous when >1) and dynamic/template → not-retargetable.
  */
 import { describe, expect, it } from 'bun:test';
+import { parseCode } from '../../../../lib/ast/parser';
 import { retargetBinding, scanBindings } from '../core';
 
 const REACT_I18NEXT = 'react-i18next' as const;
@@ -274,5 +275,212 @@ function C() {
       library: REACT_I18NEXT,
     });
     expect(result.code).toBe('unsupported');
+  });
+
+  it('still rewrites on a CRLF source (offset-drift fallback, HYP-877 P2)', () => {
+    // spliceNodeSource refuses CRLF sources (normalized offsets misindex the raw bytes), so the
+    // rewrite must land through the whole-file printAST fallback: the change APPLIES and the
+    // file stays valid — a silent 'unsupported' or a corrupted splice would both fail this
+    // (codex P2: this caller previously had no AST-write fallback, unlike style-write).
+    const source = `import { useTranslation } from 'react-i18next';
+
+export function C() {
+  const { t } = useTranslation();
+  return <span>{t('hero.title')}</span>;
+}
+`.replaceAll('\n', '\r\n');
+    const scanned = scanBindings(source, { library: REACT_I18NEXT }).find((b) => b.key === 'hero.title');
+    expect(scanned?.retargetable).toBe(true);
+
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: scanned!.bindingLoc!,
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('ok');
+    expect(result.written).toBe(true);
+    expect(result.source).toContain("t('hero.heading')");
+    expect(result.source).not.toContain("t('hero.title')");
+    expect(() => parseCode(result.source)).not.toThrow();
+
+    // recast's whole-file reprint LF-joins every line ending on its own (verified empirically:
+    // parseCode+printAST with zero edits already flattens CRLF -> LF), which would otherwise turn
+    // a one-key rewrite into a diff touching every line — the churn class HYP-877 exists to
+    // prevent, just on this callsite. wholeFileFallback restores CRLF, recovering full byte-
+    // identity outside the touched call: pin the exact output so a regression (CRLF churn
+    // creeping back in, or genuine corruption) is caught immediately.
+    expect(result.source).toBe(source.replace("t('hero.title')", "t('hero.heading')"));
+  });
+
+  it('still rewrites on a tab-indented source (offset-drift fallback, HYP-877 P2)', () => {
+    const source = `import { useTranslation } from 'react-i18next';
+
+export function C() {
+\tconst { t } = useTranslation();
+\treturn <span>{t('hero.title')}</span>;
+}
+`;
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      // Deliberately wrong loc: exercises the write-path splice fallback via the "unique
+      // t(oldKey)" locate path (same as the "falls back to the UNIQUE t(oldKey)" test above),
+      // sidestepping a separate pre-existing bug where detectI18nBinding re-parses with plain
+      // @babel/parser (no recast tab-expansion) so its column never matches the recast-derived
+      // bindingLoc scanBindings would emit for a tab-indented line — unrelated to this guard.
+      bindingLoc: { line: 999, column: 0 },
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('ok');
+    expect(result.written).toBe(true);
+    expect(() => parseCode(result.source)).not.toThrow();
+    // Unlike CRLF, tabs round-trip through printAST unmodified — the fallback here is byte-
+    // identical to the source except for the swapped key.
+    expect(result.source).toBe(source.replace("t('hero.title')", "t('hero.heading')"));
+  });
+
+  it('composes the CRLF splice fallback with the "unique t(oldKey)" locate fallback', () => {
+    // Both fallbacks in the same call: a missed bindingLoc AND a CRLF source. Guards against a
+    // future refactor accidentally coupling one fallback's success to the other's.
+    const source = `import { useTranslation } from 'react-i18next';
+
+export function C() {
+  const { t } = useTranslation();
+  return <span>{t('only.key')}</span>;
+}
+`.replaceAll('\n', '\r\n');
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'only.key',
+      newKey: 'only.renamed',
+      bindingLoc: { line: 999, column: 0 }, // miss → falls back to the unique t('only.key')
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('ok');
+    expect(result.written).toBe(true);
+    expect(result.source).toBe(source.replace("t('only.key')", "t('only.renamed')"));
+  });
+
+  it('refuses (not corrupts) a MIXED CRLF/LF source rather than risk flattening an embedded value (review round 3)', () => {
+    // A stray bare '\n' (e.g. a cross-platform-edited file) means the source is not uniformly
+    // CRLF: recast's whole-file reprint would LF-join everywhere, and on a mixed file that could
+    // flatten a genuine '\r\n' living INSIDE a template literal / JSX text value elsewhere in the
+    // file — corrupting that literal's runtime value, not just reformatting it. Refuse, same as
+    // spliceNodeSource's own guard, rather than trade a safe 'unsupported' for an unsafe write.
+    const source =
+      "import { useTranslation } from 'react-i18next';\r\n" +
+      '\r\n' +
+      'export function C() {\r\n' +
+      '  const { t } = useTranslation();\n' + // stray bare LF among CRLF siblings
+      "  return <span>{t('hero.title')}</span>;\r\n" +
+      '}\r\n';
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: { line: 999, column: 0 }, // force the unique-key locate fallback
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('unsupported');
+    expect(result.written).toBe(false);
+    expect(result.source).toBe(source); // unchanged — refusal, not a partial/lossy write
+  });
+
+  it('refuses rather than flatten a genuine embedded CRLF inside a template literal on an otherwise-LF file (review round 3)', () => {
+    // Empirically verified: printAST alone (zero mutations) turns a real embedded '\r\n' inside a
+    // template literal's VALUE into '\n' on an LF-dominant file — a semantic corruption, not mere
+    // reformatting. The source has '\r' (so spliceNodeSource's guard fires) but is not uniformly
+    // CRLF, so wholeFileFallback must refuse rather than risk that corruption.
+    const source =
+      "import { useTranslation } from 'react-i18next';\n" +
+      '\n' +
+      'export function C() {\n' +
+      '  const { t } = useTranslation();\n' +
+      "  const banner = `line1\r\nline2`;\n" + // genuine embedded CRLF inside the literal's VALUE
+      "  return <span>{t('hero.title')}</span>;\n" +
+      '}\n';
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: { line: 999, column: 0 },
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('unsupported');
+    expect(result.written).toBe(false);
+    expect(result.source).toBe(source);
+  });
+
+  it('refuses a lone-\\r (old-Mac-style) source rather than guess (review round 4)', () => {
+    // A '\r' not immediately followed by '\n' is neither "no \\r at all" nor "uniformly CRLF" —
+    // wholeFileFallback's third, unprovable case. Must refuse, not silently reprint.
+    const source =
+      "import { useTranslation } from 'react-i18next';\r" +
+      '\r' +
+      'export function C() {\r' +
+      '  const { t } = useTranslation();\r' +
+      "  return <span>{t('hero.title')}</span>;\r" +
+      '}\r';
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: { line: 999, column: 0 },
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('unsupported');
+    expect(result.written).toBe(false);
+    expect(result.source).toBe(source);
+  });
+
+  it('rewrites byte-identically (outside the swapped key) on a uniform-CRLF file with an embedded CRLF inside a template literal', () => {
+    // The positive counterpart to the two refusal tests above: proves the uniform-CRLF branch is
+    // actually SAFE, not just "doesn't obviously corrupt anything" — the template literal's own
+    // internal CRLF (which matches the file's uniform convention) round-trips through
+    // normalize-to-LF-then-restore-to-CRLF without being flattened or doubled.
+    const source =
+      "import { useTranslation } from 'react-i18next';\r\n" +
+      '\r\n' +
+      'export function C() {\r\n' +
+      '  const { t } = useTranslation();\r\n' +
+      "  const banner = `line1\r\nline2`;\r\n" + // embedded CRLF matches the file's own convention
+      "  return <span>{t('hero.title')}</span>;\r\n" +
+      '}\r\n';
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: { line: 999, column: 0 },
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('ok');
+    expect(result.written).toBe(true);
+    expect(result.source).toBe(source.replace("t('hero.title')", "t('hero.heading')"));
+  });
+
+  it('rewrites byte-identically on a source that is BOTH uniform-CRLF AND tab-indented', () => {
+    // The two "provably safe" branches (no-CRLF-with-tabs, and uniform-CRLF) are only tested in
+    // isolation elsewhere — this combines them: tabs survive the CRLF-only '\n' -> '\r\n' restore
+    // untouched, since that replace only ever targets line-ending characters.
+    const source =
+      "import { useTranslation } from 'react-i18next';\r\n" +
+      '\r\n' +
+      'export function C() {\r\n' +
+      '\tconst { t } = useTranslation();\r\n' +
+      "\treturn <span>{t('hero.title')}</span>;\r\n" +
+      '}\r\n';
+    const result = retargetBinding(source, {
+      filePath: 'src/C.tsx',
+      oldKey: 'hero.title',
+      newKey: 'hero.heading',
+      bindingLoc: { line: 999, column: 0 },
+      library: REACT_I18NEXT,
+    });
+    expect(result.code).toBe('ok');
+    expect(result.written).toBe(true);
+    expect(result.source).toBe(source.replace("t('hero.title')", "t('hero.heading')"));
   });
 });

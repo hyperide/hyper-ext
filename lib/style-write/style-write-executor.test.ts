@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'bun:test';
 import type { FileIO } from '@lib/ast/file-io';
+import { parseCode } from '@lib/ast/parser';
 import { createFileParser } from '@lib/ast/parser.node';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { executeStyleWriteRequest, StyleWriteExecutor } from './style-write-executor';
@@ -201,7 +202,133 @@ describe('StyleWriteExecutor', () => {
       plan: makeTailwindPlan(),
       mutatedFiles: [appPath],
     });
-    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
+    // HYP-877: the original double quotes survive — only the class list changes.
+    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
+  });
+
+  describe('static className write is byte-surgical (HYP-877)', () => {
+    // Mirrors the conloca repro: blank lines between JSX children, double-quoted attributes.
+    // A one-class edit must not churn quotes, swallow blank lines, or drop the trailing newline.
+    const makeFixture = (quote: string, trailingNewline: boolean) =>
+      `export function AccountPage() {
+  return (
+    <div className=${quote}host-account min-h-screen bg-grey-12 text-grey-01${quote}>
+      <header className=${quote}host-account__strip flex items-center${quote}>
+        <button type=${quote}button${quote}>Back</button>
+      </header>
+
+      <div className=${quote}host-account__main flex flex-col${quote}>
+        <h1 className=${quote}text-2xl font-semibold${quote}>Account</h1>
+      </div>
+    </div>
+  );
+}${trailingNewline ? '\n' : ''}`;
+
+    const makeBgPlan = () =>
+      makeTailwindPlan({
+        requestedStyles: { backgroundColor: '#fde047' },
+        targetStyles: { backgroundColor: '#fde047' },
+        strategy: {
+          mode: 'static',
+          removeForProperties: ['backgroundColor'],
+          addClasses: 'bg-yellow-300',
+        },
+      });
+
+    async function runEdit(original: string): Promise<string> {
+      const appPath = '/project/src/App.tsx';
+      const fileIO = new InMemoryFileIO({ [appPath]: original });
+      const executor = new StyleWriteExecutor({ fileIO });
+      const result = await executor.execute(makeBgPlan());
+      expect(result.success).toBe(true);
+      return fileIO.content(appPath);
+    }
+
+    function expectOnlyTargetLiteralChanged(original: string, content: string, quote: string) {
+      // The intended change happened.
+      expect(content).toContain('bg-yellow-300');
+      expect(content).not.toContain('bg-grey-12');
+      // Every byte outside the target literal is identical: reconstruct the expected file by
+      // splicing ONLY the new class list into the original source, then compare whole files.
+      const expected = original.replace(
+        `className=${quote}host-account min-h-screen bg-grey-12 text-grey-01${quote}`,
+        `className=${quote}host-account min-h-screen text-grey-01 bg-yellow-300${quote}`,
+      );
+      expect(content).toBe(expected);
+    }
+
+    it('keeps double quotes, blank lines, and the trailing newline byte-identical', async () => {
+      const original = makeFixture('"', true);
+      const content = await runEdit(original);
+      expectOnlyTargetLiteralChanged(original, content, '"');
+    });
+
+    it('keeps single quotes as single quotes', async () => {
+      const original = makeFixture("'", true);
+      const content = await runEdit(original);
+      expectOnlyTargetLiteralChanged(original, content, "'");
+    });
+
+    it('does not add a trailing newline to a file that has none', async () => {
+      const original = makeFixture('"', false);
+      expect(original.endsWith('\n')).toBe(false);
+      const content = await runEdit(original);
+      expectOnlyTargetLiteralChanged(original, content, '"');
+      expect(content.endsWith('\n')).toBe(false);
+    });
+
+    it('keeps offsets exact on CRLF line endings', async () => {
+      const original = makeFixture('"', true).replaceAll('\n', '\r\n');
+      const content = await runEdit(original);
+      expectOnlyTargetLiteralChanged(original, content, '"');
+      // CRLF endings outside the target literal are untouched (no LF normalization).
+      expect(content).toContain('</header>\r\n\r\n');
+    });
+
+    it('switches to the alternate quote when the value clashes with the original quote char', async () => {
+      // Tailwind arbitrary values can carry quotes: bg-[url('x.png')] cannot sit inside a
+      // single-quoted attribute (JSX has no escapes), so the splice re-quotes JUST this literal
+      // with double quotes — still byte-identical everywhere else, and valid JSX.
+      const appPath = '/project/src/App.tsx';
+      const original = `export function App() {
+  return (
+    <div className='pl-2 bg-grey-12'>Hi</div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({ [appPath]: original });
+      const executor = new StyleWriteExecutor({ fileIO });
+      const result = await executor.execute(
+        makeTailwindPlan({
+          requestedStyles: { backgroundImage: "url('x.png')" },
+          targetStyles: { backgroundImage: "url('x.png')" },
+          strategy: {
+            mode: 'static',
+            removeForProperties: ['backgroundColor', 'backgroundImage'],
+            addClasses: "bg-[url('x.png')]",
+          },
+        }),
+      );
+      expect(result.success).toBe(true);
+      expect(fileIO.content(appPath)).toBe(
+        original.replace(`className='pl-2 bg-grey-12'`, `className="pl-2 bg-[url('x.png')]"`),
+      );
+    });
+
+    it('falls back to the AST write when the element has no className yet', async () => {
+      const appPath = '/project/src/App.tsx';
+      const original = `export function App() {
+  return (
+    <div>Hi</div>
+  );
+}
+`;
+      const fileIO = new InMemoryFileIO({ [appPath]: original });
+      const executor = new StyleWriteExecutor({ fileIO });
+      const result = await executor.execute(makeBgPlan());
+      expect(result.success).toBe(true);
+      expect(fileIO.content(appPath)).toContain('bg-yellow-300');
+    });
   });
 
   it('preserves untouched JSX formatting when rewriting a dynamic className (HYP-575)', async () => {
@@ -264,6 +391,47 @@ export function OpaqueColorFixture() {
     // Explicit guards against the observed regression symptoms.
     expect(content).toContain('\n      Hello opaque color world\n');
     expect(content).toContain('\n    </div>\n');
+  });
+
+  it('still applies a dynamic className edit on a CRLF source (offset-drift fallback, HYP-877)', async () => {
+    // spliceNodeSource refuses CRLF sources (normalized offsets misindex raw bytes), so the write
+    // must land through the whole-file AST fallback: the change APPLIES and the file stays valid —
+    // a silent no-op or a corrupted splice would both fail this.
+    const appPath = '/project/src/App.tsx';
+    const original = `import cn from 'clsx';
+
+export function OpaqueColorFixture() {
+  return (
+    <div className={cn("text-red-500 p-4", isActive && "font-bold")}>
+      Hello opaque color world
+    </div>
+  );
+}
+`.replaceAll('\n', '\r\n');
+    const plan = makeTailwindPlan({
+      sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:5:4' },
+      requestedStyles: { color: 'blue' },
+      targetStyles: { color: 'blue' },
+      strategy: {
+        mode: 'dynamic',
+        locations: [],
+        addClasses: 'text-blue-500',
+        removeForProperties: ['color'],
+        fallbackStrategy: 'wrap-expression',
+        analysis: { engine: 'shared-deterministic-analyzer' },
+      },
+      target: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:5:4' },
+    });
+    const fileIO = new InMemoryFileIO({ [appPath]: original });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result.success).toBe(true);
+    const content = fileIO.content(appPath);
+    expect(content).toContain('text-blue-500');
+    expect(content).not.toContain('text-red-500');
+    expect(() => parseCode(content)).not.toThrow();
   });
 
   it('preserves untouched JSX formatting for in-place template-literal className edits (HYP-575)', async () => {
@@ -508,7 +676,7 @@ export function App() {
     });
 
     expect(result.success).toBe(true);
-    expect(fileIO.content(appPath)).toContain("className='text-red-500 pl-[16px]'");
+    expect(fileIO.content(appPath)).toContain('className="text-red-500 pl-[16px]"');
   });
 
   it('routes a cn() color write through the production planner and strips a short-circuit-branch color (HYP-537)', async () => {

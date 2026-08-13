@@ -16,10 +16,15 @@
  *   swaps the first string-literal argument of a t(...) CallExpression. We mutate the
  *   StringLiteral in-place and splice ONLY that call's source range (spliceNodeSource), so
  *   recast preserves every other byte (HYP-575 lesson: whole-file reprint reformats siblings).
+ *   On a CRLF/tab source spliceNodeSource refuses (HYP-877 P2: offsets are unverifiable against
+ *   the raw bytes there), so retargetBinding falls back to a whole-file printAST reprint (see
+ *   wholeFileFallback) — the same fallback the style-write callers use for the identical guard,
+ *   plus a CRLF restore step so it recovers byte-identity outside the touched call instead of
+ *   turning a one-key rewrite into a whole-file CRLF -> LF churn diff.
  */
 import _traverse, { type NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
-import { parseCode, spliceNodeSource } from '../../../lib/ast/parser';
+import { parseCode, printAST, spliceNodeSource } from '../../../lib/ast/parser';
 import { detectI18nBinding } from '../detect-i18n-binding';
 import type { I18nLibrary } from '../types';
 import type { BindingLocation, RetargetErrorCode } from './contract';
@@ -297,16 +302,79 @@ export function retargetBinding(source: string, req: RetargetCoreRequest): Retar
   // emits a fresh single-quoted literal from `.value`.
   delete (located.arg as { extra?: unknown }).extra;
 
-  const rewritten = spliceNodeSource(source, callNode, start, end);
+  // On a normal LF source, spliceNodeSource is the hot path and must be allowed to throw/propagate
+  // as before — swallowing its exceptions would mask a genuine regression there as a harmless
+  // 'unsupported' (review round 5). Only wholeFileFallback (the new call this diff adds) gets a
+  // defensive catch: it calls into recast's printer, which — like every other printAST/writeAST
+  // caller in this codebase — is not proven never to throw, and this function's contract is to
+  // always return a result, never propagate.
+  const spliced = spliceNodeSource(source, callNode, start, end);
+  let rewritten: string | null;
+  if (spliced !== null) {
+    rewritten = spliced;
+  } else {
+    try {
+      rewritten = wholeFileFallback(source, end, ast);
+    } catch {
+      rewritten = null;
+    }
+  }
   if (rewritten == null) {
+    // Either wholeFileFallback refused (a source it cannot independently confirm is safe to
+    // whole-file reprint — see wholeFileFallback's own precondition check) or the reprint threw —
+    // same honest refusal, not a silent no-op.
     return {
       code: 'unsupported',
       written: false,
       source,
       resultingKey: req.oldKey,
-      reason: 'spliceNodeSource returned null (no usable range)',
+      reason: 'no format-safe write path for this source (ambiguous CRLF/LF mix, or reprint failed)',
     };
   }
 
   return { code: 'ok', written: true, source: rewritten, resultingKey: req.newKey };
+}
+
+/**
+ * spliceNodeSource's whole-file fallback (HYP-877 P2 review): the node is still fully located and
+ * safely mutated in-AST, so reprint the whole file rather than refuse the retarget outright — same
+ * fallback the style-write callers (style-write-executor.ts) use for the identical guard.
+ *
+ * First independently re-confirms this really IS spliceNodeSource's CRLF/tab guard firing — the
+ * exact same `/[\r\t]/` check over `source.slice(0, end)` — rather than trusting that no OTHER
+ * null-cause exists there (review round 5). A LF-only source with no tabs before `end` returns null
+ * here even though spliceNodeSource also returned null, refusing rather than risking a churny
+ * whole-file reprint for an unexplained refusal.
+ *
+ * recast's printer always LF-joins line endings on a whole-file reprint (even with zero other
+ * mutations — tabs round-trip untouched, only CRLF is affected, both verified empirically). Two
+ * cases are PROVABLY safe to reprint:
+ *   - the guard fired on a tab with no '\r' anywhere in `source`: there are no line endings to
+ *     normalize, so the reprint has no formatting delta beyond whatever recast always does to
+ *     touched nodes.
+ *   - `source` UNIFORMLY CRLF — every '\r' immediately followed by '\n' AND every '\n' immediately
+ *     preceded by '\r', so no lone '\r' (old-Mac-style) or lone '\n' exists anywhere, including
+ *     inside string/template-literal content: recast's normalization CRLF->LF-joins the WHOLE
+ *     source before parsing — including inside multi-line template literals / JSX text — so
+ *     restoring '\n' -> '\r\n' uniformly across the reprint recovers byte-identity outside the
+ *     touched call. `\r?\n` (not a bare `\n`) as the replaced pattern so an already-restored '\r\n'
+ *     can never double into '\r\r\n' if recast's LF-only-output invariant ever changes.
+ *
+ * Anything else (mixed CRLF/LF, or a lone '\r') returns null — refuse rather than guess. A mixed
+ * file can have a genuine '\r\n' embedded inside a template literal / JSX text VALUE that ISN'T a
+ * line-ending convention at all (e.g. a hardcoded Windows-style text blob in an otherwise-LF file);
+ * recast's whole-file normalization would silently flatten that to '\n', changing the literal's
+ * RUNTIME VALUE rather than merely its formatting — verified empirically (round 3 review). That
+ * corruption class is strictly worse than the pre-fallback 'unsupported' this callsite already
+ * returned, so the mixed case keeps that behavior rather than trade a safe refusal for an unsafe
+ * write.
+ */
+function wholeFileFallback(source: string, end: number, ast: t.File): string | null {
+  // `end` is already a validated number at the call site, but `.slice(0, undefined)` would
+  // silently scan the WHOLE source instead of failing loud — an explicit finite check keeps this
+  // precondition check honest even if a future refactor loosens the caller's guarantee.
+  if (!Number.isFinite(end) || !/[\r\t]/.test(source.slice(0, end))) return null;
+  if (!source.includes('\r')) return printAST(ast);
+  const isUniformlyCrlf = !/\r(?!\n)/.test(source) && !/(?<!\r)\n/.test(source);
+  return isUniformlyCrlf ? printAST(ast).replace(/\r?\n/g, '\r\n') : null;
 }

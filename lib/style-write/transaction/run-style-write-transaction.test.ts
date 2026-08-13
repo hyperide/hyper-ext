@@ -63,7 +63,7 @@ describe('runStyleWriteTransaction — success path (the one working flow stays 
 
     expect(result.success).toBe(true);
     expect(result.writeId).toBeTruthy();
-    expect(fileIO.content(APP)).toContain("className='text-red-500 pl-[16px]'");
+    expect(fileIO.content(APP)).toContain('className="text-red-500 pl-[16px]"');
 
     const record = await journalStore.get(result.writeId);
     expect(record?.state).toBe('committed');
@@ -187,7 +187,7 @@ describe('runStyleWriteTransaction — a commit journal failure keeps the write 
     // surfaced rather than swallowed.
     expect(result.success).toBe(true);
     expect(result.journalError).toBe('journal disk full');
-    expect(fileIO.content(APP)).toContain("className='text-red-500 pl-[16px]'");
+    expect(fileIO.content(APP)).toContain('className="text-red-500 pl-[16px]"');
   });
 
   it('leaves NO recoverable non-terminal record when the committed put fails (orphan-record guard, review #2)', async () => {

@@ -15,7 +15,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { applyInlineStyleUpdate } from '@lib/ast/inline-style-mutator';
 import { getAttribute, getAttributeStaticClassName, getAttributeString, setAttribute } from '@lib/ast/mutator';
 import { NodeFileIO } from '@lib/ast/node-file-io';
-import { printNodeSource, spliceNodeSource } from '@lib/ast/parser';
+import { printNodeSource, spliceNodeSource, spliceStringLiteralValue } from '@lib/ast/parser';
 import { createFileParser } from '@lib/ast/parser.node';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import type { CssSystemId, RuntimeThemeContext, StyleSourceOwner } from '@lib/style-read/types';
@@ -261,6 +261,30 @@ export class StyleWriteExecutor {
         tailwindStatePrefix(plan),
       );
       const newClassName = [preserved, plan.strategy.addClasses].filter(Boolean).join(' ').trim();
+
+      // HYP-877: splice ONLY the existing literal's span as text, keeping its original quote char.
+      // The previous `setAttribute(t.stringLiteral(...)) + writeAST` whole-file reprint churned the
+      // quote style (recast prints a fresh literal with `quote:'single'`), re-flowed the enclosing
+      // JSX (swallowing users' blank lines between children), and could drop the trailing newline —
+      // a one-class edit on a real client repo produced a dirty multi-hunk diff.
+      const literalBefore = getAttribute(element, 'className');
+      if (t.isStringLiteral(literalBefore)) {
+        const sourceCode = await this.fileParser.readFileContent(absolutePath);
+        // extra.raw is the literal's original source text INCLUDING its quotes — the splice anchors
+        // on it (byte-equality) so recast's offset normalization (CRLF/tabs) can never misplace it.
+        const originalRaw = literalBefore.extra?.raw;
+        const spliced =
+          typeof originalRaw === 'string' && typeof literalBefore.start === 'number'
+            ? spliceStringLiteralValue(sourceCode, originalRaw, literalBefore.start, newClassName)
+            : null;
+        if (spliced !== null) {
+          await this.fileIO.writeFile(absolutePath, spliced);
+          this.fileParser.invalidate(absolutePath);
+          return { success: true, plan, mutatedFiles: [absolutePath] };
+        }
+      }
+
+      // Safety net (synthetic node / missing offsets / unspliceable value): AST-level write.
       setAttribute(element, 'className', t.stringLiteral(newClassName));
       await this.fileParser.writeAST(ast, absolutePath);
       return { success: true, plan, mutatedFiles: [absolutePath] };
@@ -364,7 +388,11 @@ export class StyleWriteExecutor {
       }
     }
 
-    if (splices.length > 0) {
+    // Same offset-drift hazard as spliceNodeSource: these spans are recast-normalized offsets, so a
+    // '\r'/'\t' BEFORE the last span's end misindexes the raw bytes — whole-file write instead
+    // (HYP-877). Chars after every span cannot shift them.
+    const lastSpliceEnd = splices.reduce((max, s) => Math.max(max, s.end), 0);
+    if (splices.length > 0 && !/[\r\t]/.test(sourceCode.slice(0, lastSpliceEnd))) {
       let out = sourceCode;
       for (const s of splices.sort((a, b) => b.start - a.start)) {
         out = out.slice(0, s.start) + s.replacement + out.slice(s.end);
