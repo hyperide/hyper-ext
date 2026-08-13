@@ -155,7 +155,11 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
         ghost.style.overflow = 'hidden';
 
         const indicator = document.createElement('div');
-        indicator.className = 'hyper-drag-indicator';
+        // Canonical class is `hyper-drop-indicator` — it MUST match the CSS in
+        // style-injector.ts (`.hyper-drop-indicator[data-dir]`) and the e2e specs that
+        // locate `.hyper-drop-indicator`. A decompose refactor (#383) renamed it to
+        // `hyper-drag-indicator` and orphaned both; do not rename it again.
+        indicator.className = 'hyper-drop-indicator';
         indicator.style.position = 'fixed';
         indicator.style.zIndex = '9998';
         indicator.style.pointerEvents = 'none';
@@ -262,6 +266,11 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
   if (_dragIndicatorEl) {
     const dropRect = dropEl.getBoundingClientRect();
     const isHorizontal = _isHorizontalLayout(dropEl);
+    // data-dir drives the indicator-line styling in style-injector.ts CSS: a HORIZONTAL
+    // layout (side-by-side items) gets a VERTICAL drop line ("v"); a VERTICAL layout
+    // (stacked items) gets a HORIZONTAL drop line ("h"). Production never set this before,
+    // so the orientation styles never applied.
+    _dragIndicatorEl.setAttribute('data-dir', isHorizontal ? 'v' : 'h');
     _dragIndicatorEl.style.width = isHorizontal ? '3px' : `${dropRect.width}px`;
     _dragIndicatorEl.style.height = isHorizontal ? `${dropRect.height}px` : '3px';
     _dragIndicatorEl.style.left = isHorizontal
