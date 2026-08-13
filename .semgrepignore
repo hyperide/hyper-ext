@@ -1,0 +1,3 @@
+# VS Code extension webview uses postMessage('*') for webview→iframe communication.
+# This is safe: the webview and iframe share the same VS Code origin context.
+vscode-extension/hypercanvas-preview/src/webview-preview-panel/
