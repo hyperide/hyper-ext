@@ -1,5 +1,15 @@
 # vecli — path / boolean ops gap audit vs Figma + Inkscape
 
+> **SUPERSEDED IN PART (2026-06-11 reconciliation, HYP-469).** Several findings here
+> are stale: GAP-1 (CLI ran ops through MockPathOps) is FIXED — `src/backend.ts` +
+> `bin/vecli.ts` boot the real CanvasKit/Clipper backend and throw on WASM failure (no
+> silent mock). GAP-4 (reverse/close node-name mismatch) is FIXED (HYP-512, chainable.ts
+> emits `reverse-path`/`close-open-path`). Visvalingam-Whyatt is now wired and exposed
+> (`.simplify(1, {method:'vw'})`). The still-open gaps — Division/Break-Apart/Combine/Cut-Path,
+> offset join-type, and splitPath wiring — share one root cause and are blocked on the
+> multi-output DSL decision (HYP-532). See HYP-469 for the live status.
+
+
 Date: 2026-06-03
 Author: Alex Ultra + Claude
 Status: Draft
