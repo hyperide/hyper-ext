@@ -1030,7 +1030,7 @@ export default function RightSidebar({
               {isTextFromProps && (
                 <div className="w-sidebar-content mt-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded text-[10px] text-amber-800 dark:text-amber-400">
                   ⚠️ Text is passed dynamically.
-                  {activeInstanceId ? ' To edit instance props click the badge.' : ' Editing may broke jsx'}
+                  {activeInstanceId ? ' To edit instance props click the badge.' : ' Editing may break jsx'}
                 </div>
               )}
             </div>
@@ -1232,7 +1232,7 @@ export default function RightSidebar({
           // them it is NOT blocked during style-sync: prop edits go through a separate
           // AST path and the original standalone callsite was never style-sync-gated.
           <div className={cn(isReadonly && 'opacity-50 pointer-events-none')}>
-            <PropsSection />
+            <PropsSection projectUIKit={inspectorUIKit} componentPath={componentPath} />
           </div>
         )}
     </div>

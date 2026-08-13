@@ -14,7 +14,15 @@
  */
 
 import { PropsEditor } from '@/components/PropsEditor';
+import type { UIKitType } from '../types';
 
-export function PropsSection() {
-  return <PropsEditor />;
+interface PropsSectionProps {
+  /** Project UI kit — drives the themed color control for color-category props. */
+  projectUIKit?: UIKitType;
+  /** Source file of the selected component — passed to the color control. */
+  componentPath?: string | null;
+}
+
+export function PropsSection({ projectUIKit = 'none', componentPath }: PropsSectionProps = {}) {
+  return <PropsEditor uiKit={projectUIKit} componentPath={componentPath} />;
 }

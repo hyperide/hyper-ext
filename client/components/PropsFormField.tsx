@@ -8,8 +8,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PropColorField, type PropColorUIKit } from '@/components/ui/prop-color-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
 
 // Helper to detect if value is a token (format: $word or $number or $word.number)
 const isTokenValue = (val: unknown): val is string => {
@@ -29,12 +31,28 @@ interface PropsFormFieldProps {
   onChange: (value: unknown) => void;
   depth?: number;
   tamaguiTokens?: TamaguiTokens;
+  /** Project UI kit — drives the themed color control (tamagui $token / tailwind hex / none raw hex). */
+  uiKit?: PropColorUIKit;
+  /** Canvas engine — passed to the color control for in-component color awareness. */
+  engine?: CanvasEngine | null;
+  /** Source file of the selected component — passed to the color control. */
+  componentPath?: string | null;
 }
 
 /**
  * Render form field based on prop type
  */
-export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tamaguiTokens }: PropsFormFieldProps) {
+export function PropsFormField({
+  name,
+  propInfo,
+  value,
+  onChange,
+  depth = 0,
+  tamaguiTokens,
+  uiKit = 'none',
+  engine,
+  componentPath,
+}: PropsFormFieldProps) {
   // Prevent infinite recursion
   if (depth > 5) {
     return <div className="text-sm text-muted-foreground">Max nesting depth reached</div>;
@@ -42,7 +60,32 @@ export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tam
 
   const fieldId = `prop-${name}-${depth}`;
 
-  // Token field (for design tokens like colors, sizes, spacing)
+  // Color-category prop → themed token-aware color control (Variant A, HYP-716).
+  // Replaces the native <datalist> for color fields: tamagui emits `$token`, tailwind
+  // emits a hex value, 'none' renders a raw hex field. The token round-trip (no silent
+  // token→hex conversion, nearest-token snap only on explicit link-toggle) is owned by
+  // ColorCombobox / use-color-value. Size/space token categories keep the datalist below.
+  if ((propInfo.type === 'string' || propInfo.type === 'unknown') && propInfo.tokenCategory === 'color') {
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+          {name}
+          {propInfo.required && <span className="text-red-500">*</span>}
+        </Label>
+        <PropColorField
+          name={name}
+          fieldId={fieldId}
+          value={String(value ?? '')}
+          uiKit={uiKit}
+          onChange={onChange}
+          engine={engine}
+          componentPath={componentPath}
+        />
+      </div>
+    );
+  }
+
+  // Token field (for design tokens like sizes, spacing — color is handled above)
   const showTokens = propInfo.tokenCategory || isTokenValue(value);
   if ((propInfo.type === 'string' || propInfo.type === 'unknown') && showTokens && tamaguiTokens) {
     // Determine token list based on category
@@ -202,6 +245,9 @@ export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tam
                   }}
                   depth={depth + 1}
                   tamaguiTokens={tamaguiTokens}
+                  uiKit={uiKit}
+                  engine={engine}
+                  componentPath={componentPath}
                 />
               ))}
             </div>
@@ -238,6 +284,9 @@ export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tam
                     }}
                     depth={depth + 1}
                     tamaguiTokens={tamaguiTokens}
+                    uiKit={uiKit}
+                    engine={engine}
+                    componentPath={componentPath}
                   />
                 ) : (
                   <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">

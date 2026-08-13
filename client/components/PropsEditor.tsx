@@ -6,13 +6,21 @@ import type { ComponentPropsSchema } from '@shared/types/props';
 import { IconChevronDown, IconSearch } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import type { PropColorUIKit } from '@/components/ui/prop-color-field';
 import { useTamaguiTokens } from '@/hooks/useTamaguiTokens';
 import { useCanvasEngine, useSelectedIds } from '@/lib/canvas-engine';
 import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import { authFetch } from '@/utils/authFetch';
 import { PropsFormField } from './PropsFormField';
 
-export function PropsEditor() {
+interface PropsEditorProps {
+  /** Project UI kit — drives the themed color control for color-category props. */
+  uiKit?: PropColorUIKit;
+  /** Source file of the selected component — passed to the color control. */
+  componentPath?: string | null;
+}
+
+export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps = {}) {
   const engine = useCanvasEngine();
   const selectedIds = useSelectedIds();
   const { tokens: tamaguiTokens } = useTamaguiTokens();
@@ -307,6 +315,9 @@ export function PropsEditor() {
                     value={propsValues[propName]}
                     onChange={(value) => handlePropChange(propName, value)}
                     tamaguiTokens={tamaguiTokens}
+                    uiKit={uiKit}
+                    engine={engine}
+                    componentPath={componentPath}
                   />
                 ))}
 
