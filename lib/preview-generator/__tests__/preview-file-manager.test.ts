@@ -1485,7 +1485,7 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     expect(result).toBe('needs-patch');
   });
 
-  it('generates Remix route with HyperCanvasScripts and is idempotent', async () => {
+  it('generates Remix route with SSR hyper-canvas scripts and is idempotent', async () => {
     const io = new InMemoryFileIO();
     io.files.set('/project/package.json', JSON.stringify({ dependencies: { '@remix-run/react': '^2.0.0' } }));
     io.files.set(
@@ -1500,8 +1500,13 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     const routeFile = io.files.get('/project/app/routes/test-preview.tsx');
     expect(routeFile).toBeDefined();
     expect(routeFile).toContain('@hyperide-managed');
-    expect(routeFile).toContain('HyperCanvasScripts');
-    expect(routeFile).toContain('/__hypercanvas/iframe-interaction.js');
+    // The interaction script must be an SSR-rendered <script src> tag (present at first
+    // paint), NOT appended in the old post-hydration HyperCanvasScripts effect (#77/#45
+    // cold-SSR race). Scope the negative guard to the removed mechanism, not "useEffect".
+    expect(routeFile).toContain('data-hyper-inject="interaction"');
+    expect(routeFile).toContain('src="/__hypercanvas/iframe-interaction.js"');
+    expect(routeFile).not.toContain('HyperCanvasScripts');
+    expect(routeFile).not.toContain('document.head.appendChild');
     expect(routeFile).toContain('useSearchParams');
     expect(routeFile).toContain('id="root"');
 

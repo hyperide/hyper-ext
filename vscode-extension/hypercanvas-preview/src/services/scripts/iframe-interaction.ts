@@ -1292,11 +1292,11 @@ if (state.engineMode !== 'interact' && document.body) {
 }
 
 // Bridge-ready handshake (#51). By this point the message listener (above) is mounted and
-// __hyperCanvasState exists, so the bridge can safely receive a re-sent selection. Non-Remix
-// previews inject this script synchronously after <head> (PreviewProxy), so the parent is
-// already up and the re-send is a harmless no-op. Remix injects it post-hydration from the
-// generated route's HyperCanvasScripts effect (framework-routing.ts) — several async hops
-// late — so a tree selection issued before this point would otherwise be dropped with no
-// replay. Announcing readiness lets the parent (usePreviewBridge) re-forward the current
-// selection state once, closing the round-trip race regardless of framework.
+// __hyperCanvasState exists, so the bridge can safely receive a re-sent selection. Every
+// framework now loads this script at first paint: non-Remix previews inject it after <head>
+// (PreviewProxy), and Remix renders it as a plain <script src> in its route's SSR JSX
+// (framework-routing.ts, #77/#45) — both parser-executed, so the parent is typically already
+// up and the re-send is a harmless no-op. Announcing readiness still closes any residual
+// round-trip race (e.g. a selection issued before this script executes): it lets the parent
+// (usePreviewBridge) re-forward the current selection state once, framework-agnostically.
 window.parent.postMessage({ type: 'hypercanvas:bridgeReady' }, '*');

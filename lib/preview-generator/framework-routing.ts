@@ -260,36 +260,51 @@ export default function TestPreviewPage() {
   }
 
   if (framework === 'remix') {
+    // Render the hyper-canvas scripts as plain <script src> tags DIRECTLY in the SSR JSX.
+    //
+    // Why not the proxy (PreviewProxy injects them into <head> for every other framework):
+    // Remix hydrates the FULL document, so proxy-added <head> nodes the client render does
+    // not know about cause a hydration mismatch. So the route must own the markup.
+    //
+    // Why not a post-hydration effect (the previous approach): the interaction script
+    // (which enables the canvas selection round-trip) was appended to <head> from a
+    // useEffect that runs several async hops AFTER hydration. Under cold-SSR (slow first
+    // compile) the e2e harness read `hasInteractionScript` BEFORE the effect ran → an
+    // intermittent race (#77/#45) that timed out the selection round-trip.
+    //
+    // Rendering them as JSX <script src> inside the route's own body subtree makes them
+    // part of the SERVER-rendered HTML: the browser's parser executes a parser-inserted
+    // <script src> at load, deterministically, with no useEffect timing dependency. React
+    // owns this markup on both server and client (it lives in the route's returned tree,
+    // the same children Remix renders inside <body>), so it hydrates cleanly WITHOUT
+    // suppressHydrationWarning — server and client emit byte-identical <script> markup.
+    //
+    // These scripts are classic (no type="module"/async/defer), so the parser executes
+    // iframe-interaction.js mid-parse — BEFORE <CanvasPreview> below it is parsed and before
+    // Remix's <Scripts> hydration bundle runs. That script imperatively sets up listeners,
+    // observers, window.__hyperCanvasState, and calls _disableNativeDraggableIn(document.body)
+    // (sets draggable=false on <img>/<a href>). None of that drifts the React-controlled DOM
+    // in a way hydration sees: React 18 hydration only reconciles props IT rendered, so a
+    // `draggable` attribute (which no component renders) and imperatively-added listeners are
+    // invisible to it — it never warns on or strips extra attributes it did not emit. And at
+    // mid-parse the #root canvas subtree isn't built yet, so the querySelectorAll touches
+    // (at most) nothing React owns. Hence pre-hydration execution is safe — no mismatch.
+    //
+    // Dedup is intrinsic: the proxy skips Remix and nothing else injects these, so each
+    // src loads exactly once. (Note: this is NOT byte-for-byte the non-Remix script set —
+    // the proxy injects process-shim + interaction + error-detection + console-capture,
+    // while Remix renders interaction + error-detection + console-capture + chrome-detection.
+    // Remix intentionally has NO process-shim here; that's pre-existing, not changed by this
+    // route.) The #51 bridge-ready handshake still fires when the script executes (now
+    // earlier and deterministically), so it remains the replay safety net.
+    //
+    // Forward-compat caveat: this relies on React 18 (Remix 2) behavior. React 19 HOISTS
+    // <script src> to <head> during render, which would move these tags out of <body> on the
+    // client and reintroduce a server/client placement mismatch — revisit then (e.g. an
+    // explicit non-hoisted script via the route's <Scripts>/links, or a head-managed inject).
     return `${managed}
-import { useEffect as useHyperCanvasEffect } from 'react';
 import { useSearchParams } from '@remix-run/react';
 import CanvasPreview from '${previewImportPath}';
-
-const hyperCanvasScripts = [
-  { id: 'interaction', src: '/__hypercanvas/iframe-interaction.js' },
-  { id: 'error-detection', src: '/__hypercanvas/iframe-error-detection.js' },
-  { id: 'console-capture', src: '/__hypercanvas/iframe-console-capture.js' },
-  { id: 'chrome-detection', src: '/__hypercanvas/chrome-detection.js' },
-];
-
-function HyperCanvasScripts() {
-  useHyperCanvasEffect(() => {
-    const addedScripts: HTMLScriptElement[] = [];
-    for (const script of hyperCanvasScripts) {
-      if (document.querySelector(\`script[data-hyper-inject="\${script.id}"]\`)) continue;
-      const element = document.createElement('script');
-      element.dataset.hyperInject = script.id;
-      element.src = script.src;
-      document.head.appendChild(element);
-      addedScripts.push(element);
-    }
-    return () => {
-      for (const element of addedScripts) element.remove();
-    };
-  }, []);
-
-  return null;
-}
 
 export default function TestPreviewRoute() {
   const [params] = useSearchParams();
@@ -297,7 +312,10 @@ export default function TestPreviewRoute() {
 
   return (
     <div id="root">
-      <HyperCanvasScripts />
+      <script data-hyper-inject="interaction" src="/__hypercanvas/iframe-interaction.js" />
+      <script data-hyper-inject="error-detection" src="/__hypercanvas/iframe-error-detection.js" />
+      <script data-hyper-inject="console-capture" src="/__hypercanvas/iframe-console-capture.js" />
+      <script data-hyper-inject="chrome-detection" src="/__hypercanvas/chrome-detection.js" />
       <CanvasPreview component={params.get('component')} mode={mode} />
     </div>
   );

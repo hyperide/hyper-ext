@@ -366,9 +366,11 @@ export class PreviewProxy {
 
           if (!this._isRemixProject) {
             // Inject interaction + error detection scripts after <head>.
-            // Remix hydrates the full document, so its generated route renders
-            // these scripts itself via /__hypercanvas/* endpoints to avoid
-            // proxy-added nodes causing hydration mismatch.
+            // Remix hydrates the full document, so proxy-added <head> nodes would
+            // cause a hydration mismatch. Its generated route instead renders these
+            // scripts itself as plain <script src="/__hypercanvas/*"> tags directly in
+            // the route's SSR JSX (framework-routing.ts) — present at first paint and
+            // executed by the browser parser, so no post-hydration timing race (#77/#45).
             const injectedScripts = INJECTED_SCRIPTS;
             const headIndex = html.indexOf('<head>');
             if (headIndex !== -1) {

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { createElement as h } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { FileIO } from '../../ast/file-io';
 import {
   detectFramework,
@@ -342,13 +344,94 @@ describe('generateRouteFileContent', () => {
     expect(content).toContain('CanvasPreview');
     expect(content).toContain('@hyperide-managed');
     expect(content).toContain('id="root"');
-    expect(content).toContain('useEffect');
     expect(content).toContain('useSearchParams');
     expect(content).toContain("params.get('component')");
     expect(content).toContain("params.get('mode')");
     expect(content).toContain("params.get('app') === '1'");
     expect(content).toContain('/__hypercanvas/iframe-interaction.js');
+    // The hyper-canvas scripts must NOT be appended via the old post-hydration effect.
+    // That made the interaction script's presence race the cold-SSR first paint
+    // (#77/#45): the e2e harness read hasInteractionScript BEFORE the effect ran.
+    // They are now rendered as plain <script src> tags directly in the SSR JSX. Guard the
+    // exact removed mechanism (the HyperCanvasScripts effect that did document.head.appendChild),
+    // not the bare word "useEffect" — an unrelated effect must be free to return later.
+    expect(content).not.toContain('HyperCanvasScripts');
+    expect(content).not.toContain('document.head.appendChild');
+  });
+
+  // #77/#45: deterministic SSR injection. The interaction script (which enables the
+  // canvas selection round-trip) must be present in the route's SERVER-RENDERED HTML
+  // at first paint — NOT appended later in a post-hydration useEffect. A parser-inserted
+  // <script src> in the SSR body is executed by the browser at load, so there is no
+  // timing window where the bridge needs the script but it is absent.
+  it('remix route includes hyper-canvas scripts at first paint (server-rendered, not post-hydration)', () => {
+    const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
+
+    // All four scripts must be rendered as JSX <script src data-hyper-inject> tags.
+    for (const id of ['interaction', 'error-detection', 'console-capture', 'chrome-detection']) {
+      expect(content).toContain(`data-hyper-inject="${id}"`);
+    }
+    expect(content).toContain('src="/__hypercanvas/iframe-interaction.js"');
+    expect(content).toContain('src="/__hypercanvas/iframe-error-detection.js"');
+    expect(content).toContain('src="/__hypercanvas/iframe-console-capture.js"');
+    expect(content).toContain('src="/__hypercanvas/chrome-detection.js"');
+
+    // The interaction <script> must live inside the component's RETURNED JSX (the
+    // SSR-reachable tree), so it is part of first-paint HTML — not only inside an
+    // effect body that runs post-hydration.
+    const returnStart = content.indexOf('return (');
+    expect(returnStart).toBeGreaterThan(-1);
+    const jsx = content.slice(returnStart);
+    expect(jsx).toContain('data-hyper-inject="interaction"');
+    expect(jsx).toContain('src="/__hypercanvas/iframe-interaction.js"');
+
+    // No post-hydration scheduling: the scripts must not be appended by the old
+    // HyperCanvasScripts effect (document.head.appendChild). Scope the guard to the
+    // removed mechanism, not the bare word "useEffect" — a future unrelated effect is fine.
+    expect(content).not.toContain('HyperCanvasScripts');
+    expect(content).not.toContain('document.head.appendChild');
+    // Rendering identical <script> markup on server and client hydrates cleanly; no
+    // hydration-warning suppression is needed for the script elements.
     expect(content).not.toContain('suppressHydrationWarning');
+  });
+
+  // #77/#45: the whole fix rests on one React-18 assumption — a <script src> rendered
+  // inside the route's <body> JSX SURVIVES SSR (is emitted inline in the server HTML,
+  // not dropped/hoisted to <head>). The generator emits TSX *source text*, so we can't
+  // import+render the generated module directly; instead we SSR-render an equivalent
+  // React tree that mirrors the generated JSX (the four <script src data-hyper-inject>
+  // tags + a stub CanvasPreview, all inside <div id="root">). renderToStaticMarkup is the
+  // same React-18 server renderer Remix uses, so this proves the parser-inserted
+  // <script src> is present in first-paint HTML. A regression where React-18 SSR silently
+  // drops <script src> from <body> would turn this red. (React 19 would hoist it to
+  // <head> — see the forward-compat caveat in framework-routing.ts.)
+  it('react-18 SSR renders the <script src> tags inline in first-paint <body> HTML, once each', () => {
+    const scripts = [
+      { id: 'interaction', src: '/__hypercanvas/iframe-interaction.js' },
+      { id: 'error-detection', src: '/__hypercanvas/iframe-error-detection.js' },
+      { id: 'console-capture', src: '/__hypercanvas/iframe-console-capture.js' },
+      { id: 'chrome-detection', src: '/__hypercanvas/chrome-detection.js' },
+    ];
+    // Mirror the generated Remix route's returned JSX: scripts first, then CanvasPreview,
+    // all inside <div id="root">.
+    const tree = h(
+      'div',
+      { id: 'root' },
+      ...scripts.map((s) => h('script', { key: s.id, 'data-hyper-inject': s.id, src: s.src })),
+      h('div', { 'data-stub': 'canvas-preview' }, 'CanvasPreview'),
+    );
+    const html = renderToStaticMarkup(tree);
+
+    // Every script tag is present inline in the SSR output (not hoisted away / dropped).
+    for (const s of scripts) {
+      const tag = `<script data-hyper-inject="${s.id}" src="${s.src}"></script>`;
+      expect(html).toContain(tag);
+      // ...and exactly once (no accidental duplication).
+      expect(html.split(tag).length - 1).toBe(1);
+    }
+    // The interaction <script> renders BEFORE the CanvasPreview stub — i.e. it is part of
+    // the route's body subtree at first paint, not appended afterwards.
+    expect(html.indexOf('data-hyper-inject="interaction"')).toBeLessThan(html.indexOf('data-stub="canvas-preview"'));
   });
 
   it('astro route mounts CanvasPreview as a client:only React island', () => {
