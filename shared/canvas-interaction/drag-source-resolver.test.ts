@@ -283,6 +283,55 @@ describe('resolveDragSource', () => {
     expect(result).toBeNull();
   });
 
+  /**
+   * CRASH REGRESSION (e2e defect #13): a pointerdown over visible text reports
+   * e.target as a Text node (nodeType 3) which has no getAttribute. Before the
+   * defense-in-depth guard, resolveDragSource crashed with
+   * "target.getAttribute is not a function" — ~333 cascade failures in the
+   * inspector/canvas/drag suite. The resolver must treat any non-Element target
+   * as untraceable (return null) instead of throwing.
+   */
+  it('returns null without throwing for a Text-node-like target (no getAttribute)', () => {
+    const textNodeLike = { nodeType: 3, textContent: 'hello' } as unknown as HTMLElement;
+    const getSourceLocation = mock((_el: HTMLElement) => SOURCE_P);
+
+    let result: ReturnType<typeof resolveDragSource> | undefined;
+    expect(() => {
+      result = resolveDragSource(textNodeLike, getSourceLocation, '/src/App.tsx');
+    }).not.toThrow();
+    expect(result).toBeNull();
+    // Must short-circuit before ever consulting the resolver.
+    expect(getSourceLocation).not.toHaveBeenCalled();
+  });
+
+  it('returns null without throwing for a real document.createTextNode target', () => {
+    const textNode = document.createTextNode('button label') as unknown as HTMLElement;
+    const getSourceLocation = mock((_el: HTMLElement) => SOURCE_P);
+
+    let result: ReturnType<typeof resolveDragSource> | undefined;
+    expect(() => {
+      result = resolveDragSource(textNode, getSourceLocation, '/src/App.tsx');
+    }).not.toThrow();
+    expect(result).toBeNull();
+  });
+
+  /**
+   * The non-Element guard must NOT swallow real SVG targets — `<svg>`/`<path>`
+   * have getAttribute and are valid draggable elements. They must resolve as
+   * themselves, not be rejected as "non-Element".
+   */
+  it('resolves a real SVG element as itself (getAttribute guard does not reject SVG)', () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement;
+    const SOURCE_SVG: SourceLocation = { fileName: '/src/Icon.tsx', line: 3, column: 2 };
+    const getSourceLocation = mock((el: HTMLElement) => (el === svg ? SOURCE_SVG : null));
+
+    const result = resolveDragSource(svg, getSourceLocation, '/src/Icon.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(svg);
+    expect(result?.source).toEqual(SOURCE_SVG);
+  });
+
   it('returns null when no source found anywhere (truly untraceable element)', () => {
     const target = makeEl({ tagName: 'DIV' });
     (target as unknown as Record<string, unknown>).parentElement = {

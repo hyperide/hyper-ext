@@ -45,6 +45,15 @@ export function resolveDragSource(
   getSourceLocation: (el: HTMLElement) => SourceLocation | null,
   renderedComponentPath: string | null,
 ): DragSourceResult | null {
+  // Defense-in-depth: a pointerdown can land on a non-Element node (e.g. a Text node,
+  // nodeType 3, when the pointer is over visible text). Such nodes have no getAttribute
+  // and would throw on the aria-hidden read below. Callers should coerce up to an
+  // HTMLElement first, but guard here too since this resolver is shared with the SaaS
+  // interaction path. We check getAttribute directly rather than `instanceof HTMLElement`
+  // so the guard fires on any element-less node (e.g. a cross-realm/iframe element) and
+  // protects exactly the call that crashed.
+  if (typeof target?.getAttribute !== 'function') return null;
+
   // Decorative elements (aria-hidden="true") should never be the drag target themselves —
   // they carry no meaningful structure and their source points to a sub-element that users
   // cannot meaningfully reorder on its own. Always delegate to the nearest ancestor.

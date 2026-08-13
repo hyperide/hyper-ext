@@ -418,6 +418,84 @@ describe('attachClickHandler', () => {
     });
   });
 
+  /**
+   * CRASH REGRESSION (e2e defect #13): a click / pointerup / mouseover over visible
+   * text reports `e.target` as a Text node (nodeType 3) with no `tagName`. Before
+   * the normalization, `resolveOpaqueTarget(e.target).tagName.toUpperCase()` threw
+   * "Cannot read properties of undefined" on these paths too. The handler must coerce
+   * a Text node up to its owning element and resolve THAT, never throw.
+   */
+  describe('Text-node event targets (e2e #13)', () => {
+    /** A Text-node-like target: no tagName, parentElement points to the owning element. */
+    function textNodeIn(parent: HTMLElement): EventTarget {
+      return { nodeType: 3, textContent: 'label', parentElement: parent } as unknown as EventTarget;
+    }
+
+    it('click over a text label resolves the owning element (no throw)', () => {
+      const doc = createMockDocument();
+      const button = createMockElement('BUTTON');
+      const callbacks = createMockCallbacks();
+      const resolver = createMockResolver({
+        resolveClickLocal: mock((el: HTMLElement) => (el === button ? createMockResolveResult() : null)),
+      });
+
+      attachClickHandler(doc, callbacks, resolver);
+      expect(() => doc.__fire('click', { target: textNodeIn(button) })).not.toThrow();
+
+      // Resolved the owning button via the coerced target, not crashed on the Text node.
+      expect(callbacks.onElementClick).toHaveBeenCalledTimes(1);
+      expect(callbacks.onElementClick).toHaveBeenCalledWith(
+        '/src/App.tsx:3',
+        button,
+        expect.any(Object),
+        0,
+        SOURCE_BUTTON,
+      );
+    });
+
+    it('click on a detached text node (no parent) falls back to onEmptyClick without throwing', () => {
+      const doc = createMockDocument();
+      const callbacks = createMockCallbacks();
+      const resolver = createMockResolver();
+      const orphanText = { nodeType: 3, parentElement: null } as unknown as EventTarget;
+
+      attachClickHandler(doc, callbacks, resolver);
+      expect(() => doc.__fire('click', { target: orphanText })).not.toThrow();
+      expect(callbacks.onElementClick).not.toHaveBeenCalled();
+      expect(callbacks.onEmptyClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('mouseover over a text label resolves the owning element (no throw)', () => {
+      const doc = createMockDocument();
+      const div = createMockElement('DIV');
+      const callbacks = createMockCallbacks();
+      const resolver = createMockResolver({
+        resolveClickLocal: mock((el: HTMLElement) => (el === div ? createMockResolveResult() : null)),
+      });
+
+      attachClickHandler(doc, callbacks, resolver);
+      expect(() => doc.__fire('mouseover', { target: textNodeIn(div) })).not.toThrow();
+      expect(callbacks.onElementHover).toHaveBeenCalledTimes(1);
+    });
+
+    it('pointerup over a disabled-button text label resolves the button (no throw)', () => {
+      const doc = createMockDocument();
+      const disabledButton = {
+        tagName: 'BUTTON',
+        disabled: true,
+        parentElement: null,
+      } as unknown as HTMLElement;
+      const callbacks = createMockCallbacks();
+      const resolver = createMockResolver({
+        resolveClickLocal: mock((el: HTMLElement) => (el === disabledButton ? createMockResolveResult() : null)),
+      });
+
+      attachClickHandler(doc, callbacks, resolver);
+      expect(() => doc.__fire('pointerup', { target: textNodeIn(disabledButton) })).not.toThrow();
+      expect(callbacks.onElementClick).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('dispose', () => {
     it('should remove all listeners on dispose', () => {
       const doc = createMockDocument();

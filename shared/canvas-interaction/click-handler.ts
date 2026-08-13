@@ -5,6 +5,7 @@
  * Assumptions: TracingResolver (ElementTracer) is initialized with a valid adapter before attaching
  */
 
+import { normalizeEventTarget } from './normalize-event-target';
 import type { ClickHandlerCallbacks, ClickHandlerOptions, TracingResolver } from './types';
 
 /**
@@ -104,8 +105,9 @@ export function attachClickHandler(
 
     if (mode !== 'design' && mode !== 'interact') return;
 
-    // Resolve opaque containers: clicks on SVG internals select the SVG element
-    const target = resolveOpaqueTarget(e.target as HTMLElement);
+    // Normalize a Text-node target (click over visible text) up to its owning
+    // Element, then resolve opaque containers: clicks on SVG internals select the SVG.
+    const owner = normalizeEventTarget(e.target);
 
     if (mode === 'design') {
       e.preventDefault();
@@ -117,6 +119,13 @@ export function attachClickHandler(
     }
 
     if (mode !== 'design') return;
+
+    // No owning Element (e.g. a detached text node) — nothing traceable to select.
+    if (!owner) {
+      onEmptyClick?.(e);
+      return;
+    }
+    const target = resolveOpaqueTarget(owner);
 
     // Try local fiber resolution (synchronous from cache)
     const result = resolver.resolveClickLocal(target);
@@ -154,7 +163,9 @@ export function attachClickHandler(
   const handlePointerUp = (e: PointerEvent) => {
     if (e.button !== 0) return;
     if (getMode() !== 'design') return;
-    const target = resolveOpaqueTarget(e.target as HTMLElement);
+    const owner = normalizeEventTarget(e.target);
+    if (!owner) return;
+    const target = resolveOpaqueTarget(owner);
     if (!isDisabledFormElement(target)) return;
 
     e.preventDefault();
@@ -178,7 +189,9 @@ export function attachClickHandler(
 
   const handleMouseOver = (e: MouseEvent) => {
     if (getMode() !== 'design') return;
-    const target = resolveOpaqueTarget(e.target as HTMLElement);
+    const owner = normalizeEventTarget(e.target);
+    if (!owner) return;
+    const target = resolveOpaqueTarget(owner);
 
     const result = resolver.resolveClickLocal(target);
     if (result) {

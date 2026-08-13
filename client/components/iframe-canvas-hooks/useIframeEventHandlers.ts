@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
 import type { SourceLocation } from '@shared/element-tracing/types';
+import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
 import type { ClickRetryQueue } from '@/lib/element-tracing/click-retry-queue';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import type { CanvasMode } from '../../../shared/types/canvas';
@@ -65,7 +66,10 @@ export function useIframeEventHandlers({
     const doc = iframe.contentDocument;
 
     const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+      // Normalize a Text-node target (mousedown over visible text) up to its owning
+      // Element before calling DOM APIs like `closest` (e2e #13).
+      const target = normalizeEventTarget(e.target);
+      if (!target) return;
       if (target.closest('[data-role="context-menu"]')) return;
       if (e.button !== 1) return;
       window.dispatchEvent(new CustomEvent('contextmenuclose'));
@@ -77,15 +81,19 @@ export function useIframeEventHandlers({
       // Any new click supersedes a retry queued for a previous one (HYP-635).
       clickRetryQueue?.cancel();
 
+      // Normalize a Text-node target (click over visible text) up to its owning
+      // Element so `closest` / fiber resolution never throw (e2e #13).
+      const target = normalizeEventTarget(e.target);
+      if (!target) return;
+
       if (isAddingComment && onAddComment) {
         e.preventDefault();
         e.stopPropagation();
-        const target = e.target as HTMLElement;
         const fiberResult = tracer?.resolveClickLocal(target);
         const elementId = fiberResult?.nodeRef ?? null;
         const instanceElement = target.closest('[data-canvas-instance-id]') as HTMLElement;
         const instanceId = instanceElement?.dataset.canvasInstanceId || activeInstanceId || null;
-        const doc = (e.target as HTMLElement).ownerDocument;
+        const doc = target.ownerDocument;
         const scrollX = doc.documentElement.scrollLeft || doc.body?.scrollLeft || 0;
         const scrollY = doc.documentElement.scrollTop || doc.body?.scrollTop || 0;
         const isSingleMode = canvasMode === 'single';
@@ -104,7 +112,6 @@ export function useIframeEventHandlers({
       }
 
       if (mode === 'design' || mode === 'interact') {
-        const target = e.target as HTMLElement;
         if (mode === 'design') {
           e.preventDefault();
           e.stopPropagation();
@@ -166,7 +173,10 @@ export function useIframeEventHandlers({
     const handleMouseOver = (e: MouseEvent) => {
       const mode = engine.getMode();
       if (mode !== 'design') return;
-      const target = e.target as HTMLElement;
+      // Normalize a Text-node target (hover over visible text) up to its owning
+      // Element before fiber resolution (e2e #13).
+      const target = normalizeEventTarget(e.target);
+      if (!target) return;
       if (tracer && onElementHover) {
         const result = tracer.resolveClickLocal(target);
         if (result) {

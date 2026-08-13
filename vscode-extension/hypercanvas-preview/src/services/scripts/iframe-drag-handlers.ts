@@ -1,5 +1,6 @@
 import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolver';
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
+import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
 import { resolveOrderWritePlan } from './iframe-drag-order';
 import type { TracingResolver } from '@shared/canvas-interaction/types';
 
@@ -16,6 +17,13 @@ const DRAG_THRESHOLD_PX = 5;
 function _isHorizontalLayout(el: HTMLElement): boolean {
   return _isHorizontalLayoutShared(el);
 }
+
+/**
+ * Normalize a pointer event target to the Element that owns it (e2e #13).
+ * Thin re-export of the shared helper so both the drag and click handlers share
+ * one source of truth; kept exported under this name for the drag-handler tests.
+ */
+export const _normalizeEventTarget = normalizeEventTarget;
 
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
 let _dragSourceId: string | null = null;
@@ -38,7 +46,9 @@ let _dragEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
 export function _dragPointerDown(ctx: DragHandlerContext, e: PointerEvent): void {
   if (ctx.state.engineMode !== 'design' || e.button !== 0) return;
   if (_dragState !== 'idle') return;
-  const target = e.target as HTMLElement;
+  // Normalize a Text-node target up to its owning Element before resolving.
+  const target = _normalizeEventTarget(e.target);
+  if (!target) return;
   const resolved = resolveDragSource(
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),
@@ -183,7 +193,11 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
     _dragBadgeEl.style.top = `${e.clientY - 12}px`;
   }
 
-  const target = e.target as HTMLElement;
+  // Normalize the drop target the same way as pointerdown: over visible text
+  // e.target is a Text node, which resolveDragSource rejects — coercing up to the
+  // owning Element keeps the drop indicator resolving over text-heavy targets.
+  const target = _normalizeEventTarget(e.target);
+  if (!target) return;
   const resolved = resolveDragSource(
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),

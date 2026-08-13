@@ -12,6 +12,7 @@ import {
   type TraceableParentStep,
 } from '@shared/canvas-interaction/find-traceable-parent';
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
+import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
 import type { NodeMapLookup } from '@shared/canvas-interaction/keyboard-handler';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
 import { collectDomSiblingRects } from '@shared/canvas-interaction/spacing-guides';
@@ -761,7 +762,10 @@ const contextMenuHandler = (e: MouseEvent) => {
   if (state.engineMode !== 'design') return;
   e.preventDefault();
   e.stopPropagation();
-  const target = e.target as HTMLElement;
+  // Right-click over visible text reports e.target as a Text node; coerce up to the
+  // owning Element so resolveClickLocal / extractComputedStyle never see a non-Element.
+  const target = normalizeEventTarget(e.target);
+  if (!target) return;
   const result = iframeResolver.resolveClickLocal(target);
   const source = result?.source ?? null;
   const elementId = result ? `${result.source.fileName}:${result.source.line}:${result.source.column}` : null;
