@@ -17,6 +17,8 @@ import type {
   ParseComponentResult,
   PasteElementParams,
   PasteElementResult,
+  ReorderElementParams,
+  ReorderElementResult,
   SaveSnapshotResult,
   UpdatePropParams,
   UpdatePropsBatchParams,
@@ -49,6 +51,13 @@ export class MockASTApiService implements ASTApiService {
     newIds: ['pasted-1'],
     index: 0,
   };
+  reorderElementResult: ReorderElementResult = { success: true, snapshotId: 7 };
+  /**
+   * Optional gate to keep the reorder write in-flight. Tests set this to a
+   * pending promise so they can fire undo BEFORE the server write resolves
+   * (asserts ASTReorderOperation awaits `_pendingPromise`, no race).
+   */
+  reorderElementGate?: Promise<void>;
   updateStylesResult: UpdateStylesResult = {
     success: true,
     snapshotId: 1,
@@ -87,6 +96,12 @@ export class MockASTApiService implements ASTApiService {
   async pasteElement(params: PasteElementParams): Promise<PasteElementResult> {
     this.calls.push({ method: 'pasteElement', args: [params] });
     return { ...this.pasteElementResult };
+  }
+
+  async reorderElement(params: ReorderElementParams): Promise<ReorderElementResult> {
+    this.calls.push({ method: 'reorderElement', args: [params] });
+    if (this.reorderElementGate) await this.reorderElementGate;
+    return { ...this.reorderElementResult };
   }
 
   async updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult> {
@@ -138,6 +153,7 @@ export class MockASTApiService implements ASTApiService {
   reset(): void {
     this.calls = [];
     this.snapshotCounter = 10;
+    this.reorderElementGate = undefined;
   }
 
   getCallsFor(method: string): MockCall[] {

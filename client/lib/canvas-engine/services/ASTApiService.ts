@@ -32,6 +32,21 @@ export interface DuplicateElementParams {
   filePath: string;
 }
 
+export interface ReorderElementParams {
+  /** nodeRef / id of the JSX element to move within its parent */
+  elementId: string;
+  filePath: string;
+  /** Zero-based logical index among the parent's JSXElement children */
+  targetIndex: number;
+}
+
+export interface ReorderElementResult {
+  success: boolean;
+  /** Pre-mutation file snapshot id (from fileSnapshotMiddleware) — used for undo */
+  snapshotId?: number;
+  error?: string;
+}
+
 export interface DuplicateElementResult {
   success: boolean;
   newId?: string;
@@ -128,6 +143,7 @@ export interface ASTApiService {
   deleteElement(params: DeleteElementParams): Promise<ApiResult>;
   deleteElements(params: DeleteElementsParams): Promise<ApiResult>;
   duplicateElement(params: DuplicateElementParams): Promise<DuplicateElementResult>;
+  reorderElement(params: ReorderElementParams): Promise<ReorderElementResult>;
   pasteElement(params: PasteElementParams): Promise<PasteElementResult>;
   updateStyles(params: UpdateStylesParams): Promise<UpdateStylesResult>;
   updateProp(params: UpdatePropParams): Promise<ApiResult>;

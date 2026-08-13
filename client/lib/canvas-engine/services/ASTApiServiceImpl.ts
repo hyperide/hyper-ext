@@ -17,6 +17,8 @@ import type {
   ParseComponentResult,
   PasteElementParams,
   PasteElementResult,
+  ReorderElementParams,
+  ReorderElementResult,
   SaveSnapshotResult,
   UpdatePropParams,
   UpdatePropsBatchParams,
@@ -67,6 +69,19 @@ export class ASTApiServiceImpl implements ASTApiService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
+    });
+    return response.json();
+  }
+
+  async reorderElement(params: ReorderElementParams): Promise<ReorderElementResult> {
+    const response = await authFetch('/api/reorder-element', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nodeRef: params.elementId,
+        filePath: params.filePath,
+        targetIndex: params.targetIndex,
+      }),
     });
     return response.json();
   }
