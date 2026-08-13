@@ -1950,6 +1950,97 @@ describe('ensureComponent — fast path', () => {
     expect(content).toContain("flexDirection: 'column'");
   });
 
+  // Codex P2 (PRRT_kwDOQSPh9M6MyIof, HYP-782): the fast path forced regeneration only when a
+  // provider IMPORT string was missing. But a LOCAL provider (e.g. a ThemeProvider the scanner
+  // already registered as a component) can have its import present while the wrapOpen/wrapClose
+  // tags are absent from the render body — so the stale, UNWRAPPED file was served and the
+  // selected component rendered OUTSIDE its provider, defeating the wrap fix. Regeneration must
+  // also trigger when the emitted wrap tags are missing, not just when an import is missing.
+  it('regenerates when the provider import is present but the wrap tags are absent (stale unwrapped cache)', async () => {
+    const PLAIN_SOURCE = `
+import React from 'react';
+export function Plain() { return <div>plain</div>; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Plain.tsx', PLAIN_SOURCE);
+    // Existing preview carries the CURRENT schema marker and the ThemeProvider import (it was
+    // registered as a component earlier) but NO <ThemeProvider> wrap around the render. Plain has
+    // no sample exports, so needsSampleUpdate stays false — the ONLY thing that can force a regen
+    // here is the missing wrap tag, isolating the codex P2 fix.
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}
+// @hyperide-managed
+import { ThemeProvider } from './context/ThemeContext';
+import { Plain } from './components/Plain';
+const componentRegistry: Record<string, React.ComponentType<Record<string, unknown>>> = {
+  'src/components/Plain.tsx': Plain,
+};
+const sampleRenderMap: Record<string, React.FC> = {};
+const sampleRenderersMap: Record<string, Record<string, React.FC>> = {};
+export default function CanvasPreview() { return null; }
+`,
+    );
+
+    const manager = new PreviewFileManager({
+      projectRoot: '/project',
+      io,
+      providerWrap: {
+        imports: ["import { ThemeProvider } from './context/ThemeContext';"],
+        wrapOpen: '<ThemeProvider>',
+        wrapClose: '</ThemeProvider>',
+      },
+    });
+    const content = await manager.ensureComponent(['src/components/Plain.tsx']);
+
+    // The fast path must NOT serve the stale unwrapped file: the regenerated content wraps the
+    // render in the provider.
+    expect(content).toContain('<ThemeProvider>');
+    expect(content).toContain('</ThemeProvider>');
+  });
+
+  // Stability guard (review follow-up): once the wrap IS present, the fast path must take the
+  // cache and NOT regenerate on every call. Uses an ATTRIBUTED provider tag (`theme={theme}`) to
+  // prove the verbatim wrapOpen/wrapClose match survives attributes — the generator emits the
+  // tags byte-for-byte, so the substring check finds them and skips the rewrite (no HMR churn).
+  it('takes the fast path without re-regenerating once the provider wrap is already present', async () => {
+    const PLAIN_SOURCE = `
+import React from 'react';
+export function Plain() { return <div>plain</div>; }
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Plain.tsx', PLAIN_SOURCE);
+    const manager = new PreviewFileManager({
+      projectRoot: '/project',
+      io,
+      providerWrap: {
+        imports: ["import { ThemeProvider } from './context/ThemeContext';", "import { theme } from './theme';"],
+        wrapOpen: '<ThemeProvider theme={theme}>',
+        wrapClose: '</ThemeProvider>',
+      },
+    });
+    // First call: file is missing → init generates WITH the (attributed) wrap.
+    const first = await manager.ensureComponent(['src/components/Plain.tsx']);
+    expect(first).toContain('<ThemeProvider theme={theme}>');
+    expect(first).toContain('</ThemeProvider>');
+
+    // Second call: the wrap is already present byte-for-byte, so the fast path must return the
+    // cached file WITHOUT writing again (a verbatim mismatch would loop-regenerate every call).
+    let writesDuringSecond = 0;
+    const origWrite = io.writeFile.bind(io);
+    io.writeFile = async (p: string, c: string) => {
+      writesDuringSecond++;
+      return origWrite(p, c);
+    };
+    try {
+      const second = await manager.ensureComponent(['src/components/Plain.tsx']);
+      expect(second).toBe(first);
+      expect(writesDuringSecond).toBe(0);
+    } finally {
+      io.writeFile = origWrite;
+    }
+  });
+
   it('regenerates when an already registered component gains SampleDefault', async () => {
     const io = new InMemoryFileIO();
     io.files.set(

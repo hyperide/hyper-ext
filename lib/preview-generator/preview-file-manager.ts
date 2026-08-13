@@ -420,8 +420,7 @@ export class PreviewFileManager {
       // Fast path: all requested components already registered.
       // Check if provider wrapping is outdated — regenerate if providers were added/changed
       // since the file was last written (e.g. detectPreviewProviders resolved after initial gen).
-      const needsProviderUpdate =
-        this.providerWrap?.imports.length && !this.providerWrap.imports.every((imp) => existingContent.includes(imp));
+      const needsProviderUpdate = this._providerWrapMissingFrom(existingContent);
       const hasCurrentGeneratorMarker = existingContent
         .split('\n')
         .some((line) => line.trim() === `// ${PREVIEW_GENERATOR_SCHEMA_MARKER}`);
@@ -492,6 +491,39 @@ export class PreviewFileManager {
       .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
+  }
+
+  /**
+   * True when the active provider wrap is not fully materialized in an already-generated
+   * preview, so the `ensureComponent` fast path must regenerate instead of serving it.
+   *
+   * Checks the provider import lines AND BOTH emitted wrap tags, because the import alone is
+   * insufficient (HYP-782 codex P2): a provider import can already be present without the wrap
+   * — e.g. a LOCAL `ThemeProvider` the scanner previously registered as a COMPONENT (its
+   * `import { ThemeProvider } from …` is in the file as a registry import) while the
+   * `<ThemeProvider>…</ThemeProvider>` tags around the render are absent. Returning that stale
+   * file would render the selected component OUTSIDE its provider, defeating the fix.
+   *
+   * The generator emits `wrapOpen`/`wrapClose` verbatim as a PAIR into the body (no
+   * reformatting — `buildCanvasPreviewBody` writes `${wo}…${wc}`), so a literal substring check
+   * is reliable and stable: once regenerated, both tags are present byte-for-byte and the next
+   * call takes the fast path (no perpetual regen). Checking BOTH tags also flags a half-written
+   * file (open present, close truncated → unbalanced JSX) as needing regen. When in doubt this
+   * biases toward regenerating (correct), never toward serving an unwrapped file.
+   *
+   * Known limitation (pre-existing, not introduced here): a SHRINKING wrap — a provider removed
+   * so `<Outer><Inner>` becomes `<Outer>` — is not detected, because the smaller wrap's tags are
+   * substrings of the larger persisted ones. The stale extra provider is dropped on the next
+   * real regen (a component/sample/stale-entry change), so the window is transient.
+   */
+  private _providerWrapMissingFrom(existingContent: string): boolean {
+    const wrap = this.providerWrap;
+    if (!wrap?.imports.length) return false;
+    const importsMissing = !wrap.imports.every((imp) => existingContent.includes(imp));
+    const wrapTagsMissing =
+      (wrap.wrapOpen.length > 0 && !existingContent.includes(wrap.wrapOpen)) ||
+      (wrap.wrapClose.length > 0 && !existingContent.includes(wrap.wrapClose));
+    return importsMissing || wrapTagsMissing;
   }
 
   /**

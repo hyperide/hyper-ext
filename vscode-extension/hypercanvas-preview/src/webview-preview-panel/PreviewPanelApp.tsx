@@ -69,6 +69,28 @@ export function getPreviewShellScreen(
   return disconnected ? 'disconnected' : 'start';
 }
 
+/**
+ * Latch for the readonly stub's "render succeeded" signal (which gates the
+ * "Continue in Readonly" button and the stub's status sentence).
+ *
+ * Once the preview has rendered successfully ONCE in the current dev-server
+ * session, keep it latched true — a transient post-render blip (a component
+ * error or no-selection flicker during an iframe reload, common for
+ * provider-heavy apps like mantine) must NOT flip the button/sentence back off.
+ * Without the latch that flicker reflows the stub and remounts the button, so
+ * Playwright's actionability check never settles and `continueBtn.click()` hangs
+ * to the test timeout (HYP-782 readonly-stub hang). Resets when the dev server
+ * goes down (`devServerRunning` false) so a fresh session re-proves the render.
+ */
+export function nextRenderProvenLatch(
+  prev: boolean,
+  signals: { devServerRunning: boolean; componentError: boolean; showNoComponentHint: boolean },
+): boolean {
+  if (!signals.devServerRunning) return false;
+  if (!signals.componentError && !signals.showNoComponentHint) return true;
+  return prev;
+}
+
 // ============================================================================
 // Preview Content
 // ============================================================================
@@ -142,6 +164,35 @@ function PreviewContent() {
   // User must click "Continue in Readonly" to dismiss the stub and see the preview.
   const [readonlyDismissed, setReadonlyDismissed] = useState(false);
   const isReadonly = projectCapabilities?.readonly === true;
+  // The readonly stub is a full-surface overlay; while it covers the preview the
+  // canvas is non-interactive. Both the stub render and the mode-HUD suppression
+  // (see shouldShowModeToolbar) derive from this single condition so they stay in
+  // lockstep — the HUD must be hidden exactly when the stub is up (HYP-782).
+  const readonlyStubVisible = isReadonly && !readonlyDismissed;
+
+  // Latched "the preview proved it renders" signal for the readonly stub. Gating
+  // the Continue button AND the stub's status sentence on the LIVE signal lets a
+  // transient post-render blip (componentError / no-selection during a
+  // provider-heavy iframe reload) reflow the stub and remount the button, so
+  // `click()` never settles and the readonly e2e hangs to timeout. Latch it once
+  // true (reset on dev-server-down) so the affordance is stable once the render
+  // is proven. Deliberate tradeoff: a SUSTAINED post-render error also stays
+  // latched (the latch can't distinguish a reload blip from a permanent break),
+  // so the sentence may read "rendered successfully" during a lasting error — the
+  // user can still Continue and reach the live (broken) preview, which beats a
+  // perpetually-unclickable stub. Depend on the derived boolean (not the
+  // componentError object) so the effect doesn't re-run on identity churn during
+  // exactly the reload it is smoothing; lazy initial value avoids a first-paint
+  // mount→unmount→mount of the button.
+  const hasComponentError = componentError != null;
+  const [readonlyRenderProven, setReadonlyRenderProven] = useState(() =>
+    nextRenderProvenLatch(false, { devServerRunning, componentError: hasComponentError, showNoComponentHint }),
+  );
+  useEffect(() => {
+    setReadonlyRenderProven((prev) =>
+      nextRenderProvenLatch(prev, { devServerRunning, componentError: hasComponentError, showNoComponentHint }),
+    );
+  }, [devServerRunning, hasComponentError, showNoComponentHint]);
 
   // Track iframe load state so we can show the shared LoadingOverlay while the
   // dev server / preview HTML is fetching. Without this, the iframe shows a
@@ -339,7 +390,10 @@ function PreviewContent() {
           <NoComponentOverlay variant="no-selection" />
         ))}
 
-      <ModeToolbar canvas={canvas} />
+      {/* Hide the floating mode HUD while the readonly stub covers the surface —
+          otherwise the z-[1000] HUD floats over the stub's Continue button and
+          intercepts its pointer events, wedging the user at the stub (HYP-782). */}
+      {shouldShowModeToolbar({ isReadonly, readonlyDismissed }) && <ModeToolbar canvas={canvas} />}
 
       <CanvasElementContextMenu
         selectedIds={contextMenu ? [contextMenu.elementId] : []}
@@ -352,11 +406,11 @@ function PreviewContent() {
           compatibility table. The "Continue in Readonly" button only appears
           when the preview has loaded successfully with no errors — so the user
           sees proof that the preview works before choosing readonly mode. */}
-      {isReadonly && !readonlyDismissed && (
+      {readonlyStubVisible && (
         <ReadonlyStubScreen
           cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
           projectType={projectCapabilities?.projectType}
-          renderSucceeded={devServerRunning && !componentError && !showNoComponentHint}
+          renderSucceeded={readonlyRenderProven}
           onContinueReadonly={() => setReadonlyDismissed(true)}
         />
       )}
@@ -436,6 +490,13 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
   unknown: 'Unknown bundler',
 };
 
+/**
+ * Full-surface readonly stub overlay (`position:absolute inset:0 z-900`). It paints
+ * over the whole preview, so any bottom-floating chrome (the z-[1000] mode HUD, future
+ * toolbars) MUST self-hide while this is shown — otherwise it floats above the stub and
+ * intercepts the Continue button's pointer events, wedging the user (HYP-782). The mode
+ * HUD is gated via `shouldShowModeToolbar`; add the same gate to any new floating chrome.
+ */
 function ReadonlyStubScreen({
   cssSystem,
   projectType,
@@ -568,6 +629,29 @@ const TOOLBAR_BUTTONS: {
   { mode: 'interact', icon: IconPointer },
   { mode: 'design', icon: IconBrush },
 ];
+
+/**
+ * Whether the floating mode HUD should render.
+ *
+ * The HUD is `fixed bottom-8 ... z-[1000]`; the readonly stub is a full-surface
+ * `position:absolute inset:0 z-900` overlay. With the HUD on top of the stub it
+ * floats OVER the stub's "Continue in Readonly" button and intercepts its pointer
+ * events (Playwright: "subtree intercepts pointer events"), so the Continue click
+ * never lands — a real user is wedged at the stub (HYP-782). While the stub covers
+ * the surface the canvas is non-interactive (nothing to point/board/design at), so
+ * the HUD must not render. Once the user clicks Continue (`readonlyDismissed`) the
+ * preview is interactive again and the HUD returns.
+ */
+export function shouldShowModeToolbar({
+  isReadonly,
+  readonlyDismissed,
+}: {
+  isReadonly: boolean;
+  readonlyDismissed: boolean;
+}): boolean {
+  const readonlyStubVisible = isReadonly && !readonlyDismissed;
+  return !readonlyStubVisible;
+}
 
 function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> }) {
   const engineMode = useEngineMode();
