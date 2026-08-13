@@ -1290,6 +1290,8 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
 describe('PreviewFileManager.ensureGitExclude', () => {
   it('creates .git/info/exclude with all entries when file is missing', async () => {
     const io = new InMemoryFileIO();
+    // Provide a .git dir so findGitRoot can locate the repo root
+    io.files.set('/project/.git/HEAD', 'ref: refs/heads/main\n');
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensureGitExclude();
 
@@ -1317,7 +1319,7 @@ describe('PreviewFileManager.ensureGitExclude', () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/.git/info/exclude',
-      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n**/test-preview/\n**/test-preview.tsx\n',
+      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n',
     );
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const before = io.files.get('/project/.git/info/exclude');

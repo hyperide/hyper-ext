@@ -988,16 +988,42 @@ export class PreviewFileManager {
   }
 
   /**
+   * Walk up from startDir to find the root that contains a real .git directory.
+   * Handles monorepos where projectRoot is a subdirectory (e.g. targets/conloca-app
+   * inside conloca-private). Returns null if no git root found.
+   */
+  private async findGitRoot(startDir: string): Promise<string | null> {
+    let current = startDir;
+    while (true) {
+      try {
+        await this.io.access(join(current, '.git'));
+        return current;
+      } catch {
+        const parent = dirname(current);
+        if (parent === current) return null; // reached filesystem root
+        current = parent;
+      }
+    }
+  }
+
+  /**
    * Add HyperIDE-generated files to .git/info/exclude (local, not committed).
-   * Prevents __canvas_preview__.tsx and route files from appearing in `git status`.
-   * No-op if entries are already present or if .git directory doesn't exist.
+   * Prevents __canvas_preview__.tsx, *.samples.tsx, .hyperide/ and route files
+   * from appearing in `git status`. Walks up to find the real git root so
+   * monorepo sub-packages are handled correctly.
+   * No-op if entries are already present or if no .git root is found.
    */
   async ensureGitExclude(): Promise<void> {
-    const excludePath = join(this.projectRoot, '.git/info/exclude');
+    const gitRoot = await this.findGitRoot(this.projectRoot);
+    if (!gitRoot) return;
+
+    const excludePath = join(gitRoot, '.git/info/exclude');
     const entries = [
       '# HyperIDE — generated preview files',
       '__canvas_preview__.tsx',
       '__canvas_preview_standalone__.tsx',
+      '*.samples.tsx',
+      '.hyperide/',
       '**/test-preview/',
       '**/test-preview.tsx',
     ];
@@ -1016,7 +1042,7 @@ export class PreviewFileManager {
     try {
       await this.io.writeFile(excludePath, `${existing}${separator}${toAdd.join('\n')}\n`);
     } catch {
-      // Not a git repo, or .git is a file (worktrees) — silently skip
+      // .git is a file in linked worktrees — silently skip
     }
   }
 
