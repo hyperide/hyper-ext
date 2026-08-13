@@ -3,16 +3,16 @@
 # Bulka Extension Preview Follow-ups
 
 > **For agentic workers:** implement this plan task by task. Do not patch
-> `/Users/ultra/work/ext-test-projects/bulka-the-dog` as the permanent fix.
+> `../ext-test-projects/bulka-the-dog` as the permanent fix.
 > Test-project edits are allowed only as temporary verification; the durable fix
-> belongs in `hyper-canvas-draft`.
+> belongs in `hyperide`.
 
 **Goal:** finish the Bulka VS Code extension preview stabilization after the
 black-screen/404 fix. Current progress is real: Bulka components can render, but
 the remaining issues are console noise, Inspector style reads, stale component
 error overlays, and a raw "Component not found" state during component switches.
 
-**Test project:** `/Users/ultra/work/ext-test-projects/bulka-the-dog`
+**Test project:** `../ext-test-projects/bulka-the-dog`
 
 **Important workflow:** before VS Code extension debugging, use the isolated E2E
 harness from `ext-test-projects` with `launchVSCode()` and
@@ -353,7 +353,7 @@ the URL changes before the generated preview bundle is compiled and loaded.
 - [x] Verify Bulka repo clean: no generated files committed (run `git status --short`)
 
 Create or update an ext-test debug script. It must follow
-`/Users/ultra/work/ext-test-projects/CLAUDE.md`.
+`../ext-test-projects/CLAUDE.md`.
 
 **Required harness shape:**
 
@@ -362,7 +362,7 @@ import { createDiagnosticsSession } from './e2e/helpers/diagnostics';
 import { setupPreviewWithDevServer } from './e2e/helpers/setup-preview';
 import { closeVSCode, launchVSCode } from './e2e/setup/electron-app';
 
-const PROJECT = '/Users/ultra/work/ext-test-projects/bulka-the-dog';
+const PROJECT = '../ext-test-projects/bulka-the-dog';
 
 const instance = await launchVSCode({ projectPath: PROJECT, workerIndex: 99 });
 const diagnostics = await createDiagnosticsSession({

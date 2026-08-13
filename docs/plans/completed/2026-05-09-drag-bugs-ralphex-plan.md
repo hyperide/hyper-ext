@@ -125,7 +125,7 @@ User-reported (2026-05-09) after manual testing of ext v0.1.44. Five bugs in dra
 ### Task 8: Build + install ext, run E2E → GREEN
 
 - [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh`
-- [x] Run E2E with worktree repo: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_EXTENSION_REPO=/Users/ultra/work/hyper-canvas-draft/.ralphex/worktrees/drag-bugs-ralphex-plan HYPER_E2E_SHARDS=1 bun run test:docker --grep "drag-drop-bugs"`
+- [x] Run E2E with worktree repo: `cd ../ext-test-projects/e2e && HYPER_E2E_EXTENSION_REPO=.ralphex/worktrees/drag-bugs-ralphex-plan HYPER_E2E_SHARDS=1 bun run test:docker --grep "drag-drop-bugs"`
 - [x] All 5 tests must be GREEN
 - [x] Check screenshot artifacts
 

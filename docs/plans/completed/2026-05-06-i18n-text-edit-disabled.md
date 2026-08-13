@@ -186,8 +186,8 @@ Built `hypercanvas-preview-0.1.41.vsix` from this worktree
 extension path hard-coded in `docker-compose.e2e.yml`, but the
 `docker-parallel-run.sh` driver respects the
 `HYPER_E2E_CONTAINER_EXTENSION_PATH` env override, so we point it at
-`/hyper-canvas-draft/.ralphex/worktrees/i18n-text-edit-disabled/vscode-extension/hypercanvas-preview`
-inside the container (the host repo is mounted at `/hyper-canvas-draft`).
+`/hyperide/.ralphex/worktrees/i18n-text-edit-disabled/vscode-extension/hypercanvas-preview`
+inside the container (the host repo is mounted at `/hyperide`).
 
 Run results (run-20260506-112416-42040, no retry):
 

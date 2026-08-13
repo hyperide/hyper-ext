@@ -112,5 +112,5 @@
 ---
 
 Generated: 2026-06-07
-Worktree: /Users/ultra/work/hyper-canvas-draft-worktrees/20250606-decompose
+Worktree: ../hyperide-worktrees/20250606-decompose
 Branch: HYP-561-decompose-large-files

@@ -35,7 +35,7 @@ Do not modify `client/components/ui/color-combobox.*`.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD mandatory: write a failing e2e or integration test first, confirm it fails for the right
   reason, then implement the fix.
 - Do not push directly to `ultra/hyp-363-...` — commit to a new branch from current HEAD.
@@ -44,13 +44,13 @@ Do not modify `client/components/ui/color-combobox.*`.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b5-i18n-keys/hyper-canvas-draft`
+- `../hyperide-worktrees/20260505-b5-i18n-keys/hyperide`
 
 Create it with:
 
 ```bash
-git -C /Users/ultra/work/hyper-canvas-draft worktree add \
-  /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b5-i18n-keys/hyper-canvas-draft \
+git -C ../hyperide worktree add \
+  ../hyperide-worktrees/20260505-b5-i18n-keys/hyperide \
   -b HYP-b5-i18n-key-combobox ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e
 ```
 
@@ -105,14 +105,14 @@ Acceptance: `I18nTextInspector` receives `availableKeys` and renders the Popover
 - [x] Confirm test FAILS before build (expected to fail = key list is empty/combobox not shown).
 - [x] Build extension: `cd vscode-extension/hypercanvas-preview && npm run package`.
 - [x] Install: `code --install-extension hypercanvas-preview-*.vsix --force`.
-- [x] Reload VS Code: `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter`.
+- [x] Reload VS Code: `vscmd workbench.action.reloadWindow -p ../ext-test-projects/react-vite-tw4-twitter`.
 - [x] Run test — confirm GREEN.
 
 Acceptance: Test passes, combobox shows keys from locale file.
 
 ### Task 6: Lint + Typecheck
 
-- [x] `bun lint` in hyper-canvas-draft.
+- [x] `bun lint` in hyperide.
 - [x] `bun typecheck` or `tsc --noEmit` for extension.
 - [x] Fix any errors.
 

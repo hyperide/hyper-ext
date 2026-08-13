@@ -137,7 +137,7 @@ and a deferred-Linear note in MEMORY.md instead.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD mandatory and **end-to-end first**: the e2e in Task 1 must fail RED on current main
   before any fix lands. Unit tests are companions, not substitutes.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` / claude.ai cloud API

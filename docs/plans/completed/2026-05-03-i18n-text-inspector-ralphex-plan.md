@@ -17,7 +17,7 @@ switcher. The feature must work in SaaS and the VS Code extension. Pure
 detection and resolution logic must be shared; platform-specific project file
 reads must sit behind `FileIO` or an equivalent host adapter.
 
-Use `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
+Use `../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
 as a fixture input only. Do not permanently edit that fixture. Back up and
 restore any temporary edits in `finally`.
 
@@ -108,7 +108,7 @@ clear read-only reason in the inspector model, not a broken combobox.
 - [x] Run the required workspace check:
 
   ```bash
-  cd /Users/ultra/work/hyper-canvas-draft
+  cd ../hyperide
   git status --short
   ```
 
@@ -123,14 +123,14 @@ clear read-only reason in the inspector model, not a broken combobox.
 - [x] Before any VS Code E2E debugging, read:
 
   ```bash
-  sed -n '1,240p' /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/CLAUDE.md
+  sed -n '1,240p' ../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/CLAUDE.md
   ```
 
 Verification:
 
 ```bash
 git status --short
-rg -n "habits\\.walks|useLanguage|t\\(" /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
+rg -n "habits\\.walks|useLanguage|t\\(" ../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects/bulka-the-dog/client/pages/Index.tsx
 ```
 
 ### Task 2: Add Shared Types And Package Detection Tests First
@@ -345,7 +345,7 @@ bun test vscode-extension/hypercanvas-preview/src/__tests__/AstBridge.test.ts
 ### Task 13: Bulka Regression And E2E
 
 - [x] Create a temporary debug or E2E script under
-      `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects` that backs up and restores
+      `../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects` that backs up and restores
       `bulka-the-dog/client/pages/Index.tsx` in `finally`.
       — Created `debug-i18n-text-inspector.ts` (bun) and `debug-i18n-text-inspector-node.mjs`
       (node fallback; bun 1.3.13 has readline/electron.launch incompatibility).
@@ -378,8 +378,8 @@ bun test vscode-extension/hypercanvas-preview/src/__tests__/AstBridge.test.ts
 Verification:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects
-EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview bun run test --filter i18n-text-inspector
+cd ../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects
+EXTENSION_PATH=vscode-extension/hypercanvas-preview bun run test --filter i18n-text-inspector
 ```
 
 If adding a one-off debug script instead of a committed E2E spec, run it in the
@@ -514,12 +514,12 @@ ls -la /tmp | rg "i18n-text|hyper-canvas|bulka"
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/hyper-canvas-draft
+- ../hyperide-worktrees/20260503-2135/i18n-text-inspector/hyperide
 
-Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects:
+Use this ext-test-projects worktree instead of ../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects
+- ../hyperide-worktrees/20260503-2135/i18n-text-inspector/ext-test-projects
 
 Do not write to the original main worktree or the original ext-test-projects checkout.
 Existing logs and dirty changes from the original worktrees were snapshotted at:
-/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees
+../hyperide-worktrees/snapshots/20260503-2135-before-worktrees

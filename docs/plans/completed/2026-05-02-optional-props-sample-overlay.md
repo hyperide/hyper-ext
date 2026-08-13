@@ -3,7 +3,7 @@
 ## Context
 
 Manual VS Code extension session on project:
-`/Users/ultra/work/ext-test-projects/bulka-the-dog`
+`../ext-test-projects/bulka-the-dog`
 
 Problem component:
 `client/components/ui/alert.tsx`

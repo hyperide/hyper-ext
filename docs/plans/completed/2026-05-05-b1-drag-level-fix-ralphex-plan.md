@@ -46,7 +46,7 @@ Do NOT modify `AstService.ts` — its same-parent constraint is correct and inte
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: write a failing unit test first, then implement.
 - Do NOT kill existing ralphex processes.
 - Write progress to `.ralphex/progress/progress-2026-05-05-b1-drag-level.txt`.
@@ -55,14 +55,14 @@ Do NOT modify `AstService.ts` — its same-parent constraint is correct and inte
 This ralphex run is isolated. Use this worktree:
 
 ```
-/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b1-drag-level/hyper-canvas-draft
+../hyperide-worktrees/20260505-b1-drag-level/hyperide
 ```
 
 Create it with:
 
 ```bash
-git -C /Users/ultra/work/hyper-canvas-draft worktree add \
-  /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b1-drag-level/hyper-canvas-draft \
+git -C ../hyperide worktree add \
+  ../hyperide-worktrees/20260505-b1-drag-level/hyperide \
   -b HYP-b1-drag-level-fix ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e
 ```
 
@@ -166,7 +166,7 @@ When drag target = card in a flat list (no nesting):
 
 ### Task 4: E2E test in ext-test-projects
 
-- [ ] Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` first.
+- [ ] Read `../ext-test-projects/CLAUDE.md` first.
 - [ ] Open `ext-test-projects/e2e/tests/project-independent/drag-reorder.spec.ts`.
 - [ ] Add test: drag the emoji span `[aria-hidden="true"]` inside a Bulka card to a sibling card position.
   - Start drag on the emoji span element.
@@ -177,9 +177,9 @@ When drag target = card in a flat list (no nesting):
 
 ### Task 5: Build + install extension
 
-- [ ] `cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b1-drag-level/hyper-canvas-draft/vscode-extension/hypercanvas-preview && npm run package`
+- [ ] `cd ../hyperide-worktrees/20260505-b1-drag-level/hyperide/vscode-extension/hypercanvas-preview && npm run package`
 - [ ] `code --install-extension hypercanvas-preview-*.vsix --force`
-- [ ] Reload VS Code: `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/bulka-the-dog`
+- [ ] Reload VS Code: `vscmd workbench.action.reloadWindow -p ../ext-test-projects/bulka-the-dog`
 
 ### Task 6: Run E2E test — GREEN
 

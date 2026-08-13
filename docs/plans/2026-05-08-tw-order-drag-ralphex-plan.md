@@ -175,7 +175,7 @@ calling the AST insert/move:
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD end-to-end first: e2e specs in Tasks 1+2 RED on main before any code in Tasks 3+4.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` (CLAUDE.md rule, top of file).
 - This ralphex run is isolated; do not touch other worktrees, do not kill unrelated ralphex

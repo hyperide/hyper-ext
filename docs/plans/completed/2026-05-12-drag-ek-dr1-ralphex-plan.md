@@ -24,19 +24,19 @@ These tests are **first-time runs** — they don't appear in ANY earlier Docker 
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: tests exist, goal is GREEN.
 - Write progress to `.ralphex/progress/progress-2026-05-12-drag-ek-dr1.txt`.
 - TG heartbeat every 15 min.
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-5-DR-EK|PI-5-DR-1"`.
-- Main worktree: `/Users/ultra/work/hyper-canvas-draft`.
+- Main worktree: `../hyperide`.
 
 ## Task 1 — Isolate PI-5-DR-EK-IMG failure
 
 Run the focused img test in isolation:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd ../ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --grep "PI-5-DR-EK-IMG" 2>&1 | tail -40
 ```

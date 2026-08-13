@@ -22,7 +22,7 @@ SaaS is out of scope. Do not touch `client/` or `server/`.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: write a failing e2e test first, then implement.
 - Do not kill existing ralphex processes.
 - Do not modify `shared/canvas-interaction/` beyond `style-injector.ts`.
@@ -31,13 +31,13 @@ SaaS is out of scope. Do not touch `client/` or `server/`.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-drag-visual/hyper-canvas-draft`
+- `../hyperide-worktrees/20260505-drag-visual/hyperide`
 
 Create it with:
 
 ```bash
-git -C /Users/ultra/work/hyper-canvas-draft worktree add \
-  /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-drag-visual/hyper-canvas-draft \
+git -C ../hyperide worktree add \
+  ../hyperide-worktrees/20260505-drag-visual/hyperide \
   -b HYP-drag-ghost-indicator ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e
 ```
 
@@ -207,7 +207,7 @@ Acceptance: test exists and fails because ghost/indicator are absent.
 
 - [ ] Build: `cd vscode-extension/hypercanvas-preview && npm run package`.
 - [ ] Install: `code --install-extension hypercanvas-preview-*.vsix --force`.
-- [ ] Reload VS Code: `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter`.
+- [ ] Reload VS Code: `vscmd workbench.action.reloadWindow -p ../ext-test-projects/react-vite-tw4-twitter`.
 - [ ] Run e2e test — confirm GREEN.
 - [ ] Manual visual check: drag an element, see ghost + indicator, release.
 
@@ -221,7 +221,7 @@ Acceptance: test GREEN, ghost follows cursor, indicator shows drop position, bot
 
 ### Task 6: Lint + Typecheck
 
-- [ ] `bun lint` in hyper-canvas-draft.
+- [ ] `bun lint` in hyperide.
 - [ ] Fix any errors.
 
 ### Task 7: Commit

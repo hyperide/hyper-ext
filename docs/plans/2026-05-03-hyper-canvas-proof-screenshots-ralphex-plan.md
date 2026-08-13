@@ -28,7 +28,7 @@ proof.
 
 - [ ] Use the VS Code/Electron extension harness, not a browser-only session.
 - [ ] Open
-      `/Users/ultra/work/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
+      `../ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
       around the target element.
 - [ ] Capture `/tmp/proof-bulka-delete-before.png` showing the target line:
       `<p className="text-foreground/80">{t("habits.walks")}</p>`.

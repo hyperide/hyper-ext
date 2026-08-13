@@ -9,7 +9,7 @@ latest Docker E2E continuation. Do not touch unrelated UI work, especially
 ## Failing Run
 
 - Artifact root:
-  `/Users/ultra/work/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch/`
+  `../ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch/`
 - Primary failure:
   `shard-2/docker.log`, `nextjs-element-clicking.spec.ts:13`
 - Interrupted related test:
@@ -37,7 +37,7 @@ latest Docker E2E continuation. Do not touch unrelated UI work, especially
 
 ## Reproduce Command
 
-Run from `/Users/ultra/work/ext-test-projects` after reading `CLAUDE.md`.
+Run from `../ext-test-projects` after reading `CLAUDE.md`.
 
 ```bash
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
@@ -48,7 +48,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 
 For a narrower local debug pass, use the harness rules from `CLAUDE.md`:
 `launchVSCode()`, `setupPreviewWithDevServer()`, diagnostics helper, and
-`EXTENSION_PATH=/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`.
+`EXTENSION_PATH=vscode-extension/hypercanvas-preview`.
 
 ## Suspected Failing API Or Path
 

@@ -67,7 +67,7 @@ Out of scope:
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - Use the local `ralphex` CLI only. Never `RemoteTrigger` (CLAUDE.md).
 - Worktree-isolated. Don't kill unrelated ralphex.
 - Run e2e ONLY through `HYPER_E2E_SHARDS=1 bun run test:docker`.

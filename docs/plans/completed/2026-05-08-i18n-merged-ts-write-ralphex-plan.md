@@ -171,7 +171,7 @@ now also show the resolved text (not just the key). Tighten the assertion in tha
   `ext-test-projects` `main`** (commit `4e1f15b5`).
 - **However, consistency plan Task 4 (`bulka-i18n-new-key-visibility.spec.ts`) was
   never created.** Verified by directory listing of
-  `/Users/ultra/work/ext-test-projects/e2e/tests/project-dependent/`: no file with
+  `../ext-test-projects/e2e/tests/project-dependent/`: no file with
   that name exists. The consistency plan’s Task 4 spec was scoped but never
   authored — its visibility scenario remains unverified at e2e level.
 - **There is therefore no Task-4 visibility e2e to tighten.** The closest
@@ -263,7 +263,7 @@ Commits on this branch (in order):
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD mandatory: unit tests in Task 1 + e2e in Task 3 must be RED first.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` / claude.ai cloud API.
 - This ralphex run is isolated. Use the worktree `--worktree` provisions; do not touch other

@@ -233,7 +233,7 @@ bring-up regression 2026-05-08`) — `setupPreviewWithDevServer` fails on retry,
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - **TDD end-to-end first**: e2e in Task 1 must be RED on main before Task 3 lands.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` (CLAUDE.md rule).
 - This ralphex run is isolated. Do not touch other worktrees, do not kill unrelated ralphex

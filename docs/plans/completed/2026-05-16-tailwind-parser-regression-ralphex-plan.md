@@ -58,10 +58,10 @@ Do NOT change MCP tool interface, test expectations, or test fixture.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any E2E work.
+- Read `../ext-test-projects/CLAUDE.md` before any E2E work.
 - TDD: confirm test is RED before fix, GREEN after.
 - This ralphex run is isolated. Use this Hyper Canvas worktree:
-  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260516-tailwind-parser/hyper-canvas-draft`
+  `../hyperide-worktrees/20260516-tailwind-parser/hyperide`
 - Write progress to `.ralphex/progress/progress-2026-05-16-tailwind-parser.txt`.
 - TG heartbeat every 15 min.
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker`.
@@ -84,7 +84,7 @@ Acceptance: understand exactly what className string PI-9-451 uses and what `par
 Run the two specific tests in isolation:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --grep "hyper_get_element_styles" 2>&1 | tail -40
 ```
@@ -136,12 +136,12 @@ Acceptance: `parseTailwindClasses` returns non-empty object for a string like
 ### Task 4: Confirm GREEN
 
 - [x] Run `bun test lib/tailwind/parser.test.ts` — all tests GREEN including new regression test
-- [x] Run full E2E docker test `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "hyper_get_element_styles"` from `/Users/ultra/work/ext-test-projects`
+- [x] Run full E2E docker test `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "hyper_get_element_styles"` from `../ext-test-projects`
 - [x] PI-9-451 passes
 - [x] PI-9-461 passes
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --grep "hyper_get_element_styles" 2>&1 | tail -40
 ```

@@ -8,7 +8,7 @@ User asked to fix E2E tests that pass while real Hyper Canvas behavior is
 broken. This lane is about test truthfulness first, and product fixes only when
 the newly strict tests expose real product bugs.
 
-Recent audit evidence from `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/e2e/tests`:
+Recent audit evidence from `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/e2e/tests`:
 
 - 43 spec files and about 899 `test(...)` blocks.
 - 92 `test.skip` occurrences.
@@ -40,14 +40,14 @@ Highest-risk examples:
 
 ## Repositories
 
-- Main repo: `/Users/ultra/work/hyper-canvas-draft`
-- E2E repo: `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects`
+- Main repo: `../hyperide`
+- E2E repo: `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects`
 
 ## Guardrails
 
 - Start with `git status --short` in both repositories and do not revert
   unrelated work.
-- Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/CLAUDE.md` before extension E2E
+- Read `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/CLAUDE.md` before extension E2E
   work.
 - Use TDD for every conversion:
   1. Make the fake test fail for the real missing behavior, or add a new failing
@@ -90,9 +90,9 @@ Highest-risk examples:
 
 ### Task 1: Freeze Baseline And Classify Fake Tests
 
-- [x] Run `git status --short` in `/Users/ultra/work/hyper-canvas-draft`.
-- [x] Run `git status --short` in `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects`.
-- [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/CLAUDE.md`.
+- [x] Run `git status --short` in `../hyperide`.
+- [x] Run `git status --short` in `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects`.
+- [x] Read `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/CLAUDE.md`.
 - [x] Re-run the audit grep over all E2E specs for `test.skip(true`,
       `does not crash`, `without crash`, `expect(true).toBe(true)`,
       `toBeGreaterThanOrEqual(0)`, `waitForTimeout`, `screenshot`, and
@@ -108,7 +108,7 @@ Highest-risk examples:
       element and asserts the source file changes correctly, not just preview
       liveness.
 - [x] Cover the Bulka i18n fixture
-      `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
+      `../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects/bulka-the-dog/client/pages/Index.tsx`
       with `<p className="text-foreground/80">{t("habits.walks")}</p>`.
 - [x] Confirm the test fails for the right reason if current behavior is broken.
 - [x] Remove the skip-after-failure behavior in
@@ -190,7 +190,7 @@ Highest-risk examples:
 
 ### Task 7: Verification And Reporting
 
-- [x] Run focused Bun tests for touched helpers. [ext-test-projects: 66 pass 0 fail; hyper-canvas-draft: 2561 pass 2 fail (pre-existing — multi-root shadcn scan in preview-file-manager.test.ts, added Apr 30, unrelated to this plan)]
+- [x] Run focused Bun tests for touched helpers. [ext-test-projects: 66 pass 0 fail; hyperide: 2561 pass 2 fail (pre-existing — multi-root shadcn scan in preview-file-manager.test.ts, added Apr 30, unrelated to this plan)]
 - [x] Run focused Playwright/E2E commands for delete, resize, drag, MCP, and
       visual changes. [manual test (skipped - requires full E2E infra with VS Code and extension installed)]
 - [x] Grep resulting logs for `[test-errors]`, `pageerror`, `console.error`,
@@ -221,12 +221,12 @@ Full E2E suite: not run (requires VS Code E2E infra).
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/hyper-canvas-draft
+- ../hyperide-worktrees/20260503-2135/e2e-fake-tests/hyperide
 
-Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects:
+Use this ext-test-projects worktree instead of ../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects
+- ../hyperide-worktrees/20260503-2135/e2e-fake-tests/ext-test-projects
 
 Do not write to the original main worktree or the original ext-test-projects checkout.
 Existing logs and dirty changes from the original worktrees were snapshotted at:
-/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees
+../hyperide-worktrees/snapshots/20260503-2135-before-worktrees

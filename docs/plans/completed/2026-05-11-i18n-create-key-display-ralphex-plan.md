@@ -195,7 +195,7 @@ Fix whichever link in the chain is broken. Minimal change — no big refactors.
 1. Build and install extension:
 
    ```bash
-   cd /Users/ultra/work/hyper-canvas-draft
+   cd ../hyperide
    bun run build:ext && bun run install:ext
    ```
 
@@ -255,7 +255,7 @@ cleared once i18nBinding.key catches up from the re-read.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD mandatory: Task 1 e2e must be RED before Task 2. Task 3 must be GREEN after.
 - No "bug fixed" claim without an E2E screenshot in Telegram.
 - E2E runs: `HYPER_E2E_SHARDS=1 bun run test:docker` from `ext-test-projects/e2e/`.

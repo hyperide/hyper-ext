@@ -32,19 +32,19 @@ Two separate issues may stack:
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: tests exist, goal is GREEN.
 - Write progress to `.ralphex/progress/progress-2026-05-12-bulka-pi7-9.txt`.
 - TG heartbeat every 15 min.
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-9\|hero.title\|translations.ts"`.
-- Main worktree: `/Users/ultra/work/hyper-canvas-draft`.
+- Main worktree: `../hyperide`.
 
 ### Task 1: Isolate: does the test load the right project?
 
 Run the three pi7-9 tests in isolation with extra diagnostics:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd ../ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/bulka-i18n-pi7-9.spec.ts 2>&1 | tail -60

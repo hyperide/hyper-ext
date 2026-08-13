@@ -2524,7 +2524,7 @@ git commit -m "chore(preview): all ModeManager branches verified"
 
 ## Task 12: E2E tests (`ext-test-projects`)
 
-**Repo:** `/Users/ultra/work/ext-test-projects`
+**Repo:** `../ext-test-projects`
 **New file:** `e2e/tests/project-dependent/preview-routing.spec.ts`
 
 Covers all verification scenarios automatically. Uses existing test projects and page objects.
@@ -2641,7 +2641,7 @@ export default function PreviewWrapper({ children }: { children: ReactNode }) {
 ### 12.1: Run
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 bun run test e2e/tests/project-dependent/preview-routing.spec.ts
 ```
 

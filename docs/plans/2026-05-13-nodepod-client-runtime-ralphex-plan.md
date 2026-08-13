@@ -37,7 +37,7 @@ handler for non-Vite servers — used to expose `/__sw__.js` from the Hono app.
   `enabled` flag gates their logic. Disabled hook returns inert state and no-ops.
 - Pin Vite to `7.3.1` in files served to NodePod (Vite 8 HMR WebSocket bug in NodePod v1.8.2).
 - Migration file: `server/database/migrations/0009_add-client-side-runtime.sql`
-- Worktree: `/Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-client-runtime`
+- Worktree: `../hyperide-worktrees/nodepod-client-runtime`
 - E2E tests only via `HYPER_E2E_SHARDS=1 bun run test:docker`. Never `bun run e2e` directly.
 - Commit frequently; one logical change per commit.
 

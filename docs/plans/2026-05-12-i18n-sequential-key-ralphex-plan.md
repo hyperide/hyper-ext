@@ -105,12 +105,12 @@ incorrectly aborts the second write because `realKey` is stale.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` **first** — mandatory.
+- Read `../ext-test-projects/CLAUDE.md` **first** — mandatory.
 - Write progress to `.ralphex/progress/progress-2026-05-12-i18n-sequential-key.txt`.
 - Telegram heartbeat every 15 min.
 - Run E2E tests **only** via `HYPER_E2E_SHARDS=1 bun run test:docker` from
-  `/Users/ultra/work/ext-test-projects`. Never `bun run e2e` directly.
-- Main worktree: `/Users/ultra/work/hyper-canvas-draft`.
+  `../ext-test-projects`. Never `bun run e2e` directly.
+- Main worktree: `../hyperide`.
 - Build extension with `/ext` skill (or `bun run build` in
   `vscode-extension/hypercanvas-preview`), install with
   `code --install-extension ... --force`, then `vscmd workbench.action.reloadWindow`.
@@ -160,7 +160,7 @@ console.warn('[HC i18n-key debug] handleI18nKeyChange called', {
 Build and install extension. Run:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "I18N-KEY-BUG-4" 2>&1 | tail -100
 ```
 
@@ -218,7 +218,7 @@ between `setStyleRefreshKey` and the effect that sets `loading = true`.
 Find `useElementStyleData` in the client:
 
 ```bash
-grep -n "loading\|setLoading\|isLoading" /Users/ultra/work/hyper-canvas-draft/client/hooks/useElementStyleData.ts | head -30
+grep -n "loading\|setLoading\|isLoading" client/hooks/useElementStyleData.ts | head -30
 ```
 
 Verify whether `loading` is a synchronous state update or async (effect-driven).
@@ -322,7 +322,7 @@ correct regardless of React batching behavior.
 
 ### 3a. Implement the fix
 
-In `/Users/ultra/work/hyper-canvas-draft/client/components/RightSidebar/RightSidebar.tsx`:
+In `client/components/RightSidebar/RightSidebar.tsx`:
 
 1. Add `const [pendingKeyWrite, setPendingKeyWrite] = useState<{ key: string; elementId: string } | null>(null);` near the other i18n state (around line 214).
 2. At the top of `handleI18nKeyChange`, after `pendingTextKeyRef.current = { key: newKey, ... }`, also call `setPendingKeyWrite({ key: newKey, elementId: effectiveSelectedId })`.
@@ -344,7 +344,7 @@ Build and install extension.
 Run the full Bug 4 test in Docker:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "I18N-KEY-BUG-4" 2>&1 | tail -80
 ```
 

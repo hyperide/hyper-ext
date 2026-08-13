@@ -44,7 +44,7 @@ mutation bug where handles render but dragging cannot update `w-*` or `h-*`.
   both SaaS `client/` and VS Code extension paths. Shared logic belongs under
   `shared/`.
 - [x] For VS Code extension E2E, first read
-      `/Users/ultra/work/ext-test-projects/CLAUDE.md` and use `launchVSCode()` /
+      `../ext-test-projects/CLAUDE.md` and use `launchVSCode()` /
       the existing E2E harness.
 
 ## Execution Plan
@@ -120,8 +120,8 @@ visible, unclipped, and correctly positioned at normal zoom and a zoomed view. (
 ### Task 6: Verify VS Code Extension Visually And With E2E
 
 [x] Before extension debugging, read
-`/Users/ultra/work/ext-test-projects/CLAUDE.md`.
-[x] Use the `/Users/ultra/work/ext-test-projects` E2E harness with
+`../ext-test-projects/CLAUDE.md`.
+[x] Use the `../ext-test-projects` E2E harness with
 `launchVSCode()` and `setupPreviewWithDevServer()`; do not use regular browser
 Playwright tools for extension verification.
 [x] Prefer the `react-vite-tw4-twitter` test project unless a closer existing

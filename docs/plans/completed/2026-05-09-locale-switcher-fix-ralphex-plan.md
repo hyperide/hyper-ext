@@ -73,7 +73,7 @@ doesn't exist). To change locale we need to:
 ### Task 6: Build + install ext, run E2E → GREEN
 
 - [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` — built v0.1.44, installed successfully
-- [x] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-locale-switch"` — also fixed HERO_TITLE_BY_LOCALE["en"] typo (! → .) in test to match actual translations.ts
+- [x] Run E2E: `cd ../ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-locale-switch"` — also fixed HERO_TITLE_BY_LOCALE["en"] typo (! → .) in test to match actual translations.ts
 - [x] Test must be GREEN — 2 passed (dep:bulka-the-dog + dep:nextjs-tw-sample), 18 skipped (non-i18n projects), run-20260509-103457-13719
 - [x] Screenshot artifacts in `docker-artifacts/run-*/shard-*/` — bulka-i18n-locale-switch-before-en.png, after-rs.png, after-ru.png
 

@@ -11,15 +11,15 @@ screenshots or tests are bad, fix the root cause first. Telegram delivery is
 allowed only after local validation proves the screenshots are visually usable.
 
 Current target project:
-`/Users/ultra/work/ext-test-projects/bulka-the-dog`
+`../ext-test-projects/bulka-the-dog`
 
 Primary extension path:
-`/Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview`
+`vscode-extension/hypercanvas-preview`
 
 Important workflow rules:
 
 - Before any extension debugging, read
-  `/Users/ultra/work/ext-test-projects/CLAUDE.md`.
+  `../ext-test-projects/CLAUDE.md`.
 - Use the VS Code E2E harness (`launchVSCode()` and
   `setupPreviewWithDevServer()`), not browser Playwright MCP.
 - Keep Telegram as the final delivery step only.
@@ -48,25 +48,25 @@ Run the relevant subset after each task, and the full list before Telegram
 delivery.
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview
+cd vscode-extension/hypercanvas-preview
 npm run build
 ```
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft
+cd ../hyperide
 bun test lib/preview-generator/__tests__/scanner.test.ts \
   lib/preview-generator/__tests__/generator.test.ts \
   lib/preview-generator/__tests__/preview-file-manager.test.ts
 ```
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 bun test e2e/helpers/setup-preview.test.ts
 ```
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
-EXT_ROOT=/Users/ultra/work/hyper-canvas-draft
+cd ../ext-test-projects/e2e
+EXT_ROOT=../hyperide
 EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
   ./node_modules/.bin/playwright test --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -88,18 +88,18 @@ EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
 
 ### Task 1: Establish a clean reproducible baseline
 
-- [x] Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` and follow its VS Code
+- [x] Read `../ext-test-projects/CLAUDE.md` and follow its VS Code
       extension workflow rules exactly.
 - [x] Record `git status --short` in both repositories:
-      `/Users/ultra/work/hyper-canvas-draft` and
-      `/Users/ultra/work/ext-test-projects`.
+      `../hyperide` and
+      `../ext-test-projects`.
 - [x] Inspect `git diff` for existing partial fixes and preserve unrelated
       user changes.
 - [x] Stop stale dev servers and VS Code/Electron test processes that target
       Bulka ports. Do not kill unrelated user apps.
 - [x] Clean only generated Bulka preview artifacts:
-      `/Users/ultra/work/ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
-      and `/Users/ultra/work/ext-test-projects/bulka-the-dog/.hyperide`.
+      `../ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
+      and `../ext-test-projects/bulka-the-dog/.hyperide`.
 - [x] Build the extension with `npm run build` from
       `vscode-extension/hypercanvas-preview`.
 - [x] Run the Bulka preview-render E2E and save logs to
@@ -132,7 +132,7 @@ EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
 
 ### Task 3: Make Bulka component selection deterministic in E2E
 
-- [x] In `/Users/ultra/work/ext-test-projects`, update the setup helper only if
+- [x] In `../ext-test-projects`, update the setup helper only if
       needed so Bulka defaults to `client/pages/Index.tsx`, not `client/App.tsx`.
 - [x] Add or verify helper tests covering Vite React SSG projects and the real
       `bulka-the-dog` fixture.
@@ -183,7 +183,7 @@ EXTENSION_PATH="$EXT_ROOT/vscode-extension/hypercanvas-preview" \
       and whether `/done` is needed.
 
 <!-- Completion summary (2026-05-01):
-hyper-canvas-draft: only untracked PNG marketing screenshots + .claude/scheduled_tasks.lock
+hyperide: only untracked PNG marketing screenshots + .claude/scheduled_tasks.lock
 ext-test-projects: many untracked debug scripts; bulka-the-dog submodule has
   untracked client/__canvas_preview__.tsx + .hyperide/ — not tracked, safe.
 

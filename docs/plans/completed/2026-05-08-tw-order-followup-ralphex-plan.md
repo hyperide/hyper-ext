@@ -118,7 +118,7 @@ Out of scope:
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: unit tests RED first.
 - Use the local `ralphex` CLI only. Never `RemoteTrigger` (CLAUDE.md).
 - Worktree-isolated. Don't kill unrelated ralphex.

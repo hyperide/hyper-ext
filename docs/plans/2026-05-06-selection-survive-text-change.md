@@ -234,9 +234,9 @@ scripts/docker-parallel-run.sh --grep "@selsurv"` against the freshly
       both frames pass the visual.
       (Skipped — non-automatable in this loop env: the `tg` CLI
       is not on `$PATH` and not present anywhere under
-      `/Users/ultra/work/hyper-canvas-draft` or `/opt/homebrew/bin`. No
+      `../hyperide` or `/opt/homebrew/bin`. No
       `TG_*` / `TELEGRAM_*` env vars set either, so no fallback Bot API
       call possible. Frame artefacts available for manual TG send at
-      `/Users/ultra/work/ext-test-projects/e2e/docker-artifacts/run-20260506-135735-48249/shard-1/screenshots/test-selsurv-frame-0500ms.png`
+      `../ext-test-projects/e2e/docker-artifacts/run-20260506-135735-48249/shard-1/screenshots/test-selsurv-frame-0500ms.png`
       and `…-1000ms.png`. Verification itself (Read of both frames + e2e
       pass) was completed in this session per the previous checkbox.)

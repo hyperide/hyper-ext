@@ -30,7 +30,7 @@ changed size, plus a test proving the source update.
 
 ### Task 1: Reproduce The Missing Mutation
 
-- [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/resize-mutation/ext-test-projects/CLAUDE.md` before extension E2E.
+- [x] Read `../hyperide-worktrees/20260503-2135/resize-mutation/ext-test-projects/CLAUDE.md` before extension E2E.
 - [x] Run the existing resize handle E2E/debug flow and confirm handles are
       visible.
 - [x] Attempt a real drag on `[data-resize-handle="width"]` and/or
@@ -92,12 +92,12 @@ changed size, plus a test proving the source update.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/resize-mutation/hyper-canvas-draft
+- ../hyperide-worktrees/20260503-2135/resize-mutation/hyperide
 
-Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/resize-mutation/ext-test-projects:
+Use this ext-test-projects worktree instead of ../hyperide-worktrees/20260503-2135/resize-mutation/ext-test-projects:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/resize-mutation/ext-test-projects
+- ../hyperide-worktrees/20260503-2135/resize-mutation/ext-test-projects
 
 Do not write to the original main worktree or the original ext-test-projects checkout.
 Existing logs and dirty changes from the original worktrees were snapshotted at:
-/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees
+../hyperide-worktrees/snapshots/20260503-2135-before-worktrees

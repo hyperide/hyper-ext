@@ -4,10 +4,10 @@
 
 - Lane: harness/flakes only.
 - Repositories:
-  - `/Users/ultra/work/hyper-canvas-draft`
-  - `/Users/ultra/work/ext-test-projects`
+  - `../hyperide`
+  - `../ext-test-projects`
 - Latest artifact run:
-  `/Users/ultra/work/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch/`
+  `../ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch/`
 - Do not touch `client/components/ui/color-combobox.*`.
 - Do not edit test assertions directly for this first fix.
 - Do not kill existing `ralphex` processes.
@@ -78,7 +78,7 @@ false failures without changing test behavior.
 
 ### Task 1: Implement Narrow Alert Fetch Filter
 
-In `/Users/ultra/work/ext-test-projects`:
+In `../ext-test-projects`:
 
 - [x] Update `e2e/helpers/benign-runtime-errors.ts`.
 - [x] Add a helper `isVSCodeWorkbenchAlertFetchNoise(text: string)`.
@@ -110,7 +110,7 @@ Use the specific failed AST project because it produced both alert-fetch false
 failures:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd ../ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:react-vite-emotion-dashboard" \
   tests/project-dependent/ast-operations.spec.ts
@@ -119,7 +119,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 Use this focused unit command before the E2E run:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd ../ext-test-projects/e2e
 bun test helpers/benign-runtime-errors.test.ts
 ```
 
@@ -143,7 +143,7 @@ Expected E2E verification:
 ```bash
 rg -n "fetchAlerts|Fetch timeout: 20000ms|test-errors" \
   /tmp/<run-log>.log \
-  /Users/ultra/work/ext-test-projects/e2e/docker-artifacts/<new-run>/
+  ../ext-test-projects/e2e/docker-artifacts/<new-run>/
 ```
 
 ## Follow-Up Candidates

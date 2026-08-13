@@ -771,7 +771,7 @@ Integrate harfbuzzjs (WASM HarfBuzz port) for complex script text shaping.
 - [ ] **Step 1: Add dependency**
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft/.claude/worktrees/HYP-308-vector-engine/packages/vector-engine && bun add harfbuzzjs
+cd .claude/worktrees/HYP-308-vector-engine/packages/vector-engine && bun add harfbuzzjs
 ```
 
 - [ ] **Step 2: Write failing tests**
@@ -938,7 +938,7 @@ Parse `.fig` files (Figma binary format) into decoded node data.
 - [ ] **Step 1: Add dependencies**
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft/.claude/worktrees/HYP-308-vector-engine/packages/vector-engine && bun add pako fzstd fflate
+cd .claude/worktrees/HYP-308-vector-engine/packages/vector-engine && bun add pako fzstd fflate
 ```
 
 Note: `fflate` handles zip extraction, `pako` handles deflate, `fzstd` handles

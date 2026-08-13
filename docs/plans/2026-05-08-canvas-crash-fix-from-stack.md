@@ -29,7 +29,7 @@ Track B produces a Docker-reproducible repro or a root-cause explanation.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any E2E work.
+- Read `../ext-test-projects/CLAUDE.md` before any E2E work.
 - Never `RemoteTrigger`. Ralphex is local CLI only.
 - No "follow-up needed" placeholders — each task has an explicit deliverable.
 - TG: never write file paths, always attach files via `tg --file <path> "caption"` (or `tg --photo` for screenshots).
@@ -99,7 +99,7 @@ This task runs after the log file is attached. Ralphex reads the log and:
       because Docker doesn't repro; it should continue passing after):
 
       ```bash
-      cd /Users/ultra/work/ext-test-projects/e2e
+      cd ../ext-test-projects/e2e
       HYPER_E2E_SHARDS=1 bun run test:docker -- \
         --project="dep:bulka-the-dog" \
         tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts

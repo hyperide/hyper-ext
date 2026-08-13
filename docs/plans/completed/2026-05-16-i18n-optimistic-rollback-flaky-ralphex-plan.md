@@ -31,7 +31,7 @@ Do NOT change production code. Do NOT change other tests.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any E2E work.
+- Read `../ext-test-projects/CLAUDE.md` before any E2E work.
 - This ralphex run is isolated. Use the worktree created by ralphex.
 - E2E ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker`.
 - TDD: confirm test is RED before fix, GREEN after.
@@ -48,7 +48,7 @@ Acceptance: exact line range identified, fix plan confirmed.
 - [x] Run the specific test and observe failure due to `toBeDisabled` timeout
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --grep "I18N-OPTIMISTIC-KEY-ROLLBACK" 2>&1 | tail -30
 ```
@@ -67,7 +67,7 @@ Acceptance: file saved with toBeDisabled removed.
 - [x] Run the same test again and confirm it passes
 
 ```bash
-cd /Users/ultra/work/ext-test-projects
+cd ../ext-test-projects
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --grep "I18N-OPTIMISTIC-KEY-ROLLBACK" 2>&1 | tail -30
 ```

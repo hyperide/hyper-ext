@@ -230,7 +230,7 @@ to tolerate empty text — reviewer will tighten later.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD mandatory: e2e specs in Task 3 + Task 4 must fail RED first, then green after impl.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` / claude.ai cloud API for any
   step (CLAUDE.md rule, top of file).

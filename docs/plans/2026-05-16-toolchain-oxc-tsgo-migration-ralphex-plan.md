@@ -113,5 +113,5 @@ Cast to `ArrayBuffer`: `data.backendWs.send(arrayBuffer as ArrayBuffer)` or fix 
 - Do NOT touch vscode-extension tsconfig files unless they also need baseUrl removed.
 - Run `tsgo --noEmit` and `oxlint` after each step to verify no regressions.
 - Do not touch any business logic. This is pure toolchain swap.
-- Work in the existing `oxc-research` worktree at `/Users/ultra/work/hyper-canvas-draft-worktrees/oxc-research`.
+- Work in the existing `oxc-research` worktree at `../hyperide-worktrees/oxc-research`.
 - Commit each step separately with clear commit messages.

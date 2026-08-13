@@ -64,7 +64,7 @@ actual root cause.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` first — mandatory before any e2e.
+- Read `../ext-test-projects/CLAUDE.md` first — mandatory before any e2e.
 - Run e2e ONLY via `HYPER_E2E_SHARDS=1 bun run test:docker`. Never `bun run e2e`.
 - Write progress to `.ralphex/progress/progress-2026-05-12-bulka-discard.txt`.
 - Telegram heartbeat every 15 min.
@@ -72,11 +72,11 @@ actual root cause.
   retrying — do NOT leave zombie Electron/Playwright processes.
 - NEVER `TaskOutput(block: true)`. Use `tail -20 <output-file>` to read bg task output.
 
-Main worktree: `/Users/ultra/work/hyper-canvas-draft`
+Main worktree: `../hyperide`
 
 ### Task 1: Fix test infrastructure — pass explicit component path
 
-**File**: `/Users/ultra/work/ext-test-projects/e2e/tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts`
+**File**: `../ext-test-projects/e2e/tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts`
 
 Line 95:
 
@@ -104,7 +104,7 @@ Steps:
       run `/ext` skill to rebuild). (no rebuild needed — no ext changes since v0.1.46 release)
 - [x] Run test in Docker:
   ```bash
-  cd /Users/ultra/work/ext-test-projects/e2e
+  cd ../ext-test-projects/e2e
   HYPER_E2E_SHARDS=1 bun run test:docker -- \
     --project="dep:bulka-the-dog" \
     tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts
@@ -198,7 +198,7 @@ After fix: rebuild + re-run.
 Run one final clean Docker run with `HYPER_E2E_SHARDS=1`:
 
 ```bash
-cd /Users/ultra/work/ext-test-projects/e2e
+cd ../ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/bulka-canvas-discard-no-crash.spec.ts

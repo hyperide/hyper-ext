@@ -80,7 +80,7 @@ Add targeted console.log to identify which hypothesis is correct:
    ```
 3. Run targeted test:
    ```bash
-   cd /Users/ultra/work/ext-test-projects/e2e
+   cd ../ext-test-projects/e2e
    HYPER_E2E_SHARDS=1 bun run test:docker -- \
      --project="dep:remix-cssmodules-spotify" \
      tests/project-dependent/ast-operations.spec.ts \

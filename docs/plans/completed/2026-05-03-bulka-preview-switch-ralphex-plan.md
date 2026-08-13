@@ -8,7 +8,7 @@ preview render test:
 - Spec: `e2e/tests/project-dependent/preview-render.spec.ts`
 - Test: `multiple components — switch between them, each renders`
 - Latest run:
-  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch`
+  `../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e/docker-artifacts/run-20260503-full-after-bun-entry-patch`
 - Failing log: `shard-2/docker.log`
 
 Do not touch unrelated UI work, especially
@@ -38,7 +38,7 @@ Do not touch unrelated UI work, especially
 Run only this project/spec first, with one worker:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
+cd ../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -48,7 +48,7 @@ HYPER_E2E_SHARDS=1 bun run test:docker -- \
 If running outside Docker for faster iteration:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
+cd ../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 ./node_modules/.bin/playwright test \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -56,7 +56,7 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-sw
   --workers=1
 ```
 
-Follow `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md`:
+Follow `../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md`:
 
 - Use the VS Code/Electron harness, not a browser-only session.
 - Add diagnostics when creating a debug script.
@@ -107,7 +107,7 @@ The secondary suspect is generated preview fallback props:
   The copied run directory appears to contain only `shard-2/screenshots`, so
   rerun locally if the attachment files are not present.
 - Compare generated
-  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
+  `../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/bulka-the-dog/client/__canvas_preview__.tsx`
   with generator output from `lib/preview-generator/generator.ts`.
 - Inspect whether the generated Bulka preview registry includes low-level UI
   components such as `Badge` and chart components that should be skipped or
@@ -115,7 +115,7 @@ The secondary suspect is generated preview fallback props:
 
 ### Task 1: Reproduce And Classify The Timeout
 
-- [x] Read `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md` before running any
+- [x] Read `../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/CLAUDE.md` before running any
       VS Code extension debugging.
 - [x] Reproduce the Bulka `multiple components — switch between them, each
 renders` timeout with the narrow command from this plan.
@@ -211,7 +211,7 @@ Do not solve this by increasing timeouts.
   `lib/preview-generator/__tests__/generator.test.ts` if the fix changes
   fallback prop generation.
 - Add a focused E2E/page-object regression in
-  `/Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e` if the fix is Explorer
+  `../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e` if the fix is Explorer
   materialization or sidebar webview discovery.
 - Keep the production code under test. Do not duplicate generator logic inside
   test assertions.
@@ -221,14 +221,14 @@ Do not solve this by increasing timeouts.
 Run focused checks first:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft
+cd ../hyperide
 bun test lib/preview-generator/__tests__/generator.test.ts
 ```
 
 Then rerun the Bulka spec:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
+cd ../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects/e2e
 HYPER_E2E_SHARDS=1 bun run test:docker -- \
   --project="dep:bulka-the-dog" \
   tests/project-dependent/preview-render.spec.ts \
@@ -248,12 +248,12 @@ Expected result:
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/hyper-canvas-draft
+- ../hyperide-worktrees/20260503-2135/bulka-preview-switch/hyperide
 
-Use this ext-test-projects worktree instead of /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects:
+Use this ext-test-projects worktree instead of ../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects:
 
-- /Users/ultra/work/hyper-canvas-draft-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects
+- ../hyperide-worktrees/20260503-2135/bulka-preview-switch/ext-test-projects
 
 Do not write to the original main worktree or the original ext-test-projects checkout.
 Existing logs and dirty changes from the original worktrees were snapshotted at:
-/Users/ultra/work/hyper-canvas-draft-worktrees/snapshots/20260503-2135-before-worktrees
+../hyperide-worktrees/snapshots/20260503-2135-before-worktrees

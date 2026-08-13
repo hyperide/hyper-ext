@@ -86,7 +86,7 @@ be filed, file it. No "follow-up needed" placeholders.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: unit tests for the serializer are mandatory.
 - Use the local `ralphex` CLI only. Never `RemoteTrigger` (CLAUDE.md).
 - This ralphex run is isolated. Do not touch other worktrees, do not kill

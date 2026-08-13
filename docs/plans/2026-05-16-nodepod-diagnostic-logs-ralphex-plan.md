@@ -12,7 +12,7 @@ filtering, ANSI colours, virtual scrolling, auto-scroll, and build status.
 Goal: same logs UI for NodePod. Adapter pattern — no mode branching in LogsPanel or
 DiagnosticLogsViewer; two sync hooks feed the same store.
 
-Worktree: `/Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime`
+Worktree: `../hyperide-worktrees/nodepod-browser-runtime`
 
 ## Architecture
 
@@ -135,7 +135,7 @@ export function useNodePodDiagnosticSync({
 - [ ] Run typecheck to verify no errors:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
 ```
 
 Expected: 0 errors (or only pre-existing errors unrelated to this file).
@@ -143,13 +143,13 @@ Expected: 0 errors (or only pre-existing errors unrelated to this file).
 - [ ] Run Codex review:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && codex exec review --uncommitted 2>&1 | tail -80
+cd ../hyperide-worktrees/nodepod-browser-runtime && codex exec review --uncommitted 2>&1 | tail -80
 ```
 
 - [ ] Commit:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git add client/hooks/useNodePodDiagnosticSync.ts && git commit -m "feat(nodepod): useNodePodDiagnosticSync — sync runtime.logs to diagnosticStore"
+cd ../hyperide-worktrees/nodepod-browser-runtime && git add client/hooks/useNodePodDiagnosticSync.ts && git commit -m "feat(nodepod): useNodePodDiagnosticSync — sync runtime.logs to diagnosticStore"
 ```
 
 ---
@@ -233,7 +233,7 @@ them directly now.
 - [ ] Run lint to verify:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 60 bun run lint 2>&1 | tail -30
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 60 bun run lint 2>&1 | tail -30
 ```
 
 Expected: no new errors from LogsPanel.tsx. (Existing CanvasEditor errors about missing
@@ -242,13 +242,13 @@ Expected: no new errors from LogsPanel.tsx. (Existing CanvasEditor errors about 
 - [ ] Run typecheck:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
 ```
 
 - [ ] Commit:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git add client/pages/Editor/components/LogsPanel.tsx && git commit -m "refactor(logs): LogsPanel — remove internal useDiagnosticSync, accept onClear prop"
+cd ../hyperide-worktrees/nodepod-browser-runtime && git add client/pages/Editor/components/LogsPanel.tsx && git commit -m "refactor(logs): LogsPanel — remove internal useDiagnosticSync, accept onClear prop"
 ```
 
 ---
@@ -268,7 +268,7 @@ Three changes:
 - [ ] Find where `runtime` is destructured in CanvasEditor (search for `useProjectRuntime` or `const runtime`). Add the two sync hook calls right after the runtime declaration. Find the exact lines with:
 
 ```bash
-grep -n "useProjectRuntime\|const runtime\|useLogsPanelState\|useDiagnosticSync" /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime/client/pages/Editor/CanvasEditor.tsx | head -20
+grep -n "useProjectRuntime\|const runtime\|useLogsPanelState\|useDiagnosticSync" ../hyperide-worktrees/nodepod-browser-runtime/client/pages/Editor/CanvasEditor.tsx | head -20
 ```
 
 - [ ] Add imports near the top of the imports block (after existing hook imports):
@@ -354,7 +354,7 @@ New condition adds NodePod active state and passes onClear, removes containerSta
 - [ ] Run typecheck:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 60 bun run typecheck 2>&1 | tail -20
 ```
 
 Expected: 0 new errors.
@@ -362,19 +362,19 @@ Expected: 0 new errors.
 - [ ] Run lint:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 60 bun run lint 2>&1 | tail -30
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 60 bun run lint 2>&1 | tail -30
 ```
 
 - [ ] Run Codex review:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && codex exec review --uncommitted 2>&1 | tail -80
+cd ../hyperide-worktrees/nodepod-browser-runtime && codex exec review --uncommitted 2>&1 | tail -80
 ```
 
 - [ ] Commit:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git add client/pages/Editor/CanvasEditor.tsx && git commit -m "feat(nodepod): wire diagnostic log adapters in CanvasEditor, show LogsPanel during boot"
+cd ../hyperide-worktrees/nodepod-browser-runtime && git add client/pages/Editor/CanvasEditor.tsx && git commit -m "feat(nodepod): wire diagnostic log adapters in CanvasEditor, show LogsPanel during boot"
 ```
 
 ---
@@ -384,13 +384,13 @@ cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git
 - [ ] Push branch commits to develop for staging:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && git push origin HEAD:develop && echo "pushed"
+cd ../hyperide-worktrees/nodepod-browser-runtime && git push origin HEAD:develop && echo "pushed"
 ```
 
 - [ ] Verify typecheck and lint pass cleanly:
 
 ```bash
-cd /Users/ultra/work/hyper-canvas-draft-worktrees/nodepod-browser-runtime && timeout 90 bun run typecheck 2>&1 | tail -5 && timeout 90 bun run lint 2>&1 | tail -5
+cd ../hyperide-worktrees/nodepod-browser-runtime && timeout 90 bun run typecheck 2>&1 | tail -5 && timeout 90 bun run lint 2>&1 | tail -5
 ```
 
 ---

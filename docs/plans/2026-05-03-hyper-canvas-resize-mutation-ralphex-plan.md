@@ -30,7 +30,7 @@ changed size, plus a test proving the source update.
 
 ### Task 1: Reproduce The Missing Mutation
 
-- [ ] Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before extension E2E.
+- [ ] Read `../ext-test-projects/CLAUDE.md` before extension E2E.
 - [ ] Run the existing resize handle E2E/debug flow and confirm handles are
       visible.
 - [ ] Attempt a real drag on `[data-resize-handle="width"]` and/or

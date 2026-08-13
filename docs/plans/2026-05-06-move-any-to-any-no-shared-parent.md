@@ -356,7 +356,7 @@ N adjustments") rather than blocking the drop.
       in env, so TG submission cannot be performed from this
       session;
       (b) `e2e/scripts/docker-parallel-run.sh` hardcodes
-      `EXTENSION_REPO=/Users/ultra/work/hyper-canvas-draft` (main
+      `EXTENSION_REPO=../hyperide` (main
       repo, not this worktree). Tasks 1-9 only live on branch
       `move-any-to-any-no-shared-parent`, so an unparameterised
       docker run would test the OLD code path, producing zero

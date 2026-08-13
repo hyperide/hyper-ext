@@ -202,7 +202,7 @@ regression`, MEMORY 2026-05-08). When the harness env is stable the
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD end-to-end first: both e2e specs RED on main before Task 3 lands.
 - Use the local `ralphex` CLI only. Never use `RemoteTrigger` (CLAUDE.md rule).
 - This ralphex run is isolated; do not touch other worktrees, do not kill unrelated ralphex

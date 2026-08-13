@@ -82,7 +82,7 @@ extension consumption. Put shared behavior in `shared/` when applicable.
       body `{ componentPath, updates: { x, y } }`. Errors logged to `console.error`.
       [x] manual test — runtime network inspection requires a live browser session.
 - [x] For VS Code extension debugging, use the E2E harness from
-      `/Users/ultra/work/ext-test-projects` and follow its `CLAUDE.md` rules.
+      `../ext-test-projects` and follow its `CLAUDE.md` rules.
       [x] manual test (skipped — no extension drag path under active investigation;
       extension does not use board mode or instanceOverlays)
 
@@ -164,7 +164,7 @@ extension consumption. Put shared behavior in `shared/` when applicable.
       `useInstanceOverlays.ts` behavior where feasible.
       Done — see useInstanceOverlays.test.ts (3 tests, 45 total hook tests pass).
 - [x] If changing extension behavior, rebuild the extension and add or update a
-      focused E2E/debug check in `/Users/ultra/work/ext-test-projects`.
+      focused E2E/debug check in `../ext-test-projects`.
       Not applicable — extension has no board mode overlay drag path.
 - [x] Run focused `bun:test` targets first, then broader checks appropriate to
       the touched package.

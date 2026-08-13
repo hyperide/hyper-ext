@@ -110,7 +110,7 @@ Fix:
 ### Task 7: Build + install ext, run E2E → GREEN
 
 - [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh`
-- [x] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-shift-enter-parent"`
+- [x] Run E2E: `cd ../ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-shift-enter-parent"`
 - [x] Test must be GREEN (exactly 1 rect after Shift+Enter on repeated component)
   - NOTE: test selector updated to `[data-selection-overlay="true"][data-element-id]` to count only selection rects, excluding hover rects (hover rects lack data-element-id per renderOverlayRects). Passed GREEN on run-20260509-111951-66423.
 - [x] Screenshot artifacts in `docker-artifacts/run-*/shard-*/`

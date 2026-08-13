@@ -2,7 +2,7 @@
 
 ## Context
 
-Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memory/project_bug_padding_down_arrow.md`):
+Reproduction (from `~/.claude/projects/-Users-ultra-work-hyperide/memory/project_bug_padding_down_arrow.md`):
 
 1. Select element `<div className="flex flex-wrap gap-3 py-[2px]">`.
 2. In the inspector, find the padding-vertical input (current value `2px`).
@@ -221,7 +221,7 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
 
       [x] skipped — Playwright `electron.launch()` hangs to its 180s
       timeout in the ralphex bash subshell. Wrote a complete standalone
-      verifier (`/Users/ultra/work/ext-test-projects/e2e/verify-padding-
+      verifier (`../ext-test-projects/e2e/verify-padding-
       down-arrow-fix.ts`) that follows the `capture-bulka-screenshots.ts`
       pattern: launchVSCode → setupPreviewWithDevServer → click element
       → fill padding-vertical = "2" + Enter → ArrowDown × 2 → assert

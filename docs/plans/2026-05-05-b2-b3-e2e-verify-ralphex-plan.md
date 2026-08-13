@@ -18,7 +18,7 @@ E2E regression tests were already written:
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` first — mandatory.
+- Read `../ext-test-projects/CLAUDE.md` first — mandatory.
 - TDD is already done (tests exist). Goal is to make them GREEN.
 - Do NOT kill existing ralphex processes.
 - Write progress to `.ralphex/progress/progress-2026-05-05-b2-b3-verify.txt`.
@@ -26,21 +26,21 @@ E2E regression tests were already written:
 
 This ralphex run works in the main worktree (no separate worktree needed — read-only run + possible fix):
 
-- Main worktree: `/Users/ultra/work/hyper-canvas-draft`
+- Main worktree: `../hyperide`
 
 ## Task 1: Confirm extension version
 
 - [ ] Check current installed extension version: `code --list-extensions --show-versions | grep hypercanvas`
 - [ ] If not 0.1.41+, build and install:
   ```bash
-  cd /Users/ultra/work/hyper-canvas-draft/vscode-extension/hypercanvas-preview && npm run package
+  cd vscode-extension/hypercanvas-preview && npm run package
   code --install-extension hypercanvas-preview-*.vsix --force
-  vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter
+  vscmd workbench.action.reloadWindow -p ../ext-test-projects/react-vite-tw4-twitter
   ```
 
 ## Task 2: Run B2 test (PI-7-I18N-3)
 
-From `/Users/ultra/work/ext-test-projects`:
+From `../ext-test-projects`:
 
 ```bash
 HYPER_E2E_SHARDS=1 bun run test:docker -- --grep "PI-7-I18N-3" 2>&1 | tail -60

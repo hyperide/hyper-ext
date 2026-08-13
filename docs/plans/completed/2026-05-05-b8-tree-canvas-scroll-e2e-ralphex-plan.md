@@ -27,7 +27,7 @@ Do not change unrelated code. Do not kill existing ralphex processes.
 
 ## Hard Rules
 
-- Read `/Users/ultra/work/ext-test-projects/CLAUDE.md` before any extension E2E.
+- Read `../ext-test-projects/CLAUDE.md` before any extension E2E.
 - TDD: write failing test first. But here the test may already be nearly passing — confirm
   behavior and write a proper assertion regardless.
 - Do not push to `ultra/hyp-363-...` directly — work on a new branch or in the worktree.
@@ -36,13 +36,13 @@ Do not change unrelated code. Do not kill existing ralphex processes.
 
 This ralphex run is isolated. Use this Hyper Canvas worktree:
 
-- `/Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b8-tree-scroll/hyper-canvas-draft`
+- `../hyperide-worktrees/20260505-b8-tree-scroll/hyperide`
 
 Create it with:
 
 ```bash
-git -C /Users/ultra/work/hyper-canvas-draft worktree add \
-  /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b8-tree-scroll/hyper-canvas-draft \
+git -C ../hyperide worktree add \
+  ../hyperide-worktrees/20260505-b8-tree-scroll/hyperide \
   -b HYP-b8-tree-canvas-scroll ultra/hyp-363-vs-code-preview-webview-opens-offscreen-in-e2e
 ```
 
@@ -83,9 +83,9 @@ Acceptance: test exists and clearly tests scroll behavior.
 
 ### Task 3: Build Fresh Extension
 
-- [x] Build: `cd /Users/ultra/work/hyper-canvas-draft-worktrees/20260505-b8-tree-scroll/hyper-canvas-draft/vscode-extension/hypercanvas-preview && npm run package`.
+- [x] Build: `cd ../hyperide-worktrees/20260505-b8-tree-scroll/hyperide/vscode-extension/hypercanvas-preview && npm run package`.
 - [x] Install: `code --install-extension hypercanvas-preview-*.vsix --force`.
-- [x] Reload VS Code via `vscmd workbench.action.reloadWindow -p /Users/ultra/work/ext-test-projects/react-vite-tw4-twitter`.
+- [x] Reload VS Code via `vscmd workbench.action.reloadWindow -p ../ext-test-projects/react-vite-tw4-twitter`.
 
 NOTE: Built v0.1.41 from worktree HYP-b8-tree-canvas-scroll (branch without scroll fix — scroll chain still missing, as found in Task 1). Task 4 will run RED test and implement the fix.
 
@@ -116,7 +116,7 @@ Acceptance: test passes.
 
 ### Task 6: Lint + Typecheck
 
-- [x] `bun lint` in hyper-canvas-draft.
+- [x] `bun lint` in hyperide.
 - [x] Fix any errors.
 
 ### Task 7: Commit

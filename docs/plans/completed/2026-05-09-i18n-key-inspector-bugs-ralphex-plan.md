@@ -104,9 +104,9 @@ Root cause of Test 4 RED: after Task 3, `showCombobox = canCreateKeys || ...` al
 
 ### Task 6: Build + install ext, run E2E → GREEN
 
-- [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` in hyper-canvas-draft root
+- [x] Run `./vscode-extension/hypercanvas-preview/build-and-install.sh` in hyperide root
 - [x] Wait for build to complete
-- [x] Run E2E: `cd /Users/ultra/work/ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-key-bugs"`
+- [x] Run E2E: `cd ../ext-test-projects/e2e && HYPER_E2E_SHARDS=1 bun run test:docker --grep "bulka-i18n-key-bugs"`
 - [x] All 4 tests must be GREEN
 - [x] Screenshot artifacts in `docker-artifacts/run-20260509-125054-69374/shard-1/screenshots/`
 
