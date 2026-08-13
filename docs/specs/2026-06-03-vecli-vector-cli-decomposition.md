@@ -68,8 +68,8 @@ tickets for things that are 80% done.
 ## Scope / Decomposition
 
 Grouped by theme. Each is independently shippable except where a dependency is stated.
-All work is in `packages/vector-{cli,engine,wasm}`; TDD per `docs/rules/development.md`
-(`bun run test`, never `bun test`).
+All work is in `packages/vector-{cli,engine,wasm}`; TDD per the `tdd-red-first` skill and
+AGENTS.md's "Coding Guidelines" (`bun run test`, never `bun test`).
 
 ### Theme A — Quick wins (ship independently, no shared-infra risk)
 

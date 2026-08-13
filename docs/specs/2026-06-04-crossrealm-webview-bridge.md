@@ -3,7 +3,8 @@
 # Cross-realm webview bridge — wiring SaaS-only features into the VS Code extension
 
 **Ticket:** HYP-535. **Covers:** #258 NudgeHUD, #270 multi-select batch, #260 FastPatch.
-**Status:** design (Этап 0 per docs/rules/development.md). TDD + per-feature visual proof + CTO
+**Status:** design (ticket-first, per `strict-ticket-discipline`; `docs/rules/development.md` this
+line pointed to is retired — see AGENTS.md). TDD + per-feature visual proof + CTO
 acceptance required before each merge.
 
 ## 1. Problem — one root cause, three symptoms
@@ -148,7 +149,7 @@ A new "Webview realms & cross-realm state" subsection under Architecture Context
   and currently broken), not by grepping for code references (which gives false "wired" positives —
   this is exactly how #258/#260/#270 were mis-assessed as "still-relevant").
 
-## 5. Sequencing (TDD per docs/rules, one feature per PR)
+## 5. Sequencing (TDD per `tdd-red-first` / AGENTS.md, one feature per PR)
 
 1. **Shared seam first**: `NudgeStatePort`/`FastPatchPort`/`updateStylesBatch` interfaces +
    Browser adapter impls (in-process, behavior-preserving) + VS Code adapter impls (StateHub/RPC) +

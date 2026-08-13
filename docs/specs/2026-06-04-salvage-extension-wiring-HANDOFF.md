@@ -14,9 +14,12 @@ then the linked specs/files. Ticket: **HYP-535**. Design PR: **#371**.
    cause, the reusable seam, per-feature wiring, the "так не надо" anti-patterns, decisions D1/D2.
 2. Read the new **`AGENTS.md` → "Webview realms & cross-realm state"** subsection (added on the
    HYP-535 branch / PR #371).
-3. Follow **`docs/rules/development.md`** for process (TDD red-first, `bun run test`, `bun run knip`,
-   advisor()+codex before commit, `/commit`, NO `--no-verify`, no sed/perl, worktree in `-worktrees/`,
-   visual proof → CTO TG acceptance = "done").
+3. Follow **`AGENTS.md`** (the retired `docs/rules/development.md` this line pointed to is gone —
+   process now lives in AGENTS.md's "Git Workflow" / "Coding Guidelines" / "PR Merge Discipline"
+   sections plus the `tdd-red-first`, `adversarial-verification`, `visual-proof-cycle`, and
+   `pre-commit-gate` skills) for process (TDD red-first, `bun run test`, `bun run knip`,
+   advisor()+review before commit, `/commit`, NO `--no-verify`, no sed/perl, worktree in
+   `-worktrees/`, visual proof → CTO TG acceptance = "done").
 4. Before building **#270**, do the deep study flagged in §4 below (the 158 KB unification plan).
 
 ---
