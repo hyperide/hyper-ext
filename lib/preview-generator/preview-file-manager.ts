@@ -8,7 +8,7 @@
  * Architecture: https://hyperide.github.io/reports/preview-routing
  */
 
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import { parse } from '@babel/parser';
 import { builders as b, namedTypes } from 'ast-types';
 import * as recast from 'recast';
@@ -33,11 +33,13 @@ import {
 import { buildContainerSampleJsxBody } from './sample-scaffold';
 import {
   detectExportStyle,
+  detectProviderShell,
   detectRouterShell,
   detectSSRHooks,
   type ExportStyle,
   extractComponentName,
   extractDeclaredPropNames,
+  extractMountedRootImportSources,
   hasComponentExport,
   scanRenderableExportNames,
   scanSampleExports,
@@ -386,6 +388,8 @@ export class PreviewFileManager {
   private ssrMock?: SSRMockConfig;
   private _providerWrapPromise: Promise<void> | null = null;
   private _ssrMockPromise: Promise<void> | null = null;
+  /** Memoized set of project-relative paths of components mounted by the entry's createRoot. */
+  private _entryRootPathsPromise: Promise<Set<string>> | null = null;
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
@@ -449,6 +453,145 @@ export class PreviewFileManager {
   }
 
   /**
+   * Resolve the SPA entry file (the module the browser loads first) and return the
+   * project-relative paths of every locally-imported component it mounts via
+   * `createRoot(...).render(<tree/>)`. Memoized for the manager's lifetime — the
+   * entry file does not change between component selections.
+   *
+   * Mirrors the entry-file candidate order used by PreviewModeManager: the
+   * index.html `<script type="module">` target first, then `src/main.tsx` &c. This
+   * is the createRoot bootstrap target that imports the app shell (`<App/>`), which
+   * must never enter the previewable-component registry — rendering it standalone
+   * fires its provider consumer hooks outside the providers main.tsx mounts (HYP-546).
+   *
+   * Scope: resolves DIRECT entry imports only (`import App from './app/App'`, the
+   * conloca shape). A barrel/directory entry import (`import App from './app'` where
+   * the shell lives in `./app/App.tsx` re-exported via `./app/index.ts`) is NOT
+   * followed — that needs index-file probing + re-export tracing and is a deferred
+   * follow-up (no observed target uses it; the reported bug uses a direct import).
+   * Returns an empty set for non-SPA frameworks (Next/Remix/Astro have no single
+   * createRoot bootstrap), so the exclusion never fires there.
+   */
+  private async _getEntryRootComponentPaths(): Promise<Set<string>> {
+    this._entryRootPathsPromise ??= this._resolveEntryRootComponentPaths();
+    return this._entryRootPathsPromise;
+  }
+
+  private async _resolveEntryRootComponentPaths(): Promise<Set<string>> {
+    const entryFile = await this._detectSpaEntryFile();
+    if (!entryFile) return new Set();
+
+    let entrySource: string;
+    try {
+      entrySource = await this.io.readFile(join(this.projectRoot, entryFile));
+    } catch {
+      return new Set();
+    }
+
+    let relativeSources: Set<string>;
+    try {
+      relativeSources = extractMountedRootImportSources(entrySource);
+    } catch {
+      return new Set();
+    }
+
+    const entryDir = dirname(entryFile);
+    const result = new Set<string>();
+    for (const source of relativeSources) {
+      // Resolve the import source relative to the entry file's dir, then express it
+      // project-relative (no extension) so it can be matched against canonicalized
+      // component paths regardless of the on-disk extension.
+      const resolvedAbs = resolve(this.projectRoot, entryDir, source);
+      const projectRel = relative(this.projectRoot, resolvedAbs);
+      if (projectRel.startsWith('..')) continue; // outside project — ignore
+      result.add(projectRel.replace(/\.[jt]sx?$/, ''));
+    }
+    return result;
+  }
+
+  /**
+   * From a set of already-registered preview entries, return the CANONICAL paths of
+   * those that are the SPA entry root AND a provider shell — i.e. exactly what
+   * `buildEntry` excludes (HYP-546). Used by the `ensureComponent` fast path to mark
+   * a persisted provider-shell entry stale and force a regen that drops it. Reads
+   * each candidate's source only when it matches an entry-root path, so the common
+   * non-entry-root entries cost nothing.
+   */
+  private async _collectEntryRootShellPaths(
+    entries: { componentPath: string }[],
+    canonicalPaths: Map<string, string>,
+  ): Promise<Set<string>> {
+    const entryRootPaths = await this._getEntryRootComponentPaths();
+    const stale = new Set<string>();
+    if (entryRootPaths.size === 0) return stale;
+
+    for (const entry of entries) {
+      const canonical = this.canonicalizeComponentPath(entry.componentPath, canonicalPaths);
+      if (!entryRootPaths.has(canonical.replace(/\.[jt]sx?$/, ''))) continue;
+      let source: string;
+      try {
+        source = await this.io.readFile(join(this.projectRoot, canonical));
+      } catch {
+        continue;
+      }
+      let isShell = false;
+      try {
+        isShell = detectProviderShell(source);
+      } catch {
+        isShell = false;
+      }
+      if (isShell) stale.add(canonical);
+    }
+    return stale;
+  }
+
+  /**
+   * Detect the SPA browser entry file (project-relative). Returns null when no
+   * Vite/CRA-style entry is found (Next.js / Remix / Astro use file-based routing
+   * and have no single createRoot bootstrap). Pure FileIO — no PreviewModeManager
+   * dependency, so the exclusion works on every buildEntry path uniformly.
+   */
+  private async _detectSpaEntryFile(): Promise<string | null> {
+    // 1. index.html <script type="module" src="…"> — the authoritative entry.
+    for (const htmlRel of ['index.html', 'src/index.html', 'client/index.html', 'app/index.html']) {
+      let html: string;
+      try {
+        html = await this.io.readFile(join(this.projectRoot, htmlRel)); // nosemgrep: path-join-resolve-traversal
+      } catch {
+        continue;
+      }
+      const htmlDir = htmlRel.includes('/') ? htmlRel.slice(0, htmlRel.lastIndexOf('/')) : '';
+      // HTML tag/attribute names are case-insensitive — match <SCRIPT>/TYPE/SRC too
+      // (CodeQL js/bad-tag-filter: a case-sensitive <script> filter misses upper-case tags).
+      for (const match of html.matchAll(/<script\b[^>]*>/gi)) {
+        const tag = match[0];
+        if (!/\btype=["']module["']/i.test(tag)) continue;
+        const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
+        if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/@')) continue;
+        if (!/\.[cm]?[jt]sx?$/.test(src)) continue;
+        const rel = src.startsWith('/') ? src.slice(1) : posix.normalize(posix.join(htmlDir, src));
+        try {
+          await this.io.access(join(this.projectRoot, rel)); // nosemgrep: path-join-resolve-traversal
+          return rel;
+        } catch {
+          /* script target not present — keep scanning */
+        }
+      }
+    }
+
+    // 2. Conventional Vite/CRA entry filenames under common frontend roots.
+    for (const rel of ['src/main.tsx', 'src/main.ts', 'src/index.tsx', 'src/index.ts', 'client/main.tsx']) {
+      try {
+        await this.io.access(join(this.projectRoot, rel)); // nosemgrep: path-join-resolve-traversal
+        return rel;
+      } catch {
+        /* not present */
+      }
+    }
+    return null;
+  }
+
+  /**
    * Ensure given component paths are registered in the preview file.
    * - File missing (init): scan ALL project components and generate once with all imports.
    * - File exists, fast path: AST check. All present → no write. Any missing → minimal AST insert.
@@ -500,10 +643,19 @@ export class PreviewFileManager {
       const existingEntries = parseExistingPreview(existingContent);
       const discoveredPaths = await this._scanAllComponents();
       const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
+      // HYP-546 — an entry-root provider shell (the createRoot bootstrap target) that
+      // slipped into a previously-generated preview must be purged on the fast path
+      // too; otherwise a persisted __canvas_preview__.tsx keeps the provider shell
+      // forever (it never re-enters buildEntry while all requested imports resolve).
+      // Marking it stale forces _initPreviewFile, whose buildEntry re-applies the
+      // two-signal exclusion. Scoped to entries that ARE provider shells (matching
+      // buildEntry's gate) so a trivial non-shell entry root never triggers churn.
+      const staleShellPaths = await this._collectEntryRootShellPaths(existingEntries, canonicalPaths);
       const isStale = (e: { componentName: string; componentPath: string }) =>
         !/^[A-Z]/.test(e.componentName) ||
         isFrameworkReserved(basename(e.componentPath)) ||
         isPreviewIneligibleByName(basename(e.componentPath)) ||
+        staleShellPaths.has(this.canonicalizeComponentPath(e.componentPath, canonicalPaths)) ||
         this.hasPathCaseMismatch(e.componentPath, canonicalPaths);
       const needsSampleUpdate = await this.hasSampleExportMismatch(componentPaths, existingEntries, canonicalPaths);
       if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate && !needsSampleUpdate) {
@@ -864,6 +1016,31 @@ export class PreviewFileManager {
     // self-referential imports that cause circular Client Component chains.
     if (sourceCode.includes('@hyperide-managed')) {
       return null;
+    }
+
+    // Skip the SPA entry-root provider shell (HYP-546). A Vite/CRA `App.tsx` that
+    // `main.tsx` mounts via `createRoot(...).render(<App/>)` and that wraps the app
+    // in context providers (AuthProvider, QueryClientProvider, …) is the application
+    // shell, not a reusable previewable component. Rendering it standalone in the
+    // preview registry fires its providers' consumer hooks (useAuth, useBootstrap, …)
+    // OUTSIDE the surrounding providers main.tsx mounts → "useAuth must be used inside
+    // <AuthProvider>" → blank preview. The two-signal gate (entry-root AND provider
+    // shell) keeps a trivial mounted root that imports no providers selectable, and
+    // honors the same `allowRouterShell` escape hatch as the router-shell skip.
+    // Guarded parse: a mid-edit unparseable file must NOT crash here — let the
+    // dedicated parse-error try/catch below skip it. Treat a parse failure as
+    // "not a provider shell".
+    let isProviderShell = false;
+    try {
+      isProviderShell = detectProviderShell(sourceCode);
+    } catch {
+      isProviderShell = false;
+    }
+    if (!options.allowRouterShell && isProviderShell) {
+      const entryRootPaths = await this._getEntryRootComponentPaths();
+      if (entryRootPaths.has(componentPath.replace(/\.[jt]sx?$/, ''))) {
+        return null;
+      }
     }
 
     let componentName: string;

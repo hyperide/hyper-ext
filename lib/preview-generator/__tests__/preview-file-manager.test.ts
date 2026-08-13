@@ -2419,3 +2419,171 @@ export default function ({ foo, bar }) { return <div>{foo}{bar}</div>; }`,
     expect(isValidTypeScript(content)).toBe(true);
   });
 });
+
+describe('HYP-546 — provider-shell App.tsx is excluded from the preview registry', () => {
+  // Real conloca-app shape: index.html → /src/main.tsx → createRoot(...).render(<App/>),
+  // and App.tsx is a PROVIDER shell (wraps the app in AuthProvider/FeatureFlagsProvider,
+  // renders its own content, NOT `{children}`). main.tsx is shown ALREADY PATCHED with the
+  // @hyperide-managed CanvasPreviewComp branch — the normal on-disk state across sessions —
+  // so the extraction must skip that branch and still resolve App via the `else` render.
+  const INDEX_HTML = `<!doctype html><html><body>
+    <div id="app-root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body></html>`;
+
+  const MAIN_TSX = `import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import App from './app/App';
+import { HostClientProvider } from './app/host-client';
+const rootEl = document.getElementById('app-root');
+// @hyperide-managed
+if (new URLSearchParams(location.search).get("component") && location.pathname.includes("test-preview")) {
+  import("./__canvas_preview__").then(m => {
+    var CanvasPreviewComp = m.default;
+    if (CanvasPreviewComp) createRoot(rootEl).render(<CanvasPreviewComp />);
+  }).catch(() => {});
+} else {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <QueryClientProvider client={qc}>
+        <HostClientProvider client={hc}>
+          <App />
+        </HostClientProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}`;
+
+  const APP_TSX = `import { AuthProvider, useAuth } from './auth/use-auth';
+import { FeatureFlagsProvider } from './feature-flags';
+export default function App() {
+  return (
+    <FeatureFlagsProvider>
+      <AuthProvider><AuthRouter /></AuthProvider>
+    </FeatureFlagsProvider>
+  );
+}
+function AuthRouter() {
+  const { state } = useAuth();
+  return <div>{state.kind}</div>;
+}`;
+
+  function setupConlocaIo(): InMemoryFileIO {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { react: '18', vite: '5' } }));
+    io.files.set('/project/index.html', INDEX_HTML);
+    io.files.set('/project/src/main.tsx', MAIN_TSX);
+    io.files.set('/project/src/app/App.tsx', APP_TSX);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    return io;
+  }
+
+  it('excludes the entry-root provider shell App.tsx but keeps a normal component', async () => {
+    const io = setupConlocaIo();
+    const manager = createManager(io);
+
+    // User selects Button; App.tsx arrives via the project-wide supplement scan (no options).
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+
+    expect(content).toContain("'src/components/Button.tsx'");
+    // The provider-shell App.tsx (createRoot target) must NOT be registered.
+    expect(content).not.toContain("'src/app/App.tsx'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('still includes provider-importing components that are NOT the entry root', async () => {
+    const io = setupConlocaIo();
+
+    // Guard 1: LanguageProvider-style file that DEFINES its own context — a real,
+    // selectable component, not the mounted app shell.
+    io.files.set(
+      '/project/src/components/LanguageProvider.tsx',
+      `import React, { createContext } from 'react';
+const LanguageContext = createContext(null);
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  return <LanguageContext.Provider value={null}>{children}</LanguageContext.Provider>;
+}
+export const SampleDefault = () => <LanguageProvider><span>hi</span></LanguageProvider>;`,
+    );
+
+    // Guard 2: a component that imports a provider only to wrap its SampleDefault.
+    io.files.set(
+      '/project/src/components/Widget.tsx',
+      `import React from 'react';
+import { ThemeProvider } from './theme';
+export function Widget({ label }: { label: string }) { return <div>{label}</div>; }
+export const SampleDefault = () => <ThemeProvider><Widget label="x" /></ThemeProvider>;`,
+    );
+
+    // Guard 3: a composite that imports a provider but is NOT mounted by main.tsx.
+    io.files.set(
+      '/project/src/components/Composite.tsx',
+      `import React from 'react';
+import { AuthProvider } from '../app/auth/use-auth';
+export default function Composite() { return <AuthProvider><div>composite</div></AuthProvider>; }`,
+    );
+
+    // Guard 4: main.tsx renders <HostClientProvider> from a DIRECTORY import
+    // ('./app/host-client' → entry-root set contains 'src/app/host-client'). A real
+    // component living inside that directory has path 'src/app/host-client/<File>',
+    // which must NOT match the stripped directory path — directory imports never
+    // wrongly exclude their members.
+    io.files.set(
+      '/project/src/app/host-client/HostClientProvider.tsx',
+      `import React from 'react';
+export function HostClientProvider({ children }: { children: React.ReactNode }) { return <>{children}</>; }
+export const SampleDefault = () => <HostClientProvider><span>x</span></HostClientProvider>;`,
+    );
+
+    const manager = createManager(io);
+    const content = await manager.ensureComponent(['src/components/Button.tsx']);
+
+    expect(content).not.toContain("'src/app/App.tsx'"); // shell still excluded
+    expect(content).toContain("'src/components/LanguageProvider.tsx'");
+    expect(content).toContain("'src/components/Widget.tsx'");
+    expect(content).toContain("'src/components/Composite.tsx'");
+    expect(content).toContain("'src/app/host-client/HostClientProvider.tsx'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('purges a persisted provider-shell App.tsx on the fast path (no missing imports)', async () => {
+    // Simulate a preview file generated BEFORE this fix shipped: App.tsx is already
+    // registered. First gen without the entry file present lets App in; then the
+    // entry (index.html + main.tsx) appears and a later ensureComponent for an
+    // already-registered component takes the fast path — App must still be purged.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { react: '18', vite: '5' } }));
+    io.files.set('/project/src/app/App.tsx', APP_TSX);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+
+    // First gen: no index.html/main.tsx yet → App is registered (legacy behavior).
+    const before = await createManager(io).ensureComponent(['src/components/Button.tsx', 'src/app/App.tsx']);
+    expect(before).toContain("'src/app/App.tsx'");
+
+    // Entry appears. A fresh manager (new session) for an already-registered
+    // component takes the fast path — App must still be purged.
+    io.files.set('/project/index.html', INDEX_HTML);
+    io.files.set('/project/src/main.tsx', MAIN_TSX);
+    const after = await createManager(io).ensureComponent(['src/components/Button.tsx']);
+
+    expect(after).not.toContain("'src/app/App.tsx'");
+    expect(after).toContain("'src/components/Button.tsx'");
+    expect(isValidTypeScript(after)).toBe(true);
+  });
+
+  it('does NOT exclude a provider-shell App when no SPA entry file exists (non-SPA / unknown)', async () => {
+    // No index.html and no src/main.tsx → _detectSpaEntryFile returns null →
+    // entry-root set is empty → the exclusion never fires. App.tsx stays selectable.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', '{}');
+    io.files.set('/project/src/app/App.tsx', APP_TSX);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/app/App.tsx']);
+
+    expect(content).toContain("'src/app/App.tsx'");
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+});

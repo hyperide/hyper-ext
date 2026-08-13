@@ -2,11 +2,13 @@ import { describe, expect, it } from 'bun:test';
 import {
   detectCompoundExports,
   detectExportStyle,
+  detectProviderShell,
   detectRouterShell,
   detectSSRHooks,
   escapeRegex,
   extractComponentName,
   extractDeclaredPropNames,
+  extractMountedRootImportSources,
   scanSampleExports,
 } from '../scanner';
 
@@ -440,6 +442,104 @@ describe('detectRouterShell', () => {
       export function HomeScreen(_props: Props) { return <div />; }
     `;
     expect(detectRouterShell(source)).toBe(false);
+  });
+});
+
+describe('detectProviderShell', () => {
+  it('returns true for a named provider import (AuthProvider/FeatureFlagsProvider)', () => {
+    const source = `
+      import { AuthProvider } from './auth/use-auth';
+      import { FeatureFlagsProvider } from './feature-flags';
+      export default function App() {
+        return (
+          <FeatureFlagsProvider>
+            <AuthProvider><div /></AuthProvider>
+          </FeatureFlagsProvider>
+        );
+      }
+    `;
+    expect(detectProviderShell(source)).toBe(true);
+  });
+
+  it('returns true for a default-imported provider', () => {
+    const source = `
+      import AuthProvider from './auth/AuthProvider';
+      export default function App() { return <AuthProvider><div /></AuthProvider>; }
+    `;
+    expect(detectProviderShell(source)).toBe(true);
+  });
+
+  it('returns false when no provider is imported', () => {
+    const source = `
+      import { Button } from './ui';
+      export default function Dashboard() { return <Button>Go</Button>; }
+    `;
+    expect(detectProviderShell(source)).toBe(false);
+  });
+
+  it('returns false for a type-only provider import', () => {
+    const source = `
+      import type { AuthProvider } from './auth/types';
+      export default function Page() { return <div />; }
+    `;
+    expect(detectProviderShell(source)).toBe(false);
+  });
+});
+
+describe('extractMountedRootImportSources', () => {
+  it('finds the relative-imported root component nested under StrictMode/providers', () => {
+    const source = `
+      import { StrictMode } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { QueryClientProvider } from '@tanstack/react-query';
+      import App from './app/App';
+      createRoot(document.getElementById('root')).render(
+        <StrictMode>
+          <QueryClientProvider client={qc}>
+            <App />
+          </QueryClientProvider>
+        </StrictMode>,
+      );
+    `;
+    expect(extractMountedRootImportSources(source)).toEqual(new Set(['./app/App']));
+  });
+
+  it('ignores the @hyperide-managed CanvasPreviewComp branch (dynamic import) and finds App', () => {
+    const source = `
+      import { StrictMode } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import App from './app/App';
+      const rootEl = document.getElementById('app-root');
+      // @hyperide-managed
+      if (new URLSearchParams(location.search).get("component") && location.pathname.includes("test-preview")) {
+        import("./__canvas_preview__").then(m => {
+          var CanvasPreviewComp = m.default;
+          if (CanvasPreviewComp) createRoot(rootEl).render(<CanvasPreviewComp />);
+        }).catch(() => {});
+      } else {
+        createRoot(rootEl).render(<StrictMode><App /></StrictMode>);
+      }
+    `;
+    // CanvasPreviewComp has no static relative import → not collected; App is.
+    expect(extractMountedRootImportSources(source)).toEqual(new Set(['./app/App']));
+  });
+
+  it('returns empty set when render mounts only bare-module components', () => {
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import { SomeWidget } from 'some-package';
+      createRoot(el).render(<SomeWidget />);
+    `;
+    expect(extractMountedRootImportSources(source)).toEqual(new Set());
+  });
+
+  it('supports legacy ReactDOM.render', () => {
+    const source = `
+      import ReactDOM from 'react-dom';
+      import App from './App';
+      ReactDOM.render(<App />, document.getElementById('root'));
+    `;
+    expect(extractMountedRootImportSources(source)).toEqual(new Set(['./App']));
   });
 });
 

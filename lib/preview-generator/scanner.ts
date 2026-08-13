@@ -494,6 +494,146 @@ export function detectRouterShell(sourceCode: string): boolean {
 }
 
 /**
+ * Detect whether a file is a PROVIDER application shell — it statically imports
+ * one or more React context providers (a value/namespace import whose local name
+ * ends in `Provider`) and composes them. This complements `detectRouterShell`:
+ * a SPA `App.tsx` that wraps the app in `AuthProvider` / `QueryClientProvider` /
+ * `FeatureFlagsProvider` is a shell, not a previewable component — rendering it
+ * standalone fires the providers' consumer hooks (useAuth, useBootstrap, …)
+ * OUTSIDE the surrounding bootstrap providers that `main.tsx` mounts, throwing
+ * "useAuth must be used inside <AuthProvider>" and blanking the preview (HYP-546).
+ *
+ * Deliberately broad and used ONLY as the AND-narrowing companion to
+ * `extractMountedRootImportSources` (the entry's createRoot target): a false
+ * positive here can never wrongly exclude a non-entry-root component, only fail
+ * to exclude one — the entry-root gate is the hard constraint. Type-only imports
+ * are ignored so `import type { FooProvider }` does not trip it.
+ */
+export function detectProviderShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.importKind === 'type') continue;
+    for (const spec of node.specifiers) {
+      // Named import: `import { AuthProvider } from '…'` — match the imported name.
+      if (spec.type === 'ImportSpecifier') {
+        if (spec.importKind === 'type') continue;
+        const name = spec.imported.type === 'Identifier' ? spec.imported.name : spec.local.name;
+        if (name.endsWith('Provider')) return true;
+        continue;
+      }
+      // Default / namespace import: `import Foo from '…'` / `import * as Foo` —
+      // match the local binding name (e.g. a default-exported `AuthProvider`).
+      if (spec.type === 'ImportDefaultSpecifier' || spec.type === 'ImportNamespaceSpecifier') {
+        if (spec.local.name.endsWith('Provider')) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Extract the set of RELATIVE import sources for components rendered inside any
+ * `createRoot(...).render(<tree/>)` (or legacy `ReactDOM.render(<tree/>)`) call —
+ * i.e. the entry file's mounted application shell and the local components it
+ * composes around it (App + co-located providers).
+ *
+ * Used to identify the entry-root component so it can be excluded from the
+ * previewable-component registry (HYP-546). Returns import-source strings exactly
+ * as written (e.g. `./app/App`, `./App.tsx`); the caller resolves them to project
+ * paths relative to the entry file's directory.
+ *
+ * Robustness notes:
+ * - Recurses the FULL render JSX tree, so `<StrictMode><Providers><App/></…>` finds
+ *   `App` even though the top element is `StrictMode`.
+ * - Only collects components imported via a relative path (`./` or `../`). Bare
+ *   module imports (StrictMode, QueryClientProvider from a package) drop out, and
+ *   the `@hyperide-managed` preview branch — which renders a `CanvasPreviewComp`
+ *   bound to a DYNAMIC `import('./__canvas_preview__')`, never a static import —
+ *   contributes nothing, so a main.tsx already patched on disk is handled.
+ */
+export function extractMountedRootImportSources(entrySource: string): Set<string> {
+  const ast = parseSource(entrySource);
+
+  // Map JSX local component name → relative import source.
+  const localToRelativeSource = new Map<string, string>();
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.importKind === 'type') continue;
+    const source = node.source.value as string;
+    if (!source.startsWith('./') && !source.startsWith('../')) continue;
+    for (const spec of node.specifiers) {
+      if (spec.type === 'ImportDefaultSpecifier' || spec.type === 'ImportNamespaceSpecifier') {
+        localToRelativeSource.set(spec.local.name, source);
+      } else if (spec.type === 'ImportSpecifier') {
+        if (spec.importKind === 'type') continue;
+        localToRelativeSource.set(spec.local.name, source);
+      }
+    }
+  }
+
+  const sources = new Set<string>();
+  if (localToRelativeSource.size === 0) return sources;
+
+  // Walk every node, find createRoot(...).render(arg) / ReactDOM.render(arg, ...)
+  // call expressions, and collect the relative-imported JSX element names in arg.
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const node = value as { type?: string } & Record<string, unknown>;
+    if (node.type === 'CallExpression' && isRenderCall(node)) {
+      const args = node.arguments as unknown[];
+      if (args.length > 0) collectRelativeJsxComponents(args[0], localToRelativeSource, sources);
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') continue;
+      visit(node[key]);
+    }
+  };
+  visit(ast.program.body);
+
+  return sources;
+}
+
+/** Match `createRoot(el).render(...)`, `root.render(...)`, or `ReactDOM.render(...)`. */
+function isRenderCall(node: Record<string, unknown>): boolean {
+  const callee = node.callee as { type?: string; property?: { type?: string; name?: string } } | undefined;
+  if (!callee || callee.type !== 'MemberExpression') return false;
+  return callee.property?.type === 'Identifier' && callee.property.name === 'render';
+}
+
+/** Collect local JSX element names present in `arg` that map to a relative import. */
+function collectRelativeJsxComponents(
+  arg: unknown,
+  localToRelativeSource: Map<string, string>,
+  out: Set<string>,
+): void {
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const node = value as { type?: string; name?: unknown } & Record<string, unknown>;
+    if (node.type === 'JSXOpeningElement') {
+      const name = node.name as { type?: string; name?: string } | undefined;
+      if (name?.type === 'JSXIdentifier' && name.name) {
+        const source = localToRelativeSource.get(name.name);
+        if (source) out.add(source);
+      }
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') continue;
+      visit(node[key]);
+    }
+  };
+  visit(arg);
+}
+
+/**
  * Detect compound component siblings exported from the same file.
  *
  * A name qualifies when it:
