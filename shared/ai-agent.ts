@@ -54,14 +54,23 @@ export type ToolName =
   | 'add_dependency';
 
 /**
- * Tool input schemas
+ * Tool input schemas.
+ *
+ * These are the per-tool input contracts wired into the executor via
+ * `ToolInputMap` below. They are the public contract surface for tool calls
+ * (consumed by the agent worker/container over HTTP and by the executor);
+ * `@public` marks them as intentional API so knip doesn't flag them — knip
+ * can't see the cross-boundary (HTTP/runtime) consumers.
  */
+
+/** @public */
 export interface ReadFileInput {
   path: string;
   startLine?: number;
   endLine?: number;
 }
 
+/** @public */
 export interface EditFileInput {
   path: string;
   oldContent: string;
@@ -69,6 +78,7 @@ export interface EditFileInput {
   replaceAll?: boolean;
 }
 
+/** @public */
 export interface GrepSearchInput {
   pattern: string;
   path?: string;
@@ -76,40 +86,75 @@ export interface GrepSearchInput {
   caseSensitive?: boolean;
 }
 
+/** @public */
 export interface GlobSearchInput {
   pattern: string;
   path?: string;
 }
 
+/** @public */
 export interface BashExecInput {
   command: string;
   timeout?: number;
 }
 
+/** @public */
 export interface GitCommandInput {
   command: 'status' | 'diff' | 'log' | 'show' | 'blame';
   args?: string[];
 }
 
+/** @public */
 export interface AskUserInput {
   question: string;
   options?: string[]; // Optional predefined choices
 }
 
+/** @public */
 export interface RunTestsInput {
   testPaths: string[]; // Paths to test files to run
   installDeps?: boolean; // Auto-install missing packages
 }
 
+/** @public */
 export interface BraveWebSearchInput {
   query: string;
   count?: number; // Number of results (1-20, default: 10)
 }
 
+/** @public */
 export interface UrlFetchInput {
   url: string;
   selector?: string; // Optional CSS selector to extract specific content
 }
+
+/**
+ * Maps every tool that has a typed input contract to its `*Input` shape.
+ *
+ * This is the single source of truth wiring the contract interfaces above to
+ * the executor in `server/services/ai-agent.ts`. Tools without an entry
+ * (canvas_*, browser_*, generate_tests, analyze_component_tests, etc.) have no
+ * static input contract yet — their handlers narrow fields ad hoc.
+ *
+ * Keyed by `ToolName` so a typo in a tool key fails to compile.
+ */
+export interface ToolInputMap {
+  read_file: ReadFileInput;
+  edit_file: EditFileInput;
+  grep_search: GrepSearchInput;
+  glob_search: GlobSearchInput;
+  bash_exec: BashExecInput;
+  git_command: GitCommandInput;
+  ask_user: AskUserInput;
+  run_tests: RunTestsInput;
+  brave_web_search: BraveWebSearchInput;
+  url_fetch: UrlFetchInput;
+}
+
+/**
+ * Tool names that carry a typed input contract (a `ToolInputMap` entry).
+ */
+export type ContractedToolName = keyof ToolInputMap;
 
 /**
  * Tool result types
