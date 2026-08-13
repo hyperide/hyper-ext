@@ -20,6 +20,9 @@
     "@vscode/vsce": "^2.22.0",
     "typescript": "^5.0.0"
   },
+  "overrides": {
+    "tmp": ">=0.2.6"
+  },
   "contributes": {
     "viewsContainers": {
       "panel": [

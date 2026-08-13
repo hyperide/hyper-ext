@@ -408,7 +408,10 @@ describe('FIG mapper with vectorNetworkBlob', () => {
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
-    expect(pathNode!.params.d as string).toHaveLength(1);
+    // Triangle blob decodes to a full SVG path string (e.g. "M 0 0 L 100 0 L 50 86.6 L 0 0 Z").
+    // The previous `toHaveLength(1)` was a botched refactor of the original
+    // `.length).toBeGreaterThan(0)` intent (commit 5b341504) — a 1-char path is impossible.
+    expect((pathNode!.params.d as string).length).toBeGreaterThan(0);
     expect(pathNode!.params.d as string).toContain('M');
   });
 
