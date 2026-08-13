@@ -1000,5 +1000,182 @@ describe('AST Operations', () => {
       ]);
       expect(hasNonUndoable.canUndo()).toBe(false);
     });
+
+    it('should await async child _pendingPromise (server writes committed) after execute', async () => {
+      // Mirrors the real pattern: each child op kicks off an async write in execute()
+      // (e.g. ASTStyleOperation) and only flips `committed` once that write resolves.
+      // The async write completes on a deferred timer — so the ONLY way to observe the
+      // commit is to await something that chains on the child _pendingPromise. The batch
+      // must expose such a _pendingPromise; without it `await undefined` returns before
+      // the timer fires and the writes are still in flight (the await-gap bug).
+      const makeAsyncOp = (name: string) => {
+        const state = { committed: false };
+        return {
+          op: {
+            name,
+            _pendingPromise: undefined as Promise<void> | undefined,
+            execute() {
+              this._pendingPromise = new Promise<void>((res) => {
+                setTimeout(res, 5);
+              }).then(() => {
+                state.committed = true;
+              });
+              return { success: true, changedIds: [name] };
+            },
+            undo: () => ({ success: true, changedIds: [name] }),
+            redo: () => ({ success: true, changedIds: [name] }),
+            canUndo: () => true,
+          },
+          state,
+        };
+      };
+
+      const a = makeAsyncOp('async-1');
+      const b = makeAsyncOp('async-2');
+
+      const batch = new BatchOperation([a.op, b.op]);
+      const result = batch.execute(tree);
+      expect(result.success).toBe(true);
+
+      // Awaiting the batch's pending promise must guarantee all child writes committed.
+      await (batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise;
+
+      expect(a.state.committed).toBe(true);
+      expect(b.state.committed).toBe(true);
+    });
+
+    it('should drive each child redo() (not execute()) on redo (P1a)', () => {
+      // A recorded batch replayed via redo() must call child redo(), not child
+      // execute(). For snapshot/ID-sensitive children the two differ (execute mints
+      // new IDs; redo reuses recorded ones). The inherited BaseOperation.redo() wrongly
+      // delegates to execute(), which would re-run execute() on every child.
+      const calls: string[] = [];
+
+      const makeOp = (name: string) => ({
+        name,
+        execute: () => {
+          calls.push(`${name}:execute`);
+          return { success: true, changedIds: [`${name}-exec`] };
+        },
+        undo: () => ({ success: true, changedIds: [name] }),
+        redo: () => {
+          calls.push(`${name}:redo`);
+          return { success: true, changedIds: [`${name}-redo`] };
+        },
+        canUndo: () => true,
+      });
+
+      const batch = new BatchOperation([makeOp('op-1'), makeOp('op-2')]);
+      const result = batch.redo(tree);
+
+      expect(result.success).toBe(true);
+      // Only redo() of each child should have fired, in order — no execute() calls.
+      expect(calls).toEqual(['op-1:redo', 'op-2:redo']);
+      // changedIds collected from redo() results (the same way execute() collects them).
+      expect(result.changedIds).toEqual(['op-1-redo', 'op-2-redo']);
+    });
+
+    it('should await async child redo() _pendingPromise after redo (P1a)', async () => {
+      // redo() must refresh the batch _pendingPromise from child redo() in-flight writes,
+      // exactly as execute() does — otherwise CanvasEngine.redo resolves before commit.
+      const makeAsyncRedoOp = (name: string) => {
+        const state = { committed: false };
+        return {
+          op: {
+            name,
+            _pendingPromise: undefined as Promise<void> | undefined,
+            execute: () => ({ success: true, changedIds: [name] }),
+            undo: () => ({ success: true, changedIds: [name] }),
+            redo() {
+              this._pendingPromise = new Promise<void>((res) => {
+                setTimeout(res, 5);
+              }).then(() => {
+                state.committed = true;
+              });
+              return { success: true, changedIds: [name] };
+            },
+            canUndo: () => true,
+          },
+          state,
+        };
+      };
+
+      const a = makeAsyncRedoOp('redo-1');
+      const b = makeAsyncRedoOp('redo-2');
+
+      const batch = new BatchOperation([a.op, b.op]);
+      batch.redo(tree);
+
+      await (batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise;
+
+      expect(a.state.committed).toBe(true);
+      expect(b.state.committed).toBe(true);
+    });
+
+    it('should await a child whose async write is exposed only via the shared _pendingPromise (P1b)', async () => {
+      // ASTPasteOperation kicks off its server write in execute() but historically tracked
+      // it on `pastePromise`, NOT the shared `_pendingPromise` the batch reads. So a batch
+      // containing it resolved before the write committed and `newElementId` was still unset.
+      // After standardization the op also sets `_pendingPromise`, so awaiting the batch
+      // guarantees the paste committed.
+      api.pasteElementResult = { success: true, newId: 'pasted-77', newIds: ['pasted-77'], index: 0 };
+      const paste = new ASTPasteOperation(api, {
+        parentId: 'parent-1',
+        filePath: '/test/component.tsx',
+        tsxCode: '<Button>Hi</Button>',
+      });
+
+      const batch = new BatchOperation([paste]);
+      const result = batch.execute(tree);
+      expect(result.success).toBe(true);
+
+      await (batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise;
+
+      // If the batch awaited the in-flight paste, the new ID is committed by now.
+      expect(paste.getNewElementId()).toBe('pasted-77');
+    });
+
+    it('should await a duplicate child whose async write is exposed via the shared _pendingPromise (P1b)', async () => {
+      // Same standardization as paste: ASTDuplicateOperation must set `_pendingPromise`
+      // so a batch containing it waits for the duplicate write before resolving.
+      api.duplicateElementResult = { success: true, newId: 'dup-77', parentId: 'p-1', index: 1 };
+      const dup = new ASTDuplicateOperation(api, {
+        elementId: 'elem-1',
+        filePath: '/test/component.tsx',
+      });
+
+      const batch = new BatchOperation([dup]);
+      const result = batch.execute(tree);
+      expect(result.success).toBe(true);
+
+      await (batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise;
+
+      expect(dup.getNewElementId()).toBe('dup-77');
+    });
+
+    it('should resolve immediately for an empty batch', async () => {
+      const batch = new BatchOperation([]);
+      const result = batch.execute(tree);
+      expect(result.success).toBe(true);
+      expect(result.changedIds).toEqual([]);
+      // No children → _pendingPromise resolves with no in-flight writes.
+      await expect((batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise).resolves.toBeUndefined();
+    });
+
+    it('should resolve immediately for a purely synchronous batch', async () => {
+      const makeSyncOp = (name: string) => ({
+        name,
+        execute: () => ({ success: true, changedIds: [name] }),
+        undo: () => ({ success: true, changedIds: [name] }),
+        redo: () => ({ success: true, changedIds: [name] }),
+        canUndo: () => true,
+      });
+
+      const batch = new BatchOperation([makeSyncOp('sync-1'), makeSyncOp('sync-2')]);
+      const result = batch.execute(tree);
+      expect(result.success).toBe(true);
+      // No child set _pendingPromise → batch _pendingPromise resolves with nothing pending.
+      await expect((batch as unknown as { _pendingPromise?: Promise<void> })._pendingPromise).resolves.toBeUndefined();
+    });
   });
 });

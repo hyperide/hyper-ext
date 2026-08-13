@@ -931,6 +931,11 @@ export class CanvasEngine {
       }
     }
 
+    // Await the in-flight async server write the operation kicked off in execute()
+    // (single AST ops and BatchOperation alike expose `_pendingPromise`). Without this,
+    // notifyStateChange/emit and the returned Promise resolve before the write commits.
+    await (operation as { _pendingPromise?: Promise<void> })._pendingPromise;
+
     // Notify state change
     this.notifyStateChange();
 

@@ -22,6 +22,13 @@ export class ASTPasteOperation extends BaseOperation {
   private newElementId?: string; // Store first new element ID for backward compatibility
   private newElementIds: string[] = []; // Store all new element IDs for undo
   private pastedElementStructure?: ASTNode; // Store full element structure for redo
+  /**
+   * Shared in-flight server-write promise the engine and BatchOperation await
+   * (same field every other async op exposes). Mirrors `pastePromise` but typed
+   * `Promise<void>` and rejection-swallowed, so a batch containing this op waits for
+   * the write to commit before resolving.
+   */
+  _pendingPromise?: Promise<void>;
 
   constructor(api: ASTApiService, params: ASTPasteOperationParams) {
     super(api);
@@ -49,6 +56,8 @@ export class ASTPasteOperation extends BaseOperation {
         throw error;
       });
 
+    this._pendingPromise = this.pastePromise.then(() => undefined).catch(() => undefined);
+
     return this.success([]);
   }
 
@@ -69,7 +78,7 @@ export class ASTPasteOperation extends BaseOperation {
     this.storePastedElement(tree);
 
     // Delete all pasted elements via API
-    this.syncBatchDelete(this.newElementIds)
+    this._pendingPromise = this.syncBatchDelete(this.newElementIds)
       .then(() => {
         console.log('[ASTPasteOperation] Undo complete');
       })
@@ -92,7 +101,7 @@ export class ASTPasteOperation extends BaseOperation {
     console.log('[ASTPasteOperation] Redoing paste, re-inserting', this.newElementIds.length, 'elements');
 
     // Re-insert by calling syncPaste again (TSX code is preserved in params)
-    this.syncPaste()
+    this._pendingPromise = this.syncPaste()
       .then((result) => {
         this.newElementId = result.newId;
         this.newElementIds = result.newIds || [result.newId];

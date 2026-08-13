@@ -22,6 +22,13 @@ export class ASTDuplicateOperation extends BaseOperation {
   private newElementIndex?: number; // Store index where duplicate was inserted
   private parentId?: string | null; // Store parent ID for redo
   private duplicatedElementStructure?: ASTNode; // Store full element structure for redo
+  /**
+   * Shared in-flight server-write promise the engine and BatchOperation await
+   * (same field every other async op exposes). Mirrors `duplicatePromise` but typed
+   * `Promise<void>` and rejection-swallowed, so a batch containing this op waits for
+   * the write to commit before resolving.
+   */
+  _pendingPromise?: Promise<void>;
 
   constructor(api: ASTApiService, params: ASTDuplicateOperationParams) {
     super(api);
@@ -50,6 +57,8 @@ export class ASTDuplicateOperation extends BaseOperation {
         console.error('[ASTDuplicateOperation] Duplicate failed:', error);
         throw error;
       });
+
+    this._pendingPromise = this.duplicatePromise.then(() => undefined).catch(() => undefined);
 
     return this.success([this.params.elementId]);
   }
@@ -113,7 +122,7 @@ export class ASTDuplicateOperation extends BaseOperation {
     console.log('[ASTDuplicateOperation] Undoing duplicate, deleting element:', this.newElementId);
 
     // Delete the duplicated element via API
-    this.syncDelete(this.newElementId)
+    this._pendingPromise = this.syncDelete(this.newElementId)
       .then(() => {
         console.log('[ASTDuplicateOperation] Undo complete');
       })
@@ -136,7 +145,7 @@ export class ASTDuplicateOperation extends BaseOperation {
     console.log('[ASTDuplicateOperation] Redoing duplicate at position:', this.newElementIndex);
 
     // Re-insert the duplicate at the same position
-    this.syncReduplicate()
+    this._pendingPromise = this.syncReduplicate()
       .then((newId) => {
         console.log('[ASTDuplicateOperation] Redo complete, new ID:', newId);
       })
