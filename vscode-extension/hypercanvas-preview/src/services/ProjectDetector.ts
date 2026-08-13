@@ -299,8 +299,7 @@ export async function detectCssSystem(
   if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
 
   // Tailwind (bare — most common, check last so design systems win)
-  // @astrojs/tailwind = Astro integration; @tailwindcss/vite = Tailwind v4 in Vite/Astro
-  if (has('tailwindcss') || has('@astrojs/tailwind') || has('@tailwindcss/vite')) return 'tailwind';
+  if (has('tailwindcss')) return 'tailwind';
 
   // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
   // plain CSS (className-based, no special AST handling needed).

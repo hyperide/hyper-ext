@@ -425,6 +425,6 @@
   ],
   "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.106.0"
+    "vscode": "^1.99.0"
   }
 }
