@@ -2,6 +2,14 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.50] — 2026-05-28
+
+### Bug fixes
+
+- **Colored logs in Hyper panel** — dev server output (Vite colors, webpack errors, etc.) now renders with ANSI colors in the Hyper logs panel; previously ANSI codes were stripped before reaching the webview (`c5d9cdf4`)
+
+---
+
 ## [0.1.49] — 2026-05-28
 
 ### Features
