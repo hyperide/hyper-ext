@@ -167,50 +167,50 @@ Expected: PASS
 
 ```tsx
 // @bun-test-env happy-dom
-import { describe, expect, it } from "bun:test";
-import { render } from "@testing-library/react";
-import { PositionSection } from "../PositionSection";
+import { describe, expect, it } from 'bun:test';
+import { render } from '@testing-library/react';
+import { PositionSection } from '../PositionSection';
 
 const defaultProps = {
-  selectedPosition: "static" as const,
-  posValues: { top: "0", right: "0", bottom: "0", left: "0" },
-  projectUIKit: "tailwind" as const,
+  selectedPosition: 'static' as const,
+  posValues: { top: '0', right: '0', bottom: '0', left: '0' },
+  projectUIKit: 'tailwind' as const,
   onPositionChange: () => {},
   onPositionValueChange: () => {},
   onPositionKeyDown: () => {},
 };
 
-describe("PositionSection toggle classes", () => {
-  it("wraps toggle buttons in toggle-container", () => {
+describe('PositionSection toggle classes', () => {
+  it('wraps toggle buttons in toggle-container', () => {
     const { container } = render(<PositionSection {...defaultProps} />);
-    const toggleGroup = container.querySelector(".toggle-container");
+    const toggleGroup = container.querySelector('.toggle-container');
     expect(toggleGroup).not.toBeNull();
   });
 
-  it("applies toggle-active to selected position button", () => {
+  it('applies toggle-active to selected position button', () => {
     const { container } = render(<PositionSection {...defaultProps} selectedPosition="abs" />);
-    const buttons = container.querySelectorAll("button");
-    const absButton = Array.from(buttons).find((b) => b.textContent === "abs");
-    expect(absButton?.classList.contains("toggle-active")).toBe(true);
+    const buttons = container.querySelectorAll('button');
+    const absButton = Array.from(buttons).find((b) => b.textContent === 'abs');
+    expect(absButton?.classList.contains('toggle-active')).toBe(true);
   });
 
-  it("does not apply bg-muted or bg-background to inactive buttons", () => {
+  it('does not apply bg-muted or bg-background to inactive buttons', () => {
     const { container } = render(<PositionSection {...defaultProps} selectedPosition="static" />);
-    const buttons = container.querySelectorAll("button");
+    const buttons = container.querySelectorAll('button');
     for (const button of buttons) {
-      if (button.textContent !== "static") {
-        expect(button.classList.contains("bg-muted")).toBe(false);
-        expect(button.classList.contains("bg-background")).toBe(false);
+      if (button.textContent !== 'static') {
+        expect(button.classList.contains('bg-muted')).toBe(false);
+        expect(button.classList.contains('bg-background')).toBe(false);
       }
     }
   });
 
-  it("does not apply old border classes to active button", () => {
+  it('does not apply old border classes to active button', () => {
     const { container } = render(<PositionSection {...defaultProps} selectedPosition="fixed" />);
-    const buttons = container.querySelectorAll("button");
-    const fixedButton = Array.from(buttons).find((b) => b.textContent === "fixed");
-    expect(fixedButton?.classList.contains("border-border")).toBe(false);
-    expect(fixedButton?.classList.contains("bg-background")).toBe(false);
+    const buttons = container.querySelectorAll('button');
+    const fixedButton = Array.from(buttons).find((b) => b.textContent === 'fixed');
+    expect(fixedButton?.classList.contains('border-border')).toBe(false);
+    expect(fixedButton?.classList.contains('bg-background')).toBe(false);
   });
 });
 ```
@@ -295,29 +295,29 @@ Mock unused callbacks as no-ops.
 
 ```tsx
 // @bun-test-env happy-dom
-import { describe, expect, it } from "bun:test";
-import { render } from "@testing-library/react";
-import { LayoutSection } from "../LayoutSection";
+import { describe, expect, it } from 'bun:test';
+import { render } from '@testing-library/react';
+import { LayoutSection } from '../LayoutSection';
 
 const defaultProps = {
-  selectedLayout: "layout" as const,
-  width: "100",
-  height: "100",
-  gap: "0",
-  justifyContent: "flex-start",
-  alignItems: "flex-start",
-  columnGap: "0",
-  rowGap: "0",
-  gridJustifyItems: "stretch",
-  gridAlignItems: "stretch",
-  gridCols: "3",
-  gridRows: "3",
-  paddingTop: "0",
-  paddingRight: "0",
-  paddingBottom: "0",
-  paddingLeft: "0",
+  selectedLayout: 'layout' as const,
+  width: '100',
+  height: '100',
+  gap: '0',
+  justifyContent: 'flex-start',
+  alignItems: 'flex-start',
+  columnGap: '0',
+  rowGap: '0',
+  gridJustifyItems: 'stretch',
+  gridAlignItems: 'stretch',
+  gridCols: '3',
+  gridRows: '3',
+  paddingTop: '0',
+  paddingRight: '0',
+  paddingBottom: '0',
+  paddingLeft: '0',
   clipContent: false,
-  projectUIKit: "tailwind" as const,
+  projectUIKit: 'tailwind' as const,
   isStyleSyncing: false,
   onLayoutChange: () => {},
   onWidthChange: () => {},
@@ -339,31 +339,31 @@ const defaultProps = {
   syncStyleChange: () => {},
 };
 
-describe("LayoutSection toggle classes", () => {
-  it("wraps layout type buttons in toggle-container", () => {
+describe('LayoutSection toggle classes', () => {
+  it('wraps layout type buttons in toggle-container', () => {
     const { container } = render(<LayoutSection {...defaultProps} />);
-    const toggleGroup = container.querySelector(".toggle-container");
+    const toggleGroup = container.querySelector('.toggle-container');
     expect(toggleGroup).not.toBeNull();
   });
 
-  it("applies toggle-active to selected layout button", () => {
+  it('applies toggle-active to selected layout button', () => {
     const { container } = render(<LayoutSection {...defaultProps} selectedLayout="col" />);
     const colButton = container.querySelector(`[data-testid="hyper-inspector-layout-flex-direction"]`);
-    expect(colButton?.classList.contains("toggle-active")).toBe(true);
+    expect(colButton?.classList.contains('toggle-active')).toBe(true);
   });
 
-  it("does not apply bg-muted or bg-background to inactive buttons", () => {
+  it('does not apply bg-muted or bg-background to inactive buttons', () => {
     const { container } = render(<LayoutSection {...defaultProps} selectedLayout="layout" />);
     const colButton = container.querySelector(`[data-testid="hyper-inspector-layout-flex-direction"]`);
-    expect(colButton?.classList.contains("bg-muted")).toBe(false);
-    expect(colButton?.classList.contains("bg-background")).toBe(false);
+    expect(colButton?.classList.contains('bg-muted')).toBe(false);
+    expect(colButton?.classList.contains('bg-background')).toBe(false);
   });
 
-  it("does not apply old border classes to active button", () => {
+  it('does not apply old border classes to active button', () => {
     const { container } = render(<LayoutSection {...defaultProps} selectedLayout="row" />);
     const rowButton = container.querySelector(`[data-testid="hyper-inspector-view-row"]`);
-    expect(rowButton?.classList.contains("border-border")).toBe(false);
-    expect(rowButton?.classList.contains("bg-background")).toBe(false);
+    expect(rowButton?.classList.contains('border-border')).toBe(false);
+    expect(rowButton?.classList.contains('bg-background')).toBe(false);
   });
 });
 ```
@@ -447,17 +447,17 @@ Load the extension CSS source into happy-dom, set body class per theme, verify t
 
 ```ts
 // @bun-test-env happy-dom
-import { afterEach, describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { afterEach, describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-const cssPath = resolve(import.meta.dir, "../../src/webview/styles.css");
-const cssContent = readFileSync(cssPath, "utf-8");
+const cssPath = resolve(import.meta.dir, '../../src/webview/styles.css');
+const cssContent = readFileSync(cssPath, 'utf-8');
 
 function applyTheme(themeClass: string) {
-  document.head.innerHTML = "";
+  document.head.innerHTML = '';
   document.body.className = themeClass;
-  const style = document.createElement("style");
+  const style = document.createElement('style');
   style.textContent = cssContent;
   document.head.appendChild(style);
 }
@@ -467,31 +467,31 @@ function getToken(name: string): string {
 }
 
 afterEach(() => {
-  document.head.innerHTML = "";
-  document.body.className = "";
+  document.head.innerHTML = '';
+  document.body.className = '';
 });
 
-describe("extension toggle tokens per theme", () => {
-  it("dark theme: container has rgba overlay", () => {
-    applyTheme("vscode-dark");
-    expect(getToken("--toggle-container-bg")).toContain("rgba(255");
+describe('extension toggle tokens per theme', () => {
+  it('dark theme: container has rgba overlay', () => {
+    applyTheme('vscode-dark');
+    expect(getToken('--toggle-container-bg')).toContain('rgba(255');
   });
 
-  it("light theme: active pill is white", () => {
-    applyTheme("vscode-light");
-    expect(getToken("--toggle-active-bg")).toBe("#fff");
+  it('light theme: active pill is white', () => {
+    applyTheme('vscode-light');
+    expect(getToken('--toggle-active-bg')).toBe('#fff');
   });
 
-  it("high-contrast dark: container is transparent", () => {
-    applyTheme("vscode-high-contrast");
-    expect(getToken("--toggle-container-bg")).toBe("transparent");
-    expect(getToken("--toggle-active-bg")).toBe("transparent");
+  it('high-contrast dark: container is transparent', () => {
+    applyTheme('vscode-high-contrast');
+    expect(getToken('--toggle-container-bg')).toBe('transparent');
+    expect(getToken('--toggle-active-bg')).toBe('transparent');
   });
 
-  it("high-contrast light: container is transparent", () => {
-    applyTheme("vscode-high-contrast-light");
-    expect(getToken("--toggle-container-bg")).toBe("transparent");
-    expect(getToken("--toggle-active-bg")).toBe("transparent");
+  it('high-contrast light: container is transparent', () => {
+    applyTheme('vscode-high-contrast-light');
+    expect(getToken('--toggle-container-bg')).toBe('transparent');
+    expect(getToken('--toggle-active-bg')).toBe('transparent');
   });
 });
 ```

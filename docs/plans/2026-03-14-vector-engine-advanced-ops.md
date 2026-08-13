@@ -138,13 +138,13 @@ Two edges between the same nodes on different ports throw before cycle checking.
 
 ```typescript
 // In vector-graph.test.ts
-it("should allow parallel edges between same nodes on different ports", () => {
-  const graph = VectorGraphModel.create("test", "Test", 100, 100);
-  const a = graph.addNode({ type: "generator", params: {} });
-  const b = graph.addNode({ type: "consumer", params: {} });
+it('should allow parallel edges between same nodes on different ports', () => {
+  const graph = VectorGraphModel.create('test', 'Test', 100, 100);
+  const a = graph.addNode({ type: 'generator', params: {} });
+  const b = graph.addNode({ type: 'consumer', params: {} });
 
-  const e1 = graph.addEdge(a, "path", b, "path");
-  const e2 = graph.addEdge(a, "transform", b, "transform");
+  const e1 = graph.addEdge(a, 'path', b, 'path');
+  const e2 = graph.addEdge(a, 'transform', b, 'transform');
 
   expect(e1).toBeTruthy();
   expect(e2).toBeTruthy();
@@ -198,7 +198,7 @@ requires SVG arc-to-center parameterization (spec §B.2.4) to find actual angula
 // Arc sweeping 180° from (0,0) to (100,0) with radius 50.
 // Control-point approx gives {x:-50, y:-50, w:200, h:100}
 // Correct tight bounds: {x:0, y:-50, w:100, h:50}
-it("should compute tight bounds for semicircular arc", () => {
+it('should compute tight bounds for semicircular arc', () => {
   const cmds = encodeCommands([
     { type: PathCmd.Move, x: 0, y: 0 },
     { type: PathCmd.Arc, rx: 50, ry: 50, rotation: 0, largeArc: 0, sweep: 1, x: 100, y: 0 },
@@ -210,7 +210,7 @@ it("should compute tight bounds for semicircular arc", () => {
   expect(bounds.height).toBeCloseTo(50, 1);
 });
 
-it("should handle large-arc flag correctly", () => {
+it('should handle large-arc flag correctly', () => {
   // Large arc from (50,0) to (50,100) with rx=50, ry=50
   // Sweeps > 180° → covers more area
   const cmds = encodeCommands([
@@ -269,19 +269,19 @@ Per spec: if output type differs from input type, dependents receive nothing.
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-it("should skip muted node when input/output types mismatch", () => {
+it('should skip muted node when input/output types mismatch', () => {
   // A node that takes 'path' input but outputs 'style' — muting should
   // not forward the path to the style output
   const registry = new NodeRegistry();
   registry.register({
-    type: "type-changer",
-    label: "Type Changer",
-    category: "utility",
-    inputs: [{ name: "path", type: "path" }],
-    outputs: [{ name: "style", type: "style" }],
+    type: 'type-changer',
+    label: 'Type Changer',
+    category: 'utility',
+    inputs: [{ name: 'path', type: 'path' }],
+    outputs: [{ name: 'style', type: 'style' }],
     params: [],
     execute() {
-      return { style: { type: "style", value: {} } };
+      return { style: { type: 'style', value: {} } };
     },
   });
   // ... build graph with muted type-changer, verify downstream gets no output
@@ -314,7 +314,7 @@ if (isMuted) {
     }
   }
   nodeOutputs.set(nodeId, outputs);
-  nodeStatus[nodeId] = { state: "skipped" };
+  nodeStatus[nodeId] = { state: 'skipped' };
 }
 ```
 
@@ -341,12 +341,12 @@ deformation nodes which operate on vertex arrays, then re-fit curves.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { flattenPath } from "./flatten";
-import { encodeCommands, PathCmd } from "./commands";
+import { describe, expect, it } from 'bun:test';
+import { flattenPath } from './flatten';
+import { encodeCommands, PathCmd } from './commands';
 
-describe("flattenPath", () => {
-  it("should pass through line segments as-is", () => {
+describe('flattenPath', () => {
+  it('should pass through line segments as-is', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -360,7 +360,7 @@ describe("flattenPath", () => {
     ]);
   });
 
-  it("should subdivide cubic bezier into line segments", () => {
+  it('should subdivide cubic bezier into line segments', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Cubic, cx1: 0, cy1: 100, cx2: 100, cy2: 100, x: 100, y: 0 },
@@ -373,7 +373,7 @@ describe("flattenPath", () => {
     expect(points[points.length - 1]).toEqual({ x: 100, y: 0 });
   });
 
-  it("should produce fewer points with higher tolerance", () => {
+  it('should produce fewer points with higher tolerance', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Cubic, cx1: 0, cy1: 100, cx2: 100, cy2: 100, x: 100, y: 0 },
@@ -383,7 +383,7 @@ describe("flattenPath", () => {
     expect(fine.length).toBeGreaterThan(coarse.length);
   });
 
-  it("should handle closed paths", () => {
+  it('should handle closed paths', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -408,8 +408,8 @@ describe("flattenPath", () => {
  * Tradeoffs: uses recursive midpoint subdivision with flatness test, not de Casteljau optimal
  */
 
-import type { Point } from "../types";
-import { decodeCommands, PathCmd } from "./commands";
+import type { Point } from '../types';
+import { decodeCommands, PathCmd } from './commands';
 
 export function flattenPath(commands: Float64Array, tolerance: number): Point[] {
   // Decode, iterate, subdivide cubics/quads/arcs adaptively
@@ -444,12 +444,12 @@ Compute total arc-length of a path and signed area (for winding direction).
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { pathLength, pathArea } from "./geometry";
-import { encodeCommands, PathCmd } from "./commands";
+import { describe, expect, it } from 'bun:test';
+import { pathLength, pathArea } from './geometry';
+import { encodeCommands, PathCmd } from './commands';
 
-describe("pathLength", () => {
-  it("should compute line segment length", () => {
+describe('pathLength', () => {
+  it('should compute line segment length', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -457,7 +457,7 @@ describe("pathLength", () => {
     expect(pathLength(cmds)).toBeCloseTo(100, 5);
   });
 
-  it("should compute polyline length", () => {
+  it('should compute polyline length', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -466,7 +466,7 @@ describe("pathLength", () => {
     expect(pathLength(cmds)).toBeCloseTo(200, 5);
   });
 
-  it("should approximate cubic bezier length via Gauss-Legendre", () => {
+  it('should approximate cubic bezier length via Gauss-Legendre', () => {
     // Quarter-circle approximation: known length ≈ π/2 * 50 ≈ 78.54
     const k = 0.5522847498; // cubic approx constant for circle
     const r = 50;
@@ -478,8 +478,8 @@ describe("pathLength", () => {
   });
 });
 
-describe("pathArea", () => {
-  it("should compute area of a unit square", () => {
+describe('pathArea', () => {
+  it('should compute area of a unit square', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -490,7 +490,7 @@ describe("pathArea", () => {
     expect(Math.abs(pathArea(cmds))).toBeCloseTo(10000, 0);
   });
 
-  it("should return positive for CW winding, negative for CCW", () => {
+  it('should return positive for CW winding, negative for CCW', () => {
     const cw = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -551,8 +551,8 @@ and normal vector at that position along the path.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("pointAtOffset", () => {
-  it("should return start point at offset 0", () => {
+describe('pointAtOffset', () => {
+  it('should return start point at offset 0', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -562,7 +562,7 @@ describe("pointAtOffset", () => {
     expect(pt.point.y).toBeCloseTo(0, 5);
   });
 
-  it("should return midpoint at offset 0.5", () => {
+  it('should return midpoint at offset 0.5', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -571,7 +571,7 @@ describe("pointAtOffset", () => {
     expect(pt.point.x).toBeCloseTo(50, 5);
   });
 
-  it("should return tangent direction", () => {
+  it('should return tangent direction', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -582,7 +582,7 @@ describe("pointAtOffset", () => {
     expect(pt.tangent.y).toBeCloseTo(0, 5);
   });
 
-  it("should return perpendicular normal", () => {
+  it('should return perpendicular normal', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 0, y: 0 },
       { type: PathCmd.Line, x: 100, y: 0 },
@@ -648,12 +648,12 @@ cd packages/vector-engine && bun add fit-curve
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { fitCurve } from "./fit";
-import type { Point } from "../types";
+import { describe, expect, it } from 'bun:test';
+import { fitCurve } from './fit';
+import type { Point } from '../types';
 
-describe("fitCurve", () => {
-  it("should fit straight line points to a single cubic", () => {
+describe('fitCurve', () => {
+  it('should fit straight line points to a single cubic', () => {
     const points: Point[] = [
       { x: 0, y: 0 },
       { x: 50, y: 0 },
@@ -664,7 +664,7 @@ describe("fitCurve", () => {
     expect(path.closed).toBe(false);
   });
 
-  it("should produce a closed path when first === last", () => {
+  it('should produce a closed path when first === last', () => {
     const points: Point[] = [
       { x: 0, y: 0 },
       { x: 100, y: 0 },
@@ -676,7 +676,7 @@ describe("fitCurve", () => {
     expect(path.closed).toBe(true);
   });
 
-  it("should approximate a circle arc", () => {
+  it('should approximate a circle arc', () => {
     // 8 points on a quarter circle
     const points: Point[] = [];
     for (let i = 0; i <= 8; i++) {
@@ -702,9 +702,9 @@ describe("fitCurve", () => {
  * Assumptions: input points are ordered and reasonably spaced
  */
 
-import fitCurveLib from "fit-curve";
-import { PathBuilder } from "../path/builder";
-import type { PathValue, Point } from "../types";
+import fitCurveLib from 'fit-curve';
+import { PathBuilder } from '../path/builder';
+import type { PathValue, Point } from '../types';
 
 export function fitCurve(points: Point[], error: number): PathValue {
   // fit-curve expects [[x,y],...] and returns [[p0, cp1, cp2, p3], ...]
@@ -752,16 +752,16 @@ Round corners replaces sharp vertices with arcs. Chamfer replaces with straight 
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { roundCornersNode } from "./round-corners";
-import { chamferNode } from "./chamfer";
-import { PathBuilder } from "../../path/builder";
-import { decodeCommands, PathCmd } from "../../path/commands";
+import { describe, expect, it } from 'bun:test';
+import { roundCornersNode } from './round-corners';
+import { chamferNode } from './chamfer';
+import { PathBuilder } from '../../path/builder';
+import { decodeCommands, PathCmd } from '../../path/commands';
 
-describe("round corners", () => {
-  it("should replace square corners with arcs", () => {
+describe('round corners', () => {
+  it('should replace square corners with arcs', () => {
     const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = roundCornersNode.execute({ path: { type: "path", value: square } }, { radius: 10 });
+    const result = roundCornersNode.execute({ path: { type: 'path', value: square } }, { radius: 10 });
     const path = (result.path as any).value;
     const cmds = decodeCommands(path.commands);
     // Should contain Arc commands (or cubics approximating arcs)
@@ -769,10 +769,10 @@ describe("round corners", () => {
     expect(hasCurves).toBe(true);
   });
 
-  it("should clamp radius to half of shortest edge", () => {
+  it('should clamp radius to half of shortest edge', () => {
     const narrow = new PathBuilder().moveTo(0, 0).lineTo(10, 0).lineTo(10, 100).lineTo(0, 100).close().build();
     const result = roundCornersNode.execute(
-      { path: { type: "path", value: narrow } },
+      { path: { type: 'path', value: narrow } },
       { radius: 50 }, // More than half of 10px edge
     );
     // Should not crash, radius should be clamped
@@ -780,10 +780,10 @@ describe("round corners", () => {
   });
 });
 
-describe("chamfer", () => {
-  it("should replace corners with straight cuts", () => {
+describe('chamfer', () => {
+  it('should replace corners with straight cuts', () => {
     const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = chamferNode.execute({ path: { type: "path", value: square } }, { distance: 10 });
+    const result = chamferNode.execute({ path: { type: 'path', value: square } }, { distance: 10 });
     const path = (result.path as any).value;
     const cmds = decodeCommands(path.commands);
     // Chamfer adds extra line segments (8 edges instead of 4)
@@ -835,28 +835,28 @@ feat(vector-engine): round corners and chamfer path operations (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("subdivide", () => {
-  it("should split a cubic segment at midpoint", () => {
+describe('subdivide', () => {
+  it('should split a cubic segment at midpoint', () => {
     const path = new PathBuilder().moveTo(0, 0).cubicTo(10, 20, 30, 40, 50, 60).build();
-    const result = subdivideNode.execute({ path: { type: "path", value: path } }, { segmentIndex: 0, t: 0.5 });
+    const result = subdivideNode.execute({ path: { type: 'path', value: path } }, { segmentIndex: 0, t: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     // One cubic becomes two cubics
     expect(cmds.filter((c) => c.type === PathCmd.Cubic).length).toBe(2);
   });
 });
 
-describe("trim path", () => {
-  it("should extract sub-path between 25% and 75%", () => {
+describe('trim path', () => {
+  it('should extract sub-path between 25% and 75%', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).lineTo(300, 0).build();
-    const result = trimPathNode.execute({ path: { type: "path", value: path } }, { start: 0.25, end: 0.75 });
+    const result = trimPathNode.execute({ path: { type: 'path', value: path } }, { start: 0.25, end: 0.75 });
     // Result path should be ~half the original length
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
-  it("should handle wrap-around (start > end)", () => {
+  it('should handle wrap-around (start > end)', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = trimPathNode.execute({ path: { type: "path", value: path } }, { start: 0.75, end: 0.25 });
+    const result = trimPathNode.execute({ path: { type: 'path', value: path } }, { start: 0.75, end: 0.25 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
@@ -898,20 +898,20 @@ feat(vector-engine): subdivide and trim path operations (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("enforce winding", () => {
-  it("should reverse CCW path when CW requested", () => {
+describe('enforce winding', () => {
+  it('should reverse CCW path when CW requested', () => {
     const ccw = new PathBuilder().moveTo(0, 0).lineTo(0, 100).lineTo(100, 100).close().build();
-    const result = enforceWindingNode.execute({ path: { type: "path", value: ccw } }, { direction: "cw" });
+    const result = enforceWindingNode.execute({ path: { type: 'path', value: ccw } }, { direction: 'cw' });
     const outPath = (result.path as any).value;
     // The output area should have the requested sign
     expect(pathArea(outPath.commands)).toBeGreaterThan(0);
   });
 });
 
-describe("smooth", () => {
-  it("should convert polyline corners to cubic curves", () => {
+describe('smooth', () => {
+  it('should convert polyline corners to cubic curves', () => {
     const zigzag = new PathBuilder().moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
-    const result = smoothNode.execute({ path: { type: "path", value: zigzag } }, { smoothness: 0.5 });
+    const result = smoothNode.execute({ path: { type: 'path', value: zigzag } }, { smoothness: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     const hasCubics = cmds.some((c) => c.type === PathCmd.Cubic);
     expect(hasCubics).toBe(true);
@@ -1005,38 +1005,38 @@ Create node definitions for operations that delegate to PathOpsBackend.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { MockPathOps } from "vector-wasm";
-import { createOffsetNode } from "./offset";
-import { createStrokeToPathNode } from "./stroke-to-path";
-import { createDashNode } from "./dash-path";
-import { PathBuilder } from "../../path/builder";
+import { describe, expect, it } from 'bun:test';
+import { MockPathOps } from 'vector-wasm';
+import { createOffsetNode } from './offset';
+import { createStrokeToPathNode } from './stroke-to-path';
+import { createDashNode } from './dash-path';
+import { PathBuilder } from '../../path/builder';
 
-describe("WASM path ops nodes", () => {
+describe('WASM path ops nodes', () => {
   const backend = new MockPathOps();
   const offsetNode = createOffsetNode(backend);
   const strokeToPathNode = createStrokeToPathNode(backend);
   const dashNode = createDashNode(backend);
 
-  it("should run offset node without error", () => {
+  it('should run offset node without error', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = offsetNode.execute({ path: { type: "path", value: rect } }, { distance: 10 });
-    expect((result.path as any).type).toBe("path");
+    const result = offsetNode.execute({ path: { type: 'path', value: rect } }, { distance: 10 });
+    expect((result.path as any).type).toBe('path');
   });
 
-  it("should run stroke-to-path node", () => {
+  it('should run stroke-to-path node', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = strokeToPathNode.execute(
-      { path: { type: "path", value: line } },
-      { width: 10, cap: "round", join: "round" },
+      { path: { type: 'path', value: line } },
+      { width: 10, cap: 'round', join: 'round' },
     );
     expect((result.path as any).value.closed).toBe(true);
   });
 
-  it("should run dash node", () => {
+  it('should run dash node', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
-    const result = dashNode.execute({ path: { type: "path", value: line } }, { dashArray: [10, 5], dashOffset: 0 });
-    expect((result.path as any).type).toBe("path");
+    const result = dashNode.execute({ path: { type: 'path', value: line } }, { dashArray: [10, 5], dashOffset: 0 });
+    expect((result.path as any).type).toBe('path');
   });
 });
 ```
@@ -1051,16 +1051,16 @@ Each follows the `createBooleanNodes` pattern — factory function receiving `Pa
 // offset.ts
 export function createOffsetNode(backend: PathOpsBackend): NodeTypeDefinition {
   return {
-    type: "offset",
-    label: "Path Offset",
-    category: "pathOp",
-    inputs: [{ name: "path", type: "path" }],
-    outputs: [{ name: "path", type: "path" }],
-    params: [{ name: "distance", type: "number", default: 10, step: 1 }],
+    type: 'offset',
+    label: 'Path Offset',
+    category: 'pathOp',
+    inputs: [{ name: 'path', type: 'path' }],
+    outputs: [{ name: 'path', type: 'path' }],
+    params: [{ name: 'distance', type: 'number', default: 10, step: 1 }],
     execute(inputs, params) {
       const pathVal = inputs.path as NodeValue;
       const result = backend.offset(pathVal.value as PathValue, params.distance as number);
-      return { path: { type: "path", value: result } };
+      return { path: { type: 'path', value: result } };
     },
   };
 }
@@ -1094,13 +1094,13 @@ Group node collects multiple path inputs into a SceneGroup with shared transform
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { groupNode } from "./group";
-import { PathBuilder } from "../../path/builder";
-import type { NodeValue } from "../../types";
+import { describe, expect, it } from 'bun:test';
+import { groupNode } from './group';
+import { PathBuilder } from '../../path/builder';
+import type { NodeValue } from '../../types';
 
-describe("group node", () => {
-  it("should merge multiple paths into compound path output", () => {
+describe('group node', () => {
+  it('should merge multiple paths into compound path output', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const circle = new PathBuilder()
       .moveTo(50, 0)
@@ -1112,15 +1112,15 @@ describe("group node", () => {
     const result = groupNode.execute(
       {
         children: [
-          { type: "path", value: rect },
-          { type: "path", value: circle },
+          { type: 'path', value: rect },
+          { type: 'path', value: circle },
         ] as NodeValue[],
       },
       { opacity: 0.8 },
     );
 
     // Group output is a path (compound) for downstream consumption
-    expect((result.path as any).type).toBe("path");
+    expect((result.path as any).type).toBe('path');
     // Group metadata stored for scene builder
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
@@ -1137,15 +1137,15 @@ forwarded via implicit ports. The scene builder detects groups and creates Scene
 
 ```typescript
 export const groupNode: NodeTypeDefinition = {
-  type: "group",
-  label: "Group",
-  category: "utility",
-  inputs: [{ name: "children", type: "path", multiple: true }],
+  type: 'group',
+  label: 'Group',
+  category: 'utility',
+  inputs: [{ name: 'children', type: 'path', multiple: true }],
   outputs: [
-    { name: "path", type: "path" },
-    { name: "transform", type: "transform" },
+    { name: 'path', type: 'path' },
+    { name: 'transform', type: 'transform' },
   ],
-  params: [{ name: "opacity", type: "number", default: 1, min: 0, max: 1, step: 0.01 }],
+  params: [{ name: 'opacity', type: 'number', default: 1, min: 0, max: 1, step: 0.01 }],
   execute(inputs, params) {
     const childInput = inputs.children;
     const children = Array.isArray(childInput)
@@ -1160,7 +1160,7 @@ export const groupNode: NodeTypeDefinition = {
     const transform = inputs.transform;
 
     return {
-      path: { type: "path", value: merged },
+      path: { type: 'path', value: merged },
       ...(transform ? { transform } : {}),
     };
   },
@@ -1209,22 +1209,22 @@ uses gradient opacity for feathered edges.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("alpha mask node", () => {
-  it("should output path with mask metadata in style", () => {
+describe('alpha mask node', () => {
+  it('should output path with mask metadata in style', () => {
     const content = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const mask = new PathBuilder().moveTo(20, 20).lineTo(80, 20).lineTo(80, 80).lineTo(20, 80).close().build();
 
     const result = alphaMaskNode.execute(
       {
-        content: { type: "path", value: content },
-        mask: { type: "path", value: mask },
+        content: { type: 'path', value: content },
+        mask: { type: 'path', value: mask },
       },
       {},
     );
 
-    expect((result.path as any).type).toBe("path");
+    expect((result.path as any).type).toBe('path');
     // Mask path should be stored for SVG <mask> export
-    expect((result.clipPath as any).type).toBe("path");
+    expect((result.clipPath as any).type).toBe('path');
   });
 });
 ```
@@ -1260,33 +1260,33 @@ Just need dedicated node definitions.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("shadow node", () => {
-  it("should add shadow to style", () => {
+describe('shadow node', () => {
+  it('should add shadow to style', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const result = shadowNode.execute(
       {
-        path: { type: "path", value: rect },
-        style: { type: "style", value: { fill: { type: "solid", color: "#ff0000" } } },
+        path: { type: 'path', value: rect },
+        style: { type: 'style', value: { fill: { type: 'solid', color: '#ff0000' } } },
       },
-      { color: "#000000", offsetX: 2, offsetY: 4, blur: 6 },
+      { color: '#000000', offsetX: 2, offsetY: 4, blur: 6 },
     );
     const style = (result.style as any).value;
     expect(style.shadow).toEqual({
-      color: "#000000",
+      color: '#000000',
       offsetX: 2,
       offsetY: 4,
       blur: 6,
     });
     // Original fill preserved
-    expect(style.fill.type).toBe("solid");
+    expect(style.fill.type).toBe('solid');
     // Path passed through
-    expect((result.path as any).type).toBe("path");
+    expect((result.path as any).type).toBe('path');
   });
 });
 
-describe("blur node", () => {
-  it("should add blur to style", () => {
-    const result = blurNode.execute({ style: { type: "style", value: {} } }, { radius: 5 });
+describe('blur node', () => {
+  it('should add blur to style', () => {
+    const result = blurNode.execute({ style: { type: 'style', value: {} } }, { radius: 5 });
     expect((result.style as any).value.blur).toBe(5);
   });
 });
@@ -1300,29 +1300,29 @@ Follow fillNode/strokeNode pattern — take style input, merge shadow/blur param
 
 ```typescript
 export const shadowNode: NodeTypeDefinition = {
-  type: "shadow",
-  label: "Shadow",
-  category: "style",
+  type: 'shadow',
+  label: 'Shadow',
+  category: 'style',
   inputs: [
-    { name: "path", type: "path" },
-    { name: "style", type: "style" },
+    { name: 'path', type: 'path' },
+    { name: 'style', type: 'style' },
   ],
   outputs: [
-    { name: "path", type: "path" },
-    { name: "style", type: "style" },
+    { name: 'path', type: 'path' },
+    { name: 'style', type: 'style' },
   ],
   params: [
-    { name: "color", type: "color", default: "#00000066" },
-    { name: "offsetX", type: "number", default: 2 },
-    { name: "offsetY", type: "number", default: 4 },
-    { name: "blur", type: "number", default: 6, min: 0 },
+    { name: 'color', type: 'color', default: '#00000066' },
+    { name: 'offsetX', type: 'number', default: 2 },
+    { name: 'offsetY', type: 'number', default: 4 },
+    { name: 'blur', type: 'number', default: 6, min: 0 },
   ],
   execute(inputs, params) {
     const existingStyle = inputs.style ? ((inputs.style as NodeValue).value as StyleValue) : {};
     return {
       path: inputs.path,
       style: {
-        type: "style",
+        type: 'style',
         value: {
           ...existingStyle,
           shadow: {
@@ -1369,53 +1369,53 @@ All deformations follow the same pipeline:
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { roughenNode } from "./roughen";
-import { zigzagNode } from "./zigzag";
-import { PathBuilder } from "../../path/builder";
+import { describe, expect, it } from 'bun:test';
+import { roughenNode } from './roughen';
+import { zigzagNode } from './zigzag';
+import { PathBuilder } from '../../path/builder';
 
-describe("roughen", () => {
-  it("should distort a straight line", () => {
+describe('roughen', () => {
+  it('should distort a straight line', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = roughenNode.execute(
-      { path: { type: "path", value: line } },
-      { size: 10, detail: 5, type: "corner", seed: 42 },
+      { path: { type: 'path', value: line } },
+      { size: 10, detail: 5, type: 'corner', seed: 42 },
     );
     const outPath = (result.path as any).value;
     // Output should have more commands than input
     expect(outPath.commands.length).toBeGreaterThan(line.commands.length);
   });
 
-  it("should produce deterministic output with same seed", () => {
+  it('should produce deterministic output with same seed', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const r1 = roughenNode.execute(
-      { path: { type: "path", value: line } },
-      { size: 10, detail: 5, type: "corner", seed: 42 },
+      { path: { type: 'path', value: line } },
+      { size: 10, detail: 5, type: 'corner', seed: 42 },
     );
     const r2 = roughenNode.execute(
-      { path: { type: "path", value: line } },
-      { size: 10, detail: 5, type: "corner", seed: 42 },
+      { path: { type: 'path', value: line } },
+      { size: 10, detail: 5, type: 'corner', seed: 42 },
     );
     expect((r1.path as any).value.commands).toEqual((r2.path as any).value.commands);
   });
 });
 
-describe("zigzag", () => {
-  it("should create zigzag pattern along path", () => {
+describe('zigzag', () => {
+  it('should create zigzag pattern along path', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = zigzagNode.execute(
-      { path: { type: "path", value: line } },
-      { size: 10, ridgesPerSegment: 5, type: "corner" },
+      { path: { type: 'path', value: line } },
+      { size: 10, ridgesPerSegment: 5, type: 'corner' },
     );
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(line.commands.length);
   });
 
-  it("should support smooth type (cubic curves)", () => {
+  it('should support smooth type (cubic curves)', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = zigzagNode.execute(
-      { path: { type: "path", value: line } },
-      { size: 10, ridgesPerSegment: 3, type: "smooth" },
+      { path: { type: 'path', value: line } },
+      { size: 10, ridgesPerSegment: 3, type: 'smooth' },
     );
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(0);
@@ -1468,25 +1468,25 @@ feat(vector-engine): roughen and zigzag deformation nodes (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("pucker/bloat", () => {
-  it("should pull points toward center (pucker, amount > 0)", () => {
+describe('pucker/bloat', () => {
+  it('should pull points toward center (pucker, amount > 0)', () => {
     const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = puckerBloatNode.execute({ path: { type: "path", value: square } }, { amount: 50 });
+    const result = puckerBloatNode.execute({ path: { type: 'path', value: square } }, { amount: 50 });
     const outPath = (result.path as any).value;
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
-  it("should push points away from center (bloat, amount < 0)", () => {
+  it('should push points away from center (bloat, amount < 0)', () => {
     const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = puckerBloatNode.execute({ path: { type: "path", value: square } }, { amount: -50 });
+    const result = puckerBloatNode.execute({ path: { type: 'path', value: square } }, { amount: -50 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
 
-describe("twist", () => {
-  it("should rotate points around center by angle proportional to distance", () => {
+describe('twist', () => {
+  it('should rotate points around center by angle proportional to distance', () => {
     const square = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
-    const result = twistNode.execute({ path: { type: "path", value: square } }, { angle: 45 });
+    const result = twistNode.execute({ path: { type: 'path', value: square } }, { angle: 45 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 });
@@ -1533,22 +1533,22 @@ Warp distorts a path along a predefined shape (arc, flag, wave, etc.).
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("warp", () => {
-  it("should bend a path along an arc", () => {
+describe('warp', () => {
+  it('should bend a path along an arc', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute({ path: { type: "path", value: rect } }, { warpType: "arc", bend: 50 });
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'arc', bend: 50 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 
-  it("should support wave warp type", () => {
+  it('should support wave warp type', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute({ path: { type: "path", value: rect } }, { warpType: "wave", bend: 30 });
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'wave', bend: 30 });
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 
-  it("should return identity at bend=0", () => {
+  it('should return identity at bend=0', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 50).lineTo(0, 50).close().build();
-    const result = warpNode.execute({ path: { type: "path", value: rect } }, { warpType: "arc", bend: 0 });
+    const result = warpNode.execute({ path: { type: 'path', value: rect } }, { warpType: 'arc', bend: 0 });
     // With bend=0, output should approximate input
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
@@ -1603,28 +1603,28 @@ The node generates an outlined fill path (offset left + offset right + caps).
 export interface WidthPoint {
   offset: number; // 0..1 along path length
   width: number; // stroke width at this point
-  taper?: "sharp" | "round"; // endpoint taper style
+  taper?: 'sharp' | 'round'; // endpoint taper style
 }
 ```
 
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { variableStrokeNode } from "./variable-stroke";
-import { PathBuilder } from "../../path/builder";
+import { describe, expect, it } from 'bun:test';
+import { variableStrokeNode } from './variable-stroke';
+import { PathBuilder } from '../../path/builder';
 
-describe("variable stroke", () => {
-  it("should generate outlined path from uniform width profile", () => {
+describe('variable stroke', () => {
+  it('should generate outlined path from uniform width profile', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = variableStrokeNode.execute(
-      { path: { type: "path", value: line } },
+      { path: { type: 'path', value: line } },
       {
         profile: JSON.stringify([
           { offset: 0, width: 10 },
           { offset: 1, width: 10 },
         ]),
-        cap: "round",
+        cap: 'round',
       },
     );
     const outPath = (result.path as any).value;
@@ -1632,33 +1632,33 @@ describe("variable stroke", () => {
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
-  it("should taper from thick to thin", () => {
+  it('should taper from thick to thin', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = variableStrokeNode.execute(
-      { path: { type: "path", value: line } },
+      { path: { type: 'path', value: line } },
       {
         profile: JSON.stringify([
           { offset: 0, width: 20 },
           { offset: 1, width: 2 },
         ]),
-        cap: "butt",
+        cap: 'butt',
       },
     );
     const outPath = (result.path as any).value;
     expect(outPath.closed).toBe(true);
   });
 
-  it("should handle curved input path", () => {
+  it('should handle curved input path', () => {
     const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 50, 66, 50, 100, 0).build();
     const result = variableStrokeNode.execute(
-      { path: { type: "path", value: curve } },
+      { path: { type: 'path', value: curve } },
       {
         profile: JSON.stringify([
           { offset: 0, width: 5 },
           { offset: 0.5, width: 15 },
           { offset: 1, width: 5 },
         ]),
-        cap: "round",
+        cap: 'round',
       },
     );
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
@@ -1681,21 +1681,21 @@ Algorithm:
 
 ```typescript
 export const variableStrokeNode: NodeTypeDefinition = {
-  type: "variableStroke",
-  label: "Variable Stroke",
-  category: "pathOp",
-  inputs: [{ name: "path", type: "path" }],
-  outputs: [{ name: "path", type: "path" }],
+  type: 'variableStroke',
+  label: 'Variable Stroke',
+  category: 'pathOp',
+  inputs: [{ name: 'path', type: 'path' }],
+  outputs: [{ name: 'path', type: 'path' }],
   params: [
-    { name: "profile", type: "json", default: '[{"offset":0,"width":10},{"offset":1,"width":10}]' },
+    { name: 'profile', type: 'json', default: '[{"offset":0,"width":10},{"offset":1,"width":10}]' },
     {
-      name: "cap",
-      type: "enum",
-      default: "round",
+      name: 'cap',
+      type: 'enum',
+      default: 'round',
       options: [
-        { value: "butt", label: "Butt" },
-        { value: "round", label: "Round" },
-        { value: "square", label: "Square" },
+        { value: 'butt', label: 'Butt' },
+        { value: 'round', label: 'Round' },
+        { value: 'square', label: 'Square' },
       ],
     },
   ],
@@ -1738,28 +1738,28 @@ cd packages/vector-engine && bun add opentype.js
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { textToPathNode } from "./text-to-path";
-import { decodeCommands, PathCmd } from "../../path/commands";
+import { describe, expect, it } from 'bun:test';
+import { textToPathNode } from './text-to-path';
+import { decodeCommands, PathCmd } from '../../path/commands';
 
-describe("text to path", () => {
+describe('text to path', () => {
   // Note: tests use a mock font loader since we can't load real fonts in unit tests.
   // Integration tests will use real fonts.
 
-  it("should have correct node definition", () => {
-    expect(textToPathNode.type).toBe("textToPath");
-    expect(textToPathNode.category).toBe("generator");
-    expect(textToPathNode.params.map((p) => p.name)).toContain("text");
-    expect(textToPathNode.params.map((p) => p.name)).toContain("fontSize");
+  it('should have correct node definition', () => {
+    expect(textToPathNode.type).toBe('textToPath');
+    expect(textToPathNode.category).toBe('generator');
+    expect(textToPathNode.params.map((p) => p.name)).toContain('text');
+    expect(textToPathNode.params.map((p) => p.name)).toContain('fontSize');
   });
 
-  it("should output empty path when no font loaded", () => {
+  it('should output empty path when no font loaded', () => {
     const result = textToPathNode.execute(
       {},
       {
-        text: "Hello",
+        text: 'Hello',
         fontSize: 24,
-        fontUrl: "",
+        fontUrl: '',
       },
     );
     const pathVal = (result.path as any).value;
@@ -1782,24 +1782,24 @@ describe("text to path", () => {
  *   Complex scripts (Arabic, Devanagari) need rustybuzz shaping (Plan 2b).
  */
 
-import type { NodeTypeDefinition } from "../../types";
-import { PathBuilder } from "../../path/builder";
+import type { NodeTypeDefinition } from '../../types';
+import { PathBuilder } from '../../path/builder';
 
 // Font cache to avoid re-parsing on every execution
 const fontCache = new Map<string, any>();
 
 export const textToPathNode: NodeTypeDefinition = {
-  type: "textToPath",
-  label: "Text to Path",
-  category: "generator",
+  type: 'textToPath',
+  label: 'Text to Path',
+  category: 'generator',
   inputs: [],
-  outputs: [{ name: "path", type: "path" }],
+  outputs: [{ name: 'path', type: 'path' }],
   params: [
-    { name: "text", type: "string", default: "Hello" },
-    { name: "fontSize", type: "number", default: 48, min: 1 },
-    { name: "fontUrl", type: "string", default: "" },
-    { name: "x", type: "number", default: 0 },
-    { name: "y", type: "number", default: 0 },
+    { name: 'text', type: 'string', default: 'Hello' },
+    { name: 'fontSize', type: 'number', default: 48, min: 1 },
+    { name: 'fontUrl', type: 'string', default: '' },
+    { name: 'x', type: 'number', default: 0 },
+    { name: 'y', type: 'number', default: 0 },
   ],
   execute(_inputs, params) {
     // opentype.js loaded dynamically — returns empty path if unavailable
@@ -1807,7 +1807,7 @@ export const textToPathNode: NodeTypeDefinition = {
     try {
       const font = fontCache.get(params.fontUrl as string);
       if (!font) {
-        return { path: { type: "path", value: builder.build() } };
+        return { path: { type: 'path', value: builder.build() } };
       }
       const opentypePath = font.getPath(
         params.text as string,
@@ -1818,19 +1818,19 @@ export const textToPathNode: NodeTypeDefinition = {
       // Convert opentype commands to our PathBuilder
       for (const cmd of opentypePath.commands) {
         switch (cmd.type) {
-          case "M":
+          case 'M':
             builder.moveTo(cmd.x, cmd.y);
             break;
-          case "L":
+          case 'L':
             builder.lineTo(cmd.x, cmd.y);
             break;
-          case "C":
+          case 'C':
             builder.cubicTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
             break;
-          case "Q":
+          case 'Q':
             builder.quadTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
             break;
-          case "Z":
+          case 'Z':
             builder.close();
             break;
         }
@@ -1838,7 +1838,7 @@ export const textToPathNode: NodeTypeDefinition = {
     } catch {
       // Font not available — return empty path
     }
-    return { path: { type: "path", value: builder.build() } };
+    return { path: { type: 'path', value: builder.build() } };
   },
 };
 ```
@@ -1868,12 +1868,12 @@ Add MeshValue type and tessellation algorithm (bezier patches → triangles).
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { createMesh, meshFromBounds } from "./mesh-from-path";
-import { tessellateMesh } from "./tessellate";
+import { describe, expect, it } from 'bun:test';
+import { createMesh, meshFromBounds } from './mesh-from-path';
+import { tessellateMesh } from './tessellate';
 
-describe("gradient mesh", () => {
-  it("should create a 2x2 mesh from bounds", () => {
+describe('gradient mesh', () => {
+  it('should create a 2x2 mesh from bounds', () => {
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 2, 2);
     expect(mesh.rows).toBe(2);
     expect(mesh.cols).toBe(2);
@@ -1881,7 +1881,7 @@ describe("gradient mesh", () => {
     expect(mesh.vertices.length).toBe(9);
   });
 
-  it("should tessellate mesh into triangles", () => {
+  it('should tessellate mesh into triangles', () => {
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
     const triangles = tessellateMesh(mesh, 4); // subdivision level
     // Each quad → subdivided → triangulated
@@ -1899,7 +1899,7 @@ describe("gradient mesh", () => {
 
 ```typescript
 // packages/vector-engine/src/mesh/types.ts
-import type { Point } from "../types";
+import type { Point } from '../types';
 
 export interface MeshVertex {
   position: Point;
@@ -1944,13 +1944,13 @@ Create a regular grid mesh fitted to a bounding box with default colors.
 
 ```typescript
 export type NodeValue =
-  | { type: "path"; value: PathValue }
-  | { type: "style"; value: StyleValue }
-  | { type: "number"; value: number }
-  | { type: "color"; value: string }
-  | { type: "boolean"; value: boolean }
-  | { type: "transform"; value: TransformMatrix }
-  | { type: "mesh"; value: MeshValue };
+  | { type: 'path'; value: PathValue }
+  | { type: 'style'; value: StyleValue }
+  | { type: 'number'; value: number }
+  | { type: 'color'; value: string }
+  | { type: 'boolean'; value: boolean }
+  | { type: 'transform'; value: TransformMatrix }
+  | { type: 'mesh'; value: MeshValue };
 ```
 
 - [ ] **Step 7: Run test — verify it passes**
@@ -1986,13 +1986,13 @@ Types from Figma model: vertices, segments, regions.
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Vector Networks
  */
 
-import type { FillStyle, Point } from "../types";
+import type { FillStyle, Point } from '../types';
 
 export interface VectorVertex {
   x: number;
   y: number;
   cornerRadius?: number;
-  handleMirroring?: "none" | "angle" | "angleAndLength";
+  handleMirroring?: 'none' | 'angle' | 'angleAndLength';
 }
 
 export interface VectorSegment {
@@ -2003,7 +2003,7 @@ export interface VectorSegment {
 }
 
 export interface VectorRegion {
-  windingRule: "evenOdd" | "nonZero";
+  windingRule: 'evenOdd' | 'nonZero';
   loops: number[][]; // arrays of segment indices forming closed chains
   fills: FillStyle[];
 }
@@ -2019,21 +2019,21 @@ export interface VectorNetwork {
 
 ```typescript
 export type NodeValue =
-  | { type: "path"; value: PathValue }
-  | { type: "style"; value: StyleValue }
-  | { type: "number"; value: number }
-  | { type: "color"; value: string }
-  | { type: "boolean"; value: boolean }
-  | { type: "transform"; value: TransformMatrix }
-  | { type: "mesh"; value: MeshValue }
-  | { type: "network"; value: VectorNetwork };
+  | { type: 'path'; value: PathValue }
+  | { type: 'style'; value: StyleValue }
+  | { type: 'number'; value: number }
+  | { type: 'color'; value: string }
+  | { type: 'boolean'; value: boolean }
+  | { type: 'transform'; value: TransformMatrix }
+  | { type: 'mesh'; value: MeshValue }
+  | { type: 'network'; value: VectorNetwork };
 ```
 
 - [ ] **Step 3: Write a basic construction test**
 
 ```typescript
-describe("VectorNetwork types", () => {
-  it("should create a simple triangle network", () => {
+describe('VectorNetwork types', () => {
+  it('should create a simple triangle network', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -2047,9 +2047,9 @@ describe("VectorNetwork types", () => {
       ],
       regions: [
         {
-          windingRule: "nonZero",
+          windingRule: 'nonZero',
           loops: [[0, 1, 2]],
-          fills: [{ type: "solid", color: "#ff0000" }],
+          fills: [{ type: 'solid', color: '#ff0000' }],
         },
       ],
     };
@@ -2086,11 +2086,11 @@ Convert between sequential SVG paths and graph-based vector networks.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { pathToNetwork, networkToPaths } from "./convert";
-import { PathBuilder } from "../path/builder";
+import { pathToNetwork, networkToPaths } from './convert';
+import { PathBuilder } from '../path/builder';
 
-describe("path → network → path roundtrip", () => {
-  it("should convert a closed triangle", () => {
+describe('path → network → path roundtrip', () => {
+  it('should convert a closed triangle', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(50, 86.6).close().build();
 
     const network = pathToNetwork(path);
@@ -2103,7 +2103,7 @@ describe("path → network → path roundtrip", () => {
     expect(paths[0].closed).toBe(true);
   });
 
-  it("should convert a cubic bezier curve", () => {
+  it('should convert a cubic bezier curve', () => {
     const path = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
 
     const network = pathToNetwork(path);
@@ -2115,7 +2115,7 @@ describe("path → network → path roundtrip", () => {
     expect(seg.tangentStart.y).toBeCloseTo(100, 1);
   });
 
-  it("should handle compound paths (multiple sub-paths)", () => {
+  it('should handle compound paths (multiple sub-paths)', () => {
     const builder = new PathBuilder();
     // Two separate triangles
     builder.moveTo(0, 0).lineTo(50, 0).lineTo(25, 43).close();
@@ -2127,7 +2127,7 @@ describe("path → network → path roundtrip", () => {
     expect(network.segments.length).toBe(6);
   });
 
-  it("should convert T-junction network to multiple paths", () => {
+  it('should convert T-junction network to multiple paths', () => {
     // T-junction: vertex at center connected to 3 endpoints
     const network: VectorNetwork = {
       vertices: [
@@ -2200,10 +2200,10 @@ algorithm that makes vector networks useful — automatic region detection.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { findRegions } from "./topology";
+import { findRegions } from './topology';
 
-describe("topology solver", () => {
-  it("should find one region in a triangle", () => {
+describe('topology solver', () => {
+  it('should find one region in a triangle', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 100 },
@@ -2222,7 +2222,7 @@ describe("topology solver", () => {
     expect(regions[0].loops[0].length).toBe(3);
   });
 
-  it("should find two regions in a square with diagonal", () => {
+  it('should find two regions in a square with diagonal', () => {
     // Square ABCD with diagonal AC → 2 triangular regions
     const network: VectorNetwork = {
       vertices: [
@@ -2244,7 +2244,7 @@ describe("topology solver", () => {
     expect(regions.length).toBe(2);
   });
 
-  it("should handle T-junction (no closed regions)", () => {
+  it('should handle T-junction (no closed regions)', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 50, y: 50 },
@@ -2263,7 +2263,7 @@ describe("topology solver", () => {
     expect(regions.length).toBe(0); // No closed regions
   });
 
-  it("should remove filaments (dead-end vertices)", () => {
+  it('should remove filaments (dead-end vertices)', () => {
     // Triangle with a dangling tail from one vertex
     const network: VectorNetwork = {
       vertices: [
@@ -2341,8 +2341,8 @@ Wire VectorNetwork into the scene builder and SVG export pipeline.
 
 ```typescript
 // In network.test.ts
-describe("VectorNetwork integration", () => {
-  it("should convert network to paths for scene/SVG export", () => {
+describe('VectorNetwork integration', () => {
+  it('should convert network to paths for scene/SVG export', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -2358,9 +2358,9 @@ describe("VectorNetwork integration", () => {
       ],
       regions: [
         {
-          windingRule: "nonZero",
+          windingRule: 'nonZero',
           loops: [[0, 1, 2, 3]],
-          fills: [{ type: "solid", color: "#ff0000" }],
+          fills: [{ type: 'solid', color: '#ff0000' }],
         },
       ],
     };
@@ -2371,8 +2371,8 @@ describe("VectorNetwork integration", () => {
 
     // Should produce valid SVG d attribute
     const d = commandsToSvgD(paths[0].commands);
-    expect(d).toContain("M");
-    expect(d).toContain("Z");
+    expect(d).toContain('M');
+    expect(d).toContain('Z');
   });
 });
 ```
@@ -2382,16 +2382,16 @@ describe("VectorNetwork integration", () => {
 - [ ] **Step 3: Create network/index.ts and wire exports**
 
 ```typescript
-export type { VectorNetwork, VectorVertex, VectorSegment, VectorRegion } from "./types";
-export { pathToNetwork, networkToPaths } from "./convert";
-export { findRegions } from "./topology";
+export type { VectorNetwork, VectorVertex, VectorSegment, VectorRegion } from './types';
+export { pathToNetwork, networkToPaths } from './convert';
+export { findRegions } from './topology';
 ```
 
 Add to main `index.ts`:
 
 ```typescript
 // Vector networks
-export * from "./network";
+export * from './network';
 ```
 
 - [ ] **Step 4: Run test — verify it passes**
@@ -2419,9 +2419,9 @@ elements that don't map to a specific generator (rectangle, ellipse, etc.).
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-describe("svgPath generator", () => {
-  it("should parse d attribute into PathValue", () => {
-    const result = svgPathNode.execute({}, { d: "M 0 0 L 100 0 L 100 100 Z" });
+describe('svgPath generator', () => {
+  it('should parse d attribute into PathValue', () => {
+    const result = svgPathNode.execute({}, { d: 'M 0 0 L 100 0 L 100 100 Z' });
     const path = (result.path as any).value;
     expect(path.commands.length).toBeGreaterThan(0);
     expect(path.closed).toBe(true);
@@ -2435,18 +2435,18 @@ describe("svgPath generator", () => {
 
 ```typescript
 export const svgPathNode: NodeTypeDefinition = {
-  type: "svgPath",
-  label: "SVG Path",
-  category: "generator",
+  type: 'svgPath',
+  label: 'SVG Path',
+  category: 'generator',
   inputs: [],
-  outputs: [{ name: "path", type: "path" }],
-  params: [{ name: "d", type: "string", default: "" }],
+  outputs: [{ name: 'path', type: 'path' }],
+  params: [{ name: 'd', type: 'string', default: '' }],
   execute(_inputs, params) {
     const d = params.d as string;
-    if (!d) return { path: { type: "path", value: { commands: new Float64Array(0), closed: false } } };
+    if (!d) return { path: { type: 'path', value: { commands: new Float64Array(0), closed: false } } };
     const commands = svgDToCommands(d);
-    const closed = d.toUpperCase().includes("Z");
-    return { path: { type: "path", value: { commands, closed } } };
+    const closed = d.toUpperCase().includes('Z');
+    return { path: { type: 'path', value: { commands, closed } } };
   },
 };
 ```
@@ -2483,68 +2483,68 @@ cd packages/vector-engine && bun add txml
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { svgToGraph } from "./svg-import";
+import { describe, expect, it } from 'bun:test';
+import { svgToGraph } from './svg-import';
 
-describe("SVG import", () => {
-  it("should import a simple rectangle", () => {
+describe('SVG import', () => {
+  it('should import a simple rectangle', () => {
     const svg = '<svg viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80"/></svg>';
     const result = svgToGraph(svg);
     expect(result.nodes.length).toBeGreaterThanOrEqual(1);
-    const rectNode = result.nodes.find((n) => n.type === "rectangle");
+    const rectNode = result.nodes.find((n) => n.type === 'rectangle');
     expect(rectNode).toBeDefined();
     expect(rectNode!.params.width).toBe(80);
     expect(rectNode!.params.height).toBe(80);
   });
 
-  it("should import a path element as svgPath node with parsed commands", () => {
+  it('should import a path element as svgPath node with parsed commands', () => {
     const svg = '<svg viewBox="0 0 100 100"><path d="M 0 0 L 100 0 L 100 100 Z"/></svg>';
     const result = svgToGraph(svg);
-    const pathNode = result.nodes.find((n) => n.type === "svgPath");
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
-    expect(pathNode!.params.d).toBe("M 0 0 L 100 0 L 100 100 Z");
+    expect(pathNode!.params.d).toBe('M 0 0 L 100 0 L 100 100 Z');
   });
 
-  it("should import fill and stroke styles", () => {
+  it('should import fill and stroke styles', () => {
     const svg =
       '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#ff0000" stroke="#000" stroke-width="2"/></svg>';
     const result = svgToGraph(svg);
-    const fillNode = result.nodes.find((n) => n.type === "fill");
+    const fillNode = result.nodes.find((n) => n.type === 'fill');
     expect(fillNode).toBeDefined();
-    expect(fillNode!.params.color).toBe("#ff0000");
+    expect(fillNode!.params.color).toBe('#ff0000');
   });
 
-  it("should import groups with transforms", () => {
+  it('should import groups with transforms', () => {
     const svg = '<svg viewBox="0 0 200 200"><g transform="translate(50,50)"><rect width="100" height="100"/></g></svg>';
     const result = svgToGraph(svg);
-    const translateNode = result.nodes.find((n) => n.type === "translate");
+    const translateNode = result.nodes.find((n) => n.type === 'translate');
     expect(translateNode).toBeDefined();
   });
 
-  it("should import circle and ellipse as generator nodes", () => {
+  it('should import circle and ellipse as generator nodes', () => {
     const svg =
       '<svg viewBox="0 0 200 200"><circle cx="50" cy="50" r="40"/><ellipse cx="150" cy="50" rx="40" ry="20"/></svg>';
     const result = svgToGraph(svg);
-    const ellipseNodes = result.nodes.filter((n) => n.type === "ellipse");
+    const ellipseNodes = result.nodes.filter((n) => n.type === 'ellipse');
     expect(ellipseNodes.length).toBe(2);
   });
 
-  it("should import polygon with points attribute as svgPath", () => {
+  it('should import polygon with points attribute as svgPath', () => {
     const svg = '<svg viewBox="0 0 100 100"><polygon points="50,0 100,100 0,100"/></svg>';
     const result = svgToGraph(svg);
-    const pathNode = result.nodes.find((n) => n.type === "svgPath");
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
-    expect(pathNode!.params.d as string).toContain("M");
+    expect(pathNode!.params.d as string).toContain('M');
   });
 
-  it("should import polyline with points attribute as svgPath", () => {
+  it('should import polyline with points attribute as svgPath', () => {
     const svg = '<svg viewBox="0 0 100 100"><polyline points="0,0 50,50 100,0"/></svg>';
     const result = svgToGraph(svg);
-    const pathNode = result.nodes.find((n) => n.type === "svgPath");
+    const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
   });
 
-  it("should import linear gradient", () => {
+  it('should import linear gradient', () => {
     const svg = `<svg viewBox="0 0 100 100">
       <defs>
         <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
@@ -2555,18 +2555,18 @@ describe("SVG import", () => {
       <rect width="100" height="100" fill="url(#g1)"/>
     </svg>`;
     const result = svgToGraph(svg);
-    const fillNode = result.nodes.find((n) => n.type === "fill");
+    const fillNode = result.nodes.find((n) => n.type === 'fill');
     expect(fillNode).toBeDefined();
-    expect(fillNode!.params.type).toBe("linearGradient");
+    expect(fillNode!.params.type).toBe('linearGradient');
   });
 
-  it("should handle viewBox canvas dimensions", () => {
+  it('should handle viewBox canvas dimensions', () => {
     const svg = '<svg viewBox="0 0 400 300"><rect width="100" height="100"/></svg>';
     const result = svgToGraph(svg);
     expect(result.canvas).toEqual({ width: 400, height: 300 });
   });
 
-  it("should return edges connecting nodes", () => {
+  it('should return edges connecting nodes', () => {
     const svg = '<svg viewBox="0 0 100 100"><rect fill="#f00" width="100" height="100"/></svg>';
     const result = svgToGraph(svg);
     expect(result.edges.length).toBeGreaterThanOrEqual(1);
@@ -2588,7 +2588,7 @@ describe("SVG import", () => {
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §SVG Import
  */
 
-import { parse as parseXml } from "txml";
+import { parse as parseXml } from 'txml';
 
 export interface ImportedNode {
   id: string;
@@ -2648,7 +2648,7 @@ Full pipeline: create graph → execute → export SVG → import SVG → compar
 - [ ] **Step 1: Write tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 import {
   VectorGraphModel,
   GraphExecutor,
@@ -2656,21 +2656,21 @@ import {
   sceneToSvg,
   PathBuilder,
   computeBounds,
-} from "./index";
-import { pathLength, pointAtOffset } from "./path/geometry";
-import { flattenPath } from "./path/flatten";
-import { svgToGraph } from "./import/svg-import";
+} from './index';
+import { pathLength, pointAtOffset } from './path/geometry';
+import { flattenPath } from './path/flatten';
+import { svgToGraph } from './import/svg-import';
 
-describe("advanced integration", () => {
-  it("should export SVG then import back as svgPath nodes", () => {
+describe('advanced integration', () => {
+  it('should export SVG then import back as svgPath nodes', () => {
     // Note: round-trip loses generator semantics — exported <path> elements
     // import as svgPath nodes, not the original rectangle/ellipse generators.
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create("test", "RT", 200, 200);
+    const graph = VectorGraphModel.create('test', 'RT', 200, 200);
 
-    const rect = graph.addNode({ type: "rectangle", params: { width: 100, height: 50, x: 10, y: 10 } });
-    const fill = graph.addNode({ type: "fill", params: { type: "solid", color: "#ff0000" } });
-    graph.addEdge(rect, "path", fill, "path");
+    const rect = graph.addNode({ type: 'rectangle', params: { width: 100, height: 50, x: 10, y: 10 } });
+    const fill = graph.addNode({ type: 'fill', params: { type: 'solid', color: '#ff0000' } });
+    graph.addEdge(rect, 'path', fill, 'path');
 
     const executor = new GraphExecutor(registry);
     const result = executor.execute(graph);
@@ -2681,24 +2681,24 @@ describe("advanced integration", () => {
     expect(imported.nodes.length).toBeGreaterThanOrEqual(1);
     expect(imported.canvas).toEqual({ width: 200, height: 200 });
     // Exported SVG uses <path>, so import creates svgPath nodes
-    const pathNodes = imported.nodes.filter((n) => n.type === "svgPath");
+    const pathNodes = imported.nodes.filter((n) => n.type === 'svgPath');
     expect(pathNodes.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("should compute geometry on generated shapes", () => {
+  it('should compute geometry on generated shapes', () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create("test", "Geo", 100, 100);
-    const rect = graph.addNode({ type: "rectangle", params: { width: 100, height: 100, x: 0, y: 0 } });
+    const graph = VectorGraphModel.create('test', 'Geo', 100, 100);
+    const rect = graph.addNode({ type: 'rectangle', params: { width: 100, height: 100, x: 0, y: 0 } });
     const executor = new GraphExecutor(registry);
     const result = executor.execute(graph);
     const item = result.scene.items[0];
-    if ("path" in item) {
+    if ('path' in item) {
       const len = pathLength(item.path.commands);
       expect(len).toBeCloseTo(400, 0); // Perimeter of 100x100 square
     }
   });
 
-  it("should flatten and re-fit a curved path", () => {
+  it('should flatten and re-fit a curved path', () => {
     const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
 
     const points = flattenPath(curve.commands, 1.0);
@@ -2710,7 +2710,7 @@ describe("advanced integration", () => {
     expect(points[midIdx].y).toBeGreaterThan(50);
   });
 
-  it("should register all new nodes without conflicts", () => {
+  it('should register all new nodes without conflicts', () => {
     const registry = createDefaultRegistry();
     const all = registry.listAll();
     // Plan 1: 23 nodes. Plan 2 adds 21: svgPath, group, alphaMask, shadow,
@@ -2773,36 +2773,36 @@ Export all new modules:
 
 ```typescript
 // Path utilities
-export { flattenPath } from "./path/flatten";
-export { pathLength, pathArea, pointAtOffset } from "./path/geometry";
-export { mergePaths } from "./path/merge";
-export { fitCurve } from "./curve/fit";
+export { flattenPath } from './path/flatten';
+export { pathLength, pathArea, pointAtOffset } from './path/geometry';
+export { mergePaths } from './path/merge';
+export { fitCurve } from './curve/fit';
 // Structural nodes
-export { groupNode } from "./nodes/structural/group";
-export { alphaMaskNode } from "./nodes/structural/alpha-mask";
+export { groupNode } from './nodes/structural/group';
+export { alphaMaskNode } from './nodes/structural/alpha-mask';
 // Style nodes
-export { shadowNode } from "./nodes/style/shadow";
-export { blurNode } from "./nodes/style/blur";
+export { shadowNode } from './nodes/style/shadow';
+export { blurNode } from './nodes/style/blur';
 // Deformation nodes
-export { roughenNode } from "./nodes/deformation/roughen";
-export { zigzagNode } from "./nodes/deformation/zigzag";
-export { puckerBloatNode } from "./nodes/deformation/pucker-bloat";
-export { twistNode } from "./nodes/deformation/twist";
-export { warpNode } from "./nodes/deformation/warp";
+export { roughenNode } from './nodes/deformation/roughen';
+export { zigzagNode } from './nodes/deformation/zigzag';
+export { puckerBloatNode } from './nodes/deformation/pucker-bloat';
+export { twistNode } from './nodes/deformation/twist';
+export { warpNode } from './nodes/deformation/warp';
 // Variable stroke
-export { variableStrokeNode } from "./nodes/stroke/variable-stroke";
+export { variableStrokeNode } from './nodes/stroke/variable-stroke';
 // Text
-export { textToPathNode } from "./nodes/text/text-to-path";
+export { textToPathNode } from './nodes/text/text-to-path';
 // Mesh
-export type { MeshValue, MeshVertex, MeshHandle, TessellatedMesh } from "./mesh/types";
-export { tessellateMesh } from "./mesh/tessellate";
-export { meshFromBounds } from "./mesh/mesh-from-path";
+export type { MeshValue, MeshVertex, MeshHandle, TessellatedMesh } from './mesh/types';
+export { tessellateMesh } from './mesh/tessellate';
+export { meshFromBounds } from './mesh/mesh-from-path';
 // Vector networks
-export * from "./network";
+export * from './network';
 // Import
-export { svgToGraph } from "./import/svg-import";
+export { svgToGraph } from './import/svg-import';
 // Additional types
-export type { WidthPoint } from "./types";
+export type { WidthPoint } from './types';
 ```
 
 - [ ] **Step 3: Run full test suite + lint**

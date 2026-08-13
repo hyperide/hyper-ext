@@ -77,56 +77,56 @@ git push --force-with-lease
 
 ```typescript
 // lib/tamagui/__tests__/style-props.test.ts
-import { describe, expect, it } from "bun:test";
-import { isValidTamaguiStyleProp, VALID_TAMAGUI_STYLE_PROPS } from "../style-props";
+import { describe, expect, it } from 'bun:test';
+import { isValidTamaguiStyleProp, VALID_TAMAGUI_STYLE_PROPS } from '../style-props';
 
-describe("VALID_TAMAGUI_STYLE_PROPS", () => {
-  it("should contain core layout properties", () => {
-    for (const prop of ["display", "flex", "flexDirection", "alignItems", "justifyContent", "position"]) {
+describe('VALID_TAMAGUI_STYLE_PROPS', () => {
+  it('should contain core layout properties', () => {
+    for (const prop of ['display', 'flex', 'flexDirection', 'alignItems', 'justifyContent', 'position']) {
       expect(VALID_TAMAGUI_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
 
-  it("should contain spacing properties", () => {
-    for (const prop of ["padding", "paddingTop", "margin", "marginLeft", "gap"]) {
+  it('should contain spacing properties', () => {
+    for (const prop of ['padding', 'paddingTop', 'margin', 'marginLeft', 'gap']) {
       expect(VALID_TAMAGUI_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
 
-  it("should contain color properties", () => {
-    for (const prop of ["backgroundColor", "color", "borderColor", "shadowColor"]) {
+  it('should contain color properties', () => {
+    for (const prop of ['backgroundColor', 'color', 'borderColor', 'shadowColor']) {
       expect(VALID_TAMAGUI_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
 
-  it("should contain sizing properties", () => {
-    for (const prop of ["width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight"]) {
+  it('should contain sizing properties', () => {
+    for (const prop of ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight']) {
       expect(VALID_TAMAGUI_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
 
-  it("should contain text properties", () => {
-    for (const prop of ["fontSize", "fontWeight", "lineHeight", "textAlign", "fontFamily"]) {
+  it('should contain text properties', () => {
+    for (const prop of ['fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'fontFamily']) {
       expect(VALID_TAMAGUI_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
 
-  it("should not contain unknown properties", () => {
-    expect(VALID_TAMAGUI_STYLE_PROPS.has("foo")).toBe(false);
-    expect(VALID_TAMAGUI_STYLE_PROPS.has("backgroundColour")).toBe(false);
-    expect(VALID_TAMAGUI_STYLE_PROPS.has("class")).toBe(false);
+  it('should not contain unknown properties', () => {
+    expect(VALID_TAMAGUI_STYLE_PROPS.has('foo')).toBe(false);
+    expect(VALID_TAMAGUI_STYLE_PROPS.has('backgroundColour')).toBe(false);
+    expect(VALID_TAMAGUI_STYLE_PROPS.has('class')).toBe(false);
   });
 });
 
-describe("isValidTamaguiStyleProp", () => {
-  it("should return true for valid props", () => {
-    expect(isValidTamaguiStyleProp("backgroundColor")).toBe(true);
-    expect(isValidTamaguiStyleProp("flex")).toBe(true);
+describe('isValidTamaguiStyleProp', () => {
+  it('should return true for valid props', () => {
+    expect(isValidTamaguiStyleProp('backgroundColor')).toBe(true);
+    expect(isValidTamaguiStyleProp('flex')).toBe(true);
   });
 
-  it("should return false for invalid props", () => {
-    expect(isValidTamaguiStyleProp("foo")).toBe(false);
-    expect(isValidTamaguiStyleProp("")).toBe(false);
+  it('should return false for invalid props', () => {
+    expect(isValidTamaguiStyleProp('foo')).toBe(false);
+    expect(isValidTamaguiStyleProp('')).toBe(false);
   });
 });
 ```
@@ -150,111 +150,111 @@ Expected: FAIL — module not found
 
 export const VALID_TAMAGUI_STYLE_PROPS: ReadonlySet<string> = new Set([
   // Layout
-  "display",
-  "flex",
-  "flexDirection",
-  "flexWrap",
-  "flexGrow",
-  "flexShrink",
-  "flexBasis",
-  "alignItems",
-  "alignSelf",
-  "alignContent",
-  "justifyContent",
-  "position",
-  "top",
-  "right",
-  "bottom",
-  "left",
-  "zIndex",
-  "overflow",
-  "overflowX",
-  "overflowY",
+  'display',
+  'flex',
+  'flexDirection',
+  'flexWrap',
+  'flexGrow',
+  'flexShrink',
+  'flexBasis',
+  'alignItems',
+  'alignSelf',
+  'alignContent',
+  'justifyContent',
+  'position',
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'zIndex',
+  'overflow',
+  'overflowX',
+  'overflowY',
 
   // Spacing
-  "padding",
-  "paddingTop",
-  "paddingRight",
-  "paddingBottom",
-  "paddingLeft",
-  "paddingHorizontal",
-  "paddingVertical",
-  "margin",
-  "marginTop",
-  "marginRight",
-  "marginBottom",
-  "marginLeft",
-  "marginHorizontal",
-  "marginVertical",
-  "gap",
-  "rowGap",
-  "columnGap",
+  'padding',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingHorizontal',
+  'paddingVertical',
+  'margin',
+  'marginTop',
+  'marginRight',
+  'marginBottom',
+  'marginLeft',
+  'marginHorizontal',
+  'marginVertical',
+  'gap',
+  'rowGap',
+  'columnGap',
 
   // Sizing
-  "width",
-  "height",
-  "minWidth",
-  "maxWidth",
-  "minHeight",
-  "maxHeight",
-  "aspectRatio",
+  'width',
+  'height',
+  'minWidth',
+  'maxWidth',
+  'minHeight',
+  'maxHeight',
+  'aspectRatio',
 
   // Colors
-  "backgroundColor",
-  "color",
-  "borderColor",
-  "borderTopColor",
-  "borderRightColor",
-  "borderBottomColor",
-  "borderLeftColor",
-  "shadowColor",
-  "outlineColor",
-  "textDecorationColor",
+  'backgroundColor',
+  'color',
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'shadowColor',
+  'outlineColor',
+  'textDecorationColor',
 
   // Borders
-  "borderWidth",
-  "borderTopWidth",
-  "borderRightWidth",
-  "borderBottomWidth",
-  "borderLeftWidth",
-  "borderRadius",
-  "borderTopLeftRadius",
-  "borderTopRightRadius",
-  "borderBottomLeftRadius",
-  "borderBottomRightRadius",
-  "borderStyle",
+  'borderWidth',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius',
+  'borderStyle',
 
   // Text
-  "fontSize",
-  "fontWeight",
-  "fontFamily",
-  "fontStyle",
-  "lineHeight",
-  "letterSpacing",
-  "textAlign",
-  "textTransform",
-  "textDecorationLine",
-  "textDecorationStyle",
-  "textShadowColor",
-  "textShadowOffset",
-  "textShadowRadius",
+  'fontSize',
+  'fontWeight',
+  'fontFamily',
+  'fontStyle',
+  'lineHeight',
+  'letterSpacing',
+  'textAlign',
+  'textTransform',
+  'textDecorationLine',
+  'textDecorationStyle',
+  'textShadowColor',
+  'textShadowOffset',
+  'textShadowRadius',
 
   // Effects
-  "opacity",
-  "elevation",
-  "shadowOffset",
-  "shadowOpacity",
-  "shadowRadius",
+  'opacity',
+  'elevation',
+  'shadowOffset',
+  'shadowOpacity',
+  'shadowRadius',
 
   // Transform
-  "transform",
-  "transformOrigin",
+  'transform',
+  'transformOrigin',
 
   // Tamagui extras (web-compatible)
-  "cursor",
-  "pointerEvents",
-  "userSelect",
-  "animation",
+  'cursor',
+  'pointerEvents',
+  'userSelect',
+  'animation',
 ]);
 
 export function isValidTamaguiStyleProp(key: string): boolean {
@@ -287,30 +287,30 @@ feat(lib): add VALID_TAMAGUI_STYLE_PROPS curated property set (HYP-283)
 Add to `TailwindColorTokenProvider` describe in `color-token-provider.test.ts`:
 
 ```typescript
-it("should include transparent, current, inherit in palette", () => {
-  provider = getColorTokenProvider("tailwind");
+it('should include transparent, current, inherit in palette', () => {
+  provider = getColorTokenProvider('tailwind');
   const colors = provider.listColors();
-  expect(colors.find((c) => c.token === "transparent")).toBeTruthy();
-  expect(colors.find((c) => c.token === "current")).toBeTruthy();
-  expect(colors.find((c) => c.token === "inherit")).toBeTruthy();
+  expect(colors.find((c) => c.token === 'transparent')).toBeTruthy();
+  expect(colors.find((c) => c.token === 'current')).toBeTruthy();
+  expect(colors.find((c) => c.token === 'inherit')).toBeTruthy();
 });
 
-it("should include transparent/current/inherit in families", () => {
-  provider = getColorTokenProvider("tailwind");
+it('should include transparent/current/inherit in families', () => {
+  provider = getColorTokenProvider('tailwind');
   const families = provider.getFamilies();
-  expect(families).toContain("transparent");
-  expect(families).toContain("current");
-  expect(families).toContain("inherit");
+  expect(families).toContain('transparent');
+  expect(families).toContain('current');
+  expect(families).toContain('inherit');
 });
 
-it("should exclude non-hex colors from nearest search results", () => {
-  provider = getColorTokenProvider("tailwind");
-  const nearest = provider.findNearest("#000000", 5);
+it('should exclude non-hex colors from nearest search results', () => {
+  provider = getColorTokenProvider('tailwind');
+  const nearest = provider.findNearest('#000000', 5);
   // transparent/current/inherit have Infinity distance — never in top results
   for (const n of nearest) {
-    expect(n.token).not.toBe("transparent");
-    expect(n.token).not.toBe("current");
-    expect(n.token).not.toBe("inherit");
+    expect(n.token).not.toBe('transparent');
+    expect(n.token).not.toBe('current');
+    expect(n.token).not.toBe('inherit');
   }
 });
 ```
@@ -369,13 +369,13 @@ In `color-token-provider.ts`, after `TW_PREFIX_TO_CSS` definition:
 // Sort by length descending so longer prefixes match first (e.g. "px" before "p")
 const TW_KEY_PREFIXES = Object.keys(TW_PREFIX_TO_CSS)
   .sort((a, b) => b.length - a.length)
-  .join("|");
+  .join('|');
 const TW_KEY_PREFIX_RE = new RegExp(`^(${TW_KEY_PREFIXES})-(.+)$`);
 
 // Color-related prefixes for value normalization
 // SYNC: subset of TW_PREFIX_TO_CSS — only prefixes that map to color CSS properties
-const TW_COLOR_PREFIXES = ["bg", "text", "border", "ring", "shadow"];
-const TW_VALUE_PREFIX_RE = new RegExp(`^(${TW_COLOR_PREFIXES.join("|")})-(.+)$`);
+const TW_COLOR_PREFIXES = ['bg', 'text', 'border', 'ring', 'shadow'];
+const TW_VALUE_PREFIX_RE = new RegExp(`^(${TW_COLOR_PREFIXES.join('|')})-(.+)$`);
 ```
 
 Then in `normalizeStylesInput`, replace the two hardcoded regex usages:
@@ -384,10 +384,10 @@ Then in `normalizeStylesInput`, replace the two hardcoded regex usages:
 function normalizeStylesInput(raw: Record<string, string>): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (key === "className" || key === "class") continue;
+    if (key === 'className' || key === 'class') continue;
 
     const twPrefixMatch = key.match(TW_KEY_PREFIX_RE);
-    if (twPrefixMatch && (!value || value === "true")) {
+    if (twPrefixMatch && (!value || value === 'true')) {
       const cssKey = TW_PREFIX_TO_CSS[twPrefixMatch[1]];
       if (cssKey) {
         result[cssKey] = twPrefixMatch[2];
@@ -435,34 +435,34 @@ refactor(mcp): derive TW prefix regex from map keys — single source of truth (
 Add to `color-token-provider.test.ts`, inside `TailwindStyleAdapter` describe:
 
 ```typescript
-describe("resolveStyles", () => {
-  it("should parse className into CSS properties", () => {
-    const adapter = getStyleAdapter("tailwind");
-    const result = adapter.resolveStyles({ className: "flex flex-col gap-4" });
+describe('resolveStyles', () => {
+  it('should parse className into CSS properties', () => {
+    const adapter = getStyleAdapter('tailwind');
+    const result = adapter.resolveStyles({ className: 'flex flex-col gap-4' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.styles.display).toBe("flex");
-      expect(result.styles.flexDirection).toBe("column");
-      expect(result.styles.gap).toBe("1rem");
+      expect(result.styles.display).toBe('flex');
+      expect(result.styles.flexDirection).toBe('column');
+      expect(result.styles.gap).toBe('1rem');
     }
   });
 
-  it("should reject styleProps with actionable error", () => {
-    const adapter = getStyleAdapter("tailwind");
-    const result = adapter.resolveStyles({ styleProps: { backgroundColor: "red" } });
+  it('should reject styleProps with actionable error', () => {
+    const adapter = getStyleAdapter('tailwind');
+    const result = adapter.resolveStyles({ styleProps: { backgroundColor: 'red' } });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("Tailwind");
-      expect(result.error).toContain("className");
+      expect(result.error).toContain('Tailwind');
+      expect(result.error).toContain('className');
     }
   });
 
-  it("should reject empty input", () => {
-    const adapter = getStyleAdapter("tailwind");
+  it('should reject empty input', () => {
+    const adapter = getStyleAdapter('tailwind');
     const result = adapter.resolveStyles({});
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("className");
+      expect(result.error).toContain('className');
     }
   });
 });
@@ -473,54 +473,54 @@ describe("resolveStyles", () => {
 Add to `TamaguiStyleAdapter` describe:
 
 ```typescript
-describe("resolveStyles", () => {
-  it("should resolve $token values to hex", () => {
-    const adapter = getStyleAdapter("tamagui");
-    const result = adapter.resolveStyles({ styleProps: { backgroundColor: "$blue9" } });
+describe('resolveStyles', () => {
+  it('should resolve $token values to hex', () => {
+    const adapter = getStyleAdapter('tamagui');
+    const result = adapter.resolveStyles({ styleProps: { backgroundColor: '$blue9' } });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.styles.backgroundColor).toBe("#0090ff");
+      expect(result.styles.backgroundColor).toBe('#0090ff');
     }
   });
 
-  it("should pass through non-token values", () => {
-    const adapter = getStyleAdapter("tamagui");
-    const result = adapter.resolveStyles({ styleProps: { padding: "16px" } });
+  it('should pass through non-token values', () => {
+    const adapter = getStyleAdapter('tamagui');
+    const result = adapter.resolveStyles({ styleProps: { padding: '16px' } });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.styles.padding).toBe("16px");
+      expect(result.styles.padding).toBe('16px');
     }
   });
 
-  it("should reject className with actionable error", () => {
-    const adapter = getStyleAdapter("tamagui");
-    const result = adapter.resolveStyles({ className: "flex gap-4" });
+  it('should reject className with actionable error', () => {
+    const adapter = getStyleAdapter('tamagui');
+    const result = adapter.resolveStyles({ className: 'flex gap-4' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("Tamagui");
-      expect(result.error).toContain("styleProps");
+      expect(result.error).toContain('Tamagui');
+      expect(result.error).toContain('styleProps');
     }
   });
 
-  it("should reject empty input", () => {
-    const adapter = getStyleAdapter("tamagui");
+  it('should reject empty input', () => {
+    const adapter = getStyleAdapter('tamagui');
     const result = adapter.resolveStyles({});
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("styleProps");
+      expect(result.error).toContain('styleProps');
     }
   });
 
-  it("should warn about unknown CSS properties", () => {
-    const adapter = getStyleAdapter("tamagui");
+  it('should warn about unknown CSS properties', () => {
+    const adapter = getStyleAdapter('tamagui');
     const result = adapter.resolveStyles({
-      styleProps: { backgroundColor: "$blue9", foo: "bar", baz: "123" },
+      styleProps: { backgroundColor: '$blue9', foo: 'bar', baz: '123' },
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.styles.backgroundColor).toBe("#0090ff");
-      expect(result.warning).toContain("foo");
-      expect(result.warning).toContain("baz");
+      expect(result.styles.backgroundColor).toBe('#0090ff');
+      expect(result.warning).toContain('foo');
+      expect(result.warning).toContain('baz');
     }
   });
 });
@@ -558,7 +558,7 @@ export interface StyleAdapter {
 Add import at top of `color-token-provider.ts`:
 
 ```typescript
-import { parseTailwindClasses } from "@lib/tailwind/parser";
+import { parseTailwindClasses } from '@lib/tailwind/parser';
 ```
 
 Add method to `TailwindStyleAdapter`:
@@ -593,8 +593,8 @@ resolveStyles(params: ResolveInput): ResolveResult {
 Add import:
 
 ```typescript
-import { isValidTamaguiStyleProp } from "@lib/tamagui/style-props";
-import { getTamaguiColorHex } from "@lib/tamagui/values";
+import { isValidTamaguiStyleProp } from '@lib/tamagui/style-props';
+import { getTamaguiColorHex } from '@lib/tamagui/values';
 ```
 
 Add method to `TamaguiStyleAdapter`:
@@ -661,7 +661,7 @@ In `styling-tools.test.ts`, update `captureToolHandlers` to intercept both `regi
 
 ```typescript
 function captureToolHandlers(stateHub: StateHub): (name: string) => ToolHandler {
-  const server = new McpServer({ name: "test", version: "0.0.1" });
+  const server = new McpServer({ name: 'test', version: '0.0.1' });
   const handlers = new Map<string, ToolHandler>();
 
   // Capture registerTool calls (new API)
@@ -700,61 +700,61 @@ Replace the existing `hyper_get_element_styles` tests. **Explicitly removed test
 New tests:
 
 ```typescript
-describe("hyper_get_element_styles", () => {
-  it("should parse Tailwind className", async () => {
-    const getHandler = captureToolHandlers(createMockStateHub("tailwind"));
-    const handler = getHandler("hyper_get_element_styles");
+describe('hyper_get_element_styles', () => {
+  it('should parse Tailwind className', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tailwind'));
+    const handler = getHandler('hyper_get_element_styles');
 
-    const result = await handler({ className: "flex flex-col gap-4" });
+    const result = await handler({ className: 'flex flex-col gap-4' });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.display).toBe("flex");
-    expect(parsed.flexDirection).toBe("column");
+    expect(parsed.display).toBe('flex');
+    expect(parsed.flexDirection).toBe('column');
   });
 
-  it("should resolve Tamagui tokens to hex", async () => {
-    const getHandler = captureToolHandlers(createMockStateHub("tamagui"));
-    const handler = getHandler("hyper_get_element_styles");
+  it('should resolve Tamagui tokens to hex', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_get_element_styles');
 
-    const result = await handler({ styleProps: { backgroundColor: "$blue9" } });
+    const result = await handler({ styleProps: { backgroundColor: '$blue9' } });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.backgroundColor).toBe("#0090ff");
+    expect(parsed.backgroundColor).toBe('#0090ff');
   });
 
-  it("should reject styleProps for Tailwind project", async () => {
-    const getHandler = captureToolHandlers(createMockStateHub("tailwind"));
-    const handler = getHandler("hyper_get_element_styles");
+  it('should reject styleProps for Tailwind project', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tailwind'));
+    const handler = getHandler('hyper_get_element_styles');
 
-    const result = await handler({ styleProps: { backgroundColor: "red" } });
+    const result = await handler({ styleProps: { backgroundColor: 'red' } });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("Tailwind");
-    expect(result.content[0].text).toContain("className");
+    expect(result.content[0].text).toContain('Tailwind');
+    expect(result.content[0].text).toContain('className');
   });
 
-  it("should reject className for Tamagui project", async () => {
-    const getHandler = captureToolHandlers(createMockStateHub("tamagui"));
-    const handler = getHandler("hyper_get_element_styles");
+  it('should reject className for Tamagui project', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_get_element_styles');
 
-    const result = await handler({ className: "flex gap-4" });
+    const result = await handler({ className: 'flex gap-4' });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("Tamagui");
-    expect(result.content[0].text).toContain("styleProps");
+    expect(result.content[0].text).toContain('Tamagui');
+    expect(result.content[0].text).toContain('styleProps');
   });
 
-  it("should warn about unknown Tamagui props", async () => {
-    const getHandler = captureToolHandlers(createMockStateHub("tamagui"));
-    const handler = getHandler("hyper_get_element_styles");
+  it('should warn about unknown Tamagui props', async () => {
+    const getHandler = captureToolHandlers(createMockStateHub('tamagui'));
+    const handler = getHandler('hyper_get_element_styles');
 
-    const result = await handler({ styleProps: { backgroundColor: "$blue9", foo: "bar" } });
+    const result = await handler({ styleProps: { backgroundColor: '$blue9', foo: 'bar' } });
 
     expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toContain("#0090ff");
+    expect(result.content[0].text).toContain('#0090ff');
     // Warning about unknown prop in second content block
     expect(result.content).toHaveLength(2);
-    expect(result.content[1].text).toContain("foo");
+    expect(result.content[1].text).toContain('foo');
   });
 });
 ```
@@ -769,23 +769,23 @@ Expected: FAIL — old handler still passes through styleProps silently
 In `styling-tools.ts`, replace the `server.tool('hyper_get_element_styles', ...)` block with:
 
 ```typescript
-import { z } from "zod";
-import { getStyleAdapter } from "./color-token-provider";
+import { z } from 'zod';
+import { getStyleAdapter } from './color-token-provider';
 
 // hyper_get_element_styles — uses registerTool for z.union() schema
 server.registerTool(
-  "hyper_get_element_styles",
+  'hyper_get_element_styles',
   {
     description:
-      "Parse element styles into resolved CSS properties.\n" +
+      'Parse element styles into resolved CSS properties.\n' +
       "- Tailwind projects: pass className (e.g. {className: 'flex gap-4 bg-blue-500'})\n" +
       '- Tamagui projects: pass styleProps (e.g. {styleProps: {backgroundColor: "$blue9"}})\n' +
-      "Use hyper_get_state to check the active framework if unsure.",
+      'Use hyper_get_state to check the active framework if unsure.',
     inputSchema: z.union([
-      z.object({ className: z.string().describe("Tailwind className string to parse") }).strict(),
+      z.object({ className: z.string().describe('Tailwind className string to parse') }).strict(),
       z
         .object({
-          styleProps: z.record(z.string(), z.string()).describe("Tamagui style props as key-value pairs"),
+          styleProps: z.record(z.string(), z.string()).describe('Tamagui style props as key-value pairs'),
         })
         .strict(),
     ]),
@@ -793,21 +793,21 @@ server.registerTool(
   async (args: Record<string, unknown>) => {
     // z.union() produces { className: string } | { styleProps: Record<string, string> }
     // TypeScript can't destructure across union branches — use runtime narrowing
-    const className = "className" in args ? (args.className as string) : undefined;
-    const styleProps = "styleProps" in args ? (args.styleProps as Record<string, string>) : undefined;
+    const className = 'className' in args ? (args.className as string) : undefined;
+    const styleProps = 'styleProps' in args ? (args.styleProps as Record<string, string>) : undefined;
 
     const adapter = getStyleAdapter(stateHub.state.projectUIKit);
     const result = adapter.resolveStyles({ className, styleProps });
 
     if (!result.success) {
-      return { content: [{ type: "text" as const, text: result.error }], isError: true };
+      return { content: [{ type: 'text' as const, text: result.error }], isError: true };
     }
 
-    const content: Array<{ type: "text"; text: string }> = [
-      { type: "text" as const, text: JSON.stringify(result.styles, null, 2) },
+    const content: Array<{ type: 'text'; text: string }> = [
+      { type: 'text' as const, text: JSON.stringify(result.styles, null, 2) },
     ];
     if (result.warning) {
-      content.push({ type: "text" as const, text: `Warning: ${result.warning}` });
+      content.push({ type: 'text' as const, text: `Warning: ${result.warning}` });
     }
     return { content };
   },
@@ -821,9 +821,9 @@ Remove the `parseTailwindClasses` and `getTamaguiColorHex` imports from `styling
 In `styling-tools.test.ts`, `registerStylingTools` describe — update to account for 1 `registerTool` call + 2 `tool` calls:
 
 ```typescript
-describe("registerStylingTools", () => {
-  it("should register 3 tools on the server", () => {
-    const server = new McpServer({ name: "test", version: "0.0.1" });
+describe('registerStylingTools', () => {
+  it('should register 3 tools on the server', () => {
+    const server = new McpServer({ name: 'test', version: '0.0.1' });
     const stateHub = createMockStateHub();
     const toolNames: string[] = [];
 
@@ -844,7 +844,7 @@ describe("registerStylingTools", () => {
 
     registerStylingTools(server, stateHub);
 
-    expect(toolNames).toEqual(["hyper_get_element_styles", "hyper_suggest_color_token", "hyper_list_color_tokens"]);
+    expect(toolNames).toEqual(['hyper_get_element_styles', 'hyper_suggest_color_token', 'hyper_list_color_tokens']);
   });
 });
 ```
@@ -878,11 +878,11 @@ feat(mcp): switch hyper_get_element_styles to registerTool + z.union() schema (H
 - [ ] **Step 1: Add test in `hyper_suggest_color_token` describe**
 
 ```typescript
-it("should handle bracket-wrapped out-of-range rgb", async () => {
-  const getHandler = captureToolHandlers(createMockStateHub("tailwind"));
-  const handler = getHandler("hyper_suggest_color_token");
+it('should handle bracket-wrapped out-of-range rgb', async () => {
+  const getHandler = captureToolHandlers(createMockStateHub('tailwind'));
+  const handler = getHandler('hyper_suggest_color_token');
 
-  const result = await handler({ color: "[rgb(300, 0, 0)]" });
+  const result = await handler({ color: '[rgb(300, 0, 0)]' });
 
   // rgb(300,0,0) clamps to #ff0000, brackets stripped → finds nearest red token
   expect(result.isError).toBeUndefined();

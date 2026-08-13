@@ -103,119 +103,119 @@ Filesystem sub-classification (only runs after primary dep match):
 
 ```ts
 // lib/preview-generator/__tests__/framework-routing.test.ts
-import { describe, expect, it } from "bun:test";
-import type { FileIO } from "../../ast/file-io";
-import { detectFramework } from "../framework-routing";
+import { describe, expect, it } from 'bun:test';
+import type { FileIO } from '../../ast/file-io';
+import { detectFramework } from '../framework-routing';
 
 function makeIO(pkg: Record<string, unknown>, files: string[] = []): FileIO {
   const fileSet = new Set(files);
   return {
     async readFile(p: string) {
-      if (p.endsWith("package.json")) return JSON.stringify(pkg);
+      if (p.endsWith('package.json')) return JSON.stringify(pkg);
       if (!fileSet.has(p)) throw new Error(`ENOENT: ${p}`);
-      return "";
+      return '';
     },
     async writeFile() {},
     async access(p: string) {
-      const exists = fileSet.has(p) || files.some((f) => f.startsWith(p + "/"));
+      const exists = fileSet.has(p) || files.some((f) => f.startsWith(p + '/'));
       if (!exists) throw new Error(`ENOENT: ${p}`);
     },
   };
 }
 
-const root = "/project";
+const root = '/project';
 
-describe("detectFramework — primary via package.json", () => {
+describe('detectFramework — primary via package.json', () => {
   it('detects Next.js App Router via app/layout.tsx, returns appDir: "app"', async () => {
-    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/app/layout.tsx`]);
+    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/app/layout.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("nextjs-app-router");
-    expect(result.appDir).toBe("app");
+    expect(result.framework).toBe('nextjs-app-router');
+    expect(result.appDir).toBe('app');
   });
 
   it('detects Next.js App Router via src/app/layout.tsx, returns appDir: "src/app"', async () => {
-    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/src/app/layout.tsx`]);
+    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/src/app/layout.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("nextjs-app-router");
-    expect(result.appDir).toBe("src/app");
+    expect(result.framework).toBe('nextjs-app-router');
+    expect(result.appDir).toBe('src/app');
   });
 
   it('detects Next.js Pages Router via pages/_app.tsx, returns pagesDir: "pages"', async () => {
-    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/pages/_app.tsx`]);
+    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/pages/_app.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("nextjs-pages-router");
-    expect(result.pagesDir).toBe("pages");
+    expect(result.framework).toBe('nextjs-pages-router');
+    expect(result.pagesDir).toBe('pages');
   });
 
   it('detects Next.js Pages Router via src/pages/_app.tsx, returns pagesDir: "src/pages"', async () => {
-    const io = makeIO({ dependencies: { next: "^14.0.0" } }, [`${root}/src/pages/_app.tsx`]);
+    const io = makeIO({ dependencies: { next: '^14.0.0' } }, [`${root}/src/pages/_app.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("nextjs-pages-router");
-    expect(result.pagesDir).toBe("src/pages");
+    expect(result.framework).toBe('nextjs-pages-router');
+    expect(result.pagesDir).toBe('src/pages');
   });
 
-  it("detects Next.js App Router by default when no filesystem signal", async () => {
-    const io = makeIO({ dependencies: { next: "^14.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("nextjs-app-router");
+  it('detects Next.js App Router by default when no filesystem signal', async () => {
+    const io = makeIO({ dependencies: { next: '^14.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('nextjs-app-router');
   });
 
   it('detects Remix via "@remix-run/react" dep, returns routesDir: "app/routes"', async () => {
-    const io = makeIO({ dependencies: { "@remix-run/react": "^2.0.0" } });
+    const io = makeIO({ dependencies: { '@remix-run/react': '^2.0.0' } });
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("remix");
-    expect(result.routesDir).toBe("app/routes");
+    expect(result.framework).toBe('remix');
+    expect(result.routesDir).toBe('app/routes');
   });
 
   it('detects Vite SPA (file-based) via app/routes/, returns routesDir: "app/routes"', async () => {
-    const io = makeIO({ dependencies: { vite: "^5.0.0" } }, [`${root}/app/routes/home.tsx`]);
+    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/app/routes/home.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("vite-spa-file-based");
-    expect(result.routesDir).toBe("app/routes");
+    expect(result.framework).toBe('vite-spa-file-based');
+    expect(result.routesDir).toBe('app/routes');
   });
 
   it('detects Vite SPA (file-based) via src/routes/, returns routesDir: "src/routes"', async () => {
-    const io = makeIO({ dependencies: { vite: "^5.0.0" } }, [`${root}/src/routes/home.tsx`]);
+    const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/src/routes/home.tsx`]);
     const result = await detectFramework(root, io);
-    expect(result.framework).toBe("vite-spa-file-based");
-    expect(result.routesDir).toBe("src/routes");
+    expect(result.framework).toBe('vite-spa-file-based');
+    expect(result.routesDir).toBe('src/routes');
   });
 
   it('detects Vite SPA (JSX router) via "vite" dep, no routes dir', async () => {
-    const io = makeIO({ dependencies: { vite: "^5.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("vite-spa-jsx-router");
+    const io = makeIO({ dependencies: { vite: '^5.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
   });
 
   it('detects CRA via "react-scripts" dep → webpack', async () => {
-    const io = makeIO({ dependencies: { "react-scripts": "^5.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("webpack");
+    const io = makeIO({ dependencies: { 'react-scripts': '^5.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('webpack');
   });
 
   it('detects plain webpack via "webpack" dep', async () => {
-    const io = makeIO({ devDependencies: { webpack: "^5.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("webpack");
+    const io = makeIO({ devDependencies: { webpack: '^5.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('webpack');
   });
 
   it('detects Parcel via "parcel" dep', async () => {
-    const io = makeIO({ devDependencies: { parcel: "^2.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("parcel");
+    const io = makeIO({ devDependencies: { parcel: '^2.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('parcel');
   });
 
-  it("returns unknown when no known deps and no config files", async () => {
-    const io = makeIO({ dependencies: { react: "^18.0.0" } });
-    expect((await detectFramework(root, io)).framework).toBe("unknown");
+  it('returns unknown when no known deps and no config files', async () => {
+    const io = makeIO({ dependencies: { react: '^18.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
   });
 
-  it("returns unknown when package.json is missing", async () => {
+  it('returns unknown when package.json is missing', async () => {
     const io: FileIO = {
       async readFile() {
-        throw new Error("ENOENT");
+        throw new Error('ENOENT');
       },
       async writeFile() {},
       async access() {
-        throw new Error("ENOENT");
+        throw new Error('ENOENT');
       },
     };
-    expect((await detectFramework(root, io)).framework).toBe("unknown");
+    expect((await detectFramework(root, io)).framework).toBe('unknown');
   });
 });
 ```
@@ -238,18 +238,18 @@ Expected: `Cannot find module '../framework-routing'`
  * Assumptions: detection rules are checked in order; first match wins
  */
 
-import { join } from "node:path";
-import type { FileIO } from "../ast/file-io";
+import { join } from 'node:path';
+import type { FileIO } from '../ast/file-io';
 
 export type FrameworkType =
-  | "nextjs-app-router"
-  | "nextjs-pages-router"
-  | "remix"
-  | "vite-spa-file-based"
-  | "vite-spa-jsx-router"
-  | "parcel"
-  | "webpack"
-  | "unknown";
+  | 'nextjs-app-router'
+  | 'nextjs-pages-router'
+  | 'remix'
+  | 'vite-spa-file-based'
+  | 'vite-spa-jsx-router'
+  | 'parcel'
+  | 'webpack'
+  | 'unknown';
 
 /** Rich detection result that includes the actual dirs found on disk. */
 export interface DetectionResult {
@@ -280,46 +280,46 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
   // 1. Read package.json once — primary signal for all frameworks
   let deps: Record<string, string> = {};
   try {
-    const pkg = JSON.parse(await io.readFile(join(projectRoot, "package.json"))) as PackageJson;
+    const pkg = JSON.parse(await io.readFile(join(projectRoot, 'package.json'))) as PackageJson;
     deps = { ...pkg.dependencies, ...pkg.devDependencies };
   } catch {
     /* package.json missing — fall through to unknown */
   }
 
   // 2. Next.js — sub-classify via filesystem, preserve actual dir for path generation
-  if (deps["next"]) {
-    if (await exists(io, join(projectRoot, "app/layout.tsx"))) return { framework: "nextjs-app-router", appDir: "app" };
-    if (await exists(io, join(projectRoot, "src/app/layout.tsx")))
-      return { framework: "nextjs-app-router", appDir: "src/app" };
-    if (await exists(io, join(projectRoot, "pages/_app.tsx")))
-      return { framework: "nextjs-pages-router", pagesDir: "pages" };
-    if (await exists(io, join(projectRoot, "src/pages/_app.tsx")))
-      return { framework: "nextjs-pages-router", pagesDir: "src/pages" };
-    return { framework: "nextjs-app-router", appDir: "app" }; // modern Next.js default
+  if (deps['next']) {
+    if (await exists(io, join(projectRoot, 'app/layout.tsx'))) return { framework: 'nextjs-app-router', appDir: 'app' };
+    if (await exists(io, join(projectRoot, 'src/app/layout.tsx')))
+      return { framework: 'nextjs-app-router', appDir: 'src/app' };
+    if (await exists(io, join(projectRoot, 'pages/_app.tsx')))
+      return { framework: 'nextjs-pages-router', pagesDir: 'pages' };
+    if (await exists(io, join(projectRoot, 'src/pages/_app.tsx')))
+      return { framework: 'nextjs-pages-router', pagesDir: 'src/pages' };
+    return { framework: 'nextjs-app-router', appDir: 'app' }; // modern Next.js default
   }
 
   // 3. Remix — prefer app/routes/, fallback to src/routes/
-  if (deps["@remix-run/react"] || deps["@remix-run/node"]) {
-    const routesDir = (await exists(io, join(projectRoot, "src/routes"))) ? "src/routes" : "app/routes";
-    return { framework: "remix", routesDir };
+  if (deps['@remix-run/react'] || deps['@remix-run/node']) {
+    const routesDir = (await exists(io, join(projectRoot, 'src/routes'))) ? 'src/routes' : 'app/routes';
+    return { framework: 'remix', routesDir };
   }
 
   // 4. Vite — sub-classify via filesystem, preserve actual routes dir
-  if (deps["vite"]) {
-    if (await exists(io, join(projectRoot, "app/routes")))
-      return { framework: "vite-spa-file-based", routesDir: "app/routes" };
-    if (await exists(io, join(projectRoot, "src/routes")))
-      return { framework: "vite-spa-file-based", routesDir: "src/routes" };
-    return { framework: "vite-spa-jsx-router" };
+  if (deps['vite']) {
+    if (await exists(io, join(projectRoot, 'app/routes')))
+      return { framework: 'vite-spa-file-based', routesDir: 'app/routes' };
+    if (await exists(io, join(projectRoot, 'src/routes')))
+      return { framework: 'vite-spa-file-based', routesDir: 'src/routes' };
+    return { framework: 'vite-spa-jsx-router' };
   }
 
   // 5. CRA (react-scripts) and plain Webpack — both get webpack treatment
-  if (deps["react-scripts"] || deps["webpack"]) return { framework: "webpack" };
+  if (deps['react-scripts'] || deps['webpack']) return { framework: 'webpack' };
 
   // 6. Parcel
-  if (deps["parcel"]) return { framework: "parcel" };
+  if (deps['parcel']) return { framework: 'parcel' };
 
-  return { framework: "unknown" };
+  return { framework: 'unknown' };
 }
 ```
 
@@ -353,75 +353,75 @@ Route files import `CanvasPreview` (default import) from `__canvas_preview__`. T
 Add to `__tests__/framework-routing.test.ts`:
 
 ```ts
-import { getRouteFilePaths, generateRouteFileContent, generateBlankLayoutContent } from "../framework-routing";
+import { getRouteFilePaths, generateRouteFileContent, generateBlankLayoutContent } from '../framework-routing';
 
-describe("getRouteFilePaths", () => {
+describe('getRouteFilePaths', () => {
   it('returns app/test-preview/* for nextjs-app-router with appDir: "app"', () => {
-    const paths = getRouteFilePaths({ framework: "nextjs-app-router", appDir: "app" }, "/project");
-    expect(paths.routeFile).toBe("/project/app/test-preview/page.tsx");
-    expect(paths.layoutFile).toBe("/project/app/test-preview/layout.tsx");
+    const paths = getRouteFilePaths({ framework: 'nextjs-app-router', appDir: 'app' }, '/project');
+    expect(paths.routeFile).toBe('/project/app/test-preview/page.tsx');
+    expect(paths.layoutFile).toBe('/project/app/test-preview/layout.tsx');
   });
 
   it('returns src/app/test-preview/* for nextjs-app-router with appDir: "src/app"', () => {
-    const paths = getRouteFilePaths({ framework: "nextjs-app-router", appDir: "src/app" }, "/project");
-    expect(paths.routeFile).toBe("/project/src/app/test-preview/page.tsx");
-    expect(paths.layoutFile).toBe("/project/src/app/test-preview/layout.tsx");
+    const paths = getRouteFilePaths({ framework: 'nextjs-app-router', appDir: 'src/app' }, '/project');
+    expect(paths.routeFile).toBe('/project/src/app/test-preview/page.tsx');
+    expect(paths.layoutFile).toBe('/project/src/app/test-preview/layout.tsx');
   });
 
   it('returns pages/test-preview.tsx for nextjs-pages-router with pagesDir: "pages"', () => {
-    const paths = getRouteFilePaths({ framework: "nextjs-pages-router", pagesDir: "pages" }, "/project");
-    expect(paths.routeFile).toBe("/project/pages/test-preview.tsx");
+    const paths = getRouteFilePaths({ framework: 'nextjs-pages-router', pagesDir: 'pages' }, '/project');
+    expect(paths.routeFile).toBe('/project/pages/test-preview.tsx');
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns src/pages/test-preview.tsx for nextjs-pages-router with pagesDir: "src/pages"', () => {
-    const paths = getRouteFilePaths({ framework: "nextjs-pages-router", pagesDir: "src/pages" }, "/project");
-    expect(paths.routeFile).toBe("/project/src/pages/test-preview.tsx");
+    const paths = getRouteFilePaths({ framework: 'nextjs-pages-router', pagesDir: 'src/pages' }, '/project');
+    expect(paths.routeFile).toBe('/project/src/pages/test-preview.tsx');
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns app/routes/test-preview.tsx for remix with routesDir: "app/routes"', () => {
-    const paths = getRouteFilePaths({ framework: "remix", routesDir: "app/routes" }, "/project");
-    expect(paths.routeFile).toBe("/project/app/routes/test-preview.tsx");
+    const paths = getRouteFilePaths({ framework: 'remix', routesDir: 'app/routes' }, '/project');
+    expect(paths.routeFile).toBe('/project/app/routes/test-preview.tsx');
     expect(paths.layoutFile).toBeUndefined();
   });
 
   it('returns src/routes/test-preview.tsx for remix with routesDir: "src/routes"', () => {
-    const paths = getRouteFilePaths({ framework: "remix", routesDir: "src/routes" }, "/project");
-    expect(paths.routeFile).toBe("/project/src/routes/test-preview.tsx");
+    const paths = getRouteFilePaths({ framework: 'remix', routesDir: 'src/routes' }, '/project');
+    expect(paths.routeFile).toBe('/project/src/routes/test-preview.tsx');
   });
 });
 
-describe("generateRouteFileContent", () => {
-  it("nextjs-app-router route uses useSearchParams + Suspense", () => {
-    const content = generateRouteFileContent("nextjs-app-router", "../../src/__canvas_preview__");
+describe('generateRouteFileContent', () => {
+  it('nextjs-app-router route uses useSearchParams + Suspense', () => {
+    const content = generateRouteFileContent('nextjs-app-router', '../../src/__canvas_preview__');
     expect(content).toContain("'use client'");
-    expect(content).toContain("useSearchParams");
-    expect(content).toContain("Suspense");
-    expect(content).toContain("@hyperide-managed");
-    expect(content).toContain("CanvasPreview");
+    expect(content).toContain('useSearchParams');
+    expect(content).toContain('Suspense');
+    expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('CanvasPreview');
   });
 
-  it("nextjs-pages-router route renders CanvasPreview directly", () => {
-    const content = generateRouteFileContent("nextjs-pages-router", "../src/__canvas_preview__");
-    expect(content).toContain("CanvasPreview");
-    expect(content).toContain("@hyperide-managed");
-    expect(content).not.toContain("useSearchParams");
+  it('nextjs-pages-router route renders CanvasPreview directly', () => {
+    const content = generateRouteFileContent('nextjs-pages-router', '../src/__canvas_preview__');
+    expect(content).toContain('CanvasPreview');
+    expect(content).toContain('@hyperide-managed');
+    expect(content).not.toContain('useSearchParams');
   });
 
-  it("remix route renders CanvasPreview", () => {
-    const content = generateRouteFileContent("remix", "../../src/__canvas_preview__");
-    expect(content).toContain("CanvasPreview");
-    expect(content).toContain("@hyperide-managed");
+  it('remix route renders CanvasPreview', () => {
+    const content = generateRouteFileContent('remix', '../../src/__canvas_preview__');
+    expect(content).toContain('CanvasPreview');
+    expect(content).toContain('@hyperide-managed');
   });
 });
 
-describe("generateBlankLayoutContent", () => {
-  it("returns a passthrough layout", () => {
+describe('generateBlankLayoutContent', () => {
+  it('returns a passthrough layout', () => {
     const content = generateBlankLayoutContent();
-    expect(content).toContain("@hyperide-managed");
-    expect(content).toContain("children");
-    expect(content).toContain("{children}");
+    expect(content).toContain('@hyperide-managed');
+    expect(content).toContain('children');
+    expect(content).toContain('{children}');
   });
 });
 ```
@@ -449,28 +449,28 @@ export interface RouteFilePaths {
  * Callers must pass the full DetectionResult so paths match the dirs that actually exist on disk.
  */
 export function getRouteFilePaths(result: DetectionResult, projectRoot: string): RouteFilePaths {
-  const { framework, appDir = "app", pagesDir = "pages", routesDir } = result;
+  const { framework, appDir = 'app', pagesDir = 'pages', routesDir } = result;
   switch (framework) {
-    case "nextjs-app-router":
+    case 'nextjs-app-router':
       return {
-        routeFile: join(projectRoot, appDir, "test-preview/page.tsx"),
-        layoutFile: join(projectRoot, appDir, "test-preview/layout.tsx"),
+        routeFile: join(projectRoot, appDir, 'test-preview/page.tsx'),
+        layoutFile: join(projectRoot, appDir, 'test-preview/layout.tsx'),
       };
-    case "nextjs-pages-router":
-      return { routeFile: join(projectRoot, pagesDir, "test-preview.tsx") };
-    case "remix":
-    case "vite-spa-file-based":
-      return { routeFile: join(projectRoot, routesDir ?? "app/routes", "test-preview.tsx") };
+    case 'nextjs-pages-router':
+      return { routeFile: join(projectRoot, pagesDir, 'test-preview.tsx') };
+    case 'remix':
+    case 'vite-spa-file-based':
+      return { routeFile: join(projectRoot, routesDir ?? 'app/routes', 'test-preview.tsx') };
     default:
       // webpack, parcel, vite-spa-jsx-router, unknown — no file-based route
-      return { routeFile: "" };
+      return { routeFile: '' };
   }
 }
 
 export function generateRouteFileContent(framework: FrameworkType, previewImportPath: string): string {
-  const managed = "// @hyperide-managed";
+  const managed = '// @hyperide-managed';
 
-  if (framework === "nextjs-app-router") {
+  if (framework === 'nextjs-app-router') {
     return `${managed}
 'use client';
 import { Suspense } from 'react';
@@ -487,7 +487,7 @@ export default function TestPreviewPage() {
 `;
   }
 
-  if (framework === "nextjs-pages-router") {
+  if (framework === 'nextjs-pages-router') {
     return `${managed}
 import CanvasPreview from '${previewImportPath}';
 
@@ -555,77 +555,77 @@ import {
   getRouteFilePaths,
   generateRouteFileContent,
   generateBlankLayoutContent,
-} from "../framework-routing";
+} from '../framework-routing';
 
-describe("PreviewFileManager.ensurePreviewFiles", () => {
-  it("generates route file for Next.js App Router", async () => {
+describe('PreviewFileManager.ensurePreviewFiles', () => {
+  it('generates route file for Next.js App Router', async () => {
     const io = new InMemoryFileIO();
     // Simulate Next.js App Router project
-    io.files.set("/project/app/layout.tsx", "export default function RootLayout...");
+    io.files.set('/project/app/layout.tsx', 'export default function RootLayout...');
     // Pre-populate source component
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     // Pre-populate __canvas_preview__.tsx (as if ensureComponent ran first)
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
-    const routeFile = io.files.get("/project/app/test-preview/page.tsx");
+    const routeFile = io.files.get('/project/app/test-preview/page.tsx');
     expect(routeFile).toBeDefined();
-    expect(routeFile).toContain("@hyperide-managed");
-    expect(routeFile).toContain("CanvasPreview");
-    expect(routeFile).toContain("useSearchParams");
+    expect(routeFile).toContain('@hyperide-managed');
+    expect(routeFile).toContain('CanvasPreview');
+    expect(routeFile).toContain('useSearchParams');
 
-    const layoutFile = io.files.get("/project/app/test-preview/layout.tsx");
+    const layoutFile = io.files.get('/project/app/test-preview/layout.tsx');
     expect(layoutFile).toBeDefined();
-    expect(layoutFile).toContain("@hyperide-managed");
+    expect(layoutFile).toContain('@hyperide-managed');
   });
 
-  it("skips route file if it already exists with @hyperide-managed", async () => {
+  it('skips route file if it already exists with @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    const existingContent = "// @hyperide-managed\nexport default function TestPreviewPage() {}";
-    io.files.set("/project/app/test-preview/page.tsx", existingContent);
+    io.files.set('/project/app/layout.tsx', '...');
+    const existingContent = '// @hyperide-managed\nexport default function TestPreviewPage() {}';
+    io.files.set('/project/app/test-preview/page.tsx', existingContent);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
     // File should remain unchanged
-    expect(io.files.get("/project/app/test-preview/page.tsx")).toBe(existingContent);
+    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(existingContent);
   });
 
-  it("does not overwrite user file without @hyperide-managed", async () => {
+  it('does not overwrite user file without @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    const userContent = "export default function UserPage() { return <div>My page</div>; }";
-    io.files.set("/project/app/test-preview/page.tsx", userContent);
+    io.files.set('/project/app/layout.tsx', '...');
+    const userContent = 'export default function UserPage() { return <div>My page</div>; }';
+    io.files.set('/project/app/test-preview/page.tsx', userContent);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.ensurePreviewFiles();
 
     // User file must not be overwritten
-    expect(io.files.get("/project/app/test-preview/page.tsx")).toBe(userContent);
+    expect(io.files.get('/project/app/test-preview/page.tsx')).toBe(userContent);
   });
 
-  it("does nothing for unknown framework", async () => {
+  it('does nothing for unknown framework', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     // Should not throw
     await expect(manager.ensurePreviewFiles()).resolves.toBeUndefined();
   });
@@ -645,14 +645,14 @@ Expected: `manager.ensurePreviewFiles is not a function`
 Add these imports at the top of `preview-file-manager.ts`:
 
 ```ts
-import { relative, dirname as pathDirname } from "node:path";
+import { relative, dirname as pathDirname } from 'node:path';
 import {
   detectFramework,
   generateBlankLayoutContent,
   generateRouteFileContent,
   getRouteFilePaths,
   type FrameworkType,
-} from "./framework-routing";
+} from './framework-routing';
 ```
 
 Add method to the `PreviewFileManager` class:
@@ -737,41 +737,41 @@ Per spec P1-3: when `.hyperide/preview.tsx` is created after App Shell mode is a
 - [ ] **Step 3c.1: Write failing test**
 
 ```ts
-describe("PreviewFileManager._cleanupPreviewFiles (public for testing)", () => {
-  it("removes @hyperide-managed route files", async () => {
+describe('PreviewFileManager._cleanupPreviewFiles (public for testing)', () => {
+  it('removes @hyperide-managed route files', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
+    io.files.set('/project/app/layout.tsx', '...');
     io.files.set(
-      "/project/app/test-preview/page.tsx",
-      "// @hyperide-managed\nexport default function TestPreviewPage() {}",
+      '/project/app/test-preview/page.tsx',
+      '// @hyperide-managed\nexport default function TestPreviewPage() {}',
     );
     io.files.set(
-      "/project/app/test-preview/layout.tsx",
-      "// @hyperide-managed\nexport default function PreviewLayout...",
+      '/project/app/test-preview/layout.tsx',
+      '// @hyperide-managed\nexport default function PreviewLayout...',
     );
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
-      "// @hyperide-managed\nexport default function CanvasPreview() {}",
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.cleanupPreviewFiles();
 
-    expect(io.files.has("/project/app/test-preview/page.tsx")).toBe(false);
-    expect(io.files.has("/project/app/test-preview/layout.tsx")).toBe(false);
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(false);
+    expect(io.files.has('/project/app/test-preview/layout.tsx')).toBe(false);
     // __canvas_preview__.tsx should NOT be removed — only route files
-    expect(io.files.has("/project/src/__canvas_preview__.tsx")).toBe(true);
+    expect(io.files.has('/project/src/__canvas_preview__.tsx')).toBe(true);
   });
 
-  it("does not remove user files without @hyperide-managed", async () => {
+  it('does not remove user files without @hyperide-managed', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/app/layout.tsx", "...");
-    io.files.set("/project/app/test-preview/page.tsx", "export default function MyPage() {}");
+    io.files.set('/project/app/layout.tsx', '...');
+    io.files.set('/project/app/test-preview/page.tsx', 'export default function MyPage() {}');
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     await manager.cleanupPreviewFiles();
 
-    expect(io.files.has("/project/app/test-preview/page.tsx")).toBe(true);
+    expect(io.files.has('/project/app/test-preview/page.tsx')).toBe(true);
   });
 });
 ```
@@ -883,55 +883,55 @@ Parses the file with `recast` (preserves formatting), finds the last `ImportDecl
 - [ ] **Step 3d.1: Write failing tests**
 
 ```ts
-describe("PreviewFileManager._hasImport", () => {
-  it("returns true for exact relative import", async () => {
+describe('PreviewFileManager._hasImport', () => {
+  it('returns true for exact relative import', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 
-  it("returns true when import has extension but search does not", async () => {
+  it('returns true when import has extension but search does not', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button.tsx';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 
-  it("returns false for missing import", async () => {
+  it('returns false for missing import', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Card")).toBe(false);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Card')).toBe(false);
   });
 
-  it("handles absolute vs relative normalization (same resolved path)", async () => {
+  it('handles absolute vs relative normalization (same resolved path)', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "import Button from '../src/components/Button';\nexport default function CanvasPreview() {}",
     );
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
     // Different relative path, same resolved file
-    expect(await manager._hasImport("/project/src/__canvas_preview__.tsx", "./components/Button")).toBe(true);
+    expect(await manager._hasImport('/project/src/__canvas_preview__.tsx', './components/Button')).toBe(true);
   });
 });
 
-describe("ensureComponent — fast path", () => {
-  it("does not write file when import already present", async () => {
+describe('ensureComponent — fast path', () => {
+  it('does not write file when import already present', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
     let writeCount = 0;
@@ -941,42 +941,42 @@ describe("ensureComponent — fast path", () => {
       return origWrite(p, c);
     };
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Button.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']);
 
     expect(writeCount).toBe(0); // fast path — no write
   });
 
-  it("AST-inserts missing import without full regeneration", async () => {
+  it('AST-inserts missing import without full regeneration', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
     // File has Button but not Card
     io.files.set(
-      "/project/src/__canvas_preview__.tsx",
+      '/project/src/__canvas_preview__.tsx',
       "// @hyperide-managed\nimport Button from './components/Button';\nexport default function CanvasPreview() {}",
     );
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Card.tsx"]);
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Card.tsx']);
 
-    const content = io.files.get("/project/src/__canvas_preview__.tsx")!;
-    expect(content).toContain("Button"); // existing import preserved
-    expect(content).toContain("Card"); // new import added
+    const content = io.files.get('/project/src/__canvas_preview__.tsx')!;
+    expect(content).toContain('Button'); // existing import preserved
+    expect(content).toContain('Card'); // new import added
   });
 
-  it("init: generates with ALL project components when file is missing", async () => {
+  it('init: generates with ALL project components when file is missing', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/components/Button.tsx", BUTTON_SOURCE);
-    io.files.set("/project/src/components/Card.tsx", CARD_SOURCE);
-    io.files.set("/project/package.json", JSON.stringify({ name: "test" }));
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    io.files.set('/project/package.json', JSON.stringify({ name: 'test' }));
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.ensureComponent(["src/components/Button.tsx"]); // only Button requested
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.ensureComponent(['src/components/Button.tsx']); // only Button requested
 
-    const content = io.files.get("/project/src/__canvas_preview__.tsx")!;
-    expect(content).toContain("Button");
-    expect(content).toContain("Card"); // all components included on init
+    const content = io.files.get('/project/src/__canvas_preview__.tsx')!;
+    expect(content).toContain('Button');
+    expect(content).toContain('Card'); // all components included on init
   });
 });
 ```
@@ -1032,18 +1032,18 @@ Delete lines 88–94 in `_handleHttp()`:
 
 ```ts
 // DELETE these lines:
-let proxyPath = clientReq.url || "/";
-if (proxyPath.startsWith("/test-preview")) {
-  proxyPath = `/${proxyPath.slice("/test-preview".length)}`;
-  if (proxyPath.startsWith("//")) proxyPath = proxyPath.slice(1);
-  if (proxyPath === "") proxyPath = "/";
+let proxyPath = clientReq.url || '/';
+if (proxyPath.startsWith('/test-preview')) {
+  proxyPath = `/${proxyPath.slice('/test-preview'.length)}`;
+  if (proxyPath.startsWith('//')) proxyPath = proxyPath.slice(1);
+  if (proxyPath === '') proxyPath = '/';
 }
 ```
 
 Replace with:
 
 ```ts
-const proxyPath = clientReq.url || "/";
+const proxyPath = clientReq.url || '/';
 ```
 
 Also update the JSDoc comment on `_handleHttp()` — remove the "Rewrites /test-preview" sentence, since we no longer do that.
@@ -1056,7 +1056,7 @@ In `_handleHttp()`, after getting the proxy response, if status is 404 and path 
 // In the proxyReq callback, before processing response:
 if (
   (proxyRes.statusCode === 404 || proxyRes.statusCode === 503) &&
-  proxyPath.startsWith("/test-preview") &&
+  proxyPath.startsWith('/test-preview') &&
   retryCount < 5
 ) {
   proxyRes.resume(); // drain response
@@ -1315,12 +1315,12 @@ User said: "не страшно что какое-то время проект �
  * Assumptions: coalescing guard on _updateMode prevents concurrent transitions
  */
 
-import { join } from "node:path";
-import type { FileIO } from "../ast/file-io";
-import { detectFramework } from "./framework-routing";
-import { PreviewFileManager } from "./preview-file-manager";
+import { join } from 'node:path';
+import type { FileIO } from '../ast/file-io';
+import { detectFramework } from './framework-routing';
+import { PreviewFileManager } from './preview-file-manager';
 
-export type PreviewMode = "app-shell" | "isolated";
+export type PreviewMode = 'app-shell' | 'isolated';
 
 /**
  * Watches projectRoot for .hyperide/preview.tsx create/delete.
@@ -1347,8 +1347,8 @@ export interface PreviewModeManagerOptions {
 /** Default: node:fs.watch with debounce. Suitable for local extension use. */
 export function fsWatchFactory(projectRoot: string, onChange: () => void): () => void {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require("node:fs") as typeof import("node:fs");
-  const hyperideDir = join(projectRoot, ".hyperide");
+  const fs = require('node:fs') as typeof import('node:fs');
+  const hyperideDir = join(projectRoot, '.hyperide');
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const debounced = (): void => {
@@ -1357,19 +1357,19 @@ export function fsWatchFactory(projectRoot: string, onChange: () => void): () =>
   };
 
   const rootWatcher = fs.watch(projectRoot, (_event: string, filename: string | null) => {
-    if (filename === ".hyperide") debounced();
+    if (filename === '.hyperide') debounced();
   });
-  rootWatcher.on("error", (err: Error) => {
-    console.error("[ModeManager] Root watcher error:", err.message);
+  rootWatcher.on('error', (err: Error) => {
+    console.error('[ModeManager] Root watcher error:', err.message);
   });
 
   let hyperideWatcher: ReturnType<typeof fs.watch> | null = null;
   try {
     hyperideWatcher = fs.watch(hyperideDir, (_event: string, filename: string | null) => {
-      if (filename === "preview.tsx" || filename === "preview.ts") debounced();
+      if (filename === 'preview.tsx' || filename === 'preview.ts') debounced();
     });
-    hyperideWatcher.on("error", (err: Error) => {
-      console.error("[ModeManager] .hyperide watcher error:", err.message);
+    hyperideWatcher.on('error', (err: Error) => {
+      console.error('[ModeManager] .hyperide watcher error:', err.message);
     });
   } catch {
     // .hyperide doesn't exist yet — root watcher covers its creation
@@ -1383,7 +1383,7 @@ export function fsWatchFactory(projectRoot: string, onChange: () => void): () =>
 }
 
 export class PreviewModeManager {
-  private _mode: PreviewMode = "app-shell";
+  private _mode: PreviewMode = 'app-shell';
   private _fileManager: PreviewFileManager;
   private readonly _projectRoot: string;
   private readonly _io: FileIO;
@@ -1419,35 +1419,35 @@ export class PreviewModeManager {
   }
 
   /** Called when a component is selected in the explorer. */
-  async onComponentSelected(absComponentPath: string): Promise<"ok" | "unsupported" | "needs-patch"> {
-    if (this._mode === "isolated") {
+  async onComponentSelected(absComponentPath: string): Promise<'ok' | 'unsupported' | 'needs-patch'> {
+    if (this._mode === 'isolated') {
       // Isolated mode: __canvas_preview__.tsx updated, no routing changes
-      return "ok";
+      return 'ok';
     }
 
     const detection = await detectFramework(this._projectRoot, this._io);
     const { framework } = detection;
 
     switch (framework) {
-      case "nextjs-app-router":
-      case "nextjs-pages-router":
-      case "remix":
-      case "vite-spa-file-based":
+      case 'nextjs-app-router':
+      case 'nextjs-pages-router':
+      case 'remix':
+      case 'vite-spa-file-based':
         return this._fileManager.ensurePreviewFiles();
-      case "vite-spa-jsx-router": {
+      case 'vite-spa-jsx-router': {
         const routerFile = await this.detectRouterFile();
         if (routerFile) await this._fileManager.patchRouterConfig(routerFile);
-        return "ok";
+        return 'ok';
       }
-      case "webpack": {
+      case 'webpack': {
         const entryFile = await this._detectEntryFile();
         if (entryFile) await this._fileManager.patchEntryFile(entryFile);
-        return "ok";
+        return 'ok';
       }
-      case "unknown":
-        return "unsupported";
+      case 'unknown':
+        return 'unsupported';
       default:
-        return "ok"; // parcel — file-based, handled by ensurePreviewFiles
+        return 'ok'; // parcel — file-based, handled by ensurePreviewFiles
     }
   }
 
@@ -1456,7 +1456,7 @@ export class PreviewModeManager {
     await this._fileManager.cleanupPreviewFiles();
     await this._revertJsxPatchIfPresent();
     await this._revertEntryPatchIfPresent();
-    this._mode = "isolated";
+    this._mode = 'isolated';
     this._onModeChange?.(true);
   }
 
@@ -1464,18 +1464,18 @@ export class PreviewModeManager {
   async onWrapperDeleted(): Promise<void> {
     await this._fileManager.ensurePreviewFiles();
     await this._applyPatchIfNeeded();
-    this._mode = "app-shell";
+    this._mode = 'app-shell';
     this._onModeChange?.(false);
   }
 
   /** Override in tests to inject a known router file path. */
   async detectRouterFile(): Promise<string | null> {
-    const candidates = ["src/App.tsx", "src/app.tsx", "App.tsx"];
+    const candidates = ['src/App.tsx', 'src/app.tsx', 'App.tsx'];
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
         const content = await this._io.readFile(abs);
-        if (content.includes("<Routes>") || content.includes("<BrowserRouter>")) return abs;
+        if (content.includes('<Routes>') || content.includes('<BrowserRouter>')) return abs;
       } catch {
         /* not found */
       }
@@ -1484,7 +1484,7 @@ export class PreviewModeManager {
   }
 
   private async _detectEntryFile(): Promise<string | null> {
-    const candidates = ["src/index.tsx", "src/index.ts", "src/main.tsx", "src/main.ts"];
+    const candidates = ['src/index.tsx', 'src/index.ts', 'src/main.tsx', 'src/main.ts'];
     for (const rel of candidates) {
       const abs = join(this._projectRoot, rel);
       try {
@@ -1505,13 +1505,13 @@ export class PreviewModeManager {
     }
     this._modeUpdateInProgress = true;
     try {
-      const wrapperPath = join(this._projectRoot, ".hyperide/preview.tsx");
+      const wrapperPath = join(this._projectRoot, '.hyperide/preview.tsx');
       try {
         await this._io.access(wrapperPath);
-        const wasIsolated = this._mode === "isolated";
+        const wasIsolated = this._mode === 'isolated';
         if (!wasIsolated) await this.onWrapperCreated();
       } catch {
-        const wasAppShell = this._mode === "app-shell";
+        const wasAppShell = this._mode === 'app-shell';
         if (!wasAppShell) await this.onWrapperDeleted();
       }
     } finally {
@@ -1528,7 +1528,7 @@ export class PreviewModeManager {
     if (!routerFile) return;
     try {
       const content = await this._io.readFile(routerFile);
-      if (content.includes("@hyperide-managed")) await this._fileManager.revertRouterPatch(routerFile);
+      if (content.includes('@hyperide-managed')) await this._fileManager.revertRouterPatch(routerFile);
     } catch {
       /* not accessible */
     }
@@ -1539,7 +1539,7 @@ export class PreviewModeManager {
     if (!entryFile) return;
     try {
       const content = await this._io.readFile(entryFile);
-      if (content.includes("@hyperide-managed")) await this._fileManager.revertEntryFile(entryFile);
+      if (content.includes('@hyperide-managed')) await this._fileManager.revertEntryFile(entryFile);
     } catch {
       /* not accessible */
     }
@@ -1547,10 +1547,10 @@ export class PreviewModeManager {
 
   private async _applyPatchIfNeeded(): Promise<void> {
     const detection = await detectFramework(this._projectRoot, this._io);
-    if (detection.framework === "vite-spa-jsx-router") {
+    if (detection.framework === 'vite-spa-jsx-router') {
       const routerFile = await this.detectRouterFile();
       if (routerFile) await this._fileManager.patchRouterConfig(routerFile);
-    } else if (detection.framework === "webpack") {
+    } else if (detection.framework === 'webpack') {
       const entryFile = await this._detectEntryFile();
       if (entryFile) await this._fileManager.patchEntryFile(entryFile);
     }
@@ -1650,7 +1650,7 @@ current file, parses fresh AST, filters managed nodes, and writes back.
 - [ ] **Step 5.1: Write failing tests**
 
 ```ts
-describe("PreviewFileManager.patchRouterConfig", () => {
+describe('PreviewFileManager.patchRouterConfig', () => {
   const ROUTER_SOURCE = `
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Home } from './pages/Home';
@@ -1666,44 +1666,44 @@ export default function App() {
 }
 `;
 
-  it("injects /test-preview route into <Routes>", async () => {
+  it('injects /test-preview route into <Routes>', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx")!;
-    expect(patched).toContain("test-preview");
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("CanvasPreview");
+    const patched = io.files.get('/project/src/App.tsx')!;
+    expect(patched).toContain('test-preview');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('CanvasPreview');
   });
 
-  it("revertRouterPatch removes @hyperide-managed lines and preserves original routes", async () => {
+  it('revertRouterPatch removes @hyperide-managed lines and preserves original routes', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
-    await manager.revertRouterPatch("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.revertRouterPatch('/project/src/App.tsx');
 
-    const reverted = io.files.get("/project/src/App.tsx")!;
-    expect(reverted).not.toContain("@hyperide-managed");
-    expect(reverted).not.toContain("test-preview");
+    const reverted = io.files.get('/project/src/App.tsx')!;
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('test-preview');
     // Original home route must survive the revert
     expect(reverted).toContain('path="/"');
-    expect(reverted).toContain("Home");
+    expect(reverted).toContain('Home');
   });
 
-  it("is idempotent — does not double-inject", async () => {
+  it('is idempotent — does not double-inject', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/App.tsx", ROUTER_SOURCE);
+    io.files.set('/project/src/App.tsx', ROUTER_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchRouterConfig("/project/src/App.tsx");
-    await manager.patchRouterConfig("/project/src/App.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchRouterConfig('/project/src/App.tsx');
+    await manager.patchRouterConfig('/project/src/App.tsx');
 
-    const patched = io.files.get("/project/src/App.tsx")!;
+    const patched = io.files.get('/project/src/App.tsx')!;
     // Should only have one test-preview route
     const count = (patched.match(/test-preview/g) || []).length;
     expect(count).toBe(1);
@@ -1722,10 +1722,10 @@ bun run test lib/preview-generator/__tests__/preview-file-manager.test.ts
 Add imports:
 
 ```ts
-import * as recast from "recast";
-import { builders as b } from "ast-types";
+import * as recast from 'recast';
+import { builders as b } from 'ast-types';
 // Use @babel/parser directly — recast/parsers/babel-ts uses require() which fails in ESM
-import { parse as babelParse } from "@babel/parser";
+import { parse as babelParse } from '@babel/parser';
 ```
 
 Add methods to `PreviewFileManager`:
@@ -1879,7 +1879,7 @@ In `_handleHttp()`, alongside the existing `INJECTED_SCRIPTS`, add an inline det
 
 ```ts
 // After existing INJECTED_SCRIPTS injection for /test-preview requests:
-if (proxyPath.startsWith("/test-preview")) {
+if (proxyPath.startsWith('/test-preview')) {
   const chromeDetectScript = `<script>
     (function() {
       window.addEventListener('load', function() {
@@ -1890,7 +1890,7 @@ if (proxyPath.startsWith("/test-preview")) {
       }, { once: true });
     })();
   </script>`;
-  html = html.replace("</head>", chromeDetectScript + "</head>");
+  html = html.replace('</head>', chromeDetectScript + '</head>');
 }
 ```
 
@@ -1904,8 +1904,8 @@ In `usePreviewBridge.ts`, inside the iframe→extension handler (the first `useE
 the existing `hypercanvas:*` checks):
 
 ```ts
-if (msg.type === "chrome-detected") {
-  canvas.sendEvent({ type: "chrome-detected" } as unknown as PlatformMessage);
+if (msg.type === 'chrome-detected') {
+  canvas.sendEvent({ type: 'chrome-detected' } as unknown as PlatformMessage);
   return;
 }
 ```
@@ -1969,16 +1969,16 @@ Isolated mode activates when `.hyperide/preview.tsx` exists. PreviewProxy swaps 
 - [ ] **Step 7a.1: Write failing test**
 
 ```ts
-describe("generateStandaloneEntry", () => {
-  it("generates standalone entry with createRoot and PreviewWrapper", () => {
-    const content = generateStandaloneEntry([makeEntry("src/Button.tsx", "Button")], "../.hyperide/preview");
-    expect(content).toContain("createRoot");
-    expect(content).toContain("PreviewWrapper");
-    expect(content).toContain("@hyperide-managed");
+describe('generateStandaloneEntry', () => {
+  it('generates standalone entry with createRoot and PreviewWrapper', () => {
+    const content = generateStandaloneEntry([makeEntry('src/Button.tsx', 'Button')], '../.hyperide/preview');
+    expect(content).toContain('createRoot');
+    expect(content).toContain('PreviewWrapper');
+    expect(content).toContain('@hyperide-managed');
     // Component registry must be present (from base generatePreviewContent)
-    expect(content).toContain("componentRegistry");
+    expect(content).toContain('componentRegistry');
     expect(content).toContain("document.getElementById('root')");
-    expect(content).toContain("<CanvasPreview />");
+    expect(content).toContain('<CanvasPreview />');
   });
 });
 ```
@@ -2064,16 +2064,16 @@ SaaS proxy sits behind a path prefix — browser would resolve `/src/main.tsx` t
 In the HTML buffering section, after injecting `INJECTED_SCRIPTS`, add Tier 1 script swap when in isolated mode:
 
 ```ts
-if (this._isIsolatedMode && proxyPath.startsWith("/test-preview")) {
+if (this._isIsolatedMode && proxyPath.startsWith('/test-preview')) {
   // Read vite base from config (cached)
-  const base = this._viteBase ?? "";
+  const base = this._viteBase ?? '';
   // Find user entry script (filter out Vite internals and CDN scripts)
   const scriptRegex = /<script\s+type="module"\s+src="([^"]+)"\s*>/g;
   let match: RegExpExecArray | null;
   let userScript: string | null = null;
   while ((match = scriptRegex.exec(html)) !== null) {
     const src = match[1];
-    if (!src.startsWith("/@") && !src.startsWith("https://") && !src.startsWith(base + "@")) {
+    if (!src.startsWith('/@') && !src.startsWith('https://') && !src.startsWith(base + '@')) {
       userScript = src;
       break;
     }
@@ -2084,7 +2084,7 @@ if (this._isIsolatedMode && proxyPath.startsWith("/test-preview")) {
     html = html.replace(`src="${userScript}"`, `src="/src/__canvas_preview__.tsx"`);
     console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → /src/__canvas_preview__.tsx`);
   } else {
-    console.warn("[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell");
+    console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
   }
 }
 ```
@@ -2146,7 +2146,7 @@ AST-based via recast — formatting-safe, no text diff involved.
 - [ ] **Step 8.1: Write failing tests**
 
 ```ts
-describe("PreviewFileManager.patchEntryFile", () => {
+describe('PreviewFileManager.patchEntryFile', () => {
   const ENTRY_SOURCE = `
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -2160,44 +2160,44 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 `;
 
-  it("wraps createRoot call in if/else block", async () => {
+  it('wraps createRoot call in if/else block', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
 
-    const patched = io.files.get("/project/src/index.tsx")!;
-    expect(patched).toContain("__preview");
-    expect(patched).toContain("@hyperide-managed");
-    expect(patched).toContain("__canvas_preview__");
+    const patched = io.files.get('/project/src/index.tsx')!;
+    expect(patched).toContain('__preview');
+    expect(patched).toContain('@hyperide-managed');
+    expect(patched).toContain('__canvas_preview__');
   });
 
-  it("revertEntryFile restores original bootstrap code", async () => {
+  it('revertEntryFile restores original bootstrap code', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    await manager.revertEntryFile("/project/src/index.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.revertEntryFile('/project/src/index.tsx');
 
-    const reverted = io.files.get("/project/src/index.tsx")!;
-    expect(reverted).not.toContain("@hyperide-managed");
-    expect(reverted).not.toContain("__preview");
+    const reverted = io.files.get('/project/src/index.tsx')!;
+    expect(reverted).not.toContain('@hyperide-managed');
+    expect(reverted).not.toContain('__preview');
     // Original bootstrap code must be present after revert
-    expect(reverted).toContain("ReactDOM.createRoot");
+    expect(reverted).toContain('ReactDOM.createRoot');
     expect(reverted).toContain("document.getElementById('root')");
   });
 
-  it("is idempotent", async () => {
+  it('is idempotent', async () => {
     const io = new InMemoryFileIO();
-    io.files.set("/project/src/index.tsx", ENTRY_SOURCE);
+    io.files.set('/project/src/index.tsx', ENTRY_SOURCE);
 
-    const manager = new PreviewFileManager({ projectRoot: "/project", io });
-    await manager.patchEntryFile("/project/src/index.tsx");
-    await manager.patchEntryFile("/project/src/index.tsx");
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    await manager.patchEntryFile('/project/src/index.tsx');
+    await manager.patchEntryFile('/project/src/index.tsx');
 
-    const patched = io.files.get("/project/src/index.tsx")!;
+    const patched = io.files.get('/project/src/index.tsx')!;
     const count = (patched.match(/__preview/g) || []).length;
     expect(count).toBe(1);
   });
@@ -2375,7 +2375,7 @@ if (element) {
 New:
 
 ```tsx
-const element = document.getElementById("root");
+const element = document.getElementById('root');
 if (element) {
   createRoot(element).render(
     <StrictMode>
@@ -2413,16 +2413,16 @@ Mode state lives in an in-memory `Map` — no DB column needed (derived from fil
 
 ```ts
 // server/proxy/chokidar-watch-factory.ts
-import { join } from "node:path";
-import { watch } from "chokidar";
-import type { WatcherFactory } from "../../lib/preview-generator/preview-mode-manager";
+import { join } from 'node:path';
+import { watch } from 'chokidar';
+import type { WatcherFactory } from '../../lib/preview-generator/preview-mode-manager';
 
 export const chokidarWatchFactory: WatcherFactory = (projectRoot, onChange) => {
-  const watcher = watch(join(projectRoot, ".hyperide/preview.tsx"), {
+  const watcher = watch(join(projectRoot, '.hyperide/preview.tsx'), {
     ignoreInitial: false,
     awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
-  watcher.on("add", onChange).on("unlink", onChange);
+  watcher.on('add', onChange).on('unlink', onChange);
   return () => {
     watcher.close();
   };
@@ -2465,9 +2465,9 @@ Call `startModeManager` when container starts, `stopModeManager` when it stops.
 **9.4.3: Add script swap in `handleHtmlResponse`**
 
 ```ts
-if (contentType.includes("text/html") && proxyPath.startsWith("/test-preview")) {
+if (contentType.includes('text/html') && proxyPath.startsWith('/test-preview')) {
   if (isProjectIsolated(projectId)) {
-    html = swapEntryScript(html, "/src/__canvas_preview_standalone__.tsx");
+    html = swapEntryScript(html, '/src/__canvas_preview_standalone__.tsx');
   }
 }
 ```
@@ -2547,42 +2547,42 @@ Covers all verification scenarios automatically. Uses existing test projects and
 
 ```ts
 // e2e/tests/project-dependent/preview-routing.spec.ts
-import { test, expect } from "../../fixtures/project.fixture";
-import { setupPreviewWithDevServer } from "../../helpers/setup-preview";
+import { test, expect } from '../../fixtures/project.fixture';
+import { setupPreviewWithDevServer } from '../../helpers/setup-preview';
 
-test.describe("Preview Routing — App Shell mode", { tag: ["@preview", "@routing"] }, () => {
-  test("Vite JSX router: select component → preview loads at /test-preview (no 404)", async ({ window }) => {
+test.describe('Preview Routing — App Shell mode', { tag: ['@preview', '@routing'] }, () => {
+  test('Vite JSX router: select component → preview loads at /test-preview (no 404)', async ({ window }) => {
     // project: react-vite-tw4-twitter
-    const { canvas } = await setupPreviewWithDevServer(window, "react-vite-tw4-twitter");
+    const { canvas } = await setupPreviewWithDevServer(window, 'react-vite-tw4-twitter');
     await expect.poll(() => canvas.isPreviewLoaded(), { timeout: 30_000 }).toBe(true);
     // Assert no 404 error overlay
     const appFrame = await canvas.getAppFrame();
-    await expect(appFrame.locator("text=404")).not.toBeVisible();
+    await expect(appFrame.locator('text=404')).not.toBeVisible();
   });
 
-  test("Next.js App Router: component renders with app wrap (CSS applied)", async ({ window }) => {
-    const { canvas } = await setupPreviewWithDevServer(window, "nextjs-sample");
+  test('Next.js App Router: component renders with app wrap (CSS applied)', async ({ window }) => {
+    const { canvas } = await setupPreviewWithDevServer(window, 'nextjs-sample');
     await expect.poll(() => canvas.isPreviewLoaded(), { timeout: 60_000 }).toBe(true);
     const appFrame = await canvas.getAppFrame();
-    const el = appFrame.locator("[data-uniq-id]").first();
+    const el = appFrame.locator('[data-uniq-id]').first();
     const box = await el.boundingBox();
     expect(box!.width).toBeGreaterThan(0);
   });
 
-  test("Webpack: App Shell + entry file patched — preview renders", async ({ window }) => {
-    const { canvas } = await setupPreviewWithDevServer(window, "webpack-react-tw3-kanban");
+  test('Webpack: App Shell + entry file patched — preview renders', async ({ window }) => {
+    const { canvas } = await setupPreviewWithDevServer(window, 'webpack-react-tw3-kanban');
     await expect.poll(() => canvas.isPreviewLoaded(), { timeout: 60_000 }).toBe(true);
     expect(await canvas.getElementCount()).toBeGreaterThan(0);
   });
 });
 
-test.describe("Preview Routing — Isolated mode", { tag: ["@preview", "@routing"] }, () => {
-  test("create .hyperide/preview.tsx → switches to Isolated mode (Tier 1 script swap)", async ({ window, fs }) => {
-    const { canvas } = await setupPreviewWithDevServer(window, "react-vite-tw4-twitter");
+test.describe('Preview Routing — Isolated mode', { tag: ['@preview', '@routing'] }, () => {
+  test('create .hyperide/preview.tsx → switches to Isolated mode (Tier 1 script swap)', async ({ window, fs }) => {
+    const { canvas } = await setupPreviewWithDevServer(window, 'react-vite-tw4-twitter');
     await expect.poll(() => canvas.isPreviewLoaded(), { timeout: 30_000 }).toBe(true);
 
     // Create .hyperide/preview.tsx
-    await fs.writeFile(".hyperide/preview.tsx", MINIMAL_WRAPPER);
+    await fs.writeFile('.hyperide/preview.tsx', MINIMAL_WRAPPER);
     // Wait for ModeManager FSWatch to pick up change
     await window.waitForTimeout(500);
 
@@ -2590,14 +2590,14 @@ test.describe("Preview Routing — Isolated mode", { tag: ["@preview", "@routing
     await expect.poll(() => canvas.isPreviewLoaded(), { timeout: 30_000 }).toBe(true);
     // Verify entry script was swapped (check network request for __canvas_preview_standalone__)
     const requests = await canvas.getCapturedRequests();
-    expect(requests.some((r) => r.includes("__canvas_preview_standalone__"))).toBe(true);
+    expect(requests.some((r) => r.includes('__canvas_preview_standalone__'))).toBe(true);
   });
 
-  test("delete .hyperide/preview.tsx → reverts to App Shell mode", async ({ window, fs }) => {
-    await setupPreviewWithDevServer(window, "react-vite-tw4-twitter");
-    await fs.writeFile(".hyperide/preview.tsx", MINIMAL_WRAPPER);
+  test('delete .hyperide/preview.tsx → reverts to App Shell mode', async ({ window, fs }) => {
+    await setupPreviewWithDevServer(window, 'react-vite-tw4-twitter');
+    await fs.writeFile('.hyperide/preview.tsx', MINIMAL_WRAPPER);
     await window.waitForTimeout(500);
-    await fs.deleteFile(".hyperide/preview.tsx");
+    await fs.deleteFile('.hyperide/preview.tsx');
     await window.waitForTimeout(500);
     // Assert: back to App Shell (route file at /test-preview)
     await expect
@@ -2605,7 +2605,7 @@ test.describe("Preview Routing — Isolated mode", { tag: ["@preview", "@routing
         async () => {
           const appFrame = await canvas.getAppFrame();
           return appFrame
-            .locator("text=404")
+            .locator('text=404')
             .isVisible()
             .then((v) => !v);
         },
@@ -2615,16 +2615,16 @@ test.describe("Preview Routing — Isolated mode", { tag: ["@preview", "@routing
   });
 });
 
-test.describe("Preview Routing — Git check", { tag: ["@preview", "@routing"] }, () => {
-  test("project without git → error screen shown instead of iframe", async ({ window, fs }) => {
+test.describe('Preview Routing — Git check', { tag: ['@preview', '@routing'] }, () => {
+  test('project without git → error screen shown instead of iframe', async ({ window, fs }) => {
     // Remove .git from project (restore via git checkout after test)
-    await fs.deleteDir(".git");
-    await setupPreviewWithDevServer(window, "react-vite-tw4-twitter");
+    await fs.deleteDir('.git');
+    await setupPreviewWithDevServer(window, 'react-vite-tw4-twitter');
 
     const webview = new WebviewFrame(window);
     const previewContent = await webview.getPreviewPanelContent();
     // Assert: error screen visible, no iframe
-    await expect(previewContent.locator("text=Git repository required")).toBeVisible({ timeout: 10_000 });
+    await expect(previewContent.locator('text=Git repository required')).toBeVisible({ timeout: 10_000 });
     await expect(previewContent.locator('button:has-text("Initialize Git")')).toBeVisible();
     await expect(previewContent.locator(`iframe[data-testid="${TID.preview.iframe}"]`)).not.toBeVisible();
   });
@@ -2681,12 +2681,12 @@ Without git, the user has no diff visibility and no safety net. This is a hard r
 
 ```ts
 // lib/preview-generator/git-check.ts
-import { join } from "node:path";
-import type { FileIO } from "../ast/file-io";
+import { join } from 'node:path';
+import type { FileIO } from '../ast/file-io';
 
 export async function isGitRepo(projectRoot: string, io: FileIO): Promise<boolean> {
   try {
-    await io.access(join(projectRoot, ".git"));
+    await io.access(join(projectRoot, '.git'));
     return true;
   } catch {
     return false;

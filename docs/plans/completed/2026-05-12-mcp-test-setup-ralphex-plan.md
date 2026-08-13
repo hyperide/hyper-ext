@@ -15,7 +15,7 @@
 Test calls:
 
 ```typescript
-await callMcpTool(port!, "hyper_get_element_styles", { elementId: selectedIds[0] });
+await callMcpTool(port!, 'hyper_get_element_styles', { elementId: selectedIds[0] });
 ```
 
 Tool schema requires `{ className: string }` OR `{ styleProps: Record<...> }` (union type).
@@ -26,7 +26,7 @@ Error from server: `"Unrecognized key: 'elementId'"`.
 Test calls:
 
 ```typescript
-await callMcpTool(port!, "hyper_suggest_color_token", { hex: "#3b82f6" });
+await callMcpTool(port!, 'hyper_suggest_color_token', { hex: '#3b82f6' });
 ```
 
 Tool schema requires `{ color: string }`.

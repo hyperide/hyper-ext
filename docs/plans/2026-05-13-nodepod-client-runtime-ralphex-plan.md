@@ -123,7 +123,7 @@ Expected: package appears in `package.json` dependencies and `bun.lock` updated.
 - [ ] In `server/index.ts`, add the import at the top:
 
 ```typescript
-import { DEFAULT_SW_PATH, serveSW } from "@scelar/nodepod/server";
+import { DEFAULT_SW_PATH, serveSW } from '@scelar/nodepod/server';
 ```
 
 Then add the route. It doesn't require auth — place it before the `authMiddleware` block,
@@ -199,49 +199,49 @@ NodePod reads files from OPFS, not from the server. This module is the single I/
 - [ ] Write a failing test first. Create `test/client-file-store.test.ts`:
 
 ```typescript
-import { expect, test, beforeEach } from "bun:test";
+import { expect, test, beforeEach } from 'bun:test';
 
 // OPFS is browser-only; in Bun we test the pure logic layer using an in-memory Map as backend.
 // Import the internal helpers we'll extract (see implementation below).
-import { makeStore } from "../client/lib/client-file-store/opfs";
+import { makeStore } from '../client/lib/client-file-store/opfs';
 
 let store: ReturnType<typeof makeStore>;
 beforeEach(() => {
   store = makeStore();
 });
 
-test("writeFile and readFiles round-trip", async () => {
-  await store.writeFile("proj1", "src/App.tsx", "export default function App() {}");
-  const files = await store.readFiles("proj1");
-  expect(files["src/App.tsx"]).toBe("export default function App() {}");
+test('writeFile and readFiles round-trip', async () => {
+  await store.writeFile('proj1', 'src/App.tsx', 'export default function App() {}');
+  const files = await store.readFiles('proj1');
+  expect(files['src/App.tsx']).toBe('export default function App() {}');
 });
 
-test("readFiles returns empty object when project not seeded", async () => {
-  const files = await store.readFiles("unknown-proj");
+test('readFiles returns empty object when project not seeded', async () => {
+  const files = await store.readFiles('unknown-proj');
   expect(files).toEqual({});
 });
 
-test("seedFiles bulk-writes and readFiles returns all", async () => {
-  await store.seedFiles("proj2", {
-    "package.json": '{"name":"test"}',
-    "src/main.tsx": 'import React from "react"',
+test('seedFiles bulk-writes and readFiles returns all', async () => {
+  await store.seedFiles('proj2', {
+    'package.json': '{"name":"test"}',
+    'src/main.tsx': 'import React from "react"',
   });
-  const files = await store.readFiles("proj2");
+  const files = await store.readFiles('proj2');
   expect(Object.keys(files)).toHaveLength(2);
-  expect(files["package.json"]).toBe('{"name":"test"}');
+  expect(files['package.json']).toBe('{"name":"test"}');
 });
 
-test("writeFile overwrites existing file", async () => {
-  await store.seedFiles("proj3", { "a.ts": "v1" });
-  await store.writeFile("proj3", "a.ts", "v2");
-  const files = await store.readFiles("proj3");
-  expect(files["a.ts"]).toBe("v2");
+test('writeFile overwrites existing file', async () => {
+  await store.seedFiles('proj3', { 'a.ts': 'v1' });
+  await store.writeFile('proj3', 'a.ts', 'v2');
+  const files = await store.readFiles('proj3');
+  expect(files['a.ts']).toBe('v2');
 });
 
-test("clearProject removes all files for a project", async () => {
-  await store.seedFiles("proj4", { "a.ts": "x", "b.ts": "y" });
-  await store.clearProject("proj4");
-  const files = await store.readFiles("proj4");
+test('clearProject removes all files for a project', async () => {
+  await store.seedFiles('proj4', { 'a.ts': 'x', 'b.ts': 'y' });
+  await store.clearProject('proj4');
+  const files = await store.readFiles('proj4');
   expect(files).toEqual({});
 });
 ```
@@ -297,15 +297,15 @@ export function makeStore(): FileStore {
 function makeOpfsStore(): FileStore {
   async function projectDir(projectId: string, create = false) {
     const root = await navigator.storage.getDirectory();
-    const nodepod = await root.getDirectoryHandle("hyper-nodepod", { create: true });
+    const nodepod = await root.getDirectoryHandle('hyper-nodepod', { create: true });
     return nodepod.getDirectoryHandle(projectId, { create });
   }
 
-  async function readDir(dir: FileSystemDirectoryHandle, prefix = ""): Promise<Record<string, string>> {
+  async function readDir(dir: FileSystemDirectoryHandle, prefix = ''): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
     for await (const [name, handle] of dir) {
       const path = prefix ? `${prefix}/${name}` : name;
-      if (handle.kind === "directory") {
+      if (handle.kind === 'directory') {
         Object.assign(out, await readDir(handle as FileSystemDirectoryHandle, path));
       } else {
         const file = await (handle as FileSystemFileHandle).getFile();
@@ -326,7 +326,7 @@ function makeOpfsStore(): FileStore {
     },
     async writeFile(projectId, path, content) {
       const dir = await projectDir(projectId, true);
-      const parts = path.split("/");
+      const parts = path.split('/');
       let cur = dir;
       for (const part of parts.slice(0, -1)) {
         cur = await cur.getDirectoryHandle(part, { create: true });
@@ -342,7 +342,7 @@ function makeOpfsStore(): FileStore {
     async clearProject(projectId) {
       try {
         const root = await navigator.storage.getDirectory();
-        const nodepod = await root.getDirectoryHandle("hyper-nodepod", { create: false });
+        const nodepod = await root.getDirectoryHandle('hyper-nodepod', { create: false });
         await nodepod.removeEntry(projectId, { recursive: true });
       } catch {}
     },
@@ -350,13 +350,13 @@ function makeOpfsStore(): FileStore {
 }
 
 export const opfsStore: FileStore =
-  typeof navigator !== "undefined" && "storage" in navigator ? makeOpfsStore() : makeStore();
+  typeof navigator !== 'undefined' && 'storage' in navigator ? makeOpfsStore() : makeStore();
 ```
 
 - [ ] Create `client/lib/client-file-store/index.ts`:
 
 ```typescript
-import { opfsStore } from "./opfs";
+import { opfsStore } from './opfs';
 
 export async function readFiles(projectId: string): Promise<Record<string, string>> {
   return opfsStore.readFiles(projectId);
@@ -413,7 +413,7 @@ export interface User {
   email: string;
   name: string | null;
   avatarUrl: string | null;
-  theme: "light" | "dark" | "system" | null;
+  theme: 'light' | 'dark' | 'system' | null;
   emailVerifiedAt: string | null;
   clientSideRuntime: boolean; // ← add this
 }
@@ -422,10 +422,10 @@ export interface User {
 - [ ] Create `client/lib/project-runtime/types.ts`:
 
 ```typescript
-import type { ContainerPhase, ProjectStatus } from "@shared/types/statuses";
+import type { ContainerPhase, ProjectStatus } from '@shared/types/statuses';
 
-export type RuntimeStatus = "idle" | "starting" | "running" | "stopping" | "error";
-export type RuntimeMode = "docker" | "nodepod";
+export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
+export type RuntimeMode = 'docker' | 'nodepod';
 
 // Matches ProjectStartOverlay's expected shape; uses the same types as useProjectSSE
 export interface PollStatus {
@@ -463,9 +463,9 @@ export interface ProjectRuntime {
 - [ ] Create `client/lib/project-runtime/isViteProject.ts`:
 
 ```typescript
-import type { ProjectData } from "@/pages/Editor/components/hooks/useProjectControl";
+import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
 
-const VITE_FRAMEWORKS = new Set(["Vite SPA (file-based routing)", "Vite SPA (JSX router)"]);
+const VITE_FRAMEWORKS = new Set(['Vite SPA (file-based routing)', 'Vite SPA (JSX router)']);
 
 export function isViteProject(project: ProjectData): boolean {
   return project.framework != null && VITE_FRAMEWORKS.has(project.framework);
@@ -497,23 +497,23 @@ All Docker-specific logic (SSE, polling, container status) stays here.
 - [ ] Create `client/lib/project-runtime/useDockerRuntime.ts`:
 
 ```typescript
-import { useEffect, useRef, useState } from "react";
-import { type ProjectData, useProjectControl } from "@/pages/Editor/components/hooks/useProjectControl";
-import { useProjectSSE } from "@/pages/Editor/components/hooks/useProjectSSE";
-import { INERT_POLL_STATUS, type PollStatus, type ProjectRuntime, type RuntimeStatus } from "./types";
+import { useEffect, useRef, useState } from 'react';
+import { type ProjectData, useProjectControl } from '@/pages/Editor/components/hooks/useProjectControl';
+import { useProjectSSE } from '@/pages/Editor/components/hooks/useProjectSSE';
+import { INERT_POLL_STATUS, type PollStatus, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseDockerRuntimeOptions {
   enabled: boolean;
   accessToken: string | null;
   setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
-  setProjectRole: (role: "owner" | "editor" | "viewer") => void;
+  setProjectRole: (role: 'owner' | 'editor' | 'viewer') => void;
   reloadComposition?: () => Promise<void>;
 }
 
 const INERT: ProjectRuntime = {
-  mode: "docker",
-  status: "idle",
+  mode: 'docker',
+  status: 'idle',
   hasBeenRunning: false,
   previewUrl: null,
   logs: [],
@@ -548,12 +548,12 @@ export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRun
   // Track hasBeenRunning — stays true once running, resets on stop/error
   useEffect(() => {
     if (!enabled) return;
-    if (project?.status === "running") {
+    if (project?.status === 'running') {
       if (!hasBeenRunningRef.current) {
         hasBeenRunningRef.current = true;
         setHasBeenRunning(true);
       }
-    } else if (project?.status === "stopped" || project?.status === "error") {
+    } else if (project?.status === 'stopped' || project?.status === 'error') {
       if (hasBeenRunningRef.current) {
         hasBeenRunningRef.current = false;
         setHasBeenRunning(false);
@@ -565,24 +565,24 @@ export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRun
 
   const status: RuntimeStatus = (() => {
     switch (project?.status) {
-      case "running":
-        return "running";
-      case "building":
-        return "starting";
-      case "error":
-        return "error";
+      case 'running':
+        return 'running';
+      case 'building':
+        return 'starting';
+      case 'error':
+        return 'error';
       default:
-        return "idle";
+        return 'idle';
     }
   })();
 
   return {
-    mode: "docker",
+    mode: 'docker',
     status,
     hasBeenRunning,
     previewUrl: null,
     logs: [],
-    error: project?.status === "error" ? "Container error" : null,
+    error: project?.status === 'error' ? 'Container error' : null,
     // Cast is safe: useProjectSSE's PollStatus uses ProjectStatus/ContainerPhase, same as our PollStatus
     pollStatus: (pollStatus as PollStatus) ?? INERT_POLL_STATUS,
     start: handleStartProject,
@@ -617,11 +617,11 @@ then seeds OPFS — subsequent starts skip the server round-trip entirely.
 - [ ] Create `client/lib/project-runtime/useNodePodRuntime.ts`:
 
 ```typescript
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProjectData } from "@/pages/Editor/components/hooks/useProjectControl";
-import { authFetch } from "@/utils/authFetch";
-import * as clientFileStore from "@/lib/client-file-store";
-import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from "./types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
+import { authFetch } from '@/utils/authFetch';
+import * as clientFileStore from '@/lib/client-file-store';
+import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseNodePodRuntimeOptions {
   enabled: boolean;
@@ -636,13 +636,13 @@ interface PodInstance {
   teardown(): Promise<void>;
 }
 interface SpawnHandle {
-  on(event: "output" | "error", handler: (t: string) => void): void;
+  on(event: 'output' | 'error', handler: (t: string) => void): void;
   completion: Promise<{ exitCode: number }>;
 }
 
 const INERT: ProjectRuntime = {
-  mode: "nodepod",
-  status: "idle",
+  mode: 'nodepod',
+  status: 'idle',
   hasBeenRunning: false,
   previewUrl: null,
   logs: [],
@@ -659,7 +659,7 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
   const podRef = useRef<PodInstance | null>(null);
   // Track current run to ignore stale async results from previous start() invocations
   const runIdRef = useRef(0);
-  const [status, setStatus] = useState<RuntimeStatus>("idle");
+  const [status, setStatus] = useState<RuntimeStatus>('idle');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [hasBeenRunning, setHasBeenRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -677,7 +677,7 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
     const runId = ++runIdRef.current;
     const isStale = () => runId !== runIdRef.current;
 
-    setStatus("starting");
+    setStatus('starting');
     setLogs([]);
     setError(null);
     setPreviewUrl(null);
@@ -685,10 +685,10 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
 
     try {
       // Dynamic import — tree-shaken away for Docker users
-      const { Nodepod } = await import("@scelar/nodepod");
+      const { Nodepod } = await import('@scelar/nodepod');
       if (isStale()) return;
 
-      appendLog("[nodepod] booting...");
+      appendLog('[nodepod] booting...');
       // Non-null assertion: resolveServer is always called before the Promise resolves
       let resolveServer!: (url: string) => void;
       const serverReady = new Promise<string>((r) => {
@@ -697,10 +697,10 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
 
       const pod = await Nodepod.boot({
         watermark: false,
-        workdir: "/app",
+        workdir: '/app',
         onServerReady: (_port: number, url: string) => {
           if (!isStale()) {
-            appendLog("[nodepod] server ready: " + url);
+            appendLog('[nodepod] server ready: ' + url);
             resolveServer(url);
           }
         },
@@ -710,13 +710,13 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
         return;
       }
       podRef.current = pod;
-      appendLog("[nodepod] runtime booted");
+      appendLog('[nodepod] runtime booted');
 
       // Read files from OPFS; bootstrap from server on first boot for this project
-      appendLog("[files] loading from OPFS...");
+      appendLog('[files] loading from OPFS...');
       let files = await clientFileStore.readFiles(project.id);
       if (Object.keys(files).length === 0) {
-        appendLog("[files] OPFS empty — bootstrapping from server...");
+        appendLog('[files] OPFS empty — bootstrapping from server...');
         const res = await authFetch(`/api/projects/${project.id}/files`);
         if (!res.ok) throw new Error(`Failed to bootstrap files: ${res.status}`);
         const { files: serverFiles } = (await res.json()) as { files: Record<string, string> };
@@ -733,12 +733,12 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       // Vite 8 has an HMR WebSocket bug in NodePod v1.8.2
       const patchedFiles: Record<string, string> = {};
       for (const [path, content] of Object.entries(files)) {
-        if (path === "package.json") {
+        if (path === 'package.json') {
           try {
             const pkg = JSON.parse(content) as Record<string, unknown>;
-            for (const field of ["dependencies", "devDependencies"] as const) {
+            for (const field of ['dependencies', 'devDependencies'] as const) {
               const deps = pkg[field] as Record<string, string> | undefined;
-              if (deps?.vite) deps.vite = "7.3.1";
+              if (deps?.vite) deps.vite = '7.3.1';
             }
             patchedFiles[path] = JSON.stringify(pkg, null, 2);
           } catch {
@@ -753,46 +753,46 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       appendLog(`[files] ${Object.keys(files).length} files mounted`);
 
       // npm install
-      appendLog("[npm] install started...");
-      const install = await pod.spawn("npm", ["install"], { cwd: "/app" });
-      install.on("output", (t) => appendLog("[npm] " + t));
-      install.on("error", (t) => appendLog("[npm:err] " + t));
+      appendLog('[npm] install started...');
+      const install = await pod.spawn('npm', ['install'], { cwd: '/app' });
+      install.on('output', (t) => appendLog('[npm] ' + t));
+      install.on('error', (t) => appendLog('[npm:err] ' + t));
       const { exitCode: installCode } = await install.completion;
       if (isStale()) return;
-      if (installCode !== 0) throw new Error("npm install failed with exit " + installCode);
-      appendLog("[npm] install done");
+      if (installCode !== 0) throw new Error('npm install failed with exit ' + installCode);
+      appendLog('[npm] install done');
 
       // vite dev
-      appendLog("[vite] starting dev server...");
-      const dev = await pod.spawn("npm", ["run", "dev"], { cwd: "/app" });
-      dev.on("output", (t) => appendLog("[vite] " + t));
-      dev.on("error", (t) => appendLog("[vite:err] " + t));
+      appendLog('[vite] starting dev server...');
+      const dev = await pod.spawn('npm', ['run', 'dev'], { cwd: '/app' });
+      dev.on('output', (t) => appendLog('[vite] ' + t));
+      dev.on('error', (t) => appendLog('[vite:err] ' + t));
       dev.completion.then(({ exitCode }) => {
         if (isStale()) return;
-        appendLog("[vite] process exited: " + exitCode);
+        appendLog('[vite] process exited: ' + exitCode);
         podRef.current = null; // allow restart
         setStatus((s) => {
-          if (s === "running") setError("Vite dev server exited unexpectedly");
-          return s === "running" ? "error" : s;
+          if (s === 'running') setError('Vite dev server exited unexpectedly');
+          return s === 'running' ? 'error' : s;
         });
       });
 
       const url = await Promise.race([
         serverReady,
-        dev.completion.then(({ exitCode }) => Promise.reject(new Error("vite exited early: " + exitCode))),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout 120s waiting for vite")), 120_000)),
+        dev.completion.then(({ exitCode }) => Promise.reject(new Error('vite exited early: ' + exitCode))),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout 120s waiting for vite')), 120_000)),
       ]);
       if (isStale()) return;
 
       setPreviewUrl(url);
-      setStatus("running");
+      setStatus('running');
       setHasBeenRunning(true);
     } catch (err) {
       if (isStale()) return;
       const msg = err instanceof Error ? err.message : String(err);
-      appendLog("[error] " + msg);
+      appendLog('[error] ' + msg);
       setError(msg);
-      setStatus("error");
+      setStatus('error');
       if (podRef.current) {
         podRef.current.teardown().catch(() => {});
         podRef.current = null; // allow restart after error
@@ -802,13 +802,13 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
 
   const stop = useCallback(async () => {
     runIdRef.current++; // invalidate any in-flight start()
-    setStatus("stopping");
+    setStatus('stopping');
     if (podRef.current) {
       await podRef.current.teardown().catch(() => {});
       podRef.current = null;
     }
     setPreviewUrl(null);
-    setStatus("idle");
+    setStatus('idle');
     setHasBeenRunning(false);
     setError(null);
   }, []);
@@ -832,7 +832,7 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
   if (!enabled) return INERT;
 
   return {
-    mode: "nodepod",
+    mode: 'nodepod',
     status,
     hasBeenRunning,
     previewUrl,
@@ -869,18 +869,18 @@ Factory hook — selects implementation based on user flag + framework.
 - [ ] Create `client/lib/project-runtime/useProjectRuntime.ts`:
 
 ```typescript
-import type { ProjectData } from "@/pages/Editor/components/hooks/useProjectControl";
-import type { User } from "@/stores/authStore";
-import { useDockerRuntime } from "./useDockerRuntime";
-import { useNodePodRuntime } from "./useNodePodRuntime";
-import { isViteProject } from "./isViteProject";
-import type { ProjectRuntime, RuntimeMode } from "./types";
+import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
+import type { User } from '@/stores/authStore';
+import { useDockerRuntime } from './useDockerRuntime';
+import { useNodePodRuntime } from './useNodePodRuntime';
+import { isViteProject } from './isViteProject';
+import type { ProjectRuntime, RuntimeMode } from './types';
 
 interface UseProjectRuntimeOptions {
   accessToken: string | null;
   setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
-  setProjectRole: (role: "owner" | "editor" | "viewer") => void;
+  setProjectRole: (role: 'owner' | 'editor' | 'viewer') => void;
   reloadComposition?: () => Promise<void>;
 }
 
@@ -890,10 +890,10 @@ export function useProjectRuntime(
   opts: UseProjectRuntimeOptions,
 ): ProjectRuntime {
   const isNodePodEligible = !!(user?.clientSideRuntime && project && isViteProject(project));
-  const mode: RuntimeMode = isNodePodEligible ? "nodepod" : "docker";
+  const mode: RuntimeMode = isNodePodEligible ? 'nodepod' : 'docker';
 
   const docker = useDockerRuntime(project, {
-    enabled: mode === "docker",
+    enabled: mode === 'docker',
     accessToken: opts.accessToken,
     setActiveProject: opts.setActiveProject,
     setIsStarting: opts.setIsStarting,
@@ -901,18 +901,18 @@ export function useProjectRuntime(
     reloadComposition: opts.reloadComposition,
   });
 
-  const nodepod = useNodePodRuntime(project, { enabled: mode === "nodepod" });
+  const nodepod = useNodePodRuntime(project, { enabled: mode === 'nodepod' });
 
-  return mode === "nodepod" ? nodepod : docker;
+  return mode === 'nodepod' ? nodepod : docker;
 }
 ```
 
 - [ ] Create `client/lib/project-runtime/index.ts` (barrel):
 
 ```typescript
-export { useProjectRuntime } from "./useProjectRuntime";
-export type { ProjectRuntime, RuntimeMode, RuntimeStatus, PollStatus } from "./types";
-export { isViteProject } from "./isViteProject";
+export { useProjectRuntime } from './useProjectRuntime';
+export type { ProjectRuntime, RuntimeMode, RuntimeStatus, PollStatus } from './types';
+export { isViteProject } from './isViteProject';
 ```
 
 - [ ] Codex review, fix findings.
@@ -998,15 +998,15 @@ The `ProjectStartOverlay`, `IframeCanvas`, and log consumers get data from `runt
 - [ ] Add imports at top of `CanvasEditor.tsx`. Replace:
 
 ```typescript
-import { type ProjectData, useProjectControl } from "./components/hooks/useProjectControl";
-import { useProjectSSE } from "./components/hooks/useProjectSSE";
+import { type ProjectData, useProjectControl } from './components/hooks/useProjectControl';
+import { useProjectSSE } from './components/hooks/useProjectSSE';
 ```
 
 with:
 
 ```typescript
-import { type ProjectData } from "./components/hooks/useProjectControl";
-import { useProjectRuntime } from "@/lib/project-runtime";
+import { type ProjectData } from './components/hooks/useProjectControl';
+import { useProjectRuntime } from '@/lib/project-runtime';
 ```
 
 - [ ] Change the `useAuthStore` destructure (line ~303) to also extract `user`:
@@ -1038,13 +1038,13 @@ It stays as-is — `useDockerRuntime` accepts it and forwards to `useProjectSSE`
 - [ ] Update the iframe visibility check (line ~1074). Replace:
 
 ```typescript
-activeProject && (activeProject.status === "running" || wasRunningRef.current);
+activeProject && (activeProject.status === 'running' || wasRunningRef.current);
 ```
 
 with:
 
 ```typescript
-activeProject && (runtime.status === "running" || runtime.hasBeenRunning);
+activeProject && (runtime.status === 'running' || runtime.hasBeenRunning);
 ```
 
 - [ ] Derive `isStarting` from `runtime.status` so the overlay shows loading in NodePod mode too.
@@ -1053,8 +1053,8 @@ activeProject && (runtime.status === "running" || runtime.hasBeenRunning);
 ```typescript
 // Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
 useEffect(() => {
-  if (runtime.mode === "nodepod") {
-    setIsStarting(runtime.status === "starting");
+  if (runtime.mode === 'nodepod') {
+    setIsStarting(runtime.status === 'starting');
   }
 }, [runtime.mode, runtime.status]);
 ```
@@ -1063,7 +1063,7 @@ useEffect(() => {
       branch in the render (if any) and also check `runtime.error`:
 
 ```typescript
-const hasError = activeProject?.status === "error" || runtime.status === "error";
+const hasError = activeProject?.status === 'error' || runtime.status === 'error';
 ```
 
 Update the relevant conditional rendering to use `hasError`.

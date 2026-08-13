@@ -69,7 +69,7 @@ interface ColorPickerContext {
   colorOptions: ColorOption[];
   colorGroups: Record<string, ColorOption[]>;
   contrastPairedHex: string | undefined;
-  contrastRole: "text" | "bg" | undefined;
+  contrastRole: 'text' | 'bg' | undefined;
   engine: CanvasEngine | null;
   componentPath: string | null;
   value: string;

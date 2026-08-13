@@ -86,18 +86,18 @@ This task creates the `NodeTypeDefinition` wrappers.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { gradientMeshNode } from "./gradient-mesh";
-import type { NodeValue } from "../../types";
+import { describe, expect, it } from 'bun:test';
+import { gradientMeshNode } from './gradient-mesh';
+import type { NodeValue } from '../../types';
 
-describe("gradientMeshNode", () => {
-  it("should have correct definition", () => {
-    expect(gradientMeshNode.type).toBe("gradientMesh");
-    expect(gradientMeshNode.category).toBe("generator");
-    expect(gradientMeshNode.outputs[0].type).toBe("mesh");
+describe('gradientMeshNode', () => {
+  it('should have correct definition', () => {
+    expect(gradientMeshNode.type).toBe('gradientMesh');
+    expect(gradientMeshNode.category).toBe('generator');
+    expect(gradientMeshNode.outputs[0].type).toBe('mesh');
   });
 
-  it("should create a mesh with given dimensions", () => {
+  it('should create a mesh with given dimensions', () => {
     const result = gradientMeshNode.execute(
       {},
       {
@@ -110,14 +110,14 @@ describe("gradientMeshNode", () => {
       },
     );
     const meshVal = result.mesh as NodeValue;
-    expect(meshVal.type).toBe("mesh");
+    expect(meshVal.type).toBe('mesh');
     const mesh = meshVal.value as any;
     expect(mesh.rows).toBe(2);
     expect(mesh.cols).toBe(3);
     expect(mesh.vertices.length).toBe(12); // (2+1)*(3+1)
   });
 
-  it("should place vertices at correct grid positions", () => {
+  it('should place vertices at correct grid positions', () => {
     const result = gradientMeshNode.execute(
       {},
       {
@@ -136,7 +136,7 @@ describe("gradientMeshNode", () => {
     expect(mesh.vertices[3].position).toEqual({ x: 110, y: 70 });
   });
 
-  it("should support initial vertex color", () => {
+  it('should support initial vertex color', () => {
     const result = gradientMeshNode.execute(
       {},
       {
@@ -146,11 +146,11 @@ describe("gradientMeshNode", () => {
         height: 100,
         x: 0,
         y: 0,
-        color: "#ff0000",
+        color: '#ff0000',
       },
     );
     const mesh = (result.mesh as NodeValue).value as any;
-    expect(mesh.vertices[0].color).toBe("#ff0000");
+    expect(mesh.vertices[0].color).toBe('#ff0000');
   });
 });
 ```
@@ -167,23 +167,23 @@ describe("gradientMeshNode", () => {
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Gradient Mesh
  */
 
-import { meshFromBounds } from "../../mesh/mesh-from-path";
-import type { NodeTypeDefinition } from "../../types";
+import { meshFromBounds } from '../../mesh/mesh-from-path';
+import type { NodeTypeDefinition } from '../../types';
 
 export const gradientMeshNode: NodeTypeDefinition = {
-  type: "gradientMesh",
-  label: "Gradient Mesh",
-  category: "generator",
+  type: 'gradientMesh',
+  label: 'Gradient Mesh',
+  category: 'generator',
   inputs: [],
-  outputs: [{ name: "mesh", type: "mesh" }],
+  outputs: [{ name: 'mesh', type: 'mesh' }],
   params: [
-    { name: "rows", type: "number", default: 2, min: 1, max: 20 },
-    { name: "cols", type: "number", default: 2, min: 1, max: 20 },
-    { name: "width", type: "number", default: 100, min: 1 },
-    { name: "height", type: "number", default: 100, min: 1 },
-    { name: "x", type: "number", default: 0 },
-    { name: "y", type: "number", default: 0 },
-    { name: "color", type: "color", default: "#ffffff" },
+    { name: 'rows', type: 'number', default: 2, min: 1, max: 20 },
+    { name: 'cols', type: 'number', default: 2, min: 1, max: 20 },
+    { name: 'width', type: 'number', default: 100, min: 1 },
+    { name: 'height', type: 'number', default: 100, min: 1 },
+    { name: 'x', type: 'number', default: 0 },
+    { name: 'y', type: 'number', default: 0 },
+    { name: 'color', type: 'color', default: '#ffffff' },
   ],
   execute(_inputs, params) {
     const mesh = meshFromBounds(
@@ -198,7 +198,7 @@ export const gradientMeshNode: NodeTypeDefinition = {
     );
     const color = params.color as string;
     for (const v of mesh.vertices) v.color = color;
-    return { mesh: { type: "mesh", value: mesh } };
+    return { mesh: { type: 'mesh', value: mesh } };
   },
 };
 ```
@@ -225,13 +225,13 @@ Takes a path input, computes bounds, creates a mesh grid fitted to it.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { meshFromPathNode } from "./mesh-from-path-node";
-import { PathBuilder } from "../../path/builder";
+import { meshFromPathNode } from './mesh-from-path-node';
+import { PathBuilder } from '../../path/builder';
 
-describe("meshFromPathNode", () => {
-  it("should create mesh fitted to path bounds", () => {
+describe('meshFromPathNode', () => {
+  it('should create mesh fitted to path bounds', () => {
     const rect = new PathBuilder().moveTo(10, 20).lineTo(110, 20).lineTo(110, 120).lineTo(10, 120).close().build();
-    const result = meshFromPathNode.execute({ path: { type: "path", value: rect } as NodeValue }, { rows: 2, cols: 2 });
+    const result = meshFromPathNode.execute({ path: { type: 'path', value: rect } as NodeValue }, { rows: 2, cols: 2 });
     const mesh = (result.mesh as NodeValue).value as any;
     expect(mesh.rows).toBe(2);
     expect(mesh.cols).toBe(2);
@@ -240,10 +240,10 @@ describe("meshFromPathNode", () => {
     expect(mesh.vertices[0].position.y).toBeCloseTo(20, 0);
   });
 
-  it("should handle empty path", () => {
+  it('should handle empty path', () => {
     const empty = new PathBuilder().build();
     const result = meshFromPathNode.execute(
-      { path: { type: "path", value: empty } as NodeValue },
+      { path: { type: 'path', value: empty } as NodeValue },
       { rows: 1, cols: 1 },
     );
     const mesh = (result.mesh as NodeValue).value as any;
@@ -263,26 +263,26 @@ describe("meshFromPathNode", () => {
  * Accessed via: MCP tool vector_create_mesh with path reference
  */
 
-import { meshFromBounds } from "../../mesh/mesh-from-path";
-import { computeBounds } from "../../path/bounds";
-import type { NodeTypeDefinition, NodeValue, PathValue } from "../../types";
+import { meshFromBounds } from '../../mesh/mesh-from-path';
+import { computeBounds } from '../../path/bounds';
+import type { NodeTypeDefinition, NodeValue, PathValue } from '../../types';
 
 export const meshFromPathNode: NodeTypeDefinition = {
-  type: "meshFromPath",
-  label: "Mesh from Path",
-  category: "generator",
-  inputs: [{ name: "path", type: "path" }],
-  outputs: [{ name: "mesh", type: "mesh" }],
+  type: 'meshFromPath',
+  label: 'Mesh from Path',
+  category: 'generator',
+  inputs: [{ name: 'path', type: 'path' }],
+  outputs: [{ name: 'mesh', type: 'mesh' }],
   params: [
-    { name: "rows", type: "number", default: 2, min: 1, max: 20 },
-    { name: "cols", type: "number", default: 2, min: 1, max: 20 },
+    { name: 'rows', type: 'number', default: 2, min: 1, max: 20 },
+    { name: 'cols', type: 'number', default: 2, min: 1, max: 20 },
   ],
   execute(inputs, params) {
     const pathVal = inputs.path as NodeValue | undefined;
     const path = pathVal?.value as PathValue | undefined;
     const bounds = path ? computeBounds(path.commands) : { x: 0, y: 0, width: 100, height: 100 };
     const mesh = meshFromBounds(bounds, params.rows as number, params.cols as number);
-    return { mesh: { type: "mesh", value: mesh } };
+    return { mesh: { type: 'mesh', value: mesh } };
   },
 };
 ```
@@ -313,18 +313,18 @@ then displaced by the mesh vertex positions.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { envelopeDistortNode } from "./envelope-distort";
-import { PathBuilder } from "../../path/builder";
-import { meshFromBounds } from "../../mesh/mesh-from-path";
+import { envelopeDistortNode } from './envelope-distort';
+import { PathBuilder } from '../../path/builder';
+import { meshFromBounds } from '../../mesh/mesh-from-path';
 
-describe("envelope distort", () => {
-  it("should deform path using undistorted mesh (identity)", () => {
+describe('envelope distort', () => {
+  it('should deform path using undistorted mesh (identity)', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
     const result = envelopeDistortNode.execute(
       {
-        path: { type: "path", value: rect },
-        mesh: { type: "mesh", value: mesh },
+        path: { type: 'path', value: rect },
+        mesh: { type: 'mesh', value: mesh },
       },
       {},
     );
@@ -332,15 +332,15 @@ describe("envelope distort", () => {
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
-  it("should distort when mesh vertices are moved", () => {
+  it('should distort when mesh vertices are moved', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 1, 1);
     // Move top-right vertex down
     mesh.vertices[1].position = { x: 100, y: 50 };
     const result = envelopeDistortNode.execute(
       {
-        path: { type: "path", value: line },
-        mesh: { type: "mesh", value: mesh },
+        path: { type: 'path', value: line },
+        mesh: { type: 'mesh', value: mesh },
       },
       {},
     );
@@ -348,20 +348,20 @@ describe("envelope distort", () => {
     expect(outPath.commands.length).toBeGreaterThan(0);
   });
 
-  it("should handle mesh with multiple cells", () => {
+  it('should handle mesh with multiple cells', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const mesh = meshFromBounds({ x: 0, y: 0, width: 100, height: 100 }, 2, 2);
     const result = envelopeDistortNode.execute(
       {
-        path: { type: "path", value: rect },
-        mesh: { type: "mesh", value: mesh },
+        path: { type: 'path', value: rect },
+        mesh: { type: 'mesh', value: mesh },
       },
       {},
     );
     expect((result.path as any).value.commands.length).toBeGreaterThan(0);
   });
 
-  it("should return empty path when no inputs", () => {
+  it('should return empty path when no inputs', () => {
     const result = envelopeDistortNode.execute({}, {});
     expect((result.path as any).value.commands.length).toBe(0);
   });
@@ -439,12 +439,12 @@ Low-level intersection functions: line×line, line×cubic, cubic×cubic.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { intersectLineLine, intersectLineCubic, intersectCubicCubic } from "./intersect-bezier";
-import type { Point } from "../types";
+import { describe, expect, it } from 'bun:test';
+import { intersectLineLine, intersectLineCubic, intersectCubicCubic } from './intersect-bezier';
+import type { Point } from '../types';
 
-describe("intersectLineLine", () => {
-  it("should find intersection of perpendicular lines", () => {
+describe('intersectLineLine', () => {
+  it('should find intersection of perpendicular lines', () => {
     const hits = intersectLineLine(
       { x: 0, y: 50 },
       { x: 100, y: 50 }, // horizontal
@@ -458,19 +458,19 @@ describe("intersectLineLine", () => {
     expect(hits[0].t2).toBeCloseTo(0.5, 5);
   });
 
-  it("should return empty for parallel lines", () => {
+  it('should return empty for parallel lines', () => {
     const hits = intersectLineLine({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 10 }, { x: 100, y: 10 });
     expect(hits.length).toBe(0);
   });
 
-  it("should return empty for non-intersecting segments", () => {
+  it('should return empty for non-intersecting segments', () => {
     const hits = intersectLineLine({ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 60, y: 10 }, { x: 60, y: 100 });
     expect(hits.length).toBe(0);
   });
 });
 
-describe("intersectLineCubic", () => {
-  it("should find intersection of horizontal line with arch curve", () => {
+describe('intersectLineCubic', () => {
+  it('should find intersection of horizontal line with arch curve', () => {
     // Cubic arch from (0,0) to (100,0) peaking at y≈75
     const hits = intersectLineCubic(
       { x: -10, y: 37 },
@@ -483,7 +483,7 @@ describe("intersectLineCubic", () => {
     expect(hits.length).toBe(2); // Enters and exits the arch
   });
 
-  it("should return empty when line misses curve", () => {
+  it('should return empty when line misses curve', () => {
     const hits = intersectLineCubic(
       { x: 0, y: 200 },
       { x: 100, y: 200 }, // way above
@@ -496,8 +496,8 @@ describe("intersectLineCubic", () => {
   });
 });
 
-describe("intersectCubicCubic", () => {
-  it("should find intersections of two crossing curves", () => {
+describe('intersectCubicCubic', () => {
+  it('should find intersections of two crossing curves', () => {
     // Curve A: arch up
     // Curve B: arch down (crosses A)
     const hits = intersectCubicCubic(
@@ -513,7 +513,7 @@ describe("intersectCubicCubic", () => {
     expect(hits.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("should return empty for non-intersecting curves", () => {
+  it('should return empty for non-intersecting curves', () => {
     const hits = intersectCubicCubic(
       { x: 0, y: 0 },
       { x: 33, y: 50 },
@@ -597,10 +597,10 @@ at intersection points, creating new vertices.
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { splitIntersections } from "./split";
+import { splitIntersections } from './split';
 
-describe("splitIntersections", () => {
-  it("should split two crossing line segments at intersection", () => {
+describe('splitIntersections', () => {
+  it('should split two crossing line segments at intersection', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -624,7 +624,7 @@ describe("splitIntersections", () => {
     expect(newV.y).toBeCloseTo(50, 1);
   });
 
-  it("should not split non-intersecting segments", () => {
+  it('should not split non-intersecting segments', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -643,7 +643,7 @@ describe("splitIntersections", () => {
     expect(result.segments.length).toBe(2);
   });
 
-  it("should handle X pattern (4 regions after findRegions)", () => {
+  it('should handle X pattern (4 regions after findRegions)', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -667,7 +667,7 @@ describe("splitIntersections", () => {
     expect(regions.length).toBe(4);
   });
 
-  it("should skip segments sharing a vertex (no false intersection)", () => {
+  it('should skip segments sharing a vertex (no false intersection)', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -685,12 +685,12 @@ describe("splitIntersections", () => {
     expect(result.segments.length).toBe(2);
   });
 
-  it("should handle empty network", () => {
+  it('should handle empty network', () => {
     const result = splitIntersections({ vertices: [], segments: [], regions: [] });
     expect(result.vertices.length).toBe(0);
   });
 
-  it("should split cubic bezier segments", () => {
+  it('should split cubic bezier segments', () => {
     // Two crossing curves
     const network: VectorNetwork = {
       vertices: [
@@ -777,24 +777,24 @@ cd /Users/ultra/work/hyper-canvas-draft/.claude/worktrees/HYP-308-vector-engine/
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { shapeText, type ShapedGlyph } from "./shaper";
+import { describe, expect, it } from 'bun:test';
+import { shapeText, type ShapedGlyph } from './shaper';
 
-describe("shapeText", () => {
-  it("should have correct interface", () => {
+describe('shapeText', () => {
+  it('should have correct interface', () => {
     // shapeText should accept font data, text, and return glyph positions
-    expect(typeof shapeText).toBe("function");
+    expect(typeof shapeText).toBe('function');
   });
 
-  it("should return empty array when no font blob provided", () => {
-    const glyphs = shapeText(null, "Hello", 24);
+  it('should return empty array when no font blob provided', () => {
+    const glyphs = shapeText(null, 'Hello', 24);
     expect(glyphs).toEqual([]);
   });
 
-  it("should return shaped glyphs with positions", () => {
+  it('should return shaped glyphs with positions', () => {
     // With a real font, this would return actual glyph data
     // For now, test the interface shape
-    const glyphs = shapeText(null, "", 24);
+    const glyphs = shapeText(null, '', 24);
     expect(Array.isArray(glyphs)).toBe(true);
   });
 });
@@ -839,9 +839,9 @@ export async function initShaper(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
-      const hbModule = await import("harfbuzzjs");
+      const hbModule = await import('harfbuzzjs');
       // Handle CJS/ESM interop — harfbuzzjs may export factory as default or module itself
-      const factory = typeof hbModule.default === "function" ? hbModule.default : hbModule;
+      const factory = typeof hbModule.default === 'function' ? hbModule.default : hbModule;
       hbInstance = await (factory as () => Promise<HarfBuzzInstance>)();
     } catch {
       // WASM not available — shapeText will return empty
@@ -949,31 +949,31 @@ Schema reverse-engineered from OpenPencil's `@open-pencil/core/kiwi`.
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { parseFigFile, type FigNode } from "./fig-import";
+import { describe, expect, it } from 'bun:test';
+import { parseFigFile, type FigNode } from './fig-import';
 
-describe("FIG import", () => {
-  it("should export parseFigFile function", () => {
-    expect(typeof parseFigFile).toBe("function");
+describe('FIG import', () => {
+  it('should export parseFigFile function', () => {
+    expect(typeof parseFigFile).toBe('function');
   });
 
-  it("should return empty result for invalid data", () => {
+  it('should return empty result for invalid data', () => {
     const result = parseFigFile(new ArrayBuffer(0));
     expect(result.nodes).toEqual([]);
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("should return errors array for malformed input", () => {
+  it('should return errors array for malformed input', () => {
     const garbage = new Uint8Array([0, 1, 2, 3, 4, 5]);
     const result = parseFigFile(garbage.buffer);
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("should have correct output types", () => {
+  it('should have correct output types', () => {
     const result = parseFigFile(new ArrayBuffer(0));
-    expect(result).toHaveProperty("nodes");
-    expect(result).toHaveProperty("errors");
-    expect(result).toHaveProperty("canvas");
+    expect(result).toHaveProperty('nodes');
+    expect(result).toHaveProperty('errors');
+    expect(result).toHaveProperty('canvas');
   });
 });
 ```
@@ -995,9 +995,9 @@ describe("FIG import", () => {
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §FIG Import
  */
 
-import pako from "pako";
-import { decompress as zstdDecompress } from "fzstd";
-import { unzipSync } from "fflate";
+import pako from 'pako';
+import { decompress as zstdDecompress } from 'fzstd';
+import { unzipSync } from 'fflate';
 
 export interface FigNode {
   type: string;
@@ -1017,7 +1017,7 @@ export function parseFigFile(data: ArrayBuffer): FigParseResult {
   const errors: string[] = [];
 
   if (data.byteLength === 0) {
-    errors.push("Empty file");
+    errors.push('Empty file');
     return { nodes: [], canvas: { width: 0, height: 0 }, errors };
   }
 
@@ -1031,9 +1031,9 @@ export function parseFigFile(data: ArrayBuffer): FigParseResult {
     if (isZip) {
       // Extract canvas.fig from zip using fflate
       const unzipped = unzipSync(bytes);
-      const canvasFig = unzipped["canvas.fig"];
+      const canvasFig = unzipped['canvas.fig'];
       if (!canvasFig) {
-        errors.push("No canvas.fig found in zip archive");
+        errors.push('No canvas.fig found in zip archive');
         return { nodes: [], canvas: { width: 0, height: 0 }, errors };
       }
       payload = canvasFig;
@@ -1093,65 +1093,65 @@ Convert parsed FIG nodes into vector-engine ImportResult (nodes + edges).
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { mapFigToGraph } from "./fig-mapper";
-import type { FigNode } from "./fig-import";
+import { mapFigToGraph } from './fig-mapper';
+import type { FigNode } from './fig-import';
 
-describe("FIG node mapper", () => {
-  it("should map RECTANGLE to rectangle node", () => {
+describe('FIG node mapper', () => {
+  it('should map RECTANGLE to rectangle node', () => {
     const figNodes: FigNode[] = [
       {
-        type: "RECTANGLE",
-        name: "Rect1",
-        id: "node-1",
+        type: 'RECTANGLE',
+        name: 'Rect1',
+        id: 'node-1',
         children: [],
         properties: { width: 100, height: 50, x: 10, y: 20 },
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    const rect = result.nodes.find((n) => n.type === "rectangle");
+    const rect = result.nodes.find((n) => n.type === 'rectangle');
     expect(rect).toBeDefined();
     expect(rect!.params.width).toBe(100);
   });
 
-  it("should map ELLIPSE to ellipse node", () => {
+  it('should map ELLIPSE to ellipse node', () => {
     const figNodes: FigNode[] = [
       {
-        type: "ELLIPSE",
-        name: "Circle1",
-        id: "node-2",
+        type: 'ELLIPSE',
+        name: 'Circle1',
+        id: 'node-2',
         children: [],
         properties: { width: 100, height: 100 },
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    expect(result.nodes.find((n) => n.type === "ellipse")).toBeDefined();
+    expect(result.nodes.find((n) => n.type === 'ellipse')).toBeDefined();
   });
 
-  it("should map VECTOR to svgPath node", () => {
+  it('should map VECTOR to svgPath node', () => {
     const figNodes: FigNode[] = [
       {
-        type: "VECTOR",
-        name: "Path1",
-        id: "node-3",
+        type: 'VECTOR',
+        name: 'Path1',
+        id: 'node-3',
         children: [],
-        properties: { fillGeometry: "M 0 0 L 100 0 L 100 100 Z" },
+        properties: { fillGeometry: 'M 0 0 L 100 0 L 100 100 Z' },
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    expect(result.nodes.find((n) => n.type === "svgPath")).toBeDefined();
+    expect(result.nodes.find((n) => n.type === 'svgPath')).toBeDefined();
   });
 
-  it("should map GROUP with children", () => {
+  it('should map GROUP with children', () => {
     const figNodes: FigNode[] = [
       {
-        type: "GROUP",
-        name: "Group1",
-        id: "node-4",
+        type: 'GROUP',
+        name: 'Group1',
+        id: 'node-4',
         children: [
           {
-            type: "RECTANGLE",
-            name: "Child",
-            id: "node-5",
+            type: 'RECTANGLE',
+            name: 'Child',
+            id: 'node-5',
             children: [],
             properties: { width: 50, height: 50 },
           },
@@ -1160,36 +1160,36 @@ describe("FIG node mapper", () => {
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    expect(result.nodes.find((n) => n.type === "group")).toBeDefined();
-    expect(result.nodes.find((n) => n.type === "rectangle")).toBeDefined();
+    expect(result.nodes.find((n) => n.type === 'group')).toBeDefined();
+    expect(result.nodes.find((n) => n.type === 'rectangle')).toBeDefined();
   });
 
-  it("should add fill node for solid fills", () => {
+  it('should add fill node for solid fills', () => {
     const figNodes: FigNode[] = [
       {
-        type: "RECTANGLE",
-        name: "Colored",
-        id: "node-6",
+        type: 'RECTANGLE',
+        name: 'Colored',
+        id: 'node-6',
         children: [],
         properties: {
           width: 100,
           height: 100,
-          fills: [{ type: "SOLID", color: { r: 1, g: 0, b: 0, a: 1 } }],
+          fills: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } }],
         },
       },
     ];
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
-    const fill = result.nodes.find((n) => n.type === "fill");
+    const fill = result.nodes.find((n) => n.type === 'fill');
     expect(fill).toBeDefined();
     expect(result.edges.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("should handle unknown node types gracefully", () => {
+  it('should handle unknown node types gracefully', () => {
     const figNodes: FigNode[] = [
       {
-        type: "UNKNOWN_FANCY_THING",
-        name: "Mystery",
-        id: "node-99",
+        type: 'UNKNOWN_FANCY_THING',
+        name: 'Mystery',
+        id: 'node-99',
         children: [],
         properties: {},
       },
@@ -1214,8 +1214,8 @@ describe("FIG node mapper", () => {
  *   Auto-layout, variables, and prototyping are skipped with warnings.
  */
 
-import type { ImportResult, ImportedNode, ImportedEdge } from "./svg-import";
-import type { FigNode } from "./fig-import";
+import type { ImportResult, ImportedNode, ImportedEdge } from './svg-import';
+import type { FigNode } from './fig-import';
 
 export function mapFigToGraph(figNodes: FigNode[], canvas: { width: number; height: number }): ImportResult {
   const nodes: ImportedNode[] = [];
@@ -1225,23 +1225,23 @@ export function mapFigToGraph(figNodes: FigNode[], canvas: { width: number; heig
 
   function walk(figNode: FigNode, parentId?: string): void {
     switch (figNode.type) {
-      case "RECTANGLE": {
+      case 'RECTANGLE': {
         /* map to rectangle node + style nodes */ break;
       }
-      case "ELLIPSE": {
+      case 'ELLIPSE': {
         /* map to ellipse node */ break;
       }
-      case "VECTOR": {
+      case 'VECTOR': {
         /* map to svgPath node using fillGeometry */ break;
       }
-      case "BOOLEAN_OPERATION": {
+      case 'BOOLEAN_OPERATION': {
         /* map to boolean node */ break;
       }
-      case "GROUP":
-      case "FRAME": {
+      case 'GROUP':
+      case 'FRAME': {
         /* map to group node, recurse children */ break;
       }
-      case "TEXT": {
+      case 'TEXT': {
         /* map to textToPath node */ break;
       }
       default: {
@@ -1283,9 +1283,9 @@ feat(vector-engine): FIG node mapper — Figma types to engine graph (HYP-308)
 Add 4 new nodes:
 
 ```typescript
-import { gradientMeshNode } from "./mesh/gradient-mesh";
-import { meshFromPathNode } from "./mesh/mesh-from-path-node";
-import { envelopeDistortNode } from "./deformation/envelope-distort";
+import { gradientMeshNode } from './mesh/gradient-mesh';
+import { meshFromPathNode } from './mesh/mesh-from-path-node';
+import { envelopeDistortNode } from './deformation/envelope-distort';
 
 // In function body:
 registry.register(gradientMeshNode);
@@ -1300,30 +1300,30 @@ behavior but doesn't add a new node.
 
 ```typescript
 // Mesh nodes (Plan 2b)
-export { gradientMeshNode } from "./nodes/mesh/gradient-mesh";
-export { meshFromPathNode } from "./nodes/mesh/mesh-from-path-node";
+export { gradientMeshNode } from './nodes/mesh/gradient-mesh';
+export { meshFromPathNode } from './nodes/mesh/mesh-from-path-node';
 // Envelope distort
-export { envelopeDistortNode } from "./nodes/deformation/envelope-distort";
+export { envelopeDistortNode } from './nodes/deformation/envelope-distort';
 // Curve intersection
 export {
   intersectLineLine,
   intersectLineCubic,
   intersectCubicCubic,
   type IntersectionHit,
-} from "./curve/intersect-bezier";
+} from './curve/intersect-bezier';
 // Network: splitIntersections
-export { splitIntersections } from "./network/split";
+export { splitIntersections } from './network/split';
 // Text shaping
-export { shapeText, initShaper, type ShapedGlyph } from "./nodes/text/shaper";
+export { shapeText, initShaper, type ShapedGlyph } from './nodes/text/shaper';
 // FIG import
-export { parseFigFile, type FigParseResult, type FigNode } from "./import/fig-import";
-export { mapFigToGraph } from "./import/fig-mapper";
+export { parseFigFile, type FigParseResult, type FigNode } from './import/fig-import';
+export { mapFigToGraph } from './import/fig-mapper';
 ```
 
 - [ ] **Step 3: Update network/index.ts**
 
 ```typescript
-export { splitIntersections } from "./split";
+export { splitIntersections } from './split';
 ```
 
 - [ ] **Step 4: Update register-all.test.ts node count**
@@ -1355,12 +1355,12 @@ feat(vector-engine): register Plan 2b nodes and update public API (HYP-308)
 - [ ] **Step 1: Add integration tests**
 
 ```typescript
-describe("Plan 2b integration", () => {
-  it("should create gradient mesh and tessellate", () => {
+describe('Plan 2b integration', () => {
+  it('should create gradient mesh and tessellate', () => {
     const registry = createDefaultRegistry();
-    const graph = VectorGraphModel.create("test", "Mesh", 200, 200);
+    const graph = VectorGraphModel.create('test', 'Mesh', 200, 200);
     const meshNode = graph.addNode({
-      type: "gradientMesh",
+      type: 'gradientMesh',
       params: {
         rows: 2,
         cols: 2,
@@ -1368,17 +1368,17 @@ describe("Plan 2b integration", () => {
         height: 100,
         x: 0,
         y: 0,
-        color: "#ff0000",
+        color: '#ff0000',
       },
     });
     const executor = new GraphExecutor(registry);
     // Mesh nodes don't produce path output (different NodeValue type)
     // This verifies the node executes without error
     const result = executor.execute(graph);
-    expect(result.nodeStatus[meshNode].state).toBe("ok");
+    expect(result.nodeStatus[meshNode].state).toBe('ok');
   });
 
-  it("should split intersections then find regions", () => {
+  it('should split intersections then find regions', () => {
     const network: VectorNetwork = {
       vertices: [
         { x: 0, y: 0 },
@@ -1397,11 +1397,11 @@ describe("Plan 2b integration", () => {
     // After adding border edges, findRegions would work
   });
 
-  it("should register all Plan 2b nodes", () => {
+  it('should register all Plan 2b nodes', () => {
     const registry = createDefaultRegistry();
-    expect(registry.get("gradientMesh")).toBeDefined();
-    expect(registry.get("meshFromPath")).toBeDefined();
-    expect(registry.get("envelopeDistort")).toBeDefined();
+    expect(registry.get('gradientMesh')).toBeDefined();
+    expect(registry.get('meshFromPath')).toBeDefined();
+    expect(registry.get('envelopeDistort')).toBeDefined();
   });
 });
 ```

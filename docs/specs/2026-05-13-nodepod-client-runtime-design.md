@@ -87,8 +87,8 @@ New module `client/lib/project-runtime/`.
 #### `types.ts`
 
 ```typescript
-export type RuntimeStatus = "idle" | "starting" | "running" | "stopping" | "error";
-export type RuntimeMode = "docker" | "nodepod";
+export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
+export type RuntimeMode = 'docker' | 'nodepod';
 
 export interface ProjectRuntime {
   mode: RuntimeMode;
@@ -135,12 +135,12 @@ Factory hook. Selects implementation based on user flag and project framework:
 ```typescript
 export function useProjectRuntime(project: ProjectData, user: User): ProjectRuntime {
   const isNodePodEligible = user.clientSideRuntime && isViteProject(project);
-  const mode: RuntimeMode = isNodePodEligible ? "nodepod" : "docker";
+  const mode: RuntimeMode = isNodePodEligible ? 'nodepod' : 'docker';
 
-  const docker = useDockerRuntime(project, { enabled: mode === "docker" });
-  const nodepod = useNodePodRuntime(project, { enabled: mode === "nodepod" });
+  const docker = useDockerRuntime(project, { enabled: mode === 'docker' });
+  const nodepod = useNodePodRuntime(project, { enabled: mode === 'nodepod' });
 
-  return mode === "nodepod" ? nodepod : docker;
+  return mode === 'nodepod' ? nodepod : docker;
 }
 ```
 

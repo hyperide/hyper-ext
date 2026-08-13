@@ -250,12 +250,12 @@ Enhance `ElementTracer` with client-side resolution from cached node maps, elimi
 ```typescript
 // element-tracer.test.ts — add to existing test file
 
-describe("resolveClickLocal", () => {
-  it("should resolve element from cached node map without server round-trip", () => {
+describe('resolveClickLocal', () => {
+  it('should resolve element from cached node map without server round-trip', () => {
     const mockAdapter: FrameworkAdapter = {
-      name: "react",
+      name: 'react',
       detect: () => true,
-      getSourceLocation: () => ({ fileName: "/app/src/App.tsx", line: 5, column: 4 }),
+      getSourceLocation: () => ({ fileName: '/app/src/App.tsx', line: 5, column: 4 }),
       getComponentChain: () => [],
       getItemIndex: () => 0,
       walkComponentTree: () => [],
@@ -275,10 +275,10 @@ describe("resolveClickLocal", () => {
     // Simulate server pushing a node map
     const nodeMap: NodeMapEntry[] = [
       {
-        nodeRef: "/app/src/App.tsx:0",
-        tag: "div",
-        loc: { fileName: "/app/src/App.tsx", line: 5, column: 4 },
-        endLoc: { fileName: "/app/src/App.tsx", line: 10, column: 10 },
+        nodeRef: '/app/src/App.tsx:0',
+        tag: 'div',
+        loc: { fileName: '/app/src/App.tsx', line: 5, column: 4 },
+        endLoc: { fileName: '/app/src/App.tsx', line: 10, column: 10 },
         parentRef: null,
         children: [],
         isComponent: false,
@@ -286,30 +286,30 @@ describe("resolveClickLocal", () => {
     ];
 
     // Feed node map via transport message handler
-    tracer["_handleMessage"]({
-      type: "node-map-update",
-      filePath: "/app/src/App.tsx",
-      fileHash: "abc123",
+    tracer['_handleMessage']({
+      type: 'node-map-update',
+      filePath: '/app/src/App.tsx',
+      fileHash: 'abc123',
       version: 1,
       nodes: nodeMap,
     });
 
-    const el = document.createElement("div");
+    const el = document.createElement('div');
     const result = tracer.resolveClickLocal(el);
 
     expect(result).not.toBeNull();
-    expect(result!.nodeRef).toBe("/app/src/App.tsx:0");
-    expect(result!.entry.tag).toBe("div");
+    expect(result!.nodeRef).toBe('/app/src/App.tsx:0');
+    expect(result!.entry.tag).toBe('div');
     expect(result!.itemIndex).toBe(0);
     // Should NOT have sent a message to server
     expect(sentMessages).toHaveLength(0);
   });
 
-  it("should fall back to server resolution when no cached map matches", () => {
+  it('should fall back to server resolution when no cached map matches', () => {
     const mockAdapter: FrameworkAdapter = {
-      name: "react",
+      name: 'react',
       detect: () => true,
-      getSourceLocation: () => ({ fileName: "/app/src/Unknown.tsx", line: 1, column: 0 }),
+      getSourceLocation: () => ({ fileName: '/app/src/Unknown.tsx', line: 1, column: 0 }),
       getComponentChain: () => [],
       getItemIndex: () => 0,
       walkComponentTree: () => [],
@@ -325,13 +325,13 @@ describe("resolveClickLocal", () => {
     };
 
     const tracer = new ElementTracer(mockAdapter, mockTransport);
-    const el = document.createElement("div");
+    const el = document.createElement('div');
     const result = tracer.resolveClickLocal(el);
 
     expect(result).toBeNull();
     // Should have sent resolve-element to server
     expect(sentMessages).toHaveLength(1);
-    expect(sentMessages[0].type).toBe("resolve-element");
+    expect(sentMessages[0].type).toBe('resolve-element');
   });
 });
 ```
@@ -429,25 +429,25 @@ Replace `mapElementQuery.ts` functions with fiber-based equivalents.
 
 ```typescript
 // fiber-element-query.test.ts
-import { describe, expect, it } from "bun:test";
-import type { FrameworkAdapter, SourceLocation } from "../../shared/element-tracing/types";
-import { findDOMElementsBySource, computeFiberItemIndex, buildSourceKey } from "./fiber-element-query";
+import { describe, expect, it } from 'bun:test';
+import type { FrameworkAdapter, SourceLocation } from '../../shared/element-tracing/types';
+import { findDOMElementsBySource, computeFiberItemIndex, buildSourceKey } from './fiber-element-query';
 
-describe("buildSourceKey", () => {
-  it("should create deterministic key from source location", () => {
-    const source: SourceLocation = { fileName: "/app/src/App.tsx", line: 5, column: 4 };
-    expect(buildSourceKey(source)).toBe("/app/src/App.tsx:5:4");
+describe('buildSourceKey', () => {
+  it('should create deterministic key from source location', () => {
+    const source: SourceLocation = { fileName: '/app/src/App.tsx', line: 5, column: 4 };
+    expect(buildSourceKey(source)).toBe('/app/src/App.tsx:5:4');
   });
 });
 
-describe("findDOMElementsBySource", () => {
-  it("should delegate to adapter.findDOMElement for single item", () => {
-    const mockEl = document.createElement("div");
-    const source: SourceLocation = { fileName: "App.tsx", line: 5, column: 4 };
+describe('findDOMElementsBySource', () => {
+  it('should delegate to adapter.findDOMElement for single item', () => {
+    const mockEl = document.createElement('div');
+    const source: SourceLocation = { fileName: 'App.tsx', line: 5, column: 4 };
 
-    const adapter: Pick<FrameworkAdapter, "findDOMElement"> = {
+    const adapter: Pick<FrameworkAdapter, 'findDOMElement'> = {
       findDOMElement: (s, idx) => {
-        if (s.fileName === "App.tsx" && s.line === 5 && idx === 0) return mockEl;
+        if (s.fileName === 'App.tsx' && s.line === 5 && idx === 0) return mockEl;
         return null;
       },
     };
@@ -456,21 +456,21 @@ describe("findDOMElementsBySource", () => {
     expect(result).toEqual([mockEl]);
   });
 
-  it("should return empty array when adapter returns null", () => {
-    const adapter: Pick<FrameworkAdapter, "findDOMElement"> = {
+  it('should return empty array when adapter returns null', () => {
+    const adapter: Pick<FrameworkAdapter, 'findDOMElement'> = {
       findDOMElement: () => null,
     };
 
-    const source: SourceLocation = { fileName: "App.tsx", line: 5, column: 4 };
+    const source: SourceLocation = { fileName: 'App.tsx', line: 5, column: 4 };
     const result = findDOMElementsBySource(adapter, source, 0);
     expect(result).toEqual([]);
   });
 });
 
-describe("computeFiberItemIndex", () => {
-  it("should return adapter.getItemIndex result", () => {
-    const mockEl = document.createElement("div");
-    const adapter: Pick<FrameworkAdapter, "getItemIndex"> = {
+describe('computeFiberItemIndex', () => {
+  it('should return adapter.getItemIndex result', () => {
+    const mockEl = document.createElement('div');
+    const adapter: Pick<FrameworkAdapter, 'getItemIndex'> = {
       getItemIndex: () => 2,
     };
 
@@ -494,7 +494,7 @@ Expected: FAIL — module not found
  * Assumptions: FrameworkAdapter is initialized and fiber tree is available in the iframe
  */
 
-import type { FrameworkAdapter, SourceLocation } from "../../shared/element-tracing/types";
+import type { FrameworkAdapter, SourceLocation } from '../../shared/element-tracing/types';
 
 /** Create a deterministic lookup key from a source location. */
 export function buildSourceKey(source: SourceLocation): string {
@@ -507,7 +507,7 @@ export function buildSourceKey(source: SourceLocation): string {
  * When null, finds all elements at that source location (for .map() highlighting).
  */
 export function findDOMElementsBySource(
-  adapter: Pick<FrameworkAdapter, "findDOMElement">,
+  adapter: Pick<FrameworkAdapter, 'findDOMElement'>,
   source: SourceLocation,
   itemIndex: number | null,
 ): HTMLElement[] {
@@ -530,7 +530,7 @@ export function findDOMElementsBySource(
  * Compute the item index of an element among fiber siblings with the same source.
  * Wraps adapter.getItemIndex() for consistent API.
  */
-export function computeFiberItemIndex(adapter: Pick<FrameworkAdapter, "getItemIndex">, element: HTMLElement): number {
+export function computeFiberItemIndex(adapter: Pick<FrameworkAdapter, 'getItemIndex'>, element: HTMLElement): number {
   return adapter.getItemIndex(element);
 }
 ```
@@ -565,7 +565,7 @@ In `shared/canvas-interaction/types.ts`, change the callbacks to use `nodeRef` a
 ```typescript
 // types.ts — replace ClickHandlerCallbacks
 
-import type { SourceLocation } from "../element-tracing/types";
+import type { SourceLocation } from '../element-tracing/types';
 
 export interface ClickHandlerCallbacks {
   /**
@@ -589,7 +589,7 @@ export interface ClickHandlerCallbacks {
   /** Called when clicking empty space (no fiber source found) */
   onEmptyClick?: (event: MouseEvent) => void;
   /** Returns current editor mode */
-  getMode: () => "design" | "interact";
+  getMode: () => 'design' | 'interact';
   /**
    * Optional pre-intercept before default click handling.
    * Return true to skip default handling entirely.
@@ -613,14 +613,14 @@ export interface ClickHandlerOptions {
  * Assumptions: ElementTracer is initialized with a valid ReactAdapter before attaching
  */
 
-import type { ClickHandlerCallbacks, ClickHandlerOptions, TracingResolver } from "./types";
+import type { ClickHandlerCallbacks, ClickHandlerOptions, TracingResolver } from './types';
 
 /** Check if target is a form/editable element that should retain native focus behavior. */
 function isInteractiveElement(target: HTMLElement): boolean {
   return (
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT" ||
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
     target.isContentEditable
   );
 }
@@ -642,7 +642,7 @@ export function attachClickHandler(
 
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    if (getMode() === "design") {
+    if (getMode() === 'design') {
       e.preventDefault();
       e.stopPropagation();
     }
@@ -651,16 +651,16 @@ export function attachClickHandler(
   const handleClick = (e: MouseEvent) => {
     const mode = getMode();
     if (shouldIntercept?.(e)) return;
-    if (mode !== "design" && mode !== "interact") return;
+    if (mode !== 'design' && mode !== 'interact') return;
 
     const target = e.target as HTMLElement;
 
-    if (mode === "design") {
+    if (mode === 'design') {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    if (mode !== "design") return;
+    if (mode !== 'design') return;
 
     // Try local fiber resolution (synchronous from cache)
     const result = resolver.resolveClickLocal(target);
@@ -682,14 +682,14 @@ export function attachClickHandler(
   };
 
   const handleMouseDown = (e: MouseEvent) => {
-    if (getMode() !== "design") return;
+    if (getMode() !== 'design') return;
     if (isInteractiveElement(e.target as HTMLElement)) {
       e.preventDefault();
     }
   };
 
   const handleMouseOver = (e: MouseEvent) => {
-    if (getMode() !== "design") return;
+    if (getMode() !== 'design') return;
     const target = e.target as HTMLElement;
 
     const result = resolver.resolveClickLocal(target);
@@ -700,7 +700,7 @@ export function attachClickHandler(
   };
 
   const handleMouseOut = (e: MouseEvent) => {
-    if (getMode() !== "design") return;
+    if (getMode() !== 'design') return;
     const relatedTarget = e.relatedTarget as HTMLElement | null;
     if (relatedTarget) {
       const source = resolver.getSourceLocation(relatedTarget);
@@ -709,18 +709,18 @@ export function attachClickHandler(
     onElementHover(null, null, null, null);
   };
 
-  iframeDoc.addEventListener("pointerdown", handlePointerDown, { capture: true });
-  iframeDoc.addEventListener("click", handleClick, { capture: true });
-  iframeDoc.addEventListener("mousedown", handleMouseDown, { capture: true });
-  iframeDoc.addEventListener("mouseover", handleMouseOver, { capture: true });
-  iframeDoc.addEventListener("mouseout", handleMouseOut, { capture: true });
+  iframeDoc.addEventListener('pointerdown', handlePointerDown, { capture: true });
+  iframeDoc.addEventListener('click', handleClick, { capture: true });
+  iframeDoc.addEventListener('mousedown', handleMouseDown, { capture: true });
+  iframeDoc.addEventListener('mouseover', handleMouseOver, { capture: true });
+  iframeDoc.addEventListener('mouseout', handleMouseOut, { capture: true });
 
   return () => {
-    iframeDoc.removeEventListener("pointerdown", handlePointerDown, { capture: true });
-    iframeDoc.removeEventListener("click", handleClick, { capture: true });
-    iframeDoc.removeEventListener("mousedown", handleMouseDown, { capture: true });
-    iframeDoc.removeEventListener("mouseover", handleMouseOver, { capture: true });
-    iframeDoc.removeEventListener("mouseout", handleMouseOut, { capture: true });
+    iframeDoc.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+    iframeDoc.removeEventListener('click', handleClick, { capture: true });
+    iframeDoc.removeEventListener('mousedown', handleMouseDown, { capture: true });
+    iframeDoc.removeEventListener('mouseover', handleMouseOver, { capture: true });
+    iframeDoc.removeEventListener('mouseout', handleMouseOut, { capture: true });
   };
 }
 ```
@@ -853,7 +853,7 @@ Replace `querySelectorAll('[data-uniq-id="..."]')` in `computeOverlayRects()` wi
 In `shared/canvas-interaction/types.ts`:
 
 ```typescript
-import type { SourceLocation } from "../element-tracing/types";
+import type { SourceLocation } from '../element-tracing/types';
 
 export interface OverlayState {
   selectedIds: string[]; // nodeRefs
@@ -875,7 +875,7 @@ Replace `querySelectorAll('[data-uniq-id="..."]')` patterns with `FrameworkAdapt
 export interface OverlayRendererOptions {
   viewportZoom?: number;
   onPlaceholderClick?: (elementId: string) => void;
-  editorMode?: "design" | "interact" | "code";
+  editorMode?: 'design' | 'interact' | 'code';
   /** Framework adapter for fiber-based DOM element lookup */
   findDOMElement?: (source: SourceLocation, itemIndex: number) => HTMLElement | null;
 }
@@ -980,7 +980,7 @@ function findDirectChildNodeRefs(nodeRef: string, lookup: NodeMapLookup): string
 }
 
 /** Find next/prev sibling nodeRef from parent's children. */
-function findSiblingNodeRef(nodeRef: string, direction: "next" | "prev", lookup: NodeMapLookup): string | null {
+function findSiblingNodeRef(nodeRef: string, direction: 'next' | 'prev', lookup: NodeMapLookup): string | null {
   const entry = lookup.getEntry(nodeRef);
   if (!entry?.parentRef) return null;
 
@@ -992,7 +992,7 @@ function findSiblingNodeRef(nodeRef: string, direction: "next" | "prev", lookup:
   if (currentIndex === -1) return null;
 
   let targetIndex: number;
-  if (direction === "prev") {
+  if (direction === 'prev') {
     targetIndex = currentIndex === 0 ? siblings.length - 1 : currentIndex - 1;
   } else {
     targetIndex = currentIndex === siblings.length - 1 ? 0 : currentIndex + 1;
@@ -1027,7 +1027,7 @@ Replace `querySelectorAll('[data-uniq-id]')` with fiber tree walk.
 - [ ] **Step 1: Add adapter parameter**
 
 ```typescript
-import type { FrameworkAdapter, SourceLocation } from "../../shared/element-tracing/types";
+import type { FrameworkAdapter, SourceLocation } from '../../shared/element-tracing/types';
 
 export interface FiberPlaceholderRect {
   nodeRef: string;
@@ -1117,11 +1117,11 @@ Initialize `ElementTracer` + `ReactAdapter` + `WSTracingTransport` when iframe l
  * Accessed via: IframeCanvas.tsx
  */
 
-import { useEffect, useRef, useState } from "react";
-import { ElementTracer } from "@/lib/element-tracing/element-tracer";
-import { ReactAdapter } from "@/lib/element-tracing/react-adapter";
-import { WSTracingTransport } from "@/lib/element-tracing/ws-tracing-transport";
-import type { SourceLocation } from "@shared/element-tracing/types";
+import { useEffect, useRef, useState } from 'react';
+import { ElementTracer } from '@/lib/element-tracing/element-tracer';
+import { ReactAdapter } from '@/lib/element-tracing/react-adapter';
+import { WSTracingTransport } from '@/lib/element-tracing/ws-tracing-transport';
+import type { SourceLocation } from '@shared/element-tracing/types';
 
 interface UseElementTracerOptions {
   iframe: HTMLIFrameElement | null;
@@ -1145,7 +1145,7 @@ export function useElementTracer({ iframe, projectId, enabled }: UseElementTrace
       return;
     }
 
-    const wsUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws/element-tracing?projectId=${projectId}`;
+    const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/element-tracing?projectId=${projectId}`;
     const transport = new WSTracingTransport(() => new WebSocket(wsUrl));
     const tracer = new ElementTracer(adapter, transport);
 
@@ -1323,9 +1323,9 @@ Connect `PostMessageTracingTransport` to PanelRouter + StateHub so element traci
 
 ```typescript
 // PanelRouter.ts — add to routeMessage()
-if (type.startsWith("element-tracing:")) {
+if (type.startsWith('element-tracing:')) {
   // Forward to PostMessageTracingTransport handler
-  this.onElementTracingMessage?.(type.replace("element-tracing:", ""), payload);
+  this.onElementTracingMessage?.(type.replace('element-tracing:', ''), payload);
   return;
 }
 ```
@@ -1362,7 +1362,7 @@ useEffect(() => {
   if (!tracer) return;
 
   const unsub = tracer.onMessage((msg) => {
-    if (msg.type !== "node-map-update" || !msg.refMapping) return;
+    if (msg.type !== 'node-map-update' || !msg.refMapping) return;
 
     const currentSelection = engine.getSelection();
     const remapped = currentSelection.selectedIds
@@ -1404,11 +1404,11 @@ New function that finds a JSX element by its source location, equivalent to `fin
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { parse } from "@babel/parser";
-import { findElementByPosition } from "./position-finder";
+import { describe, expect, it } from 'bun:test';
+import { parse } from '@babel/parser';
+import { findElementByPosition } from './position-finder';
 
-describe("findElementByPosition", () => {
+describe('findElementByPosition', () => {
   const source = `
 import React from 'react';
 export function App() {
@@ -1420,33 +1420,33 @@ export function App() {
   );
 }`;
 
-  it("should find div at its exact start position", () => {
-    const ast = parse(source, { sourceType: "module", plugins: ["jsx", "typescript"] });
+  it('should find div at its exact start position', () => {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     // <div> starts at line 5, column 4
     const result = findElementByPosition(ast, 5, 4);
     expect(result).not.toBeNull();
-    expect(result!.element.openingElement.name).toHaveProperty("name", "div");
+    expect(result!.element.openingElement.name).toHaveProperty('name', 'div');
   });
 
-  it("should find h1 at its exact start position", () => {
-    const ast = parse(source, { sourceType: "module", plugins: ["jsx", "typescript"] });
+  it('should find h1 at its exact start position', () => {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     // <h1> starts at line 6, column 6
     const result = findElementByPosition(ast, 6, 6);
     expect(result).not.toBeNull();
-    expect(result!.element.openingElement.name).toHaveProperty("name", "h1");
+    expect(result!.element.openingElement.name).toHaveProperty('name', 'h1');
   });
 
-  it("should return null for non-existent position", () => {
-    const ast = parse(source, { sourceType: "module", plugins: ["jsx", "typescript"] });
+  it('should return null for non-existent position', () => {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     const result = findElementByPosition(ast, 100, 0);
     expect(result).toBeNull();
   });
 
-  it("should return the innermost element when positions overlap", () => {
-    const ast = parse(source, { sourceType: "module", plugins: ["jsx", "typescript"] });
+  it('should return the innermost element when positions overlap', () => {
+    const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
     // Position of <h1> — not <div> even though <div> contains it
     const result = findElementByPosition(ast, 6, 6);
-    expect(result!.element.openingElement.name).toHaveProperty("name", "h1");
+    expect(result!.element.openingElement.name).toHaveProperty('name', 'h1');
   });
 });
 ```
@@ -1465,9 +1465,9 @@ Run: `bun run test lib/ast/position-finder.test.ts`
  * Assumptions: AST was parsed with `loc: true` (Babel default)
  */
 
-import _traverse, { type NodePath } from "@babel/traverse";
-import * as t from "@babel/types";
-import type { FindElementResult } from "../types";
+import _traverse, { type NodePath } from '@babel/traverse';
+import * as t from '@babel/types';
+import type { FindElementResult } from '../types';
 
 // @ts-expect-error - babel/traverse ESM/CJS
 const traverse = _traverse.default || _traverse;
@@ -1517,24 +1517,24 @@ After every mutation route writes the AST, re-parse the file and broadcast the u
 - [ ] **Step 1: Write failing test**
 
 ```typescript
-import { describe, expect, it, mock } from "bun:test";
-import { afterMutation } from "./mutation-tracing";
+import { describe, expect, it, mock } from 'bun:test';
+import { afterMutation } from './mutation-tracing';
 
-describe("afterMutation", () => {
-  it("should re-parse file and return NodeMapUpdate", async () => {
+describe('afterMutation', () => {
+  it('should re-parse file and return NodeMapUpdate', async () => {
     const mockBroadcast = mock(() => {});
-    const sourceCode = "<div><span>hello</span></div>";
+    const sourceCode = '<div><span>hello</span></div>';
 
     const result = await afterMutation({
-      filePath: "/app/src/App.tsx",
-      projectId: "proj-1",
+      filePath: '/app/src/App.tsx',
+      projectId: 'proj-1',
       readFile: async () => sourceCode,
       broadcast: mockBroadcast,
     });
 
     expect(result).not.toBeNull();
-    expect(result!.type).toBe("node-map-update");
-    expect(result!.filePath).toBe("/app/src/App.tsx");
+    expect(result!.type).toBe('node-map-update');
+    expect(result!.filePath).toBe('/app/src/App.tsx');
     expect(result!.nodes.length).toBeGreaterThan(0);
     expect(mockBroadcast).toHaveBeenCalledTimes(1);
   });
@@ -1551,9 +1551,9 @@ describe("afterMutation", () => {
  * Assumptions: NodeMapService is initialized for the project via element-tracing-channel
  */
 
-import { readFile } from "node:fs/promises";
-import type { NodeMapUpdate } from "../../shared/element-tracing/types";
-import { broadcastToProject, getNodeMapService } from "../services/element-tracing-channel";
+import { readFile } from 'node:fs/promises';
+import type { NodeMapUpdate } from '../../shared/element-tracing/types';
+import { broadcastToProject, getNodeMapService } from '../services/element-tracing-channel';
 
 interface AfterMutationOptions {
   filePath: string;
@@ -1570,7 +1570,7 @@ interface AfterMutationOptions {
  */
 export async function afterMutation(options: AfterMutationOptions): Promise<NodeMapUpdate | null> {
   const { filePath, projectId } = options;
-  const read = options.readFile ?? ((p: string) => readFile(p, "utf-8"));
+  const read = options.readFile ?? ((p: string) => readFile(p, 'utf-8'));
   const broadcast = options.broadcast ?? broadcastToProject;
 
   const nodeMapService = getNodeMapService(projectId);
@@ -1644,7 +1644,7 @@ const result = findElementByPosition(ast, entry.loc.line, entry.loc.column);
 After every `await writeAST(ast, absolutePath)`, add:
 
 ```typescript
-import { afterMutation } from "../lib/mutation-tracing";
+import { afterMutation } from '../lib/mutation-tracing';
 
 await afterMutation({ filePath: absolutePath, projectId });
 ```
@@ -1814,8 +1814,8 @@ When the first tracing WS client connects to a project, the NodeMapService has z
 - [ ] **Step 1: Add `populateNodeMaps` function**
 
 ```typescript
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 /** Scan project source files and populate NodeMapService on first connect. */
 export async function populateNodeMaps(projectId: string, projectPath: string): Promise<void> {
@@ -1824,12 +1824,12 @@ export async function populateNodeMaps(projectId: string, projectPath: string): 
   if (state.nodeMapService.getTrackedFiles().length > 0) return; // Already populated
 
   // Find all JSX/TSX files in src/ directory
-  const srcDir = join(projectPath, "src");
+  const srcDir = join(projectPath, 'src');
   const files = await findJsxFiles(srcDir);
 
   for (const filePath of files) {
     try {
-      const sourceCode = await readFile(filePath, "utf-8");
+      const sourceCode = await readFile(filePath, 'utf-8');
       state.nodeMapService.parseAndBuild(sourceCode, filePath);
     } catch {
       // Skip unparseable files — Babel errors are logged by NodeMapService.safeParse()
@@ -1882,7 +1882,7 @@ Switch extension's `AstService` from UUID-based methods to position-based.
 
 ```typescript
 // AstService.ts
-import { NodeMapService } from "@lib/element-tracing/node-map-service";
+import { NodeMapService } from '@lib/element-tracing/node-map-service';
 
 class AstService {
   private nodeMapService = new NodeMapService();
@@ -1906,7 +1906,7 @@ Replace all `findElementByUuid(ast, elementId)` calls with:
 
 ```typescript
 const entry = this.nodeMapService.resolveNodeRef(nodeRef);
-if (!entry) return { success: false, error: "nodeRef not found" };
+if (!entry) return { success: false, error: 'nodeRef not found' };
 const result = findElementByPosition(ast, entry.loc.line, entry.loc.column);
 ```
 
@@ -1917,7 +1917,7 @@ Replace `closest('[data-uniq-id]')` with fiber-based extraction. The extension's
 ```typescript
 // iframe-interaction.ts — click handler section
 // OLD:
-const element = target.closest("[data-uniq-id]") as HTMLElement | null;
+const element = target.closest('[data-uniq-id]') as HTMLElement | null;
 const elementId = element?.dataset.uniqId ?? null;
 
 // NEW:
@@ -1925,7 +1925,7 @@ const elementId = element?.dataset.uniqId ?? null;
 const fiber = getFiberFromDOM(target);
 const source = findNearestDebugSource(fiber);
 if (source) {
-  postMessage("hypercanvas:elementClick", {
+  postMessage('hypercanvas:elementClick', {
     source: {
       fileName: source.fileName,
       line: source.lineNumber,
@@ -2133,30 +2133,30 @@ Create a one-time migration script for existing projects that have `data-uniq-id
  * Usage: bun scripts/strip-data-uniq-ids.ts <directory>
  */
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
-import _generate from "@babel/generator";
-import * as t from "@babel/types";
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parse } from '@babel/parser';
+import _traverse from '@babel/traverse';
+import _generate from '@babel/generator';
+import * as t from '@babel/types';
 
 const traverse = _traverse.default || _traverse;
 const generate = _generate.default || _generate;
 
 async function processFile(filePath: string): Promise<boolean> {
-  const source = await readFile(filePath, "utf-8");
-  if (!source.includes("data-uniq-id")) return false;
+  const source = await readFile(filePath, 'utf-8');
+  if (!source.includes('data-uniq-id')) return false;
 
   const ast = parse(source, {
-    sourceType: "module",
-    plugins: ["jsx", "typescript"],
+    sourceType: 'module',
+    plugins: ['jsx', 'typescript'],
   });
 
   let modified = false;
 
   traverse(ast, {
     JSXAttribute(path) {
-      if (t.isJSXIdentifier(path.node.name) && path.node.name.name === "data-uniq-id") {
+      if (t.isJSXIdentifier(path.node.name) && path.node.name.name === 'data-uniq-id') {
         path.remove();
         modified = true;
       }

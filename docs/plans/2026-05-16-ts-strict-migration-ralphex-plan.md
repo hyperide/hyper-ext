@@ -53,10 +53,10 @@ Example pattern:
 
 ```ts
 // Before
-const id = c.req.param("projectId"); // string | undefined
+const id = c.req.param('projectId'); // string | undefined
 doSomething(id); // error
 // After
-const id = c.req.param("projectId")!; // or validate at middleware level
+const id = c.req.param('projectId')!; // or validate at middleware level
 ```
 
 File list:

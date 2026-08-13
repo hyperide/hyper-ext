@@ -128,7 +128,7 @@ interface StyleValue {
 }
 
 interface FillStyle {
-  type: "solid" | "linearGradient" | "radialGradient" | "conicGradient";
+  type: 'solid' | 'linearGradient' | 'radialGradient' | 'conicGradient';
   color?: string; // hex, for solid
   stops?: GradientStop[]; // for gradients
   from?: Point;
@@ -140,8 +140,8 @@ interface FillStyle {
 interface StrokeStyle {
   color: string;
   width: number;
-  cap: "butt" | "round" | "square";
-  join: "miter" | "round" | "bevel";
+  cap: 'butt' | 'round' | 'square';
+  join: 'miter' | 'round' | 'bevel';
   dashArray?: number[];
   dashOffset?: number;
 }
@@ -154,18 +154,18 @@ interface ShadowStyle {
 }
 
 type BlendMode =
-  | "normal"
-  | "multiply"
-  | "screen"
-  | "overlay"
-  | "darken"
-  | "lighten"
-  | "colorDodge"
-  | "colorBurn"
-  | "hardLight"
-  | "softLight"
-  | "difference"
-  | "exclusion";
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'darken'
+  | 'lighten'
+  | 'colorDodge'
+  | 'colorBurn'
+  | 'hardLight'
+  | 'softLight'
+  | 'difference'
+  | 'exclusion';
 
 interface GradientStop {
   offset: number;
@@ -196,7 +196,7 @@ interface VectorVertex {
   x: number;
   y: number;
   cornerRadius?: number;
-  handleMirroring?: "none" | "angle" | "angleAndLength";
+  handleMirroring?: 'none' | 'angle' | 'angleAndLength';
 }
 
 interface VectorSegment {
@@ -207,20 +207,20 @@ interface VectorSegment {
 }
 
 interface VectorRegion {
-  windingRule: "evenOdd" | "nonZero";
+  windingRule: 'evenOdd' | 'nonZero';
   loops: number[][]; // segment index chains
   fills: FillStyle[];
 }
 
 /** Discriminated union for all values flowing through the graph */
 type NodeValue =
-  | { type: "path"; value: PathValue }
-  | { type: "network"; value: VectorNetwork }
-  | { type: "style"; value: StyleValue }
-  | { type: "number"; value: number }
-  | { type: "color"; value: string }
-  | { type: "boolean"; value: boolean }
-  | { type: "transform"; value: TransformMatrix };
+  | { type: 'path'; value: PathValue }
+  | { type: 'network'; value: VectorNetwork }
+  | { type: 'style'; value: StyleValue }
+  | { type: 'number'; value: number }
+  | { type: 'color'; value: string }
+  | { type: 'boolean'; value: boolean }
+  | { type: 'transform'; value: TransformMatrix };
 ```
 
 ### Scene Graph (renderer input)
@@ -250,7 +250,7 @@ interface SceneGraph {
 /** Hit test result */
 interface HitResult {
   itemId: string;
-  hitType: "fill" | "stroke" | "control-point";
+  hitType: 'fill' | 'stroke' | 'control-point';
   point: Point; // exact hit coordinates
   distance: number; // distance from point to nearest edge
 }
@@ -273,7 +273,7 @@ interface Viewport {
 ### Parameter Definitions
 
 ```typescript
-type ParamType = "number" | "string" | "color" | "boolean" | "enum" | "point";
+type ParamType = 'number' | 'string' | 'color' | 'boolean' | 'enum' | 'point';
 
 interface ParamDefinition {
   name: string;
@@ -330,7 +330,7 @@ interface GraphEdge {
 /** Port definition for a node type */
 interface PortDefinition {
   name: string;
-  type: NodeValue["type"]; // must match NodeValue discriminant
+  type: NodeValue['type']; // must match NodeValue discriminant
   multiple?: boolean; // accepts multiple connections (e.g. boolean union)
 }
 
@@ -338,7 +338,7 @@ interface PortDefinition {
 interface NodeTypeDefinition {
   type: string;
   label: string;
-  category: "generator" | "pathOp" | "style" | "transform" | "utility";
+  category: 'generator' | 'pathOp' | 'style' | 'transform' | 'utility';
   inputs: PortDefinition[];
   outputs: PortDefinition[];
   params: ParamDefinition[];
@@ -408,7 +408,7 @@ interface ExecutionResult {
 }
 
 interface NodeExecutionStatus {
-  state: "ok" | "error" | "skipped" | "cached";
+  state: 'ok' | 'error' | 'skipped' | 'cached';
   error?: string;
   executionTimeMs?: number;
 }
@@ -439,13 +439,13 @@ interface HistoryEntry {
 
 /** Covers both parameter changes and structural changes */
 type GraphDiff =
-  | { kind: "paramChange"; nodeId: string; param: string; oldValue: unknown; newValue: unknown }
-  | { kind: "addNode"; node: GraphNode }
-  | { kind: "removeNode"; node: GraphNode; removedEdges: GraphEdge[] }
-  | { kind: "addEdge"; edge: GraphEdge }
-  | { kind: "removeEdge"; edge: GraphEdge }
-  | { kind: "muteNode"; nodeId: string; muted: boolean }
-  | { kind: "moveNode"; nodeId: string; oldPosition: Point; newPosition: Point };
+  | { kind: 'paramChange'; nodeId: string; param: string; oldValue: unknown; newValue: unknown }
+  | { kind: 'addNode'; node: GraphNode }
+  | { kind: 'removeNode'; node: GraphNode; removedEdges: GraphEdge[] }
+  | { kind: 'addEdge'; edge: GraphEdge }
+  | { kind: 'removeEdge'; edge: GraphEdge }
+  | { kind: 'muteNode'; nodeId: string; muted: boolean }
+  | { kind: 'moveNode'; nodeId: string; oldPosition: Point; newPosition: Point };
 ```
 
 - **Undo**: reverse each diff in the entry (remove added nodes, re-add removed nodes,
@@ -517,7 +517,7 @@ When a node is muted:
 New mode added to `client/components/Toolbar.tsx`:
 
 ```typescript
-export type Tool = "board" | "interact" | "design" | "vector" | "code";
+export type Tool = 'board' | 'interact' | 'design' | 'vector' | 'code';
 ```
 
 Position: between Design and Code. Hotkey: `5` / `Alt+5` / `Ctrl+Shift+5`.
@@ -532,11 +532,11 @@ New messages added to `client/lib/platform/types.ts`:
 
 ```typescript
 type VectorPlatformMessage =
-  | { type: "vector:modeEntered"; assetId: string }
-  | { type: "vector:modeExited"; exportedSvg: string }
-  | { type: "vector:graphChanged"; graphId: string }
-  | { type: "vector:nodeSelected"; nodeIds: string[] }
-  | { type: "vector:svgExported"; svg: string; componentPath: string };
+  | { type: 'vector:modeEntered'; assetId: string }
+  | { type: 'vector:modeExited'; exportedSvg: string }
+  | { type: 'vector:graphChanged'; graphId: string }
+  | { type: 'vector:nodeSelected'; nodeIds: string[] }
+  | { type: 'vector:svgExported'; svg: string; componentPath: string };
 ```
 
 These are added to the `PlatformMessage` union to avoid the silent-failure pitfall
@@ -1037,13 +1037,13 @@ Width profile is an array of `{ offset: number; width: number }` points along th
 interface WidthPoint {
   offset: number; // 0..1 along path length
   width: number; // stroke width at this point
-  taper?: "sharp" | "round"; // endpoint taper style
+  taper?: 'sharp' | 'round'; // endpoint taper style
 }
 
 // Node params
 interface VariableStrokeParams {
   profile: WidthPoint[];
-  cap: "butt" | "round" | "square";
+  cap: 'butt' | 'round' | 'square';
 }
 ```
 
@@ -1324,7 +1324,7 @@ interface SnappingEngine {
 }
 
 interface SnapGuide {
-  type: "edge" | "center" | "grid" | "custom";
+  type: 'edge' | 'center' | 'grid' | 'custom';
   from: Point;
   to: Point;
 }

@@ -98,8 +98,8 @@ Replace control-point hull approximation with derivative root solving for cubics
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("tight cubic bounds", () => {
-  it("should compute tight bounds for cubic with distant control point", () => {
+describe('tight cubic bounds', () => {
+  it('should compute tight bounds for cubic with distant control point', () => {
     // Cubic from (0,0) to (100,0) with cp1=(50,200) cp2=(50,-200)
     // Control-point hull would give y:[-200, 200]
     // Tight bounds: the curve never reaches y=±200
@@ -115,7 +115,7 @@ describe("tight cubic bounds", () => {
     expect(bounds.height).toBeLessThan(200); // Much less than 400 (control-point hull)
   });
 
-  it("should still include endpoints", () => {
+  it('should still include endpoints', () => {
     const cmds = encodeCommands([
       { type: PathCmd.Move, x: 10, y: 20 },
       { type: PathCmd.Cubic, cx1: 50, cy1: 50, cx2: 80, cy2: 50, x: 90, y: 30 },
@@ -211,19 +211,19 @@ fix(vector-engine): tight cubic and quad bounding box via derivative root solvin
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("add point", () => {
-  it("should add point on a line segment at given position", () => {
+describe('add point', () => {
+  it('should add point on a line segment at given position', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
-    const result = addPointNode.execute({ path: { type: "path", value: path } }, { segmentIndex: 0, t: 0.5 });
+    const result = addPointNode.execute({ path: { type: 'path', value: path } }, { segmentIndex: 0, t: 0.5 });
     const cmds = decodeCommands((result.path as any).value.commands);
     expect(cmds.filter((c) => c.type === PathCmd.Line).length).toBe(2);
   });
 });
 
-describe("remove point", () => {
-  it("should remove a vertex and merge adjacent segments", () => {
+describe('remove point', () => {
+  it('should remove a vertex and merge adjacent segments', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(50, 0).lineTo(100, 0).build();
-    const result = removePointNode.execute({ path: { type: "path", value: path } }, { pointIndex: 1 });
+    const result = removePointNode.execute({ path: { type: 'path', value: path } }, { pointIndex: 1 });
     const cmds = decodeCommands((result.path as any).value.commands);
     // Middle point removed → single line from (0,0) to (100,0)
     expect(cmds.filter((c) => c.type === PathCmd.Line).length).toBe(1);
@@ -259,23 +259,23 @@ feat(vector-engine): add point and remove point path operations (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("convert point type", () => {
-  it("should convert corner to smooth (add cubic handles)", () => {
+describe('convert point type', () => {
+  it('should convert corner to smooth (add cubic handles)', () => {
     const zigzag = new PathBuilder().moveTo(0, 0).lineTo(50, 100).lineTo(100, 0).build();
     const result = convertPointNode.execute(
-      { path: { type: "path", value: zigzag } },
-      { pointIndex: 1, pointType: "smooth" },
+      { path: { type: 'path', value: zigzag } },
+      { pointIndex: 1, pointType: 'smooth' },
     );
     const cmds = decodeCommands((result.path as any).value.commands);
     const hasCubics = cmds.some((c) => c.type === PathCmd.Cubic);
     expect(hasCubics).toBe(true);
   });
 
-  it("should convert smooth to corner (remove handles)", () => {
+  it('should convert smooth to corner (remove handles)', () => {
     const curve = new PathBuilder().moveTo(0, 0).cubicTo(33, 100, 66, 100, 100, 0).build();
     const result = convertPointNode.execute(
-      { path: { type: "path", value: curve } },
-      { pointIndex: 1, pointType: "corner" },
+      { path: { type: 'path', value: curve } },
+      { pointIndex: 1, pointType: 'corner' },
     );
     const cmds = decodeCommands((result.path as any).value.commands);
     // Endpoint of cubic → line
@@ -284,13 +284,13 @@ describe("convert point type", () => {
   });
 });
 
-describe("split path", () => {
-  it("should split path at offset into two sub-paths", () => {
+describe('split path', () => {
+  it('should split path at offset into two sub-paths', () => {
     const path = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(200, 0).build();
-    const result = splitPathNode.execute({ path: { type: "path", value: path } }, { offset: 0.5 });
+    const result = splitPathNode.execute({ path: { type: 'path', value: path } }, { offset: 0.5 });
     // Should output two paths
-    expect((result.pathA as any).type).toBe("path");
-    expect((result.pathB as any).type).toBe("path");
+    expect((result.pathA as any).type).toBe('path');
+    expect((result.pathB as any).type).toBe('path');
   });
 });
 ```
@@ -321,27 +321,27 @@ feat(vector-engine): convert point type and split path operations (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-import { describe, expect, it } from "bun:test";
-import { pointInPath, pointOnStroke } from "./hit-test";
-import { PathBuilder } from "./builder";
+import { describe, expect, it } from 'bun:test';
+import { pointInPath, pointOnStroke } from './hit-test';
+import { PathBuilder } from './builder';
 
-describe("pointInPath", () => {
-  it("should return true for point inside closed rectangle", () => {
+describe('pointInPath', () => {
+  it('should return true for point inside closed rectangle', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     expect(pointInPath({ x: 50, y: 50 }, rect)).toBe(true);
   });
 
-  it("should return false for point outside rectangle", () => {
+  it('should return false for point outside rectangle', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     expect(pointInPath({ x: 150, y: 50 }, rect)).toBe(false);
   });
 
-  it("should return false for open path", () => {
+  it('should return false for open path', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     expect(pointInPath({ x: 50, y: 0 }, line)).toBe(false);
   });
 
-  it("should handle concave polygon", () => {
+  it('should handle concave polygon', () => {
     // L-shaped polygon
     const L = new PathBuilder()
       .moveTo(0, 0)
@@ -357,7 +357,7 @@ describe("pointInPath", () => {
     expect(pointInPath({ x: 75, y: 75 }, L)).toBe(true); // inside
   });
 
-  it("should handle path with curves", () => {
+  it('should handle path with curves', () => {
     // Circle approximated with cubics
     const k = 0.5522847498;
     const r = 50;
@@ -416,21 +416,21 @@ feat(vector-engine): point-in-path hit testing via ray casting (HYP-308)
 - [ ] **Step 1: Write failing tests**
 
 ```typescript
-describe("pointOnStroke", () => {
-  it("should return true for point near stroke", () => {
+describe('pointOnStroke', () => {
+  it('should return true for point near stroke', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     expect(pointOnStroke({ x: 50, y: 2 }, line, 5)).toBe(true); // within 5px
   });
 
-  it("should return false for point far from stroke", () => {
+  it('should return false for point far from stroke', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     expect(pointOnStroke({ x: 50, y: 20 }, line, 5)).toBe(false);
   });
 });
 
 // nearest.test.ts
-describe("nearestPointOnPath", () => {
-  it("should find nearest point on horizontal line", () => {
+describe('nearestPointOnPath', () => {
+  it('should find nearest point on horizontal line', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = nearestPointOnPath({ x: 50, y: 30 }, line);
     expect(result.point.x).toBeCloseTo(50, 1);
@@ -438,7 +438,7 @@ describe("nearestPointOnPath", () => {
     expect(result.distance).toBeCloseTo(30, 1);
   });
 
-  it("should clamp to endpoints", () => {
+  it('should clamp to endpoints', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
     const result = nearestPointOnPath({ x: -50, y: 0 }, line);
     expect(result.point.x).toBeCloseTo(0, 1);
@@ -492,13 +492,13 @@ feat(vector-engine): point-on-stroke and nearest point on path (HYP-308)
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Renderer
  */
 
-import type { Point, SceneGraph } from "../types";
+import type { Point, SceneGraph } from '../types';
 
 export interface HitResult {
   itemId: string;
   point: Point;
   /** 'fill' if point is inside shape, 'stroke' if on edge */
-  hitType: "fill" | "stroke";
+  hitType: 'fill' | 'stroke';
 }
 
 export interface VectorRenderer {
@@ -520,11 +520,11 @@ export interface VectorRenderer {
  *   Hit testing uses flattened polyline approximation.
  */
 
-import { sceneToSvg } from "../export/svg";
-import { pointInPath } from "../path/hit-test";
-import type { Point, SceneGraph, SceneItem } from "../types";
-import { isSceneItem } from "../types";
-import type { HitResult, VectorRenderer } from "./types";
+import { sceneToSvg } from '../export/svg';
+import { pointInPath } from '../path/hit-test';
+import type { Point, SceneGraph, SceneItem } from '../types';
+import { isSceneItem } from '../types';
+import type { HitResult, VectorRenderer } from './types';
 
 export class SVGStringRenderer implements VectorRenderer {
   render(scene: SceneGraph): string {
@@ -538,12 +538,12 @@ export class SVGStringRenderer implements VectorRenderer {
       if (isSceneItem(entry) && entry.visible) {
         // Check fill first (higher priority)
         if (entry.style.fill && pointInPath(point, entry.path)) {
-          return { itemId: entry.id, point, hitType: "fill" };
+          return { itemId: entry.id, point, hitType: 'fill' };
         }
         // Check stroke (tolerance = stroke width or 3px minimum)
         const strokeWidth = entry.style.stroke?.width ?? 0;
         if (strokeWidth > 0 && pointOnStroke(point, entry.path, Math.max(strokeWidth / 2, 1.5))) {
-          return { itemId: entry.id, point, hitType: "stroke" };
+          return { itemId: entry.id, point, hitType: 'stroke' };
         }
       }
     }
@@ -559,19 +559,19 @@ export class SVGStringRenderer implements VectorRenderer {
 - [ ] **Step 3: Write tests**
 
 ```typescript
-describe("SVGStringRenderer", () => {
-  it("should render scene to SVG string", () => {
+describe('SVGStringRenderer', () => {
+  it('should render scene to SVG string', () => {
     const renderer = new SVGStringRenderer();
     const scene: SceneGraph = {
       items: [],
       canvas: { width: 100, height: 100 },
     };
     const svg = renderer.render(scene);
-    expect(svg).toContain("<svg");
+    expect(svg).toContain('<svg');
     expect(svg).toContain('viewBox="0 0 100 100"');
   });
 
-  it("should hit test items back-to-front", () => {
+  it('should hit test items back-to-front', () => {
     // ... build scene with two overlapping rectangles
     // hit test at overlap point → should return top item
   });
@@ -600,7 +600,7 @@ feat(vector-engine): VectorRenderer interface and SVGStringRenderer (HYP-308)
 
 ```typescript
 // persistence/types.ts
-import type { GraphDiff, GraphEdge, GraphNode } from "../types";
+import type { GraphDiff, GraphEdge, GraphNode } from '../types';
 
 export interface VectorGraphMeta {
   componentPath: string;
@@ -634,23 +634,23 @@ export interface VectorGraphFile {
 - [ ] **Step 2: Write tests for serialization**
 
 ```typescript
-describe("VectorGraphFile serialization", () => {
-  it("should serialize and deserialize graph to JSON", () => {
-    const graph = VectorGraphModel.create("test", "Test", 100, 100);
-    graph.addNode({ type: "rectangle", params: { width: 50, height: 50 } });
-    const file = serializeGraph(graph, { componentPath: "src/App.tsx" });
+describe('VectorGraphFile serialization', () => {
+  it('should serialize and deserialize graph to JSON', () => {
+    const graph = VectorGraphModel.create('test', 'Test', 100, 100);
+    graph.addNode({ type: 'rectangle', params: { width: 50, height: 50 } });
+    const file = serializeGraph(graph, { componentPath: 'src/App.tsx' });
     const json = JSON.stringify(file);
     const loaded = deserializeGraph(JSON.parse(json));
     expect(loaded.model.nodeCount).toBe(1);
-    expect(loaded.meta.componentPath).toBe("src/App.tsx");
+    expect(loaded.meta.componentPath).toBe('src/App.tsx');
   });
 
-  it("should include operation log from history", () => {
+  it('should include operation log from history', () => {
     // Create graph, make changes via HistoryManager, serialize
     // Verify operations array contains the history entries
   });
 
-  it("should reconstruct graph state from base + operations", () => {
+  it('should reconstruct graph state from base + operations', () => {
     // Serialize graph with operations
     // Deserialize and verify final state matches
   });
@@ -704,14 +704,14 @@ feat(vector-engine): VectorGraphFile persistence format (HYP-308)
 - [ ] **Step 1: Write tests**
 
 ```typescript
-describe("operation log", () => {
-  it("should append operations", () => {
+describe('operation log', () => {
+  it('should append operations', () => {
     const log = new OperationLog();
-    log.append({ timestamp: 1, description: "test", diffs: [] });
+    log.append({ timestamp: 1, description: 'test', diffs: [] });
     expect(log.length).toBe(1);
   });
 
-  it("should compact old operations into base state", () => {
+  it('should compact old operations into base state', () => {
     const log = new OperationLog();
     // Add 150 operations
     for (let i = 0; i < 150; i++) {
@@ -723,7 +723,7 @@ describe("operation log", () => {
     // Base state should have absorbed the first 50 operations
   });
 
-  it("should replay operations onto base state", () => {
+  it('should replay operations onto base state', () => {
     // Create base state, add operations that add a node, replay
     // Verify the node exists in the replayed state
   });
@@ -852,11 +852,11 @@ cd packages/vector-wasm && bun add canvaskit-wasm
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeAll } from "bun:test";
-import { CanvasKitPathOps, initCanvasKit } from "./canvaskit-pathops";
-import { PathBuilder } from "vector-engine";
+import { describe, expect, it, beforeAll } from 'bun:test';
+import { CanvasKitPathOps, initCanvasKit } from './canvaskit-pathops';
+import { PathBuilder } from 'vector-engine';
 
-describe("CanvasKitPathOps", () => {
+describe('CanvasKitPathOps', () => {
   let pathOps: CanvasKitPathOps;
 
   beforeAll(async () => {
@@ -864,21 +864,21 @@ describe("CanvasKitPathOps", () => {
     pathOps = new CanvasKitPathOps(ck);
   }, 10000);
 
-  it("should compute boolean union of two rectangles", () => {
+  it('should compute boolean union of two rectangles', () => {
     const a = new PathBuilder().moveTo(0, 0).lineTo(60, 0).lineTo(60, 60).lineTo(0, 60).close().build();
     const b = new PathBuilder().moveTo(40, 40).lineTo(100, 40).lineTo(100, 100).lineTo(40, 100).close().build();
-    const result = pathOps.boolean("union", a, b);
+    const result = pathOps.boolean('union', a, b);
     expect(result.commands.length).toBeGreaterThan(0);
     expect(result.closed).toBe(true);
   });
 
-  it("should convert stroke to filled path", () => {
+  it('should convert stroke to filled path', () => {
     const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
-    const result = pathOps.strokeToPath(line, 10, "round", "round");
+    const result = pathOps.strokeToPath(line, 10, 'round', 'round');
     expect(result.closed).toBe(true);
   });
 
-  it("should remove self-intersections", () => {
+  it('should remove self-intersections', () => {
     const figure8 = new PathBuilder().moveTo(0, 50).lineTo(100, 100).lineTo(100, 0).lineTo(0, 50).close().build();
     const result = pathOps.removeSelfIntersections(figure8);
     expect(result.commands.length).toBeGreaterThan(0);
@@ -938,11 +938,11 @@ NOT `js-angusj-clipper` (which wraps the older Clipper1).
 - [ ] **Step 2: Write failing tests**
 
 ```typescript
-import { describe, expect, it, beforeAll } from "bun:test";
-import { Clipper2Offset, initClipper2 } from "./clipper-offset";
-import { PathBuilder } from "vector-engine";
+import { describe, expect, it, beforeAll } from 'bun:test';
+import { Clipper2Offset, initClipper2 } from './clipper-offset';
+import { PathBuilder } from 'vector-engine';
 
-describe("Clipper2Offset", () => {
+describe('Clipper2Offset', () => {
   let clipper: Clipper2Offset;
 
   beforeAll(async () => {
@@ -950,13 +950,13 @@ describe("Clipper2Offset", () => {
     clipper = new Clipper2Offset(c2);
   }, 10000);
 
-  it("should inflate a rectangle", () => {
+  it('should inflate a rectangle', () => {
     const rect = new PathBuilder().moveTo(10, 10).lineTo(90, 10).lineTo(90, 90).lineTo(10, 90).close().build();
     const result = clipper.offset(rect, 5);
     expect(result.commands.length).toBeGreaterThan(rect.commands.length);
   });
 
-  it("should deflate a rectangle", () => {
+  it('should deflate a rectangle', () => {
     const rect = new PathBuilder().moveTo(0, 0).lineTo(100, 0).lineTo(100, 100).lineTo(0, 100).close().build();
     const result = clipper.offset(rect, -10);
     expect(result.commands.length).toBeGreaterThan(0);
@@ -1000,11 +1000,11 @@ feat(vector-wasm): Clipper2 path offset backend (HYP-308)
 - [ ] **Step 1: Write tests**
 
 ```typescript
-describe("version migration", () => {
-  it("should migrate v1 graph to current version", () => {
+describe('version migration', () => {
+  it('should migrate v1 graph to current version', () => {
     const v1Graph: VectorGraphFile = {
       version: 1,
-      meta: { componentPath: "" },
+      meta: { componentPath: '' },
       base: { canvas: { width: 100, height: 100 }, nodes: {}, edges: [], muted: [] },
       operations: [],
       undoPointer: 0,
@@ -1014,10 +1014,10 @@ describe("version migration", () => {
     expect(migrated.version).toBe(CURRENT_VERSION);
   });
 
-  it("should refuse to open future version", () => {
+  it('should refuse to open future version', () => {
     const futureGraph: VectorGraphFile = {
       version: 999,
-      meta: { componentPath: "" },
+      meta: { componentPath: '' },
       base: { canvas: { width: 100, height: 100 }, nodes: {}, edges: [], muted: [] },
       operations: [],
       undoPointer: 0,
@@ -1026,7 +1026,7 @@ describe("version migration", () => {
     expect(() => migrateGraph(futureGraph)).toThrow(/version/i);
   });
 
-  it("should apply migrations sequentially", () => {
+  it('should apply migrations sequentially', () => {
     // Register a v1→v2 migration that adds a field
     // Verify the field exists after migration
   });
@@ -1148,14 +1148,14 @@ feat(vector-engine): graph reconciliation diff algorithm (HYP-308)
 - [ ] **Step 1: Write tests**
 
 ```typescript
-describe("apply reconciliation", () => {
-  it("should apply diff as undoable operations", () => {
-    const graph = VectorGraphModel.create("test", "Test", 100, 100);
-    graph.addNode({ type: "rectangle", params: { width: 50, height: 50 } });
+describe('apply reconciliation', () => {
+  it('should apply diff as undoable operations', () => {
+    const graph = VectorGraphModel.create('test', 'Test', 100, 100);
+    graph.addNode({ type: 'rectangle', params: { width: 50, height: 50 } });
     const history = new HistoryManager(graph);
 
     const diff: ReconciliationDiff = {
-      added: { nodes: [{ id: "new-1", type: "ellipse", params: { rx: 25, ry: 25 } }], edges: [] },
+      added: { nodes: [{ id: 'new-1', type: 'ellipse', params: { rx: 25, ry: 25 } }], edges: [] },
       removed: { nodeIds: [], edgeIds: [] },
       modified: { params: [], reordered: [], muted: { added: [], removed: [] } },
       meta: { canvasChanged: false, viewportChanged: false },

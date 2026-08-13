@@ -69,7 +69,7 @@ All source ownership, condition, confidence, theme, and capability types. These 
  * Accessed via: bun run test lib/style-read/types.test.ts
  * Assumptions: types are importable and values satisfy type constraints
  */
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 import type {
   CascadeContext,
   CssSystemId,
@@ -81,136 +81,136 @@ import type {
   StyleCondition,
   StyleSourceOwner,
   StyleSourceTab,
-} from "./types";
+} from './types';
 
-describe("style-read types", () => {
-  it("CssSystemId covers all supported systems", () => {
+describe('style-read types', () => {
+  it('CssSystemId covers all supported systems', () => {
     const systems: CssSystemId[] = [
-      "tailwind-v3",
-      "tailwind-v4",
-      "css-modules",
-      "plain-css",
-      "inline-style",
-      "emotion",
-      "styled-components",
-      "vanilla-extract",
-      "mui-system",
-      "chakra-ui",
-      "mantine",
-      "tamagui",
+      'tailwind-v3',
+      'tailwind-v4',
+      'css-modules',
+      'plain-css',
+      'inline-style',
+      'emotion',
+      'styled-components',
+      'vanilla-extract',
+      'mui-system',
+      'chakra-ui',
+      'mantine',
+      'tamagui',
     ];
     expect(systems).toHaveLength(12);
   });
 
-  it("SourceForm covers all write surfaces", () => {
+  it('SourceForm covers all write surfaces', () => {
     const forms: SourceForm[] = [
-      "elementClass",
-      "cssStyleRule",
-      "scriptReactStyleRule",
-      "scriptNativeStyleRule",
-      "adapterKnownElementProp",
-      "arbitraryElementProp",
+      'elementClass',
+      'cssStyleRule',
+      'scriptReactStyleRule',
+      'scriptNativeStyleRule',
+      'adapterKnownElementProp',
+      'arbitraryElementProp',
     ];
     expect(forms).toHaveLength(6);
   });
 
-  it("SourceConfidence has three levels", () => {
-    const levels: SourceConfidence[] = ["exact", "probable", "computed-only"];
+  it('SourceConfidence has three levels', () => {
+    const levels: SourceConfidence[] = ['exact', 'probable', 'computed-only'];
     expect(levels).toHaveLength(3);
   });
 
-  it("StyleSourceOwner has required fields", () => {
+  it('StyleSourceOwner has required fields', () => {
     const owner: StyleSourceOwner = {
-      cssSystem: "css-modules",
-      sourceForm: "cssStyleRule",
-      cssSyntax: "css",
-      filePath: "src/Card.module.css",
-      selector: ".card",
-      property: "padding-left",
-      condition: { state: "base" },
-      confidence: "exact",
+      cssSystem: 'css-modules',
+      sourceForm: 'cssStyleRule',
+      cssSyntax: 'css',
+      filePath: 'src/Card.module.css',
+      selector: '.card',
+      property: 'padding-left',
+      condition: { state: 'base' },
+      confidence: 'exact',
     };
-    expect(owner.cssSystem).toBe("css-modules");
-    expect(owner.sourceForm).toBe("cssStyleRule");
-    expect(owner.condition.state).toBe("base");
+    expect(owner.cssSystem).toBe('css-modules');
+    expect(owner.sourceForm).toBe('cssStyleRule');
+    expect(owner.condition.state).toBe('base');
   });
 
-  it("StyleCondition composes theme + viewport + state", () => {
+  it('StyleCondition composes theme + viewport + state', () => {
     const condition: StyleCondition = {
-      state: "hover",
+      state: 'hover',
       viewport: {
-        kind: "viewport",
-        key: "md",
+        kind: 'viewport',
+        key: 'md',
         minWidthPx: 768,
-        source: "tailwind-screens",
+        source: 'tailwind-screens',
       },
       theme: [
         {
-          axis: "color-scheme",
-          value: "dark",
-          source: "tailwind-dark-selector",
-          selector: ".dark &",
+          axis: 'color-scheme',
+          value: 'dark',
+          source: 'tailwind-dark-selector',
+          selector: '.dark &',
         },
       ],
     };
-    expect(condition.state).toBe("hover");
-    expect(condition.viewport?.key).toBe("md");
-    expect(condition.theme?.[0].value).toBe("dark");
+    expect(condition.state).toBe('hover');
+    expect(condition.viewport?.key).toBe('md');
+    expect(condition.theme?.[0].value).toBe('dark');
   });
 
-  it("CascadeContext is separate from StyleCondition", () => {
+  it('CascadeContext is separate from StyleCondition', () => {
     const cascade: CascadeContext = {
-      layer: "components",
-      scope: { rootSelector: ".card" },
-      atRuleStack: [{ name: "layer", params: "components" }],
+      layer: 'components',
+      scope: { rootSelector: '.card' },
+      atRuleStack: [{ name: 'layer', params: 'components' }],
     };
-    expect(cascade.layer).toBe("components");
+    expect(cascade.layer).toBe('components');
   });
 
-  it("StyleSourceTab has Computed tab without cssSystem", () => {
+  it('StyleSourceTab has Computed tab without cssSystem', () => {
     const computed: StyleSourceTab = {
-      id: "computed",
-      label: "Computed",
-      condition: { state: "base" },
-      confidence: "computed-only",
+      id: 'computed',
+      label: 'Computed',
+      condition: { state: 'base' },
+      confidence: 'computed-only',
     };
     expect(computed.cssSystem).toBeUndefined();
     expect(computed.sourceForm).toBeUndefined();
   });
 
-  it("StyleSourceTab has source tab with cssSystem", () => {
+  it('StyleSourceTab has source tab with cssSystem', () => {
     const tab: StyleSourceTab = {
-      id: "css-modules:card",
-      label: ".card",
-      cssSystem: "css-modules",
-      sourceForm: "cssStyleRule",
-      cssSyntax: "css",
-      filePath: "src/Card.module.css",
-      selector: ".card",
-      condition: { state: "base" },
-      confidence: "exact",
+      id: 'css-modules:card',
+      label: '.card',
+      cssSystem: 'css-modules',
+      sourceForm: 'cssStyleRule',
+      cssSyntax: 'css',
+      filePath: 'src/Card.module.css',
+      selector: '.card',
+      condition: { state: 'base' },
+      confidence: 'exact',
     };
-    expect(tab.cssSystem).toBe("css-modules");
-    expect(tab.label).toBe(".card");
+    expect(tab.cssSystem).toBe('css-modules');
+    expect(tab.label).toBe('.card');
   });
 
-  it("ProjectStyleCapabilities uses arrays for multiple systems", () => {
+  it('ProjectStyleCapabilities uses arrays for multiple systems', () => {
     const caps: ProjectStyleCapabilities = {
-      projectCssSystems: ["tailwind-v4", "css-modules"],
-      projectUiKits: ["shadcn-ui"],
+      projectCssSystems: ['tailwind-v4', 'css-modules'],
+      projectUiKits: ['shadcn-ui'],
       componentPropMappers: [],
-      cssSyntaxes: ["css"],
+      cssSyntaxes: ['css'],
       projectThemeCapabilities: {
         axes: [],
-        mechanisms: ["tailwind-dark-variant"],
+        mechanisms: ['tailwind-dark-variant'],
         tokenSources: [],
       },
       packageEvidence: [],
       configEvidence: [],
       sourceEvidence: [],
     };
-    expect(caps.projectCssSystems).toContain("tailwind-v4");
-    expect(caps.projectCssSystems).toContain("css-modules");
+    expect(caps.projectCssSystems).toContain('tailwind-v4');
+    expect(caps.projectCssSystems).toContain('css-modules');
   });
 });
 ```
@@ -234,20 +234,20 @@ Expected: FAIL — module `./types` not found
 // --- CSS System Identity ---
 
 export type CssSystemId =
-  | "tailwind-v3"
-  | "tailwind-v4"
-  | "css-modules"
-  | "plain-css"
-  | "inline-style"
-  | "emotion"
-  | "styled-components"
-  | "vanilla-extract"
-  | "mui-system"
-  | "chakra-ui"
-  | "mantine"
-  | "tamagui";
+  | 'tailwind-v3'
+  | 'tailwind-v4'
+  | 'css-modules'
+  | 'plain-css'
+  | 'inline-style'
+  | 'emotion'
+  | 'styled-components'
+  | 'vanilla-extract'
+  | 'mui-system'
+  | 'chakra-ui'
+  | 'mantine'
+  | 'tamagui';
 
-export type CssSystemTopology = "flat" | "cascade";
+export type CssSystemTopology = 'flat' | 'cascade';
 
 export interface CssSystemDescriptor {
   id: CssSystemId;
@@ -255,64 +255,64 @@ export interface CssSystemDescriptor {
   defaultSourceForm: SourceForm;
 }
 
-export type CssSyntaxId = "css" | "scss" | "sass" | "less" | "stylus";
+export type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
 
 export type UiKitId =
-  | "shadcn-ui"
-  | "daisyui"
-  | "radix-ui"
-  | "mui"
-  | "chakra-ui"
-  | "ant-design"
-  | "mantine"
-  | "bootstrap"
-  | "flowbite"
-  | "headless-ui"
-  | "tamagui";
+  | 'shadcn-ui'
+  | 'daisyui'
+  | 'radix-ui'
+  | 'mui'
+  | 'chakra-ui'
+  | 'ant-design'
+  | 'mantine'
+  | 'bootstrap'
+  | 'flowbite'
+  | 'headless-ui'
+  | 'tamagui';
 
 export type ComponentPropMapperId =
-  | "tamagui"
-  | "chakra-ui"
-  | "mui-sx"
-  | "mantine"
-  | "ant-design"
-  | "react-bootstrap"
-  | "flowbite-react"
-  | "radix-ui"
-  | "headless-ui"
-  | "shadcn-cva";
+  | 'tamagui'
+  | 'chakra-ui'
+  | 'mui-sx'
+  | 'mantine'
+  | 'ant-design'
+  | 'react-bootstrap'
+  | 'flowbite-react'
+  | 'radix-ui'
+  | 'headless-ui'
+  | 'shadcn-cva';
 
 // --- Source Form ---
 
 export type SourceForm =
-  | "elementClass"
-  | "cssStyleRule"
-  | "scriptReactStyleRule"
-  | "scriptNativeStyleRule"
-  | "adapterKnownElementProp"
-  | "arbitraryElementProp";
+  | 'elementClass'
+  | 'cssStyleRule'
+  | 'scriptReactStyleRule'
+  | 'scriptNativeStyleRule'
+  | 'adapterKnownElementProp'
+  | 'arbitraryElementProp';
 
 // --- Source Confidence ---
 
-export type SourceConfidence = "exact" | "probable" | "computed-only";
+export type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 
 // --- Conditions ---
 
-export type StylePseudoState = "base" | "hover" | "focus" | "active" | "focus-visible" | "disabled";
+export type StylePseudoState = 'base' | 'hover' | 'focus' | 'active' | 'focus-visible' | 'disabled';
 
-export type StyleBreakpointKey = "base" | "xs" | "sm" | "md" | "lg" | "xl" | (string & {});
+export type StyleBreakpointKey = 'base' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | (string & {});
 
 export type ResponsiveConditionSource =
-  | "tailwind-screens"
-  | "mui-theme-breakpoints"
-  | "chakra-theme-breakpoints"
-  | "mantine-theme-breakpoints"
-  | "css-media-query"
-  | "css-container-query"
-  | "custom";
+  | 'tailwind-screens'
+  | 'mui-theme-breakpoints'
+  | 'chakra-theme-breakpoints'
+  | 'mantine-theme-breakpoints'
+  | 'css-media-query'
+  | 'css-container-query'
+  | 'custom';
 
 export interface ViewportCondition {
-  kind: "viewport";
+  kind: 'viewport';
   key: StyleBreakpointKey;
   minWidthPx?: number;
   maxWidthPx?: number;
@@ -321,7 +321,7 @@ export interface ViewportCondition {
 }
 
 export interface ContainerCondition {
-  kind: "container";
+  kind: 'container';
   key?: StyleBreakpointKey;
   containerName?: string;
   minWidthPx?: number;
@@ -331,29 +331,29 @@ export interface ContainerCondition {
 }
 
 export interface MediaCondition {
-  kind: "media" | "supports";
+  kind: 'media' | 'supports';
   query: string;
   source: ResponsiveConditionSource;
 }
 
 // --- Theme ---
 
-export type ThemeAxisId = "color-scheme" | "brand" | "density" | "contrast" | "platform" | (string & {});
+export type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
 export type ThemeConditionSource =
-  | "prefers-color-scheme"
-  | "tailwind-dark-selector"
-  | "mui-color-scheme"
-  | "chakra-color-mode"
-  | "mantine-color-scheme"
-  | "tamagui-theme"
-  | "data-attribute"
-  | "class-selector"
-  | "css-variable-scope"
-  | "script-condition"
-  | "theme-provider"
-  | "library-theme-config"
-  | "custom";
+  | 'prefers-color-scheme'
+  | 'tailwind-dark-selector'
+  | 'mui-color-scheme'
+  | 'chakra-color-mode'
+  | 'mantine-color-scheme'
+  | 'tamagui-theme'
+  | 'data-attribute'
+  | 'class-selector'
+  | 'css-variable-scope'
+  | 'script-condition'
+  | 'theme-provider'
+  | 'library-theme-config'
+  | 'custom';
 
 export interface ThemeCondition {
   axis: ThemeAxisId;
@@ -367,22 +367,22 @@ export interface ThemeCondition {
 }
 
 export type SelectorConditionKind =
-  | "self-pseudo"
-  | "ancestor-selector"
-  | "group-selector"
-  | "peer-selector"
-  | "data-attribute"
-  | "aria-attribute"
-  | "structural-selector"
-  | "slot-selector"
-  | "arbitrary-selector"
-  | "library-variant";
+  | 'self-pseudo'
+  | 'ancestor-selector'
+  | 'group-selector'
+  | 'peer-selector'
+  | 'data-attribute'
+  | 'aria-attribute'
+  | 'structural-selector'
+  | 'slot-selector'
+  | 'arbitrary-selector'
+  | 'library-variant';
 
 export interface SelectorCondition {
   kind: SelectorConditionKind;
   selector: string;
   label?: string;
-  source: "css-selector" | "tailwind-variant" | "mui-slot" | "chakra-pseudo-prop" | "mantine-slot" | "custom";
+  source: 'css-selector' | 'tailwind-variant' | 'mui-slot' | 'chakra-pseudo-prop' | 'mantine-slot' | 'custom';
 }
 
 export interface StyleCondition {
@@ -441,9 +441,9 @@ export interface StyleSourceTab {
 
 // --- Runtime Theme Context ---
 
-export type IdeThemePreference = "light" | "dark" | "system";
-export type ResolvedColorScheme = "light" | "dark";
-export type RuntimeThemeSource = "hyperide" | "vscode" | "browser-system" | "app-runtime" | "test-fixture";
+export type IdeThemePreference = 'light' | 'dark' | 'system';
+export type ResolvedColorScheme = 'light' | 'dark';
+export type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
 
 export interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -455,30 +455,30 @@ export interface RuntimeThemeContext {
 // --- Theme Capabilities ---
 
 export type ThemeMechanism =
-  | "prefers-color-scheme"
-  | "class-selector"
-  | "data-attribute"
-  | "css-custom-properties"
-  | "tailwind-dark-variant"
-  | "tailwind-theme"
-  | "mui-theme"
-  | "chakra-theme"
-  | "mantine-theme"
-  | "tamagui-theme"
-  | "vanilla-extract-theme"
-  | "css-in-js-theme-callback"
-  | "script-branch";
+  | 'prefers-color-scheme'
+  | 'class-selector'
+  | 'data-attribute'
+  | 'css-custom-properties'
+  | 'tailwind-dark-variant'
+  | 'tailwind-theme'
+  | 'mui-theme'
+  | 'chakra-theme'
+  | 'mantine-theme'
+  | 'tamagui-theme'
+  | 'vanilla-extract-theme'
+  | 'css-in-js-theme-callback'
+  | 'script-branch';
 
 export interface ThemeTokenSource {
   kind:
-    | "css-custom-property"
-    | "tailwind-token"
-    | "mui-theme-token"
-    | "chakra-theme-token"
-    | "mantine-theme-token"
-    | "tamagui-token"
-    | "vanilla-extract-token"
-    | "css-in-js-theme-token";
+    | 'css-custom-property'
+    | 'tailwind-token'
+    | 'mui-theme-token'
+    | 'chakra-theme-token'
+    | 'mantine-theme-token'
+    | 'tamagui-token'
+    | 'vanilla-extract-token'
+    | 'css-in-js-theme-token';
   filePath?: string;
   owner?: string;
 }
@@ -487,7 +487,7 @@ export interface ThemeAxisCapability {
   id: ThemeAxisId;
   values: string[];
   defaultValue?: string;
-  source: "config" | "css" | "runtime" | "library" | "inferred";
+  source: 'config' | 'css' | 'runtime' | 'library' | 'inferred';
 }
 
 export interface ProjectThemeCapabilities {
@@ -501,35 +501,35 @@ export interface ProjectThemeCapabilities {
 export interface PackageEvidence {
   packageName: string;
   version?: string;
-  dependencyKind: "dependencies" | "devDependencies" | "peerDependencies" | "unknown";
+  dependencyKind: 'dependencies' | 'devDependencies' | 'peerDependencies' | 'unknown';
 }
 
 export interface ConfigEvidence {
   filePath: string;
   kind:
-    | "tailwind-config"
-    | "postcss-config"
-    | "vite-config"
-    | "next-config"
-    | "tsconfig"
-    | "vanilla-extract-config"
-    | "theme-config"
-    | "other";
+    | 'tailwind-config'
+    | 'postcss-config'
+    | 'vite-config'
+    | 'next-config'
+    | 'tsconfig'
+    | 'vanilla-extract-config'
+    | 'theme-config'
+    | 'other';
 }
 
 export interface SourceEvidence {
   filePath: string;
   cssSyntax?: CssSyntaxId;
   kind:
-    | "css-import"
-    | "css-module-import"
-    | "css-in-js-import"
-    | "ui-kit-import"
-    | "style-prop"
-    | "className-expression"
-    | "theme-config"
-    | "css-variable-definition"
-    | "script-theme-branch";
+    | 'css-import'
+    | 'css-module-import'
+    | 'css-in-js-import'
+    | 'ui-kit-import'
+    | 'style-prop'
+    | 'className-expression'
+    | 'theme-config'
+    | 'css-variable-definition'
+    | 'script-theme-branch';
 }
 
 export interface ProjectStyleCapabilities {
@@ -544,13 +544,13 @@ export interface ProjectStyleCapabilities {
 }
 
 export interface ClassNameExpressionFacts {
-  kind: "literal" | "template" | "call-expression" | "member-expression" | "unknown";
+  kind: 'literal' | 'template' | 'call-expression' | 'member-expression' | 'unknown';
   staticClasses: string[];
   dynamic: boolean;
 }
 
 export interface StyleAttributeFacts {
-  kind: "object-literal" | "identifier" | "spread" | "unknown";
+  kind: 'object-literal' | 'identifier' | 'spread' | 'unknown';
   hasSpread: boolean;
 }
 
@@ -578,7 +578,7 @@ export interface ThemeVariableUsage {
 
 export interface ThemeTokenUsage {
   tokenPath: string;
-  source: ThemeTokenSource["kind"];
+  source: ThemeTokenSource['kind'];
   owners: StyleSourceOwner[];
 }
 
@@ -604,18 +604,18 @@ export interface ElementStyleFacts {
 // --- Inspector Surface Decision ---
 
 export interface InspectorSurfaceDecision {
-  standardStyleInspector: "enabled" | "disabled";
-  propsEditor: "hidden" | "compact" | "full";
+  standardStyleInspector: 'enabled' | 'disabled';
+  propsEditor: 'hidden' | 'compact' | 'full';
   reasons: Array<
-    | "intrinsic-element"
-    | "accepts-className"
-    | "accepts-style"
-    | "accepts-css-prop"
-    | "accepts-sx-prop"
-    | "adapter-known-prop-mapper"
-    | "source-owner-found"
-    | "props-schema-available"
-    | "no-standard-style-surface"
+    | 'intrinsic-element'
+    | 'accepts-className'
+    | 'accepts-style'
+    | 'accepts-css-prop'
+    | 'accepts-sx-prop'
+    | 'adapter-known-prop-mapper'
+    | 'source-owner-found'
+    | 'props-schema-available'
+    | 'no-standard-style-surface'
   >;
 }
 
@@ -624,7 +624,7 @@ export interface InspectorSurfaceDecision {
 export type ComponentPropMapperMatch =
   | {
       matched: true;
-      confidence: "exact" | "probable";
+      confidence: 'exact' | 'probable';
       supportedProps: string[];
       supportedStates: StylePseudoState[];
     }
@@ -634,7 +634,7 @@ export type ComponentPropMapperMatch =
     };
 
 export interface ComponentPropStyleWriteTarget {
-  sourceForm: "adapterKnownElementProp" | "scriptReactStyleRule" | "elementClass" | "cssStyleRule";
+  sourceForm: 'adapterKnownElementProp' | 'scriptReactStyleRule' | 'elementClass' | 'cssStyleRule';
   props?: Record<string, unknown>;
   propPaths?: string[][];
   sourceOwner?: StyleSourceOwner;
@@ -695,7 +695,7 @@ StyleWritePlan union, StyleWriteContext, StyleWriteResult, framework adapter int
  * Accessed via: bun run test lib/style-write/types.test.ts
  * Assumptions: types are importable and plan union discriminates correctly
  */
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test';
 import type {
   AdapterPropPlan,
   ArbitraryPropPlan,
@@ -710,220 +710,220 @@ import type {
   StyleWritePlan,
   StyleWriteResult,
   TailwindPlan,
-} from "./types";
+} from './types';
 
-describe("StyleWritePlan union", () => {
-  it("TailwindPlan discriminates by sourceForm elementClass", () => {
+describe('StyleWritePlan union', () => {
+  it('TailwindPlan discriminates by sourceForm elementClass', () => {
     const plan: TailwindPlan = {
-      id: "plan-1",
-      sourceForm: "elementClass",
-      cssSystem: "tailwind-v4",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/App.tsx", elementRef: "src/App.tsx:12:4" },
-      requestedStyles: { paddingLeft: "16" },
-      targetStyles: { paddingLeft: "16" },
-      condition: { state: "base" },
-      reason: "project-primary-system",
-      confidence: "exact",
+      id: 'plan-1',
+      sourceForm: 'elementClass',
+      cssSystem: 'tailwind-v4',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:12:4' },
+      requestedStyles: { paddingLeft: '16' },
+      targetStyles: { paddingLeft: '16' },
+      condition: { state: 'base' },
+      reason: 'project-primary-system',
+      confidence: 'exact',
       diagnostics: [],
       strategy: {
-        mode: "static",
-        removeForProperties: ["paddingLeft"],
-        addClasses: "pl-[16px]",
+        mode: 'static',
+        removeForProperties: ['paddingLeft'],
+        addClasses: 'pl-[16px]',
       },
-      target: { filePath: "src/App.tsx", elementRef: "src/App.tsx:12:4" },
+      target: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:12:4' },
     };
-    expect(plan.sourceForm).toBe("elementClass");
-    expect(plan.strategy.mode).toBe("static");
+    expect(plan.sourceForm).toBe('elementClass');
+    expect(plan.strategy.mode).toBe('static');
   });
 
-  it("CssModulesFilePlan discriminates by cssSystem css-modules", () => {
+  it('CssModulesFilePlan discriminates by cssSystem css-modules', () => {
     const plan: CssModulesFilePlan = {
-      id: "plan-2",
-      sourceForm: "cssStyleRule",
-      cssSystem: "css-modules",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/App.tsx", elementRef: "src/App.tsx:20:6" },
-      requestedStyles: { paddingLeft: "16" },
-      targetStyles: { paddingLeft: "16px" },
-      condition: { state: "base" },
-      reason: "existing-owner",
-      confidence: "exact",
+      id: 'plan-2',
+      sourceForm: 'cssStyleRule',
+      cssSystem: 'css-modules',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:20:6' },
+      requestedStyles: { paddingLeft: '16' },
+      targetStyles: { paddingLeft: '16px' },
+      condition: { state: 'base' },
+      reason: 'existing-owner',
+      confidence: 'exact',
       diagnostics: [],
       target: {
-        cssFilePath: "src/App.module.css",
-        cssSyntax: "css",
-        selector: ".app",
-        declarations: { "padding-left": "16px" },
-        importSource: "./App.module.css",
-        importLocalName: "styles",
-        classKey: "app",
+        cssFilePath: 'src/App.module.css',
+        cssSyntax: 'css',
+        selector: '.app',
+        declarations: { 'padding-left': '16px' },
+        importSource: './App.module.css',
+        importLocalName: 'styles',
+        classKey: 'app',
       },
     };
-    expect(plan.sourceForm).toBe("cssStyleRule");
-    expect(plan.cssSystem).toBe("css-modules");
+    expect(plan.sourceForm).toBe('cssStyleRule');
+    expect(plan.cssSystem).toBe('css-modules');
   });
 
-  it("PlainCssExistingOwnerPlan has mode existing-owner", () => {
+  it('PlainCssExistingOwnerPlan has mode existing-owner', () => {
     const plan: PlainCssExistingOwnerPlan = {
-      id: "plan-3",
-      sourceForm: "cssStyleRule",
-      cssSystem: "plain-css",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/App.tsx", elementRef: "src/App.tsx:8:4" },
-      requestedStyles: { color: "red" },
-      targetStyles: { color: "red" },
-      condition: { state: "base" },
-      reason: "existing-owner",
-      confidence: "exact",
+      id: 'plan-3',
+      sourceForm: 'cssStyleRule',
+      cssSystem: 'plain-css',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:8:4' },
+      requestedStyles: { color: 'red' },
+      targetStyles: { color: 'red' },
+      condition: { state: 'base' },
+      reason: 'existing-owner',
+      confidence: 'exact',
       diagnostics: [],
       target: {
-        mode: "existing-owner",
-        cssFilePath: "src/global.css",
-        cssSyntax: "css",
-        selector: ".card",
-        declarations: { color: "red" },
+        mode: 'existing-owner',
+        cssFilePath: 'src/global.css',
+        cssSyntax: 'css',
+        selector: '.card',
+        declarations: { color: 'red' },
         cascadeOwner: {
-          cssSystem: "plain-css",
-          sourceForm: "cssStyleRule",
-          filePath: "src/global.css",
-          selector: ".card",
-          property: "color",
-          condition: { state: "base" },
-          confidence: "exact",
+          cssSystem: 'plain-css',
+          sourceForm: 'cssStyleRule',
+          filePath: 'src/global.css',
+          selector: '.card',
+          property: 'color',
+          condition: { state: 'base' },
+          confidence: 'exact',
         },
       },
     };
-    expect(plan.target.mode).toBe("existing-owner");
+    expect(plan.target.mode).toBe('existing-owner');
   });
 
-  it("ScriptObjectStylePlan discriminates by scriptReactStyleRule", () => {
+  it('ScriptObjectStylePlan discriminates by scriptReactStyleRule', () => {
     const plan: ScriptObjectStylePlan = {
-      id: "plan-4",
-      sourceForm: "scriptReactStyleRule",
-      cssSystem: "inline-style",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/App.tsx", elementRef: "src/App.tsx:8:4" },
-      requestedStyles: { opacity: "50" },
-      targetStyles: { opacity: "0.5" },
-      condition: { state: "base" },
-      reason: "existing-owner",
-      confidence: "exact",
+      id: 'plan-4',
+      sourceForm: 'scriptReactStyleRule',
+      cssSystem: 'inline-style',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:8:4' },
+      requestedStyles: { opacity: '50' },
+      targetStyles: { opacity: '0.5' },
+      condition: { state: 'base' },
+      reason: 'existing-owner',
+      confidence: 'exact',
       diagnostics: [],
       target: {
-        filePath: "src/App.tsx",
-        objectPath: "JSXAttribute[name=style]/JSXExpressionContainer/ObjectExpression",
-        styles: { opacity: "0.5" },
-        mergeMode: "object",
+        filePath: 'src/App.tsx',
+        objectPath: 'JSXAttribute[name=style]/JSXExpressionContainer/ObjectExpression',
+        styles: { opacity: '0.5' },
+        mergeMode: 'object',
       },
     };
-    expect(plan.sourceForm).toBe("scriptReactStyleRule");
+    expect(plan.sourceForm).toBe('scriptReactStyleRule');
   });
 
-  it("AdapterPropPlan requires mapperId for standard-style-inspector origin", () => {
+  it('AdapterPropPlan requires mapperId for standard-style-inspector origin', () => {
     const plan: AdapterPropPlan = {
-      id: "plan-5",
-      sourceForm: "adapterKnownElementProp",
-      cssSystem: "tamagui",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/Card.tsx", elementRef: "src/Card.tsx:8:4", tagName: "YStack" },
-      requestedStyles: { opacity: "50" },
+      id: 'plan-5',
+      sourceForm: 'adapterKnownElementProp',
+      cssSystem: 'tamagui',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/Card.tsx', elementRef: 'src/Card.tsx:8:4', tagName: 'YStack' },
+      requestedStyles: { opacity: '50' },
       targetStyles: { opacity: 0.5 },
-      condition: { state: "base" },
-      reason: "existing-owner",
-      confidence: "exact",
+      condition: { state: 'base' },
+      reason: 'existing-owner',
+      confidence: 'exact',
       diagnostics: [],
       target: {
-        filePath: "src/Card.tsx",
-        elementRef: "src/Card.tsx:8:4",
-        mapperId: "tamagui",
-        origin: "standard-style-inspector",
+        filePath: 'src/Card.tsx',
+        elementRef: 'src/Card.tsx:8:4',
+        mapperId: 'tamagui',
+        origin: 'standard-style-inspector',
         props: { opacity: 0.5 },
-        propPaths: [["opacity"]],
+        propPaths: [['opacity']],
       },
     };
-    expect(plan.target.mapperId).toBe("tamagui");
-    expect(plan.target.origin).toBe("standard-style-inspector");
+    expect(plan.target.mapperId).toBe('tamagui');
+    expect(plan.target.origin).toBe('standard-style-inspector');
   });
 
-  it("ArbitraryPropPlan has empty requestedStyles and targetStyles", () => {
+  it('ArbitraryPropPlan has empty requestedStyles and targetStyles', () => {
     const plan: ArbitraryPropPlan = {
-      id: "plan-6",
-      sourceForm: "arbitraryElementProp",
-      projectRoot: "/project",
-      sourceElement: { filePath: "src/Card.tsx", elementRef: "src/Card.tsx:8:4" },
+      id: 'plan-6',
+      sourceForm: 'arbitraryElementProp',
+      projectRoot: '/project',
+      sourceElement: { filePath: 'src/Card.tsx', elementRef: 'src/Card.tsx:8:4' },
       requestedStyles: {},
       targetStyles: {},
-      condition: { state: "base" },
-      reason: "explicit-prop-edit",
-      confidence: "exact",
+      condition: { state: 'base' },
+      reason: 'explicit-prop-edit',
+      confidence: 'exact',
       diagnostics: [],
       target: {
-        filePath: "src/Card.tsx",
-        elementRef: "src/Card.tsx:8:4",
-        origin: "recursive-props-editor",
-        props: { variant: "solid" },
-        propPaths: [["variant"]],
+        filePath: 'src/Card.tsx',
+        elementRef: 'src/Card.tsx:8:4',
+        origin: 'recursive-props-editor',
+        props: { variant: 'solid' },
+        propPaths: [['variant']],
       },
     };
     expect(Object.keys(plan.requestedStyles)).toHaveLength(0);
     expect(Object.keys(plan.targetStyles)).toHaveLength(0);
   });
 
-  it("StyleWriteContext carries per-request runtime theme context", () => {
+  it('StyleWriteContext carries per-request runtime theme context', () => {
     const ctx: StyleWriteContext = {
       projectCapabilities: {
-        projectCssSystems: ["tailwind-v4"],
+        projectCssSystems: ['tailwind-v4'],
         projectUiKits: [],
         componentPropMappers: [],
-        cssSyntaxes: ["css"],
+        cssSyntaxes: ['css'],
         projectThemeCapabilities: { axes: [], mechanisms: [], tokenSources: [] },
         packageEvidence: [],
         configEvidence: [],
         sourceEvidence: [],
       },
       elementFacts: {
-        elementCssSystems: ["tailwind-v4"],
+        elementCssSystems: ['tailwind-v4'],
         elementUiKits: [],
         elementPropMappers: [],
         sourceOwners: [],
       },
       runtimeThemeContext: {
-        ideThemePreference: "dark",
-        resolvedColorScheme: "dark",
-        source: "vscode",
+        ideThemePreference: 'dark',
+        resolvedColorScheme: 'dark',
+        source: 'vscode',
       },
-      condition: { state: "base" },
-      requestedStyles: { paddingLeft: "16" },
+      condition: { state: 'base' },
+      requestedStyles: { paddingLeft: '16' },
     };
-    expect(ctx.runtimeThemeContext.resolvedColorScheme).toBe("dark");
+    expect(ctx.runtimeThemeContext.resolvedColorScheme).toBe('dark');
   });
 
-  it("StyleWriteResult indicates success or failure", () => {
+  it('StyleWriteResult indicates success or failure', () => {
     const success: StyleWriteResult = {
       success: true,
       plan: {
-        id: "plan-1",
-        sourceForm: "elementClass",
-        cssSystem: "tailwind-v4",
-        projectRoot: "/project",
-        sourceElement: { filePath: "src/App.tsx", elementRef: "src/App.tsx:12:4" },
-        requestedStyles: { paddingLeft: "16" },
-        targetStyles: { paddingLeft: "16" },
-        condition: { state: "base" },
-        reason: "project-primary-system",
-        confidence: "exact",
+        id: 'plan-1',
+        sourceForm: 'elementClass',
+        cssSystem: 'tailwind-v4',
+        projectRoot: '/project',
+        sourceElement: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:12:4' },
+        requestedStyles: { paddingLeft: '16' },
+        targetStyles: { paddingLeft: '16' },
+        condition: { state: 'base' },
+        reason: 'project-primary-system',
+        confidence: 'exact',
         diagnostics: [],
-        strategy: { mode: "static", removeForProperties: ["paddingLeft"], addClasses: "pl-[16px]" },
-        target: { filePath: "src/App.tsx", elementRef: "src/App.tsx:12:4" },
+        strategy: { mode: 'static', removeForProperties: ['paddingLeft'], addClasses: 'pl-[16px]' },
+        target: { filePath: 'src/App.tsx', elementRef: 'src/App.tsx:12:4' },
       },
-      mutatedFiles: ["src/App.tsx"],
+      mutatedFiles: ['src/App.tsx'],
     };
     expect(success.success).toBe(true);
 
     const failure: StyleWriteResult = {
       success: false,
-      error: "CSS file not found: src/App.module.css",
+      error: 'CSS file not found: src/App.module.css',
     };
     expect(failure.success).toBe(false);
   });
@@ -958,7 +958,7 @@ import type {
   StyleCondition,
   StylePseudoState,
   StyleSourceOwner,
-} from "@lib/style-read/types";
+} from '@lib/style-read/types';
 
 // Re-export for consumers that need both read and write types
 export type { CssSystemId, CssSyntaxId, SourceForm, StyleCondition, StyleSourceOwner };
@@ -988,26 +988,26 @@ export interface StyleWritePlanBase {
   selectedSourceTabId?: string;
   routeDecision?: {
     sourceTabId: string;
-    router: "explicit-user-selection" | "ai-style-source-router" | "deterministic-owner-router";
+    router: 'explicit-user-selection' | 'ai-style-source-router' | 'deterministic-owner-router';
     reason: string;
-    confidence: "exact" | "probable" | "ai-assisted" | "fallback";
+    confidence: 'exact' | 'probable' | 'ai-assisted' | 'fallback';
   };
   condition: StyleCondition;
   reason:
-    | "existing-owner"
-    | "project-primary-system"
-    | "element-primary-system"
-    | "mixed-system-tailwind-priority"
-    | "css-module-selector-ambiguous"
-    | "css-rule-not-found"
-    | "dynamic-source-ambiguous"
-    | "explicit-local-override"
-    | "explicit-prop-edit"
-    | "theme-branch-selected"
-    | "theme-value-owner-selected";
-  confidence: "exact" | "probable" | "fallback";
+    | 'existing-owner'
+    | 'project-primary-system'
+    | 'element-primary-system'
+    | 'mixed-system-tailwind-priority'
+    | 'css-module-selector-ambiguous'
+    | 'css-rule-not-found'
+    | 'dynamic-source-ambiguous'
+    | 'explicit-local-override'
+    | 'explicit-prop-edit'
+    | 'theme-branch-selected'
+    | 'theme-value-owner-selected';
+  confidence: 'exact' | 'probable' | 'fallback';
   diagnostics: Array<{
-    level: "info" | "warning" | "error";
+    level: 'info' | 'warning' | 'error';
     message: string;
   }>;
 }
@@ -1022,22 +1022,22 @@ export interface ClassNameLocation {
 }
 
 export interface TailwindPlan extends StyleWritePlanBase {
-  sourceForm: "elementClass";
-  cssSystem: "tailwind-v3" | "tailwind-v4";
+  sourceForm: 'elementClass';
+  cssSystem: 'tailwind-v3' | 'tailwind-v4';
   strategy:
     | {
-        mode: "static";
+        mode: 'static';
         removeForProperties: string[];
         addClasses: string;
       }
     | {
-        mode: "dynamic";
+        mode: 'dynamic';
         locations: ClassNameLocation[];
         addClasses: string;
         removeForProperties: string[];
-        fallbackStrategy: "append-to-template" | "wrap-expression" | "location-only";
+        fallbackStrategy: 'append-to-template' | 'wrap-expression' | 'location-only';
         analysis: {
-          engine: "shared-deterministic-analyzer";
+          engine: 'shared-deterministic-analyzer';
           ambiguityResolverUsed?: boolean;
         };
       };
@@ -1048,11 +1048,11 @@ export interface TailwindPlan extends StyleWritePlanBase {
 }
 
 interface CssFilePlanBase extends StyleWritePlanBase {
-  sourceForm: "cssStyleRule";
+  sourceForm: 'cssStyleRule';
 }
 
 export interface CssModulesFilePlan extends CssFilePlanBase {
-  cssSystem: "css-modules";
+  cssSystem: 'css-modules';
   target: {
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
@@ -1066,12 +1066,12 @@ export interface CssModulesFilePlan extends CssFilePlanBase {
 }
 
 interface PlainCssFilePlanBase extends CssFilePlanBase {
-  cssSystem: "plain-css";
+  cssSystem: 'plain-css';
 }
 
 export interface PlainCssExistingOwnerPlan extends PlainCssFilePlanBase {
   target: {
-    mode: "existing-owner";
+    mode: 'existing-owner';
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
     selector: string;
@@ -1083,14 +1083,14 @@ export interface PlainCssExistingOwnerPlan extends PlainCssFilePlanBase {
 
 export interface PlainCssCreateRulePlan extends PlainCssFilePlanBase {
   target: {
-    mode: "create-rule";
+    mode: 'create-rule';
     cssFilePath: string;
     cssSyntax: CssSyntaxId;
     selector: string;
     declarations: Record<string, string>;
     createMode: {
-      reason: "no-existing-owner" | "explicit-new-selector";
-      insertionHint: "append-to-file" | "before-owner" | "after-owner";
+      reason: 'no-existing-owner' | 'explicit-new-selector';
+      insertionHint: 'append-to-file' | 'before-owner' | 'after-owner';
     };
     cascadeContext?: CascadeContext;
   };
@@ -1100,21 +1100,21 @@ export type PlainCssFilePlan = PlainCssExistingOwnerPlan | PlainCssCreateRulePla
 export type CssFilePlan = CssModulesFilePlan | PlainCssFilePlan;
 
 export interface ScriptObjectStylePlan extends StyleWritePlanBase {
-  sourceForm: "scriptReactStyleRule";
-  cssSystem: "inline-style" | "emotion" | "styled-components" | "vanilla-extract" | "mui-system" | "mantine";
+  sourceForm: 'scriptReactStyleRule';
+  cssSystem: 'inline-style' | 'emotion' | 'styled-components' | 'vanilla-extract' | 'mui-system' | 'mantine';
   target: {
     filePath: string;
     elementRef?: string;
     objectPath: string;
     styles: Record<string, TargetStyleValue>;
-    mergeMode: "object" | "spread-existing-expression";
+    mergeMode: 'object' | 'spread-existing-expression';
     cascadeContext?: CascadeContext;
   };
 }
 
 export interface ScriptTemplateStylePlan extends StyleWritePlanBase {
-  sourceForm: "scriptNativeStyleRule";
-  cssSystem: "emotion" | "styled-components";
+  sourceForm: 'scriptNativeStyleRule';
+  cssSystem: 'emotion' | 'styled-components';
   target: {
     filePath: string;
     quasiPath: string;
@@ -1124,24 +1124,24 @@ export interface ScriptTemplateStylePlan extends StyleWritePlanBase {
 }
 
 export interface AdapterPropPlan extends StyleWritePlanBase {
-  sourceForm: "adapterKnownElementProp";
+  sourceForm: 'adapterKnownElementProp';
   cssSystem: CssSystemId;
   target: {
     filePath: string;
     elementRef: string;
     mapperId: ComponentPropMapperId;
-    origin: "standard-style-inspector" | "recursive-props-editor";
+    origin: 'standard-style-inspector' | 'recursive-props-editor';
     props: Record<string, unknown>;
     propPaths?: string[][];
   };
 }
 
 export interface ArbitraryPropPlan extends StyleWritePlanBase {
-  sourceForm: "arbitraryElementProp";
+  sourceForm: 'arbitraryElementProp';
   target: {
     filePath: string;
     elementRef: string;
-    origin: "recursive-props-editor";
+    origin: 'recursive-props-editor';
     props: Record<string, unknown>;
     propPaths?: string[][];
   };
@@ -1269,167 +1269,167 @@ Validates and normalizes user input to canonical inspector form. Does NOT conver
  * Accessed via: bun run test lib/style-values/inspector-value-codec.test.ts
  * Assumptions: inspector canonical form is 0-100 for opacity, unitless numbers for lengths
  */
-import { describe, expect, it } from "bun:test";
-import { inspectorValueCodec } from "./inspector-value-codec";
+import { describe, expect, it } from 'bun:test';
+import { inspectorValueCodec } from './inspector-value-codec';
 
-describe("InspectorValueCodec.normalize", () => {
-  describe("opacity", () => {
-    it("passes through integer string", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "50" });
-      expect(result.value).toBe("50");
+describe('InspectorValueCodec.normalize', () => {
+  describe('opacity', () => {
+    it('passes through integer string', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '50' });
+      expect(result.value).toBe('50');
     });
 
-    it("normalizes percentage string to integer", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "50%" });
-      expect(result.value).toBe("50");
+    it('normalizes percentage string to integer', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '50%' });
+      expect(result.value).toBe('50');
     });
 
-    it("normalizes number to string", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: 50 });
-      expect(result.value).toBe("50");
+    it('normalizes number to string', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: 50 });
+      expect(result.value).toBe('50');
     });
 
-    it("normalizes float string to integer string", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "50.0" });
-      expect(result.value).toBe("50");
+    it('normalizes float string to integer string', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '50.0' });
+      expect(result.value).toBe('50');
     });
 
-    it("preserves non-integer float", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "33.5" });
-      expect(result.value).toBe("33.5");
+    it('preserves non-integer float', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '33.5' });
+      expect(result.value).toBe('33.5');
     });
 
-    it("clamps value above 100", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "150" });
-      expect(result.value).toBe("100");
+    it('clamps value above 100', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '150' });
+      expect(result.value).toBe('100');
     });
 
-    it("clamps negative value", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "-10" });
-      expect(result.value).toBe("0");
+    it('clamps negative value', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '-10' });
+      expect(result.value).toBe('0');
     });
 
-    it("rejects non-numeric value", () => {
-      expect(() => inspectorValueCodec.normalize({ key: "opacity", value: "foo" })).toThrow();
+    it('rejects non-numeric value', () => {
+      expect(() => inspectorValueCodec.normalize({ key: 'opacity', value: 'foo' })).toThrow();
     });
 
-    it("normalizes empty string as remove", () => {
-      const result = inspectorValueCodec.normalize({ key: "opacity", value: "" });
-      expect(result.kind).toBe("remove");
-    });
-  });
-
-  describe("lengths (padding, margin, width, etc.)", () => {
-    it("strips px suffix to bare number", () => {
-      const result = inspectorValueCodec.normalize({ key: "paddingLeft", value: "16px" });
-      expect(result.value).toBe("16");
-    });
-
-    it("passes through bare number", () => {
-      const result = inspectorValueCodec.normalize({ key: "paddingLeft", value: "16" });
-      expect(result.value).toBe("16");
-    });
-
-    it("passes through number type", () => {
-      const result = inspectorValueCodec.normalize({ key: "width", value: 16 });
-      expect(result.value).toBe("16");
-    });
-
-    it("preserves auto keyword", () => {
-      const result = inspectorValueCodec.normalize({ key: "width", value: "auto" });
-      expect(result.value).toBe("auto");
-    });
-
-    it("preserves percentage", () => {
-      const result = inspectorValueCodec.normalize({ key: "width", value: "50%" });
-      expect(result.value).toBe("50%");
-    });
-
-    it("preserves rem units", () => {
-      const result = inspectorValueCodec.normalize({ key: "paddingLeft", value: "1rem" });
-      expect(result.value).toBe("1rem");
-    });
-
-    it("preserves vh/vw units", () => {
-      const result = inspectorValueCodec.normalize({ key: "height", value: "100vh" });
-      expect(result.value).toBe("100vh");
-    });
-
-    it("normalizes empty string as remove", () => {
-      const result = inspectorValueCodec.normalize({ key: "paddingLeft", value: "" });
-      expect(result.kind).toBe("remove");
-    });
-
-    it("preserves fit-content keyword", () => {
-      const result = inspectorValueCodec.normalize({ key: "width", value: "fit-content" });
-      expect(result.value).toBe("fit-content");
-    });
-
-    it("preserves min-content keyword", () => {
-      const result = inspectorValueCodec.normalize({ key: "width", value: "min-content" });
-      expect(result.value).toBe("min-content");
-    });
-
-    it("preserves negative values", () => {
-      const result = inspectorValueCodec.normalize({ key: "marginLeft", value: "-8" });
-      expect(result.value).toBe("-8");
+    it('normalizes empty string as remove', () => {
+      const result = inspectorValueCodec.normalize({ key: 'opacity', value: '' });
+      expect(result.kind).toBe('remove');
     });
   });
 
-  describe("colors", () => {
-    it("passes through hex color", () => {
-      const result = inspectorValueCodec.normalize({ key: "backgroundColor", value: "#4285f4" });
-      expect(result.value).toBe("#4285f4");
+  describe('lengths (padding, margin, width, etc.)', () => {
+    it('strips px suffix to bare number', () => {
+      const result = inspectorValueCodec.normalize({ key: 'paddingLeft', value: '16px' });
+      expect(result.value).toBe('16');
     });
 
-    it("passes through rgb color", () => {
-      const result = inspectorValueCodec.normalize({ key: "color", value: "rgb(255, 0, 0)" });
-      expect(result.value).toBe("rgb(255, 0, 0)");
+    it('passes through bare number', () => {
+      const result = inspectorValueCodec.normalize({ key: 'paddingLeft', value: '16' });
+      expect(result.value).toBe('16');
     });
 
-    it("passes through named color", () => {
-      const result = inspectorValueCodec.normalize({ key: "borderColor", value: "red" });
-      expect(result.value).toBe("red");
+    it('passes through number type', () => {
+      const result = inspectorValueCodec.normalize({ key: 'width', value: 16 });
+      expect(result.value).toBe('16');
     });
 
-    it("passes through transparent", () => {
-      const result = inspectorValueCodec.normalize({ key: "backgroundColor", value: "transparent" });
-      expect(result.value).toBe("transparent");
+    it('preserves auto keyword', () => {
+      const result = inspectorValueCodec.normalize({ key: 'width', value: 'auto' });
+      expect(result.value).toBe('auto');
     });
 
-    it("normalizes empty string as remove", () => {
-      const result = inspectorValueCodec.normalize({ key: "backgroundColor", value: "" });
-      expect(result.kind).toBe("remove");
+    it('preserves percentage', () => {
+      const result = inspectorValueCodec.normalize({ key: 'width', value: '50%' });
+      expect(result.value).toBe('50%');
+    });
+
+    it('preserves rem units', () => {
+      const result = inspectorValueCodec.normalize({ key: 'paddingLeft', value: '1rem' });
+      expect(result.value).toBe('1rem');
+    });
+
+    it('preserves vh/vw units', () => {
+      const result = inspectorValueCodec.normalize({ key: 'height', value: '100vh' });
+      expect(result.value).toBe('100vh');
+    });
+
+    it('normalizes empty string as remove', () => {
+      const result = inspectorValueCodec.normalize({ key: 'paddingLeft', value: '' });
+      expect(result.kind).toBe('remove');
+    });
+
+    it('preserves fit-content keyword', () => {
+      const result = inspectorValueCodec.normalize({ key: 'width', value: 'fit-content' });
+      expect(result.value).toBe('fit-content');
+    });
+
+    it('preserves min-content keyword', () => {
+      const result = inspectorValueCodec.normalize({ key: 'width', value: 'min-content' });
+      expect(result.value).toBe('min-content');
+    });
+
+    it('preserves negative values', () => {
+      const result = inspectorValueCodec.normalize({ key: 'marginLeft', value: '-8' });
+      expect(result.value).toBe('-8');
     });
   });
 
-  describe("enum properties", () => {
-    it("passes through display value", () => {
-      const result = inspectorValueCodec.normalize({ key: "display", value: "flex" });
-      expect(result.value).toBe("flex");
+  describe('colors', () => {
+    it('passes through hex color', () => {
+      const result = inspectorValueCodec.normalize({ key: 'backgroundColor', value: '#4285f4' });
+      expect(result.value).toBe('#4285f4');
     });
 
-    it("passes through position value", () => {
-      const result = inspectorValueCodec.normalize({ key: "position", value: "absolute" });
-      expect(result.value).toBe("absolute");
+    it('passes through rgb color', () => {
+      const result = inspectorValueCodec.normalize({ key: 'color', value: 'rgb(255, 0, 0)' });
+      expect(result.value).toBe('rgb(255, 0, 0)');
     });
 
-    it("passes through flexDirection value", () => {
-      const result = inspectorValueCodec.normalize({ key: "flexDirection", value: "column" });
-      expect(result.value).toBe("column");
+    it('passes through named color', () => {
+      const result = inspectorValueCodec.normalize({ key: 'borderColor', value: 'red' });
+      expect(result.value).toBe('red');
+    });
+
+    it('passes through transparent', () => {
+      const result = inspectorValueCodec.normalize({ key: 'backgroundColor', value: 'transparent' });
+      expect(result.value).toBe('transparent');
+    });
+
+    it('normalizes empty string as remove', () => {
+      const result = inspectorValueCodec.normalize({ key: 'backgroundColor', value: '' });
+      expect(result.kind).toBe('remove');
+    });
+  });
+
+  describe('enum properties', () => {
+    it('passes through display value', () => {
+      const result = inspectorValueCodec.normalize({ key: 'display', value: 'flex' });
+      expect(result.value).toBe('flex');
+    });
+
+    it('passes through position value', () => {
+      const result = inspectorValueCodec.normalize({ key: 'position', value: 'absolute' });
+      expect(result.value).toBe('absolute');
+    });
+
+    it('passes through flexDirection value', () => {
+      const result = inspectorValueCodec.normalize({ key: 'flexDirection', value: 'column' });
+      expect(result.value).toBe('column');
     });
   });
 });
 
-describe("InspectorValueCodec.format", () => {
-  it("formats opacity value for display", () => {
-    const result = inspectorValueCodec.format({ key: "opacity", value: "50" });
-    expect(result).toBe("50");
+describe('InspectorValueCodec.format', () => {
+  it('formats opacity value for display', () => {
+    const result = inspectorValueCodec.format({ key: 'opacity', value: '50' });
+    expect(result).toBe('50');
   });
 
-  it("formats length value for display", () => {
-    const result = inspectorValueCodec.format({ key: "paddingLeft", value: "16" });
-    expect(result).toBe("16");
+  it('formats length value for display', () => {
+    const result = inspectorValueCodec.format({ key: 'paddingLeft', value: '16' });
+    expect(result).toBe('16');
   });
 });
 ```
@@ -1453,7 +1453,7 @@ Expected: FAIL — module `./inspector-value-codec` not found
  */
 
 export interface NormalizedInspectorValue {
-  kind: "value" | "remove";
+  kind: 'value' | 'remove';
   value: string;
 }
 
@@ -1467,76 +1467,76 @@ interface FormatInput {
   value: string;
 }
 
-const OPACITY_KEYS = new Set(["opacity"]);
+const OPACITY_KEYS = new Set(['opacity']);
 
 const SIZE_KEYWORDS = new Set([
-  "auto",
-  "inherit",
-  "initial",
-  "unset",
-  "revert",
-  "min-content",
-  "max-content",
-  "fit-content",
-  "none",
+  'auto',
+  'inherit',
+  'initial',
+  'unset',
+  'revert',
+  'min-content',
+  'max-content',
+  'fit-content',
+  'none',
 ]);
 
 const COLOR_KEYS = new Set([
-  "color",
-  "backgroundColor",
-  "borderColor",
-  "borderTopColor",
-  "borderRightColor",
-  "borderBottomColor",
-  "borderLeftColor",
-  "outlineColor",
-  "textDecorationColor",
-  "caretColor",
-  "shadowColor",
-  "fill",
-  "stroke",
+  'color',
+  'backgroundColor',
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'outlineColor',
+  'textDecorationColor',
+  'caretColor',
+  'shadowColor',
+  'fill',
+  'stroke',
 ]);
 
 function isLengthProperty(key: string): boolean {
   return (
-    key.startsWith("padding") ||
-    key.startsWith("margin") ||
-    (key.startsWith("border") && key.endsWith("Width")) ||
-    (key.startsWith("border") && key.endsWith("Radius")) ||
-    key === "width" ||
-    key === "height" ||
-    key === "minWidth" ||
-    key === "minHeight" ||
-    key === "maxWidth" ||
-    key === "maxHeight" ||
-    key === "top" ||
-    key === "right" ||
-    key === "bottom" ||
-    key === "left" ||
-    key === "gap" ||
-    key === "rowGap" ||
-    key === "columnGap" ||
-    key === "fontSize" ||
-    key === "lineHeight" ||
-    key === "letterSpacing" ||
-    key === "wordSpacing" ||
-    key === "textIndent" ||
-    key === "outlineWidth" ||
-    key === "outlineOffset" ||
-    key === "borderRadius" ||
-    key === "borderRadiusTopLeft" ||
-    key === "borderRadiusTopRight" ||
-    key === "borderRadiusBottomLeft" ||
-    key === "borderRadiusBottomRight"
+    key.startsWith('padding') ||
+    key.startsWith('margin') ||
+    (key.startsWith('border') && key.endsWith('Width')) ||
+    (key.startsWith('border') && key.endsWith('Radius')) ||
+    key === 'width' ||
+    key === 'height' ||
+    key === 'minWidth' ||
+    key === 'minHeight' ||
+    key === 'maxWidth' ||
+    key === 'maxHeight' ||
+    key === 'top' ||
+    key === 'right' ||
+    key === 'bottom' ||
+    key === 'left' ||
+    key === 'gap' ||
+    key === 'rowGap' ||
+    key === 'columnGap' ||
+    key === 'fontSize' ||
+    key === 'lineHeight' ||
+    key === 'letterSpacing' ||
+    key === 'wordSpacing' ||
+    key === 'textIndent' ||
+    key === 'outlineWidth' ||
+    key === 'outlineOffset' ||
+    key === 'borderRadius' ||
+    key === 'borderRadiusTopLeft' ||
+    key === 'borderRadiusTopRight' ||
+    key === 'borderRadiusBottomLeft' ||
+    key === 'borderRadiusBottomRight'
   );
 }
 
 function normalizeOpacity(raw: unknown): NormalizedInspectorValue {
   const str = String(raw).trim();
-  if (str === "") return { kind: "remove", value: "" };
+  if (str === '') return { kind: 'remove', value: '' };
 
   let numStr = str;
-  if (numStr.endsWith("%")) {
+  if (numStr.endsWith('%')) {
     numStr = numStr.slice(0, -1);
   }
 
@@ -1547,48 +1547,48 @@ function normalizeOpacity(raw: unknown): NormalizedInspectorValue {
 
   const clamped = Math.max(0, Math.min(100, num));
   const formatted = clamped === Math.trunc(clamped) ? String(Math.trunc(clamped)) : String(clamped);
-  return { kind: "value", value: formatted };
+  return { kind: 'value', value: formatted };
 }
 
 function normalizeLength(raw: unknown): NormalizedInspectorValue {
   const str = String(raw).trim();
-  if (str === "") return { kind: "remove", value: "" };
+  if (str === '') return { kind: 'remove', value: '' };
 
   // Check for keyword values
   if (SIZE_KEYWORDS.has(str)) {
-    return { kind: "value", value: str };
+    return { kind: 'value', value: str };
   }
 
   // Check for values with non-px units — preserve as-is
   if (/^-?\d+(\.\d+)?(rem|em|vh|vw|vmin|vmax|ch|ex|svh|svw|dvh|dvw|lvh|lvw|cqi|cqb|%)$/.test(str)) {
-    return { kind: "value", value: str };
+    return { kind: 'value', value: str };
   }
 
   // Strip px suffix for bare number canonical form
-  if (str.endsWith("px")) {
+  if (str.endsWith('px')) {
     const num = str.slice(0, -2);
-    return { kind: "value", value: num };
+    return { kind: 'value', value: num };
   }
 
   // Bare number or negative number — pass through
   if (/^-?\d+(\.\d+)?$/.test(str)) {
-    return { kind: "value", value: str };
+    return { kind: 'value', value: str };
   }
 
   // CSS functions and other complex values — pass through
-  return { kind: "value", value: str };
+  return { kind: 'value', value: str };
 }
 
 function normalizeColor(raw: unknown): NormalizedInspectorValue {
   const str = String(raw).trim();
-  if (str === "") return { kind: "remove", value: "" };
-  return { kind: "value", value: str };
+  if (str === '') return { kind: 'remove', value: '' };
+  return { kind: 'value', value: str };
 }
 
 function normalizeGeneric(raw: unknown): NormalizedInspectorValue {
   const str = String(raw).trim();
-  if (str === "") return { kind: "remove", value: "" };
-  return { kind: "value", value: str };
+  if (str === '') return { kind: 'remove', value: '' };
+  return { kind: 'value', value: str };
 }
 
 function normalize(input: NormalizeInput): NormalizedInspectorValue {
@@ -1649,100 +1649,100 @@ Browser-backed CSS validation using CSS.supports from happy-dom in tests. CSS-ta
  * Accessed via: bun run test lib/style-values/css-runtime-normalizer.test.ts
  * Assumptions: happy-dom provides CSS.supports from test/setup.ts preload
  */
-import { describe, expect, it } from "bun:test";
-import { cssRuntimeNormalizer } from "./css-runtime-normalizer";
+import { describe, expect, it } from 'bun:test';
+import { cssRuntimeNormalizer } from './css-runtime-normalizer';
 
-describe("CssRuntimeNormalizer.normalize", () => {
-  describe("length properties", () => {
-    it("appends px to bare number for length properties", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "padding-left", value: "16" });
-      expect(result).toEqual({ kind: "value", value: "16px" });
+describe('CssRuntimeNormalizer.normalize', () => {
+  describe('length properties', () => {
+    it('appends px to bare number for length properties', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'padding-left', value: '16' });
+      expect(result).toEqual({ kind: 'value', value: '16px' });
     });
 
-    it("passes through value with px already", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "padding-left", value: "16px" });
-      expect(result).toEqual({ kind: "value", value: "16px" });
+    it('passes through value with px already', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'padding-left', value: '16px' });
+      expect(result).toEqual({ kind: 'value', value: '16px' });
     });
 
-    it("passes through value with rem", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "margin-top", value: "1rem" });
-      expect(result).toEqual({ kind: "value", value: "1rem" });
+    it('passes through value with rem', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'margin-top', value: '1rem' });
+      expect(result).toEqual({ kind: 'value', value: '1rem' });
     });
 
-    it("passes through auto keyword", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "width", value: "auto" });
-      expect(result).toEqual({ kind: "value", value: "auto" });
+    it('passes through auto keyword', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'width', value: 'auto' });
+      expect(result).toEqual({ kind: 'value', value: 'auto' });
     });
 
-    it("passes through percentage", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "width", value: "50%" });
-      expect(result).toEqual({ kind: "value", value: "50%" });
+    it('passes through percentage', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'width', value: '50%' });
+      expect(result).toEqual({ kind: 'value', value: '50%' });
     });
 
-    it("handles negative bare numbers", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "margin-left", value: "-8" });
-      expect(result).toEqual({ kind: "value", value: "-8px" });
+    it('handles negative bare numbers', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'margin-left', value: '-8' });
+      expect(result).toEqual({ kind: 'value', value: '-8px' });
     });
   });
 
-  describe("opacity", () => {
-    it("passes through valid CSS opacity", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "opacity", value: "0.5" });
-      expect(result).toEqual({ kind: "value", value: "0.5" });
+  describe('opacity', () => {
+    it('passes through valid CSS opacity', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'opacity', value: '0.5' });
+      expect(result).toEqual({ kind: 'value', value: '0.5' });
     });
 
-    it("passes through integer opacity (CSS accepts it)", () => {
+    it('passes through integer opacity (CSS accepts it)', () => {
       // CSS.supports("opacity", "1") → true, browser clamps to valid range
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "opacity", value: "1" });
-      expect(result).toEqual({ kind: "value", value: "1" });
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'opacity', value: '1' });
+      expect(result).toEqual({ kind: 'value', value: '1' });
     });
   });
 
-  describe("color properties", () => {
-    it("passes through hex color", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "background-color", value: "#4285f4" });
-      expect(result).toEqual({ kind: "value", value: "#4285f4" });
+  describe('color properties', () => {
+    it('passes through hex color', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'background-color', value: '#4285f4' });
+      expect(result).toEqual({ kind: 'value', value: '#4285f4' });
     });
 
-    it("passes through named color", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "color", value: "red" });
-      expect(result).toEqual({ kind: "value", value: "red" });
+    it('passes through named color', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'color', value: 'red' });
+      expect(result).toEqual({ kind: 'value', value: 'red' });
     });
 
-    it("passes through transparent", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "background-color", value: "transparent" });
-      expect(result).toEqual({ kind: "value", value: "transparent" });
-    });
-  });
-
-  describe("remove", () => {
-    it("returns remove for empty string", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "padding-left", value: "" });
-      expect(result).toEqual({ kind: "remove" });
+    it('passes through transparent', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'background-color', value: 'transparent' });
+      expect(result).toEqual({ kind: 'value', value: 'transparent' });
     });
   });
 
-  describe("invalid values", () => {
-    it("rejects nonsense value", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "width", value: "foo" });
-      expect(result.kind).toBe("invalid");
-    });
-
-    it("rejects nonsense with px appended", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "width", value: "abc" });
-      expect(result.kind).toBe("invalid");
+  describe('remove', () => {
+    it('returns remove for empty string', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'padding-left', value: '' });
+      expect(result).toEqual({ kind: 'remove' });
     });
   });
 
-  describe("enum/keyword properties", () => {
-    it("passes through valid display value", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "display", value: "flex" });
-      expect(result).toEqual({ kind: "value", value: "flex" });
+  describe('invalid values', () => {
+    it('rejects nonsense value', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'width', value: 'foo' });
+      expect(result.kind).toBe('invalid');
     });
 
-    it("passes through valid position value", () => {
-      const result = cssRuntimeNormalizer.normalize({ cssProperty: "position", value: "absolute" });
-      expect(result).toEqual({ kind: "value", value: "absolute" });
+    it('rejects nonsense with px appended', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'width', value: 'abc' });
+      expect(result.kind).toBe('invalid');
+    });
+  });
+
+  describe('enum/keyword properties', () => {
+    it('passes through valid display value', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'display', value: 'flex' });
+      expect(result).toEqual({ kind: 'value', value: 'flex' });
+    });
+
+    it('passes through valid position value', () => {
+      const result = cssRuntimeNormalizer.normalize({ cssProperty: 'position', value: 'absolute' });
+      expect(result).toEqual({ kind: 'value', value: 'absolute' });
     });
   });
 });
@@ -1767,9 +1767,9 @@ Expected: FAIL — module `./css-runtime-normalizer` not found
  */
 
 export type CssNormalizationResult =
-  | { kind: "value"; value: string }
-  | { kind: "remove" }
-  | { kind: "invalid"; reason: string };
+  | { kind: 'value'; value: string }
+  | { kind: 'remove' }
+  | { kind: 'invalid'; reason: string };
 
 interface NormalizeInput {
   cssProperty: string;
@@ -1780,7 +1780,7 @@ interface NormalizeInput {
  * Check if CSS.supports is available. Falls back to static heuristics when not.
  */
 function hasCssSupports(): boolean {
-  return typeof globalThis.CSS !== "undefined" && typeof globalThis.CSS.supports === "function";
+  return typeof globalThis.CSS !== 'undefined' && typeof globalThis.CSS.supports === 'function';
 }
 
 /**
@@ -1805,60 +1805,60 @@ function cssSupports(property: string, value: string): boolean {
  */
 function staticFallbackSupports(property: string, value: string): boolean {
   // Keywords valid for most properties
-  if (["inherit", "initial", "unset", "revert"].includes(value)) return true;
+  if (['inherit', 'initial', 'unset', 'revert'].includes(value)) return true;
 
   // Opacity accepts any number
-  if (property === "opacity") return /^-?\d+(\.\d+)?$/.test(value);
+  if (property === 'opacity') return /^-?\d+(\.\d+)?$/.test(value);
 
   // Display/position enum values
-  if (property === "display") {
+  if (property === 'display') {
     return [
-      "block",
-      "inline",
-      "flex",
-      "grid",
-      "inline-flex",
-      "inline-grid",
-      "inline-block",
-      "none",
-      "contents",
-      "table",
-      "list-item",
-      "flow-root",
+      'block',
+      'inline',
+      'flex',
+      'grid',
+      'inline-flex',
+      'inline-grid',
+      'inline-block',
+      'none',
+      'contents',
+      'table',
+      'list-item',
+      'flow-root',
     ].includes(value);
   }
-  if (property === "position") {
-    return ["static", "relative", "absolute", "fixed", "sticky"].includes(value);
+  if (property === 'position') {
+    return ['static', 'relative', 'absolute', 'fixed', 'sticky'].includes(value);
   }
 
   // Color values — basic check
-  if (property.includes("color") || property === "background-color") {
+  if (property.includes('color') || property === 'background-color') {
     if (/^#([0-9a-fA-F]{3,8})$/.test(value)) return true;
     if (/^(rgb|rgba|hsl|hsla|oklch|lch|lab|oklab)\(/.test(value)) return true;
     if (
       [
-        "transparent",
-        "currentColor",
-        "red",
-        "blue",
-        "green",
-        "black",
-        "white",
-        "gray",
-        "grey",
-        "orange",
-        "yellow",
-        "purple",
-        "pink",
-        "brown",
-        "cyan",
-        "magenta",
-        "navy",
-        "teal",
-        "lime",
-        "aqua",
-        "silver",
-        "gold",
+        'transparent',
+        'currentColor',
+        'red',
+        'blue',
+        'green',
+        'black',
+        'white',
+        'gray',
+        'grey',
+        'orange',
+        'yellow',
+        'purple',
+        'pink',
+        'brown',
+        'cyan',
+        'magenta',
+        'navy',
+        'teal',
+        'lime',
+        'aqua',
+        'silver',
+        'gold',
       ].includes(value)
     )
       return true;
@@ -1868,32 +1868,32 @@ function staticFallbackSupports(property: string, value: string): boolean {
   if (/^-?\d+(\.\d+)?(px|rem|em|vh|vw|vmin|vmax|ch|ex|%)$/.test(value)) return true;
 
   // Keywords
-  if (["auto", "none", "min-content", "max-content", "fit-content"].includes(value)) return true;
+  if (['auto', 'none', 'min-content', 'max-content', 'fit-content'].includes(value)) return true;
 
   // Flex direction, flex-wrap, align, justify, etc.
   if (
     [
-      "row",
-      "column",
-      "row-reverse",
-      "column-reverse",
-      "wrap",
-      "nowrap",
-      "wrap-reverse",
-      "flex-start",
-      "flex-end",
-      "center",
-      "space-between",
-      "space-around",
-      "space-evenly",
-      "start",
-      "end",
-      "stretch",
-      "baseline",
-      "hidden",
-      "visible",
-      "scroll",
-      "clip",
+      'row',
+      'column',
+      'row-reverse',
+      'column-reverse',
+      'wrap',
+      'nowrap',
+      'wrap-reverse',
+      'flex-start',
+      'flex-end',
+      'center',
+      'space-between',
+      'space-around',
+      'space-evenly',
+      'start',
+      'end',
+      'stretch',
+      'baseline',
+      'hidden',
+      'visible',
+      'scroll',
+      'clip',
     ].includes(value)
   )
     return true;
@@ -1906,19 +1906,19 @@ const BARE_NUMBER_RE = /^-?\d+(\.\d+)?$/;
 function normalize(input: NormalizeInput): CssNormalizationResult {
   const { cssProperty, value } = input;
 
-  if (value === "") return { kind: "remove" };
+  if (value === '') return { kind: 'remove' };
 
   // Try the value as-is first
   if (cssSupports(cssProperty, value)) {
-    return { kind: "value", value };
+    return { kind: 'value', value };
   }
 
   // If bare number, try appending px
   if (BARE_NUMBER_RE.test(value) && cssSupports(cssProperty, `${value}px`)) {
-    return { kind: "value", value: `${value}px` };
+    return { kind: 'value', value: `${value}px` };
   }
 
-  return { kind: "invalid", reason: `${cssProperty}: ${value}` };
+  return { kind: 'invalid', reason: `${cssProperty}: ${value}` };
 }
 
 export const cssRuntimeNormalizer = { normalize };

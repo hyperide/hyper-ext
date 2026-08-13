@@ -75,7 +75,7 @@ Alternative hypothesis: entry-file-watcher (added in v0.1.46, commit f898bcdd) f
 Current code (simplified):
 
 ```typescript
-await expect.poll(() => inspector.getComponentName().catch(() => ""), { timeout: 10_000, message: "..." }).toBeTruthy();
+await expect.poll(() => inspector.getComponentName().catch(() => ''), { timeout: 10_000, message: '...' }).toBeTruthy();
 ```
 
 **Problem:** `getComponentName()` on webpack+CSS Modules returns a promise that never settles.
@@ -85,12 +85,12 @@ await expect.poll(() => inspector.getComponentName().catch(() => ""), { timeout:
 
 ```typescript
 const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("componentName-timeout")), ms))]);
+  Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('componentName-timeout')), ms))]);
 
 await expect
-  .poll(() => withTimeout(inspector.getComponentName(), 3_000).catch(() => ""), {
+  .poll(() => withTimeout(inspector.getComponentName(), 3_000).catch(() => ''), {
     timeout: 10_000,
-    message: "Inspector componentName should appear after tree selection",
+    message: 'Inspector componentName should appear after tree selection',
   })
   .toBeTruthy();
 ```

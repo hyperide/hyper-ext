@@ -59,7 +59,7 @@ commits via AST.
 
 ```typescript
 // client/lib/__tests__/fast-patch-service.test.ts
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 
 // Mock dom-utils before importing
 let mockIframeDoc: {
@@ -68,18 +68,18 @@ let mockIframeDoc: {
   head: { appendChild: ReturnType<typeof mock> };
 } | null = null;
 
-mock.module("@/lib/dom-utils", () => ({
+mock.module('@/lib/dom-utils', () => ({
   getPreviewIframe: () => (mockIframeDoc ? { contentDocument: mockIframeDoc, contentWindow: {} } : null),
 }));
 
-import { FastPatchService } from "../fast-patch-service";
+import { FastPatchService } from '../fast-patch-service';
 
-describe("FastPatchService", () => {
+describe('FastPatchService', () => {
   let service: FastPatchService;
   let mockStyleEl: { textContent: string; id: string };
 
   beforeEach(() => {
-    mockStyleEl = { textContent: "", id: "" };
+    mockStyleEl = { textContent: '', id: '' };
     mockIframeDoc = {
       getElementById: mock(() => null),
       createElement: mock(() => mockStyleEl),
@@ -88,58 +88,58 @@ describe("FastPatchService", () => {
     service = new FastPatchService();
   });
 
-  describe("applyPatch", () => {
-    it("injects CSS for element by data-uniq-id selector", () => {
-      service.applyPatch("elem-1", { backgroundColor: "red", padding: "16px" });
+  describe('applyPatch', () => {
+    it('injects CSS for element by data-uniq-id selector', () => {
+      service.applyPatch('elem-1', { backgroundColor: 'red', padding: '16px' });
 
       expect(mockStyleEl.textContent).toContain('[data-uniq-id="elem-1"]');
-      expect(mockStyleEl.textContent).toContain("background-color: red !important");
-      expect(mockStyleEl.textContent).toContain("padding: 16px !important");
+      expect(mockStyleEl.textContent).toContain('background-color: red !important');
+      expect(mockStyleEl.textContent).toContain('padding: 16px !important');
     });
 
-    it("scopes to instance when instanceId provided", () => {
-      service.applyPatch("elem-1", { color: "blue" }, "instance-1");
+    it('scopes to instance when instanceId provided', () => {
+      service.applyPatch('elem-1', { color: 'blue' }, 'instance-1');
 
       expect(mockStyleEl.textContent).toContain('[data-canvas-instance-id="instance-1"] [data-uniq-id="elem-1"]');
     });
 
-    it("replaces previous patch for same element", () => {
-      service.applyPatch("elem-1", { color: "red" });
-      service.applyPatch("elem-1", { color: "blue" });
+    it('replaces previous patch for same element', () => {
+      service.applyPatch('elem-1', { color: 'red' });
+      service.applyPatch('elem-1', { color: 'blue' });
 
       const occurrences = (mockStyleEl.textContent.match(/elem-1/g) || []).length;
       // Should appear once in selector, not duplicated
       expect(occurrences).toBeLessThanOrEqual(2); // selector + possibly closing
-      expect(mockStyleEl.textContent).toContain("color: blue");
-      expect(mockStyleEl.textContent).not.toContain("color: red");
+      expect(mockStyleEl.textContent).toContain('color: blue');
+      expect(mockStyleEl.textContent).not.toContain('color: red');
     });
   });
 
-  describe("clearPatch", () => {
-    it("removes patch for specific element", () => {
-      service.applyPatch("elem-1", { color: "red" });
-      service.applyPatch("elem-2", { color: "blue" });
-      service.clearPatch("elem-1");
+  describe('clearPatch', () => {
+    it('removes patch for specific element', () => {
+      service.applyPatch('elem-1', { color: 'red' });
+      service.applyPatch('elem-2', { color: 'blue' });
+      service.clearPatch('elem-1');
 
-      expect(mockStyleEl.textContent).not.toContain("elem-1");
-      expect(mockStyleEl.textContent).toContain("elem-2");
+      expect(mockStyleEl.textContent).not.toContain('elem-1');
+      expect(mockStyleEl.textContent).toContain('elem-2');
     });
   });
 
-  describe("clearAll", () => {
-    it("removes all patches", () => {
-      service.applyPatch("elem-1", { color: "red" });
-      service.applyPatch("elem-2", { color: "blue" });
+  describe('clearAll', () => {
+    it('removes all patches', () => {
+      service.applyPatch('elem-1', { color: 'red' });
+      service.applyPatch('elem-2', { color: 'blue' });
       service.clearAll();
 
-      expect(mockStyleEl.textContent).toBe("");
+      expect(mockStyleEl.textContent).toBe('');
     });
   });
 
-  describe("no iframe", () => {
-    it("does not throw when iframe is missing", () => {
+  describe('no iframe', () => {
+    it('does not throw when iframe is missing', () => {
       mockIframeDoc = null;
-      expect(() => service.applyPatch("elem-1", { color: "red" })).not.toThrow();
+      expect(() => service.applyPatch('elem-1', { color: 'red' })).not.toThrow();
     });
   });
 });
@@ -154,9 +154,9 @@ Expected: FAIL — module `../fast-patch-service` not found
 
 ```typescript
 // client/lib/fast-patch-service.ts
-import { getPreviewIframe } from "@/lib/dom-utils";
+import { getPreviewIframe } from '@/lib/dom-utils';
 
-const STYLE_ID = "hyper-canvas-fast-patch";
+const STYLE_ID = 'hyper-canvas-fast-patch';
 
 /** Converts camelCase CSS property to kebab-case */
 function toKebab(prop: string): string {
@@ -204,12 +204,12 @@ export class FastPatchService {
 
       const declarations = Object.entries(styles)
         .map(([prop, value]) => `${toKebab(prop)}: ${value} !important`)
-        .join(";\n  ");
+        .join(';\n  ');
 
       rules.push(`${selector} {\n  ${declarations};\n}`);
     }
 
-    styleEl.textContent = rules.join("\n");
+    styleEl.textContent = rules.join('\n');
   }
 
   private getOrCreateStyleElement(): HTMLStyleElement | null {
@@ -219,7 +219,7 @@ export class FastPatchService {
 
     let el = doc.getElementById(STYLE_ID) as HTMLStyleElement | null;
     if (!el) {
-      el = doc.createElement("style") as HTMLStyleElement;
+      el = doc.createElement('style') as HTMLStyleElement;
       el.id = STYLE_ID;
       doc.head.appendChild(el);
     }
@@ -275,7 +275,7 @@ the iframe reloads), call `this.fastPatch.clearAll()`.
 In `CanvasEngine.test.ts`, add:
 
 ```typescript
-it("exposes FastPatchService instance", () => {
+it('exposes FastPatchService instance', () => {
   expect(engine.fastPatch).toBeDefined();
   expect(engine.fastPatch).toBeInstanceOf(FastPatchService);
 });
@@ -360,50 +360,50 @@ shown, differing values shown as "mixed").
 
 ```typescript
 // client/components/RightSidebar/__tests__/useBatchStyleData.test.ts
-import { describe, it, expect } from "bun:test";
-import { mergeStyleData, MIXED } from "../hooks/useBatchStyleData";
-import type { ParsedStyles } from "@/lib/canvas-engine/adapters/StyleAdapter";
+import { describe, it, expect } from 'bun:test';
+import { mergeStyleData, MIXED } from '../hooks/useBatchStyleData';
+import type { ParsedStyles } from '@/lib/canvas-engine/adapters/StyleAdapter';
 
-describe("mergeStyleData", () => {
-  it("returns single element styles unchanged", () => {
-    const styles: Partial<ParsedStyles>[] = [{ backgroundColor: "red", padding: "16px" }];
+describe('mergeStyleData', () => {
+  it('returns single element styles unchanged', () => {
+    const styles: Partial<ParsedStyles>[] = [{ backgroundColor: 'red', padding: '16px' }];
     const result = mergeStyleData(styles);
-    expect(result.backgroundColor).toBe("red");
-    expect(result.padding).toBe("16px");
+    expect(result.backgroundColor).toBe('red');
+    expect(result.padding).toBe('16px');
   });
 
-  it("returns common values when all elements match", () => {
+  it('returns common values when all elements match', () => {
     const styles: Partial<ParsedStyles>[] = [
-      { backgroundColor: "red", padding: "16px" },
-      { backgroundColor: "red", padding: "16px" },
+      { backgroundColor: 'red', padding: '16px' },
+      { backgroundColor: 'red', padding: '16px' },
     ];
     const result = mergeStyleData(styles);
-    expect(result.backgroundColor).toBe("red");
-    expect(result.padding).toBe("16px");
+    expect(result.backgroundColor).toBe('red');
+    expect(result.padding).toBe('16px');
   });
 
-  it("returns MIXED for differing values", () => {
+  it('returns MIXED for differing values', () => {
     const styles: Partial<ParsedStyles>[] = [
-      { backgroundColor: "red", padding: "16px" },
-      { backgroundColor: "blue", padding: "16px" },
+      { backgroundColor: 'red', padding: '16px' },
+      { backgroundColor: 'blue', padding: '16px' },
     ];
     const result = mergeStyleData(styles);
     expect(result.backgroundColor).toBe(MIXED);
-    expect(result.padding).toBe("16px");
+    expect(result.padding).toBe('16px');
   });
 
-  it("returns empty object for empty input", () => {
+  it('returns empty object for empty input', () => {
     const result = mergeStyleData([]);
     expect(Object.keys(result)).toHaveLength(0);
   });
 
-  it("treats undefined and missing as equal", () => {
+  it('treats undefined and missing as equal', () => {
     const styles: Partial<ParsedStyles>[] = [
-      { backgroundColor: "red" },
-      { backgroundColor: "red", padding: undefined },
+      { backgroundColor: 'red' },
+      { backgroundColor: 'red', padding: undefined },
     ];
     const result = mergeStyleData(styles);
-    expect(result.backgroundColor).toBe("red");
+    expect(result.backgroundColor).toBe('red');
     expect(result.padding).toBeUndefined();
   });
 });
@@ -418,9 +418,9 @@ Expected: FAIL — module not found
 
 ```typescript
 // client/components/RightSidebar/hooks/useBatchStyleData.ts
-import type { ParsedStyles } from "@/lib/canvas-engine/adapters/StyleAdapter";
+import type { ParsedStyles } from '@/lib/canvas-engine/adapters/StyleAdapter';
 
-export const MIXED = "__mixed__" as const;
+export const MIXED = '__mixed__' as const;
 export type MixedValue = typeof MIXED;
 
 export type MergedStyles = {
@@ -448,7 +448,7 @@ export function mergeStyleData(allStyles: Partial<ParsedStyles>[]): MergedStyles
     const first = allStyles[0][k];
     const allSame = allStyles.every((s) => {
       const val = s[k];
-      if (typeof first === "object" && first !== null) {
+      if (typeof first === 'object' && first !== null) {
         return JSON.stringify(val) === JSON.stringify(first);
       }
       return val === first;
@@ -504,7 +504,7 @@ if (engine && selectedIds.length > 1) {
 
   // Batch AST operations for single undo
   await engine.executeBatchStyles(selectedIds, filePath, styles, {
-    domClasses: "", // Each element may differ — let server resolve
+    domClasses: '', // Each element may differ — let server resolve
     state: currentState,
   });
 
@@ -615,12 +615,12 @@ an element from its current position and inserts at a new index within the same 
 
 ```typescript
 // server/routes/__tests__/moveElement.test.ts
-import { describe, it, expect, beforeEach } from "bun:test";
-import { moveElementInAST } from "../../routes/moveElement";
-import { parseCode, printAST } from "@lib/ast/parser";
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { moveElementInAST } from '../../routes/moveElement';
+import { parseCode, printAST } from '@lib/ast/parser';
 
-describe("moveElementInAST", () => {
-  it("moves element from index 0 to index 2 within same parent", () => {
+describe('moveElementInAST', () => {
+  it('moves element from index 0 to index 2 within same parent', () => {
     const code = `
 export function App() {
   return (
@@ -633,8 +633,8 @@ export function App() {
 }`;
     const ast = parseCode(code);
     const result = moveElementInAST(ast, {
-      elementId: "a",
-      targetParentId: "parent",
+      elementId: 'a',
+      targetParentId: 'parent',
       targetIndex: 2,
     });
 
@@ -648,7 +648,7 @@ export function App() {
     expect(posC).toBeLessThan(posA);
   });
 
-  it("moves element to different parent", () => {
+  it('moves element to different parent', () => {
     const code = `
 export function App() {
   return (
@@ -662,8 +662,8 @@ export function App() {
 }`;
     const ast = parseCode(code);
     const result = moveElementInAST(ast, {
-      elementId: "child",
-      targetParentId: "parent2",
+      elementId: 'child',
+      targetParentId: 'parent2',
       targetIndex: 0,
     });
 
@@ -672,15 +672,15 @@ export function App() {
     // child should be inside parent2 now
     expect(output).toContain('data-uniq-id="parent2"');
     // parent1 should be empty
-    const parent1Section = output.slice(output.indexOf("parent1"), output.indexOf("parent2"));
-    expect(parent1Section).not.toContain("child");
+    const parent1Section = output.slice(output.indexOf('parent1'), output.indexOf('parent2'));
+    expect(parent1Section).not.toContain('child');
   });
 
-  it("returns error for non-existent element", () => {
+  it('returns error for non-existent element', () => {
     const ast = parseCode('<div data-uniq-id="x" />');
     const result = moveElementInAST(ast, {
-      elementId: "nonexistent",
-      targetParentId: "x",
+      elementId: 'nonexistent',
+      targetParentId: 'x',
       targetIndex: 0,
     });
     expect(result.success).toBe(false);
@@ -697,11 +697,11 @@ Expected: FAIL
 
 ```typescript
 // server/routes/moveElement.ts
-import type { Context } from "hono";
-import { parseCode, printAST, readAndParseFile, writeAST } from "@lib/ast/parser";
-import { findElementByUuid } from "@lib/ast/traverser";
-import { calculateRealIndex } from "@lib/ast/element-builder";
-import type * as t from "@babel/types";
+import type { Context } from 'hono';
+import { parseCode, printAST, readAndParseFile, writeAST } from '@lib/ast/parser';
+import { findElementByUuid } from '@lib/ast/traverser';
+import { calculateRealIndex } from '@lib/ast/element-builder';
+import type * as t from '@babel/types';
 
 interface MoveElementParams {
   elementId: string;
@@ -735,7 +735,7 @@ export function moveElementInAST(ast: t.File, params: MoveElementParams): MoveRe
   // Remove from current parent via path
   const parentPath = elementResult.path.parentPath;
   if (!parentPath) {
-    return { success: false, error: "Element has no parent path" };
+    return { success: false, error: 'Element has no parent path' };
   }
 
   // Store the node before removing
@@ -748,7 +748,7 @@ export function moveElementInAST(ast: t.File, params: MoveElementParams): MoveRe
   if (targetParent.openingElement.selfClosing || !targetParent.closingElement) {
     targetParent.openingElement.selfClosing = false;
     targetParent.closingElement = {
-      type: "JSXClosingElement",
+      type: 'JSXClosingElement',
       name: { ...targetParent.openingElement.name },
     } as t.JSXClosingElement;
     if (!targetParent.children) {
@@ -774,10 +774,10 @@ export async function moveElement(c: Context): Promise<Response> {
   const { elementId, targetParentId, targetIndex, filePath } = body;
 
   if (!elementId || !targetParentId || targetIndex === undefined || !filePath) {
-    return c.json({ success: false, error: "Missing required fields" }, 400);
+    return c.json({ success: false, error: 'Missing required fields' }, 400);
   }
 
-  const projectPath = c.get("checkedProject").path;
+  const projectPath = c.get('checkedProject').path;
   const { ast, absolutePath } = await readAndParseFile(`${projectPath}/${filePath}`);
 
   const result = moveElementInAST(ast, {
@@ -806,9 +806,9 @@ Expected: PASS
 Add to route registration:
 
 ```typescript
-import { moveElement } from "./routes/moveElement";
+import { moveElement } from './routes/moveElement';
 // In route setup:
-app.post("/api/move-element", authMiddleware, requireEditor, requireProjectAccess, moveElement);
+app.post('/api/move-element', authMiddleware, requireEditor, requireProjectAccess, moveElement);
 ```
 
 **Step 6: Commit**
@@ -835,12 +835,12 @@ onto another. Different from move — both elements exchange positions.
 
 ```typescript
 // server/routes/__tests__/swapElements.test.ts
-import { describe, it, expect } from "bun:test";
-import { swapElementsInAST } from "../../routes/swapElements";
-import { parseCode, printAST } from "@lib/ast/parser";
+import { describe, it, expect } from 'bun:test';
+import { swapElementsInAST } from '../../routes/swapElements';
+import { parseCode, printAST } from '@lib/ast/parser';
 
-describe("swapElementsInAST", () => {
-  it("swaps two sibling elements", () => {
+describe('swapElementsInAST', () => {
+  it('swaps two sibling elements', () => {
     const code = `
 export function App() {
   return (
@@ -852,7 +852,7 @@ export function App() {
   );
 }`;
     const ast = parseCode(code);
-    const result = swapElementsInAST(ast, "a", "c");
+    const result = swapElementsInAST(ast, 'a', 'c');
 
     expect(result.success).toBe(true);
     const output = printAST(ast);
@@ -862,7 +862,7 @@ export function App() {
     expect(posC).toBeLessThan(posA);
   });
 
-  it("swaps elements in different parents", () => {
+  it('swaps elements in different parents', () => {
     const code = `
 export function App() {
   return (
@@ -873,12 +873,12 @@ export function App() {
   );
 }`;
     const ast = parseCode(code);
-    const result = swapElementsInAST(ast, "a", "b");
+    const result = swapElementsInAST(ast, 'a', 'b');
 
     expect(result.success).toBe(true);
     const output = printAST(ast);
     // A should now be inside p2, B inside p1
-    const p1Section = output.slice(output.indexOf("p1"), output.indexOf("p2"));
+    const p1Section = output.slice(output.indexOf('p1'), output.indexOf('p2'));
     expect(p1Section).toContain('"b"');
   });
 });
@@ -1006,13 +1006,13 @@ Using same pattern as overlay-renderer.ts — absolutely positioned divs:
 
 ```typescript
 // Drop indicator: thin blue line between elements
-const indicator = document.createElement("div");
-indicator.style.position = "absolute";
-indicator.style.height = "2px";
-indicator.style.backgroundColor = "rgb(59, 130, 246)";
-indicator.style.borderRadius = "1px";
-indicator.style.pointerEvents = "none";
-indicator.style.zIndex = "100";
+const indicator = document.createElement('div');
+indicator.style.position = 'absolute';
+indicator.style.height = '2px';
+indicator.style.backgroundColor = 'rgb(59, 130, 246)';
+indicator.style.borderRadius = '1px';
+indicator.style.pointerEvents = 'none';
+indicator.style.zIndex = '100';
 ```
 
 **Step 5: Wire into CanvasEditor**
@@ -1083,24 +1083,24 @@ git commit -m "feat: handle .map() array reordering in drag operations"
 **Step 1: Write tests**
 
 ```typescript
-import { describe, it, expect } from "bun:test";
-import { hasExplicitSize } from "../utils/hasExplicitSize";
+import { describe, it, expect } from 'bun:test';
+import { hasExplicitSize } from '../utils/hasExplicitSize';
 
-describe("hasExplicitSize", () => {
+describe('hasExplicitSize', () => {
   it('returns { width: true, height: false } for "w-64 p-4"', () => {
-    expect(hasExplicitSize("w-64 p-4")).toEqual({ width: true, height: false });
+    expect(hasExplicitSize('w-64 p-4')).toEqual({ width: true, height: false });
   });
 
   it('returns { width: true, height: true } for "w-full h-screen"', () => {
-    expect(hasExplicitSize("w-full h-screen")).toEqual({ width: true, height: true });
+    expect(hasExplicitSize('w-full h-screen')).toEqual({ width: true, height: true });
   });
 
   it('returns { width: false, height: false } for "p-4 m-2"', () => {
-    expect(hasExplicitSize("p-4 m-2")).toEqual({ width: false, height: false });
+    expect(hasExplicitSize('p-4 m-2')).toEqual({ width: false, height: false });
   });
 
-  it("handles min/max width/height", () => {
-    expect(hasExplicitSize("min-w-0 max-h-96")).toEqual({ width: true, height: true });
+  it('handles min/max width/height', () => {
+    expect(hasExplicitSize('min-w-0 max-h-96')).toEqual({ width: true, height: true });
   });
 });
 ```
@@ -1148,16 +1148,16 @@ After rendering selection rectangles, if the element has explicit w/h, add handl
 
 ```typescript
 // Handle element: small square
-const handle = document.createElement("div");
-handle.style.position = "absolute";
-handle.style.width = "8px";
-handle.style.height = "8px";
-handle.style.backgroundColor = "rgb(59, 130, 246)";
-handle.style.border = "1px solid white";
-handle.style.borderRadius = "1px";
-handle.style.cursor = "nwse-resize"; // or appropriate cursor
-handle.style.pointerEvents = "auto"; // handles are clickable!
-handle.style.zIndex = "20";
+const handle = document.createElement('div');
+handle.style.position = 'absolute';
+handle.style.width = '8px';
+handle.style.height = '8px';
+handle.style.backgroundColor = 'rgb(59, 130, 246)';
+handle.style.border = '1px solid white';
+handle.style.borderRadius = '1px';
+handle.style.cursor = 'nwse-resize'; // or appropriate cursor
+handle.style.pointerEvents = 'auto'; // handles are clickable!
+handle.style.zIndex = '20';
 ```
 
 **Step 2: Add cursor styles per handle position**
@@ -1179,7 +1179,7 @@ interface OverlayRendererOptions {
   // ... existing
   onResizeHandleMouseDown?: (
     elementId: string,
-    handle: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw",
+    handle: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw',
     event: MouseEvent,
   ) => void;
   getElementSizeInfo?: (elementId: string) => { width: boolean; height: boolean } | null;
@@ -1248,11 +1248,11 @@ the active element and its siblings (like Figma).
 **Step 1: Write tests**
 
 ```typescript
-import { describe, it, expect } from "bun:test";
-import { calculateSpacingGuides } from "../spacing-guides";
+import { describe, it, expect } from 'bun:test';
+import { calculateSpacingGuides } from '../spacing-guides';
 
-describe("calculateSpacingGuides", () => {
-  it("calculates horizontal gap between siblings", () => {
+describe('calculateSpacingGuides', () => {
+  it('calculates horizontal gap between siblings', () => {
     const active = { left: 100, top: 0, width: 50, height: 50 };
     const siblings = [{ left: 0, top: 0, width: 50, height: 50 }];
 
@@ -1260,7 +1260,7 @@ describe("calculateSpacingGuides", () => {
 
     expect(guides).toContainEqual(
       expect.objectContaining({
-        direction: "horizontal",
+        direction: 'horizontal',
         distance: 50, // gap between right edge of sibling and left edge of active
       }),
     );

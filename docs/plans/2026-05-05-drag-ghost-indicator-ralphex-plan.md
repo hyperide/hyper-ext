@@ -75,7 +75,7 @@ Add to `buildDesignStylesCSS()` return string:
 }
 .hyper-drop-indicator::before,
 .hyper-drop-indicator::after {
-  content: "" !important;
+  content: '' !important;
   position: absolute !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
@@ -112,12 +112,12 @@ In `_dragPointerMove`, transition `pending → dragging`:
 const rect = _dragSourceEl!.getBoundingClientRect();
 _dragOffsetX = _dragStartX - rect.left;
 _dragOffsetY = _dragStartY - rect.top;
-_dragSourceEl!.style.opacity = "0.35";
+_dragSourceEl!.style.opacity = '0.35';
 
 const ghost = _dragSourceEl!.cloneNode(true) as HTMLElement;
-ghost.className = "";
-ghost.classList.add("hyper-drag-ghost");
-ghost.removeAttribute("data-uniq-id"); // prevent elementFromPoint confusion
+ghost.className = '';
+ghost.classList.add('hyper-drag-ghost');
+ghost.removeAttribute('data-uniq-id'); // prevent elementFromPoint confusion
 ghost.style.width = `${rect.width}px`;
 ghost.style.height = `${rect.height}px`;
 ghost.style.left = `${_dragStartX - _dragOffsetX}px`;
@@ -125,9 +125,9 @@ ghost.style.top = `${_dragStartY - _dragOffsetY}px`;
 document.body.appendChild(ghost);
 _dragGhostEl = ghost;
 
-const indicator = document.createElement("div");
-indicator.classList.add("hyper-drop-indicator");
-indicator.style.display = "none";
+const indicator = document.createElement('div');
+indicator.classList.add('hyper-drop-indicator');
+indicator.style.display = 'none';
 document.body.appendChild(indicator);
 _dragIndicatorEl = indicator;
 ```
@@ -148,13 +148,13 @@ if (_dragIndicatorEl) {
       const r = dropEl!.getBoundingClientRect();
       const isBefore = e.clientY < r.top + r.height / 2;
       const lineY = isBefore ? r.top : r.bottom;
-      _dragIndicatorEl.style.display = "block";
+      _dragIndicatorEl.style.display = 'block';
       _dragIndicatorEl.style.top = `${lineY - 1}px`;
     } else {
-      _dragIndicatorEl.style.display = "none";
+      _dragIndicatorEl.style.display = 'none';
     }
   } else {
-    _dragIndicatorEl.style.display = "none";
+    _dragIndicatorEl.style.display = 'none';
   }
 }
 ```
@@ -171,7 +171,7 @@ if (_dragIndicatorEl) {
   _dragIndicatorEl = null;
 }
 if (_dragSourceEl) {
-  _dragSourceEl.style.opacity = "";
+  _dragSourceEl.style.opacity = '';
   _dragSourceEl = null;
 }
 ```

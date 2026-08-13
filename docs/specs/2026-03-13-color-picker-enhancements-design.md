@@ -48,7 +48,7 @@ Each feature is an independent module. ColorCombobox composes them. Each module 
 type ParsedColorInput = {
   hex: string; // normalized 6-digit hex (#rrggbb)
   original: string; // raw user input
-  format: "hex" | "hex-short" | "rgb" | "hsl" | "named";
+  format: 'hex' | 'hex-short' | 'rgb' | 'hsl' | 'named';
 };
 ```
 
@@ -66,21 +66,21 @@ type ParsedColorInput = {
 // Lazy-initialized singleton — avoids import-time `document` access (breaks tests/SSR)
 let ctx: CanvasRenderingContext2D | null = null;
 function getCtx(): CanvasRenderingContext2D {
-  if (!ctx) ctx = document.createElement("canvas").getContext("2d")!;
+  if (!ctx) ctx = document.createElement('canvas').getContext('2d')!;
   return ctx;
 }
 
 function cssColorToHex(input: string): string | null {
   const c = getCtx();
   // Two-sentinel approach to avoid collision with real colors
-  c.fillStyle = "#010101";
+  c.fillStyle = '#010101';
   c.fillStyle = input;
-  if (c.fillStyle !== "#010101") return c.fillStyle;
+  if (c.fillStyle !== '#010101') return c.fillStyle;
 
   // Input resolved to #010101 — verify it's intentional, not a failed parse
-  c.fillStyle = "#020202";
+  c.fillStyle = '#020202';
   c.fillStyle = input;
-  if (c.fillStyle !== "#020202") return c.fillStyle;
+  if (c.fillStyle !== '#020202') return c.fillStyle;
 
   return null; // canvas did not recognize the input
 }

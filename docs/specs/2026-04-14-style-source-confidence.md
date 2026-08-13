@@ -17,7 +17,7 @@ it cannot always prove which project source declaration should be edited.
 ## Types
 
 ```typescript
-type SourceConfidence = "exact" | "probable" | "computed-only";
+type SourceConfidence = 'exact' | 'probable' | 'computed-only';
 ```
 
 `SourceConfidence` belongs to source ownership records such as
@@ -253,8 +253,8 @@ Write plans using a non-exact path should record why:
 ```typescript
 diagnostics: [
   {
-    level: "warning",
-    message: "Multiple CSS selectors could own padding-left; writing to selected .card source tab.",
+    level: 'warning',
+    message: 'Multiple CSS selectors could own padding-left; writing to selected .card source tab.',
   },
 ];
 ```

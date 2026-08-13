@@ -79,11 +79,11 @@ VS Code and SaaS must pass the same runtime theme context into the shared read
 and write managers.
 
 ```typescript
-type IdeThemePreference = "light" | "dark" | "system";
+type IdeThemePreference = 'light' | 'dark' | 'system';
 
-type ResolvedColorScheme = "light" | "dark";
+type ResolvedColorScheme = 'light' | 'dark';
 
-type RuntimeThemeSource = "hyperide" | "vscode" | "browser-system" | "app-runtime" | "test-fixture";
+type RuntimeThemeSource = 'hyperide' | 'vscode' | 'browser-system' | 'app-runtime' | 'test-fixture';
 
 interface RuntimeThemeContext {
   ideThemePreference: IdeThemePreference;
@@ -118,22 +118,22 @@ tests:
 The parent spec's `StyleCondition.theme` field uses this shape:
 
 ```typescript
-type ThemeAxisId = "color-scheme" | "brand" | "density" | "contrast" | "platform" | (string & {});
+type ThemeAxisId = 'color-scheme' | 'brand' | 'density' | 'contrast' | 'platform' | (string & {});
 
 type ThemeConditionSource =
-  | "prefers-color-scheme"
-  | "tailwind-dark-selector"
-  | "mui-color-scheme"
-  | "chakra-color-mode"
-  | "mantine-color-scheme"
-  | "tamagui-theme"
-  | "data-attribute"
-  | "class-selector"
-  | "css-variable-scope"
-  | "script-condition"
-  | "theme-provider"
-  | "library-theme-config"
-  | "custom";
+  | 'prefers-color-scheme'
+  | 'tailwind-dark-selector'
+  | 'mui-color-scheme'
+  | 'chakra-color-mode'
+  | 'mantine-color-scheme'
+  | 'tamagui-theme'
+  | 'data-attribute'
+  | 'class-selector'
+  | 'css-variable-scope'
+  | 'script-condition'
+  | 'theme-provider'
+  | 'library-theme-config'
+  | 'custom';
 
 interface ThemeCondition {
   axis: ThemeAxisId;
@@ -192,34 +192,34 @@ interface ThemeAxisCapability {
   id: ThemeAxisId;
   values: string[];
   defaultValue?: string;
-  source: "config" | "css" | "runtime" | "library" | "inferred";
+  source: 'config' | 'css' | 'runtime' | 'library' | 'inferred';
 }
 
 type ThemeMechanism =
-  | "prefers-color-scheme"
-  | "class-selector"
-  | "data-attribute"
-  | "css-custom-properties"
-  | "tailwind-dark-variant"
-  | "tailwind-theme"
-  | "mui-theme"
-  | "chakra-theme"
-  | "mantine-theme"
-  | "tamagui-theme"
-  | "vanilla-extract-theme"
-  | "css-in-js-theme-callback"
-  | "script-branch";
+  | 'prefers-color-scheme'
+  | 'class-selector'
+  | 'data-attribute'
+  | 'css-custom-properties'
+  | 'tailwind-dark-variant'
+  | 'tailwind-theme'
+  | 'mui-theme'
+  | 'chakra-theme'
+  | 'mantine-theme'
+  | 'tamagui-theme'
+  | 'vanilla-extract-theme'
+  | 'css-in-js-theme-callback'
+  | 'script-branch';
 
 interface ThemeTokenSource {
   kind:
-    | "css-custom-property"
-    | "tailwind-token"
-    | "mui-theme-token"
-    | "chakra-theme-token"
-    | "mantine-theme-token"
-    | "tamagui-token"
-    | "vanilla-extract-token"
-    | "css-in-js-theme-token";
+    | 'css-custom-property'
+    | 'tailwind-token'
+    | 'mui-theme-token'
+    | 'chakra-theme-token'
+    | 'mantine-theme-token'
+    | 'tamagui-token'
+    | 'vanilla-extract-token'
+    | 'css-in-js-theme-token';
   filePath?: string;
   owner?: string;
 }
@@ -328,13 +328,13 @@ system selected:
 ### Script Branches
 
 ```tsx
-<div style={{ color: isDark ? "#ffffff" : "#111827" }} />
+<div style={{ color: isDark ? '#ffffff' : '#111827' }} />
 ```
 
 or:
 
 ```tsx
-const cardStyle = isDark ? { color: "#ffffff" } : { color: "#111827" };
+const cardStyle = isDark ? { color: '#ffffff' } : { color: '#111827' };
 ```
 
 Read model:
@@ -364,7 +364,7 @@ Unknown expression:
 
 ```tsx
 const Card = styled.div(({ theme }) => ({
-  color: theme.palette.mode === "dark" ? theme.palette.grey[100] : theme.palette.grey[900],
+  color: theme.palette.mode === 'dark' ? theme.palette.grey[100] : theme.palette.grey[900],
 }));
 ```
 

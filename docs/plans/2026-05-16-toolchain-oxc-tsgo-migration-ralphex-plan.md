@@ -73,18 +73,18 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      glob: "*.{ts,tsx,js,jsx,json,css}"
+      glob: '*.{ts,tsx,js,jsx,json,css}'
       run: npx oxlint --config .oxlintrc.json {staged_files}
       stage_fixed: true
     format:
-      glob: "*.{ts,tsx,js,jsx,json,css}"
+      glob: '*.{ts,tsx,js,jsx,json,css}'
       run: npx oxfmt --write {staged_files}
       stage_fixed: true
     typecheck:
-      glob: "*.{ts,tsx}"
+      glob: '*.{ts,tsx}'
       run: npx tsgo --noEmit && npx tsgo --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json
     react-hooks-import:
-      glob: "*.{tsx,ts}"
+      glob: '*.{tsx,ts}'
       run: node scripts/check-react-hooks-import.cjs {staged_files}
 ```
 

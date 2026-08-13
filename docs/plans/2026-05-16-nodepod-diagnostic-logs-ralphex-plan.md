@@ -52,10 +52,10 @@ Key design decisions:
 - [ ] Create the file with this exact content:
 
 ```typescript
-import type { RuntimeStatus } from "@/lib/project-runtime/types";
-import type { DiagnosticSource } from "@shared/diagnostic-types";
-import { useEffect, useRef } from "react";
-import { useDiagnosticStore } from "@/stores/diagnosticStore";
+import type { RuntimeStatus } from '@/lib/project-runtime/types';
+import type { DiagnosticSource } from '@shared/diagnostic-types';
+import { useEffect, useRef } from 'react';
+import { useDiagnosticStore } from '@/stores/diagnosticStore';
 
 interface UseNodePodDiagnosticSyncOptions {
   enabled: boolean;
@@ -65,9 +65,9 @@ interface UseNodePodDiagnosticSyncOptions {
 }
 
 function mapSource(line: string): DiagnosticSource {
-  if (line.startsWith("[npm]") || line.startsWith("[vite]")) return "server";
-  if (line.startsWith("[error]")) return "server";
-  return "system";
+  if (line.startsWith('[npm]') || line.startsWith('[vite]')) return 'server';
+  if (line.startsWith('[error]')) return 'server';
+  return 'system';
 }
 
 export function useNodePodDiagnosticSync({
@@ -101,7 +101,7 @@ export function useNodePodDiagnosticSync({
         line,
         timestamp: Date.now(),
         source: mapSource(line),
-        isError: line.startsWith("[error]"),
+        isError: line.startsWith('[error]'),
       })),
     );
   }, [enabled, logs, addLogs]);
@@ -109,10 +109,10 @@ export function useNodePodDiagnosticSync({
   // Sync build status
   useEffect(() => {
     if (!enabled) return;
-    if (runtimeStatus === "starting") setBuildStatus("building");
-    else if (runtimeStatus === "running") setBuildStatus("ready");
-    else if (runtimeStatus === "error") setBuildStatus("error");
-    else setBuildStatus("idle");
+    if (runtimeStatus === 'starting') setBuildStatus('building');
+    else if (runtimeStatus === 'running') setBuildStatus('ready');
+    else if (runtimeStatus === 'error') setBuildStatus('error');
+    else setBuildStatus('idle');
   }, [enabled, runtimeStatus, setBuildStatus]);
 
   // Always connected when enabled (logs come directly from runtime state)
@@ -125,7 +125,7 @@ export function useNodePodDiagnosticSync({
   // Sync runtime error
   useEffect(() => {
     if (!enabled) return;
-    setRuntimeError(runtimeError ? { type: "RuntimeError", message: runtimeError, framework: "vite" } : null);
+    setRuntimeError(runtimeError ? { type: 'RuntimeError', message: runtimeError, framework: 'vite' } : null);
   }, [enabled, runtimeError, setRuntimeError]);
 
   return { clear };
@@ -274,8 +274,8 @@ grep -n "useProjectRuntime\|const runtime\|useLogsPanelState\|useDiagnosticSync"
 - [ ] Add imports near the top of the imports block (after existing hook imports):
 
 ```typescript
-import { useDiagnosticSync } from "@/hooks/useDiagnosticSync";
-import { useNodePodDiagnosticSync } from "@/hooks/useNodePodDiagnosticSync";
+import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
+import { useNodePodDiagnosticSync } from '@/hooks/useNodePodDiagnosticSync';
 ```
 
 - [ ] Find where `runtimeError` is used in CanvasEditor (it comes from `useGatewayErrorHandling`). Convert `runtime.error` to `RuntimeError` format for NodePod. Add this block right after `parseErrorAsRuntimeError` useMemo (around line 266):
@@ -284,8 +284,8 @@ import { useNodePodDiagnosticSync } from "@/hooks/useNodePodDiagnosticSync";
 // Convert NodePod runtime error string to RuntimeError shape for LogsPanel
 const nodePodRuntimeError = useMemo(
   (): RuntimeError | null =>
-    runtime.mode === "nodepod" && runtime.error
-      ? { type: "RuntimeError", message: runtime.error, framework: "vite" }
+    runtime.mode === 'nodepod' && runtime.error
+      ? { type: 'RuntimeError', message: runtime.error, framework: 'vite' }
       : null,
   [runtime.mode, runtime.error],
 );
@@ -296,7 +296,7 @@ const nodePodRuntimeError = useMemo(
 ```typescript
 // Docker diagnostic sync (no-op when projectId is undefined = NodePod mode)
 const { clear: dockerLogsClear } = useDiagnosticSync({
-  projectId: runtime.mode === "docker" ? activeProject?.id : undefined,
+  projectId: runtime.mode === 'docker' ? activeProject?.id : undefined,
   containerStatus: activeProject?.status,
   runtimeError: runtimeError || parseErrorAsRuntimeError,
   proxyError: gatewayErrorMessage,
@@ -304,13 +304,13 @@ const { clear: dockerLogsClear } = useDiagnosticSync({
 
 // NodePod diagnostic sync (no-op when enabled = false)
 const { clear: nodePodLogsClear } = useNodePodDiagnosticSync({
-  enabled: runtime.mode === "nodepod",
+  enabled: runtime.mode === 'nodepod',
   logs: runtime.logs,
   runtimeStatus: runtime.status,
   runtimeError: runtime.error,
 });
 
-const logsClear = runtime.mode === "nodepod" ? nodePodLogsClear : dockerLogsClear;
+const logsClear = runtime.mode === 'nodepod' ? nodePodLogsClear : dockerLogsClear;
 ```
 
 - [ ] Update `useLogsPanelState` call to also react to NodePod errors. Find the call (around line 499-500) and add `nodePodRuntimeError`:
