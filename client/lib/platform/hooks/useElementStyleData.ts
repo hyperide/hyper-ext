@@ -340,13 +340,24 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
         }
       }
 
-      if (!astNode) {
-        setData(EMPTY_DATA);
-        return;
-      }
-
       // Get DOM element from iframe for computed styles (itemIndex selects specific .map() item)
       const domElement = getElementFromIframe(elementId, itemIndex);
+
+      if (!astNode) {
+        // NodePod mode: no server-side AST, show minimal element info from DOM
+        if (domElement) {
+          setData({
+            parsedStyles: null,
+            childrenType: undefined,
+            textContent: domElement.textContent?.trim() ?? '',
+            tagType: domElement.tagName.toLowerCase(),
+            loading: false,
+          });
+        } else {
+          setData(EMPTY_DATA);
+        }
+        return;
+      }
       const domTextContent = domElement?.textContent?.trim() || '';
 
       // Read parsed styles via adapter (TailwindAdapter or TamaguiAdapter)

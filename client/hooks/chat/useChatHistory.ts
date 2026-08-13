@@ -23,8 +23,8 @@ export function useChatHistory({
 
   const currentChat = useMemo(() => chats.find((c) => c.id === currentChatId), [chats, currentChatId]);
 
-  // Load chats on mount
-  /* eslint-disable react-hooks/exhaustive-deps -- mount-only, chatAdapter is stable */
+  // Load chats on mount. `chatAdapter` is the only dep — reloading on every
+  // `initialChatId` change would be wrong; the sync effect below handles that.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -33,9 +33,6 @@ export function useChatHistory({
         const loaded = await chatAdapter.listChats();
         if (cancelled) return;
         setChats(loaded);
-        if (initialChatId) {
-          setCurrentChatId(initialChatId);
-        }
         // Don't auto-select first chat — start with "New Chat" (null)
       } catch (error) {
         console.error('Failed to load chats:', error);
@@ -47,7 +44,6 @@ export function useChatHistory({
       cancelled = true;
     };
   }, [chatAdapter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Load messages when currentChatId changes
   useEffect(() => {

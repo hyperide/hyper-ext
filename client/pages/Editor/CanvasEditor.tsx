@@ -38,7 +38,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { DragResizeHandle } from '@/components/ui/drag-resize-handle';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
+import { useDiagnosticSync } from '@/hooks/useDiagnosticSync';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useNodePodDiagnosticSync } from '@/hooks/useNodePodDiagnosticSync';
 import { useRightSidebarWidth } from '@/hooks/useRightSidebarWidth';
 import {
   useCanvasEngine,
@@ -311,11 +313,28 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     setProjectRole,
   });
 
+  // Convert NodePod runtime error string to RuntimeError shape for LogsPanel
+  const nodePodRuntimeError = useMemo(
+    (): RuntimeError | null =>
+      runtime.mode === 'nodepod' && runtime.error
+        ? { type: 'RuntimeError', message: runtime.error, framework: 'vite', fullText: runtime.error }
+        : null,
+    [runtime.mode, runtime.error],
+  );
+
   // Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
   useEffect(() => {
     if (runtime.mode === 'nodepod') {
       setIsStarting(runtime.status === 'starting');
     }
+  }, [runtime.mode, runtime.status]);
+
+  // Tell ConnectionStatus we're running a NodePod virtual server
+  useEffect(() => {
+    useConnectionStore.getState().setNodePodRunning(runtime.mode === 'nodepod' && runtime.status === 'running');
+    return () => {
+      useConnectionStore.getState().setNodePodRunning(false);
+    };
   }, [runtime.mode, runtime.status]);
 
   // Comments for current component
@@ -399,7 +418,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
   // Track iframe load events to trigger overlay recomputation
   const { iframeLoadedCounter, instancesReadyCounter, triggerIframeReload } = useIframeLoadTracking({
-    enabled: !!activeProject && activeProject.status === 'running' && !isCodeEditorMode,
+    enabled:
+      !!activeProject &&
+      (activeProject.status === 'running' || (runtime.mode === 'nodepod' && runtime.status === 'running')) &&
+      !isCodeEditorMode,
     isBoardModeActive,
     componentName: meta?.componentName,
   });
@@ -497,7 +519,25 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   });
 
   const { isLogsPanelOpen, isLogsPanelCollapsed, handleLogsDismiss, handleExpandLogs, handleToggleLogs } =
-    useLogsPanelState({ hasGatewayError, runtimeError, parseErrorAsRuntimeError });
+    useLogsPanelState({ hasGatewayError, runtimeError: runtimeError || nodePodRuntimeError, parseErrorAsRuntimeError });
+
+  // Docker diagnostic sync (no-op when projectId is undefined = NodePod mode)
+  const { clear: dockerLogsClear } = useDiagnosticSync({
+    projectId: runtime.mode === 'docker' ? activeProject?.id : undefined,
+    containerStatus: activeProject?.status,
+    runtimeError: runtimeError || parseErrorAsRuntimeError,
+    proxyError: gatewayErrorMessage,
+  });
+
+  // NodePod diagnostic sync (no-op when enabled = false)
+  const { clear: nodePodLogsClear } = useNodePodDiagnosticSync({
+    enabled: runtime.mode === 'nodepod',
+    logs: runtime.logs,
+    runtimeStatus: runtime.status,
+    runtimeError: runtime.error,
+  });
+
+  const logsClear = runtime.mode === 'nodepod' ? nodePodLogsClear : dockerLogsClear;
 
   const handleIframeErrorChange = useCallback((error: string | null, retryCount: number) => {
     setIframeError({ message: error, retryCount });
@@ -924,7 +964,11 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
   // Selection overlays (hover + selection rectangles + empty container placeholders) via RAF
   useSelectionOverlays({
-    enabled: !!activeProject && activeProject.status === 'running' && !isCodeEditorMode && !isAddingComment,
+    enabled:
+      !!activeProject &&
+      (activeProject.status === 'running' || (runtime.mode === 'nodepod' && runtime.status === 'running')) &&
+      !isCodeEditorMode &&
+      !isAddingComment,
     overlayContainerRef,
     hoveredId,
     hoveredItemIndex,
@@ -1227,6 +1271,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                         setIsStarting={setIsStarting}
                         setActiveProject={setActiveProject}
                         onOpenSettings={onOpenSettings}
+                        runtimeError={runtime.error}
+                        onRetry={runtime.restart}
                       />
                     </div>
                   </div>
@@ -1399,16 +1445,20 @@ export function CanvasEditor({ onOpenSettings }: Props) {
             {/* LogsPanel — outside scroll container so it stays pinned at bottom */}
             {!isCodeEditorMode &&
               !isLogsPanelCollapsed &&
-              (hasGatewayError || runtimeError || parseErrorAsRuntimeError || isLogsPanelOpen) &&
+              (hasGatewayError ||
+                runtimeError ||
+                parseErrorAsRuntimeError ||
+                nodePodRuntimeError ||
+                isLogsPanelOpen ||
+                (runtime.mode === 'nodepod' && runtime.status !== 'idle')) &&
               activeProject?.id && (
                 <LogsPanel
                   projectId={activeProject.id}
-                  containerStatus={activeProject.status}
-                  proxyError={gatewayErrorMessage}
-                  runtimeError={runtimeError || parseErrorAsRuntimeError}
+                  runtimeError={runtimeError || parseErrorAsRuntimeError || nodePodRuntimeError}
                   height={logsHeight}
                   onHeightChange={setLogsHeight}
                   onDismiss={handleLogsDismiss}
+                  onClear={logsClear}
                 />
               )}
           </div>

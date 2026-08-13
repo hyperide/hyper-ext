@@ -20,9 +20,8 @@ mock.module('../services/PreviewProxy', () => ({
     stop = mock();
   },
 }));
-const { appendScriptCliArgs, buildInstallCommand, DevServerManager, shouldRepairDependencies } = await import(
-  '../services/DevServerManager'
-);
+const { appendScriptCliArgs, buildInstallCommand, DevServerManager, shouldRepairDependencies } =
+  await import('../services/DevServerManager');
 
 describe('DevServerManager', () => {
   let manager: InstanceType<typeof DevServerManager>;

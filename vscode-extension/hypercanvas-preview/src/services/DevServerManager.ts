@@ -729,15 +729,13 @@ export class DevServerManager {
    */
   private _maybeUpdatePortFromOutput(text: string): void {
     if (this._portDetected || !this._previewProxy) return;
-    const match = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1):(\d{4,5})/);
+    const match = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1):(\d{1,5})/);
     if (!match) return;
     const detectedPort = Number(match[1]);
     if (!Number.isFinite(detectedPort) || detectedPort <= 0 || detectedPort > 65535) return;
     this._portDetected = true;
     if (detectedPort === this._port) return;
-    console.log(
-      `[HyperIDE] DevServer bound to port ${detectedPort} (assigned ${this._port}), correcting proxy target`,
-    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    console.log(`[HyperIDE] DevServer bound to port ${detectedPort} (assigned ${this._port}), correcting proxy target`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
     this._port = detectedPort;
     this._previewProxy.setTargetPort(detectedPort);
   }

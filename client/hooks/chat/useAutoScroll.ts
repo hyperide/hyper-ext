@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 /**
- * Auto-scroll to bottom when content changes, unless user has scrolled up.
+ * Auto-scroll to bottom when any trigger value changes, unless the user has
+ * scrolled up.
+ *
+ * Triggers are positional so the deps array is statically analyzable by
+ * exhaustive-deps. The call site at SharedChatPanel passes three values
+ * (history.messages, stream.currentAssistantMessage, stream.currentToolCalls);
+ * unused trigger slots can be left as undefined.
  */
-export function useAutoScroll(dependencies: unknown[]) {
+export function useAutoScroll(triggerA?: unknown, triggerB?: unknown, triggerC?: unknown) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isUserScrolledUpRef = useRef(false);
 
-  // Auto-scroll on content change — deps are dynamic (caller controls scroll triggers)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: triggers are sentinel deps — the effect fires when any of them changes to scroll the viewport; the body intentionally does not read them.
   useEffect(() => {
     if (isUserScrolledUpRef.current || !scrollAreaRef.current) return;
     const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [...dependencies]);
+  }, [triggerA, triggerB, triggerC]);
 
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return;

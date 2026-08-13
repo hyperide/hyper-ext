@@ -217,7 +217,13 @@ describe('AstService.moveElement — text-container & inline-emoji moves (Task 4
   });
 
   describe('cross-card moves between grid-cols-2 siblings (different JSX parents)', () => {
-    it('moves <p className="body-tail"> from card-tail BEFORE <h3 className="title-bark"> in card-bark', async () => {
+    // liftToCommonJsxParent (Task 4 of move-any-intermittent plan) lifts source and
+    // target to their common ancestor's direct children — i.e. to the outer CARDS,
+    // not to the inner elements. Dragging an inner element of one card near an inner
+    // element of another card reorders the OUTER cards, not the inner elements.
+    // This matches the user's visual intent: the whole card moves with its contents.
+
+    it('dragging <p body-tail> BEFORE <h3 title-bark>: cards already in order → no-op', async () => {
       const { service, fileIO, absPath, relPath } = await makeService(CARDS_FIXTURE);
       const sourceRef = refByClass(service, absPath, relPath, 'p', 'body-tail', CARDS_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'h3', 'title-bark', CARDS_FIXTURE);
@@ -227,26 +233,30 @@ describe('AstService.moveElement — text-container & inline-emoji moves (Task 4
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <p body-tail> must now live INSIDE card-bark, BEFORE <h3 title-bark>.
-      const cardBarkOpen = content.indexOf('"card-bark"');
-      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
-      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
-      expect(insideBark.includes('"body-tail"')).toBe(true);
-      expect(insideBark.indexOf('"body-tail"')).toBeLessThan(insideBark.indexOf('"title-bark"'));
+      // Lift: card-tail (sourceLifted) is moved before card-bark (targetLifted).
+      // card-tail was already before card-bark → order is unchanged.
+      expect(content.indexOf('"card-tail"')).toBeLessThan(content.indexOf('"card-bark"'));
 
-      // <p body-tail> no longer in card-tail.
+      // All elements stay intact inside their original cards — nothing was extracted.
       const cardTailOpen = content.indexOf('"card-tail"');
       const cardTailClose = content.indexOf('</article>', cardTailOpen);
       const insideTail = content.slice(cardTailOpen, cardTailClose);
-      expect(insideTail.includes('"body-tail"')).toBe(false);
-      // card-tail still has its title and emoji.
+      expect(insideTail.includes('"body-tail"')).toBe(true);
       expect(insideTail.includes('"title-tail"')).toBe(true);
       expect(insideTail.includes('"emoji-tail"')).toBe(true);
-      // Globally exactly one body-tail — no orphaned duplicate.
+
+      const cardBarkOpen = content.indexOf('"card-bark"');
+      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
+      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
+      expect(insideBark.includes('"title-bark"')).toBe(true);
+      expect(insideBark.includes('"body-bark"')).toBe(true);
+      expect(insideBark.includes('"emoji-bark"')).toBe(true);
+
+      // No duplicates — each element appears exactly once.
       expect(content.match(/"body-tail"/g)?.length).toBe(1);
     });
 
-    it('moves <span emoji-tail> 🌀 from card-tail AFTER <span emoji-bark> in card-bark', async () => {
+    it('dragging <span emoji-tail> AFTER <span emoji-bark>: card-tail moves after card-bark', async () => {
       const { service, fileIO, absPath, relPath } = await makeService(CARDS_FIXTURE);
       const sourceRef = refByClass(service, absPath, relPath, 'span', 'emoji-tail', CARDS_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'span', 'emoji-bark', CARDS_FIXTURE);
@@ -256,34 +266,35 @@ describe('AstService.moveElement — text-container & inline-emoji moves (Task 4
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <span emoji-tail> now sits in card-bark, after <span emoji-bark>.
-      const cardBarkOpen = content.indexOf('"card-bark"');
-      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
-      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
-      expect(insideBark.includes('"emoji-tail"')).toBe(true);
-      expect(insideBark.indexOf('"emoji-bark"')).toBeLessThan(insideBark.indexOf('"emoji-tail"'));
+      // Lift: card-tail (sourceLifted) is moved AFTER card-bark (targetLifted).
+      // card-bark now comes first in the grid.
+      expect(content.indexOf('"card-bark"')).toBeLessThan(content.indexOf('"card-tail"'));
 
-      // No longer in card-tail.
+      // emoji-tail stays inside card-tail (now second in the grid).
       const cardTailOpen = content.indexOf('"card-tail"');
       const cardTailClose = content.indexOf('</article>', cardTailOpen);
       const insideTail = content.slice(cardTailOpen, cardTailClose);
-      expect(insideTail.includes('"emoji-tail"')).toBe(false);
+      expect(insideTail.includes('"emoji-tail"')).toBe(true);
+
+      // emoji-bark stays inside card-bark (now first in the grid).
+      const cardBarkOpen = content.indexOf('"card-bark"');
+      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
+      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
+      expect(insideBark.includes('"emoji-bark"')).toBe(true);
+      expect(insideBark.includes('"emoji-tail"')).toBe(false);
 
       // Both emojis preserved (🌀 from tail, 🐶 from bark) — exactly once each.
       expect(content.match(/🌀/g)?.length).toBe(1);
       expect(content.match(/🐶/g)?.length).toBe(1);
       // No duplicate emoji-tail span.
       expect(content.match(/"emoji-tail"/g)?.length).toBe(1);
-      // aria-hidden on the moved span survives.
-      const movedTailIdx = content.indexOf('"emoji-tail"');
-      const movedTailLine = content.slice(
-        content.lastIndexOf('<', movedTailIdx),
-        content.indexOf('>', movedTailIdx) + 1,
-      );
-      expect(movedTailLine.includes('aria-hidden="true"')).toBe(true);
+      // aria-hidden on emoji-tail span survives.
+      const tailIdx = content.indexOf('"emoji-tail"');
+      const tailLine = content.slice(content.lastIndexOf('<', tailIdx), content.indexOf('>', tailIdx) + 1);
+      expect(tailLine.includes('aria-hidden="true"')).toBe(true);
     });
 
-    it('moves <h3 title-tail> AFTER <p body-bark>: heading travels with its child text', async () => {
+    it('dragging <h3 title-tail> AFTER <p body-bark>: card-tail moves after card-bark', async () => {
       const { service, fileIO, absPath, relPath } = await makeService(CARDS_FIXTURE);
       const sourceRef = refByClass(service, absPath, relPath, 'h3', 'title-tail', CARDS_FIXTURE);
       const targetRef = refByClass(service, absPath, relPath, 'p', 'body-bark', CARDS_FIXTURE);
@@ -293,25 +304,30 @@ describe('AstService.moveElement — text-container & inline-emoji moves (Task 4
       expect(result.success).toBe(true);
       const content = fileIO.content(absPath);
 
-      // <h3 title-tail> now lives inside card-bark, after <p body-bark>.
-      const cardBarkOpen = content.indexOf('"card-bark"');
-      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
-      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
-      expect(insideBark.includes('"title-tail"')).toBe(true);
-      expect(insideBark.indexOf('"body-bark"')).toBeLessThan(insideBark.indexOf('"title-tail"'));
-      // The "Tail" text content moved with the <h3>.
-      const movedHeadIdx = insideBark.indexOf('"title-tail"');
-      const movedHeadEnd = insideBark.indexOf('</h3>', movedHeadIdx);
-      expect(insideBark.slice(movedHeadIdx, movedHeadEnd).includes('Tail')).toBe(true);
+      // Lift: card-tail (sourceLifted) is moved AFTER card-bark (targetLifted).
+      // card-bark now comes first in the grid.
+      expect(content.indexOf('"card-bark"')).toBeLessThan(content.indexOf('"card-tail"'));
 
-      // Original card-tail no longer hosts <h3 title-tail> but keeps the rest.
+      // title-tail (h3) stays inside card-tail, travelling with the whole card.
       const cardTailOpen = content.indexOf('"card-tail"');
       const cardTailClose = content.indexOf('</article>', cardTailOpen);
       const insideTail = content.slice(cardTailOpen, cardTailClose);
-      expect(insideTail.includes('"title-tail"')).toBe(false);
+      expect(insideTail.includes('"title-tail"')).toBe(true);
+      // "Tail" text content stays with its h3 inside card-tail.
+      const titleTailIdx = insideTail.indexOf('"title-tail"');
+      const titleTailEnd = insideTail.indexOf('</h3>', titleTailIdx);
+      expect(insideTail.slice(titleTailIdx, titleTailEnd).includes('Tail')).toBe(true);
+      // card-tail keeps all its elements.
       expect(insideTail.includes('"body-tail"')).toBe(true);
       expect(insideTail.includes('"emoji-tail"')).toBe(true);
-      // No duplicate-insertion: title-tail moved, not copied.
+
+      // title-tail does NOT appear inside card-bark.
+      const cardBarkOpen = content.indexOf('"card-bark"');
+      const cardBarkClose = content.indexOf('</article>', cardBarkOpen);
+      const insideBark = content.slice(cardBarkOpen, cardBarkClose);
+      expect(insideBark.includes('"title-tail"')).toBe(false);
+
+      // No duplicate-insertion: title-tail appears exactly once.
       expect(content.match(/"title-tail"/g)?.length).toBe(1);
     });
   });

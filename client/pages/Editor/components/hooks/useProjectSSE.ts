@@ -96,6 +96,11 @@ export function useProjectSSE({
     const projectStatus = activeProject?.status;
 
     if (!projectId) return;
+    // NodePod projects manage their own runtime — no Docker status polling needed
+    if (activeProject?.clientSideRuntime) {
+      setPollStatus({ lastPoll: null, lastResult: null, isPolling: false });
+      return;
+    }
     if (projectStatus !== 'stopped' && projectStatus !== 'error') {
       // Clear poll status when not polling
       setPollStatus({ lastPoll: null, lastResult: null, isPolling: false });
@@ -153,7 +158,7 @@ export function useProjectSSE({
     doPoll();
 
     return () => clearInterval(interval);
-  }, [activeProject?.id, activeProject?.status, setActiveProject]);
+  }, [activeProject?.id, activeProject?.status, activeProject?.clientSideRuntime, setActiveProject]);
 
   // Project stream URL with token and persisted projectId
   const projectStreamUrl = useMemo(() => {

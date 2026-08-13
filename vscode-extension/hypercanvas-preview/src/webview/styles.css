@@ -92,6 +92,37 @@ body.vscode-high-contrast-light .toggle-active {
   border: 1px solid var(--vscode-contrastBorder);
 }
 
+/* SYNC: client/global.css — inspector-btn-active tokens */
+:root,
+body.vscode-dark {
+  --inspector-btn-active-bg: rgba(255, 255, 255, 0.12);
+  --inspector-btn-active-fg: var(--vscode-button-background, #3479de);
+}
+
+body.vscode-light {
+  --inspector-btn-active-bg: rgba(52, 121, 222, 0.12);
+  --inspector-btn-active-fg: var(--vscode-button-background, #3479de);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --inspector-btn-active-bg: transparent;
+  --inspector-btn-active-fg: var(--vscode-focusBorder, var(--vscode-contrastBorder, #3479de));
+}
+
+.inspector-btn-active {
+  background: var(--inspector-btn-active-bg);
+}
+
+.inspector-btn-active svg {
+  color: var(--inspector-btn-active-fg);
+}
+
+body.vscode-high-contrast .inspector-btn-active,
+body.vscode-high-contrast-light .inspector-btn-active {
+  border: 1px solid var(--vscode-contrastBorder);
+}
+
 input,
 select {
   background: var(--vscode-input-background);
