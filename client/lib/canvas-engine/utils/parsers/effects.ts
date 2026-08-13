@@ -29,8 +29,12 @@ export function parseOpacity(classes: string[]): Pick<ParsedEffectStyles, 'opaci
       const value = cls.slice(8);
       const arbValue = extractArbitraryValue(cls);
       if (arbValue) {
-        const uiValue = Number.parseFloat(arbValue) * 100;
-        result.opacity = uiValue.toString();
+        const n = Number.parseFloat(arbValue);
+        if (Number.isFinite(n)) {
+          // Trim IEEE-754 artifacts (0.55*100 === 55.00000000000001) without
+          // coercing legitimate fractional percentages (0.335 -> 33.5) to integers.
+          result.opacity = (Math.round(n * 100 * 1e6) / 1e6).toString();
+        }
       } else {
         result.opacity = value;
       }
