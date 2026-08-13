@@ -15,6 +15,8 @@ All notable changes to HyperCanvas Preview are documented here.
 - **ConlocaCard no longer duplicated in Pages and Components** — `scanPagesDirectory` now skips directories already categorised as composites; `buildSubProject` passes `compositeDirPaths` as `excludeDirs` to the pages build call, mirroring the existing atom→composites exclusion pattern (`c51652e3`)
 - **SaaS accordion propagation** — `useComponentsData` now preserves `isMonorepo` and `subProjects` fields returned by the server; previously the hook silently dropped them by reconstructing only `atomGroups/compositeGroups/pageGroups` (`85eecc49`)
 - **Monorepo CSS fallback always fires** — removed `if (!packageJson)` guard in `detectCssSystem()` that prevented Tailwind detection in `apps/web/` when root `package.json` was pre-resolved (`85eecc49`)
+- **Library sub-packages no longer appear under Pages** — `isLibrarySubPackage()` detects packages with `react` in `peerDependencies` only (not `dependencies`); their root-level `.tsx` components go to the Composites section instead of Pages (`a0a43ea7`)
+- **Pages fallback adds individual files, not the whole src/ directory** — `detectProjectStructureInScope` now pushes individual PascalCase `.tsx` file paths instead of the parent directory, matching the root-project behaviour from HYP-397 (`a321bc1e`)
 
 ---
 
