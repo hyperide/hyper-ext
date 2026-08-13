@@ -51,6 +51,23 @@ const MAX_LOG_ENTRIES = 200;
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[A-Z\\[\]^_@]/g;
 type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
 
+/**
+ * True when a dev-server output line signals Bun HMR staleness — the bundler can
+ * no longer hot-replace a module because it is not a dynamic import (or explicitly
+ * reports HMR stale state). The server keeps running but subsequent changes are not
+ * reflected; a full restart of the dev server is the only reliable recovery.
+ *
+ * Exported so the predicate is unit-testable without spawning a process.
+ */
+export function isDynamicImportStalenessMessage(text: string): boolean {
+  return /not a dynamic import|HMR stale/i.test(text);
+}
+
+/** Cap: maximum auto-restarts per episode before giving up and waiting for user action. */
+const HMR_STALENESS_RESTART_CAP = 3;
+/** Episode window: if the last staleness-restart was older than this, start a fresh episode. */
+const HMR_STALENESS_EPISODE_WINDOW_MS = 60_000;
+
 // Explicit dev-server lifecycle edges (HYP-370 Phase 2). The DevServerStatus enum
 // (types.ts) is the de facto state; this table makes it a guarded machine instead of
 // a passively-set field. Idempotent self-loops (to === from) are handled by transition()
@@ -211,6 +228,27 @@ export class DevServerManager {
   // Port auto-detection — set once per start() when dev server stdout reveals
   // the actual bound port (e.g. "http://localhost:3000"). Resets on each start().
   private _portDetected = false;
+
+  // HMR-staleness auto-restart state (HYP-758 / task #38).
+  // Counts how many times we have restarted for the current staleness episode.
+  //
+  // Give-up is sticky: once the cap is reached the flag stays set until the
+  // server successfully transitions to `running` (meaning the restart actually
+  // helped — the staleness was transient).  A purely time-based reset would
+  // resume restarts every ~60 s for a persistent structural staleness, causing
+  // an infinite restart loop even after the "reload manually" log message.
+  // Cleared in transition() when status reaches `running`.
+  //
+  // The episode window (HMR_STALENESS_EPISODE_WINDOW_MS) still gates the
+  // counter for truly independent staleness events: if the server was `running`
+  // for a long time and a NEW unrelated staleness occurs well after the last
+  // restart, the window resets the counter so the new event gets its own budget.
+  // This is only reachable when _hmrStalenessGaveUp === false (cap not hit).
+  private _hmsRestartsThisEpisode = 0;
+  private _hmrLastRestartAt = 0;
+  // True once the per-episode cap is exhausted; cleared on a successful `running`
+  // transition so a recovery restart re-arms auto-restart for future staleness.
+  private _hmrStalenessGaveUp = false;
 
   // Recompile gate — webpack-only. Armed by PreviewModeManager BEFORE it AST-rewrites
   // the entry file. Forces _waitForReady() / consumers to wait for a FRESH
@@ -620,6 +658,7 @@ export class DevServerManager {
         }
 
         this._maybeResolveRecompileGate(clean);
+        this._maybeRestartOnStaleness(clean);
       });
 
       // Handle stderr — many servers (Vite 8, Next.js) write to stderr
@@ -638,6 +677,7 @@ export class DevServerManager {
         }
 
         this._maybeResolveRecompileGate(clean);
+        this._maybeRestartOnStaleness(clean);
       });
 
       // Handle process exit
@@ -917,6 +957,73 @@ export class DevServerManager {
     gate.resolve();
     // HYP-370 Phase 3: gate cleared — `recompiling` flips back to false.
     this._publishState();
+  }
+
+  /**
+   * Detect Bun HMR-staleness signatures on a clean output chunk and schedule an
+   * automatic restart when one is found.
+   *
+   * Why auto-restart: Bun's bundler can fall out of HMR sync for a module that is
+   * not a dynamic import. Once in this state the dev server keeps running but changes
+   * to that module are silently ignored — the only reliable fix is a full server
+   * restart. We detect the signature and restart automatically so the user does not
+   * have to notice the stale preview and restart manually.
+   *
+   * Loop protection: the give-up flag (_hmrStalenessGaveUp) is STICKY — once the
+   * cap is reached it stays set until the server successfully transitions to `running`
+   * (transition() clears it). A purely time-based reset would resume restarts every
+   * ~60 s for a persistent structural staleness, causing an infinite loop even after
+   * the "reload manually" message. The time window (HMR_STALENESS_EPISODE_WINDOW_MS)
+   * still resets the counter for genuinely independent events: if the server was
+   * running for a long time and a new staleness event appears well after the last
+   * restart, the window resets the counter. This path is only reachable when
+   * _hmrStalenessGaveUp is false (cap not yet hit).
+   *
+   * Only fires when the server is `running` — HMR staleness is a post-boot condition.
+   * Restart is enqueued onto the public lifecycle queue (restart()) rather than calling
+   * _runRestart() directly, because this callback runs outside a dequeued lifecycle op
+   * (it is a Node stream event) and must not interleave with an in-flight stop/start.
+   */
+  private _maybeRestartOnStaleness(text: string): void {
+    if (this._status !== 'running') return;
+    if (!isDynamicImportStalenessMessage(text)) return;
+
+    // Sticky give-up: cleared only when the server successfully reaches `running`.
+    if (this._hmrStalenessGaveUp) {
+      this._outputChannel.appendLine(
+        '[DevServer] HMR staleness detected but auto-restart cap already exhausted — reload manually',
+      );
+      return;
+    }
+
+    const now = Date.now();
+    // Reset the episode counter for genuinely new events (window elapsed + no give-up yet).
+    if (now - this._hmrLastRestartAt > HMR_STALENESS_EPISODE_WINDOW_MS) {
+      this._hmsRestartsThisEpisode = 0;
+    }
+
+    if (this._hmsRestartsThisEpisode >= HMR_STALENESS_RESTART_CAP) {
+      // Mark give-up sticky so the window can't re-arm restarts while the root cause persists.
+      this._hmrStalenessGaveUp = true;
+      this._outputChannel.appendLine(
+        `[DevServer] HMR staleness restart cap (${HMR_STALENESS_RESTART_CAP}) reached — auto-restart disabled until server recovers`,
+      );
+      return;
+    }
+
+    this._hmsRestartsThisEpisode += 1;
+    this._hmrLastRestartAt = now;
+    const attempt = this._hmsRestartsThisEpisode;
+    console.log(
+      `[HyperIDE] DevServer HMR staleness detected — auto-restart attempt ${attempt}/${HMR_STALENESS_RESTART_CAP}`,
+    ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    this._outputChannel.appendLine(
+      `[DevServer] HMR staleness detected — auto-restarting (attempt ${attempt}/${HMR_STALENESS_RESTART_CAP})`,
+    );
+
+    // Fire-and-forget via the public queue so this does not deadlock a concurrent
+    // lifecycle op and unhandled rejections are not surfaced to the process.
+    void this.restart().catch(() => {});
   }
 
   private _isRecompileReadyMessage(text: string): boolean {
@@ -1249,6 +1356,14 @@ export class DevServerManager {
     if (to !== from && !LEGAL_TRANSITIONS[from].includes(to)) {
       console.warn(`[HyperIDE] DevServer rejected illegal status transition: ${from} -> ${to}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       return false;
+    }
+    // A successful boot means the HMR-staleness restart actually resolved the issue.
+    // Clear the sticky give-up flag and reset the episode counter so future staleness
+    // events get a fresh budget (instead of being permanently blocked by a previous
+    // episode's cap).
+    if (to === 'running') {
+      this._hmrStalenessGaveUp = false;
+      this._hmsRestartsThisEpisode = 0;
     }
     this._updateStatus(to, error);
     return true;

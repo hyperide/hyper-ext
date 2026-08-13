@@ -52,6 +52,7 @@ const {
   devScriptDeclaresPort,
   devScriptUsesWrapper,
   DevServerManager,
+  isDynamicImportStalenessMessage,
   portInjectionArgs,
   shouldRepairDependencies,
 } = await import('../services/DevServerManager');
@@ -255,6 +256,33 @@ describe('portInjectionArgs', () => {
 
   it('skips injection for a turbo-wrapped nextjs dev script', () => {
     expect(portInjectionArgs('nextjs', 'turbo run dev --filter=web', 3000)).toEqual([]);
+  });
+});
+
+describe('isDynamicImportStalenessMessage', () => {
+  // HYP-758 / task #38: Bun emits a "not a dynamic import" line when HMR falls out of sync
+  // for a module that was not bundled as a dynamic import. The predicate must match it (and
+  // the generic "HMR stale" variant) while rejecting normal log output so we don't
+  // restart the server on every build line.
+  it('matches the Bun "not a dynamic import" signature (exact phrase)', () => {
+    expect(isDynamicImportStalenessMessage('[HMR] /src/App.tsx is not a dynamic import')).toBe(true);
+  });
+
+  it('matches case-insensitively', () => {
+    expect(isDynamicImportStalenessMessage('NOT A DYNAMIC IMPORT in module')).toBe(true);
+    expect(isDynamicImportStalenessMessage('HMR STALE: /src/Component.tsx')).toBe(true);
+  });
+
+  it('matches the "HMR stale" variant', () => {
+    expect(isDynamicImportStalenessMessage('[vite] HMR stale — full reload required')).toBe(true);
+  });
+
+  it('does not match ordinary HMR update lines', () => {
+    expect(isDynamicImportStalenessMessage('[vite] hmr update /src/App.tsx')).toBe(false);
+    expect(isDynamicImportStalenessMessage('page reload /src/App.tsx')).toBe(false);
+    expect(isDynamicImportStalenessMessage('compiled successfully')).toBe(false);
+    expect(isDynamicImportStalenessMessage('waiting for a connection...')).toBe(false);
+    expect(isDynamicImportStalenessMessage('')).toBe(false);
   });
 });
 
@@ -905,6 +933,135 @@ describe('DevServerManager', () => {
       firePortDetector(manager, 'Running at http://localhost:65536');
 
       expect(setTargetPort).not.toHaveBeenCalled();
+    });
+  });
+
+  // HYP-758 / task #38: _maybeRestartOnStaleness.
+  // The detector fires on the Bun HMR-staleness signature and calls restart() once.
+  // It must: (a) only fire when running, (b) skip benign lines, (c) cap at
+  // HMR_STALENESS_RESTART_CAP restarts per episode, (d) reset the cap when the
+  // episode window expires so a later independent event is not permanently blocked.
+  describe('HMR staleness auto-restart (_maybeRestartOnStaleness)', () => {
+    type PrivatesHmr = {
+      _status: DevServerStatus;
+      _hmsRestartsThisEpisode: number;
+      _hmrLastRestartAt: number;
+      _hmrStalenessGaveUp: boolean;
+      _maybeRestartOnStaleness(text: string): void;
+    };
+
+    function fireHmr(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      (mgr as unknown as PrivatesHmr)._maybeRestartOnStaleness(text);
+    }
+    function transition(mgr: InstanceType<typeof DevServerManager>, to: DevServerStatus) {
+      (mgr as unknown as { transition(to: DevServerStatus): boolean }).transition(to, undefined);
+    }
+    function setStatus(mgr: InstanceType<typeof DevServerManager>, status: DevServerStatus) {
+      (mgr as unknown as PrivatesHmr)._status = status;
+    }
+
+    it('calls restart() when the staleness signature fires while running', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      setStatus(manager, 'running');
+
+      fireHmr(manager, '[HMR] /src/App.tsx is not a dynamic import');
+
+      // restart is fire-and-forget via void; let microtasks settle
+      await Promise.resolve();
+      expect(restartMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call restart() for a benign line', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      setStatus(manager, 'running');
+
+      fireHmr(manager, '[vite] hmr update /src/App.tsx');
+      await Promise.resolve();
+      expect(restartMock).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call restart() when status is not running (staleness is a post-boot condition)', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+
+      for (const status of ['stopped', 'starting', 'error'] as DevServerStatus[]) {
+        setStatus(manager, status);
+        fireHmr(manager, '[HMR] /src/App.tsx is not a dynamic import');
+        await Promise.resolve();
+      }
+      expect(restartMock).not.toHaveBeenCalled();
+    });
+
+    it('stops auto-restarting once the cap is reached (exactly cap restarts, then sticky give-up)', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      setStatus(manager, 'running');
+
+      const STALENESS_LINE = '[HMR] /src/App.tsx is not a dynamic import';
+      // Fire 10 times — only exactly HMR_STALENESS_RESTART_CAP (3) restarts should happen
+      for (let i = 0; i < 10; i++) {
+        fireHmr(manager, STALENESS_LINE);
+      }
+      await Promise.resolve();
+      // Exactly cap restarts, not more, not zero.
+      expect(restartMock.mock.calls.length).toBe(3);
+    });
+
+    it('give-up is sticky — time-window expiry does NOT re-arm restarts while give-up is set', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      setStatus(manager, 'running');
+      const priv = manager as unknown as PrivatesHmr;
+
+      // Hit the cap
+      priv._hmsRestartsThisEpisode = 3;
+      priv._hmrStalenessGaveUp = true;
+      // Mark last restart as well outside the episode window
+      priv._hmrLastRestartAt = Date.now() - 70_000;
+
+      // A staleness event — give-up is sticky, must NOT restart
+      fireHmr(manager, '[HMR] /src/App.tsx is not a dynamic import');
+      await Promise.resolve();
+      expect(restartMock).not.toHaveBeenCalled();
+    });
+
+    it('give-up clears on a successful running transition so future episodes get a fresh budget', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      const priv = manager as unknown as PrivatesHmr;
+
+      // Simulate give-up state
+      priv._hmsRestartsThisEpisode = 3;
+      priv._hmrStalenessGaveUp = true;
+
+      // Simulate a successful server restart (transition to running clears the give-up)
+      transition(manager, 'starting');
+      transition(manager, 'running');
+
+      // Now a new staleness event should be handled again
+      fireHmr(manager, '[HMR] /src/App.tsx is not a dynamic import');
+      await Promise.resolve();
+      expect(restartMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets the counter (not the give-up) when the episode window expires before cap is hit', async () => {
+      const restartMock = mock(() => Promise.resolve(manager.getState()));
+      Object.assign(manager, { restart: restartMock });
+      setStatus(manager, 'running');
+      const priv = manager as unknown as PrivatesHmr;
+
+      // Cap not yet hit, but some restarts consumed
+      priv._hmsRestartsThisEpisode = 2;
+      priv._hmrStalenessGaveUp = false;
+      // Mark the last restart as well outside the episode window
+      priv._hmrLastRestartAt = Date.now() - 70_000;
+
+      // A new staleness event should reset the counter and restart
+      fireHmr(manager, '[HMR] /src/App.tsx is not a dynamic import');
+      await Promise.resolve();
+      expect(restartMock).toHaveBeenCalledTimes(1);
     });
   });
 
