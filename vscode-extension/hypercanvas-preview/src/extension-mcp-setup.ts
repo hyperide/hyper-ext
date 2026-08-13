@@ -94,6 +94,14 @@ export function setupMcpServer(
     })
     .catch((err) => {
       console.error('[HyperIDE] Failed to start MCP server:', err);
+      // HYP-953: a start() failure (loopback bind refused by a local firewall/AV/
+      // sandbox, port exhaustion, etc.) used to be silent — console.error only
+      // reaches the Extension Host log, which a user never opens. Surface it
+      // immediately so a partner sees the real reason instead of discovering the
+      // failure later as a bare "MCP server is not running" toast on Setup AI
+      // Agents (server.startError carries the same message for that guard).
+      const message = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`HyperCanvas MCP server failed to start: ${message}`);
     });
 
   context.subscriptions.push({ dispose: () => server.dispose() });

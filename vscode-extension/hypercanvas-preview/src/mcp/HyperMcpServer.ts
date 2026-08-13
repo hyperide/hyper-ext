@@ -11,6 +11,13 @@ import type { HyperMcpServices } from './types';
 export class HyperMcpServer {
   private _httpServer: Server | null = null;
   private _port = 0;
+  // HYP-953: the last start() rejection message, if any. Consumed by the
+  // `hypercanvas.setupMcp` guard (extension-commands.ts) so a startup failure
+  // — e.g. loopback bind refused by a local firewall/AV/sandbox — surfaces an
+  // actionable reason instead of a bare "not running" dead end. Cleared on a
+  // fresh dispose()/start() cycle (extension.ts doesn't currently retry, but
+  // this keeps the field from reporting a stale reason if it ever does).
+  private _startError: string | null = null;
 
   constructor(private _services: HyperMcpServices) {}
 
@@ -97,10 +104,14 @@ export class HyperMcpServer {
     // Bind loopback (127.0.0.1) via the shared net-probe util — same host as
     // before, now through the shared address-extraction plumbing. Stays
     // loopback-only so the MCP endpoint is not reachable from the LAN.
+    this._startError = null;
     return listenLoopback(httpServer, 0).then((port) => {
       this._port = port;
       console.log(`[HyperMCP] Server started on http://127.0.0.1:${this._port}/mcp`);
       return port;
+    }).catch((error: unknown) => {
+      this._startError = error instanceof Error ? error.message : String(error);
+      throw error;
     });
   }
 
@@ -110,6 +121,11 @@ export class HyperMcpServer {
 
   get url(): string {
     return `http://127.0.0.1:${this._port}/mcp`;
+  }
+
+  /** Reason the last start() attempt failed, or null if it hasn't failed. */
+  get startError(): string | null {
+    return this._startError;
   }
 
   dispose(): void {

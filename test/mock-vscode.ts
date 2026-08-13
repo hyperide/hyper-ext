@@ -80,6 +80,7 @@ class MockEventEmitter<T> {
 const ViewColumn = { One: 1, Two: 2, Three: 3, Active: -1, Beside: -2 };
 const TextEditorRevealType = { Default: 0, InCenter: 1, InCenterIfOutsideViewport: 2, AtTop: 3 };
 const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 };
+const StatusBarAlignment = { Left: 1, Right: 2 };
 
 /* ---------- TabInputWebview stub ---------- */
 
@@ -115,6 +116,14 @@ const window = {
   onDidChangeActiveTextEditor: mock(() => ({ dispose: mock() })),
   visibleTextEditors: [] as unknown[],
   tabGroups: { all: [] as unknown[] },
+  createStatusBarItem: mock(() => ({
+    text: '',
+    tooltip: '',
+    command: '',
+    show: mock(),
+    hide: mock(),
+    dispose: mock(),
+  })),
 };
 
 /* ---------- WorkspaceEdit ---------- */
@@ -185,6 +194,7 @@ mock.module('vscode', () => ({
   ViewColumn,
   TextEditorRevealType,
   FileType,
+  StatusBarAlignment,
   TabInputWebview,
   TabInputText,
   window,
@@ -201,6 +211,7 @@ const allMockFns = [
   window.showTextDocument,
   window.createOutputChannel,
   window.onDidChangeActiveTextEditor,
+  window.createStatusBarItem,
   workspace.getConfiguration,
   workspace.openTextDocument,
   workspace.applyEdit,

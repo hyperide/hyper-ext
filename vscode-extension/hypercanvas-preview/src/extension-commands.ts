@@ -1056,7 +1056,15 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
     register('hypercanvas.setupMcp', async () => {
       const mcpServer = ctx.getMcpServer();
       if (!mcpServer || mcpServer.port === 0) {
-        vscode.window.showErrorMessage('HyperCanvas MCP server is not running');
+        // HYP-953: distinguish "still starting" (no error yet — port flips to
+        // nonzero within milliseconds under normal conditions) from a genuine
+        // startup failure. Base message text stays byte-identical to the pre-fix
+        // string when there's no known reason — the #383 regression tests pin it.
+        const reason = mcpServer?.startError;
+        const message = reason
+          ? `HyperCanvas MCP server is not running (failed to start: ${reason})`
+          : 'HyperCanvas MCP server is not running';
+        vscode.window.showErrorMessage(message);
         return;
       }
 
