@@ -1344,6 +1344,17 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Aggregate both side panels' visibility → the canvas component picker (#92). The picker is the
+  // ONLY way to pick a component when both the Explorer and the Inspector are hidden, so the
+  // PreviewPanel needs the combined signal. Each provider notifies on resolve + on every toggle.
+  const recomputeSidePanelsHidden = (): void => {
+    const explorerVisible = leftPanelProvider?.visible ?? false;
+    const inspectorVisible = rightPanelProvider?.visible ?? false;
+    previewPanel?.setSidePanelsHidden(!explorerVisible && !inspectorVisible);
+  };
+  leftPanelProvider.onVisibilityChange(recomputeSidePanelsHidden);
+  rightPanelProvider.onVisibilityChange(recomputeSidePanelsHidden);
+
   // Register commands
   registerCommands(context, workspaceRoot, {
     previewPanel,

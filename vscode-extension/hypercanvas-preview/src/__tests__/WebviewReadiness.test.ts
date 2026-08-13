@@ -23,7 +23,9 @@ interface MockWebview {
 
 interface MockWebviewView {
   webview: MockWebview;
+  visible: boolean;
   onDidDispose: (handler: () => void) => { dispose: () => void };
+  onDidChangeVisibility: (handler: () => void) => { dispose: () => void };
   fireDispose: () => void;
 }
 
@@ -63,8 +65,12 @@ function createMockWebviewView(options: MockWebviewViewOptions = {}): MockWebvie
 
   return {
     webview,
+    visible: false,
     onDidDispose(handler: () => void) {
       disposeHandlers.push(handler);
+      return { dispose: mock() };
+    },
+    onDidChangeVisibility() {
       return { dispose: mock() };
     },
     fireDispose() {

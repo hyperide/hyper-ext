@@ -21,6 +21,21 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private _ready = false;
+  // Observers of THIS panel's (Inspector) visibility — the PreviewPanel aggregator needs it to
+  // decide when BOTH side panels are hidden and the canvas component picker should show (#92).
+  private _visibilityListeners: Array<(visible: boolean) => void> = [];
+
+  get visible(): boolean {
+    return this._view?.visible ?? false;
+  }
+
+  onVisibilityChange(cb: (visible: boolean) => void): void {
+    this._visibilityListeners.push(cb);
+  }
+
+  private _emitVisibility(visible: boolean): void {
+    for (const listener of this._visibilityListeners) listener(visible);
+  }
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -122,6 +137,13 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     this._leftPanelProvider?.onVisibilityChange((visible) => {
       this._postToWebview({ type: 'inspector:explorerVisible', visible });
     });
+
+    // Broadcast THIS panel's visibility to the PreviewPanel aggregator (#92). onDidChangeVisibility
+    // does not fire for the initial state, so emit it once here too.
+    webviewView.onDidChangeVisibility(() => {
+      this._emitVisibility(webviewView.visible);
+    });
+    this._emitVisibility(webviewView.visible);
 
     // Route messages through PanelRouter
     webviewView.webview.onDidReceiveMessage(async (message) => {

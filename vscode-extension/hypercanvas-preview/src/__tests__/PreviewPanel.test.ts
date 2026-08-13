@@ -9,7 +9,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
 import type { PanelRouter } from '../PanelRouter';
-import { normalizeSampleComponentName, PreviewPanel } from '../PreviewPanel';
+import { normalizeSampleComponentName, PreviewPanel, toPickerGroups } from '../PreviewPanel';
+import type { ComponentsData } from '../../../../lib/component-scanner/types';
 import type { StateHub } from '../StateHub';
 
 interface MockStateHubState {
@@ -43,6 +44,9 @@ function createPanel(stateHub: ReturnType<typeof createStateHub>) {
     {
       setSubProjectPrefix: mock(() => {}),
       astBridge: { setSubProjectPrefix: mock(() => {}) },
+      getComponentGroups: mock(() =>
+        Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+      ),
     } as unknown as PanelRouter,
     {} as vscode.ExtensionContext,
   );
@@ -114,6 +118,65 @@ function createMockPreviewWebviewPanel(options: { onHtmlWrite?: (webview: MockPr
   };
   return panel;
 }
+
+describe('toPickerGroups (canvas component-picker payload)', () => {
+  const group = (name: string, path: string) => ({
+    dirPath: path.replace(/\/[^/]+$/, ''),
+    components: [{ name, path }],
+  });
+
+  it('passes flat groups through unchanged for a single-package project', () => {
+    const data: ComponentsData = {
+      atomGroups: [group('Button', 'src/ui/Button.tsx')],
+      compositeGroups: [group('Tweet', 'src/Tweet.tsx')],
+      pageGroups: [group('App', 'src/App.tsx')],
+      isMonorepo: false,
+    };
+    expect(toPickerGroups(data)).toEqual({
+      atomGroups: data.atomGroups,
+      compositeGroups: data.compositeGroups,
+      pageGroups: data.pageGroups,
+    });
+  });
+
+  it('folds sub-project page groups into the flat pageGroups for a monorepo', () => {
+    // The scanner mirrors sub-project atom/composite into the flat fields but leaves flat
+    // pageGroups empty; the picker must still surface monorepo pages.
+    const subPage = group('Home', 'apps/web/src/pages/Home.tsx');
+    const data: ComponentsData = {
+      atomGroups: [group('Button', 'packages/ui/Button.tsx')],
+      compositeGroups: [],
+      pageGroups: [],
+      isMonorepo: true,
+      subProjects: [
+        {
+          name: 'web',
+          path: 'apps/web',
+          supported: true,
+          atomGroups: [],
+          compositeGroups: [],
+          pageGroups: [subPage],
+        },
+      ],
+    };
+    const result = toPickerGroups(data);
+    expect(result.pageGroups).toEqual([subPage]);
+    expect(result.atomGroups).toEqual(data.atomGroups);
+  });
+
+  it('renders nothing-by-omission only when even sub-project pages are empty', () => {
+    const data: ComponentsData = {
+      atomGroups: [],
+      compositeGroups: [],
+      pageGroups: [],
+      isMonorepo: true,
+      subProjects: [
+        { name: 'web', path: 'apps/web', supported: true, atomGroups: [], compositeGroups: [], pageGroups: [] },
+      ],
+    };
+    expect(toPickerGroups(data).pageGroups).toEqual([]);
+  });
+});
 
 describe('PreviewPanel component selection', () => {
   it('normalizes path-like sample component names to JSX-safe identifiers', () => {
@@ -463,6 +526,9 @@ export { Alert, AlertTitle, AlertDescription };
             // the name feeds the meaningful children placeholder.
             getComponent: mock(() => Promise.resolve({ name: componentName, props: propDefs })),
           },
+          getComponentGroups: mock(() =>
+            Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+          ),
         },
       });
       return { panel, postMessage };
@@ -572,6 +638,9 @@ export { Alert, AlertTitle, AlertDescription };
       {
         astBridge: { astService: {} },
         setAstResponseTarget: mock(),
+        getComponentGroups: mock(() =>
+          Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+        ),
       } as never,
       { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
     );
@@ -629,7 +698,13 @@ export { Alert, AlertTitle, AlertDescription };
       vscode.Uri.file('/extension'),
       '/workspace',
       stateHub as never,
-      { astBridge: { astService: {} }, setAstResponseTarget: mock() } as never,
+      {
+        astBridge: { astService: {} },
+        setAstResponseTarget: mock(),
+        getComponentGroups: mock(() =>
+          Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+        ),
+      } as never,
       { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
     );
     panel.createOrShow(vscode.ViewColumn.Two);
@@ -936,7 +1011,13 @@ describe('PreviewPanel off-screen webview guard (HYP-363)', () => {
       vscode.Uri.file('/extension'),
       '/workspace',
       stateHub as never,
-      { astBridge: { astService: {} }, setAstResponseTarget: mock() } as never,
+      {
+        astBridge: { astService: {} },
+        setAstResponseTarget: mock(),
+        getComponentGroups: mock(() =>
+          Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } }),
+        ),
+      } as never,
       { workspaceState: { get: mock(() => false), update: mock(() => Promise.resolve()) } } as never,
     );
     return { createWebviewPanel, panel };

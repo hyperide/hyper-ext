@@ -13,6 +13,7 @@ import type { RouteSuggestionItem } from '@shared/components/preview-chrome';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
+import type { PickerGroupsData } from './CanvasComponentPicker';
 import { postToPreviewIframe } from './postToPreviewIframe';
 
 /**
@@ -74,6 +75,12 @@ interface UsePreviewBridgeResult {
   disconnected: boolean;
   previewUrl: string | null;
   showNoComponentHint: boolean;
+  /** Scanner component groups (atom/composite/page) — drives the canvas component picker. */
+  componentGroups: PickerGroupsData | null;
+  /** True when BOTH side panels (Explorer + Inspector) are hidden — gates the canvas picker. */
+  sidePanelsHidden: boolean;
+  /** Pick a component from the canvas picker — drives the normal stateHub selection pipeline. */
+  selectComponent: (name: string, path: string) => void;
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
   /** Detected project capabilities — CSS system, readonly mode, etc. */
@@ -227,6 +234,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [devServerUrl, setDevServerUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
+  // Canvas component picker (shown when no component is selected AND both side panels are hidden).
+  const [componentGroups, setComponentGroups] = useState<PickerGroupsData | null>(null);
+  // Default true: with both panels never opened (the exact bug scenario) the host fires no
+  // visibility change, so the picker must be allowed by default and only suppressed once a panel
+  // reports itself visible.
+  const [sidePanelsHidden, setSidePanelsHidden] = useState(true);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
   const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
@@ -649,6 +662,20 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           setShowNoComponentHint(true);
           break;
 
+        case 'preview:componentGroups':
+          // Scanner groups for the canvas picker — same data the Inspector quick-list uses.
+          setComponentGroups({
+            atomGroups: Array.isArray(msg.atomGroups) ? msg.atomGroups : [],
+            compositeGroups: Array.isArray(msg.compositeGroups) ? msg.compositeGroups : [],
+            pageGroups: Array.isArray(msg.pageGroups) ? msg.pageGroups : [],
+          });
+          break;
+
+        case 'preview:sidePanelsHidden':
+          // Host aggregates Explorer + Inspector visibility; true only when BOTH are hidden.
+          setSidePanelsHidden(msg.hidden === true);
+          break;
+
         case 'refresh':
           doRefresh();
           break;
@@ -957,6 +984,17 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     [canvas],
   );
 
+  // Pick a component from the canvas picker. Reuses the same `preview:selectComponent` host
+  // message the non-previewable overlay's recommendation click uses — it drives the stateHub
+  // `currentComponent` selection pipeline (reroot, open file, navigate preview), identical to
+  // an Explorer/Inspector click.
+  const selectComponent = useCallback(
+    (name: string, path: string) => {
+      canvas.sendEvent({ type: 'preview:selectComponent', name, path } as unknown as PlatformMessage);
+    },
+    [canvas],
+  );
+
   // Drive the previewed app's own router by posting into the iframe. The generated
   // CanvasPreview handles `hypercanvas:navigateRoute` (pushState + popstate). We also
   // update the resting address locally so the bar reflects the new route immediately.
@@ -972,6 +1010,9 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     disconnected,
     previewUrl,
     showNoComponentHint,
+    componentGroups,
+    sidePanelsHidden,
+    selectComponent,
     projectError,
     projectCapabilities,
     componentError,

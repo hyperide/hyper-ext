@@ -26,6 +26,7 @@ import {
 import type { PlatformMessage } from '@/lib/platform/types';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import { CanvasComponentPicker, hasPickerComponents, shouldShowComponentPicker } from './CanvasComponentPicker';
 import { DisconnectedScreen } from './DisconnectedScreen';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
@@ -90,6 +91,9 @@ function PreviewContent() {
     disconnected,
     previewUrl,
     showNoComponentHint,
+    componentGroups,
+    sidePanelsHidden,
+    selectComponent,
     projectError,
     projectCapabilities,
     componentError,
@@ -231,6 +235,15 @@ function PreviewContent() {
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
 
+  // Canvas component picker: when no component is selected AND both side panels are hidden, surface
+  // the available component list centered in the canvas so a component can be picked with no panel
+  // open (bug #92). When a panel is open the list is reachable there, so the bare hint stays.
+  const showComponentPicker = shouldShowComponentPicker({
+    showNoComponentHint,
+    sidePanelsHidden,
+    hasComponents: hasPickerComponents(componentGroups),
+  });
+
   const shellScreen = getPreviewShellScreen(devServerRunning, disconnected);
 
   // Dev server stopped after a successful connection — dedicated disconnected
@@ -319,7 +332,12 @@ function PreviewContent() {
         />
       )}
 
-      {showNoComponentHint && <NoComponentOverlay variant="no-selection" />}
+      {showNoComponentHint &&
+        (showComponentPicker && componentGroups ? (
+          <CanvasComponentPicker groups={componentGroups} onPick={selectComponent} />
+        ) : (
+          <NoComponentOverlay variant="no-selection" />
+        ))}
 
       <ModeToolbar canvas={canvas} />
 

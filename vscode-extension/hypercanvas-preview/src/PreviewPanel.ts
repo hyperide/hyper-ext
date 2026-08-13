@@ -15,6 +15,7 @@ import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { normalizeSampleComponentName } from '@lib/preview-generator';
 import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
+import type { ComponentGroup, ComponentsData } from '@lib/component-scanner/types';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import { handleEditorMessage } from './EditorBridge';
 import {
@@ -63,6 +64,29 @@ import { generatePreviewHtml } from './preview-html';
 import { postToWebviewSafe, readWebviewSafe } from './webview-post';
 
 export { normalizeSampleComponentName };
+
+/**
+ * Build the canvas component-picker payload (atom/composite/page) from a scan result.
+ *
+ * For monorepos the scanner mirrors the union of sub-project atom/composite groups into the flat
+ * fields but deliberately leaves flat `pageGroups: []` (the SaaS PagesSection renders flat pages
+ * unconditionally and would double-render — see scanner.ts). The canvas picker is a single flat
+ * list with no such conflict, so fold the sub-project page groups in here; otherwise monorepo
+ * pages — and a monorepo whose only entries are pages — stay unreachable from the panel-less
+ * canvas this picker exists to fix.
+ */
+export function toPickerGroups(data: ComponentsData): {
+  atomGroups: ComponentGroup[];
+  compositeGroups: ComponentGroup[];
+  pageGroups: ComponentGroup[];
+} {
+  const subProjectPageGroups = data.subProjects?.flatMap((sp) => sp.pageGroups) ?? [];
+  return {
+    atomGroups: data.atomGroups,
+    compositeGroups: data.compositeGroups,
+    pageGroups: [...data.pageGroups, ...subProjectPageGroups],
+  };
+}
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -201,6 +225,12 @@ export class PreviewPanel {
 
   // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
   private _capabilities: import('./types').ProjectCapabilities | null = null;
+
+  // True when BOTH side panels (Explorer + Inspector) are hidden — gates the canvas component
+  // picker (#92). Defaults true: with neither panel ever opened the host fires no visibility
+  // change, and that is exactly the both-closed scenario the picker exists for. extension.ts
+  // recomputes this from the two providers' visibility and calls setSidePanelsHidden.
+  private _sidePanelsHidden = true;
 
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
@@ -819,6 +849,34 @@ export class PreviewPanel {
     }
     if (this._devServerRunning) {
       this._updatePreviewUrl();
+    }
+    // Canvas component picker (#92): replay the both-panels-hidden flag and the scanner groups so a
+    // freshly-mounted (or restored) preview webview can render the picker without waiting for the
+    // next visibility toggle.
+    this._postToWebview({ type: 'preview:sidePanelsHidden', hidden: this._sidePanelsHidden });
+    void this._sendComponentGroups();
+  }
+  /**
+   * Update the both-side-panels-hidden flag and replay it to the webview. When both panels are
+   * hidden the canvas picker is about to show, so refresh the scanner groups too — this recovers
+   * from a cold/empty scan at first mount (same rationale as the Inspector's hide-Explorer refresh).
+   */
+  public setSidePanelsHidden(hidden: boolean): void {
+    this._sidePanelsHidden = hidden;
+    this._postToWebview({ type: 'preview:sidePanelsHidden', hidden });
+    if (hidden) void this._sendComponentGroups();
+  }
+  /**
+   * Push the scanner component groups (atom/composite/page) to the preview webview for the canvas
+   * picker. Same data source the Inspector quick-list uses (PanelRouter.getComponentGroups), posted
+   * through the disposed-safe poster since the scan awaits filesystem work.
+   */
+  private async _sendComponentGroups(): Promise<void> {
+    try {
+      const result = await this._panelRouter.getComponentGroups();
+      this._postToWebview({ type: 'preview:componentGroups', ...toPickerGroups(result.data) });
+    } catch (e) {
+      console.error('[PreviewPanel] Failed to load component groups:', e);
     }
   }
   /**

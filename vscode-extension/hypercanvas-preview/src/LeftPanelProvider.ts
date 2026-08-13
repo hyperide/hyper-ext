@@ -14,7 +14,10 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.explorerView';
 
   private _view?: vscode.WebviewView;
-  private _onVisibilityChange?: (visible: boolean) => void;
+  // Multiple consumers observe Explorer visibility: the Inspector (component quick-list fallback)
+  // and the PreviewPanel aggregator (both-panels-hidden gate for the canvas picker, #92). Keep a
+  // list so a second subscriber does not clobber the first.
+  private _visibilityListeners: Array<(visible: boolean) => void> = [];
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -58,7 +61,11 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
   }
 
   onVisibilityChange(cb: (visible: boolean) => void): void {
-    this._onVisibilityChange = cb;
+    this._visibilityListeners.push(cb);
+  }
+
+  private _emitVisibility(visible: boolean): void {
+    for (const listener of this._visibilityListeners) listener(visible);
   }
 
   public resolveWebviewView(
@@ -89,11 +96,11 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidChangeVisibility(() => {
-      this._onVisibilityChange?.(webviewView.visible);
+      this._emitVisibility(webviewView.visible);
     });
 
     // Notify initial visibility (onDidChangeVisibility won't fire for the initial state)
-    this._onVisibilityChange?.(webviewView.visible);
+    this._emitVisibility(webviewView.visible);
 
     webviewView.onDidDispose(() => {
       this._stateHub.unregister(LeftPanelProvider.viewType);
