@@ -180,6 +180,12 @@ export interface SupportDimension {
   evidence: SupportEvidence[];
   /** Optional auto-fix action label for needs-setup (e.g. "Fix: Add react-native-web"). */
   fixLabel?: string;
+  /**
+   * For the 'framework' dimension only: the exact FRAMEWORK_SUPPORT row name to
+   * highlight as "detected" in the compatibility table (HYP-924). Absent when nothing
+   * specific was detected (e.g. no React at all) or the dimension isn't 'framework'.
+   */
+  detectedFrameworkName?: string;
 }
 
 /** What the extension can do with this project */

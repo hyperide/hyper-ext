@@ -160,7 +160,11 @@ function DimensionPanel({
     return (
       <div role={role} data-testid={testId} style={legacyFrameworkPanelStyle}>
         <div style={legacyFrameworkCardStyle}>
-          <FrameworkUnsupportedContent description={dimension.reason} frameworkSupport={FRAMEWORK_SUPPORT} />
+          <FrameworkUnsupportedContent
+            description={dimension.reason}
+            frameworkSupport={FRAMEWORK_SUPPORT}
+            detectedFrameworkName={dimension.detectedFrameworkName}
+          />
           {/* Centered (not the left-aligned actionRowStyle below) — legacyFrameworkCardStyle
               mirrors PreviewSetupOverlay's centered card layout on purpose (HYP-913), so its
               own Auto Fix button follows that centering, not the generic branch's row style. */}

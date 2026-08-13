@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { DETECTED_FRAMEWORK_KIND_TO_NAME, FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import type { CssSystem, ProjectType, SupportDimension } from '../../types';
 import {
   classifySupportDimensions,
@@ -33,26 +34,37 @@ describe('classifySupportDimensions — always returns all five dimensions', () 
 });
 
 describe('framework dimension (render gate)', () => {
+  it('maps every detected framework kind to an actual compatibility table row', () => {
+    const rowNames = new Set(FRAMEWORK_SUPPORT.map(({ name }) => name));
+
+    for (const frameworkName of Object.values(DETECTED_FRAMEWORK_KIND_TO_NAME)) {
+      expect(rowNames.has(frameworkName)).toBe(true);
+    }
+  });
+
   it('Vue → unsupported with the exact spec reason', () => {
     const d = dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'vue' } })), 'framework');
     expect(d.status).toBe('unsupported');
     expect(d.reason).toBe('Vue.js projects not supported');
+    expect(d.detectedFrameworkName).toBe('Vue');
     expect(d.evidence.length).toBeGreaterThan(0);
   });
 
   it('Svelte and Angular use their exact reasons', () => {
-    expect(dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'svelte' } })), 'framework').reason).toBe(
-      'Svelte projects not supported',
-    );
-    expect(dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'angular' } })), 'framework').reason).toBe(
-      'Angular projects not supported',
-    );
+    const svelte = dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'svelte' } })), 'framework');
+    expect(svelte.reason).toBe('Svelte projects not supported');
+    expect(svelte.detectedFrameworkName).toBe('Svelte / SvelteKit');
+
+    const angular = dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'angular' } })), 'framework');
+    expect(angular.reason).toBe('Angular projects not supported');
+    expect(angular.detectedFrameworkName).toBe('Angular');
   });
 
   it('no React → unsupported "No React components found"', () => {
     const d = dim(classifySupportDimensions(facts({ frameworkGate: { kind: 'none' } })), 'framework');
     expect(d.status).toBe('unsupported');
     expect(d.reason).toBe('No React components found');
+    expect(d.detectedFrameworkName).toBeUndefined();
   });
 
   it('react-native without react-native-web → needs-setup with fix label', () => {
@@ -70,10 +82,13 @@ describe('framework dimension (render gate)', () => {
     );
     expect(d.status).toBe('needs-setup');
     expect(d.fixLabel).toBe('Fix: Add react-native-web + Vite config');
+    expect(d.detectedFrameworkName).toBeUndefined();
   });
 
   it('plain react → supported', () => {
-    expect(dim(classifySupportDimensions(facts()), 'framework').status).toBe('supported');
+    const d = dim(classifySupportDimensions(facts()), 'framework');
+    expect(d.status).toBe('supported');
+    expect(d.detectedFrameworkName).toBeUndefined();
   });
 });
 

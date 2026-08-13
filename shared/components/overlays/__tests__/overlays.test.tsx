@@ -11,6 +11,15 @@ import { ParseErrorOverlay } from '../ParseErrorOverlay';
 import { buildUnsupportedFrameworkPrompt, PreviewSetupOverlay } from '../PreviewSetupOverlay';
 import { RuntimeErrorOverlay } from '../RuntimeErrorOverlay';
 
+function frameworkRowOpeningTag(html: string, name: string): string {
+  const testId = TID.preview.unsupportedFrameworkRow(name);
+  const testIdIndex = html.indexOf(`data-testid="${testId}"`);
+  expect(testIdIndex).toBeGreaterThanOrEqual(0);
+  const tagStart = html.lastIndexOf('<div', testIdIndex);
+  const tagEnd = html.indexOf('>', testIdIndex);
+  return html.slice(tagStart, tagEnd + 1);
+}
+
 // Isolation: other test files (e.g. fiber-element-query.test.ts) create a bare
 // `new Window()` and re-point `globalThis.document` at it, which breaks @testing-library
 // queries (the selector parser calls `this.window.SyntaxError` which ends up undefined).
@@ -334,6 +343,22 @@ describe('PreviewSetupOverlay', () => {
     );
     expect(html).toContain(`data-testid="${TID.preview.unsupportedFrameworkRow('Next.js')}"`);
     expect(html).toContain(`data-testid="${TID.preview.unsupportedFrameworkRow('Remix')}"`);
+  });
+
+  it('marks only the detected framework row as current', () => {
+    const html = renderToString(
+      <PreviewSetupOverlay
+        status="unsupported"
+        detectedFrameworkName="Vue"
+        frameworkSupport={[
+          { name: 'Vue', level: 'planned' },
+          { name: 'Angular', level: 'not-planned' },
+        ]}
+      />,
+    );
+
+    expect(frameworkRowOpeningTag(html, 'Vue')).toContain('aria-current="true"');
+    expect(frameworkRowOpeningTag(html, 'Angular')).not.toContain('aria-current');
   });
 });
 

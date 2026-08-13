@@ -24,6 +24,7 @@
  * monorepo is a SEPARATE capture tool, explicitly NOT this feature.
  */
 
+import { DETECTED_FRAMEWORK_KIND_TO_NAME } from '@shared/framework-support';
 import type { CssSystem, ProjectType, SupportDimension, SupportEvidence, SupportStatus } from '../types';
 
 /**
@@ -44,6 +45,8 @@ const WRITABLE_CSS_SYSTEMS: ReadonlySet<CssSystem> = new Set<CssSystem>([
 
 /** Framework render-gate kinds, independent of the RN needs-setup signal. */
 export type FrameworkRenderKind = 'react' | 'vue' | 'svelte' | 'angular' | 'react-native' | 'none';
+
+type NonReactFrameworkKind = Extract<FrameworkRenderKind, 'vue' | 'svelte' | 'angular'>;
 
 /** The framework dimension's input: a plain render kind, or an RN fix prompt. */
 export type FrameworkGate =
@@ -96,13 +99,13 @@ const SUPPORTED_BUNDLERS: ReadonlySet<ProjectType> = new Set<ProjectType>([
   'remix',
 ]);
 
-const NON_REACT_FRAMEWORK_REASON: Record<'vue' | 'svelte' | 'angular', string> = {
+const NON_REACT_FRAMEWORK_REASON: Record<NonReactFrameworkKind, string> = {
   vue: 'Vue.js projects not supported',
   svelte: 'Svelte projects not supported',
   angular: 'Angular projects not supported',
 };
 
-const FRAMEWORK_DEP_EVIDENCE: Record<'vue' | 'svelte' | 'angular', string> = {
+const FRAMEWORK_DEP_EVIDENCE: Record<NonReactFrameworkKind, string> = {
   vue: 'vue',
   svelte: 'svelte',
   angular: '@angular/core',
@@ -144,6 +147,7 @@ function classifyFramework(gate: FrameworkGate): SupportDimension {
     ...base,
     status: 'unsupported',
     reason: NON_REACT_FRAMEWORK_REASON[gate.kind],
+    detectedFrameworkName: DETECTED_FRAMEWORK_KIND_TO_NAME[gate.kind],
     evidence: [
       { label: 'Detected framework', detail: capitalize(gate.kind) },
       { label: 'Dependency', detail: FRAMEWORK_DEP_EVIDENCE[gate.kind] },

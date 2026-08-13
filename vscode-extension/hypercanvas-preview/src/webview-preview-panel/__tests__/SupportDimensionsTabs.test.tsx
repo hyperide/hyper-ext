@@ -23,6 +23,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
 import { TID } from '@shared/data-testid-map';
 import type { SupportDimension } from '../../types';
+import { classifySupportDimensions } from '../../services/support-dimensions';
 import { SupportDimensionsTabs } from '../SupportDimensionsTabs';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -132,6 +133,23 @@ describe('SupportDimensionsTabs', () => {
     expect(panel.textContent).toContain('Vue.js projects not supported');
     expect(panel.textContent).toContain('Framework not supported');
     expect(findOptional(container, TID.preview.unsupportedFrameworkRow('Vue'))).not.toBeNull();
+  });
+
+  it('highlights the detected framework row in the legacy compatibility table', () => {
+    const [dimension] = classifySupportDimensions({
+      frameworkGate: { kind: 'vue' },
+      bundler: 'vite',
+      cssSystems: ['tailwind'],
+      packageManager: 'npm',
+    });
+    const container = renderLocal(<SupportDimensionsTabs dimensions={[dimension]} />);
+
+    const vueRow = find(container, TID.preview.unsupportedFrameworkRow('Vue'));
+    const angularRow = find(container, TID.preview.unsupportedFrameworkRow('Angular'));
+    expect(vueRow.getAttribute('aria-current')).toBe('true');
+    expect(vueRow.getAttribute('style') ?? '').toContain('var(--overlay-accent)');
+    expect(angularRow.getAttribute('aria-current')).toBeNull();
+    expect(angularRow.getAttribute('style') ?? '').not.toContain('var(--overlay-accent)');
   });
 
   it('switches the visible panel when another tab is clicked', () => {

@@ -32,6 +32,19 @@ export const FRAMEWORK_SUPPORT: { name: string; level: SupportLevel }[] = [
 ];
 
 /**
+ * Maps a non-React framework render-gate kind (vscode-extension's
+ * support-dimensions.ts FrameworkRenderKind — duplicated here as a literal union so
+ * this shared, cross-platform module never imports an extension-only type) to the
+ * exact FRAMEWORK_SUPPORT row name whose table row should be highlighted as
+ * "the framework HyperIDE detected in this project" (HYP-924).
+ */
+export const DETECTED_FRAMEWORK_KIND_TO_NAME: Record<'vue' | 'svelte' | 'angular', string> = {
+  vue: 'Vue',
+  svelte: 'Svelte / SvelteKit',
+  angular: 'Angular',
+};
+
+/**
  * Formats the "currently supports" line embedded in Auto Fix prompts (HYP-917) — the single
  * source of truth for that phrasing, shared between `buildUnsupportedFrameworkPrompt`
  * (shared/components/overlays/PreviewSetupOverlay.tsx) and `buildDimensionAutoFixPrompt`

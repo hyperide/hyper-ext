@@ -28,6 +28,7 @@ const DEFAULT_FRAMEWORK_DETECTION_MESSAGE = 'HyperIDE could not detect a support
 interface PreviewSetupOverlayProps {
   status: 'needs-patch' | 'unsupported';
   frameworkSupport?: Array<{ name: string; level: SupportLevel }>;
+  detectedFrameworkName?: string;
   /** Overrides the default explanatory paragraph of the active variant */
   description?: string;
   /** data-testid override for the root element */
@@ -78,6 +79,12 @@ const tableRowStyle: CSSProperties = {
   borderTop: '1px solid var(--overlay-border)',
   alignItems: 'center',
   gap: 16,
+};
+
+const tableRowHighlightStyle: CSSProperties = {
+  background: 'var(--overlay-surface)',
+  boxShadow: 'inset 3px 0 0 0 var(--overlay-accent)',
+  fontWeight: 600,
 };
 
 const btnRowStyle: CSSProperties = {
@@ -154,6 +161,7 @@ export function buildUnsupportedFrameworkPrompt(
 export function PreviewSetupOverlay({
   status,
   frameworkSupport,
+  detectedFrameworkName,
   description,
   testId = 'preview-setup-overlay',
   onDismiss,
@@ -206,7 +214,11 @@ export function PreviewSetupOverlay({
   return (
     <OverlayShell testId={testId}>
       <div style={{ ...cardStyle, overflowY: 'auto', maxHeight: '100%' }}>
-        <FrameworkUnsupportedContent description={description} frameworkSupport={frameworkSupport} />
+        <FrameworkUnsupportedContent
+          description={description}
+          frameworkSupport={frameworkSupport}
+          detectedFrameworkName={detectedFrameworkName}
+        />
         <div style={btnRowStyle}>
           {onDismiss && (
             <button type="button" onClick={onDismiss} style={secondaryBtnStyle}>
@@ -244,9 +256,11 @@ export function PreviewSetupOverlay({
 export function FrameworkUnsupportedContent({
   description,
   frameworkSupport,
+  detectedFrameworkName,
 }: {
   description?: string;
   frameworkSupport?: Array<{ name: string; level: SupportLevel }>;
+  detectedFrameworkName?: string;
 }) {
   return (
     <>
@@ -259,14 +273,22 @@ export function FrameworkUnsupportedContent({
             <span style={{ textAlign: 'left' }}>Framework</span>
             <span>Status</span>
           </div>
-          {frameworkSupport.map(({ name, level }) => (
-            <div key={name} data-testid={TID.preview.unsupportedFrameworkRow(name)} style={tableRowStyle}>
-              <span style={{ textAlign: 'left' }}>{name}</span>
-              <span style={{ fontSize: 12, color: BADGE_COLORS[level] ?? 'var(--overlay-muted)' }}>
-                {BADGE_LABELS[level] ?? level}
-              </span>
-            </div>
-          ))}
+          {frameworkSupport.map(({ name, level }) => {
+            const isDetectedFramework = name === detectedFrameworkName;
+            return (
+              <div
+                key={name}
+                data-testid={TID.preview.unsupportedFrameworkRow(name)}
+                aria-current={isDetectedFramework ? 'true' : undefined}
+                style={isDetectedFramework ? { ...tableRowStyle, ...tableRowHighlightStyle } : tableRowStyle}
+              >
+                <span style={{ textAlign: 'left' }}>{name}</span>
+                <span style={{ fontSize: 12, color: BADGE_COLORS[level] ?? 'var(--overlay-muted)' }}>
+                  {BADGE_LABELS[level] ?? level}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </>
