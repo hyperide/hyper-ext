@@ -146,6 +146,60 @@ describe('tree-adapter', () => {
       expect(result.label).toBe('button "Submit"');
     });
 
+    it('labels a bare {children} passthrough as a brace binding, not quoted literal text', () => {
+      // `<button>{children}</button>` parses to childrenType 'expression' with the raw
+      // JSX text `{children}`. Quoting it (`button "{children}"`) reads as literal on-
+      // screen text, which is misleading. Keep the braces (they signal a JSX binding)
+      // but drop the surrounding quotes: `button {children}`.
+      const node: ComponentNode = {
+        id: '1',
+        type: 'button',
+        props: { children: '{children}' },
+        children: [],
+        childrenType: 'expression',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('button {children}');
+    });
+
+    it('labels a {children} passthrough on a component as a brace binding', () => {
+      const node: ComponentNode = {
+        id: '1',
+        type: 'Card',
+        props: { children: '{children}' },
+        children: [],
+        childrenType: 'expression',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('Card {children}');
+    });
+
+    it('prefers data-testid label over {children} passthrough', () => {
+      const node: ComponentNode = {
+        id: '1',
+        type: 'div',
+        props: { 'data-testid': 'sidebar', children: '{children}' },
+        childrenType: 'expression',
+        children: [],
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('div "sidebar"');
+    });
+
+    it('keeps a real expression child quoted (not the {children} passthrough)', () => {
+      // `<div>{user.name}</div>` is informative as `div "{user.name}"`; only the bare
+      // `{children}` passthrough is special-cased.
+      const node: ComponentNode = {
+        id: '1',
+        type: 'div',
+        props: { children: '{user.name}' },
+        children: [],
+        childrenType: 'expression',
+      };
+      const result = convertComponentNodeToTreeNode(node);
+      expect(result.label).toBe('div "{user.name}"');
+    });
+
     it('uses placeholder for input label', () => {
       const node: ComponentNode = {
         id: '1',

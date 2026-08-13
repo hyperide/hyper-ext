@@ -60,6 +60,28 @@ function acceptsTextPlaceholder(type: string): boolean {
   return t === 'reactnode' || t === 'react.reactnode';
 }
 
+/** Options that let the generator produce more meaningful placeholders. */
+export interface SampleValueOptions {
+  /**
+   * The component's display name (e.g. `LocalButton`). When known, it is used —
+   * humanized — as the visible `children` placeholder so a button/badge renders
+   * real-looking content ("Local Button") instead of the generic "Sample".
+   */
+  componentName?: string;
+}
+
+/**
+ * Turn a PascalCase / camelCase component identifier into spaced Title Case words
+ * for use as visible placeholder content: `LocalButton` → `Local Button`,
+ * `CTAButton` → `CTA Button`. Returns the input unchanged if it doesn't split.
+ */
+function humanizeComponentName(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .trim();
+}
+
 function isFunctionType(type: string): boolean {
   const t = type.trim();
   return t.includes('=>') || /^\([^)]*\)\s*:/.test(t) || t.toLowerCase() === 'function';
@@ -103,7 +125,7 @@ function parseEnumMembers(type: string): string[] | null {
   return null;
 }
 
-function valueForProp(prop: PropInfo): unknown | typeof UNSATISFIED {
+function valueForProp(prop: PropInfo, opts?: SampleValueOptions): unknown | typeof UNSATISFIED {
   const type = (prop.type ?? '').trim();
   const lower = type.toLowerCase();
 
@@ -165,7 +187,12 @@ function valueForProp(prop: PropInfo): unknown | typeof UNSATISFIED {
   // Either way ReactNode-ish props are never flagged as unsatisfied.
   if (isReactNodeType(type)) {
     if (prop.required && acceptsTextPlaceholder(type)) {
-      return prop.name === 'children' ? 'Sample' : `Sample ${prop.name}`;
+      if (prop.name === 'children') {
+        // The main visible slot: prefer the (humanized) component name so the
+        // component renders real-looking content; fall back to "Sample".
+        return opts?.componentName ? humanizeComponentName(opts.componentName) : 'Sample';
+      }
+      return `Sample ${prop.name}`;
     }
     return undefined;
   }
@@ -215,12 +242,15 @@ function dedupeProps(props: readonly PropInfo[]): PropInfo[] {
   return [...byName.values()];
 }
 
-export function generateSamplePropValues(props: readonly PropInfo[]): SamplePropValuesResult {
+export function generateSamplePropValues(
+  props: readonly PropInfo[],
+  opts?: SampleValueOptions,
+): SamplePropValuesResult {
   const values: Record<string, unknown> = {};
   const unsatisfied: string[] = [];
 
   for (const prop of dedupeProps(props)) {
-    const value = valueForProp(prop);
+    const value = valueForProp(prop, opts);
     if (value !== UNSATISFIED) {
       // ReactNode resolves to `undefined` intentionally — don't write the key.
       if (value !== undefined) values[prop.name] = value;

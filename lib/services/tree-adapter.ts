@@ -31,10 +31,25 @@ export function extractTextFromNode(node: ComponentNode): string {
   return text.trim();
 }
 
+/**
+ * True for a node whose only content is the bare `{children}` passthrough
+ * (`<button>{children}</button>`). The static AST walk records this as the raw
+ * JSX-expression text `{children}` with childrenType 'expression'. Quoting it in
+ * the tree (`button "{children}"`) reads as literal on-screen text, which is
+ * misleading — it is a children binding, invariant to any runtime sample. We
+ * keep the braces (they signal a JSX binding/expression) but drop the
+ * surrounding quotes, labeling it `button {children}`. Narrow on purpose: a real
+ * expression like `{user.name}` stays quoted and informative.
+ */
+function isChildrenPassthrough(node: ComponentNode): boolean {
+  return node.childrenType === 'expression' && node.props?.children === '{children}';
+}
+
 function computeLabel(node: ComponentNode): string {
   const tag = node.type;
 
   if (tag === 'button') {
+    if (isChildrenPassthrough(node)) return `button {children}`;
     const buttonText = extractTextFromNode(node);
     if (buttonText) return `button "${buttonText}"`;
     const buttonType = (node.props?.type as string) || 'submit';
@@ -49,18 +64,21 @@ function computeLabel(node: ComponentNode): string {
 
   if (FRAME_TAGS.has(tag)) {
     if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
+    if (isChildrenPassthrough(node)) return `${tag} {children}`;
     const text = extractTextFromNode(node);
     if (text) return `${tag} "${text}"`;
     return tag;
   }
 
   if (/^[A-Z]/.test(tag)) {
+    if (isChildrenPassthrough(node)) return `${tag} {children}`;
     const componentText = extractTextFromNode(node);
     if (componentText) return `${tag} "${componentText}"`;
     return tag;
   }
 
   if (node.props?.['data-testid']) return `${tag} "${node.props['data-testid']}"`;
+  if (isChildrenPassthrough(node)) return `${tag} {children}`;
   const elementText = extractTextFromNode(node);
   if (elementText) return `${tag} "${elementText}"`;
   return tag;

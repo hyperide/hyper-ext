@@ -869,8 +869,15 @@ export class PreviewPanel {
   public async injectGeneratedSampleProps(componentPath: string, previewKey: string): Promise<boolean> {
     if (!this._panel) return false;
 
-    const propDefs = await this._panelRouter.componentService?.getComponentDefinitions(componentPath).catch(() => null);
-    const rawValues = propDefs && propDefs.length > 0 ? generateSamplePropValues(propDefs).values : {};
+    // getComponent (cached) gives us both the prop schema and the display name; the
+    // name is used as a meaningful `children` placeholder so a button/badge renders
+    // real-looking content ("Local Button") instead of the generic "Sample".
+    const component = await this._panelRouter.componentService?.getComponent(componentPath).catch(() => null);
+    const propDefs = component?.props ?? null;
+    const rawValues =
+      propDefs && propDefs.length > 0
+        ? generateSamplePropValues(propDefs, { componentName: component?.name }).values
+        : {};
 
     // Deep-strip function values: webview postMessage uses structured clone, which
     // throws on functions — including nested ones (e.g. `{ actions: { onSave: fn } }`,

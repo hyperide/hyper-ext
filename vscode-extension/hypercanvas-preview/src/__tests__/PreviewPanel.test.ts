@@ -428,13 +428,15 @@ export { Alert, AlertTitle, AlertDescription };
   });
 
   describe('injectGeneratedSampleProps (#210)', () => {
-    function panelWithPropDefs(propDefs: unknown) {
+    function panelWithPropDefs(propDefs: unknown, componentName = 'Sample') {
       const stateHub = createStateHub();
       const { panel, postMessage } = createPanel(stateHub);
       Object.assign(panel as PreviewPanel & { _panelRouter: unknown }, {
         _panelRouter: {
           componentService: {
-            getComponentDefinitions: mock(() => Promise.resolve(propDefs)),
+            // injectGeneratedSampleProps reads getComponent (props + display name);
+            // the name feeds the meaningful children placeholder.
+            getComponent: mock(() => Promise.resolve({ name: componentName, props: propDefs })),
           },
         },
       });
@@ -475,6 +477,19 @@ export { Alert, AlertTitle, AlertDescription };
       expect(() => structuredClone(payload.values)).not.toThrow();
       expect(payload.values).toEqual({ actions: { label: 'Sample label' } });
       expect(payload.values).not.toHaveProperty('onClick');
+    });
+
+    it('uses the component display name as the required children placeholder', async () => {
+      const { panel, postMessage } = panelWithPropDefs(
+        [{ name: 'children', type: 'ReactNode', required: true }],
+        'LocalButton',
+      );
+
+      await panel.injectGeneratedSampleProps('src/LocalButton.tsx', 'src/LocalButton.tsx');
+
+      const call = postMessage.mock.calls.find((c) => (c[0] as { type?: string })?.type === 'setGeneratedProps');
+      const payload = call?.[0] as { values: Record<string, unknown> };
+      expect(payload.values.children).toBe('Local Button');
     });
 
     it('posts an empty payload (readiness signal) when the component has no props', async () => {

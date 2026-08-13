@@ -245,4 +245,30 @@ describe('generateSamplePropValues', () => {
     expect((result.values.children as string).length).toBeGreaterThan(0);
     expect(result.unsatisfied).not.toContain('children');
   });
+
+  it('uses the component display name as the children placeholder when provided', () => {
+    // A button labelled "Sample" looks like nothing; "Local Button" reads as real
+    // content. When the caller knows the component name, use a humanized form of it
+    // for the required `children` placeholder so the rendered component looks real.
+    const result = generateSamplePropValues([prop({ name: 'children', type: 'ReactNode', required: true })], {
+      componentName: 'LocalButton',
+    });
+    expect(result.values.children).toBe('Local Button');
+  });
+
+  it('falls back to "Sample" for required children when no component name is given', () => {
+    // Back-compat with #307: with no opts, the placeholder is still a non-empty
+    // string (the previous literal "Sample").
+    const result = generateSamplePropValues([prop({ name: 'children', type: 'ReactNode', required: true })]);
+    expect(result.values.children).toBe('Sample');
+  });
+
+  it('does NOT use the component name for a non-children ReactNode prop', () => {
+    // The component name only makes sense as the main visible label (children).
+    // A secondary slot like `icon` keeps its own descriptive placeholder.
+    const result = generateSamplePropValues([prop({ name: 'icon', type: 'ReactNode', required: true })], {
+      componentName: 'LocalButton',
+    });
+    expect(result.values.icon).toBe('Sample icon');
+  });
 });
