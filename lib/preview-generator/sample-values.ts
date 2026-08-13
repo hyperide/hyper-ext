@@ -39,13 +39,18 @@ const UNSATISFIED = Symbol('unsatisfied');
  */
 function isReactNodeType(type: string): boolean {
   const t = type.toLowerCase().replace(/\s+/g, '');
+  // SYNC: keep in lockstep with the ReactNode-ish set in
+  // shared/components/overlays/PropsForm/prop-type-utils.ts (toPropTypeInfo).
+  // componentSourceParser.getTypeString() serializes qualified names verbatim, so
+  // React.JSX.Element is also a real emitted spelling.
   return (
     t === 'reactnode' ||
     t === 'react.reactnode' ||
     t === 'reactelement' ||
     t === 'react.reactelement' ||
     t === 'jsx.element' ||
-    t === 'jsxelement'
+    t === 'jsxelement' ||
+    t === 'react.jsx.element'
   );
 }
 

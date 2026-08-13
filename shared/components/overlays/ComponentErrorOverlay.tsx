@@ -18,7 +18,13 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { TID } from '../../data-testid-map';
 import { isTrustedMessageOrigin } from '../../utils/trusted-message-origin';
 import { extractPropsFromError } from './extract-props-from-error';
-import { computeInitialPropValues, PropsForm, type SimplePropInfo } from './PropsForm';
+import {
+  computeInitialPropValues,
+  isEditablePropType,
+  PropsForm,
+  type SimplePropInfo,
+  toPropTypeInfo,
+} from './PropsForm';
 
 interface ComponentErrorOverlayProps {
   componentPath: string;
@@ -48,7 +54,11 @@ const propsCache = new Map<string, Record<string, unknown>>();
  * `reading 'name'` crash), for which PropsForm renders NO field. We drop those.
  *
  * The editable field set mirrors PropsForm: when a schema is present (even empty)
- * the fields come from the schema; otherwise from the extracted prop names.
+ * the fields come from the schema; otherwise from the extracted prop names. With a
+ * schema we further drop props whose type renders a read-only "Not editable" row in
+ * PropsForm — `function` and `reactNode` (HYP-485) — since the user can't act on them.
+ * The no-schema fallback keeps all extracted props: PropsForm then renders a plain
+ * text field per name, so no editability filtering applies.
  */
 export function computeAttentionProps(input: {
   unsatisfiedProps: readonly string[];
@@ -56,7 +66,11 @@ export function computeAttentionProps(input: {
   propsSchema: SimplePropInfo[] | null | undefined;
 }): string[] {
   const { unsatisfiedProps, extractedProps, propsSchema } = input;
-  const editableFieldNames = new Set(propsSchema ? propsSchema.map((p) => p.name) : extractedProps);
+  const editableFieldNames = new Set(
+    propsSchema
+      ? propsSchema.filter((p) => isEditablePropType(toPropTypeInfo(p).type)).map((p) => p.name)
+      : extractedProps,
+  );
   const candidates = [...new Set([...unsatisfiedProps, ...extractedProps])];
   return candidates.filter((name) => editableFieldNames.has(name));
 }

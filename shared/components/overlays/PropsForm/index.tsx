@@ -1,6 +1,6 @@
 import type { PropTypeInfo } from '@shared/types/props';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { humanize, type SimplePropInfo, toPropTypeInfo } from './prop-type-utils';
+import { humanize, isEditablePropType, type SimplePropInfo, toPropTypeInfo } from './prop-type-utils';
 import { generateObjectValues, getGenerateAllAvailability, getStringFieldGenerator } from './prop-generators';
 import {
   arrayAddButtonStyle,
@@ -40,6 +40,7 @@ import {
 } from './styles';
 
 export type { SimplePropInfo } from './prop-type-utils';
+export { isEditablePropType, toPropTypeInfo } from './prop-type-utils';
 export { canGenerateSomeValue, getGenerateAllAvailability } from './prop-generators';
 
 /**
@@ -319,7 +320,7 @@ function PropField({
     );
   }
 
-  if (typeInfo.type === 'function' || typeInfo.type === 'reactNode') {
+  if (!isEditablePropType(typeInfo.type)) {
     return (
       <div style={fieldRowStyle}>
         <span style={fieldNameStyle}>{humanize(name)}</span>

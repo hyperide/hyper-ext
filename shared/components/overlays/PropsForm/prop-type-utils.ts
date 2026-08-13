@@ -14,9 +14,26 @@ export function toPropTypeInfo(prop: SimplePropInfo): PropTypeInfo {
   if (typeStr === 'string') return { type: 'string', required: prop.required };
   if (typeStr === 'number') return { type: 'number', required: prop.required };
   if (typeStr === 'boolean' || typeStr === 'bool') return { type: 'boolean', required: prop.required };
-  if (typeStr === 'reactnode' || typeStr === 'react.reactnode' || typeStr === 'jsx.element')
+  // ReactNode-ish element spellings. SYNC: keep this set in lockstep with
+  // isReactNodeType in lib/preview-generator/sample-values.ts — both classify the
+  // type strings emitted by componentSourceParser.getTypeString() (which serializes
+  // qualified names verbatim, e.g. `React.JSX.Element`). Whitespace is already
+  // collapsed by getTypeString for these references, so a lowercase compare suffices.
+  if (
+    typeStr === 'reactnode' ||
+    typeStr === 'react.reactnode' ||
+    typeStr === 'reactelement' ||
+    typeStr === 'react.reactelement' ||
+    typeStr === 'jsx.element' ||
+    typeStr === 'jsxelement' ||
+    typeStr === 'react.jsx.element'
+  )
     return { type: 'reactNode', required: prop.required };
-  if (typeStr.startsWith('(') || typeStr.includes('=>')) return { type: 'function', required: prop.required };
+  // Function spellings. SYNC: isFunctionType in sample-values.ts. The parser emits the
+  // bare word `Function` for `() => void`; keep the arrow / `(args):` syntax too for
+  // hand-written or alternately-stringified types.
+  if (typeStr === 'function' || typeStr.startsWith('(') || typeStr.includes('=>'))
+    return { type: 'function', required: prop.required };
   if (typeStr.endsWith('[]') || typeStr.startsWith('array'))
     return { type: 'array', required: prop.required, arrayItemType: { type: 'string', required: false } };
 
@@ -78,6 +95,16 @@ function parseInlineObjectType(typeStr: string): Record<string, PropTypeInfo> | 
     });
   }
   return Object.keys(schema).length > 0 ? schema : null;
+}
+
+/**
+ * Whether PropsForm renders an editable field for a prop of this type. `function`
+ * and `reactNode` props show a read-only "Not editable" row (see PropField), so they
+ * must never be flagged "needs attention" — there's nothing the user can do about them.
+ * Single source of truth for both PropField and computeAttentionProps (HYP-485).
+ */
+export function isEditablePropType(type: PropTypeInfo['type']): boolean {
+  return type !== 'function' && type !== 'reactNode';
 }
 
 export function humanize(name: string): string {
