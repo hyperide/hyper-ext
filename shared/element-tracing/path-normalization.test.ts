@@ -69,4 +69,24 @@ describe('toProjectRelative', () => {
     // 'myproj/src/App.tsx' — wrong. projectRoot must win.
     expect(toProjectRelative('/app/myproj/src/App.tsx', '/app/myproj')).toBe('src/App.tsx');
   });
+
+  it('strips the Vite /@fs/ serving prefix from a cross-package fiber path (HYP-443)', () => {
+    // A cross-package library component is served by the re-rooted target's Vite
+    // dev server via `/@fs/<absolute>`, and that URL leaks into the fiber
+    // `_debugSource.fileName`. Strip `/@fs` to recover the real absolute path, then
+    // the workspace-root strip yields the repo-relative path the AstService keys on.
+    expect(toProjectRelative('/@fs/Users/alice/repo/packages/ui/src/Card.tsx', '/Users/alice/repo')).toBe(
+      'packages/ui/src/Card.tsx',
+    );
+  });
+
+  it('strips /@fs/ even without a projectRoot, yielding the absolute path', () => {
+    expect(toProjectRelative('/@fs/Users/alice/repo/packages/ui/src/Card.tsx')).toBe(
+      '/Users/alice/repo/packages/ui/src/Card.tsx',
+    );
+  });
+
+  it('strips a Windows /@fs/ prefix (drive letter, no leading slash after @fs)', () => {
+    expect(toProjectRelative('/@fs/C:/repo/packages/ui/src/Card.tsx', 'C:/repo')).toBe('packages/ui/src/Card.tsx');
+  });
 });

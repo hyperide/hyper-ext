@@ -63,6 +63,16 @@ export { parseExistingPreview } from './preview-validation';
 
 export interface PreviewFileManagerConfig {
   projectRoot: string;
+  /**
+   * The monorepo workspace root, when `projectRoot` is a re-rooted sub-project
+   * (an app target whose dev server hosts the preview, HYP-420/HYP-441). A
+   * cross-package library component selected from another package resolves to a
+   * `..`-path relative to `projectRoot` that still lives INSIDE this workspace
+   * root. buildEntry allows such in-workspace `..` paths and rejects only paths
+   * that escape `workspaceRoot` (HYP-443). Defaults to `projectRoot` for
+   * single-package projects, where `..` paths are always escapes and rejected.
+   */
+  workspaceRoot?: string;
   io: FileIO;
   isNextPagesRouter?: boolean;
   providerWrap?: ProviderWrapConfig;
@@ -70,6 +80,7 @@ export interface PreviewFileManagerConfig {
 }
 export class PreviewFileManager {
   private projectRoot: string;
+  private workspaceRoot: string;
   private io: FileIO;
   private isNextPagesRouter: boolean;
   private providerWrap?: ProviderWrapConfig;
@@ -81,6 +92,9 @@ export class PreviewFileManager {
 
   constructor(config: PreviewFileManagerConfig) {
     this.projectRoot = config.projectRoot;
+    // Defaults to projectRoot: single-package projects have no separate workspace
+    // root, so any `..` path is an escape and the buildEntry guard rejects it.
+    this.workspaceRoot = config.workspaceRoot ?? config.projectRoot;
     this.io = config.io;
     this.isNextPagesRouter = config.isNextPagesRouter ?? false;
     this.providerWrap = config.providerWrap;
@@ -463,6 +477,7 @@ export class PreviewFileManager {
       const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         allowRouterShell: isExplicitWebAppShell(compPath),
         entryRootPaths,
+        workspaceRoot: this.workspaceRoot,
       });
       if (entry) requestedEntries.push(entry);
     }
@@ -476,6 +491,7 @@ export class PreviewFileManager {
       if (requestedPathSet.has(compPath)) continue;
       const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         entryRootPaths,
+        workspaceRoot: this.workspaceRoot,
       });
       if (entry) extraEntries.push(entry);
     }
@@ -634,6 +650,7 @@ export class PreviewFileManager {
       const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         allowRouterShell: isExplicitWebAppShell(compPath),
         entryRootPaths,
+        workspaceRoot: this.workspaceRoot,
       });
       if (entry) entries.push(entry);
     }

@@ -23,7 +23,7 @@ import {
   PreviewModeManager,
   parseExistingPreview,
 } from '@lib/preview-generator';
-import { resolveActiveProjectRoot } from '@lib/preview-generator/monorepo-root';
+import { resolveRunnableProjectRoot } from '@lib/preview-generator/monorepo-root';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import type { SharedEditorState } from '@lib/types';
 import * as vscode from 'vscode';
@@ -335,9 +335,15 @@ export function activate(context: vscode.ExtensionContext) {
         // Send capabilities to inspector panel (readonly inputs)
         rightPanelProvider?.notifyCapabilities(capabilities);
 
-        // Always send projectError — null clears the unsupported-project screen
-        // when switching from an unsupported workspace to a supported one.
-        previewPanel?.notifyUnsupportedProject(projectError ?? null);
+        // Scope this background detector to its OWN react-native error channel.
+        // detectUnsupportedProject only ever returns a 'react-native' error (or
+        // null), so posting its null result via notifyUnsupportedProject would
+        // clobber a selection-driven 'framework' compat screen back to blank —
+        // the very screen HYP-442 added (race: this async detector can finish
+        // AFTER the selection path posts the framework screen). setReactNativeUnsupported
+        // clears only a stale RN screen and never touches a 'framework' one, while
+        // still clearing the RN screen when switching from an RN to a supported project.
+        previewPanel?.setReactNativeUnsupported(projectError ?? null);
         if (projectError) {
           console.log('[HyperIDE] Unsupported project detected:', projectError.type);
         }
@@ -543,6 +549,13 @@ export function activate(context: vscode.ExtensionContext) {
   const createPreviewFileManager = (projectRoot: string): PreviewFileManager => {
     const manager = new PreviewFileManager({
       projectRoot,
+      // The monorepo workspace root (the CURRENTLY-opened folder, resolved at call
+      // time — not the captured activation-time value, so a workspace-folder change
+      // re-roots correctly, codex P2). When projectRoot is a re-rooted app target,
+      // this lets buildEntry allow a cross-package library component reached via an
+      // in-workspace `..` path while still rejecting any path that escapes the
+      // workspace (HYP-443).
+      workspaceRoot: getWorkspaceRoot() ?? workspaceRoot,
       io: vsCodeIO,
     });
     // Provider and SSR mock detection run async; ensureComponent/rebuild await both before generating
@@ -669,13 +682,16 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceFolderRoot = (): string => getWorkspaceRoot() ?? workspaceRoot;
 
   /**
-   * For a monorepo, re-root the preview pipeline to the sub-project that owns the
-   * selected component (the nearest ancestor with its own package.json). The repo
-   * root usually has no dev/start script and no index.html / src entry, so the dev
-   * server and entry/router patch must run inside the target (HYP-420). Returns the
-   * active project root the component should be resolved against.
+   * For a monorepo, re-root the preview pipeline to the sub-project that should
+   * RENDER the selected component (a runnable app target). The owning package may
+   * be a shared library (react in peerDeps, no bundler, no dev script) which cannot
+   * host a preview; in that case resolveRunnableProjectRoot resolves to a runnable
+   * app target instead of flagging "unsupported" (HYP-441). The repo root usually
+   * has no dev/start script and no index.html / src entry, so the dev server and
+   * entry/router patch must run inside the target (HYP-420). Returns the active
+   * project root the preview pipeline should run against.
    */
-  // Sequence-aware reroot: resolveActiveProjectRoot is an async filesystem walk,
+  // Sequence-aware reroot: resolveRunnableProjectRoot is an async filesystem walk,
   // so when the user rapidly selects components from different monorepo targets an
   // earlier resolve can finish AFTER a newer selection. The reroot of
   // previewManager / modeManager / devServerManager must therefore be gated on the
@@ -687,7 +703,7 @@ export function activate(context: vscode.ExtensionContext) {
     resolveRoot: (componentPath) => {
       const repoRoot = workspaceFolderRoot();
       const absComponent = isAbsolute(componentPath) ? componentPath : join(activeWorkspaceRoot, componentPath);
-      return resolveActiveProjectRoot(repoRoot, absComponent, vsCodeIO);
+      return resolveRunnableProjectRoot(repoRoot, absComponent, vsCodeIO);
     },
     reroot: (projectRoot) => rerootPreviewPipeline(projectRoot),
   });
@@ -903,6 +919,17 @@ export function activate(context: vscode.ExtensionContext) {
     const relativePath = relative(currentWorkspaceRoot, absComponentPath);
     const repoRelativePath = relative(workspaceFolderRoot(), absComponentPath);
 
+    // Cross-package library component (HYP-443): the preview pipeline is re-rooted
+    // to a runnable app target, but the selected component lives OUTSIDE that target
+    // (a shared library sub-package), so `relativePath` escapes with '..'. This is
+    // now a fully renderable, editable case — buildEntry allows in-workspace '..'
+    // paths and emits a relative import the target's dev server serves (once
+    // server.fs.allow covers the workspace, injected in DevServerManager). The
+    // registry key, the iframe ?component= URL and the #210 in-memory prop injection
+    // all key on `relativePath`, so the '..' path flows through unchanged. No info
+    // screen — clear any stale selection-blocking screen.
+    previewPanel?.clearSelectionBlockingScreen();
+
     // UI primitives (shadcn-style ui/<name>.tsx) must NOT have SampleDefault written
     // into their source — keeping the file pristine matters for users who track shadcn
     // updates, and writing a deterministic scaffold into Carousel/Tabs/etc. would lose
@@ -973,13 +1000,20 @@ export function activate(context: vscode.ExtensionContext) {
         // 3. Ensure route files + handle mode transitions (App Shell / Isolated)
         const result = await modeManager.onComponentSelected();
         if (result === 'unsupported') {
-          // SYNC: shared/framework-support.ts → FRAMEWORK_SUPPORT
-          void vscode.window.showWarningMessage(
-            'HyperIDE: unsupported project type. ' +
-              'Supported: Next.js, Remix, Vite (file-based and JSX router), Astro, Webpack/CRA, Parcel.',
-          );
+          // No toast (HYP-442): surface the framework-compatibility screen in the
+          // preview panel instead — it's the authoritative, non-redundant place to
+          // explain which frameworks HyperIDE supports. The compatibility table
+          // lives in the webview (UnsupportedFrameworkScreen) and reads the same
+          // shared FRAMEWORK_SUPPORT list (Astro included via shared/framework-support.ts).
+          previewPanel?.notifyUnsupportedProject({
+            type: 'framework',
+            message: 'HyperIDE could not detect a supported framework in this project.',
+          });
           return 'unsupported' as const;
         }
+        // A non-unsupported outcome means a supported framework was resolved — clear
+        // any stale selection-blocking screen left over from a previous selection.
+        previewPanel?.clearSelectionBlockingScreen();
         if (result === 'needs-patch') {
           void vscode.window
             .showWarningMessage(

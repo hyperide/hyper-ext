@@ -24,6 +24,7 @@ import type { UnsupportedProjectError } from '../types';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
 import { PropsForm } from './PropsForm';
+import { UnsupportedFrameworkScreen } from './UnsupportedFrameworkScreen';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
 
@@ -180,9 +181,14 @@ function PreviewContent() {
     } as unknown as PlatformMessage);
   }, [canvas]);
 
-  // Unsupported project type (React Native / Tamagui without react-native-web)
-  // These projects CAN'T render at all — full blocking screen.
+  // Unsupported project — full blocking screen. Two flavours:
+  //  - 'framework': no supported bundler/framework → compatibility table (HYP-442,
+  //    replaces the old warning toast).
+  //  - 'react-native': renders only after a fix (react-native-web) → fix button.
   if (projectError) {
+    if (projectError.type === 'framework') {
+      return <UnsupportedFrameworkScreen message={projectError.message} />;
+    }
     const handleFix = () => {
       canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
     };

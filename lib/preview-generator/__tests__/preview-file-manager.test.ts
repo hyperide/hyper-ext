@@ -722,6 +722,105 @@ describe('PreviewFileManager — path traversal guard', () => {
   });
 });
 
+describe('PreviewFileManager — cross-package library component (in-workspace ".." import, HYP-443)', () => {
+  // A monorepo opened at /repo. The preview pipeline is re-rooted to the runnable
+  // app target /repo/targets/web (projectRoot), but the selected component lives in
+  // the shared library /repo/packages/ui/src/Button.tsx — OUTSIDE the target. Its
+  // path relative to the target is `../../packages/ui/src/Button.tsx` (escapes the
+  // target with `..`, but stays WITHIN the workspace root /repo). buildEntry must
+  // allow it and emit a relative import that Vite can serve once fs.allow permits.
+  function createMonorepoManager(io: InMemoryFileIO) {
+    return new PreviewFileManager({
+      projectRoot: '/repo/targets/web',
+      workspaceRoot: '/repo',
+      io,
+    });
+  }
+
+  it('renders a library component reached via in-workspace ".." path', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/repo/packages/ui/src/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/repo/packages/ui/package.json', '{"name": "@conloca-mini/ui", "exports": {".": "./src/index.ts"}}');
+    io.files.set('/repo/targets/web/package.json', '{"name": "@conloca-mini/web"}');
+    io.files.set('/repo/targets/web/src/main.tsx', 'export {};');
+    const manager = createMonorepoManager(io);
+
+    const content = await manager.ensureComponent(['../../packages/ui/src/Button.tsx']);
+
+    // The library component is registered, not skipped.
+    expect(content).toContain('Button');
+    // A relative import is used (sidesteps the package `exports` wall that blocks
+    // a deep `@conloca-mini/ui/src/Button` import). Path is relative to the preview
+    // file in /repo/targets/web/src/.
+    expect(content).toContain('packages/ui/src/Button');
+    expect(content).not.toContain('@conloca-mini/ui/src/Button');
+    expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('rejects a path that escapes the workspace root entirely (security)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/repo/targets/web/package.json', '{"name": "@conloca-mini/web"}');
+    io.files.set('/repo/targets/web/src/Button.tsx', BUTTON_SOURCE);
+    // /etc/passwd is OUTSIDE the workspace root /repo — must never be readable.
+    io.files.set('/etc/passwd', 'root:x:0:0:root');
+    const manager = createMonorepoManager(io);
+
+    // The escape path is skipped; the in-target Button is discovered instead.
+    const content = await manager.ensureComponent(['../../../../etc/passwd', 'src/Button.tsx']);
+    expect(content).not.toContain('passwd');
+    expect(content).toContain('Button');
+  });
+
+  it('rejects a sibling-escape that leaves the workspace root (does not render it)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/repo/targets/web/package.json', '{"name": "@conloca-mini/web"}');
+    io.files.set('/repo/targets/web/src/Safe.tsx', BUTTON_SOURCE);
+    // /other-repo is a sibling of /repo — escaping /repo must be rejected even
+    // though it does not reach the filesystem root. The in-target Safe component
+    // is rendered; the escaped Evil component must never appear.
+    io.files.set('/other-repo/secret/Evil.tsx', 'export function Evil() { return <div/> }');
+    const manager = createMonorepoManager(io);
+
+    const content = await manager.ensureComponent(['../../../other-repo/secret/Evil.tsx', 'src/Safe.tsx']);
+    expect(content).not.toContain('Evil');
+    expect(content).toContain('Button');
+  });
+
+  it('rejects an internal ".." trick that normalizes back inside projectRoot, even in a monorepo', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/repo/targets/web/package.json', '{"name": "@conloca-mini/web"}');
+    io.files.set('/repo/targets/web/src/Safe.tsx', BUTTON_SOURCE);
+    // `src/../secret/Evil.tsx` normalizes to `/repo/targets/web/secret/Evil.tsx` —
+    // INSIDE projectRoot. The guard must still reject it: a legitimate in-project
+    // file never needs a `..` segment to be addressed, so any `..` that resolves
+    // back inside projectRoot is a traversal trick. Keyed at the NORMALIZED path so
+    // the rejection is the guard's doing, not a missing-file ENOENT.
+    io.files.set('/repo/targets/web/secret/Evil.tsx', 'export function Evil() { return <div/> }');
+    const manager = createMonorepoManager(io);
+
+    const content = await manager.ensureComponent(['src/../secret/Evil.tsx', 'src/Safe.tsx']);
+    expect(content).not.toContain('Evil');
+    expect(content).toContain('Button');
+  });
+
+  it('rejects any ".." path in a single-package project (workspaceRoot === projectRoot)', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', '{"name": "solo"}');
+    io.files.set('/project/src/Safe.tsx', BUTTON_SOURCE);
+    // `src/../secret/Evil.tsx` normalizes to `/project/secret/Evil.tsx` (inside the
+    // project). With no separate workspaceRoot, cross-package is impossible, so every
+    // `..` path is rejected. Keyed at the normalized path so the guard, not ENOENT,
+    // is what rejects it.
+    io.files.set('/project/secret/Evil.tsx', 'export function Evil() { return <div/> }');
+    // createManager uses projectRoot '/project' and no workspaceRoot → defaults equal.
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['src/../secret/Evil.tsx', 'src/Safe.tsx']);
+    expect(content).not.toContain('Evil');
+    expect(content).toContain('Button');
+  });
+});
+
 describe('PreviewFileManager — buildEntry error handling', () => {
   it('should handle unparseable component source gracefully', async () => {
     const io = new InMemoryFileIO();

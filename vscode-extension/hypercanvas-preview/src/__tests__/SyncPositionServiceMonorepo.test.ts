@@ -73,4 +73,30 @@ describe('SyncPositionService monorepo navigate re-rooting', () => {
     expect(opened).toContain('src/App.tsx');
     expect(opened).not.toContain('targets/');
   });
+
+  it('re-roots a cross-package library click source served via Vite /@fs/ (HYP-443)', async () => {
+    (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mockClear();
+    // Cross-package: the lib file lives OUTSIDE the re-rooted target, so the iframe
+    // reports the Vite `/@fs/<absolute>` serving URL and the sub-project prefix is
+    // empty (the path is not a suffix of the repo-relative form). The fix strips
+    // `/@fs/` and re-roots against the workspace root → opens the real library file.
+    const service = makeService('');
+    service.setPendingSource({
+      fileName: '/@fs/test-workspace/packages/ui/src/Card.tsx',
+      line: 12,
+      column: 3,
+    });
+
+    await (
+      service as unknown as { _onPreviewSelectionChange: (ids: string[]) => Promise<void> }
+    )._onPreviewSelectionChange(['/@fs/test-workspace/packages/ui/src/Card.tsx:12:4']);
+
+    const calls = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const uri = calls[0][0] as { fsPath?: string; path?: string };
+    const opened = uri.fsPath ?? uri.path ?? String(uri);
+    expect(opened).toBe('/test-workspace/packages/ui/src/Card.tsx');
+    // The pre-fix bug: opening the literal `/@fs/...` URL → nonexistent file.
+    expect(opened).not.toContain('@fs');
+  });
 });

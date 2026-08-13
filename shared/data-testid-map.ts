@@ -6,6 +6,8 @@ export const TID = {
     startServerButton: 'hyper-preview-start-server',
     unsupportedRoot: 'hyper-preview-unsupported',
     unsupportedFixButton: 'hyper-preview-unsupported-fix',
+    unsupportedFrameworkRoot: 'hyper-preview-unsupported-framework',
+    unsupportedFrameworkRow: (name: string) => `hyper-preview-unsupported-framework-row-${name}`,
     toolbarMode: (mode: string) => `hyper-preview-mode-${mode}`,
     toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',

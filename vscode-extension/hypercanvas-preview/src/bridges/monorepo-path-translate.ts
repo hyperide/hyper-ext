@@ -25,6 +25,9 @@
 
 import { isAbsolute, join } from 'node:path';
 
+import { stripViteFsPrefix } from '@shared/element-tracing/path-normalization';
+
+
 /** Convert any backslash separators to forward slashes. */
 function toForwardSlashes(p: string): string {
   return p.includes('\\') ? p.replace(/\\/g, '/') : p;
@@ -65,10 +68,16 @@ export function deriveSubProjectPrefix(repoRel: string | undefined, subRel: stri
  *   `filePath` taken from the repo-rooted editor state, not from the iframe).
  */
 export function toRepoRelativePath(filePath: string, subProjectPrefix: string): string {
-  if (!subProjectPrefix || !filePath) return filePath;
-  const fwd = toForwardSlashes(filePath);
-  if (fwd.startsWith('/') || /^[a-zA-Z]:/.test(fwd)) return filePath;
-  if (fwd.startsWith(subProjectPrefix)) return fwd === filePath ? filePath : fwd;
+  if (!filePath) return filePath;
+  // Strip Vite's `/@fs/` prefix FIRST — unconditionally, before the empty-prefix
+  // early return. A cross-package library file has an empty sub-project prefix
+  // (its path is not a suffix of the repo-relative form), so the prefix logic
+  // below no-ops; the `/@fs/` strip is what makes the absolute path usable (HYP-443).
+  const stripped = stripViteFsPrefix(filePath);
+  if (!subProjectPrefix) return stripped;
+  const fwd = toForwardSlashes(stripped);
+  if (fwd.startsWith('/') || /^[a-zA-Z]:/.test(fwd)) return stripped;
+  if (fwd.startsWith(subProjectPrefix)) return fwd === stripped ? stripped : fwd;
   return `${subProjectPrefix}${fwd}`;
 }
 
@@ -81,9 +90,11 @@ export function toRepoRelativePath(filePath: string, subProjectPrefix: string): 
  * are returned unchanged.
  */
 export function toRepoRelativeElementId(elementId: string, subProjectPrefix: string): string {
-  if (!subProjectPrefix || !elementId) return elementId;
+  if (!elementId) return elementId;
   const m = elementId.match(/^(.+):(\d+):(\d+)$/);
   if (!m) return elementId;
+  // toRepoRelativePath strips `/@fs/` unconditionally (HYP-443) and applies the
+  // sub-project prefix when present, so this works even for an empty prefix.
   const translated = toRepoRelativePath(m[1], subProjectPrefix);
   if (translated === m[1]) return elementId;
   return `${translated}:${m[2]}:${m[3]}`;

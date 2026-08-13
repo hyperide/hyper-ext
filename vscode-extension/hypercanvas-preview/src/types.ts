@@ -26,14 +26,25 @@ export interface ProjectInfo {
 // Unsupported Project Detection
 // ============================================
 
-/** Describes an unsupported project type that can't render in browser without intervention. */
+/**
+ * Describes a project/component state that the preview cannot render directly.
+ * Drives a full-panel blocking screen via the projectError channel.
+ */
 export interface UnsupportedProjectError {
-  /** Discriminant for the unsupported project category */
-  type: 'react-native';
+  /**
+   * Discriminant for the blocking-screen category.
+   * - 'react-native': renders only after adding react-native-web (offers a fix button).
+   * - 'framework': no supported bundler/framework detected — shows the framework
+   *   compatibility table instead of a fix button (HYP-442; replaces the old toast).
+   *
+   * Cross-package library components are no longer a blocking category: they render
+   * and edit directly via the re-rooted app target (HYP-443).
+   */
+  type: 'react-native' | 'framework';
   /** Human-readable explanation shown in the error screen */
   message: string;
-  /** Button label for the fix action (e.g. "Fix: Add react-native-web") */
-  fixLabel: string;
+  /** Button label for the fix action (e.g. "Fix: Add react-native-web"). Omitted for non-fix screens. */
+  fixLabel?: string;
 }
 
 // ============================================

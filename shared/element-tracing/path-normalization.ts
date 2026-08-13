@@ -37,6 +37,27 @@ function toForwardSlashes(p: string): string {
   return p.includes('\\') ? p.replace(/\\/g, '/') : p;
 }
 
+/**
+ * Strip Vite's `/@fs/` file-serving prefix, recovering the real absolute path.
+ *
+ * Vite serves files OUTSIDE the project root (a cross-package monorepo library,
+ * HYP-443) via `/@fs/<absolute-path>`, and that URL leaks into the React fiber
+ * `_debugSource.fileName` used for navigation AND AST mutation. POSIX:
+ * `/@fs/Users/a/x.tsx` → `/Users/a/x.tsx`. Windows: `/@fs/C:/repo/x.tsx` →
+ * `C:/repo/x.tsx` (drop the slash before the drive letter). The webview→extension
+ * hop may drop the leading slash, so both `/@fs/<abs>` and `@fs/<abs>` are
+ * accepted. Input is expected to already be forward-slash normalized. Returns the
+ * input unchanged when no `@fs/` prefix is present. Single source of truth — the
+ * extension's path translators reuse this.
+ */
+export function stripViteFsPrefix(fileName: string): string {
+  const m = /^\/?@fs\/(.*)$/.exec(fileName);
+  if (!m) return fileName;
+  const rest = m[1];
+  // Windows drive path: `C:/...` → keep as-is; POSIX: re-add the leading slash.
+  return /^[a-zA-Z]:/.test(rest) ? rest : `/${rest}`;
+}
+
 /** Uppercase a leading Windows drive letter so case-variant roots compare equal. */
 function canonicalizeDriveLetter(p: string): string {
   return /^[a-z]:/.test(p) ? p[0].toUpperCase() + p.slice(1) : p;
@@ -58,7 +79,10 @@ function canonicalizeDriveLetter(p: string): string {
 export function toProjectRelative(fileName: string, projectRoot?: string): string {
   if (!fileName) return fileName;
 
-  const fwd = canonicalizeDriveLetter(toForwardSlashes(fileName));
+  // Strip Vite's `/@fs/` serving prefix first — a cross-package library file is
+  // served via `/@fs/<absolute>` and that URL leaks into the fiber path (HYP-443).
+  // Recovering the real absolute path lets the projectRoot strip below apply.
+  const fwd = canonicalizeDriveLetter(stripViteFsPrefix(toForwardSlashes(fileName)));
 
   // projectRoot takes priority — devcontainer workspaces can live under
   // `/app/<something>`, so stripping the sandbox prefix first would yield

@@ -791,3 +791,48 @@ describe('PreviewPanel monorepo prefix wiring', () => {
     expect(setSubProjectPrefix).toHaveBeenLastCalledWith('');
   });
 });
+
+describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () => {
+  function projectErrorOf(panel: PreviewPanel): { type: string } | null {
+    return (panel as PreviewPanel & { _projectError: { type: string } | null })._projectError;
+  }
+
+  it('setReactNativeUnsupported(null) does NOT clobber a standing framework screen', () => {
+    const { panel } = createPanel(createStateHub());
+
+    // Selection path posts the framework compat screen (HYP-442).
+    panel.notifyUnsupportedProject({ type: 'framework', message: 'no supported framework' });
+    expect(projectErrorOf(panel)?.type).toBe('framework');
+
+    // Background detector (runProjectDetection) finishes AFTER selection with a null
+    // result (non-RN project). It must NOT wipe the framework screen back to blank.
+    panel.setReactNativeUnsupported(null);
+    expect(projectErrorOf(panel)?.type).toBe('framework');
+  });
+
+  it('setReactNativeUnsupported(null) DOES clear a stale react-native screen', () => {
+    const { panel } = createPanel(createStateHub());
+
+    panel.notifyUnsupportedProject({ type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' });
+    expect(projectErrorOf(panel)?.type).toBe('react-native');
+
+    // Switching from an RN project to a supported one: the RN screen must clear.
+    panel.setReactNativeUnsupported(null);
+    expect(projectErrorOf(panel)).toBeNull();
+  });
+
+  it('setReactNativeUnsupported(error) always applies the RN error', () => {
+    const { panel } = createPanel(createStateHub());
+
+    panel.setReactNativeUnsupported({ type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' });
+    expect(projectErrorOf(panel)?.type).toBe('react-native');
+  });
+
+  it('clearSelectionBlockingScreen leaves a react-native screen intact (inverse guard)', () => {
+    const { panel } = createPanel(createStateHub());
+
+    panel.notifyUnsupportedProject({ type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' });
+    panel.clearSelectionBlockingScreen();
+    expect(projectErrorOf(panel)?.type).toBe('react-native');
+  });
+});

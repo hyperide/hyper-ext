@@ -98,4 +98,31 @@ describe('toRepoRelativeElementId', () => {
   it('leaves ids that are not fileName:line:column untouched', () => {
     expect(toRepoRelativeElementId('synthetic-ref-abc', prefix)).toBe('synthetic-ref-abc');
   });
+
+  it('strips the Vite /@fs/ prefix from the fileName even with an empty prefix (HYP-443)', () => {
+    // Cross-package library edit: the iframe emits the Vite-served `/@fs/<abs>` URL
+    // and the sub-project prefix is empty, so the path must still be normalized to
+    // the real absolute file for the AST mutation to land.
+    expect(toRepoRelativeElementId('/@fs/Users/alice/repo/packages/ui/src/Card.tsx:42:7', '')).toBe(
+      '/Users/alice/repo/packages/ui/src/Card.tsx:42:7',
+    );
+  });
+});
+
+describe('toRepoRelativePath — Vite /@fs/ normalization (HYP-443)', () => {
+  it('strips /@fs/ to the real absolute path with an empty prefix', () => {
+    expect(toRepoRelativePath('/@fs/Users/alice/repo/packages/ui/src/Card.tsx', '')).toBe(
+      '/Users/alice/repo/packages/ui/src/Card.tsx',
+    );
+  });
+
+  it('strips a slash-dropped @fs/ prefix (webview hop drops the leading slash)', () => {
+    expect(toRepoRelativePath('@fs/Users/alice/repo/packages/ui/src/Card.tsx', '')).toBe(
+      '/Users/alice/repo/packages/ui/src/Card.tsx',
+    );
+  });
+
+  it('strips a Windows /@fs/ prefix (drive letter retained)', () => {
+    expect(toRepoRelativePath('/@fs/C:/repo/packages/ui/src/Card.tsx', '')).toBe('C:/repo/packages/ui/src/Card.tsx');
+  });
 });

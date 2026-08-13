@@ -124,6 +124,26 @@ describe('EditorBridge', () => {
       expect(uri.fsPath).toBe('/test-workspace/app/page.tsx');
     });
 
+    it('strips the Vite /@fs/ serving prefix from a cross-package library path (HYP-443)', async () => {
+      // A cross-package library file is served via `/@fs/<absolute>`; that URL leaks
+      // into the fiber path the iframe reports for navigation. resolveFilePath must
+      // strip `/@fs/` to recover the real absolute file, not resolve it relative to
+      // the workspace root (which produced `<repo>/@fs/...` → "cannot open").
+      await goToCode('/@fs/Users/alice/repo/packages/ui/src/Card.tsx', 12, 3);
+      const call = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const uri = call[0] as { fsPath: string };
+      expect(uri.fsPath).toBe('/Users/alice/repo/packages/ui/src/Card.tsx');
+    });
+
+    it('strips a slash-dropped @fs/ prefix (webview hop drops the leading slash)', async () => {
+      // The webview→extension message hop can drop the leading slash, yielding
+      // `@fs/Users/...`. Both forms must resolve to the same real absolute file.
+      await goToCode('@fs/Users/alice/repo/packages/ui/src/Card.tsx', 12, 3);
+      const call = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls[0];
+      const uri = call[0] as { fsPath: string };
+      expect(uri.fsPath).toBe('/Users/alice/repo/packages/ui/src/Card.tsx');
+    });
+
     it('skips bundle artifact paths without opening or erroring', async () => {
       // Bun's hashed _bun/client/<hash>.js rotates on every rebuild — opening
       // it produces "cannot open file:///.../_bun/client/index-<hash>.js"

@@ -7,6 +7,7 @@
  * preview to the right group first.
  */
 
+import { stripViteFsPrefix } from '@shared/element-tracing/path-normalization';
 import * as vscode from 'vscode';
 import { isBundleArtifactPath } from './services/bundle-artifact-path';
 
@@ -200,6 +201,15 @@ function getNonPreviewColumn(): vscode.ViewColumn {
  * the workspace with the leading slash dropped.
  */
 function resolveFilePath(filePath: string): vscode.Uri {
+  // Vite serves files OUTSIDE the project root (a cross-package monorepo library,
+  // HYP-443) via `/@fs/<absolute>`, and that URL leaks into the React fiber path
+  // the iframe reports for navigation. Strip it to recover the real absolute path
+  // (handles both `/@fs/<abs>` and the slash-dropped `@fs/<abs>`).
+  const fsStripped = stripViteFsPrefix(filePath);
+  if (fsStripped !== filePath) {
+    return vscode.Uri.file(fsStripped);
+  }
+
   // Absolute path — use as-is
   if (filePath.startsWith('/')) {
     return vscode.Uri.file(filePath);

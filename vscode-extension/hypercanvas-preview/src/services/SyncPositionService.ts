@@ -12,6 +12,7 @@
  * without an AST lookup round-trip.
  */
 
+import { toProjectRelative } from '@shared/element-tracing/path-normalization';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import * as vscode from 'vscode';
 import { toRepoRelativePath } from '../bridges/monorepo-path-translate';
@@ -170,9 +171,15 @@ export class SyncPositionService implements vscode.Disposable {
     if (pendingSource) {
       try {
         this._suppressCursorSync = true;
-        // source.column is 0-based, goToCode expects 1-based column. Re-root the
-        // sub-project-relative fileName the iframe reported to repo-relative.
-        const fileName = toRepoRelativePath(pendingSource.fileName, this._subProjectPrefix);
+        // source.column is 0-based, goToCode expects 1-based column.
+        // First normalize the iframe-reported fileName: a cross-package library
+        // file is served via Vite's `/@fs/<absolute>` URL, which leaks into the
+        // fiber path — toProjectRelative strips `/@fs/` and re-roots against the
+        // repo root, yielding `packages/ui/src/Card.tsx` (HYP-443). For an
+        // in-package sub-project file the path is already sub-relative, so this is
+        // a no-op and toRepoRelativePath then applies the HYP-430 sub→repo prefix.
+        const normalized = toProjectRelative(pendingSource.fileName, this._workspaceRoot);
+        const fileName = toRepoRelativePath(normalized, this._subProjectPrefix);
         await goToCode(fileName, pendingSource.line, pendingSource.column + 1);
       } finally {
         setTimeout(() => {

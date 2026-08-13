@@ -932,6 +932,38 @@ export class PreviewPanel {
     this._panel?.webview.postMessage({ type: 'projectError', error });
   }
   /**
+   * Clear ONLY the selection-driven blocking screen (framework-compat, HYP-442) —
+   * used when a later component selection succeeds and the screen must give way to
+   * the working preview. Deliberately leaves a 'react-native' projectError intact,
+   * so a genuine react-native block is not wiped by an unrelated successful selection.
+   */
+  public clearSelectionBlockingScreen(): void {
+    if (this._projectError?.type !== 'framework') return;
+    this.notifyUnsupportedProject(null);
+  }
+
+  /**
+   * Set or clear ONLY the react-native blocking screen owned by background project
+   * detection (runProjectDetection). The async detector only ever produces a
+   * 'react-native' error (or null), so it must never clobber a selection-driven
+   * 'framework' compat screen with its null result — that race wiped the screen
+   * back to blank when detection finished after a component selection. Clearing is
+   * scoped to a stale RN error, preserving the framework screen; setting always
+   * applies the RN error. (Inverse of clearSelectionBlockingScreen.)
+   */
+  public setReactNativeUnsupported(error: UnsupportedProjectError | null): void {
+    if (error) {
+      this.notifyUnsupportedProject(error);
+      return;
+    }
+    // No RN error: clear only if the standing error is an RN one. Leave a
+    // selection-driven 'framework' screen untouched.
+    if (this._projectError?.type === 'react-native') {
+      this.notifyUnsupportedProject(null);
+    }
+  }
+
+  /**
    * Notify the webview about project capabilities (readonly mode, CSS system).
    * Sent after CSS system detection completes during activation.
    */

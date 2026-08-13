@@ -1,4 +1,4 @@
-import { basename, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 import {
   detectExportStyle,
@@ -19,6 +19,16 @@ import type { PreviewComponentEntry } from './generator';
 interface BuildEntryOptions {
   allowRouterShell?: boolean;
   entryRootPaths?: Set<string>;
+  /**
+   * The monorepo workspace root, when `projectRoot` is a re-rooted sub-project
+   * (an app target whose dev server hosts the preview, HYP-420/HYP-441). A
+   * cross-package library component selected from another package resolves to a
+   * `..`-path relative to `projectRoot` that still lives INSIDE this workspace
+   * root. buildEntry allows such in-workspace `..` paths and rejects only paths
+   * that escape `workspaceRoot` (HYP-443). Defaults to `projectRoot` for
+   * single-package projects, where `..` paths are always escapes and rejected.
+   */
+  workspaceRoot?: string;
 }
 
 export async function buildEntry(
@@ -29,10 +39,36 @@ export async function buildEntry(
   previewDir: string,
   options: BuildEntryOptions = {},
 ): Promise<PreviewComponentEntry | null> {
-  // Guard against path traversal — componentPath must stay within projectRoot
+  // Guard against path traversal. This is security-sensitive: it gates which
+  // files the preview reads + serves. A `..` path is allowed in EXACTLY ONE
+  // case — the cross-package library case (HYP-443): projectRoot is a re-rooted
+  // app target, and the component lives in a SIBLING package that
+  //   (a) escapes projectRoot (so `..` is structurally required), AND
+  //   (b) stays within the monorepo workspaceRoot, AND
+  //   (c) workspaceRoot !== projectRoot (a real monorepo re-root, not a single
+  //       package where the two coincide).
+  // Everything else is rejected, including:
+  //   - paths escaping the workspace (../../../etc/passwd, a sibling repo);
+  //   - internal `..` tricks that normalize back INSIDE projectRoot
+  //     (packages/../secret/Evil.tsx → secret/Evil.tsx) — these never need `..`
+  //     to address a legitimate file, so a `..` segment is always suspicious;
+  //   - single-package projects (workspaceRoot === projectRoot): every `..`
+  //     path is rejected exactly as before HYP-443.
+  const workspaceRoot = options.workspaceRoot ?? projectRoot;
   if (componentPath.includes('..')) {
-    console.warn(`[PreviewFileManager] Skipping suspicious path: ${componentPath}`);
-    return null;
+    const resolved = resolve(projectRoot, componentPath);
+    const relToProject = relative(projectRoot, resolved);
+    const relToWorkspace = relative(workspaceRoot, resolved);
+    // `..` prefix = escapes upward; isAbsolute = cross-drive on Windows (where
+    // path.relative returns an absolute path, not a `..` chain). Mirror the
+    // convention in monorepo-root.ts resolveActiveProjectRoot.
+    const escapesProject = relToProject.startsWith('..') || isAbsolute(relToProject);
+    const escapesWorkspace = relToWorkspace.startsWith('..') || isAbsolute(relToWorkspace);
+    const crossPackageAllowed = workspaceRoot !== projectRoot && escapesProject && !escapesWorkspace;
+    if (!crossPackageAllowed) {
+      console.warn(`[PreviewFileManager] Skipping suspicious path: ${componentPath}`);
+      return null;
+    }
   }
 
   // Exclude framework-reserved files (Next.js App Router specials, Remix root/entry) —
@@ -182,8 +218,10 @@ export async function computeImportPath(
   const packageImport = await getPackageImportPath(projectRoot, io, componentPath);
   if (packageImport) return packageImport;
 
-  // Regular relative path
-  // componentPath is validated in buildEntry (no '..' segments)
+  // Regular relative path. componentPath may contain in-workspace `..` segments
+  // for a cross-package library component (HYP-443); join + relative normalize
+  // them into a correct `../../packages/ui/src/Button`-style import. buildEntry
+  // has already rejected any `..` path that escapes the workspace root.
   const absoluteComponent = join(projectRoot, componentPath);
   const relativePath = relative(previewDir, absoluteComponent).replace(/\.\w+$/, '');
 
@@ -195,6 +233,13 @@ export async function computeImportPath(
 }
 
 async function getPackageImportPath(projectRoot: string, io: FileIO, componentPath: string): Promise<string | null> {
+  // A `..`-prefixed cross-package path (HYP-443) must NOT be turned into a deep
+  // package import (`@acme/ui/src/Button`): the library's package.json `exports`
+  // map typically only exposes `"."`, so a deep subpath import is blocked by the
+  // exports wall and fails to resolve. Fall through to the relative import, which
+  // Vite serves directly once server.fs.allow permits cross-package reads.
+  if (componentPath.startsWith('..')) return null;
+
   const match = componentPath.match(/packages\/([^/]+)\/(.*)/);
   if (!match) return null;
 
