@@ -101,7 +101,7 @@ Run `code --telemetry` to see the full list of events, or read
 
 ## Development
 
-See [DEVELOPMENT.md](https://github.com/hyperide/hyper-ext/blob/main/DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
+See [DEVELOPMENT.md](https://github.com/hyperide/hyper-ext/blob/main/vscode-extension/hypercanvas-preview/DEVELOPMENT.md) for architecture details, build instructions, and contribution guide.
 
 ## License
 
