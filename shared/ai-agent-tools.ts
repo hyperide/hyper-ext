@@ -843,39 +843,12 @@ export const RESTART_DEV_SERVER: ToolDefinition = {
   },
 };
 
-// NOTE: intentionally NOT tagged `@public` — never wired into any *_TOOLS / ALL_TOOLS
-// aggregate (orphaned, per HYP-423 / #276), so knip keeps reporting it as dead code.
-/** @deprecated Use GET_DIAGNOSTICS with sources: ['server'] instead */
-export const GET_CONTAINER_LOGS: ToolDefinition = {
-  name: 'get_container_logs',
-  description:
-    'Get recent container logs from the project dev server. Use this to debug startup issues, runtime errors, build failures, or investigate why the application is not working.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      lines: {
-        type: 'number',
-        description: 'Number of log lines to retrieve. Default: 100, max: 500.',
-      },
-      includePrevious: {
-        type: 'boolean',
-        description:
-          'Include logs from before the last container restart (useful for crash debugging). Only works in Kubernetes mode.',
-      },
-      includeEvents: {
-        type: 'boolean',
-        description: 'Include Kubernetes pod events (scheduling, image pull, restarts). Only works in Kubernetes mode.',
-      },
-    },
-  },
-};
-
 export const GET_DIAGNOSTICS: ToolDefinition = {
   name: 'get_diagnostics',
   description:
     'Get diagnostic information from the development environment: server logs, runtime errors, ' +
     'browser console output, and build status. Use to investigate issues, verify fixes, or understand ' +
-    'the current state of the application. Replaces get_container_logs and check_build_status.',
+    'the current state of the application.',
   input_schema: {
     type: 'object',
     properties: {
@@ -994,28 +967,6 @@ export const URL_FETCH: ToolDefinition = {
 
 /** @public */
 export const WEB_TOOLS: ToolDefinition[] = [BRAVE_WEB_SEARCH, URL_FETCH];
-
-// ============================================
-// Extension-Only Tools (legacy — kept for backward compat, new code uses GET_DIAGNOSTICS)
-// ============================================
-
-// NOTE: intentionally NOT tagged `@public` — never wired into any *_TOOLS / ALL_TOOLS
-// aggregate (orphaned, per HYP-423 / #276), so knip keeps reporting it as dead code.
-/** @deprecated Use GET_DIAGNOSTICS with sources: ['build_status'] instead */
-export const CHECK_BUILD_STATUS: ToolDefinition = {
-  name: 'check_build_status',
-  description:
-    'Wait for build to settle and check if the dev server has build errors or runtime errors. Use after editing files to verify the fix worked.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      waitSeconds: {
-        type: 'number',
-        description: 'Seconds to wait before checking (1-10, default: 3). Gives time for HMR to rebuild.',
-      },
-    },
-  },
-};
 
 // ============================================
 // Aggregated Exports

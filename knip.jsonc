@@ -44,7 +44,7 @@
   // `ignoreExportsUsedInFile` was rejected because it hid 97 unrelated legit
   // "over-export / de-export me" findings while suppressing none of the targets,
   // and `entry`-ing a vocabulary file would also hide the genuinely-dead orphans
-  // that co-live in it (GET_CONTAINER_LOGS, CHECK_BUILD_STATUS, AIMessageRole, …).
+  // that co-live in it (AIMessageRole, …).
   // `tags: ["-public"]` => any export carrying a `@public` JSDoc tag is EXCLUDED
   // from the report (treated as intentionally-public surface, i.e. "used").
   // Used for BOTH category 3 (aggregate-catalog consts in shared/ai-agent-tools.ts)

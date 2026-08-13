@@ -46,15 +46,12 @@ export type ToolName =
   | 'run_tests'
   // Server management tools
   | 'restart_dev_server'
-  | 'get_container_logs'
   | 'get_diagnostics'
   // Web tools
   | 'brave_web_search'
   | 'url_fetch'
   // Package management
-  | 'add_dependency'
-  // Extension-only tools
-  | 'check_build_status';
+  | 'add_dependency';
 
 /**
  * Tool input schemas
@@ -112,12 +109,6 @@ export interface BraveWebSearchInput {
 export interface UrlFetchInput {
   url: string;
   selector?: string; // Optional CSS selector to extract specific content
-}
-
-export interface GetContainerLogsInput {
-  lines?: number; // Number of log lines (default: 100, max: 500)
-  includePrevious?: boolean; // Include logs from before last restart (K8s only)
-  includeEvents?: boolean; // Include K8s pod events (K8s only)
 }
 
 /**
