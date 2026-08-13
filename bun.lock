@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "fusion-starter",
+      "name": "hyper-saas",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
         "@babel/generator": "^7.28.5",
