@@ -468,12 +468,23 @@ export async function detectCssSystem(
   if (has('unocss') || has('@unocss/preset-uno')) return 'unocss';
   if (has('@stylexjs/stylex') || has('stylex')) return 'stylex';
   if (has('styled-components')) return 'styled-components';
+  // Chakra UI is emotion-based: users list @emotion/react + @emotion/styled
+  // DIRECTLY in package.json (peer-dep install pattern — required for v2, common
+  // for v3), so `has('@emotion/...')` is true for Chakra projects. Chakra MUST be
+  // checked BEFORE the bare emotion fallback below — otherwise it resolves to
+  // writable 'emotion' and the inspector falsely claims its prop-based styling is
+  // editable via the emotion styled/css AST write path (it is not).
+  // 'chakra' is unsupported (not in WRITABLE_CSS_SYSTEMS) → readonly stub shows.
+  // Scoped to Chakra only. MUI (@mui/material) is also emotion-based and has the
+  // same shadowing, but whether MUI's emotion integration is AST-writable is a
+  // separate open question — intentionally left as-is here (out of scope), so MUI
+  // keeps resolving to 'emotion'. Do not reorder the @mui branch with this change.
+  if (has('@chakra-ui/react')) return 'chakra';
   if (has('@emotion/react') || has('@emotion/styled')) return 'emotion';
 
   // Component libraries (check after CSS-in-JS since they often bring their own)
   if (has('@mui/material') || has('@mui/system')) return 'mui';
   if (has('antd') || has('@ant-design/icons')) return 'antd';
-  if (has('@chakra-ui/react')) return 'chakra';
   if (has('@mantine/core')) return 'mantine';
   if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
 
@@ -502,6 +513,18 @@ export async function detectCssSystem(
       if (hasSub('daisyui')) return 'daisyui';
       if (hasSub('tamagui') || hasSub('@tamagui/core')) return 'tamagui';
       if (hasSub('styled-components')) return 'styled-components';
+      // NB: no chakra-before-emotion check here, unlike the root path above. This
+      // branch runs on the MERGED dep map of EVERY sub-package (readSubPackageDeps
+      // unions all members), but detectCssSystem returns ONE cssSystem applied to the
+      // WHOLE workspace. A merged-map chakra check (HYP-786 / PR #544, reverted in this
+      // commit after a codex P2) forced the whole workspace to 'chakra'/readonly when
+      // any single sibling merely depended on @chakra-ui/react — disabling style
+      // editing for an unrelated pure-Emotion app in the same monorepo. Correctly
+      // scoping chakra precedence needs PER-TARGET detection (the selected member's own
+      // deps, not the union), which the current single-result API can't express.
+      // Tracked as HYP-787. Until then the monorepo path keeps emotion writable — the
+      // regression-free choice (a false-writable chakra monorepo target is the lesser
+      // evil vs a false-readonly Emotion app).
       if (hasSub('@emotion/react') || hasSub('@emotion/styled')) return 'emotion';
       if (hasSub('tailwindcss') || hasSub('@astrojs/tailwind') || hasSub('@tailwindcss/vite')) return 'tailwind';
     }

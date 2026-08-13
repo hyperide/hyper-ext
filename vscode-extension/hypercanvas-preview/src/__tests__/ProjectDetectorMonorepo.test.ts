@@ -35,7 +35,7 @@ function setup(files: Record<string, string>) {
   for (const [p, content] of Object.entries(files)) fsFiles.set(p, content);
 }
 
-const { detectRepoType, detectProjectType, detectCssSystem, resolveRunnableTargets } =
+const { detectRepoType, detectProjectType, detectCssSystem, resolveRunnableTargets, computeCapabilities } =
   await import('../services/ProjectDetector');
 
 function pkgWithScripts(scripts: Record<string, string>): string {
@@ -309,5 +309,72 @@ describe('detectCssSystem — monorepo-aware (Nx)', () => {
     });
     // Simulate extension.ts: pre-pass pkg as second argument
     expect(await detectCssSystem(ROOT, rootPkg)).toBe('tailwind');
+  });
+
+  // HYP-786 codex P2 regression: detectCssSystem returns ONE cssSystem for the whole
+  // workspace from the MERGED sub-package dep map (readSubPackageDeps unions every
+  // member's deps). A chakra-before-emotion check on that merged map (added by #544,
+  // reverted here) misclassified a workspace where a pure-Emotion app and a separate
+  // chakra sibling coexist: the merged map has BOTH → returned 'chakra' → readonly →
+  // style editing wrongly disabled for the Emotion app. The merged map cannot scope
+  // chakra precedence to a single target, so the monorepo path must NOT prefer chakra:
+  // a sibling that merely depends on @chakra-ui/react must not force the whole
+  // workspace readonly. Proper per-target detection is the deferred follow-up (HYP-787).
+  it('does NOT force chakra/readonly when a chakra sibling coexists with a pure-emotion app', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),
+      [`${ROOT}/nx.json`]: '{}',
+      // The renderable preview target: a pure-Emotion app (writable styling).
+      [`${ROOT}/apps/web/package.json`]: pkg({
+        react: '^19',
+        '@emotion/react': '^11.14.0',
+        '@emotion/styled': '^11.14.0',
+      }),
+      // An unrelated sibling that merely depends on chakra.
+      [`${ROOT}/packages/ui/package.json`]: pkg({ '@chakra-ui/react': '^3.34.0' }),
+    });
+    // Merged map = {emotion, chakra}; must stay 'emotion' (writable) — not forced to
+    // 'chakra' by the sibling.
+    const cssSystem = await detectCssSystem(ROOT);
+    expect(cssSystem).toBe('emotion');
+    // Prove the user-visible fix end-to-end: 'emotion' on a vite monorepo →
+    // canWriteStyles=true → NOT readonly → the Emotion app keeps style editing.
+    expect(computeCapabilities(cssSystem, 'none', null, 'vite', 'mono-nx').readonly).toBe(false);
+  });
+
+  // Known deferred limitation (HYP-787): a monorepo whose ONLY styled member is a
+  // genuine chakra package still resolves to its emotion peer-dep ('emotion', writable)
+  // rather than 'chakra' (readonly). Reverting the merged-map chakra check trades a
+  // false-readonly (breaks an Emotion app's editing — the regression above) for a
+  // false-writable on a chakra-only monorepo. The latter needs per-target detection
+  // (the selected target's OWN deps), tracked separately. This pins CURRENT behavior;
+  // it is NOT the desired end-state.
+  it('chakra-only monorepo sub-package resolves to emotion (deferred per-target limitation)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),
+      [`${ROOT}/nx.json`]: '{}',
+      [`${ROOT}/apps/app/package.json`]: pkg({
+        '@chakra-ui/react': '^3.34.0',
+        '@emotion/react': '^11.14.0',
+        '@emotion/styled': '^11.14.0',
+      }),
+    });
+    // TODO(HYP-787): flip to 'chakra' once per-target detection lands.
+    expect(await detectCssSystem(ROOT)).toBe('emotion');
+  });
+
+  // Edge case (pinned): a chakra member that lists ONLY @chakra-ui/react and relies on
+  // chakra to pull emotion in transitively. readSubPackageDeps reads each member's own
+  // declared deps, so the merged map has no @emotion/* here → the reverted emotion
+  // branch does not fire → falls through to 'unknown' (readonly). This is SAFE for
+  // chakra (readonly is the correct outcome), but it differs from the emotion-listed
+  // case above, so pin it against accidental future change. Also subsumed by HYP-787.
+  it('chakra sub-package with no explicit @emotion dep resolves to unknown (readonly, safe)', async () => {
+    setup({
+      [`${ROOT}/package.json`]: JSON.stringify({ devDependencies: { nx: '^19' } }),
+      [`${ROOT}/nx.json`]: '{}',
+      [`${ROOT}/apps/app/package.json`]: pkg({ '@chakra-ui/react': '^3.34.0' }),
+    });
+    expect(await detectCssSystem(ROOT)).toBe('unknown');
   });
 });
