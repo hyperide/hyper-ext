@@ -368,6 +368,128 @@ export default function App() {
       expect(content).toContain('AlertSampleDefault');
     });
   });
+
+  // Regression: a stale `SampleDefault` import for a component OTHER than the one
+  // currently requested must still force a regen on the fast path. e2e #82 —
+  // tamagui-food-delivery: the harness reverts a screen's source via `git checkout`
+  // (dropping a transiently-added `SampleDefault`), but the gitignored
+  // `__canvas_preview__.tsx` is NOT reverted and keeps `import { …, SampleDefault as
+  // …SampleDefault }`. A later test selects a DIFFERENT component (App.web.tsx); the
+  // fast path only checked the requested component's samples, so the dangling import
+  // survived and Vite threw `does not provide an export named 'SampleDefault'` in the
+  // iframe — a blank, cross-origin (empty) pageerror / 320s rootChildren:0 wedge.
+  describe('fast-path stale-sample detection across registered components (#82)', () => {
+    const BUTTON_WITH_SAMPLE = BUTTON_SOURCE;
+    const BUTTON_NO_SAMPLE = `
+import React from 'react';
+
+export function Button({ children }: { children: React.ReactNode }) {
+  return <button>{children}</button>;
+}
+`;
+
+    it('regenerates when another registered component lost its SampleDefault (source reverted)', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/components/Button.tsx', BUTTON_WITH_SAMPLE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
+      const manager = createManager(io);
+
+      // Register both — Button captures `SampleDefault`/`SamplePrimary`.
+      const initial = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Alert.tsx']);
+      expect(initial).toContain('SampleDefault as ButtonSampleDefault');
+
+      // Button's source is reverted (the `SampleDefault` export is gone) — but the
+      // generated preview file still imports it. Now a DIFFERENT component is
+      // selected; the fast path must notice the stale Button sample and regenerate.
+      io.files.set('/project/src/components/Button.tsx', BUTTON_NO_SAMPLE);
+      const afterRevert = await manager.ensureComponent(['src/components/Alert.tsx']);
+
+      // The dangling `SampleDefault as ButtonSampleDefault` import must be gone —
+      // otherwise Vite throws "does not provide an export named 'SampleDefault'".
+      expect(afterRevert).not.toContain('ButtonSampleDefault');
+      // Both components remain registered as real entries (assert the registry rows,
+      // not a loose substring) and the preview stays valid TypeScript.
+      expect(afterRevert).toContain("'src/components/Button.tsx': toPreviewComponent(Button)");
+      expect(afterRevert).toContain("'src/components/Alert.tsx': toPreviewComponent(Alert)");
+      expect(await isValidTypeScript(afterRevert)).toBe(true);
+    });
+
+    it('does not reject or regen an unrelated selection when another registered component is mid-edit/broken', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/components/Button.tsx', BUTTON_WITH_SAMPLE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
+      const manager = createManager(io);
+
+      const before = await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Alert.tsx']);
+
+      // Button is mid-edit — `scanSampleExports` THROWS on this (babel raises despite
+      // errorRecovery for a hard syntax error). Selecting the UNRELATED, valid Alert must
+      // neither throw nor regen: the scan catches Button's parse error and skips it, so the
+      // fast path returns the EXISTING preview byte-for-byte (proving skip, not regen — a
+      // regen here would re-read Button and could drop a still-valid entry mid-keystroke).
+      io.files.set('/project/src/components/Button.tsx', 'export function Button( {{{ broken');
+      const result = await manager.ensureComponent(['src/components/Alert.tsx']);
+
+      expect(result).toBe(before);
+    });
+
+    it('rejects a crafted `..` preview entry without reading outside the project root, then converges', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
+      const manager = createManager(io);
+      await manager.ensureComponent(['src/components/Alert.tsx']);
+
+      // Splice a malicious SAMPLE-BEARING entry whose path escapes the project root into the
+      // persisted (gitignored) preview file. It must carry a sample (wired through
+      // sampleRenderMap) so parseExistingPreview reports sampleExports > 0 — only then does the
+      // staleness scan even visit it, which is exactly the case the `..` traversal guard
+      // defends: the scan must NOT read the escaping source and must force a regen that drops
+      // the entry — and the regen must converge.
+      const poisoned = io.files
+        .get('/project/src/__canvas_preview__.tsx')!
+        .replace(
+          "import { Alert } from './components/Alert';",
+          "import { Alert } from './components/Alert';\nimport { Evil, SampleDefault as EvilSampleDefault } from '../../../etc/passwd';",
+        )
+        .replace(
+          "'src/components/Alert.tsx': toPreviewComponent(Alert),",
+          "'src/components/Alert.tsx': toPreviewComponent(Alert),\n  '../../../etc/passwd.tsx': toPreviewComponent(Evil),",
+        )
+        .replace(
+          'const sampleRenderMap: Record<string, React.FC> = {\n',
+          "const sampleRenderMap: Record<string, React.FC> = {\n  '../../../etc/passwd.tsx': EvilSampleDefault,\n",
+        );
+      io.files.set('/project/src/__canvas_preview__.tsx', poisoned);
+      // /etc/passwd must NEVER be read — assert by absence from the IO's touched set is not
+      // available, so rely on the regen dropping the traversal entry instead.
+      const first = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(first).not.toContain('EvilSampleDefault');
+      expect(first).not.toContain('etc/passwd');
+
+      const second = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(second).toBe(first);
+    });
+
+    it('converges (no regen loop) when a registered sample-bearing component is deleted', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set('/project/src/components/Button.tsx', BUTTON_WITH_SAMPLE);
+      io.files.set('/project/src/components/Alert.tsx', ALERT_NO_SAMPLE_SOURCE);
+      const manager = createManager(io);
+
+      await manager.ensureComponent(['src/components/Button.tsx', 'src/components/Alert.tsx']);
+
+      // Button's source file is deleted but its sample import lingers in the preview.
+      // First selection of the unrelated Alert must regen (dropping the dead Button entry);
+      // the second must be a no-op fast path — proving it converges, not loops.
+      await io.deleteFile('/project/src/components/Button.tsx');
+      const first = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(first).not.toContain('ButtonSampleDefault');
+      expect(first).not.toContain("'src/components/Button.tsx'");
+
+      const second = await manager.ensureComponent(['src/components/Alert.tsx']);
+      expect(second).toBe(first);
+    });
+  });
 });
 
 describe('parseExistingPreview', () => {
@@ -778,6 +900,47 @@ describe('PreviewFileManager — cross-package library component (in-workspace "
     expect(content).toContain('packages/ui/src/Button');
     expect(content).not.toContain('@conloca-mini/ui/src/Button');
     expect(isValidTypeScript(content)).toBe(true);
+  });
+
+  it('does not churn the fast path for a SAMPLE-BEARING in-workspace ".." entry (#82)', async () => {
+    // Regression guard for the #82 staleness scan: it must reject only the `..` paths
+    // buildEntry rejects, NOT a legitimate in-workspace cross-package entry. A
+    // sample-bearing library component (BUTTON_SOURCE carries SampleDefault/SamplePrimary)
+    // is registered via an in-workspace `..` path; re-selecting it must hit the fast path
+    // as a no-op. A too-broad `includes('..')` guard would treat the entry as stale on
+    // EVERY call → a forced regen. The regen is idempotent on OUTPUT (buildEntry re-adds
+    // the same entry), so byte-for-byte equality alone CANNOT catch it.
+    //
+    // Detect a wasted regen via a side channel: a NON-sample sibling's source is read by
+    // `buildEntry` (regen only) — never by the staleness scan (which reads only
+    // sample-bearing entries) nor by `_scanAllComponents` (listFiles, no content read). So
+    // the sibling's read count on the second selection is 0 for a true no-op, ≥1 for a
+    // forced regen.
+    const SIBLING_PATH = '/repo/targets/web/src/Alert.tsx';
+    let siblingReads = 0;
+    const io = new (class extends InMemoryFileIO {
+      async readFile(path: string): Promise<string> {
+        if (path === SIBLING_PATH) siblingReads++;
+        return super.readFile(path);
+      }
+    })();
+    io.files.set('/repo/packages/ui/src/Button.tsx', BUTTON_SOURCE);
+    io.files.set('/repo/packages/ui/package.json', '{"name": "@conloca-mini/ui", "exports": {".": "./src/index.ts"}}');
+    io.files.set('/repo/targets/web/package.json', '{"name": "@conloca-mini/web"}');
+    io.files.set(SIBLING_PATH, ALERT_NO_SAMPLE_SOURCE);
+    const manager = createMonorepoManager(io);
+
+    // Register both — Button (cross-package, sample-bearing) and the in-target Alert.
+    const first = await manager.ensureComponent(['../../packages/ui/src/Button.tsx', 'src/Alert.tsx']);
+    // The cross-package entry must actually be sample-bearing — otherwise it never enters
+    // the staleness scan and this proof would be vacuous.
+    expect(first).toContain('SampleDefault as ButtonSampleDefault');
+
+    siblingReads = 0;
+    const second = await manager.ensureComponent(['../../packages/ui/src/Button.tsx']);
+    expect(second).toBe(first);
+    // The sibling was NOT re-read → the fast path was a true no-op, not a forced regen.
+    expect(siblingReads).toBe(0);
   });
 
   it('rejects a path that escapes the workspace root entirely (security)', async () => {

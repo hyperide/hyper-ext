@@ -528,27 +528,94 @@ export class PreviewFileManager {
     existingEntries: PreviewComponentEntry[],
     canonicalPaths: Map<string, string>,
   ): Promise<boolean> {
+    // Two ways the preview file's sample imports can drift out of sync with source:
+    //   (a) a REQUESTED component GAINED a `SampleN` export since last write (the file
+    //       imports nothing for it yet) → regen to pick the new sample up; and
+    //   (b) ANY already-registered component the file imports a sample for LOST that
+    //       export (e.g. source reverted by `git checkout` while the gitignored
+    //       __canvas_preview__.tsx kept `import { …, SampleN as …SampleN }`). The dangling
+    //       import makes Vite throw "does not provide an export named '…'" in the preview
+    //       iframe — a blank, cross-origin pageerror / a 320s rootChildren:0 wedge (#82),
+    //       even when a totally UNRELATED component is the one being selected.
+    //
+    // So the scan covers the requested paths (case a) PLUS every registered entry that
+    // already carries sampleExports (case b). Entries with no captured samples can't have
+    // a dangling sample import, so they're skipped — keeping the fast path cheap on large
+    // projects (it reads only the requested file(s) + the handful of sample-bearing ones).
+    const canonicalRequested = new Set(componentPaths.map((p) => canonicalizeComponentPath(p, canonicalPaths)));
     const entryByPath = new Map(
       existingEntries.map((entry) => [canonicalizeComponentPath(entry.componentPath, canonicalPaths), entry]),
     );
-    for (const componentPath of componentPaths) {
-      const canonicalPath = canonicalizeComponentPath(componentPath, canonicalPaths);
+    const pathsToCheck = new Set<string>([
+      ...canonicalRequested,
+      ...existingEntries
+        .filter((entry) => entry.sampleExports.length > 0)
+        .map((entry) => canonicalizeComponentPath(entry.componentPath, canonicalPaths)),
+    ]);
+
+    for (const canonicalPath of pathsToCheck) {
       const entry = entryByPath.get(canonicalPath);
       if (!entry) continue;
+
+      // A stale preview file could carry a crafted `..`/absolute entry; never read
+      // outside the workspace root. Reject EXACTLY the paths buildEntry would reject as
+      // traversals — but NOT a legitimate in-workspace cross-package `..` path (HYP-443),
+      // which resolves to a real, readable file and must stay on the fast path instead of
+      // forcing a regen on every selection. A rejected path can't be a legitimate sample
+      // source, so treat it as a mismatch and let regen drop it.
+      if (this._entryPathEscapesWorkspace(canonicalPath)) return true;
 
       let sourceCode: string;
       try {
         sourceCode = await this.io.readFile(join(this.projectRoot, canonicalPath));
       } catch {
+        // Source gone (deleted/renamed) but the file still imports its samples — stale.
+        // Force a regen so the dead entry + its dangling sample import are dropped.
+        if (entry.sampleExports.length > 0) return true;
         continue;
       }
 
-      const currentSamples = scanSampleExports(sourceCode);
+      let currentSamples: string[];
+      try {
+        currentSamples = scanSampleExports(sourceCode);
+      } catch {
+        // scanSampleExports (babel) still throws on a hard syntax error despite its
+        // errorRecovery, e.g. a component caught mid-keystroke. Don't let an UNRELATED
+        // broken file reject the selected component — skip it. buildEntry owns the
+        // parse-error path on the next real regen (and rejects unparseable files there).
+        // Narrow known gap: a PERMANENTLY unparseable sample-bearing component keeps its
+        // dangling sample import until some other change triggers a regen. The #82 revert
+        // case is unaffected (reverted source still parses), so it stays covered.
+        continue;
+      }
       if (currentSamples.length !== entry.sampleExports.length) return true;
       if (currentSamples.some((sample) => !entry.sampleExports.includes(sample))) return true;
     }
 
     return false;
+  }
+
+  /**
+   * True when a persisted preview entry's path is one `buildEntry` would REJECT as a
+   * traversal — an absolute path, or a `..` path that escapes the project root WITHOUT
+   * staying inside the monorepo workspace root (HYP-443's one allowed `..` case). Used by
+   * the staleness scan to force a regen that drops such an entry WITHOUT reading its
+   * source, while leaving a legitimate in-workspace cross-package sample entry on the fast
+   * path (it resolves to a real, readable file and must not churn every selection).
+   *
+   * SYNC: mirrors the boundary logic in `buildEntry` (preview-build-entry.ts) — the two
+   * MUST agree on which `..` paths are allowed, or the scan and the regen disagree.
+   */
+  private _entryPathEscapesWorkspace(canonicalPath: string): boolean {
+    if (isAbsolute(canonicalPath)) return true;
+    if (!canonicalPath.split(/[\\/]/).includes('..')) return false;
+    const resolved = resolve(this.projectRoot, canonicalPath);
+    const relToProject = relative(this.projectRoot, resolved);
+    const relToWorkspace = relative(this.workspaceRoot, resolved);
+    const escapesProject = relToProject.startsWith('..') || isAbsolute(relToProject);
+    const escapesWorkspace = relToWorkspace.startsWith('..') || isAbsolute(relToWorkspace);
+    const crossPackageAllowed = this.workspaceRoot !== this.projectRoot && escapesProject && !escapesWorkspace;
+    return !crossPackageAllowed;
   }
 
   /**
