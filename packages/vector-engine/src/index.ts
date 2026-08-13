@@ -114,6 +114,8 @@ export {
   type PathCommand,
   svgDToCommands,
 } from './path/commands';
+// Polyline point-decimation
+export { decimateRDP, decimateVW } from './path/decimate';
 // Path utilities (Plan 2)
 export { flattenPath } from './path/flatten';
 export { type PointAtOffsetResult, pathArea, pathLength, pointAtOffset } from './path/geometry';

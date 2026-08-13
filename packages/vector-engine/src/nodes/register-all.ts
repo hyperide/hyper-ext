@@ -1,7 +1,7 @@
 /**
  * @file Auto-registration of all built-in node types
  *
- * Accessed via: Engine initialization — called once to populate the registry with all 52 built-in node types
+ * Accessed via: Engine initialization — called once to populate the registry with all 53 built-in node types
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Node Registry
  */
 
@@ -35,6 +35,7 @@ import { enforceWindingNode } from './path-ops/enforce-winding';
 import { createOffsetNode } from './path-ops/offset';
 import { removePointNode } from './path-ops/remove-point';
 import { roundCornersNode } from './path-ops/round-corners';
+import { createSimplifyNode } from './path-ops/simplify';
 import { smoothNode } from './path-ops/smooth';
 import { splitPathNode } from './path-ops/split-path';
 import { createStrokeToPathNode } from './path-ops/stroke-to-path';
@@ -119,6 +120,7 @@ export function createDefaultRegistry(pathOps?: PathOpsBackend): NodeRegistry {
   registry.register(createOffsetNode(pathOps ?? new MockPathOps()));
   registry.register(createStrokeToPathNode(pathOps ?? new MockPathOps()));
   registry.register(createDashNode(pathOps ?? new MockPathOps()));
+  registry.register(createSimplifyNode(pathOps ?? new MockPathOps()));
 
   // Deformation
   registry.register(roughenNode);

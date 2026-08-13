@@ -97,6 +97,15 @@ export class ChainableNode {
     return this.chain('offset', { distance });
   }
 
+  /**
+   * Reduce redundant points via Ramer-Douglas-Peucker decimation, then run the WASM
+   * geometric simplify (self-intersection removal). Higher tolerance drops more points;
+   * tolerance 0 is a near-identity.
+   */
+  simplify(tolerance = 1): ChainableNode {
+    return this.chain('simplify', { tolerance });
+  }
+
   trim(start = 0, end = 1): ChainableNode {
     return this.chain('trimPath', { start, end });
   }

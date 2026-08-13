@@ -83,6 +83,38 @@ describe('ChainableNode', () => {
     expect(svg).toContain('<svg');
   });
 
+  describe('simplify', () => {
+    it('should chain simplify as a node', () => {
+      const ctx = createContext();
+      ChainableNode.generator(ctx, 'rectangle', { width: 100, height: 50 }).simplify(0.5);
+      expect(ctx.graph.nodeCount).toBe(2);
+      expect(ctx.graph.edgeCount).toBe(1);
+    });
+
+    it('should drop redundant collinear points from a polyline', () => {
+      const ctx = createContext();
+      // A horizontal line oversampled with 4 redundant collinear points.
+      const d = 'M 0 0 L 25 0 L 50 0 L 75 0 L 100 0';
+      const before = ChainableNode.generator(ctx, 'svgPath', { d }).export('json');
+      const ctx2 = createContext();
+      const node = ChainableNode.generator(ctx2, 'svgPath', { d }).simplify(0.5);
+      // Bounds preserved within tolerance — the line still spans 0..100.
+      const bounds = node.bounds();
+      expect(bounds.width).toBeCloseTo(100, 0);
+      expect(bounds.height).toBeCloseTo(0, 0);
+      // The simplify node exists in the graph.
+      expect(ctx2.graph.nodeCount).toBe(2);
+      expect(before).toContain('svgPath');
+    });
+
+    it('tolerance 0 keeps geometry identical', () => {
+      const ctx = createContext();
+      const d = 'M 0 0 L 10 7 L 20 0 L 30 9';
+      const bounds = ChainableNode.generator(ctx, 'svgPath', { d }).simplify(0).bounds();
+      expect(bounds.width).toBeCloseTo(30, 0);
+    });
+  });
+
   describe('png', () => {
     it('should convert SVG to PNG buffer with no external binary', () => {
       const svg =

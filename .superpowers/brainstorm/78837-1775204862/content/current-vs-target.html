@@ -4,70 +4,172 @@
 <div class="split">
   <div class="mockup">
     <div class="mockup-header">Current (VS Code) — flat, no hierarchy</div>
-    <div class="mockup-body" style="padding:0; background: #1e1e1e; color: #ccc; font-family: system-ui; font-size: 11px;">
+    <div
+      class="mockup-body"
+      style="padding: 0; background: #1e1e1e; color: #ccc; font-family: system-ui; font-size: 11px"
+    >
       <!-- Current broken state: everything same bg -->
-      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128,128,128,0.2);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #ccc;">Position</span>
+      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128, 128, 128, 0.2)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #ccc">Position</span>
         </div>
-        <div style="display:flex; gap:4px; margin-bottom:8px;">
-          <span style="font-size:10px; padding:2px 6px; color:#888; background:transparent;">static</span>
-          <span style="font-size:10px; padding:2px 6px; color:#888; background:transparent;">rel</span>
-          <span style="font-size:10px; padding:2px 6px; color:#888; background:transparent;">abs</span>
-          <span style="font-size:10px; padding:2px 6px; color:#888; background:transparent;">fixed</span>
-          <span style="font-size:10px; padding:2px 6px; color:#888; background:transparent;">sticky</span>
+        <div style="display: flex; gap: 4px; margin-bottom: 8px">
+          <span style="font-size: 10px; padding: 2px 6px; color: #888; background: transparent">static</span>
+          <span style="font-size: 10px; padding: 2px 6px; color: #888; background: transparent">rel</span>
+          <span style="font-size: 10px; padding: 2px 6px; color: #888; background: transparent">abs</span>
+          <span style="font-size: 10px; padding: 2px 6px; color: #888; background: transparent">fixed</span>
+          <span style="font-size: 10px; padding: 2px 6px; color: #888; background: transparent">sticky</span>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">X</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">0px</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">X</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              0px
+            </div>
           </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">Y</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">0px</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128,128,128,0.2);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #ccc;">Layout</span>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">W</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">auto</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">H</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">auto</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128,128,128,0.2);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #ccc;">Appearance</span>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">⬡</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">100%</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">⬡</span>
-            <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">0px</div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">Y</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              0px
+            </div>
           </div>
         </div>
       </div>
 
-      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128,128,128,0.2);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #ccc;">Fill</span>
+      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128, 128, 128, 0.2)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #ccc">Layout</span>
         </div>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <div style="width:22px; height:22px; border-radius:4px; background:transparent; border:1px solid rgba(128,128,128,0.3);"></div>
-          <div style="flex:1; height:22px; padding:0 6px; display:flex; align-items:center; color:#888; background:transparent; border-radius:4px;">none</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">W</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              auto
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">H</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              auto
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128, 128, 128, 0.2)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #ccc">Appearance</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">⬡</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              100%
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">⬡</span>
+            <div
+              style="
+                flex: 1;
+                height: 22px;
+                padding: 0 6px;
+                display: flex;
+                align-items: center;
+                color: #888;
+                background: transparent;
+                border-radius: 4px;
+              "
+            >
+              0px
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 12px 16px; border-bottom: 1px solid rgba(128, 128, 128, 0.2)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #ccc">Fill</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <div
+            style="
+              width: 22px;
+              height: 22px;
+              border-radius: 4px;
+              background: transparent;
+              border: 1px solid rgba(128, 128, 128, 0.3);
+            "
+          ></div>
+          <div
+            style="
+              flex: 1;
+              height: 22px;
+              padding: 0 6px;
+              display: flex;
+              align-items: center;
+              color: #888;
+              background: transparent;
+              border-radius: 4px;
+            "
+          >
+            none
+          </div>
         </div>
       </div>
     </div>
@@ -75,83 +177,219 @@
 
   <div class="mockup">
     <div class="mockup-header">Target (Figma-style) — bg-based hierarchy</div>
-    <div class="mockup-body" style="padding:0; background: #252526; color: #ccc; font-family: system-ui; font-size: 11px;">
+    <div
+      class="mockup-body"
+      style="padding: 0; background: #252526; color: #ccc; font-family: system-ui; font-size: 11px"
+    >
       <!-- Target: Figma-like with bg hierarchy -->
-      <div style="padding: 12px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0;">Position</span>
+      <div style="padding: 12px 16px">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0">Position</span>
         </div>
-        <div style="display:flex; gap:2px; margin-bottom:8px; background:#2d2d30; border-radius:6px; padding:2px;">
-          <span style="font-size:10px; padding:3px 6px; color:#888; border-radius:4px;">static</span>
-          <span style="font-size:10px; padding:3px 6px; color:#fff; background:#3c3c3f; border-radius:4px;">rel</span>
-          <span style="font-size:10px; padding:3px 6px; color:#888; border-radius:4px;">abs</span>
-          <span style="font-size:10px; padding:3px 6px; color:#888; border-radius:4px;">fixed</span>
-          <span style="font-size:10px; padding:3px 6px; color:#888; border-radius:4px;">sticky</span>
+        <div style="display: flex; gap: 2px; margin-bottom: 8px; background: #2d2d30; border-radius: 6px; padding: 2px">
+          <span style="font-size: 10px; padding: 3px 6px; color: #888; border-radius: 4px">static</span>
+          <span style="font-size: 10px; padding: 3px 6px; color: #fff; background: #3c3c3f; border-radius: 4px"
+            >rel</span
+          >
+          <span style="font-size: 10px; padding: 3px 6px; color: #888; border-radius: 4px">abs</span>
+          <span style="font-size: 10px; padding: 3px 6px; color: #888; border-radius: 4px">fixed</span>
+          <span style="font-size: 10px; padding: 3px 6px; color: #888; border-radius: 4px">sticky</span>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">X</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">0px</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">X</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              0px
+            </div>
           </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">Y</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">0px</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="height:1px; background:rgba(128,128,128,0.15); margin:0 16px;"></div>
-
-      <div style="padding: 12px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0;">Layout</span>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">W</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">auto</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">H</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">auto</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="height:1px; background:rgba(128,128,128,0.15); margin:0 16px;"></div>
-
-      <div style="padding: 12px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0;">Appearance</span>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">⬡</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">100%</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="font-size:10px;color:#666;">⬡</span>
-            <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#ccc; background:#2d2d30; border-radius:4px; font-size:11px;">0px</div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">Y</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              0px
+            </div>
           </div>
         </div>
       </div>
 
-      <div style="height:1px; background:rgba(128,128,128,0.15); margin:0 16px;"></div>
+      <div style="height: 1px; background: rgba(128, 128, 128, 0.15); margin: 0 16px"></div>
 
-      <div style="padding: 12px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0;">Fill</span>
+      <div style="padding: 12px 16px">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0">Layout</span>
         </div>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <div style="width:24px; height:24px; border-radius:4px; background:linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%), linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%); background-size:8px 8px; background-position:0 0, 4px 4px;"></div>
-          <div style="flex:1; height:24px; padding:0 8px; display:flex; align-items:center; color:#888; background:#2d2d30; border-radius:4px; font-size:11px;">none</div>
-          <div style="height:24px; padding:0 8px; display:flex; align-items:center; color:#888; background:#2d2d30; border-radius:4px; font-size:11px;">100%</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">W</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              auto
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">H</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              auto
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 1px; background: rgba(128, 128, 128, 0.15); margin: 0 16px"></div>
+
+      <div style="padding: 12px 16px">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0">Appearance</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">⬡</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              100%
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <span style="font-size: 10px; color: #666">⬡</span>
+            <div
+              style="
+                flex: 1;
+                height: 24px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                color: #ccc;
+                background: #2d2d30;
+                border-radius: 4px;
+                font-size: 11px;
+              "
+            >
+              0px
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 1px; background: rgba(128, 128, 128, 0.15); margin: 0 16px"></div>
+
+      <div style="padding: 12px 16px">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 600; color: #e0e0e0">Fill</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <div
+            style="
+              width: 24px;
+              height: 24px;
+              border-radius: 4px;
+              background:
+                linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%),
+                linear-gradient(45deg, #333 25%, transparent 25%, transparent 75%, #333 75%);
+              background-size: 8px 8px;
+              background-position:
+                0 0,
+                4px 4px;
+            "
+          ></div>
+          <div
+            style="
+              flex: 1;
+              height: 24px;
+              padding: 0 8px;
+              display: flex;
+              align-items: center;
+              color: #888;
+              background: #2d2d30;
+              border-radius: 4px;
+              font-size: 11px;
+            "
+          >
+            none
+          </div>
+          <div
+            style="
+              height: 24px;
+              padding: 0 8px;
+              display: flex;
+              align-items: center;
+              color: #888;
+              background: #2d2d30;
+              border-radius: 4px;
+              font-size: 11px;
+            "
+          >
+            100%
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<h3 style="margin-top:24px;">Корневая проблема</h3>
-<p>В <code>styles.css</code>: <code>--background: transparent</code> и <code>--muted: var(--vscode-input-background)</code>. В стандартной тёмной теме VS Code оба фона почти неотличимы (~#1e1e1e vs #3c3c3f). Инпуты с <code>bg-muted</code> сливаются с панелью.</p>
-<p><strong>Figma-подход</strong>: инпуты живут на чуть более тёмном (или светлом) фоне, без бордеров. Визуальная иерархия через 2-3 уровня яркости фона.</p>
+<h3 style="margin-top: 24px">Корневая проблема</h3>
+<p>
+  В <code>styles.css</code>: <code>--background: transparent</code> и
+  <code>--muted: var(--vscode-input-background)</code>. В стандартной тёмной теме VS Code оба фона почти неотличимы
+  (~#1e1e1e vs #3c3c3f). Инпуты с <code>bg-muted</code> сливаются с панелью.
+</p>
+<p>
+  <strong>Figma-подход</strong>: инпуты живут на чуть более тёмном (или светлом) фоне, без бордеров. Визуальная иерархия
+  через 2-3 уровня яркости фона.
+</p>

@@ -110,6 +110,7 @@ Examples:
   .chamfer(distance)             Chamfer corners
   .smooth(smoothness)            Smooth corners (0..1)
   .offset(distance)              Inflate (+) or deflate (-)
+  .simplify(tolerance)           Drop redundant points (RDP) + remove self-overlap
   .trim(start, end)              Trim path (0..1)
   .reverse()                     Reverse direction
   .close()                       Close open path

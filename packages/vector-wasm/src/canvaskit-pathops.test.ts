@@ -106,6 +106,16 @@ describe('CanvasKitPathOps', () => {
       const result = pathOps.simplify(bowtie, 0);
       expect(result.commands.length).toBeGreaterThan(0);
     });
+
+    it('should not erase an open line (open-fill-zero-area guard)', () => {
+      if (!available) return;
+      // CanvasKit treats paths as fills; an open line has zero area and would
+      // simplify to an empty path. The guard must fall back to the input.
+      const line = new PathBuilder().moveTo(0, 0).lineTo(100, 0).build();
+
+      const result = pathOps.simplify(line, 0);
+      expect(result.commands.length).toBeGreaterThan(0);
+    });
   });
 
   describe('removeSelfIntersections', () => {

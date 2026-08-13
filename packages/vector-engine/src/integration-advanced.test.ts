@@ -199,7 +199,7 @@ describe('Plan 3 integration', () => {
     expect(registry.get('convertPoint')).toBeDefined();
     expect(registry.get('splitPath')).toBeDefined();
     const all = registry.listAll();
-    expect(all.length).toBe(52);
+    expect(all.length).toBe(53);
   });
 });
 

@@ -169,13 +169,29 @@ export class CanvasKitPathOps implements PathOpsBackend {
     }
   }
 
+  /**
+   * Geometric simplify — removes self-intersections / overlaps (same primitive as
+   * removeSelfIntersections). `_tolerance` is intentionally NOT consumed here: CanvasKit's
+   * `SkPath.simplify()` takes no tolerance argument, so there is no deviation knob to honor
+   * at this layer. Deviation tolerance for point-decimation is honored upstream by the
+   * `simplify` node's RDP pass (vector-engine/src/nodes/path-ops/simplify.ts). Do not
+   * "fix" the unused param by faking a tolerance here — see HYP-493 / spec §VECLI-2.
+   *
+   * Open-path guard: CanvasKit treats a path as a fill region, so simplify() collapses an
+   * open line (zero fill area) to an EMPTY path. Returning that would silently erase valid
+   * open geometry. We therefore fall back to the input when simplify empties a non-empty
+   * path, keeping the operation safe for open polylines / strokes.
+   */
   simplify(path: PathValue, _tolerance: number): PathValue {
     const ck = this.ck;
     const skPath = pathValueToSkPath(ck, path);
     try {
       const ok = skPath.simplify();
       if (!ok) return path;
-      return skPathToPathValue(skPath);
+      const result = skPathToPathValue(skPath);
+      // Don't let a non-empty input vanish (open-fill-zero-area case).
+      if (result.commands.length === 0 && path.commands.length > 0) return path;
+      return result;
     } finally {
       skPath.delete();
     }

@@ -1,212 +1,389 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>Toggle Design</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#111; color:#ccc; font-family:system-ui,sans-serif; padding:24px; }
-  h1 { font-size:20px; color:#fff; margin-bottom:4px; }
-  .sub { color:#888; font-size:13px; margin-bottom:24px; }
-  h2 { font-size:15px; color:#fff; margin:28px 0 12px; }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Toggle Design</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #111;
+        color: #ccc;
+        font-family: system-ui, sans-serif;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin-bottom: 4px;
+      }
+      .sub {
+        color: #888;
+        font-size: 13px;
+        margin-bottom: 24px;
+      }
+      h2 {
+        font-size: 15px;
+        color: #fff;
+        margin: 28px 0 12px;
+      }
 
-  .split { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:24px; }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
 
-  .panel { border-radius:8px; padding:16px; }
-  .panel.dark { background:#252526; }
-  .panel.light { background:#f3f3f3; }
-  .panel-label { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; font-weight:600; }
-  .panel.dark .panel-label { color:#888; }
-  .panel.light .panel-label { color:#999; }
+      .panel {
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .panel.dark {
+        background: #252526;
+      }
+      .panel.light {
+        background: #f3f3f3;
+      }
+      .panel-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+        font-weight: 600;
+      }
+      .panel.dark .panel-label {
+        color: #888;
+      }
+      .panel.light .panel-label {
+        color: #999;
+      }
 
-  /* Three-level hierarchy */
-  .level-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:11px; }
-  .level-swatch { width:32px; height:20px; border-radius:4px; flex-shrink:0; }
-  .level-name { flex:1; }
-  .level-value { font-family:monospace; font-size:10px; }
+      /* Three-level hierarchy */
+      .level-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 11px;
+      }
+      .level-swatch {
+        width: 32px;
+        height: 20px;
+        border-radius: 4px;
+        flex-shrink: 0;
+      }
+      .level-name {
+        flex: 1;
+      }
+      .level-value {
+        font-family: monospace;
+        font-size: 10px;
+      }
 
-  /* Toggle group */
-  .tg-container { border-radius:6px; padding:2px; display:flex; gap:1px; margin-bottom:12px; }
-  .dark .tg-container { background:rgba(255,255,255,0.06); }
-  .light .tg-container { background:rgba(0,0,0,0.06); }
+      /* Toggle group */
+      .tg-container {
+        border-radius: 6px;
+        padding: 2px;
+        display: flex;
+        gap: 1px;
+        margin-bottom: 12px;
+      }
+      .dark .tg-container {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .light .tg-container {
+        background: rgba(0, 0, 0, 0.06);
+      }
 
-  .tg-btn { font-size:10px; padding:4px 8px; border-radius:4px; cursor:default; flex:1; text-align:center; }
-  .dark .tg-btn { color:#888; background:transparent; }
-  .light .tg-btn { color:#999; background:transparent; }
-  .dark .tg-btn.on { background:rgba(255,255,255,0.09); color:#fff; }
-  .light .tg-btn.on { background:#fff; color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.08); }
+      .tg-btn {
+        font-size: 10px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: default;
+        flex: 1;
+        text-align: center;
+      }
+      .dark .tg-btn {
+        color: #888;
+        background: transparent;
+      }
+      .light .tg-btn {
+        color: #999;
+        background: transparent;
+      }
+      .dark .tg-btn.on {
+        background: rgba(255, 255, 255, 0.09);
+        color: #fff;
+      }
+      .light .tg-btn.on {
+        background: #fff;
+        color: #333;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
 
-  /* Icon toggle group */
-  .tg-icon { width:32px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:14px; }
-  .dark .tg-icon { color:#666; }
-  .light .tg-icon { color:#aaa; }
-  .dark .tg-icon.on { background:rgba(255,255,255,0.09); color:#fff; }
-  .light .tg-icon.on { background:#fff; color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.08); }
+      /* Icon toggle group */
+      .tg-icon {
+        width: 32px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .dark .tg-icon {
+        color: #666;
+      }
+      .light .tg-icon {
+        color: #aaa;
+      }
+      .dark .tg-icon.on {
+        background: rgba(255, 255, 255, 0.09);
+        color: #fff;
+      }
+      .light .tg-icon.on {
+        background: #fff;
+        color: #333;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
 
-  /* Input fields for comparison */
-  .input-row { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
-  .inp { height:24px; padding:0 8px; border-radius:4px; display:flex; align-items:center; gap:4px; font-size:11px; }
-  .dark .inp { background:#3c3c3c; color:#ccc; }
-  .light .inp { background:#fff; color:#333; }
-  .inp .ic { font-size:10px; }
-  .dark .inp .ic { color:#666; }
-  .light .inp .ic { color:#999; }
+      /* Input fields for comparison */
+      .input-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+      }
+      .inp {
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+      }
+      .dark .inp {
+        background: #3c3c3c;
+        color: #ccc;
+      }
+      .light .inp {
+        background: #fff;
+        color: #333;
+      }
+      .inp .ic {
+        font-size: 10px;
+      }
+      .dark .inp .ic {
+        color: #666;
+      }
+      .light .inp .ic {
+        color: #999;
+      }
 
-  .sep { height:1px; margin:12px 0; }
-  .dark .sep { background:rgba(255,255,255,0.06); }
-  .light .sep { background:rgba(0,0,0,0.06); }
+      .sep {
+        height: 1px;
+        margin: 12px 0;
+      }
+      .dark .sep {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .light .sep {
+        background: rgba(0, 0, 0, 0.06);
+      }
 
-  .label { font-size:11px; font-weight:600; margin-bottom:8px; }
-  .dark .label { color:#e0e0e0; }
-  .light .label { color:#333; }
+      .label {
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .dark .label {
+        color: #e0e0e0;
+      }
+      .light .label {
+        color: #333;
+      }
 
-  /* CSS var mapping */
-  .var-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
-  .var-table th { text-align:left; padding:6px 8px; border-bottom:1px solid #333; color:#888; font-weight:500; }
-  .var-table td { padding:6px 8px; border-bottom:1px solid #222; }
-  .var-table code { background:#2a2a2a; padding:1px 4px; border-radius:3px; font-size:11px; }
-  .new { color:#81c784; }
-  .note { color:#888; font-size:11px; margin-top:4px; }
-</style>
-</head>
-<body>
+      /* CSS var mapping */
+      .var-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .var-table th {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #333;
+        color: #888;
+        font-weight: 500;
+      }
+      .var-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #222;
+      }
+      .var-table code {
+        background: #2a2a2a;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 11px;
+      }
+      .new {
+        color: #81c784;
+      }
+      .note {
+        color: #888;
+        font-size: 11px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>HYP-357: Toggle Hierarchy — 3 уровня фона</h1>
+    <p class="sub">Panel bg → Toggle container → Active pill. Без бордеров.</p>
 
-<h1>HYP-357: Toggle Hierarchy — 3 уровня фона</h1>
-<p class="sub">Panel bg → Toggle container → Active pill. Без бордеров.</p>
+    <div class="split">
+      <!-- Dark theme -->
+      <div class="panel dark">
+        <div class="panel-label">Dark Theme</div>
 
-<div class="split">
-  <!-- Dark theme -->
-  <div class="panel dark">
-    <div class="panel-label">Dark Theme</div>
+        <!-- Hierarchy levels -->
+        <div class="level-bar">
+          <div class="level-swatch" style="background: #252526; border: 1px solid #444"></div>
+          <span class="level-name">Level 1 — Panel bg</span>
+          <span class="level-value" style="color: #888">#252526</span>
+        </div>
+        <div class="level-bar">
+          <div class="level-swatch" style="background: rgba(255, 255, 255, 0.06); border: 1px solid #444"></div>
+          <span class="level-name">Level 2 — Toggle container</span>
+          <span class="level-value" style="color: #888">white/6%</span>
+        </div>
+        <div class="level-bar">
+          <div class="level-swatch" style="background: rgba(255, 255, 255, 0.09); border: 1px solid #444"></div>
+          <span class="level-name">Level 3 — Active pill</span>
+          <span class="level-value" style="color: #888">white/9%</span>
+        </div>
 
-    <!-- Hierarchy levels -->
-    <div class="level-bar">
-      <div class="level-swatch" style="background:#252526;border:1px solid #444;"></div>
-      <span class="level-name">Level 1 — Panel bg</span>
-      <span class="level-value" style="color:#888;">#252526</span>
+        <div class="sep"></div>
+
+        <!-- Position toggles -->
+        <div class="label">Position</div>
+        <div class="tg-container">
+          <div class="tg-btn on">static</div>
+          <div class="tg-btn">rel</div>
+          <div class="tg-btn">abs</div>
+          <div class="tg-btn">fixed</div>
+          <div class="tg-btn">sticky</div>
+        </div>
+
+        <!-- Layout icon toggles -->
+        <div class="label">Auto layout</div>
+        <div class="tg-container">
+          <div class="tg-icon on">⊞</div>
+          <div class="tg-icon">↓</div>
+          <div class="tg-icon">→</div>
+          <div class="tg-icon">⊞</div>
+        </div>
+
+        <!-- Inputs for contrast reference -->
+        <div class="input-row">
+          <div class="inp"><span class="ic">W</span>auto</div>
+          <div class="inp"><span class="ic">H</span>auto</div>
+        </div>
+      </div>
+
+      <!-- Light theme -->
+      <div class="panel light">
+        <div class="panel-label">Light Theme</div>
+
+        <div class="level-bar">
+          <div class="level-swatch" style="background: #f3f3f3; border: 1px solid #ddd"></div>
+          <span class="level-name">Level 1 — Panel bg</span>
+          <span class="level-value">#f3f3f3</span>
+        </div>
+        <div class="level-bar">
+          <div class="level-swatch" style="background: rgba(0, 0, 0, 0.06); border: 1px solid #ddd"></div>
+          <span class="level-name">Level 2 — Toggle container</span>
+          <span class="level-value">black/6%</span>
+        </div>
+        <div class="level-bar">
+          <div class="level-swatch" style="background: #fff; border: 1px solid #ddd"></div>
+          <span class="level-name">Level 3 — Active pill</span>
+          <span class="level-value">#fff + shadow</span>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="label">Position</div>
+        <div class="tg-container">
+          <div class="tg-btn on">static</div>
+          <div class="tg-btn">rel</div>
+          <div class="tg-btn">abs</div>
+          <div class="tg-btn">fixed</div>
+          <div class="tg-btn">sticky</div>
+        </div>
+
+        <div class="label">Auto layout</div>
+        <div class="tg-container">
+          <div class="tg-icon on">⊞</div>
+          <div class="tg-icon">↓</div>
+          <div class="tg-icon">→</div>
+          <div class="tg-icon">⊞</div>
+        </div>
+
+        <div class="input-row">
+          <div class="inp"><span class="ic">W</span>auto</div>
+          <div class="inp"><span class="ic">H</span>auto</div>
+        </div>
+      </div>
     </div>
-    <div class="level-bar">
-      <div class="level-swatch" style="background:rgba(255,255,255,0.06);border:1px solid #444;"></div>
-      <span class="level-name">Level 2 — Toggle container</span>
-      <span class="level-value" style="color:#888;">white/6%</span>
-    </div>
-    <div class="level-bar">
-      <div class="level-swatch" style="background:rgba(255,255,255,0.09);border:1px solid #444;"></div>
-      <span class="level-name">Level 3 — Active pill</span>
-      <span class="level-value" style="color:#888;">white/9%</span>
-    </div>
 
-    <div class="sep"></div>
-
-    <!-- Position toggles -->
-    <div class="label">Position</div>
-    <div class="tg-container">
-      <div class="tg-btn on">static</div>
-      <div class="tg-btn">rel</div>
-      <div class="tg-btn">abs</div>
-      <div class="tg-btn">fixed</div>
-      <div class="tg-btn">sticky</div>
-    </div>
-
-    <!-- Layout icon toggles -->
-    <div class="label">Auto layout</div>
-    <div class="tg-container">
-      <div class="tg-icon on">⊞</div>
-      <div class="tg-icon">↓</div>
-      <div class="tg-icon">→</div>
-      <div class="tg-icon">⊞</div>
-    </div>
-
-    <!-- Inputs for contrast reference -->
-    <div class="input-row">
-      <div class="inp"><span class="ic">W</span>auto</div>
-      <div class="inp"><span class="ic">H</span>auto</div>
-    </div>
-  </div>
-
-  <!-- Light theme -->
-  <div class="panel light">
-    <div class="panel-label">Light Theme</div>
-
-    <div class="level-bar">
-      <div class="level-swatch" style="background:#f3f3f3;border:1px solid #ddd;"></div>
-      <span class="level-name">Level 1 — Panel bg</span>
-      <span class="level-value">#f3f3f3</span>
-    </div>
-    <div class="level-bar">
-      <div class="level-swatch" style="background:rgba(0,0,0,0.06);border:1px solid #ddd;"></div>
-      <span class="level-name">Level 2 — Toggle container</span>
-      <span class="level-value">black/6%</span>
-    </div>
-    <div class="level-bar">
-      <div class="level-swatch" style="background:#fff;border:1px solid #ddd;"></div>
-      <span class="level-name">Level 3 — Active pill</span>
-      <span class="level-value">#fff + shadow</span>
-    </div>
-
-    <div class="sep"></div>
-
-    <div class="label">Position</div>
-    <div class="tg-container">
-      <div class="tg-btn on">static</div>
-      <div class="tg-btn">rel</div>
-      <div class="tg-btn">abs</div>
-      <div class="tg-btn">fixed</div>
-      <div class="tg-btn">sticky</div>
-    </div>
-
-    <div class="label">Auto layout</div>
-    <div class="tg-container">
-      <div class="tg-icon on">⊞</div>
-      <div class="tg-icon">↓</div>
-      <div class="tg-icon">→</div>
-      <div class="tg-icon">⊞</div>
-    </div>
-
-    <div class="input-row">
-      <div class="inp"><span class="ic">W</span>auto</div>
-      <div class="inp"><span class="ic">H</span>auto</div>
-    </div>
-  </div>
-</div>
-
-<!-- Implementation plan -->
-<h2>Реализация</h2>
-<table class="var-table">
-  <tr><th>Файл</th><th>Что</th><th>Детали</th></tr>
-  <tr>
-    <td><code>styles.css</code></td>
-    <td><code>--background</code></td>
-    <td><code class="new">var(--vscode-sideBar-background)</code> вместо <code>transparent</code></td>
-  </tr>
-  <tr>
-    <td><code>styles.css</code></td>
-    <td class="new">toggle-container class</td>
-    <td>
-      Dark: <code>rgba(255,255,255,0.06)</code>, rounded 6px, padding 2px<br>
-      Light: <code>rgba(0,0,0,0.06)</code>
-    </td>
-  </tr>
-  <tr>
-    <td><code>styles.css</code></td>
-    <td class="new">toggle-active class</td>
-    <td>
-      Dark: <code>rgba(255,255,255,0.09)</code><br>
-      Light: <code>#fff</code> + <code>box-shadow: 0 1px 2px rgba(0,0,0,0.08)</code>
-    </td>
-  </tr>
-  <tr>
-    <td><code>PositionSection.tsx</code></td>
-    <td>Toggle classes</td>
-    <td>Container div → add <code>toggle-container</code>. Active: <code>toggle-active</code>. Inactive: transparent. Убрать <code>border border-border</code></td>
-  </tr>
-  <tr>
-    <td><code>LayoutSection.tsx</code></td>
-    <td>Toggle classes</td>
-    <td>То же самое</td>
-  </tr>
-</table>
-<p class="note">State selector (Base/Hover/Focus/Active) — не трогаем. Fill/Stroke/Effects — не трогаем.</p>
-
-</body>
+    <!-- Implementation plan -->
+    <h2>Реализация</h2>
+    <table class="var-table">
+      <tr>
+        <th>Файл</th>
+        <th>Что</th>
+        <th>Детали</th>
+      </tr>
+      <tr>
+        <td><code>styles.css</code></td>
+        <td><code>--background</code></td>
+        <td><code class="new">var(--vscode-sideBar-background)</code> вместо <code>transparent</code></td>
+      </tr>
+      <tr>
+        <td><code>styles.css</code></td>
+        <td class="new">toggle-container class</td>
+        <td>
+          Dark: <code>rgba(255,255,255,0.06)</code>, rounded 6px, padding 2px<br />
+          Light: <code>rgba(0,0,0,0.06)</code>
+        </td>
+      </tr>
+      <tr>
+        <td><code>styles.css</code></td>
+        <td class="new">toggle-active class</td>
+        <td>
+          Dark: <code>rgba(255,255,255,0.09)</code><br />
+          Light: <code>#fff</code> + <code>box-shadow: 0 1px 2px rgba(0,0,0,0.08)</code>
+        </td>
+      </tr>
+      <tr>
+        <td><code>PositionSection.tsx</code></td>
+        <td>Toggle classes</td>
+        <td>
+          Container div → add <code>toggle-container</code>. Active: <code>toggle-active</code>. Inactive: transparent.
+          Убрать <code>border border-border</code>
+        </td>
+      </tr>
+      <tr>
+        <td><code>LayoutSection.tsx</code></td>
+        <td>Toggle classes</td>
+        <td>То же самое</td>
+      </tr>
+    </table>
+    <p class="note">State selector (Base/Hover/Focus/Active) — не трогаем. Fill/Stroke/Effects — не трогаем.</p>
+  </body>
 </html>
