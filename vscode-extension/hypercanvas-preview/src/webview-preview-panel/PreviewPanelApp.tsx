@@ -408,10 +408,7 @@ function PreviewContent() {
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
         {readableSurface.surfaceId && (
-          <ReadableSurfaceBadge
-            minContrast={readableSurface.minContrastBefore}
-            onDismiss={readableSurface.onDismiss}
-          />
+          <ReadableSurfaceBadge minContrast={readableSurface.minContrastBefore} onDismiss={readableSurface.onDismiss} />
         )}
         {iframeSrc &&
           !iframeLoaded &&
@@ -492,6 +489,7 @@ function PreviewContent() {
         <ReadonlyStubScreen
           cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
           projectType={projectCapabilities?.projectType}
+          readonlyReason={projectCapabilities?.readonlyReason}
           renderSucceeded={readonlyRenderProven}
           onContinueReadonly={() => setReadonlyDismissed(true)}
         />
@@ -572,6 +570,45 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
   unknown: 'Unknown bundler',
 };
 
+type ReadonlyReason = 'css' | 'bundler' | 'both';
+
+/**
+ * Stub explanation sentence keyed on the gate that actually made the project
+ * readonly (HYP-1171). Before this, the stub always blamed the bundler — a
+ * vite+emotion user read "Vite does not support AST-based style writes … once
+ * the project uses a supported bundler (Vite, webpack, Next.js)", and the
+ * inverse (always blaming CSS) is equally wrong for remix+tailwind. `unknown`
+ * CSS keys are humanized so the copy never reads "a style writer for unknown".
+ */
+export function readonlyStubSentence(
+  cssSystem: string,
+  projectType: string | undefined,
+  reason: ReadonlyReason | undefined,
+): string {
+  const cssName = cssSystem === 'unknown' ? 'the detected CSS framework' : `the CSS framework ${cssSystem}`;
+  const cssWriterName = cssSystem === 'unknown' ? 'the detected CSS framework' : cssSystem;
+  const projectLabel = projectType ? (PROJECT_TYPE_LABELS[projectType] ?? projectType) : 'Unknown bundler';
+  switch (reason ?? 'bundler') {
+    case 'css':
+      return (
+        `Visual editing is not available yet — ${cssName} does not support AST-based style writes. ` +
+        `The project bundler is compatible; editing will be enabled once a style writer for ${cssWriterName} lands.`
+      );
+    case 'both':
+      return (
+        `Visual editing is not available — ${projectLabel} does not support AST-based style writes, ` +
+        `and ${cssName} has no style writer yet. Editing requires a supported bundler (Vite, webpack, Next.js) ` +
+        `and a style writer for ${cssWriterName}.`
+      );
+    default:
+      return (
+        `Visual editing is not available — ${projectLabel} does not support AST-based style writes. ` +
+        `The CSS framework ${cssSystem} is compatible; editing will work once the project uses a supported ` +
+        `bundler (Vite, webpack, Next.js).`
+      );
+  }
+}
+
 /**
  * Full-surface readonly stub overlay (`position:absolute inset:0 z-900`). It paints
  * over the whole preview, so any bottom-floating chrome (the z-[1000] mode HUD, future
@@ -582,15 +619,16 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
 function ReadonlyStubScreen({
   cssSystem,
   projectType,
+  readonlyReason,
   renderSucceeded,
   onContinueReadonly,
 }: {
   cssSystem: string;
   projectType?: string;
+  readonlyReason?: ReadonlyReason;
   renderSucceeded: boolean;
   onContinueReadonly: () => void;
 }) {
-  const projectLabel = projectType ? (PROJECT_TYPE_LABELS[projectType] ?? projectType) : 'Unknown bundler';
   return (
     <div
       data-testid="hyper-preview-readonly-stub"
@@ -605,9 +643,7 @@ function ReadonlyStubScreen({
       <div style={warningIconStyle}>🔒</div>
       <h2 style={headingStyle}>Readonly mode</h2>
       <p style={{ ...subtextStyle, maxWidth: 480, marginBottom: 4 }}>
-        Visual editing is not available — <strong>{projectLabel}</strong> does not support AST-based style writes. The
-        CSS framework <strong>{cssSystem}</strong> is compatible; editing will work once the project uses a supported
-        bundler (Vite, webpack, Next.js).
+        {readonlyStubSentence(cssSystem, projectType, readonlyReason)}
         {renderSucceeded
           ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
           : ' Waiting for preview to render...'}

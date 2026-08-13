@@ -135,6 +135,44 @@ describe('computeCapabilities — registry-derived writable gate (HYP-796)', () 
   }
 });
 
+// HYP-1171: the readonly stub copy must name the gate that actually failed —
+// css (no native writer) vs bundler (not full-edit capable) vs both. Before this
+// field the stub always blamed the bundler, telling vite+emotion users "Vite does
+// not support... use Vite"; a copy fix that always blamed the CSS system was
+// equally wrong for remix+tailwind (review P2). readonlyReason makes the stub
+// honest for every combination.
+describe('computeCapabilities — readonlyReason names the failing gate (HYP-1171)', () => {
+  it('emotion + vite → css (the CSS system has no writer; bundler is full-edit)', () => {
+    const caps = computeCapabilities('emotion', 'none', null, 'vite', 'simple');
+    expect(caps.readonly).toBe(true);
+    expect(caps.readonlyReason).toBe('css');
+  });
+
+  it('tailwind + remix → bundler (CSS is writable; remix is not full-edit)', () => {
+    const caps = computeCapabilities('tailwind', 'none', null, 'remix', 'simple');
+    expect(caps.readonly).toBe(true);
+    expect(caps.readonlyReason).toBe('bundler');
+  });
+
+  it('emotion + remix → both (neither gate passes)', () => {
+    const caps = computeCapabilities('emotion', 'none', null, 'remix', 'simple');
+    expect(caps.readonly).toBe(true);
+    expect(caps.readonlyReason).toBe('both');
+  });
+
+  it('writable project → no readonlyReason', () => {
+    const caps = computeCapabilities('tailwind', 'none', null, 'vite', 'simple');
+    expect(caps.readonly).toBe(false);
+    expect(caps.readonlyReason).toBeUndefined();
+  });
+
+  it('project that cannot render → not readonly, no readonlyReason', () => {
+    const caps = computeCapabilities('emotion', 'none', { type: 'react-native', message: 'rn' }, 'vite', 'simple');
+    expect(caps.readonly).toBe(false);
+    expect(caps.readonlyReason).toBeUndefined();
+  });
+});
+
 describe('detectUIKit — Astro Tailwind', () => {
   const DIR = '/irrelevant';
 

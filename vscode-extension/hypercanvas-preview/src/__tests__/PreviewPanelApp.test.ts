@@ -11,6 +11,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   getPreviewShellScreen,
   nextRenderProvenLatch,
+  readonlyStubSentence,
   shouldShowModeToolbar,
 } from '../webview-preview-panel/PreviewPanelApp';
 
@@ -81,5 +82,43 @@ describe('shouldShowModeToolbar (HYP-782: mode HUD must not overlap the readonly
   it('is shown for normal (non-readonly) projects regardless of the dismiss flag', () => {
     expect(shouldShowModeToolbar(false)).toBe(true);
     expect(shouldShowModeToolbar(false)).toBe(true);
+  });
+});
+
+// HYP-1171: the stub must blame the gate that actually failed. Always-bundler
+// copy told vite+emotion users "Vite does not support … use Vite"; always-CSS
+// copy would lie to remix+tailwind users (review P2 on the first HYP-1171 fix).
+describe('readonlyStubSentence (HYP-1171: copy keyed on the failing gate)', () => {
+  it('css-gated readonly (emotion + vite) blames the CSS system, not the bundler', () => {
+    const sentence = readonlyStubSentence('emotion', 'vite', 'css');
+    expect(sentence).toContain('emotion');
+    expect(sentence).toContain('does not support AST-based style writes');
+    expect(sentence).toContain('bundler is compatible');
+    expect(sentence).not.toContain('Vite does not support');
+  });
+
+  it('bundler-gated readonly (tailwind + remix) blames the bundler, not the CSS system', () => {
+    const sentence = readonlyStubSentence('tailwind', 'remix', 'bundler');
+    expect(sentence).toContain('Remix does not support AST-based style writes');
+    expect(sentence).toContain('tailwind');
+    expect(sentence).toContain('is compatible');
+    expect(sentence).not.toContain('does not support AST-based style writes. The project bundler is compatible');
+  });
+
+  it('both gates failing names both', () => {
+    const sentence = readonlyStubSentence('emotion', 'remix', 'both');
+    expect(sentence).toContain('Remix');
+    expect(sentence).toContain('emotion');
+    expect(sentence).toContain('no style writer yet');
+  });
+
+  it('undefined reason falls back to the bundler copy (pre-HYP-1171 behavior)', () => {
+    expect(readonlyStubSentence('emotion', 'vite', undefined)).toBe(readonlyStubSentence('emotion', 'vite', 'bundler'));
+  });
+
+  it('humanizes an unknown CSS system instead of roadmap copy about "unknown"', () => {
+    const sentence = readonlyStubSentence('unknown', 'vite', 'css');
+    expect(sentence).toContain('the detected CSS framework');
+    expect(sentence).not.toContain('writer for unknown');
   });
 });

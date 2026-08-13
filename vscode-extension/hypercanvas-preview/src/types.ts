@@ -206,6 +206,13 @@ export interface ProjectCapabilities {
   /** If true, show readonly badge instead of full editing UI */
   readonly: boolean;
   /**
+   * Which gate made the project readonly (HYP-1171): 'css' = the CSS system has no
+   * native style writer, 'bundler' = the bundler is not full-edit capable, 'both'.
+   * Present iff `readonly` is true — the readonly stub keys its explanation copy on
+   * it (blaming the wrong gate produced "Vite does not support … use Vite").
+   */
+  readonlyReason?: 'css' | 'bundler' | 'both';
+  /**
    * Per-(sub-)repo support breakdown across the five dimensions (HYP-788). Additive:
    * absent on older hosts. The webview renders one tab per blocking dimension
    * (unsupported | needs-setup) — a table of WHY — for the currently-open repo / active

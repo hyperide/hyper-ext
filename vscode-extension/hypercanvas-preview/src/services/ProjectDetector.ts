@@ -792,6 +792,14 @@ export function computeCapabilities(
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
   const canWriteStyles = cssWritable && bundlerFullEdit;
   const canRender = projectError === null;
+  const readonly = canRender && !canWriteStyles;
+  const readonlyReason: import('../types').ProjectCapabilities['readonlyReason'] = !readonly
+    ? undefined
+    : cssWritable
+      ? 'bundler'
+      : bundlerFullEdit
+        ? 'css'
+        : 'both';
   return {
     cssSystem,
     uiKit,
@@ -799,7 +807,8 @@ export function computeCapabilities(
     repoType,
     canWriteStyles,
     canRender,
-    readonly: canRender && !canWriteStyles,
+    readonly,
+    readonlyReason,
   };
 }
 
