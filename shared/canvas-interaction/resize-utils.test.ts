@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { computeResizeStyles, snapToGrid } from './resize-utils';
+import { computeLiveResizeDims, computeResizeStyles, snapToGrid } from './resize-utils';
 
 describe('computeResizeStyles', () => {
   it('returns null when width delta is below threshold (< 2px)', () => {
@@ -71,6 +71,50 @@ describe('computeResizeStyles', () => {
       // 4 - 3 = 1 → nearest 4px = 0 → clamped to 1
       expect(computeResizeStyles('width', 4, 4, -3, 0, { snap: true })).toEqual({ width: '1px' });
     });
+  });
+});
+
+describe('computeLiveResizeDims', () => {
+  it('matches the committed width when snap is enabled (no jump on pointer-up)', () => {
+    // 48 + 10.7 = 58.7 → snapped commit writes 60px. The live preview must show
+    // 60 too, otherwise the element visibly jumps on pointer-up (HYP-590).
+    expect(computeResizeStyles('width', 48, 48, 10.7, 0, { snap: true })).toEqual({ width: '60px' });
+    expect(computeLiveResizeDims('width', 48, 48, 10.7, 0, { snap: true })).toEqual({ width: 60, height: 48 });
+  });
+
+  it('matches the committed height when snap is enabled', () => {
+    // 48 + 14 = 62 → snapped commit writes 64px.
+    expect(computeResizeStyles('height', 48, 48, 0, 14, { snap: true })).toEqual({ height: '64px' });
+    expect(computeLiveResizeDims('height', 48, 48, 0, 14, { snap: true })).toEqual({ width: 48, height: 64 });
+  });
+
+  it('respects a custom gridSize like the commit path', () => {
+    // 48 + 10 = 58 → nearest 8px = 56.
+    expect(computeLiveResizeDims('width', 48, 48, 10, 0, { snap: true, gridSize: 8 })).toEqual({
+      width: 56,
+      height: 48,
+    });
+  });
+
+  it('previews the base size below the write threshold (commit is a no-op)', () => {
+    // |delta| < 2px → computeResizeStyles returns null (nothing is written), so
+    // the live preview must keep the base size — otherwise pointer-up leaves the
+    // iframe patched with a dimension that was never committed.
+    expect(computeResizeStyles('width', 102, 50, 1, 0, { snap: true })).toBeNull();
+    expect(computeLiveResizeDims('width', 102, 50, 1, 0, { snap: true })).toEqual({ width: 102, height: 50 });
+    expect(computeLiveResizeDims('height', 50, 102, 0, -1, { snap: true })).toEqual({ width: 50, height: 102 });
+  });
+
+  it('rounds without snapping when snap is not enabled', () => {
+    expect(computeLiveResizeDims('width', 48, 48, 10.7, 0)).toEqual({ width: 59, height: 48 });
+  });
+
+  it('clamps to the 1px minimum like the commit path', () => {
+    expect(computeLiveResizeDims('width', 4, 4, -3, 0, { snap: true })).toEqual({ width: 1, height: 4 });
+  });
+
+  it('keeps the perpendicular axis at the rounded base size', () => {
+    expect(computeLiveResizeDims('width', 48, 33.4, 10.7, 0, { snap: true })).toEqual({ width: 60, height: 33 });
   });
 });
 

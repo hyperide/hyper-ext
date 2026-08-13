@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { SpacingGuide } from './spacing-guides';
-import { calculateSpacingGuides } from './spacing-guides';
+import type { Rect, SpacingGuide } from './spacing-guides';
+import { calculateSpacingGuides, collectDomSiblingRects, mergeSiblingRects } from './spacing-guides';
 
 /**
  * Tests for spacing guide calculation — pink lines with pixel values
@@ -177,5 +177,114 @@ describe('calculateSpacingGuides', () => {
     const guides = calculateSpacingGuides(active, siblings);
     // Both axes overlap → no positive gaps
     expect(guides).toHaveLength(0);
+  });
+});
+
+/** Stub layout geometry on an element — happy-dom does not compute layout. */
+function stubRect(el: Element, rect: Rect): void {
+  el.getBoundingClientRect = () =>
+    ({
+      ...rect,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => rect,
+    }) as DOMRect;
+}
+
+describe('collectDomSiblingRects', () => {
+  it('collects viewport rects of real DOM siblings, excluding the element itself', () => {
+    const parent = document.createElement('div');
+    const active = document.createElement('div');
+    const before = document.createElement('div');
+    const after = document.createElement('span');
+    parent.append(before, active, after);
+    stubRect(active, { left: 100, top: 0, width: 50, height: 50 });
+    stubRect(before, { left: 0, top: 0, width: 50, height: 50 });
+    stubRect(after, { left: 200, top: 0, width: 40, height: 50 });
+
+    expect(collectDomSiblingRects(active)).toEqual([
+      { left: 0, top: 0, width: 50, height: 50 },
+      { left: 200, top: 0, width: 40, height: 50 },
+    ]);
+  });
+
+  it('skips zero-size siblings (display:none, script/style tags)', () => {
+    const parent = document.createElement('div');
+    const active = document.createElement('div');
+    const hidden = document.createElement('div');
+    const script = document.createElement('script');
+    const visible = document.createElement('div');
+    parent.append(active, hidden, script, visible);
+    stubRect(active, { left: 0, top: 0, width: 50, height: 50 });
+    stubRect(hidden, { left: 0, top: 0, width: 0, height: 0 });
+    stubRect(script, { left: 0, top: 0, width: 0, height: 0 });
+    stubRect(visible, { left: 100, top: 0, width: 50, height: 50 });
+
+    expect(collectDomSiblingRects(active)).toEqual([{ left: 100, top: 0, width: 50, height: 50 }]);
+  });
+
+  it('returns empty for an element without a parent', () => {
+    const orphan = document.createElement('div');
+    expect(collectDomSiblingRects(orphan)).toEqual([]);
+  });
+
+  it('returns empty for an only child', () => {
+    const parent = document.createElement('div');
+    const only = document.createElement('div');
+    parent.append(only);
+    stubRect(only, { left: 0, top: 0, width: 50, height: 50 });
+    expect(collectDomSiblingRects(only)).toEqual([]);
+  });
+
+  it('feeds calculateSpacingGuides for a single-selected element with ordinary siblings', () => {
+    // Regression for HYP-590: guides must be derivable from the real DOM siblings,
+    // not only from selection overlays (which exist only under multi-select).
+    const parent = document.createElement('div');
+    const active = document.createElement('div');
+    const sibling = document.createElement('div');
+    parent.append(sibling, active);
+    stubRect(active, { left: 100, top: 0, width: 50, height: 50 });
+    stubRect(sibling, { left: 0, top: 0, width: 50, height: 50 });
+
+    const guides = calculateSpacingGuides({ left: 100, top: 0, width: 50, height: 50 }, collectDomSiblingRects(active));
+    expect(guides).toContainEqual(expect.objectContaining({ direction: 'horizontal', distance: 50 }));
+  });
+});
+
+describe('mergeSiblingRects', () => {
+  it('appends DOM rects that are not present among overlay rects', () => {
+    const overlay = [{ left: 0, top: 0, width: 50, height: 50 }];
+    const dom = [{ left: 200, top: 0, width: 40, height: 50 }];
+    expect(mergeSiblingRects(overlay, dom)).toEqual([
+      { left: 0, top: 0, width: 50, height: 50 },
+      { left: 200, top: 0, width: 40, height: 50 },
+    ]);
+  });
+
+  it('drops DOM rects duplicating an overlay rect within tolerance', () => {
+    // A selected sibling is reported by BOTH sources: its selection overlay in the
+    // webview container and the iframe DOM walk. Subpixel drift must not double it.
+    const overlay = [{ left: 100, top: 50, width: 50, height: 50 }];
+    const dom = [
+      { left: 100.4, top: 49.7, width: 50.2, height: 50 },
+      { left: 300, top: 50, width: 50, height: 50 },
+    ];
+    expect(mergeSiblingRects(overlay, dom)).toEqual([
+      { left: 100, top: 50, width: 50, height: 50 },
+      { left: 300, top: 50, width: 50, height: 50 },
+    ]);
+  });
+
+  it('keeps rects that differ by more than the tolerance', () => {
+    const overlay = [{ left: 100, top: 50, width: 50, height: 50 }];
+    const dom = [{ left: 103, top: 50, width: 50, height: 50 }];
+    expect(mergeSiblingRects(overlay, dom)).toHaveLength(2);
+  });
+
+  it('passes DOM rects through when there are no overlay rects (single-select)', () => {
+    const dom = [{ left: 0, top: 0, width: 50, height: 50 }];
+    expect(mergeSiblingRects([], dom)).toEqual(dom);
   });
 });

@@ -4,16 +4,18 @@
  * Calculates pink spacing lines with pixel values between the active element
  * and its siblings — Figma-like spacing indicators for visual alignment.
  *
- * Accessed via: intended consumer is the resize/drag drag-handler onMove hook,
- *   which feeds it the active element rect + sibling rects and renders the result
- *   into an overlay container. As of HYP-405 no live consumer is wired (resize is
- *   extension-webview-only and SaaS disables resize handles); salvaged as the
- *   pure calc + DOM renderer building block for that future wiring (HYP-402).
- * Assumptions: runs in a browser environment with `document` available (renderer only;
- *   `calculateSpacingGuides` is pure and environment-agnostic).
+ * Accessed via: the extension resize drag (useCanvasInteraction pointermove hook) —
+ *   active element rect + sibling rects in, guide lines/badges rendered into the
+ *   webview overlay container. Sibling rects come from two sources: selection /
+ *   placeholder overlays already in the container (multi-select) and the real
+ *   iframe DOM siblings reported by the iframe interaction script via
+ *   `collectDomSiblingRects` (single-select, HYP-590).
+ * Assumptions: runs in a browser environment with `document` available (renderer
+ *   and sibling collection only; `calculateSpacingGuides` and `mergeSiblingRects`
+ *   are pure and environment-agnostic).
  */
 
-interface Rect {
+export interface Rect {
   left: number;
   top: number;
   width: number;
@@ -148,6 +150,51 @@ export function calculateSpacingGuides(active: Rect, siblings: Rect[]): SpacingG
   }
 
   return guides;
+}
+
+/**
+ * Collect viewport-space rects of an element's real DOM siblings.
+ *
+ * Runs inside the preview iframe (the only realm with the user app's DOM). The
+ * webview overlay container only knows selection/placeholder overlays, so under
+ * single-select it has no geometry for ordinary siblings — guides would never
+ * fire there without this (HYP-590). Zero-size boxes (display:none, collapsed
+ * elements, script/style tags) are skipped — they would produce degenerate guides.
+ */
+export function collectDomSiblingRects(element: Element): Rect[] {
+  const parent = element.parentElement;
+  if (!parent) return [];
+  const rects: Rect[] = [];
+  for (const child of parent.children) {
+    if (child === element) continue;
+    const rect = child.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    rects.push({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+  }
+  return rects;
+}
+
+/**
+ * Merge overlay-derived sibling rects with iframe-reported DOM sibling rects.
+ *
+ * A selected sibling is reported by BOTH sources (its selection overlay in the
+ * webview container and the iframe DOM walk) — DOM rects duplicating an overlay
+ * rect within `tolerance` px on every edge are dropped so guides and distance
+ * badges are not doubled. Overlay rects always pass through unchanged.
+ */
+export function mergeSiblingRects(overlayRects: Rect[], domRects: Rect[], tolerance: number = 1): Rect[] {
+  const merged = [...overlayRects];
+  for (const rect of domRects) {
+    const isDuplicate = overlayRects.some(
+      (overlay) =>
+        Math.abs(overlay.left - rect.left) <= tolerance &&
+        Math.abs(overlay.top - rect.top) <= tolerance &&
+        Math.abs(overlay.width - rect.width) <= tolerance &&
+        Math.abs(overlay.height - rect.height) <= tolerance,
+    );
+    if (!isDuplicate) merged.push(rect);
+  }
+  return merged;
 }
 
 // ============================================================================

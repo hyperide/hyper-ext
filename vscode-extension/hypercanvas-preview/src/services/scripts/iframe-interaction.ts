@@ -14,6 +14,7 @@ import {
 import { createDesignKeydownHandler } from '@shared/canvas-interaction/keyboard-handler';
 import type { NodeMapLookup } from '@shared/canvas-interaction/keyboard-handler';
 import { resolveCallSiteSource, resolveCallSiteTarget } from '@shared/canvas-interaction/resolve-source';
+import { collectDomSiblingRects } from '@shared/canvas-interaction/spacing-guides';
 import {
   computeEffectiveRef,
   toggleItemIndex,
@@ -1158,6 +1159,30 @@ window.addEventListener('message', (event: MessageEvent) => {
       }
       if (typeof msg.width === 'number') el.style.width = `${msg.width}px`;
       if (typeof msg.height === 'number') el.style.height = `${msg.height}px`;
+      // HYP-590: report the real DOM sibling rects for spacing guides. The webview
+      // overlay container only knows selection/placeholder overlays, so under
+      // single-select it has no geometry for ordinary siblings. Measured AFTER the
+      // live size is applied so reflow is captured; same viewport coordinate space
+      // as overlay rects (both raw getBoundingClientRect, identity-mapped). The
+      // active element's own rect rides along from the same layout pass — in
+      // position-shifting layouts (e.g. centered flex) the webview's overlay
+      // position is stale mid-drag, so it must not be mixed with fresh siblings.
+      const activeRect = el.getBoundingClientRect();
+      // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+      window.parent.postMessage(
+        {
+          type: 'hypercanvas:siblingRects',
+          elementId: id,
+          activeRect: {
+            left: activeRect.left,
+            top: activeRect.top,
+            width: activeRect.width,
+            height: activeRect.height,
+          },
+          rects: collectDomSiblingRects(el),
+        },
+        '*',
+      );
     }
     return;
   }

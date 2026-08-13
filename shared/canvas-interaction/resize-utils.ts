@@ -45,15 +45,47 @@ export function computeResizeStyles(
   dY: number,
   options?: ComputeResizeStylesOptions,
 ): Record<string, string> | null {
-  const gridSize = options?.gridSize ?? DEFAULT_SNAP_GRID;
-  const round = (v: number): number => (options?.snap ? snapToGrid(v, gridSize) : Math.round(v));
-
   if (axis === 'width') {
-    if (Math.abs(dX) < MIN_DELTA_PX) return null;
-    const newW = Math.max(1, round(baseW + dX));
-    return { width: `${newW}px` };
+    const newW = resizeDimension(baseW, dX, options);
+    return newW === null ? null : { width: `${newW}px` };
   }
-  if (Math.abs(dY) < MIN_DELTA_PX) return null;
-  const newH = Math.max(1, round(baseH + dY));
-  return { height: `${newH}px` };
+  const newH = resizeDimension(baseH, dY, options);
+  return newH === null ? null : { height: `${newH}px` };
+}
+
+/**
+ * Core dimension math shared by the commit path (`computeResizeStyles`) and the
+ * live-preview path (`computeLiveResizeDims`). Returns null below the write
+ * threshold (the drag is too small to warrant a write).
+ */
+function resizeDimension(base: number, delta: number, options?: ComputeResizeStylesOptions): number | null {
+  if (Math.abs(delta) < MIN_DELTA_PX) return null;
+  const gridSize = options?.gridSize ?? DEFAULT_SNAP_GRID;
+  const rounded = options?.snap ? snapToGrid(base + delta, gridSize) : Math.round(base + delta);
+  return Math.max(1, rounded);
+}
+
+/**
+ * Compute the live (mid-drag) preview dimensions for a resize drag.
+ *
+ * Used by the webview resize pointermove handler to patch the iframe element
+ * while the drag is in flight. Shares `resizeDimension` with the commit path so
+ * the preview always shows the exact value `computeResizeStyles` will write —
+ * including snap-to-grid — and falls back to the base size below the write
+ * threshold (where the commit is a no-op). Without this the element visibly
+ * jumps on pointer-up when snapping is enabled (HYP-590).
+ */
+export function computeLiveResizeDims(
+  axis: 'width' | 'height',
+  baseW: number,
+  baseH: number,
+  dX: number,
+  dY: number,
+  options?: ComputeResizeStylesOptions,
+): { width: number; height: number } {
+  const live =
+    axis === 'width'
+      ? (resizeDimension(baseW, dX, options) ?? Math.round(baseW))
+      : (resizeDimension(baseH, dY, options) ?? Math.round(baseH));
+  return axis === 'width' ? { width: live, height: Math.round(baseH) } : { width: Math.round(baseW), height: live };
 }

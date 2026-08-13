@@ -12,8 +12,12 @@ import {
   renderOverlayRects,
   renderPlaceholderOverlays,
 } from '@shared/canvas-interaction/overlay-renderer';
-import { computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
-import { calculateSpacingGuides, renderSpacingGuides } from '@shared/canvas-interaction/spacing-guides';
+import { computeLiveResizeDims, computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
+import {
+  calculateSpacingGuides,
+  mergeSiblingRects,
+  renderSpacingGuides,
+} from '@shared/canvas-interaction/spacing-guides';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canvasRPC } from '@/lib/platform/PlatformContext';
@@ -110,11 +114,11 @@ interface GuideRect {
  * Collect sibling rects (in container pixel coordinates) from the overlay container
  * for spacing-guide computation during a resize drag.
  *
- * The webview never receives the full sibling DOM from the iframe (overlayRects only
- * carries selection + hover + placeholder rects — see overlay-rects.ts), so the only
- * sibling geometry available here is what is already rendered into the container:
- * other selection overlays (multi-select) and empty-container placeholders. The
- * active element's own overlay is excluded so it is not measured against itself.
+ * This is one of two sibling-geometry sources: the container only holds selection
+ * overlays (multi-select) and empty-container placeholders, so ordinary unselected
+ * siblings are invisible here. Those arrive separately via the iframe-reported
+ * `hypercanvas:siblingRects` message (HYP-590) and are merged in onPointerMove.
+ * The active element's own overlay is excluded so it is not measured against itself.
  */
 function collectSiblingRects(container: HTMLElement, activeOverlay: HTMLElement): GuideRect[] {
   const rects: GuideRect[] = [];
@@ -503,6 +507,39 @@ export function useCanvasInteraction(
           break;
         }
 
+        case 'hypercanvas:siblingRects': {
+          // Real DOM sibling geometry from the iframe for the in-flight resize drag
+          // (HYP-590). Coordinates are iframe viewport px — same space as overlay rects.
+          if (typeof msg.elementId !== 'string' || !Array.isArray(msg.rects)) break;
+          const rects: GuideRect[] = [];
+          for (const r of msg.rects) {
+            if (
+              r &&
+              typeof r.left === 'number' &&
+              typeof r.top === 'number' &&
+              typeof r.width === 'number' &&
+              typeof r.height === 'number'
+            ) {
+              rects.push({ left: r.left, top: r.top, width: r.width, height: r.height });
+            }
+          }
+          const a = msg.activeRect;
+          const activeRect: GuideRect | null =
+            a &&
+            typeof a.left === 'number' &&
+            typeof a.top === 'number' &&
+            typeof a.width === 'number' &&
+            typeof a.height === 'number'
+              ? { left: a.left, top: a.top, width: a.width, height: a.height }
+              : null;
+          dragSiblingRects = { elementId: msg.elementId, activeRect, rects };
+          // Re-render guides with the fresh geometry — the round-trip is async,
+          // so the pointermove that requested these rects already rendered
+          // without them (no-op when no resize drag is in flight).
+          renderResizeGuides();
+          break;
+        }
+
         case 'hypercanvas:contextMenu': {
           // Only show context menu when an element is targeted
           if (!msg.elementId) break;
@@ -554,6 +591,54 @@ export function useCanvasInteraction(
     // Track doc-level fallback listener and ghost so effect cleanup can remove them if effect tears down mid-drag.
     let activeDocPointerUp: ((e: PointerEvent) => void) | null = null;
     let activeGhost: HTMLDivElement | null = null;
+    // Real iframe DOM geometry for the in-flight resize drag, reported by the
+    // iframe per previewResize message (HYP-590): the active element's own
+    // post-reflow rect plus its sibling rects, all from the same layout pass.
+    // Keyed by elementId so a stale report from a previous drag never feeds
+    // another element's guides.
+    let dragSiblingRects: { elementId: string; activeRect: GuideRect | null; rects: GuideRect[] } | null = null;
+    // Live geometry of the in-flight resize drag, captured on every pointermove so
+    // the async siblingRects handler can re-render guides against the current size.
+    let resizeGuideContext: { elementId: string; overlayDiv: HTMLDivElement; width: number; height: number } | null =
+      null;
+
+    /**
+     * Render spacing guides for the in-flight resize drag from the freshest
+     * geometry available. Called from two places: pointermove (live size just
+     * changed) and the hypercanvas:siblingRects handler (iframe sibling geometry
+     * just arrived). The round-trip through the iframe is asynchronous — without
+     * the second call site guides would always lag one move behind and a
+     * single-move drag would never show them at all.
+     */
+    function renderResizeGuides() {
+      if (!resizeGuideContext) return;
+      const { elementId, overlayDiv, width, height } = resizeGuideContext;
+      const reported = dragSiblingRects && dragSiblingRects.elementId === elementId ? dragSiblingRects : null;
+      // Prefer the iframe-reported active rect — it is measured in the same
+      // post-reflow layout pass as the sibling rects, so position-shifting
+      // layouts (e.g. centered flex) never mix a stale overlay position with
+      // fresh sibling geometry. Until the first report arrives, fall back to the
+      // overlay position + live dims. Coordinates are already container pixels
+      // (identity viewport).
+      const activeRect = reported?.activeRect ?? {
+        left: parseFloat(overlayDiv.style.left) || 0,
+        top: parseFloat(overlayDiv.style.top) || 0,
+        width,
+        height,
+      };
+      // Two sibling sources merged (HYP-590): overlay-derived rects (multi-select
+      // selection overlays + placeholders) and the real iframe DOM siblings
+      // reported back per previewResize. The elementId guard drops stale reports.
+      const overlaySiblings = collectSiblingRects(container, overlayDiv);
+      const siblingRects = mergeSiblingRects(overlaySiblings, reported ? reported.rects : []);
+      // Clear before render — renderSpacingGuides appends, so stale guides would
+      // otherwise accumulate.
+      clearSpacingGuides(container);
+      const guides = calculateSpacingGuides(activeRect, siblingRects);
+      if (guides.length > 0) {
+        renderSpacingGuides(container, guides, IDENTITY_VIEWPORT);
+      }
+    }
 
     function handleResizePointerDown(event: PointerEvent) {
       if (event.button !== 0) return;
@@ -593,6 +678,10 @@ export function useCanvasInteraction(
 
       const dragPointerId = event.pointerId;
       let dragFinished = false;
+      // Fresh drag — drop sibling geometry from any previous drag. The first
+      // pointermove triggers a previewResize round-trip that repopulates it.
+      dragSiblingRects = null;
+      resizeGuideContext = null;
 
       function finishDrag(endX: number, endY: number) {
         if (dragFinished) return;
@@ -611,11 +700,19 @@ export function useCanvasInteraction(
         activeDocPointerUp = null;
 
         clearSpacingGuides(container);
+        dragSiblingRects = null;
+        resizeGuideContext = null;
 
         const dX = endX - startX;
         const dY = endY - startY;
         const styles = computeResizeStyles(axis, baseW, baseH, dX, dY, { snap: true });
-        if (!styles) return;
+        if (!styles) {
+          // Drag was below the write threshold — no AST change. Clear any live
+          // preview patch that was applied during pointermove so the iframe DOM
+          // is restored to its original inline style (or lack thereof).
+          postToPreviewIframe(frame, { type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId });
+          return;
+        }
 
         // size-* sets both axes — stripping it for one axis loses the other.
         // Preserve the perpendicular dimension explicitly when hasSizeClass is set.
@@ -662,6 +759,8 @@ export function useCanvasInteraction(
         document.removeEventListener('pointerup', onDocPointerUp);
         activeDocPointerUp = null;
         clearSpacingGuides(container);
+        dragSiblingRects = null;
+        resizeGuideContext = null;
         // Restore original size in iframe
         postToPreviewIframe(frame, { type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId });
       }
@@ -669,28 +768,27 @@ export function useCanvasInteraction(
       function onPointerMove(e: PointerEvent) {
         const dX = e.clientX - startX;
         const dY = e.clientY - startY;
-        const liveW = axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : Math.round(baseW);
-        const liveH = axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : Math.round(baseH);
+        // Same snap option as the finishDrag commit path — the live preview must
+        // show the exact dimension ast:updateStyles will write, otherwise the
+        // element visibly jumps on pointer-up (HYP-590).
+        const live = computeLiveResizeDims(axis, baseW, baseH, dX, dY, { snap: true });
         postToPreviewIframe(frame, {
           type: 'hypercanvas:previewResize',
           elementId: capturedElementId,
-          width: axis === 'width' ? liveW : undefined,
-          height: axis === 'height' ? liveH : undefined,
+          width: axis === 'width' ? live.width : undefined,
+          height: axis === 'height' ? live.height : undefined,
         });
 
         // Spacing guides: measure the live (resizing) active rect against the
-        // sibling rects currently rendered in the overlay container. Coordinates
-        // are already container pixels (identity viewport). Clear before render —
-        // renderSpacingGuides appends, so stale guides would otherwise accumulate.
-        const activeLeft = parseFloat(capturedOverlayDiv.style.left) || 0;
-        const activeTop = parseFloat(capturedOverlayDiv.style.top) || 0;
-        const activeRect = { left: activeLeft, top: activeTop, width: liveW, height: liveH };
-        const siblingRects = collectSiblingRects(container, capturedOverlayDiv);
-        clearSpacingGuides(container);
-        const guides = calculateSpacingGuides(activeRect, siblingRects);
-        if (guides.length > 0) {
-          renderSpacingGuides(container, guides, IDENTITY_VIEWPORT);
-        }
+        // freshest sibling geometry. Re-rendered again when the iframe's
+        // siblingRects response for this previewResize arrives (async round-trip).
+        resizeGuideContext = {
+          elementId: capturedElementId,
+          overlayDiv: capturedOverlayDiv,
+          width: live.width,
+          height: live.height,
+        };
+        renderResizeGuides();
       }
 
       activeDocPointerUp = onDocPointerUp;
