@@ -23,7 +23,7 @@ import {
 import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
-import { deriveSubProjectPrefix, resolveComponentAbsPath } from './bridges/monorepo-path-translate';
+import { deriveSubProjectPrefix, resolveComponentAbsPath, toRepoRelativePath } from './bridges/monorepo-path-translate';
 import {
   canNavigate,
   createComponentState,
@@ -731,6 +731,15 @@ export class PreviewPanel {
     // prefix so the file read doesn't miss 'targets/<app>/' and fail (HYP-479).
     const subProjectPrefix = deriveSubProjectPrefix(this._currentComponent, this._previewComponent);
     const absPath = resolveComponentAbsPath(componentPath, this._workspaceRoot, subProjectPrefix);
+    // Repo-relative counterpart of `componentPath` — the inverse of the absPath
+    // re-root above. Downstream consumers rooted at the REPO root (the
+    // onSampleCreated callback, which joins to the repo root, and the repo-rooted
+    // componentService) need this, not the sub-project-relative `componentPath`;
+    // otherwise the post-creation preview regen / prop-schema read targets the
+    // wrong file in a monorepo (HYP-483). Identity no-op for single-package
+    // projects (empty prefix). The iframe/registry `?component=` key still wants
+    // the sub-rel `componentPath`, so we keep both.
+    const repoRelativePath = toRepoRelativePath(componentPath, subProjectPrefix);
     const exportName = sampleName || 'SampleDefault';
     const revealInEditor = options?.revealInEditor ?? true;
     const notifySampleCreated = options?.notifySampleCreated ?? true;
@@ -778,7 +787,7 @@ export class PreviewPanel {
       }
 
       if (notifySampleCreated) {
-        await this._onSampleCreatedCallback?.(componentPath);
+        await this._onSampleCreatedCallback?.(repoRelativePath);
       }
 
       if (!revealInEditor) {
@@ -808,7 +817,7 @@ export class PreviewPanel {
 
     if (!hasPropValues) {
       const propDefs = await this._panelRouter.componentService
-        ?.getComponentDefinitions(componentPath)
+        ?.getComponentDefinitions(repoRelativePath)
         .catch(() => null);
       const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
 
@@ -885,7 +894,7 @@ export class PreviewPanel {
       this._watchSampleInFile(absPath, exportName, this._panel.webview);
     }
     if (notifySampleCreated) {
-      await this._onSampleCreatedCallback?.(componentPath);
+      await this._onSampleCreatedCallback?.(repoRelativePath);
     }
     return true;
   }

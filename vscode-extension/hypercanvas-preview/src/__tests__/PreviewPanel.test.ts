@@ -716,6 +716,50 @@ export default function Home() {
 
     expect(callbackPaths).toEqual([componentPath]);
   });
+
+  // HYP-483: in a monorepo the error-boundary reports a SUB-project-relative
+  // componentPath ('src/app/ui/HostField.tsx'), but onSampleCreated joins its
+  // argument to the REPO root. Passing the sub-rel path verbatim points the
+  // post-creation preview regen / navigation at the wrong file. The handler must
+  // hand the callback the REPO-relative path ('targets/conloca-app/src/...').
+  it('passes the repo-relative path to onSampleCreated in a monorepo', async () => {
+    const stateHub = createStateHub();
+    const { panel } = createPanel(stateHub);
+
+    // _currentComponent is repo-relative, _previewComponent is sub-project-relative;
+    // deriveSubProjectPrefix(_currentComponent, _previewComponent) → 'targets/conloca-app/'.
+    Object.assign(panel as PreviewPanel & { _currentComponent: string; _previewComponent: string }, {
+      _currentComponent: 'targets/conloca-app/src/app/ui/HostField.tsx',
+      _previewComponent: 'src/app/ui/HostField.tsx',
+    });
+
+    const callbackPaths: string[] = [];
+    panel.onSampleCreated((path) => {
+      callbackPaths.push(path);
+    });
+
+    const hostFieldSource = 'export function HostField({ label }: { label?: string }) { return null; }';
+    vscode.workspace.fs.readFile.mockImplementation(() => Promise.resolve(Buffer.from(hostFieldSource)));
+    vscode.workspace.fs.writeFile.mockImplementation(() => Promise.resolve());
+
+    type InternalPanel = {
+      _handleCreateSampleFromError: (
+        path: string | undefined,
+        propValues?: Record<string, unknown>,
+        sampleName?: string,
+        options?: { componentName?: string; revealInEditor?: boolean },
+      ) => Promise<boolean>;
+    };
+    const internal = panel as unknown as InternalPanel;
+
+    // Error boundary reports the sub-project-relative path.
+    await internal._handleCreateSampleFromError('src/app/ui/HostField.tsx', undefined, 'SampleDefault', {
+      revealInEditor: false,
+    });
+
+    // onSampleCreated joins to the repo root, so it must receive the repo-relative path.
+    expect(callbackPaths).toEqual(['targets/conloca-app/src/app/ui/HostField.tsx']);
+  });
 });
 
 // HYP-435: setComponentParam(repoRel, subRel) must derive and forward the
