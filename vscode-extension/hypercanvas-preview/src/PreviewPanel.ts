@@ -14,6 +14,7 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { normalizeSampleComponentName } from '@lib/preview-generator';
+import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import { handleEditorMessage } from './EditorBridge';
 import {
   injectGeneratedSampleProps,
@@ -169,6 +170,12 @@ export class PreviewPanel {
 
   // Pending screenshot requests (MCP tool round-trip)
   private _pendingScreenshotRequests = new Map<string, (result: { dataUrl: string | null }) => void>();
+
+  // Pending live-className requests (HYP-544 write-time DOM-anchor round-trip)
+  private _pendingClassNameRequests = new Map<string, (result: { className: string | null }) => void>();
+
+  // Pending empirical color-probe requests (HYP-544 Phase 3 — which candidate drives the color)
+  private _pendingProbeRequests = new Map<string, (result: { driving: ColorProbeCandidate[] }) => void>();
 
   // Preview URL (set dynamically when dev server starts)
   private _previewBaseUrl = 'http://localhost:3000';
@@ -404,6 +411,8 @@ export class PreviewPanel {
       handleContextMenuCopyContent: (msg, wv, mode) => this._handleContextMenuCopyContent(msg, wv, mode),
       handleElementContentResult: (msg) => this._handleElementContentResult(msg),
       handleScreenshotResult: (msg) => this._handleScreenshotResult(msg),
+      handleLiveClassNameResult: (msg) => this._handleLiveClassNameResult(msg),
+      handleProbeColorCandidatesResult: (msg) => this._handleProbeColorCandidatesResult(msg),
     };
   }
   // === ErrorBoundary handlers ===
@@ -540,6 +549,112 @@ export class PreviewPanel {
   }
   private _handleScreenshotResult(msg: { [key: string]: unknown }): void {
     return handleScreenshotResult(this._contextMenuDeps(), msg);
+  }
+
+  private _handleLiveClassNameResult(msg: { [key: string]: unknown }): void {
+    const requestId = msg.requestId as string | undefined;
+    if (!requestId) return;
+
+    const callback = this._pendingClassNameRequests.get(requestId);
+    if (callback) {
+      callback({ className: typeof msg.className === 'string' ? msg.className : null });
+      this._pendingClassNameRequests.delete(requestId);
+    }
+  }
+
+  private _handleProbeColorCandidatesResult(msg: { [key: string]: unknown }): void {
+    const requestId = msg.requestId as string | undefined;
+    if (!requestId) return;
+
+    const callback = this._pendingProbeRequests.get(requestId);
+    if (callback) {
+      const driving = Array.isArray(msg.driving) ? (msg.driving as ColorProbeCandidate[]) : [];
+      callback({ driving });
+      this._pendingProbeRequests.delete(requestId);
+    }
+  }
+
+  /**
+   * Run the empirical color-probe against an element in the preview iframe (HYP-544 Phase 3).
+   * Used when an inspector color edit reaches the host from a source the static AST classifier
+   * can't resolve: the iframe enumerates candidate value-bearing tokens (§4) and verifies, via
+   * the Tier-1 off-screen-clone probe (§5.1), which candidate actually DRIVES the element's
+   * color to the requested value. Returns the ranked driving-candidate list (empty = none drive
+   * → host degrades to the §7 floor). Same request/response + 800ms-timeout shape as
+   * requestLiveClassName. The `elementId` MUST be the iframe-relative id (findElementsByRef).
+   */
+  requestProbeColorCandidates(request: ColorProbeRequest): Promise<ColorProbeCandidate[]> {
+    const webview = this._panel?.webview;
+    if (!webview || !request.elementId || !request.requestedColor) return Promise.resolve([]);
+
+    const requestId = `colorprobe-${Date.now()}-${this._generateRandomId(6)}`;
+
+    return new Promise((resolve) => {
+      this._pendingProbeRequests.set(requestId, (result) => {
+        resolve(result.driving);
+      });
+
+      webview.postMessage({
+        type: 'probeColorCandidates',
+        elementId: request.elementId,
+        itemIndex: request.itemIndex ?? null,
+        prefixes: request.prefixes,
+        cssProp: request.cssProp,
+        requestedColor: request.requestedColor,
+        requestClass: request.requestClass,
+        requestId,
+      });
+
+      // Timeout mirrors the live-className RPC: resolve [] if the iframe doesn't answer
+      // (e.g. mid-HMR reload). 800ms is well under any human-perceptible write latency and
+      // never blocks the write — the host then degrades to the static AST / §7 floor.
+      setTimeout(() => {
+        if (this._pendingProbeRequests.has(requestId)) {
+          this._pendingProbeRequests.delete(requestId);
+          resolve([]);
+        }
+      }, 800);
+    });
+  }
+
+  /**
+   * Fetch the LIVE applied `class` attribute of an element from the preview iframe (HYP-544).
+   * Used as the write-time `domClasses` source for the inspector color write: the inspector
+   * runs in the right-panel webview, which has no preview iframe of its own, so this host
+   * round-trip is the only way to read the element's real applied classes at write time.
+   * Same request/response shape as takeScreenshot. Resolves null on no-panel / element-not-found
+   * / timeout — the caller then degrades to the static AST write. The `elementId` MUST be the
+   * iframe-relative id (sub-project-relative in a monorepo), matching findElementsByRef.
+   * `itemIndex` selects the occurrence at a repeated JSX site (.map() row) so the anchor
+   * reads the element the user is editing, not always the first rendered instance.
+   */
+  requestLiveClassName(elementId: string, itemIndex?: number | null): Promise<string | null> {
+    const webview = this._panel?.webview;
+    if (!webview || !elementId) return Promise.resolve(null);
+
+    const requestId = `classname-${Date.now()}-${this._generateRandomId(6)}`;
+
+    return new Promise((resolve) => {
+      this._pendingClassNameRequests.set(requestId, (result) => {
+        resolve(result.className);
+      });
+
+      webview.postMessage({
+        type: 'requestLiveClassName',
+        elementId,
+        itemIndex: itemIndex ?? null,
+        requestId,
+      });
+
+      // Timeout: resolve null if the iframe doesn't answer (e.g. mid-HMR reload).
+      // 800ms is well under any human-perceptible write latency and never blocks the write.
+      setTimeout(() => {
+        if (this._pendingClassNameRequests.has(requestId)) {
+          this._pendingClassNameRequests.delete(requestId);
+          resolve(null);
+        }
+      }, 800);
+    });
   }
   /**
    * Take a screenshot of the preview or a specific element.

@@ -192,6 +192,10 @@ export function useStyleSync({
             elementId: selectedId,
             filePath,
             styles,
+            // Live applied className from the DOM (HYP-544) — authoritative replace target.
+            // Without this the extension-host plumbing receives `undefined` and the DOM-anchored
+            // residual override never activates for VS Code users.
+            domClasses: getDOMClassesFromIframe(selectedId),
             state: currentState,
             selectedSourceTabId,
           });

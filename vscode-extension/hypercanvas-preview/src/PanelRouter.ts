@@ -8,6 +8,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { generateTailwindClasses, getConflictingPrefixes } from '@lib/tailwind/generator';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
@@ -15,6 +16,7 @@ import { AstBridge } from './bridges/AstBridge';
 import { toRepoRelativeElementId, toRepoRelativePath } from './bridges/monorepo-path-translate';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
+import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import { ComponentService } from './services/ComponentService';
 import { StyleReadService } from './services/StyleReadService';
 import type { AstMessage, SharedEditorState } from './types';
@@ -35,6 +37,27 @@ export class PanelRouter {
   private _context: vscode.ExtensionContext;
   private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
+  /**
+   * Fetches the LIVE applied className of an element from the preview iframe (HYP-544).
+   * The color write originates in the right-panel webview, which has no preview iframe of
+   * its own — so the inspector's `getDOMClassesFromIframe` reads '' and `ast:updateStyles`
+   * arrives with `domClasses` empty. Before executing the write, routeMessage asks the
+   * preview-panel (which owns the iframe) for the element's live className and awaits it,
+   * so the DOM-anchored twMerge escalation can anchor on reality. Wired in extension.ts to
+   * `previewPanel.requestLiveClassName(elementId)` (mirrors the takeScreenshot wiring),
+   * which avoids a PanelRouter → PreviewPanel circular dependency. Resolves null when the
+   * element can't be found / no preview panel / timeout — the write then degrades to the
+   * static AST behavior (committed set-diff gate no-ops on empty domClasses).
+   */
+  private _liveClassNameProvider?: (elementId: string, itemIndex?: number | null) => Promise<string | null>;
+  /**
+   * Runs the empirical color-probe in the preview-panel iframe (HYP-544 Phase 3). When an
+   * inspector color edit's source can't be statically resolved, this asks the iframe which
+   * candidate token actually drives the element's color (off-screen-clone verification, §5).
+   * Wired in extension.ts to `previewPanel.requestProbeColorCandidates(...)` (same no-circular-dep
+   * pattern as the live-className provider). Resolves [] on no-panel / not-found / timeout.
+   */
+  private _colorProbeProvider?: (request: ColorProbeRequest) => Promise<ColorProbeCandidate[]>;
   /**
    * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
    * `targets/conloca-app/`), empty for single-package projects. The dev server
@@ -193,6 +216,45 @@ export class PanelRouter {
 
     // AST operations — route response back to the requesting webview
     if (type.startsWith('ast:')) {
+      // HYP-544: live write-time className RPC for color writes. When the inspector
+      // (right-panel webview, no preview iframe of its own) sends ast:updateStyles with
+      // an empty domClasses, fetch the element's LIVE applied className from the
+      // preview-panel iframe and await it, so the DOM-anchored twMerge escalation anchors
+      // on reality. Use the PRE-re-root (iframe-relative) elementId: the iframe's
+      // findElementsByRef matches the id it emitted (sub-project-relative in a monorepo),
+      // while the AST write below uses the re-rooted `message`. Degrades to static behavior
+      // on a null result; never throws / never blocks the write.
+      if (type === 'ast:updateStyles' && (this._liveClassNameProvider || this._colorProbeProvider)) {
+        const styleMsg = message as Extract<AstMessage, { type: 'ast:updateStyles' }>;
+        const rawElementId = (rawMessage as { elementId?: unknown }).elementId;
+        const probeElementId = typeof rawElementId === 'string' && rawElementId ? rawElementId : null;
+        // Item index of the selected occurrence at a repeated JSX site (.map() row), keyed by the
+        // iframe-relative id (same space as the raw elementId). Lets the iframe anchor on the
+        // element the user is editing, not always the first.
+        const itemIndex = probeElementId ? (this._stateHub.state.selectedItemIndices?.[probeElementId] ?? null) : null;
+
+        if (!styleMsg.domClasses && this._liveClassNameProvider) {
+          if (probeElementId) {
+            let live: string | null = null;
+            try {
+              live = await this._liveClassNameProvider(probeElementId, itemIndex);
+            } catch {
+              live = null;
+            }
+            styleMsg.domClasses = live ?? '';
+          } else {
+            styleMsg.domClasses = '';
+          }
+        }
+
+        // HYP-544 Phase 3: empirical color-probe. When a same-group color reaches the element from
+        // a source the static AST can't resolve, we can't know statically which token drives it.
+        // Gate the probe on a live same-group conflict (so it doesn't fire on every write), then ask
+        // the iframe which candidate actually drives the color (off-screen-clone verification, §5).
+        // The executor consumes the result ONLY in the case-(c) branch (inline/var/module driver →
+        // inline-style override); a tailwind-class driver is a no-op there → existing twMerge path.
+        await this._maybeProbeColorCandidates(styleMsg, probeElementId, itemIndex);
+      }
       await this._astBridge.handleMessage(message as AstMessage, webview);
       return true;
     }
@@ -526,6 +588,96 @@ export class PanelRouter {
    */
   setOnOpenAIChat(callback: (prompt: string) => void): void {
     this._onOpenAIChat = callback;
+  }
+
+  /**
+   * Wire the live write-time className provider (HYP-544). The extension host backs this
+   * with `previewPanel.requestLiveClassName(elementId)` — a request/response round-trip to
+   * the preview-panel iframe (same promise+timeout shape as takeScreenshot). Called before
+   * an inspector color write so `domClasses` is fresh at write time, with no dependency on
+   * the race-prone push-at-selection state.
+   */
+  setLiveClassNameProvider(provider: (elementId: string, itemIndex?: number | null) => Promise<string | null>): void {
+    this._liveClassNameProvider = provider;
+  }
+
+  /**
+   * Wire the empirical color-probe provider (HYP-544 Phase 3). Backed by
+   * `previewPanel.requestProbeColorCandidates(...)` — same no-circular-dep pattern as the
+   * live-className provider. Lets routeMessage ask the iframe which candidate token drives an
+   * element's color when the color source can't be statically resolved.
+   */
+  setColorProbeProvider(provider: (request: ColorProbeRequest) => Promise<ColorProbeCandidate[]>): void {
+    this._colorProbeProvider = provider;
+  }
+
+  /**
+   * HYP-544 Phase 3 — fire the empirical color-probe and thread the ranked driving candidates onto
+   * the write message, but ONLY when a same-group color is actually applied (the live `domClasses`
+   * carries a conflicting class for the changed property). This keeps the probe off the hot path for
+   * plain writes; the executor further gates it (only an inline/var/module driver redirects the
+   * write). On >1 driver, surface a non-blocking inspector warning and take the first (§6). Never
+   * throws / never blocks the write — any failure degrades to the static AST path.
+   */
+  private async _maybeProbeColorCandidates(
+    styleMsg: Extract<AstMessage, { type: 'ast:updateStyles' }>,
+    probeElementId: string | null,
+    itemIndex: number | null,
+  ): Promise<void> {
+    if (!this._colorProbeProvider || !probeElementId) return;
+
+    const styleKeys = Object.keys(styleMsg.styles ?? {});
+    if (styleKeys.length === 0) return;
+    const prefixes = getConflictingPrefixes(styleKeys);
+    if (prefixes.length === 0) return;
+
+    // Only probe when the live DOM actually shows a same-group conflict class for this property.
+    const liveTokens = (styleMsg.domClasses ?? '').split(/\s+/).filter(Boolean);
+    const hasLiveConflict = liveTokens.some((tok) => prefixes.some((p) => tok.startsWith(p)));
+    if (!hasLiveConflict) return;
+
+    // The probe's "request" is one changed property at a time (color edits are single-prop). Pick the
+    // first changed key; its value is the requested color, its conflict prefix the candidate filter.
+    const cssProp = styleKeys[0];
+    const requestedColor = styleMsg.styles[cssProp];
+    if (!requestedColor) return;
+
+    // The Tailwind class that paints the requested color (e.g. `bg-red-600`). The iframe probe swaps
+    // this IN on the clone to empirically verify a tailwind-class / hashed module-class driver — without
+    // it those candidate kinds can't be tested and the probe would return [] for them (codex P2).
+    const requestClass = generateTailwindClasses({ [cssProp]: requestedColor }) || undefined;
+
+    let driving: ColorProbeCandidate[] = [];
+    try {
+      driving = await this._colorProbeProvider({
+        elementId: probeElementId,
+        itemIndex,
+        prefixes,
+        cssProp,
+        requestedColor,
+        requestClass,
+      });
+    } catch {
+      driving = [];
+    }
+
+    if (driving.length === 0) return;
+    styleMsg.probeDriving = driving;
+
+    if (driving.length > 1) {
+      const chosen = driving[0];
+      const others = driving.length - 1;
+      // Non-blocking breadcrumb — reuse the existing inspector notification surface (no modal, §6).
+      void vscode.window.showWarningMessage(
+        `HyperCanvas: color resolved at ${chosen.kind} \`${chosen.token}\`; ${others} other place${others === 1 ? '' : 's'} could also control this color.`,
+      );
+    }
+    console.log(
+      '[PanelRouter] HYP-544 color-probe driving candidates:',
+      JSON.stringify(driving),
+      '→ chose',
+      JSON.stringify(driving[0]),
+    );
   }
 
   dispose(): void {

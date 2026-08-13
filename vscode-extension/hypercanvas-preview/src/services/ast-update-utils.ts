@@ -5,6 +5,7 @@
 import * as t from '@babel/types';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import { isJsxSourceFile } from './ast-utils';
+import type { ColorProbeCandidate } from './color-probe-types';
 import type { NodeRef } from '@shared/element-tracing/types';
 import type { FileIO } from '@lib/ast/file-io';
 import { resolveWorkspacePath } from './workspace-path';
@@ -18,6 +19,8 @@ export interface UpdateStylesDeps {
     nodeRef: NodeRef,
   ) => Promise<{ result: FindElementResult; ast: t.File; resolvedPath: string } | null>;
   updateNodeMap: (filePath: string) => Promise<void>;
+  /** HYP-544 Phase 3 — ranked driving candidates from the empirical color-probe (unresolvable case). */
+  probeDriving?: ColorProbeCandidate[];
 }
 
 export async function updateStyles(
@@ -27,6 +30,7 @@ export async function updateStyles(
   state: string | undefined,
   nodeRef: NodeRef | undefined,
   selectedSourceTabId: string | undefined,
+  domClasses: string | undefined,
   deps: UpdateStylesDeps,
 ): Promise<
   { success: true; resolvedPath: string; contentBeforeWrite: string | undefined } | { success: false; error: string }
@@ -54,6 +58,8 @@ export async function updateStyles(
     styles,
     state,
     selectedSourceTabId,
+    domClasses,
+    probeDriving: deps.probeDriving,
     runtimeThemeContext: {
       ideThemePreference: 'system',
       resolvedColorScheme: 'light',

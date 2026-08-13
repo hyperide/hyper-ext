@@ -48,6 +48,7 @@ import {
   serializeSelectionGraceCache,
 } from './selection-grace-cache';
 import { getItemIndexFromDOM } from './iframe-utils';
+import { detectColorCandidates, probeDrivingCandidates, type ColorCandidate } from './iframe-color-probe';
 import {
   clientInternalFrames,
   clientSourceMapCache,
@@ -1009,7 +1010,7 @@ window.addEventListener('unload', () => {
 });
 import { updateDesignStyles } from './iframe-design-styles';
 
-// nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
+// nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- VS Code webview iframe, origin not applicable
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data;
   if (!msg || !msg.type) return;
@@ -1171,6 +1172,64 @@ window.addEventListener('message', (event: MessageEvent) => {
     _previewResizeOrig.delete(id);
     return;
   }
+
+  // HYP-544: live applied className request from the extension host (write-time DOM anchor
+  // for an inspector color replace). Read the real `class` attribute off the live element and
+  // round-trip it back. Resolves with null className when the element can't be found — the
+  // host then degrades the write to the static AST behavior.
+  if (msg.type === 'hypercanvas:requestLiveClassName') {
+    // Use the selected item index so a repeated JSX site (.map() row) anchors on the
+    // element the user is actually editing, not always the first rendered instance.
+    const liveItemIndex = (msg.itemIndex as number | null | undefined) ?? 0;
+    const el = findElementsByRef(msg.elementId as string, liveItemIndex)[0] ?? null;
+    // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:liveClassNameResult',
+        requestId: msg.requestId,
+        className: el && typeof el.className === 'string' ? el.className : null,
+      },
+      '*',
+    );
+    return;
+  }
+
+  // HYP-544 Phase 3: empirical color-probe request from the extension host. When an inspector
+  // color edit reaches the host from a source the static AST classifier can't resolve, the host
+  // asks the iframe (the only realm with the live DOM + computed style) to find which candidate
+  // token actually DRIVES the element's color. Enumerate candidates (§4) then verify each via the
+  // Tier-1 off-screen-clone probe (§5.1) — invisible by construction, the real node is never
+  // mutated. Round-trip the ranked driving-candidate list back. Resolves an empty list when the
+  // element can't be found / nothing drives the color — the host then degrades to the §7 floor.
+  if (msg.type === 'hypercanvas:probeColorCandidates') {
+    const probeItemIndex = (msg.itemIndex as number | null | undefined) ?? 0;
+    const probeEl = findElementsByRef(msg.elementId as string, probeItemIndex)[0] ?? null;
+    const prefixes = Array.isArray(msg.prefixes) ? (msg.prefixes as string[]) : [];
+    const cssProp = (msg.cssProp as string | undefined) ?? 'backgroundColor';
+    const requestedColor = (msg.requestedColor as string | undefined) ?? '';
+    const requestClass = (msg.requestClass as string | undefined) ?? undefined;
+    let driving: ColorCandidate[] = [];
+    if (probeEl && requestedColor) {
+      try {
+        const candidates = detectColorCandidates(probeEl, prefixes, cssProp);
+        driving = probeDrivingCandidates(probeEl, candidates, requestedColor, cssProp, { requestClass });
+      } catch {
+        driving = [];
+      }
+    }
+    // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
+    window.parent.postMessage(
+      {
+        type: 'hypercanvas:probeColorCandidatesResult',
+        requestId: msg.requestId,
+        driving,
+      },
+      '*',
+    );
+    return;
+  }
+
+  // Screenshot request from MCP tool
   if (msg.type === 'hypercanvas:takeScreenshot') {
     handleScreenshotRequest(msg.requestId as string, msg.elementId as string | null, findElementsByRef);
     return;

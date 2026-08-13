@@ -234,6 +234,23 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             requestId: msg.requestId,
             dataUrl: msg.dataUrl,
           } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:liveClassNameResult') {
+          // HYP-544: iframe answered the write-time live-className request — forward to the
+          // extension host, which resolves the pending requestLiveClassName promise.
+          canvas.sendEvent({
+            type: 'liveClassNameResult',
+            requestId: msg.requestId,
+            className: msg.className,
+          } as unknown as PlatformMessage);
+        } else if (msg.type === 'hypercanvas:probeColorCandidatesResult') {
+          // HYP-544 Phase 3: iframe answered the empirical color-probe — forward the ranked
+          // driving-candidate list to the extension host, which resolves the pending
+          // requestProbeColorCandidates promise.
+          canvas.sendEvent({
+            type: 'probeColorCandidatesResult',
+            requestId: msg.requestId,
+            driving: msg.driving,
+          } as unknown as PlatformMessage);
         } else if (msg.type === 'hypercanvas:resolveServerSourceMap') {
           // Approach B: iframe requests server-side source map resolution from extension host.
           // Forward to extension host which reads the .map file from the local filesystem.
@@ -627,6 +644,34 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           postToPreviewIframe(iframeEl, {
             type: 'hypercanvas:takeScreenshot',
             elementId: msg.elementId,
+            requestId: msg.requestId,
+          });
+          break;
+
+        // HYP-544: extension host requests the live applied className of an element from the
+        // iframe at write time (DOM-anchored color replace). Forward to the iframe; the result
+        // returns via 'hypercanvas:liveClassNameResult' (handled by useCanvasInteraction).
+        case 'requestLiveClassName':
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:requestLiveClassName',
+            elementId: msg.elementId,
+            itemIndex: msg.itemIndex,
+            requestId: msg.requestId,
+          });
+          break;
+
+        // HYP-544 Phase 3: extension host requests the empirical color-probe — which candidate
+        // token drives the element's color, when the static AST classifier can't resolve it.
+        // Forward to the iframe; the result returns via 'hypercanvas:probeColorCandidatesResult'.
+        case 'probeColorCandidates':
+          postToPreviewIframe(iframeEl, {
+            type: 'hypercanvas:probeColorCandidates',
+            elementId: msg.elementId,
+            itemIndex: msg.itemIndex,
+            prefixes: msg.prefixes,
+            cssProp: msg.cssProp,
+            requestedColor: msg.requestedColor,
+            requestClass: msg.requestClass,
             requestId: msg.requestId,
           });
           break;

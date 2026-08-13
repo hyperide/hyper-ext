@@ -74,6 +74,7 @@ function createMockWebview() {
 
 function createMockStateHub() {
   return {
+    state: { selectedItemIndices: {} as Record<string, number | null> },
     applyUpdate: mock(),
     register: mock(),
     unregister: mock(),
@@ -313,6 +314,283 @@ describe('PanelRouter', () => {
         wv as never,
       );
       expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+    });
+  });
+
+  // HYP-544: live write-time className RPC. The color write originates in the
+  // right-panel webview, which has no preview iframe of its own — so the inspector's
+  // `getDOMClassesFromIframe` returns '' and `ast:updateStyles` arrives with
+  // domClasses empty. Before executing the write, PanelRouter asks the preview-panel
+  // (which owns the iframe) for the element's LIVE applied className and awaits it,
+  // then threads it as the `domClasses` arg so the DOM-anchored twMerge escalation
+  // can fire. No dependency on race-prone push-at-selection state.
+  describe('live write-time className RPC (HYP-544)', () => {
+    const updateStylesArgs = (r: typeof router) =>
+      (r.astBridge.astService.updateStyles as ReturnType<typeof mock>).mock.calls.at(-1);
+
+    it('fetches the live className from the provider and threads it into updateStyles when domClasses is empty', async () => {
+      const provider = mock((_elementId: string) => Promise.resolve('px-6 py-4 rounded bg-blue-600'));
+      router.setLiveClassNameProvider(provider);
+      const wv = createMockWebview();
+
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-live',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(provider).toHaveBeenCalledWith('src/components/Card.tsx:9:2', null);
+      // 7th positional arg of AstService.updateStyles is domClasses
+      expect(updateStylesArgs(router)?.[6]).toBe('px-6 py-4 rounded bg-blue-600');
+    });
+
+    it('does NOT call the provider when domClasses is already populated (SaaS / same-realm read)', async () => {
+      const provider = mock((_elementId: string) => Promise.resolve('should-not-be-used'));
+      router.setLiveClassNameProvider(provider);
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-prefilled',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 bg-blue-600',
+        },
+        wv as never,
+      );
+
+      expect(provider).not.toHaveBeenCalled();
+      expect(updateStylesArgs(router)?.[6]).toBe('p-2 bg-blue-600');
+    });
+
+    it('degrades gracefully when the provider returns null — write still fires with empty domClasses', async () => {
+      const provider = mock((_elementId: string) => Promise.resolve(null));
+      router.setLiveClassNameProvider(provider);
+      const wv = createMockWebview();
+
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-null',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(provider).toHaveBeenCalled();
+      // Write still proceeds (response posted), domClasses falls back to '' — committed
+      // set-diff gate then no-ops and static AST behavior is preserved.
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'ast:response', success: true }));
+      expect(updateStylesArgs(router)?.[6]).toBe('');
+    });
+
+    it('passes the PRE-re-root (iframe-relative) elementId to the provider in a monorepo', async () => {
+      // _reRootMessage converts elementId to repo-relative for the AST write, but the
+      // iframe's findElementsByRef matches the sub-project-relative id it emitted. The
+      // RPC must use the raw id so the iframe lookup hits.
+      router.setSubProjectPrefix('targets/conloca-app/');
+      const provider = mock((_elementId: string) => Promise.resolve('bg-blue-600'));
+      router.setLiveClassNameProvider(provider);
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-mono',
+          filePath: 'src/app/page.tsx',
+          elementId: 'src/app/page.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+
+      // Provider gets the iframe-relative id, NOT the repo-relative one used for the write.
+      expect(provider).toHaveBeenCalledWith('src/app/page.tsx:9:2', null);
+      // The AST write still receives the re-rooted id.
+      expect(updateStylesArgs(router)?.[1]).toBe('targets/conloca-app/src/app/page.tsx:9:2');
+    });
+
+    it('threads the selected item index (repeated .map() site) to the provider', async () => {
+      // At a repeated JSX site the selected occurrence is N>0; the iframe must read the live
+      // class off that instance, not always index 0. PanelRouter sources the index from
+      // StateHub.selectedItemIndices keyed by the iframe-relative elementId.
+      stateHub.state.selectedItemIndices = { 'src/List.tsx:12:6': 2 };
+      const provider = mock((_elementId: string, _itemIndex?: number | null) => Promise.resolve('bg-blue-600'));
+      router.setLiveClassNameProvider(provider);
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-item',
+          filePath: 'src/List.tsx',
+          elementId: 'src/List.tsx:12:6',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+
+      expect(provider).toHaveBeenCalledWith('src/List.tsx:12:6', 2);
+    });
+
+    it('skips the RPC when no provider is wired (SaaS / no preview panel)', async () => {
+      const wv = createMockWebview();
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-noprovider',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+        },
+        wv as never,
+      );
+      expect(handled).toBe(true);
+      // No provider → no RPC; domClasses stays empty (undefined), the committed gate no-ops.
+      expect(updateStylesArgs(router)?.[6]).toBeFalsy();
+    });
+  });
+
+  // HYP-544 Phase 3: empirical color-probe RPC. When a same-group color is actually applied
+  // (live domClasses carries a conflicting class for the changed property) but the source can't
+  // be statically resolved, PanelRouter asks the preview-panel iframe which candidate token
+  // drives the color, then threads the ranked driving list as the 8th arg of updateStyles. The
+  // executor consumes it only in the case-(c) branch (inline/var/module → inline-style override).
+  describe('empirical color-probe RPC (HYP-544 Phase 3)', () => {
+    const updateStylesArgs = (r: typeof router) =>
+      (r.astBridge.astService.updateStyles as ReturnType<typeof mock>).mock.calls.at(-1);
+
+    const driving = [{ kind: 'css-var' as const, token: '--brand', locationHint: 'computed' }];
+
+    it('fires the probe and threads driving candidates when a live same-group conflict exists', async () => {
+      const probe = mock(() => Promise.resolve(driving));
+      router.setColorProbeProvider(probe);
+      const wv = createMockWebview();
+
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-probe',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 bg-blue-600', // live same-group bg-* conflict
+        },
+        wv as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(probe).toHaveBeenCalledTimes(1);
+      // The probe request carries the conflict prefixes, requested color, and css prop.
+      const req = probe.mock.calls[0][0] as {
+        elementId: string;
+        cssProp: string;
+        requestedColor: string;
+        prefixes: string[];
+        requestClass?: string;
+      };
+      expect(req.elementId).toBe('src/components/Card.tsx:9:2');
+      expect(req.cssProp).toBe('backgroundColor');
+      expect(req.requestedColor).toBe('#dc2626');
+      expect(req.prefixes.some((p) => p.startsWith('bg-'))).toBe(true);
+      // codex P2: the host supplies the Tailwind class that paints the requested color, so the iframe
+      // probe can verify tailwind-class / hashed-module-class drivers (swap it in on the clone).
+      expect(req.requestClass).toMatch(/^bg-/);
+      // 8th positional arg of AstService.updateStyles is probeDriving.
+      expect(updateStylesArgs(router)?.[7]).toEqual(driving);
+    });
+
+    it('does NOT fire the probe when the live DOM shows no same-group conflict class', async () => {
+      const probe = mock(() => Promise.resolve(driving));
+      router.setColorProbeProvider(probe);
+      const wv = createMockWebview();
+
+      await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-noconflict',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 text-white', // no bg-* — nothing to probe
+        },
+        wv as never,
+      );
+
+      expect(probe).not.toHaveBeenCalled();
+      expect(updateStylesArgs(router)?.[7]).toBeFalsy();
+    });
+
+    it('does NOT thread anything when the probe finds no driving candidate (degrades to floor)', async () => {
+      const probe = mock(() => Promise.resolve([]));
+      router.setColorProbeProvider(probe);
+      const wv = createMockWebview();
+
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-empty',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 bg-blue-600',
+        },
+        wv as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(updateStylesArgs(router)?.[7]).toBeFalsy();
+    });
+
+    it('degrades gracefully when the probe provider throws — write still fires', async () => {
+      const probe = mock(() => Promise.reject(new Error('iframe gone')));
+      router.setColorProbeProvider(probe);
+      const wv = createMockWebview();
+
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-throw',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 bg-blue-600',
+        },
+        wv as never,
+      );
+
+      expect(handled).toBe(true);
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'ast:response', success: true }));
+      expect(updateStylesArgs(router)?.[7]).toBeFalsy();
+    });
+
+    it('skips the probe when no provider is wired (SaaS / no preview panel)', async () => {
+      const wv = createMockWebview();
+      const handled = await router.routeMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r-noprobe',
+          filePath: 'src/components/Card.tsx',
+          elementId: 'src/components/Card.tsx:9:2',
+          styles: { backgroundColor: '#dc2626' },
+          domClasses: 'p-2 bg-blue-600',
+        },
+        wv as never,
+      );
+      expect(handled).toBe(true);
+      expect(updateStylesArgs(router)?.[7]).toBeFalsy();
     });
   });
 

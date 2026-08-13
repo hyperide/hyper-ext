@@ -10,6 +10,7 @@
 import * as fsSync from 'node:fs';
 import * as nodePath from 'node:path';
 import * as t from '@babel/types';
+import type { ColorProbeCandidate } from './color-probe-types';
 import type { FileIO } from '@lib/ast/file-io';
 import { insertElement, duplicateElement, pasteElement, wrapElement } from './ast-element-ops';
 import {
@@ -411,6 +412,8 @@ export class AstService {
     state?: string,
     nodeRef?: NodeRef,
     selectedSourceTabId?: string,
+    domClasses?: string,
+    probeDriving?: ColorProbeCandidate[],
   ): Promise<UpdateStylesResult> {
     dbg(
       `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
@@ -424,6 +427,8 @@ export class AstService {
       state,
       nodeRef,
       selectedSourceTabId,
+      domClasses,
+      probeDriving,
     );
   }
 

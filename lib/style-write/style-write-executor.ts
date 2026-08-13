@@ -9,12 +9,13 @@
 import path from 'node:path';
 import * as t from '@babel/types';
 import { getCssModuleClassReferences, getCssModuleImportBindings } from '@lib/ast/css-module-references';
+import type { BindingLiteralRewrite, MutatorWriteHints } from '@lib/ast/dynamic-classname-mutator';
 import { detectClassNameType, modifyDynamicClassName } from '@lib/ast/dynamic-classname-mutator';
 import type { FileIO } from '@lib/ast/file-io';
 import { applyInlineStyleUpdate } from '@lib/ast/inline-style-mutator';
 import { getAttribute, getAttributeStaticClassName, getAttributeString, setAttribute } from '@lib/ast/mutator';
 import { NodeFileIO } from '@lib/ast/node-file-io';
-import { createFileParser, spliceNodeSource } from '@lib/ast/parser';
+import { createFileParser, printNodeSource, spliceNodeSource } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import type { CssSystemId, RuntimeThemeContext, StyleSourceOwner } from '@lib/style-read/types';
 import { removeConflictingClasses } from '@lib/tailwind/parser';
@@ -36,9 +37,43 @@ import type {
 } from './types';
 import { errorMessage } from './utils';
 
+/**
+ * HYP-544 Phase 3 — a candidate token the empirical color-probe found to DRIVE the element's
+ * color. The probe runs in the preview iframe (off-screen-clone verification); the host threads
+ * the ranked driving list here. The executor's Tailwind dynamic branch consults it ONLY in the
+ * unresolvable case (binding resolution found nothing): an inline/var/module-class driver means
+ * a twMerge override is a NO-OP (inline/var wins specificity), so the write is redirected to an
+ * inline-style override on the element ref instead. A tailwind-class driver keeps the twMerge path.
+ */
+export interface ProbeDrivingCandidate {
+  kind: 'tailwind-class' | 'inline-style' | 'css-var' | 'module-class';
+  token: string;
+  locationHint: string;
+}
+
 export interface StyleWriteExecutorOptions {
   fileIO?: FileIO;
   projectRoot?: string;
+  /**
+   * Live applied className from the DOM (HYP-544). Request-scoped — the executor is constructed fresh
+   * per request, so this never leaks across requests. Authoritative source of "what color is applied
+   * now"; lets the Tailwind writer escalate the residual to a twMerge override when a same-group color
+   * reaches the element from an opaque source the static AST cannot rewrite.
+   */
+  domClasses?: string;
+  /**
+   * HYP-544 Phase 3 — ranked driving candidates from the empirical color-probe (preview-iframe
+   * realm). Present only when the host ran the probe (unresolvable color source). Used to redirect
+   * an inline/var/module-driven color write to an inline-style override (a twMerge wrap can't change
+   * an inline- or var-driven color). Empty/absent → existing behavior.
+   */
+  probeDriving?: ProbeDrivingCandidate[];
+  /**
+   * HYP-544 Phase 3 — the raw requested CSS styles (e.g. `{ backgroundColor: '#dc2626' }`) for this
+   * write, retained so the probe-driven inline-style override can write the actual color value (the
+   * TailwindPlan only carries the generated class, not the raw value).
+   */
+  requestedStyles?: Record<string, string>;
 }
 
 export interface ExecuteStyleWriteRequestInput {
@@ -51,6 +86,18 @@ export interface ExecuteStyleWriteRequestInput {
   runtimeThemeContext: RuntimeThemeContext;
   fileIO?: FileIO;
   projectRoot?: string;
+  /**
+   * Live applied className from the DOM (HYP-544). The authoritative "what color is applied now",
+   * collected client-side and threaded through the RPC/HTTP body. Used by the Tailwind writer to
+   * anchor the replace target on reality and escalate the opaque-source residual to a twMerge override.
+   */
+  domClasses?: string;
+  /**
+   * HYP-544 Phase 3 — ranked driving candidates from the empirical color-probe (preview-iframe realm),
+   * threaded by the host when the color source is unresolvable. Redirects an inline/var/module-driven
+   * color write to an inline-style override (twMerge can't change inline/var-driven colors).
+   */
+  probeDriving?: ProbeDrivingCandidate[];
 }
 
 interface ElementRefPosition {
@@ -102,11 +149,17 @@ export class StyleWriteExecutor {
   private readonly fileParser: ReturnType<typeof createFileParser>;
   private readonly fileIO: FileIO;
   private readonly projectRoot?: string;
+  private readonly domClasses?: string;
+  private readonly probeDriving?: ProbeDrivingCandidate[];
+  private readonly requestedStyles?: Record<string, string>;
 
   constructor(options: StyleWriteExecutorOptions = {}) {
     this.fileIO = options.fileIO ?? new NodeFileIO();
     this.fileParser = createFileParser(this.fileIO);
     this.projectRoot = options.projectRoot;
+    this.domClasses = options.domClasses;
+    this.probeDriving = options.probeDriving;
+    this.requestedStyles = options.requestedStyles;
   }
 
   async execute(plan: StyleWritePlan): Promise<StyleWriteResult> {
@@ -152,6 +205,21 @@ export class StyleWriteExecutor {
       };
     }
 
+    // HYP-544 Phase 3: empirical-probe redirect. When the color source was unresolvable and the
+    // host's probe found that the driving candidate is an INLINE style, a CSS VAR, or a hashed
+    // MODULE class, a twMerge/className override is a no-op (inline/var wins specificity; a var-driven
+    // color isn't changed by adding a utility class). Redirect to an inline-style override on the
+    // element ref — the universal §7 floor — using the raw requested CSS value. This runs BEFORE the
+    // literal-className branch too: `className="bg-blue-600" style={{ background: 'var(--brand)' }}`
+    // would otherwise rewrite the class while the inline var still wins the cascade (codex P2). A
+    // tailwind-class driver (or no probe result) falls through to the normal className write below.
+    const inlineOverride = this.probeDrivenInlineOverride();
+    if (inlineOverride) {
+      applyInlineStyleUpdate(element, inlineOverride);
+      await this.fileParser.writeAST(ast, absolutePath);
+      return { success: true, plan, mutatedFiles: [absolutePath] };
+    }
+
     const classNameType = detectClassNameType(element);
     if (classNameType === 'string') {
       const existingClassName = getAttributeString(element, 'className') || '';
@@ -177,6 +245,13 @@ export class StyleWriteExecutor {
     const originalEnd = valueBefore?.end ?? undefined;
 
     const locations: LegacyClassNameLocation[] = [];
+    const canInjectTwMerge = await this.projectResolvesTailwindMerge(plan.projectRoot);
+    // HYP-544 Phase 1: binding resolution may find-replace the conflicting class at a SAME-FILE const's
+    // literal — a node in a DISJOINT top-level statement, outside the className value's span. The
+    // mutator records each such rewritten literal's original source range here so we can splice it too
+    // (the className-value splice below never touches the const).
+    const bindingRewrites: BindingLiteralRewrite[] = [];
+    const writeHints: MutatorWriteHints = { forceFullReprint: false };
     modifyDynamicClassName(
       ast,
       sourceCode,
@@ -186,20 +261,85 @@ export class StyleWriteExecutor {
       plan.strategy.removeForProperties,
       plan.strategy.mode === 'dynamic' && plan.strategy.fallbackStrategy === 'wrap-expression' ? 'wrap' : 'append',
       tailwindStatePrefix(plan),
+      this.domClasses,
+      canInjectTwMerge,
+      bindingRewrites,
+      writeHints,
     );
 
-    const valueAfter = getAttribute(element, 'className');
-    const spliced =
-      valueAfter && typeof originalStart === 'number' && typeof originalEnd === 'number'
-        ? spliceNodeSource(sourceCode, valueAfter, originalStart, originalEnd)
-        : null;
+    // HYP-544 Phase 2 (§7): the mutator hit an OPAQUE same-group conflict it could not override (the
+    // project has no `tailwind-merge` and the override path bailed rather than write an unresolvable
+    // import). A concat-append would not win that cascade, so the mutator left the className UNTOUCHED and
+    // signaled the universal §7 floor: write an inline `style` override on the element ref instead. This
+    // is the same write the empirical-probe redirect (above) uses — reuse, not a new mechanism. Requires
+    // the raw requested CSS value (the TailwindPlan carries only the generated class).
+    if (writeHints.needsInlineFloor && this.requestedStyles && Object.keys(this.requestedStyles).length > 0) {
+      applyInlineStyleUpdate(element, { ...this.requestedStyles });
+      await this.fileParser.writeAST(ast, absolutePath);
+      return { success: true, plan, mutatedFiles: [absolutePath] };
+    }
 
-    if (spliced !== null) {
-      await this.fileIO.writeFile(absolutePath, spliced);
+    const valueAfter = getAttribute(element, 'className');
+
+    // P1 guard (HYP-544 rebase interaction): whenever the mutator INJECTED a new top-level
+    // `import { twMerge } from 'tailwind-merge'` (the #381 opaque-source override on a file with no
+    // existing import — with OR without a coexisting same-file const find-replace), the injected import
+    // is an inserted node with NO source range. A span-splice write (className span ± const literal
+    // spans) cannot represent it and would emit `twMerge(...)` WITHOUT the import — a broken build (the
+    // pre-rebase #381 branch always `writeAST`'d, so it never hit this; HYP-575's span-splice did).
+    // Whole-file recast in that case — recast still preserves every untouched original node's bytes.
+    if (writeHints.forceFullReprint) {
+      await this.fileParser.writeAST(ast, absolutePath);
+      return { success: true, plan, mutatedFiles: [absolutePath] };
+    }
+
+    // Common path (HYP-575, no binding rewrites): a single surgical splice of the className value's own
+    // span. Kept verbatim — `spliceNodeSource` re-prints only that node and preserves every other byte.
+    if (bindingRewrites.length === 0) {
+      const spliced =
+        valueAfter && typeof originalStart === 'number' && typeof originalEnd === 'number'
+          ? spliceNodeSource(sourceCode, valueAfter, originalStart, originalEnd)
+          : null;
+      if (spliced !== null) {
+        await this.fileIO.writeFile(absolutePath, spliced);
+        this.fileParser.invalidate(absolutePath);
+      } else {
+        // Safety net: no usable source range (synthetic node / missing offsets) — fall back to the
+        // whole-file recast print. Still format-preserving for every node recast can round-trip.
+        await this.fileParser.writeAST(ast, absolutePath);
+      }
+      return { success: true, plan, mutatedFiles: [absolutePath] };
+    }
+
+    // HYP-544 Phase 1: binding resolution rewrote one or more SAME-FILE const literals — each lives in a
+    // DISJOINT top-level statement, so the className-value splice alone never touches them. Collect every
+    // disjoint splice (the className span plus each const literal span), each an original node with valid
+    // offsets, and apply them to the ONE original source in DESCENDING start order so an earlier splice
+    // never shifts the offsets of a later one.
+    const splices: { start: number; end: number; replacement: string }[] = [];
+    if (valueAfter && typeof originalStart === 'number' && typeof originalEnd === 'number') {
+      splices.push({ start: originalStart, end: originalEnd, replacement: printNodeSource(valueAfter) });
+    }
+    for (const rewrite of bindingRewrites) {
+      if (
+        Number.isInteger(rewrite.start) &&
+        Number.isInteger(rewrite.end) &&
+        rewrite.start >= 0 &&
+        rewrite.end <= sourceCode.length &&
+        rewrite.start <= rewrite.end
+      ) {
+        splices.push({ start: rewrite.start, end: rewrite.end, replacement: printNodeSource(rewrite.node) });
+      }
+    }
+
+    if (splices.length > 0) {
+      let out = sourceCode;
+      for (const s of splices.sort((a, b) => b.start - a.start)) {
+        out = out.slice(0, s.start) + s.replacement + out.slice(s.end);
+      }
+      await this.fileIO.writeFile(absolutePath, out);
       this.fileParser.invalidate(absolutePath);
     } else {
-      // Safety net: no usable source range (synthetic node / missing offsets) — fall back to the
-      // whole-file recast print. Still format-preserving for every node recast can round-trip.
       await this.fileParser.writeAST(ast, absolutePath);
     }
     return { success: true, plan, mutatedFiles: [absolutePath] };
@@ -279,6 +419,43 @@ export class StyleWriteExecutor {
     const result = findElementByPosition(ast, position.line, position.column);
     return result?.element ?? null;
   }
+
+  /**
+   * HYP-544 Phase 3 — if the empirical probe found that this color is driven by an inline style,
+   * a CSS var, or a hashed module class (NOT a Tailwind utility), return the inline-style override
+   * to write (`{ backgroundColor: '#dc2626' }`); else null. A twMerge className wrap can't change an
+   * inline/var-driven color (specificity / it doesn't touch the var), so we redirect to the universal
+   * inline-style floor (§7). A tailwind-class driver returns null → keep the existing twMerge path.
+   * Requires the raw requested CSS styles (the TailwindPlan only carries the generated class).
+   */
+  private probeDrivenInlineOverride(): Record<string, string> | null {
+    const first = this.probeDriving?.[0];
+    if (!first) return null;
+    if (first.kind === 'tailwind-class') return null; // twMerge path handles utility drivers
+    if (!this.requestedStyles || Object.keys(this.requestedStyles).length === 0) return null;
+    return { ...this.requestedStyles };
+  }
+
+  /**
+   * Does the EDITED project resolve `tailwind-merge`? Gates whether the residual override may inject a
+   * new `import { twMerge } from 'tailwind-merge'`. Reading the project's own package.json (not
+   * HyperIDE's) is what keeps a color edit from breaking the user's build with an unresolvable import.
+   * Conservative: any read/parse failure → false (fall back to the safe concat-append).
+   */
+  private async projectResolvesTailwindMerge(planProjectRoot: string): Promise<boolean> {
+    const root = planProjectRoot || this.projectRoot;
+    if (!root) return false;
+    try {
+      const raw = await this.fileIO.readFile(path.join(root, 'package.json'));
+      const pkg = JSON.parse(raw) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      return Boolean(pkg.dependencies?.['tailwind-merge'] || pkg.devDependencies?.['tailwind-merge']);
+    } catch {
+      return false;
+    }
+  }
 }
 
 export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestInput): Promise<StyleWriteResult> {
@@ -310,6 +487,9 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     executor: new StyleWriteExecutor({
       fileIO: input.fileIO,
       projectRoot: input.projectRoot,
+      domClasses: input.domClasses,
+      probeDriving: input.probeDriving,
+      requestedStyles: input.styles,
     }),
   });
   const context = createStyleWriteContextFromRequest({

@@ -12,6 +12,16 @@ import { getAttribute, setAttribute } from './mutator.js';
 /** Callee names whose first/string arguments hold static Tailwind class literals. */
 const CLASS_MERGE_CALLEES = new Set(['cn', 'clsx', 'classnames', 'classNames', 'twMerge', 'cva', 'tw']);
 
+/**
+ * Merge callees that resolve Tailwind conflicts last-wins (tailwind-merge backed by convention).
+ * For these, appending the new class as the LAST argument already makes it win — no outer twMerge
+ * wrap and no extra import are needed.
+ */
+const TW_BACKED_MERGE_CALLEES = new Set(['cn', 'twMerge', 'cva', 'tw']);
+
+/** Pure-concatenation callees: appending an argument does NOT win Tailwind conflicts. */
+const PLAIN_CONCAT_MERGE_CALLEES = new Set(['clsx', 'classnames', 'classNames']);
+
 function getCalleeName(callee: t.Expression | t.V8IntrinsicIdentifier): string | null {
   if (t.isIdentifier(callee)) return callee.name;
   // twMerge(clsx(...)) or styles.cn(...) — use the trailing member property name
@@ -645,6 +655,9 @@ function replaceConflictingInStaticLiterals(
   newClasses: string,
   changedStyleKeys: string[],
   state?: string,
+  // HYP-544: when provided, every same-group class stripped from a static literal is recorded here.
+  // The caller diffs it against the live DOM conflict to detect a conflict from an OPAQUE source.
+  removedSink?: Set<string>,
 ): InPlaceReplaceResult {
   const visit = (node: t.Expression): InPlaceReplaceResult => {
     if (t.isStringLiteral(node)) {
@@ -652,6 +665,7 @@ function replaceConflictingInStaticLiterals(
       if (removed.length === 0) {
         return { handledConflict: false, guaranteedNewClass: false };
       }
+      if (removedSink) for (const cls of removed) removedSink.add(cls);
       // Preserve the literal's leading/trailing whitespace. A concat tail like `' text-red-500'`
       // (the shape the append fallback itself produces) needs its leading space kept, or the new
       // class would glue onto the preceding operand's last class at runtime (`...p-2text-blue-500`).
@@ -766,18 +780,421 @@ function replaceConflictingInStaticLiterals(
 }
 
 /**
+ * HYP-544: the same-property classes the LIVE applied className (from the DOM) carries for the changed
+ * properties. `domClasses` is the authoritative "what is applied right now". The caller diffs this set
+ * against the classes the static rewrite stripped — whatever remains came from an OPAQUE source (an
+ * opaque prop, a dynamic branch) the AST cannot rewrite, and only that residual needs a twMerge override.
+ */
+function liveDomConflictClasses(domClasses: string | undefined, changedStyleKeys: string[], state?: string): string[] {
+  if (!domClasses) return [];
+  return removeConflictingClasses(domClasses, changedStyleKeys, state).removed;
+}
+
+/**
+ * HYP-544 Phase 1: one same-file const literal that binding resolution rewrote in place. The executor
+ * splices each `[start, end)` range with the re-printed `node`, alongside the className value's own
+ * span — the const lives in a DISJOINT top-level statement the className splice never touches.
+ */
+export interface BindingLiteralRewrite {
+  /** The rewritten init node — a StringLiteral for `const X = '…'`, or the whole concat/ternary init. */
+  node: t.Expression;
+  start: number;
+  end: number;
+}
+
+/**
+ * HYP-544 Phase 1: out-channel for write hints the executor must honor. `forceFullReprint` is set when a
+ * const find-replace coexists with a twMerge override that INJECTED a top-level import (an inserted node
+ * with no source range): the splice path can't represent the insertion, so the executor must whole-file
+ * recast instead. Recast still preserves every untouched original node's bytes.
+ *
+ * HYP-544 Phase 2 (§7): `needsInlineFloor` is set when an OPAQUE same-group conflict reached the element
+ * (a color the static AST can't strip, contributed by a prop/param/import) AND a twMerge override could
+ * NOT be applied because the project does not resolve `tailwind-merge` (`canInjectTwMerge=false`). A
+ * concat-append does not win that cascade, so the mutator leaves the className UNTOUCHED and signals the
+ * executor to apply the universal §7 floor — an inline `style` override on the element ref (highest
+ * specificity short of !important, no import/config dependency). The mutator never touches the `style`
+ * attribute itself (it has only the new className, not the raw color value); the executor owns the write.
+ */
+export interface MutatorWriteHints {
+  forceFullReprint: boolean;
+  needsInlineFloor?: boolean;
+}
+
+/** Collect every Identifier name referenced inside a className expression (cn/clsx args, ternary branches, concat operands). */
+function collectIdentifierNames(expr: t.Expression): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: t.Node | null | undefined): void => {
+    if (!node) return;
+    if (t.isIdentifier(node)) {
+      names.add(node.name);
+      return;
+    }
+    if (t.isParenthesizedExpression(node)) return visit(node.expression);
+    if (t.isBinaryExpression(node)) {
+      if (t.isExpression(node.left)) visit(node.left);
+      visit(node.right);
+      return;
+    }
+    if (t.isConditionalExpression(node)) {
+      // Only the BRANCHES contribute class values; the `test` is a condition (a `FLAG` used only as a
+      // ternary test must NOT be resolved — rewriting its literal would corrupt a non-class value).
+      visit(node.consequent);
+      visit(node.alternate);
+      return;
+    }
+    if (t.isLogicalExpression(node)) {
+      // `cond && X`: the LEFT is a pure condition (a `FLAG` used only as `FLAG && '...'` must not be
+      // resolved — rewriting its literal would corrupt a non-class value), only RIGHT is a class value.
+      // `X || fallback` / `X ?? fallback`: the LEFT *is* the rendered class value when truthy/non-null,
+      // so BOTH operands are class-value-producing and must be visited.
+      if (node.operator !== '&&' && t.isExpression(node.left)) visit(node.left);
+      visit(node.right);
+      return;
+    }
+    if (t.isCallExpression(node)) {
+      for (const arg of node.arguments) if (t.isExpression(arg)) visit(arg);
+      return;
+    }
+    if (t.isTemplateLiteral(node)) {
+      for (const e of node.expressions) if (t.isExpression(e)) visit(e);
+      return;
+    }
+    // Member/object/array etc. are NOT same-file plain consts (case b/c) — don't descend into them.
+  };
+  visit(expr);
+  return names;
+}
+
+/**
+ * HYP-544 Phase 1: resolve `name` to a SAME-FILE top-level `const`/`let` whose init is a StringLiteral
+ * (or a literal reachable through a string-concat / all-literal-ternary init). Deterministic, AI-free.
+ *
+ * Excludes (→ stays case b/c, twMerge/append):
+ * - bindings declared with `var` or re-assigned later at top level (value not statically certain),
+ * - destructured / object-member / computed ids (only a plain `id Identifier === name`),
+ * - imports (an ImportSpecifier is a master-component value we must not edit),
+ * - function/block-scoped shadows (only top-level module bindings are scanned for v1).
+ *
+ * Returns the init expression (the literal, or the concat/ternary node carrying literals) so the caller
+ * can run the existing static-literal visitor on it. Returns null when no such binding exists.
+ */
+function resolveSameFileLiteralBinding(ast: t.File, name: string): t.Expression | null {
+  let foundInit: t.Expression | null = null;
+  let declarationCount = 0;
+
+  for (const node of ast.program.body) {
+    if (!t.isVariableDeclaration(node)) continue;
+    // `var` has function-scope hoisting / re-assignment ambiguity — treat as non-literal (case c).
+    if (node.kind === 'var') continue;
+    for (const decl of node.declarations) {
+      if (!t.isIdentifier(decl.id) || decl.id.name !== name) continue;
+      declarationCount += 1;
+      if (decl.init && isTriviallyLiteralInit(decl.init)) {
+        foundInit = decl.init;
+      } else {
+        // A matching declarator whose init is NOT a trivially-literal expression → not case (a).
+        return null;
+      }
+    }
+  }
+
+  // More than one top-level declarator for the same name should not happen for a const, but if it did
+  // the value is ambiguous — bail to the conservative path.
+  if (declarationCount !== 1) return null;
+
+  // A later top-level re-assignment makes the value uncertain — bail (only `let` can be reassigned).
+  if (foundInit && isReassignedAtTopLevel(ast, name)) return null;
+
+  return foundInit;
+}
+
+/** Is `init` a literal, or a string-concat / ternary built only from trivially-literal sub-expressions? */
+function isTriviallyLiteralInit(init: t.Expression): boolean {
+  if (t.isStringLiteral(init)) return true;
+  if (t.isParenthesizedExpression(init)) return isTriviallyLiteralInit(init.expression);
+  if (t.isBinaryExpression(init) && init.operator === '+') {
+    return t.isExpression(init.left) && isTriviallyLiteralInit(init.left) && isTriviallyLiteralInit(init.right);
+  }
+  if (t.isConditionalExpression(init)) {
+    return isTriviallyLiteralInit(init.consequent) && isTriviallyLiteralInit(init.alternate);
+  }
+  return false;
+}
+
+/**
+ * Is `name` ever re-assigned anywhere in the module (an `AssignmentExpression`/`UpdateExpression`
+ * targeting it)? A `let X = '...'` re-bound later — directly (`X = ...`) OR inside module-level
+ * control flow (`if (cond) X = '...'`, a loop, a try) — has a value the AST can't statically pin, so
+ * we must bail. A structural recursive scan (not just top-level expression statements) is required to
+ * catch the control-flow cases; we deliberately scan the whole program rather than only `program.body`.
+ */
+function isReassignedAtTopLevel(ast: t.File, name: string): boolean {
+  let reassigned = false;
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object' || reassigned) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const n = node as t.Node;
+    if (t.isAssignmentExpression(n) && t.isIdentifier(n.left) && n.left.name === name) {
+      reassigned = true;
+      return;
+    }
+    if (t.isUpdateExpression(n) && t.isIdentifier(n.argument) && n.argument.name === name) {
+      reassigned = true;
+      return;
+    }
+    for (const key in node as Record<string, unknown>) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range' || key === 'leadingComments') {
+        continue;
+      }
+      visit((node as Record<string, unknown>)[key]);
+    }
+  };
+  visit(ast.program.body);
+  return reassigned;
+}
+
+/** Does any string literal inside `init` carry a class token present in the live-conflict set? */
+function initCarriesLiveConflict(init: t.Expression, liveConflict: Set<string>): boolean {
+  let carries = false;
+  const visit = (node: t.Expression | null | undefined): void => {
+    if (!node || carries) return;
+    if (t.isStringLiteral(node)) {
+      for (const tok of node.value.split(/\s+/)) {
+        if (tok && liveConflict.has(tok)) {
+          carries = true;
+          return;
+        }
+      }
+      return;
+    }
+    if (t.isParenthesizedExpression(node)) return visit(node.expression);
+    if (t.isBinaryExpression(node) && node.operator === '+') {
+      if (t.isExpression(node.left)) visit(node.left);
+      visit(node.right);
+      return;
+    }
+    if (t.isConditionalExpression(node)) {
+      visit(node.consequent);
+      visit(node.alternate);
+    }
+  };
+  visit(init);
+  return carries;
+}
+
+/**
+ * HYP-544 Phase 1 (residual-driven, per spec §2): for each same-group conflict class the LIVE DOM
+ * actually applies (`liveConflict`) but the static rewrite did NOT account for, find the SAME-FILE const
+ * literal that contributes it and find-replace there — the same `replaceConflictingInStaticLiterals`
+ * primitive used on inline literals, run on the const's init. A const so rewritten is recorded in
+ * `rewrites` (with its original source range) and its removed classes are added to `staticRemoved`, so
+ * the caller drops them from the opaque residual and only STILL-opaque tokens proceed to twMerge.
+ *
+ * `liveConflict` gates the rewrite to classes that are *currently applied*: a const reachable only
+ * through a runtime-false branch (`cond && OPAQUE_BG`) is absent from `domClasses`, so we don't rewrite
+ * a value the user isn't actually seeing. When `liveConflict` is empty (no domClasses signal) nothing is
+ * rewritten — the residual flows to the existing fallback exactly as before.
+ *
+ * Returns nothing; mutates `staticRemoved` and `rewrites` in place.
+ */
+function replaceConflictingInSameFileBindings(
+  ast: t.File,
+  expr: t.Expression,
+  newClasses: string,
+  changedStyleKeys: string[],
+  state: string | undefined,
+  liveConflict: Set<string>,
+  staticRemoved: Set<string>,
+  rewrites: BindingLiteralRewrite[],
+): void {
+  // Residual-driven: only same-file consts that contribute a LIVE-applied conflict class are touched.
+  if (liveConflict.size === 0) return;
+
+  const names = collectIdentifierNames(expr);
+  for (const name of names) {
+    const init = resolveSameFileLiteralBinding(ast, name);
+    if (!init) continue;
+
+    // The const must actually carry one of the live-applied conflict classes, else it is not the
+    // residual's source — skip it (don't rewrite a const the DOM isn't currently showing).
+    if (!initCarriesLiveConflict(init, liveConflict)) continue;
+
+    // Capture the init's ORIGINAL source range before mutation — recast keeps `.start/.end` on
+    // original nodes; the executor splices this disjoint range with the re-printed node.
+    const start = init.start;
+    const end = init.end;
+
+    const removedHere = new Set<string>();
+    const result = replaceConflictingInStaticLiterals(init, newClasses, changedStyleKeys, state, removedHere);
+    if (removedHere.size === 0 || !result.handledConflict) continue; // nothing to rewrite here
+
+    for (const cls of removedHere) staticRemoved.add(cls);
+
+    // Record the rewritten init node for the executor to splice. For a plain `const X = '...'` the init
+    // IS the StringLiteral; for a concat/ternary init the whole init node is re-printed. Either way it
+    // keeps its original `[start, end)` range, so every untouched byte around it is preserved.
+    if (typeof start === 'number' && typeof end === 'number') {
+      rewrites.push({ node: init, start, end });
+    }
+  }
+}
+
+/** Find an existing local binding name for `tailwind-merge`'s twMerge (direct or aliased import). */
+function findExistingTwMergeBinding(ast: t.File): string | null {
+  for (const node of ast.program.body) {
+    if (!t.isImportDeclaration(node) || node.source.value !== 'tailwind-merge') continue;
+    // Skip `import type { twMerge } from 'tailwind-merge'` — type-only imports are erased at
+    // runtime; using the local name as a callable would break the component.
+    if (node.importKind === 'type') continue;
+    for (const spec of node.specifiers) {
+      if (
+        t.isImportSpecifier(spec) &&
+        spec.importKind !== 'type' && // skip `import { type twMerge }` form
+        t.isIdentifier(spec.imported) &&
+        spec.imported.name === 'twMerge'
+      ) {
+        return spec.local.name;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Collect every top-level binding name the program declares. Uses `t.getBindingIdentifiers` per
+ * statement so destructured/nested/default patterns (`const { twMerge } = helpers`, `const [twMerge] =
+ * …`) are all counted — a hand-rolled enumerator misses these and risks a duplicate-binding inject.
+ */
+function collectTopLevelBindings(ast: t.File): Set<string> {
+  const names = new Set<string>();
+  for (const node of ast.program.body) {
+    for (const name of Object.keys(t.getBindingIdentifiers(node))) names.add(name);
+  }
+  return names;
+}
+
+/**
+ * Resolve a callable twMerge identifier for the file. Reuses an existing `tailwind-merge` import when
+ * present (always safe). Injects an import only when the project is known to resolve the dependency
+ * (`canInjectTwMerge`) — otherwise returns null so the caller falls back to a safe concat-append
+ * rather than writing an import that would break the user's build.
+ *
+ * Collision-safe: if the local name `twMerge` is already bound to something else (a different import,
+ * a `const twMerge = ...`), inject under a non-colliding alias (`twMerge`, `twMerge2`, …) so we never
+ * create a duplicate top-level binding that breaks parsing.
+ */
+function resolveTwMergeBinding(
+  ast: t.File,
+  canInjectTwMerge: boolean,
+): { id: t.Identifier; injectedImport: boolean } | null {
+  const existing = findExistingTwMergeBinding(ast);
+  if (existing) return { id: t.identifier(existing), injectedImport: false };
+  if (!canInjectTwMerge) return null;
+
+  const taken = collectTopLevelBindings(ast);
+  let localName = 'twMerge';
+  for (let i = 2; taken.has(localName); i++) localName = `twMerge${i}`;
+
+  const importDecl = t.importDeclaration(
+    [t.importSpecifier(t.identifier(localName), t.identifier('twMerge'))],
+    t.stringLiteral('tailwind-merge'),
+  );
+  // Insert after the last existing import so the file's import block stays grouped.
+  let lastImportIndex = -1;
+  for (let i = 0; i < ast.program.body.length; i++) {
+    if (t.isImportDeclaration(ast.program.body[i])) lastImportIndex = i;
+  }
+  ast.program.body.splice(lastImportIndex + 1, 0, importDecl);
+  return { id: t.identifier(localName), injectedImport: true };
+}
+
+/**
+ * Escalate the residual to a twMerge override so the inspector's class wins IN PLACE at the selected
+ * element (HYP-544 / Option A). Mutates `element`'s className in place. Returns true when an override
+ * was applied; false when the shape isn't handled OR injecting an import would break the user's build,
+ * in which case the caller falls back to the safe concat-append.
+ *
+ * - tailwind-merge-backed merge call (cn/cva/twMerge): append the new class as the LAST argument —
+ *   it already wins per Tailwind group, no outer wrap, no import. Always safe.
+ * - plain-concat merge call (clsx/classnames) / raw expr / identifier / `+` concat: wrap in
+ *   `twMerge(<expr>, '<newClass>')` so the new class wins last. Reuses an existing import; injects one
+ *   only when the project resolves `tailwind-merge` (`canInjectTwMerge`) — otherwise returns false so
+ *   the caller appends instead of writing an unresolvable import (which would break the build).
+ *
+ * The opaque source (prop/parent) is never edited — only the edited element's expression is rewritten.
+ */
+interface TwMergeOverrideResult {
+  /** True when an override was applied (false → caller falls back to concat-append). */
+  applied: boolean;
+  /** True when a NEW `import { twMerge } from 'tailwind-merge'` was inserted into program.body. */
+  injectedImport: boolean;
+}
+
+function applyTwMergeOverride(
+  ast: t.File,
+  element: t.JSXElement,
+  expr: t.Expression,
+  newClasses: string,
+  canInjectTwMerge: boolean,
+): TwMergeOverrideResult {
+  if (t.isCallExpression(expr)) {
+    const calleeName = getCalleeName(expr.callee);
+    if (calleeName && TW_BACKED_MERGE_CALLEES.has(calleeName)) {
+      // tw-backed merge call resolves last-wins — append the new class, no import needed.
+      expr.arguments.push(t.stringLiteral(newClasses));
+      setAttribute(element, 'className', t.jsxExpressionContainer(expr));
+      return { applied: true, injectedImport: false };
+    }
+    if (calleeName && PLAIN_CONCAT_MERGE_CALLEES.has(calleeName)) {
+      const twMerge = resolveTwMergeBinding(ast, canInjectTwMerge);
+      if (!twMerge) return { applied: false, injectedImport: false }; // not resolvable — caller appends
+      const wrapped = t.callExpression(twMerge.id, [expr, t.stringLiteral(newClasses)]);
+      setAttribute(element, 'className', t.jsxExpressionContainer(wrapped));
+      return { applied: true, injectedImport: twMerge.injectedImport };
+    }
+  }
+
+  // Raw identifier / member / binary-concat / parenthesized: wrap the whole expression in twMerge so
+  // the new class is the last same-group token and wins regardless of the opaque source's order.
+  const twMerge = resolveTwMergeBinding(ast, canInjectTwMerge);
+  if (!twMerge) return { applied: false, injectedImport: false }; // not resolvable — caller appends
+  const wrapped = t.callExpression(twMerge.id, [expr, t.stringLiteral(newClasses)]);
+  setAttribute(element, 'className', t.jsxExpressionContainer(wrapped));
+  return { applied: true, injectedImport: twMerge.injectedImport };
+}
+
+/**
  * Wrap expression in concatenation
  * className={expr} -> className={(expr) + ' bg-red-500'}
  *
  * First attempts to replace the conflicting class within the expression's static string literals
  * (so old + new color classes don't both survive). Only when no static literal held a conflicting
  * class does it fall back to appending via concatenation.
+ *
+ * HYP-544: when a same-group color reaches the element from an OPAQUE source (visible in the live
+ * `domClasses` but not in any static literal we can rewrite), a plain concat-append does not win
+ * (clsx/raw concat keep both classes; Tailwind resolves by generated-CSS order, not attribute order).
+ * In that case escalate to a twMerge override so the inspector's class wins in place.
  */
 function wrapInConcatenation(
   element: t.JSXElement,
   newClasses: string,
   changedStyleKeys: string[],
   state?: string,
+  ast?: t.File,
+  domClasses?: string,
+  canInjectTwMerge = false,
+  // HYP-544 Phase 1: each same-file const literal that binding resolution rewrote in place is recorded
+  // here so the executor can splice its disjoint source range. Undefined when the caller has no splice
+  // pipeline (the whole-file recast path still picks up the mutated nodes).
+  bindingRewrites?: BindingLiteralRewrite[],
+  // HYP-544 Phase 1: out-channel for the "force whole-file recast" hint (mixed const + import-injecting
+  // twMerge override). Undefined when the caller doesn't splice.
+  writeHints?: MutatorWriteHints,
 ): void {
   const attr = getAttribute(element, 'className');
   if (!attr) return;
@@ -795,17 +1212,103 @@ function wrapInConcatenation(
   }
 
   // Strip the conflicting same-property class from the static literals first (so old + new color
-  // classes never both survive within the expression).
-  const { guaranteedNewClass } = replaceConflictingInStaticLiterals(expr, newClasses, changedStyleKeys, state);
+  // classes never both survive within the expression). Record exactly which classes we stripped so we
+  // can tell a static conflict apart from one contributed by an opaque source.
+  const staticRemoved = new Set<string>();
+  const { guaranteedNewClass } = replaceConflictingInStaticLiterals(
+    expr,
+    newClasses,
+    changedStyleKeys,
+    state,
+    staticRemoved,
+  );
   if (guaranteedNewClass) {
     // The new class is now unconditionally present on every runtime branch — no append needed.
     return;
   }
 
-  // The new class is NOT guaranteed on every code path (no static literal held the conflict, or it
-  // lived only in some branches / a dynamic sub-expression). Append it so the inspector's intent
-  // always applies. Conflicts already stripped above won't duplicate the OLD class; at worst the new
-  // class appears twice (harmless — same class).
+  // The same-group classes the LIVE DOM applies for the changed property. Both Phase 1 binding
+  // resolution and the twMerge escalation key off this set.
+  const liveConflict = new Set(liveDomConflictClasses(domClasses, changedStyleKeys, state));
+
+  // HYP-544 Phase 1: before any twMerge escalation, try to account for the OPAQUE residual — the live
+  // conflict classes NOT already handled by an inline static literal — by resolving contributing
+  // identifiers to a SAME-FILE const literal and find-replacing the conflict AT THE DEFINITION
+  // (deterministic, AI-free). Passing `liveConflict − staticRemoved` keeps it residual-driven: a class
+  // an inline literal already carried must not trigger an unrelated const rewrite. Each const so
+  // rewritten adds its removed classes to `staticRemoved`, so a residual fully explained by const
+  // literals never escalates to twMerge.
+  let didBindingRewrite = false;
+  if (ast && newClasses) {
+    const opaqueResidual = new Set([...liveConflict].filter((cls) => !staticRemoved.has(cls)));
+    const localRewrites: BindingLiteralRewrite[] = [];
+    replaceConflictingInSameFileBindings(
+      ast,
+      expr,
+      newClasses,
+      changedStyleKeys,
+      state,
+      opaqueResidual,
+      staticRemoved,
+      localRewrites,
+    );
+    didBindingRewrite = localRewrites.length > 0;
+    if (bindingRewrites) for (const r of localRewrites) bindingRewrites.push(r);
+  }
+
+  // Escalate to a twMerge override ONLY for a same-group conflict that comes from an OPAQUE source:
+  // a class the LIVE DOM shows but neither the static rewrite NOR binding resolution accounted for (set
+  // difference). This handles the mixed case `clsx('text-red-500', titleClassName)` where the static
+  // `text-red-500` is rewritten but `titleClassName` (an import / prop / param) still contributes
+  // `text-green-500` — the concat-append would lose to it. A same-file const conflict is now in
+  // `staticRemoved`, so it does NOT escalate; a purely-static conflict needs no override either.
+  if (ast && newClasses) {
+    const opaqueConflict = [...liveConflict].some((cls) => !staticRemoved.has(cls));
+    if (opaqueConflict) {
+      const override = applyTwMergeOverride(ast, element, expr, newClasses, canInjectTwMerge);
+      if (override.applied) {
+        // A twMerge override that INJECTED a new top-level `import { twMerge }` is an inserted node with
+        // NO source range — a span-splice write (className span ± const literal spans) cannot represent
+        // it and would emit `twMerge(...)` WITHOUT the import, breaking the build. Force a whole-file
+        // recast in that case (recast still preserves every untouched original node's bytes; only the
+        // import + className reprint). The tw-backed append (cn/cva) and reuse-existing-import cases
+        // inject nothing, so they stay on the byte-preserving span-splice path. Span-splice is valid
+        // ONLY when the mutation is confined to the className node; an injected import is not confined.
+        if (override.injectedImport && writeHints) writeHints.forceFullReprint = true;
+        return;
+      }
+
+      // HYP-544 Phase 2 (§7): the override could NOT be applied — `resolveTwMergeBinding` returned null
+      // because the project has no existing `tailwind-merge` import AND `canInjectTwMerge` is false. A
+      // concat-append does NOT win an opaque same-group conflict (Tailwind resolves by generated-CSS
+      // order, not attribute order), so the inspector's edit would silently not apply. Signal the
+      // executor to apply the universal §7 inline-style floor instead, and leave the className UNTOUCHED
+      // (do not fall through to the append below). The executor owns the inline write — it alone has the
+      // raw requested color value. If the caller passes no `writeHints` sink (no inline-floor pipeline),
+      // fall through to the legacy concat-append so behavior degrades safely.
+      //
+      // BASE STATE ONLY (codex P2): an inline `style` is unconditional — it cannot express a state
+      // variant (`hover:`, `focus:`, …). Flooring a `hover:bg-*` edit to a plain `backgroundColor` would
+      // make it always-active AND clobber the hover utility. For a non-base state we therefore do NOT
+      // floor; fall through to the legacy concat-append (which at least preserves the state-prefixed
+      // class). `state` is undefined for base writes (`tailwindStatePrefix` returns undefined for 'base').
+      if (writeHints && !state) {
+        writeHints.needsInlineFloor = true;
+        return;
+      }
+    }
+
+    // HYP-544 Phase 1: a same-file const literal was find-replaced AND no opaque residual remains — the
+    // inspector's intent now applies at the const definition. Returning here avoids the concat-append
+    // below, which would otherwise double the new class onto the expression on top of the clean const
+    // rewrite. Scoped to `didBindingRewrite` so #381's existing append-path for the no-rewrite case is
+    // unchanged.
+    if (didBindingRewrite && !opaqueConflict) return;
+  }
+
+  // No live conflict known (or shape unhandled): append it so the inspector's intent always applies.
+  // Conflicts already stripped above won't duplicate the OLD class; at worst the new class appears
+  // twice (harmless — same class).
   const newExpr = t.binaryExpression('+', t.parenthesizedExpression(expr), t.stringLiteral(` ${newClasses}`));
 
   setAttribute(element, 'className', t.jsxExpressionContainer(newExpr));
@@ -842,6 +1345,19 @@ export function modifyDynamicClassName(
   changedStyleKeys: string[],
   fallback: 'append' | 'wrap',
   state?: string,
+  // HYP-544: live applied className from the DOM. Authoritative source of "what color is applied
+  // now"; lets the residual escalate to a twMerge override only when a real same-group conflict
+  // reaches the element from an opaque source.
+  domClasses?: string,
+  // HYP-544: whether the EDITED project resolves `tailwind-merge`. Gates injecting a new import — when
+  // false the residual falls back to a safe concat-append instead of writing an unresolvable import.
+  canInjectTwMerge = false,
+  // HYP-544 Phase 1: sink for same-file const literals rewritten by binding resolution. The executor
+  // splices each one's disjoint source range (the className-value splice never touches the const).
+  bindingRewrites?: BindingLiteralRewrite[],
+  // HYP-544 Phase 1: out-channel for write hints (e.g. "force whole-file recast" for a mixed const +
+  // import-injecting twMerge override the splice path can't represent).
+  writeHints?: MutatorWriteHints,
 ): void {
   const type = detectClassNameType(element);
 
@@ -867,11 +1383,31 @@ export function modifyDynamicClassName(
     if (fallback === 'append') {
       appendToLastString(element, newClasses, changedStyleKeys);
     } else {
-      wrapInConcatenation(element, newClasses, changedStyleKeys, state);
+      wrapInConcatenation(
+        element,
+        newClasses,
+        changedStyleKeys,
+        state,
+        ast,
+        domClasses,
+        canInjectTwMerge,
+        bindingRewrites,
+        writeHints,
+      );
     }
   } else {
     // For call expressions and other expressions, try in-place conflict replacement,
     // falling back to concatenation only when no static literal held the conflicting class.
-    wrapInConcatenation(element, newClasses, changedStyleKeys, state);
+    wrapInConcatenation(
+      element,
+      newClasses,
+      changedStyleKeys,
+      state,
+      ast,
+      domClasses,
+      canInjectTwMerge,
+      bindingRewrites,
+      writeHints,
+    );
   }
 }

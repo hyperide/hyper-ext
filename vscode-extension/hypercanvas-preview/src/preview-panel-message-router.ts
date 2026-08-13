@@ -49,6 +49,10 @@ export interface MessageRouterDeps {
   handleContextMenuCopyContent(msg: { [key: string]: unknown }, webview: vscode.Webview, mode: 'text' | 'html'): void;
   handleElementContentResult(msg: { [key: string]: unknown }): void;
   handleScreenshotResult(msg: { [key: string]: unknown }): void;
+  // HYP-544: the iframe's reply to a write-time live-className RPC (DOM-anchored color).
+  handleLiveClassNameResult(msg: { [key: string]: unknown }): void;
+  // HYP-544 Phase 3: the iframe's reply to an empirical color-probe RPC (driving candidates).
+  handleProbeColorCandidatesResult(msg: { [key: string]: unknown }): void;
 }
 
 export async function routeMessage(deps: MessageRouterDeps, message: unknown, webview: vscode.Webview): Promise<void> {
@@ -256,6 +260,18 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
   // === Screenshot result ===
   if (msg.type === 'screenshotResult') {
     deps.handleScreenshotResult(msg);
+    return;
+  }
+
+  // === Live-className result (HYP-544 write-time DOM-anchor round-trip) ===
+  if (msg.type === 'liveClassNameResult') {
+    deps.handleLiveClassNameResult(msg);
+    return;
+  }
+
+  // === Color-probe result (HYP-544 Phase 3 empirical driving-candidate round-trip) ===
+  if (msg.type === 'probeColorCandidatesResult') {
+    deps.handleProbeColorCandidatesResult(msg);
     return;
   }
 

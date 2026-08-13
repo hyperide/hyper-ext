@@ -92,6 +92,8 @@ describe('useStyleSync', () => {
       elementId: 'card-root',
       filePath: 'src/components/Card.tsx',
       styles: { paddingLeft: '16px' },
+      // Live applied className from the DOM (HYP-544); empty in jsdom (no preview iframe).
+      domClasses: '',
       state: undefined,
       selectedSourceTabId: undefined,
     });

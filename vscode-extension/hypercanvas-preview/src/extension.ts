@@ -269,6 +269,24 @@ export function activate(context: vscode.ExtensionContext) {
   // Create preview panel instance
   previewPanel = new PreviewPanel(context.extensionUri, workspaceRoot, stateHub, panelRouter, context);
 
+  // HYP-544: live write-time className RPC. The inspector color write (right-panel webview,
+  // no preview iframe of its own) routes ast:updateStyles through PanelRouter with an empty
+  // domClasses; PanelRouter asks the preview-panel for the element's live applied className
+  // and awaits it so the DOM-anchored twMerge escalation anchors on reality. Wired here
+  // (not a PanelRouter → PreviewPanel ctor dependency) to avoid a circular reference,
+  // mirroring the onScreenshot wiring. Resolves null → write degrades to static AST behavior.
+  panelRouter.setLiveClassNameProvider(
+    (elementId, itemIndex) => previewPanel?.requestLiveClassName(elementId, itemIndex) ?? Promise.resolve(null),
+  );
+
+  // HYP-544 Phase 3: empirical color-probe provider. When a color edit's source can't be statically
+  // resolved, PanelRouter asks the preview-panel iframe which candidate token actually drives the
+  // element's color (off-screen-clone verification). Wired here for the same no-circular-dep reason
+  // as the live-className provider. Resolves [] → write degrades to the static AST / §7 floor.
+  panelRouter.setColorProbeProvider(
+    (request) => previewPanel?.requestProbeColorCandidates(request) ?? Promise.resolve([]),
+  );
+
   // Register serializer for cross-restart persistence
   context.subscriptions.push(
     vscode.window.registerWebviewPanelSerializer(PreviewPanel.viewType, {

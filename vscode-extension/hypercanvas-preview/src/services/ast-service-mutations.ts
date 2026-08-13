@@ -7,6 +7,7 @@
 import * as t from '@babel/types';
 import type { NodeRef } from '@shared/element-tracing/types';
 import type { FileIO } from '@lib/ast/file-io';
+import type { ColorProbeCandidate } from './color-probe-types';
 import { mutateElement } from './ast-mutation-utils';
 import { insertElement, duplicateElement, pasteElement, wrapElement } from './ast-element-ops';
 import { deleteElements } from './ast-delete';
@@ -48,13 +49,16 @@ export async function updateStylesWrapper(
   state: string | undefined,
   nodeRef: NodeRef | undefined,
   selectedSourceTabId: string | undefined,
+  domClasses: string | undefined,
+  probeDriving: ColorProbeCandidate[] | undefined,
 ): Promise<UpdateStylesResult> {
   try {
-    const result = await updateStyles(filePath, elementId, styles, state, nodeRef, selectedSourceTabId, {
+    const result = await updateStyles(filePath, elementId, styles, state, nodeRef, selectedSourceTabId, domClasses, {
       workspaceRoot: deps.workspaceRoot,
       fileIO: deps.fileIO,
       resolveElementInCorrectFile: (absolutePath, nr) => deps.resolveElementInCorrectFile(absolutePath, nr),
       updateNodeMap: (fp) => deps.updateNodeMap(fp),
+      probeDriving,
     });
     return result;
   } catch (error) {

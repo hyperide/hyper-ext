@@ -84,6 +84,17 @@ export function spliceNodeSource(
 }
 
 /**
+ * Print a single node to source text (format-preserving for its untouched descendants), without
+ * splicing. Returns the printed string, or `null` for a node with no usable offsets when `requireRange`
+ * is set. Used when several disjoint nodes must be spliced into one source in a single pass (HYP-544:
+ * the className value's span PLUS a same-file const literal's span) — each `[start, end) → printed`
+ * pair is applied in descending order so offsets never drift.
+ */
+export function printNodeSource(node: t.Node): string {
+  return recastPrint(node, { quote: 'single' }).code;
+}
+
+/**
  * Create file-bound parser functions using given FileIO implementation
  */
 export function createFileParser(io: FileIO) {

@@ -4,6 +4,7 @@
  */
 
 import type { I18nLibrary } from '../../../shared/i18n-text/types';
+import type { ColorProbeCandidate } from './services/color-probe-types';
 
 // ============================================
 // Project Detection
@@ -131,6 +132,11 @@ export type AstMessage =
       styles: Record<string, string>;
       state?: string; // hover, focus, etc.
       selectedSourceTabId?: string;
+      domClasses?: string; // Live applied className from the DOM (HYP-544) — authoritative replace target
+      // HYP-544 Phase 3: ranked driving candidates from the empirical color-probe (set by PanelRouter
+      // when the color source is unresolvable). Redirects an inline/var/module-driven write to an
+      // inline-style override (a twMerge wrap can't change inline/var-driven colors).
+      probeDriving?: ColorProbeCandidate[];
     }
   | {
       type: 'ast:updateProps';

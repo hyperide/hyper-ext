@@ -336,6 +336,8 @@ export class AstBridge {
         message.state,
         nodeRef,
         message.selectedSourceTabId,
+        message.domClasses,
+        message.probeDriving,
       ),
     );
 

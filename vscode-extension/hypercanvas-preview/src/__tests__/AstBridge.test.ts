@@ -149,7 +149,7 @@ describe('AstBridge', () => {
     );
   });
 
-  it('passes selected source tab ID through ast:updateStyles', async () => {
+  it('passes selected source tab ID and live domClasses through ast:updateStyles', async () => {
     const wv = createMockWebview();
     await bridge.handleMessage(
       {
@@ -159,6 +159,7 @@ describe('AstBridge', () => {
         elementId: 'e1',
         styles: { color: 'red' },
         selectedSourceTabId: 'tailwind-v4:elementClass',
+        domClasses: 'p-2 text-blue',
       } as never,
       wv as never,
     );
@@ -170,6 +171,9 @@ describe('AstBridge', () => {
       undefined,
       undefined,
       'tailwind-v4:elementClass',
+      'p-2 text-blue',
+      // HYP-544 Phase 3: 8th arg is probeDriving (the empirical color-probe result); absent here.
+      undefined,
     );
   });
 
