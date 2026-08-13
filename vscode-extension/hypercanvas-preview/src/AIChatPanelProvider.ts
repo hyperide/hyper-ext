@@ -13,7 +13,7 @@ import type { DiagnosticHub } from './DiagnosticHub';
 import type { StateHub } from './StateHub';
 import { ChatHistoryService } from './services/ChatHistoryService';
 import type { DevServerManager } from './services/DevServerManager';
-import { postToWebviewRawSafe } from './webview-post';
+import { WebviewViewRef } from './webview-post';
 import { TelemetryEvents } from './telemetry/events';
 
 /**
@@ -30,7 +30,13 @@ export interface AIChatTelemetry {
 export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.aiChatView';
 
-  private _view?: vscode.WebviewView;
+  /**
+   * Disposed-safe view ref (rationale: webview-post.ts / PR #514, #515). Guards the
+   * cached-view reuse-after-dispose race for deferred callers — `sendAIPrompt`,
+   * the streaming `ai:chat` callback, and the `secrets.onDidChange` key-status push.
+   * `onCleared` resets `_ready` in sync with the ref so neither path can forget the flag.
+   */
+  private readonly _viewRef: WebviewViewRef<vscode.WebviewView>;
   private _aiBridge: AIBridge;
   private _chatHistory: ChatHistoryService;
   private _pendingAIPrompt: string | null = null;
@@ -43,6 +49,11 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     private readonly _context: vscode.ExtensionContext,
     stateHub: StateHub,
   ) {
+    // Resource teardown (AIBridge dispose, secrets subscription) stays with onDidDispose;
+    // this callback resets only the derived lifecycle flag.
+    this._viewRef = new WebviewViewRef(() => {
+      this._ready = false;
+    });
     this._aiBridge = new AIBridge(workspaceRoot, _context);
     this._aiBridge.setStateHub(stateHub);
     this._chatHistory = new ChatHistoryService(_context.globalStorageUri.fsPath);
@@ -56,8 +67,9 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   public async reset(): Promise<void> {
     // Direct webview access (not the safe poster): reset() writes `.html` to reload, not
     // postMessage, on a view known live at call time. See webview-post.ts for the guard rationale.
-    if (!this._view) return;
-    const webview = this._view.webview;
+    const view = this._viewRef.current;
+    if (!view) return;
+    const webview = view.webview;
     this._ready = false;
     const ready = new Promise<void>((resolve) => {
       const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
@@ -83,7 +95,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   async resetIfNotReady(): Promise<void> {
-    if (!this._view || this._ready) return;
+    if (!this._viewRef.current || this._ready) return;
     await this.reset();
   }
 
@@ -94,31 +106,13 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   sendAIPrompt(prompt: string): void {
     void this.focusAndEnsureReady();
 
-    // _ready is the real gate (don't post before the handshake); _postToWebview already
+    // _ready is the real gate (don't post before the handshake); _viewRef.post already
     // returns false for a missing/disposed view. If the post didn't land, queue it — the
     // rebuilt view replays _pendingAIPrompt once it sends `webview:ready`.
-    const posted = this._ready && this._postToWebview({ type: 'ai:openChat', prompt });
+    const posted = this._ready && this._viewRef.post({ type: 'ai:openChat', prompt });
     if (!posted) {
       this._pendingAIPrompt = prompt;
     }
-  }
-
-  /**
-   * Post through the disposed-safe poster (rationale: webview-post.ts / PR #514). Guards
-   * the cached-`_view` reuse-after-dispose race for the deferred callers — `sendAIPrompt`,
-   * the streaming `ai:chat` events, and the `secrets.onDidChange` key-status push.
-   */
-  private _postToWebview(message: unknown): boolean {
-    return postToWebviewRawSafe(this._view?.webview, message, () => this._clearDisposedView());
-  }
-
-  /**
-   * Drop the stale ref so the next `resolveWebviewView` rebuilds. Resource teardown
-   * (AIBridge dispose, secrets subscription) stays with `onDidDispose`; this is idempotent.
-   */
-  private _clearDisposedView(): void {
-    this._view = undefined;
-    this._ready = false;
   }
 
   /**
@@ -150,7 +144,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
-    this._view = webviewView;
+    this._viewRef.set(webviewView);
     this._ready = false;
 
     // Telemetry: the AI chat view became visible.
@@ -177,9 +171,9 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.onDidDispose(() => {
       this._telemetry?.track(TelemetryEvents.panelClosed, { panel: 'aiChat' });
-      // Share the view-state clear with _clearDisposedView so a future lifecycle field
+      // Share the ref clear with the disposed-safe post path so a future lifecycle field
       // can't be cleared in one path and forgotten in the other; then extra teardown.
-      this._clearDisposedView();
+      this._viewRef.clear();
       this._aiBridge.dispose();
       secretsSub.dispose();
     });
@@ -203,8 +197,8 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
         // The stream runs for many ticks; the view can be disposed mid-stream — each
         // event posts through the safe poster so a late event can't poison the worker.
         this._aiBridge.handleChat(requestId, messages, (event) => {
-        void this._postToWebview(event);
-      });
+          void this._viewRef.post(event);
+        });
         return;
       }
 
@@ -236,21 +230,21 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
 
       case 'chat:list': {
         const chats = await this._chatHistory.listChats();
-        this._postToWebview({ type: 'chat:list', chats });
+        this._viewRef.post({ type: 'chat:list', chats });
         return;
       }
 
       case 'chat:create': {
         const title = message.title as string | undefined;
         const session = await this._chatHistory.createChat(title);
-        this._postToWebview({ type: 'chat:created', session });
+        this._viewRef.post({ type: 'chat:created', session });
         return;
       }
 
       case 'chat:load': {
         const chatId = message.chatId as string;
         const data = await this._chatHistory.loadChat(chatId);
-        this._postToWebview({ type: 'chat:loaded', chatId, data });
+        this._viewRef.post({ type: 'chat:loaded', chatId, data });
         return;
       }
 
@@ -271,7 +265,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       case 'chat:delete': {
         const chatId = message.chatId as string;
         await this._chatHistory.deleteChat(chatId);
-        this._postToWebview({ type: 'chat:deleted', chatId });
+        this._viewRef.post({ type: 'chat:deleted', chatId });
         return;
       }
 
@@ -301,7 +295,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     // Clear the pending slot ONLY if the post actually landed — if the view was disposed
     // in the window between `webview:ready` and this flush, keep the prompt queued so the
     // next rebuilt view replays it instead of dropping it permanently.
-    if (this._postToWebview({ type: 'ai:openChat', prompt: this._pendingAIPrompt })) {
+    if (this._viewRef.post({ type: 'ai:openChat', prompt: this._pendingAIPrompt })) {
       this._pendingAIPrompt = null;
     }
   }
@@ -321,7 +315,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     // Key must exist AND be non-empty. Also require provider to be configured.
     const key = secretKey || settingsKey;
     const hasApiKey = !!(key && key.trim().length > 3 && provider);
-    this._postToWebview({ type: 'ai:keyStatus', hasApiKey });
+    this._viewRef.post({ type: 'ai:keyStatus', hasApiKey });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

@@ -21,7 +21,7 @@
 
 import { describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
-import { isWebviewDisposedError, postToWebviewSafe, readWebviewSafe } from '../webview-post';
+import { isWebviewDisposedError, postToWebviewSafe, readWebviewSafe, WebviewViewRef } from '../webview-post';
 import { injectGeneratedSampleProps, watchSampleInFile } from '../preview-panel-sample';
 import { setupPanel, type PanelSetupDeps } from '../preview-panel-setup';
 import { PreviewPanel } from '../PreviewPanel';
@@ -66,8 +66,8 @@ function disposedWebviewView() {
   return { webview: { postMessage: disposedPostMessage() } } as unknown as vscode.WebviewView;
 }
 
-/** Reach the private `_view` field of a sidebar provider in tests. */
-type WithView = { _view: vscode.WebviewView | undefined };
+/** Reach the private `_viewRef` field of a sidebar provider in tests. */
+type WithViewRef = { _viewRef: WebviewViewRef<vscode.WebviewView> };
 
 /**
  * Construct a real PreviewPanel and inject `fakePanel` as its private `_panel`. The
@@ -460,9 +460,114 @@ describe('watchSampleInFile survives a disposed webview', () => {
   });
 });
 
+describe('WebviewViewRef', () => {
+  function makeView(postMessageImpl: () => unknown) {
+    return { webview: { postMessage: mock(postMessageImpl) } } as unknown as vscode.WebviewView;
+  }
+
+  function makeThrowingGetterView() {
+    const view = {} as unknown as vscode.WebviewView;
+    Object.defineProperty(view, 'webview', {
+      get() {
+        throw new Error('Webview is disposed');
+      },
+    });
+    return view;
+  }
+
+  it('returns undefined for .current before set()', () => {
+    const ref = new WebviewViewRef(() => {});
+    expect(ref.current).toBeUndefined();
+  });
+
+  it('returns the view after set()', () => {
+    const ref = new WebviewViewRef(() => {});
+    const view = makeView(() => Promise.resolve(true));
+    ref.set(view);
+    expect(ref.current).toBe(view);
+  });
+
+  it('clears the ref and calls onCleared on clear()', () => {
+    const onCleared = mock(() => {});
+    const ref = new WebviewViewRef(onCleared);
+    ref.set(makeView(() => Promise.resolve(true)));
+    ref.clear();
+    expect(ref.current).toBeUndefined();
+    expect(onCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('post() returns false and does not call onCleared when no view is set', () => {
+    const onCleared = mock(() => {});
+    const ref = new WebviewViewRef(onCleared);
+    expect(ref.post({ type: 'x' })).toBe(false);
+    expect(onCleared).not.toHaveBeenCalled();
+  });
+
+  it('post() returns true on a live view', () => {
+    const ref = new WebviewViewRef(() => {});
+    ref.set(makeView(() => Promise.resolve(true)));
+    expect(ref.post({ type: 'x' })).toBe(true);
+  });
+
+  it('post() returns false, clears the ref, and calls onCleared when postMessage throws disposed', () => {
+    const onCleared = mock(() => {});
+    const ref = new WebviewViewRef(onCleared);
+    ref.set(
+      makeView(() => {
+        throw new Error('Webview is disposed');
+      }),
+    );
+
+    let result: boolean | undefined;
+    expect(() => {
+      result = ref.post({ type: 'x' });
+    }).not.toThrow();
+    expect(result).toBe(false);
+    expect(ref.current).toBeUndefined();
+    expect(onCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('post() returns false and clears the ref when the webview GETTER throws disposed', () => {
+    // The getter itself throws on a disposed WebviewView, before any postMessage call.
+    const onCleared = mock(() => {});
+    const ref = new WebviewViewRef(onCleared);
+    ref.set(makeThrowingGetterView());
+
+    let result: boolean | undefined;
+    expect(() => {
+      result = ref.post({ type: 'x' });
+    }).not.toThrow();
+    expect(result).toBe(false);
+    expect(ref.current).toBeUndefined();
+    expect(onCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('post() rethrows non-disposal errors from postMessage', () => {
+    const ref = new WebviewViewRef(() => {});
+    ref.set(
+      makeView(() => {
+        throw new Error('structured clone failed');
+      }),
+    );
+    expect(() => ref.post({ type: 'x' })).toThrow('structured clone failed');
+  });
+
+  it('post() rethrows non-disposal errors from the webview getter', () => {
+    const view = {} as unknown as vscode.WebviewView;
+    Object.defineProperty(view, 'webview', {
+      get() {
+        throw new Error('some other failure');
+      },
+    });
+    const ref = new WebviewViewRef(() => {});
+    ref.set(view);
+    expect(() => ref.post({ type: 'x' })).toThrow('some other failure');
+  });
+});
+
 /** The private surface of RightPanelProvider exercised by these tests. */
 type RightInternals = RightPanelProvider &
-  WithView & {
+  WithViewRef & {
     _sendComponentGroups: () => Promise<void>;
   };
 
@@ -479,7 +584,7 @@ describe('RightPanelProvider reuse-after-dispose guard', () => {
 
   function createProviderWithDisposedView(getComponentGroups?: () => Promise<unknown>) {
     const provider = createProvider(getComponentGroups) as RightInternals;
-    Object.assign(provider, { _view: disposedWebviewView() });
+    provider._viewRef.set(disposedWebviewView());
     return provider;
   }
 
@@ -488,10 +593,10 @@ describe('RightPanelProvider reuse-after-dispose guard', () => {
     expect(() => provider.notifyCapabilities(null)).not.toThrow();
   });
 
-  it('clears the stale _view so the next resolveWebviewView rebuilds', () => {
+  it('clears the stale view ref so the next resolveWebviewView rebuilds', () => {
     const provider = createProviderWithDisposedView();
     provider.notifyCapabilities(null);
-    expect(provider._view).toBeUndefined();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 
   it('survives a view disposed across the _sendComponentGroups await (workspace switch in flight)', async () => {
@@ -510,17 +615,16 @@ describe('RightPanelProvider reuse-after-dispose guard', () => {
     resolveScan({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } });
 
     await expect(sendPromise).resolves.toBeUndefined();
-    expect(provider._view).toBeUndefined();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 });
 
 /** The private surface of AIChatPanelProvider exercised by these tests. */
 type AIChatInternals = AIChatPanelProvider &
-  WithView & {
+  WithViewRef & {
     _ready: boolean;
     _pendingAIPrompt: string | null;
     _chatHistory: { listChats: () => Promise<unknown[]> };
-    _postToWebview: (message: unknown) => boolean;
     _sendKeyStatus: () => Promise<void>;
     _handleMessage: (message: { type?: string; [key: string]: unknown }) => Promise<void>;
     _flushPendingPrompt: () => void;
@@ -544,7 +648,8 @@ describe('AIChatPanelProvider reuse-after-dispose guard', () => {
   function createProviderWithDisposedView() {
     const provider = createProvider();
     // sendAIPrompt only posts when the view is present AND ready.
-    Object.assign(provider, { _view: disposedWebviewView(), _ready: true });
+    provider._viewRef.set(disposedWebviewView());
+    provider._ready = true;
     return provider;
   }
 
@@ -553,10 +658,10 @@ describe('AIChatPanelProvider reuse-after-dispose guard', () => {
     expect(() => provider.sendAIPrompt('hello')).not.toThrow();
   });
 
-  it('clears the stale _view so the next resolveWebviewView rebuilds', () => {
+  it('clears the stale view ref so the next resolveWebviewView rebuilds', () => {
     const provider = createProviderWithDisposedView();
     provider.sendAIPrompt('hello');
-    expect(provider._view).toBeUndefined();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 
   it('re-queues the prompt as pending when the disposal race swallows the sendAIPrompt post', () => {
@@ -579,22 +684,22 @@ describe('AIChatPanelProvider reuse-after-dispose guard', () => {
   it('a late streaming ai:chat event after disposal is a no-op, not a throw', () => {
     // The handleChat callback fires over many ticks; the view can be disposed mid-stream.
     const provider = createProviderWithDisposedView();
-    expect(() => provider._postToWebview({ type: 'ai:streamChunk', text: 'x' })).not.toThrow();
-    expect(provider._view).toBeUndefined();
+    expect(() => provider._viewRef.post({ type: 'ai:streamChunk', text: 'x' })).not.toThrow();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 
   it('a chat:* handler that awaits then posts is a no-op when the view is already disposed', async () => {
-    // chat:list/create/load/delete all `await` history I/O then post via _postToWebview —
+    // chat:list/create/load/delete all `await` history I/O then post via _viewRef.post —
     // the post-after-await shape. Exercised end-to-end via _handleMessage against a
     // disposed view (history I/O stubbed to keep it deterministic, no real fs).
     const provider = createProviderWithDisposedView();
     await expect(provider._handleMessage({ type: 'chat:list' })).resolves.toBeUndefined();
-    expect(provider._view).toBeUndefined();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 
   it('a _sendKeyStatus from secrets.onDidChange after disposal is a no-op, not a throw', async () => {
     const provider = createProviderWithDisposedView();
     await expect(provider._sendKeyStatus()).resolves.toBeUndefined();
-    expect(provider._view).toBeUndefined();
+    expect(provider._viewRef.current).toBeUndefined();
   });
 });

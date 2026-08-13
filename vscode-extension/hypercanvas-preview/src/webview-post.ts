@@ -25,6 +25,74 @@
 import type * as vscode from 'vscode';
 
 /**
+ * Disposed-safe holder for a `vscode.WebviewView` (or any object carrying a `.webview`
+ * property). Unifies the boilerplate that appeared identically in RightPanelProvider and
+ * AIChatPanelProvider:
+ *
+ * - A `_view?: vscode.WebviewView` field
+ * - A `_postToWebview(msg)` method delegating to `postToWebviewRawSafe`
+ * - A `_clearDisposedView()` method that nulls the ref and resets derived flags
+ *
+ * Each provider constructs one `WebviewViewRef` in its constructor, passing an `onCleared`
+ * callback for provider-specific state that must be reset alongside the ref (e.g. `_ready`).
+ * The getter-throw race is guarded identically to `postToWebviewSafe` for `WebviewPanel` —
+ * the only difference is the holder type (`WebviewView` vs `WebviewPanel`).
+ */
+export class WebviewViewRef<T extends { readonly webview: vscode.Webview }> {
+  private _current: T | undefined;
+
+  /**
+   * @param onCleared Called each time the ref is cleared — either via `clear()` or when
+   *   the disposed-safe post detects a dead webview. Use to reset provider-local state
+   *   (e.g. `_ready = false`) that must stay in sync with the view lifecycle.
+   */
+  constructor(private readonly onCleared: () => void) {}
+
+  /** The live view reference, or `undefined` when not yet resolved or cleared. */
+  get current(): T | undefined {
+    return this._current;
+  }
+
+  /** Set the ref when a new view is resolved (call from `resolveWebviewView`). */
+  set(view: T): void {
+    this._current = view;
+  }
+
+  /**
+   * Drop the stale ref and invoke `onCleared`. Call from both the `onDidDispose` handler
+   * and the disposed-safe post path so neither can forget a lifecycle field.
+   */
+  clear(): void {
+    this._current = undefined;
+    this.onCleared();
+  }
+
+  /**
+   * Post to the view's webview, tolerating a disposed webview.
+   *
+   * Returns `true` when the post was attempted on a live view, `false` when there was
+   * no view or the webview was disposed (in which case `clear()` is also called). Non-
+   * disposal errors rethrow. The `view.webview` getter itself can throw "Webview is
+   * disposed" before any `postMessage` call, so the getter read is also guarded here.
+   */
+  post(message: unknown): boolean {
+    if (!this._current) return false;
+    // The webview getter itself throws on a disposed view — guard it before postMessage.
+    let webview: vscode.Webview;
+    try {
+      webview = this._current.webview;
+    } catch (err) {
+      if (isWebviewDisposedError(err)) {
+        this.clear();
+        return false;
+      }
+      throw err;
+    }
+    return postToWebviewRawSafe(webview, message, () => this.clear());
+  }
+}
+
+/**
  * Heuristic for the "Webview is disposed" error VS Code throws when posting to a
  * webview whose panel has been disposed. VS Code does not export an error type for
  * it, so match on the message (and tolerate a plain string throw, just in case).

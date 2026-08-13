@@ -18,12 +18,18 @@ import type { TelemetrySink } from './telemetry/TelemetryService';
 import type { ScanResult } from './services/ComponentService';
 import type { DesignToken } from './services/DesignTokensService';
 import type { ProjectCapabilities } from './types';
-import { postToWebviewRawSafe } from './webview-post';
+import { WebviewViewRef } from './webview-post';
 
 export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
 
-  private _view?: vscode.WebviewView;
+  /**
+   * Disposed-safe view ref (rationale: webview-post.ts / PR #514, #515). Guards the
+   * cached-view reuse-after-dispose race for deferred callers — `notifyCapabilities`
+   * (workspace switch), the visibility callback, and the post-`await` `_sendComponentGroups`.
+   * `onCleared` resets derived flags in sync with the ref so neither path can forget a field.
+   */
+  private readonly _viewRef: WebviewViewRef<vscode.WebviewView>;
   private _ready = false;
   private _telemetry: TelemetrySink | null = null;
   /** Last reported visibility — dedupes repeated same-state visibility events. */
@@ -33,7 +39,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   private _visibilityListeners: Array<(visible: boolean) => void> = [];
 
   get visible(): boolean {
-    return this._view?.visible ?? false;
+    return this._viewRef.current?.visible ?? false;
   }
 
   onVisibilityChange(cb: (visible: boolean) => void): void {
@@ -50,12 +56,19 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   }
 
   constructor(
-  private readonly _extensionUri: vscode.Uri,
-  private readonly _stateHub: StateHub,
-  private readonly _panelRouter: PanelRouter,
-  private readonly _leftPanelProvider?: LeftPanelProvider,
-  private readonly _getComponentGroups?: () => Promise<ScanResult>,
-) {}
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _stateHub: StateHub,
+    private readonly _panelRouter: PanelRouter,
+    private readonly _leftPanelProvider?: LeftPanelProvider,
+    private readonly _getComponentGroups?: () => Promise<ScanResult>,
+  ) {
+    // Resource teardown (StateHub unregister, focus-guard clear) stays with onDidDispose;
+    // this callback resets only the derived lifecycle flags.
+    this._viewRef = new WebviewViewRef(() => {
+      this._ready = false;
+      this._lastVisible = null;
+    });
+  }
 
   private _capabilities: ProjectCapabilities | null = null;
   private _designTokens: DesignToken[] = [];
@@ -67,7 +80,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
    */
   public notifyCapabilities(capabilities: ProjectCapabilities | null): void {
     this._capabilities = capabilities;
-    this._postToWebview({ type: 'projectCapabilities', capabilities: capabilities ?? null });
+    this._viewRef.post({ type: 'projectCapabilities', capabilities: capabilities ?? null });
   }
 
   /**
@@ -76,26 +89,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
    */
   public notifyDesignTokens(tokens: DesignToken[]): void {
     this._designTokens = tokens;
-    this._postToWebview({ type: 'inspector:designTokens', tokens });
-  }
-
-  /**
-   * Post through the disposed-safe poster (rationale: webview-post.ts / PR #514). Guards
-   * the cached-`_view` reuse-after-dispose race for the deferred callers — `notifyCapabilities`
-   * (workspace switch), the visibility callback, and the post-`await` `_sendComponentGroups`.
-   */
-  private _postToWebview(message: unknown): boolean {
-    return postToWebviewRawSafe(this._view?.webview, message, () => this._clearDisposedView());
-  }
-
-  /**
-   * Drop the stale ref so the next `resolveWebviewView` rebuilds. Resource teardown
-   * (StateHub unregister, focus-guard clear) stays with `onDidDispose`; this is idempotent.
-   */
-  private _clearDisposedView(): void {
-    this._view = undefined;
-    this._ready = false;
-    this._lastVisible = null;
+    this._viewRef.post({ type: 'inspector:designTokens', tokens });
   }
 
   /**
@@ -106,8 +100,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   public async reset(): Promise<void> {
     // Direct webview access (not the safe poster): reset() writes `.html` to reload, not
     // postMessage, on a view known live at call time. See webview-post.ts for the guard rationale.
-    if (!this._view) return;
-    const webview = this._view.webview;
+    const view = this._viewRef.current;
+    if (!view) return;
+    const webview = view.webview;
     this._ready = false;
     // Webview reloads — old inputs lose focus without firing focusout, clear the guard
     void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
@@ -135,7 +130,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
   }
 
   async resetIfNotReady(): Promise<void> {
-    if (!this._view || this._ready) return;
+    if (!this._viewRef.current || this._ready) return;
     await this.reset();
   }
 
@@ -144,7 +139,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
-    this._view = webviewView;
+    this._viewRef.set(webviewView);
     this._ready = false;
     webviewView.webview.options = {
       enableScripts: true,
@@ -166,7 +161,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     // LATER (on a visibility toggle), by which point the view may be disposed — route
     // through the safe poster so a disposed view is a no-op, not a worker-poisoning throw.
     this._leftPanelProvider?.onVisibilityChange((visible) => {
-      this._postToWebview({ type: 'inspector:explorerVisible', visible });
+      this._viewRef.post({ type: 'inspector:explorerVisible', visible });
       // When the Explorer collapses, the Inspector's ComponentQuickList becomes the active
       // UI for picking a component. Component groups are otherwise pushed only once on
       // `webview:ready`; refresh here so the list is fresh+complete (and recovers from a
@@ -191,8 +186,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
         // Send initial explorer visibility + component groups + capabilities + design tokens
         this._sendExplorerState();
         this._sendComponentGroups();
-        this._postToWebview({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
-        this._postToWebview({ type: 'inspector:designTokens', tokens: this._designTokens });
+        this._viewRef.post({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+        this._viewRef.post({ type: 'inspector:designTokens', tokens: this._designTokens });
         return;
       }
 
@@ -211,9 +206,9 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidDispose(() => {
-      // Share the view-state clear with _clearDisposedView so a future lifecycle field
+      // Share the ref clear with the disposed-safe post path so a future lifecycle field
       // can't be cleared in one path and forgotten in the other; then extra teardown.
-      this._clearDisposedView();
+      this._viewRef.clear();
       this._stateHub.unregister(RightPanelProvider.viewType);
       // Clear input-focus guard so canvas keybindings aren't permanently blocked
       void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
@@ -235,7 +230,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
 
   private _sendExplorerState(): void {
     const visible = this._leftPanelProvider?.visible ?? true;
-    this._postToWebview({ type: 'inspector:explorerVisible', visible });
+    this._viewRef.post({ type: 'inspector:explorerVisible', visible });
   }
 
   private async _sendComponentGroups(): Promise<void> {
@@ -248,7 +243,7 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       // SaaS PagesSection). The Inspector quick-list is a single flat list like the canvas
       // picker, so it must fold them too — otherwise monorepo pages stay unreachable here.
       // Shared with the canvas picker (PreviewPanel) so both lists agree (HYP-772/#535).
-      this._postToWebview({
+      this._viewRef.post({
         type: 'inspector:componentGroups',
         ...toPickerGroups(result.data),
       });
