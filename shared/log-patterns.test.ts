@@ -32,6 +32,32 @@ describe('hasErrorsInLogs', () => {
     expect(hasErrorsInLogs('Failed to compile.')).toBe(true);
   });
 
+  // HYP-753 (orphan-reap-on-reload): a dev server that loses the port race must
+  // not crash silently. These are the port-in-use signatures across runtimes.
+  it("detects Bun's port-collision crash", () => {
+    expect(hasErrorsInLogs('error: Failed to start server. Is port 3000 in use?')).toBe(true);
+    expect(hasErrorsInLogs('Failed to start server. Is port 5173 in use?')).toBe(true);
+  });
+
+  it('detects Node/libuv EADDRINUSE', () => {
+    expect(hasErrorsInLogs('Error: listen EADDRINUSE: address already in use :::3000')).toBe(true);
+    expect(hasErrorsInLogs('eaddrinuse 0.0.0.0:8080')).toBe(true);
+  });
+
+  it('detects generic "address already in use" / "port N is already in use"', () => {
+    expect(hasErrorsInLogs('listen tcp 0.0.0.0:3000: address already in use')).toBe(true);
+    expect(hasErrorsInLogs('Port 3000 is already in use')).toBe(true);
+    expect(hasErrorsInLogs('error when starting dev server: Port 5173 is in use')).toBe(true);
+  });
+
+  it('does not flag a clean "running on port" line as a port-in-use error', () => {
+    // The new port patterns must require the "in use" qualifier — a normal
+    // startup banner that merely mentions a port number is not an error.
+    expect(hasErrorsInLogs('Local: http://localhost:3000')).toBe(false);
+    expect(hasErrorsInLogs('Server running on port 3000')).toBe(false);
+    expect(hasErrorsInLogs('listening on port 8080')).toBe(false);
+  });
+
   it('returns false for clean output', () => {
     expect(hasErrorsInLogs('Server started on port 3000\nReady')).toBe(false);
   });

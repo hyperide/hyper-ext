@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-patterns';
 import type { RuntimeError } from '../../../../shared/runtime-error';
 import type { DevServerState, DevServerStatus, ProjectType } from '../types';
+import { clearOwnedDevServer, reapStaleOwnedDevServer, recordOwnedDevServer } from './devServerOrphanRegistry';
 import { findFreePort, probeOpen } from './netProbe';
 import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
@@ -321,6 +322,16 @@ export class DevServerManager {
     this._hasErrors = false;
     this._portDetected = false;
 
+    // Reap our own orphaned dev server from a previous session BEFORE picking a
+    // port. On a VS Code window reload, deactivate()'s fire-and-forget stop() does
+    // not complete before the extension host is torn down, so the detached child
+    // survives and keeps its port. A port-ignoring server (Bun hardcodes :3000)
+    // then loses the next start to that orphan with EADDRINUSE and the preview
+    // never appears. We attribute the kill ONLY via the pid WE recorded for THIS
+    // project — never "whoever holds the port" (occupancy is not ownership).
+    // See devServerOrphanRegistry (orphan-reap-on-reload, HYP-753).
+    this._reapOrphanedDevServer();
+
     try {
       // Get project info
       const projectInfo = await getProjectInfo(this._projectPath);
@@ -409,6 +420,17 @@ export class DevServerManager {
       });
       this._process = child;
 
+      // Persist an "owned dev server" record so the NEXT start can reap this child
+      // if it gets orphaned by a window-reload race (see _reapOrphanedDevServer).
+      if (child.pid) {
+        recordOwnedDevServer({
+          pid: child.pid,
+          projectPath: this._projectPath,
+          command: `${command.cmd} ${command.args.join(' ')}`.trim(),
+          startedAt: Date.now(),
+        });
+      }
+
       const isCurrentProcess = () => this._process === child;
 
       // Handle stdout
@@ -455,6 +477,9 @@ export class DevServerManager {
         if (!isCurrentProcess()) return;
         console.log(`[HyperIDE] DevServer process exited with code ${code}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
         this._outputChannel.appendLine(`[DevServer] Process exited with code ${code}`);
+        // The child is gone — drop its orphan record so the next start does not try
+        // to reap an already-dead pid (or, worse, a recycled one).
+        clearOwnedDevServer(this._projectPath);
         this._process = null;
         this._port = null;
         this._stopProxy();
@@ -509,6 +534,11 @@ export class DevServerManager {
     if (proc) {
       this._outputChannel.appendLine('[DevServer] Stopping server...');
     }
+
+    // Clear the orphan record up front: a clean stop() means this child is no
+    // longer something the next start should reap. (The exit handler also clears
+    // it, but stop() may resolve via the 5s force-kill timeout before exit fires.)
+    clearOwnedDevServer(this._projectPath);
 
     this._process = null;
     this._port = null;
@@ -775,16 +805,57 @@ export class DevServerManager {
   }
 
   private _killProcessTree(proc: ChildProcess, signal: NodeJS.Signals): void {
-    if (process.platform !== 'win32' && proc.pid) {
-      try {
-        process.kill(-proc.pid, signal);
-        return;
-      } catch {
-        // Fall back to killing the direct child below.
-      }
+    if (process.platform !== 'win32' && proc.pid && this._killPidGroup(proc.pid, signal)) {
+      return;
     }
-
     proc.kill(signal);
+  }
+
+  /**
+   * Kill a raw pid's process group on POSIX (`process.kill(-pid, signal)`), the
+   * same group-kill _killProcessTree uses for the live ChildProcess. Returns true
+   * when the group signal was delivered, false when it failed (e.g. the group is
+   * already gone, or on Windows where detached groups are not addressable this
+   * way) so the caller can fall back. Used by the orphan reaper, which only has a
+   * recorded pid (no ChildProcess handle).
+   */
+  private _killPidGroup(pid: number, signal: NodeJS.Signals): boolean {
+    if (process.platform === 'win32') return false;
+    try {
+      process.kill(-pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Terminate an orphaned dev-server process group we recorded in a previous
+   * session, using the same SIGTERM→(brief wait)→SIGKILL ladder as stop(). Best
+   * effort: each step swallows its own error. Synchronous SIGTERM, then a delayed
+   * SIGKILL backstop so a process ignoring SIGTERM is still cleared without us
+   * blocking the fresh start that follows.
+   */
+  private _reapOrphanPid(pid: number): void {
+    this._killPidGroup(pid, 'SIGTERM');
+    setTimeout(() => {
+      this._killPidGroup(pid, 'SIGKILL');
+    }, 2000).unref?.();
+  }
+
+  /**
+   * Reap an orphaned dev server from a previous session for the current project,
+   * if our recorded pid is still alive. Delegates ownership/aliveness checks to the
+   * registry and the actual termination to _reapOrphanPid (the shared kill ladder).
+   * Fully best-effort — reapStaleOwnedDevServer never throws.
+   */
+  private _reapOrphanedDevServer(): void {
+    const reaped = reapStaleOwnedDevServer(this._projectPath, (pid) => this._reapOrphanPid(pid), {
+      onLog: (message) => this._outputChannel.appendLine(message),
+    });
+    if (reaped !== null) {
+      console.log(`[HyperIDE] DevServer reaped orphaned pid ${reaped} from previous session`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    }
   }
 
   /**

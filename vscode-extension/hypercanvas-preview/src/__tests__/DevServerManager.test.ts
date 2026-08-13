@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { spawn } from 'node:child_process';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import {
+  clearOwnedDevServer,
+  isProcessAlive,
+  readOwnedDevServer,
+  recordOwnedDevServer,
+} from '../services/devServerOrphanRegistry';
 import type { DevServerStatus } from '../types';
 
 /**
@@ -24,12 +31,18 @@ import type { DevServerStatus } from '../types';
  * nothing leaks.
  */
 const realFs = await import('node:fs');
+// Capture the ORIGINAL readFileSync before mock.module mutates the node:fs
+// namespace in place. Calling `realFs.readFileSync` inside the factory would
+// resolve to the MOCKED function (bun mutates the existing namespace object),
+// recursing forever on any non-iframe read — dormant until a test reads a real
+// file at runtime (e.g. the orphan-registry reap wiring below).
+const origReadFileSync = realFs.readFileSync;
 mock.module('node:fs', () => ({
   ...realFs,
   default: realFs,
   readFileSync: (file: string, enc?: unknown) => {
     if (typeof file === 'string' && file.includes('iframe-')) return '/* stub */';
-    return realFs.readFileSync(file as string, enc as never);
+    return origReadFileSync(file as string, enc as never);
   },
 }));
 const {
@@ -861,6 +874,98 @@ describe('DevServerManager', () => {
       firePortDetector(manager, 'Running at http://localhost:65536');
 
       expect(setTargetPort).not.toHaveBeenCalled();
+    });
+  });
+
+  // HYP-753 (orphan-reap-on-reload): a detached dev server orphaned by a window
+  // reload still holds its port; the next start must reap OUR recorded pid before
+  // picking a port. These tests exercise the manager's wiring to the registry —
+  // the registry's own behavior is covered in services/__tests__/devServerOrphanRegistry.test.ts.
+  describe('orphan reap wiring', () => {
+    const REAP_PROJECT = '/orphan-reap-project';
+    const spawnedPids: number[] = [];
+
+    function spawnSleeper(): number {
+      // `sleep` is a clean killable leaf; detached → its own process group (the
+      // reaper kills the group via -pid). Avoid process.execPath: under bun that is
+      // the bun binary, whose detached children hang the test runner's shutdown.
+      const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
+      child.unref();
+      if (!child.pid) throw new Error('failed to spawn sleeper');
+      spawnedPids.push(child.pid);
+      return child.pid;
+    }
+    function hardKill(pid: number): void {
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* gone */
+        }
+      }
+    }
+    async function waitForDeath(pid: number, timeoutMs = 2000): Promise<boolean> {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (!isProcessAlive(pid)) return true;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      return !isProcessAlive(pid);
+    }
+    function callReap(mgr: InstanceType<typeof DevServerManager>): void {
+      (mgr as unknown as { _reapOrphanedDevServer(): void })._reapOrphanedDevServer();
+    }
+
+    afterEach(() => {
+      for (const pid of spawnedPids.splice(0)) hardKill(pid);
+      clearOwnedDevServer(REAP_PROJECT);
+    });
+
+    it('_reapOrphanedDevServer kills a live recorded child for this project', async () => {
+      const reapManager = new DevServerManager(REAP_PROJECT);
+      const pid = spawnSleeper();
+      // Record the command we actually spawn (`sleep 30`), not a stand-in, so the
+      // registry's `ps` PID-reuse recheck finds the live process's `sleep` token and
+      // proceeds with the kill. A mismatching record (e.g. 'bun run dev') would be
+      // correctly suppressed as a suspected pid reuse, defeating the test's intent.
+      recordOwnedDevServer({ pid, projectPath: REAP_PROJECT, command: 'sleep 30', startedAt: Date.now() });
+
+      callReap(reapManager);
+
+      expect(await waitForDeath(pid)).toBe(true);
+      // Record swept so a later start does not re-target a dead/recycled pid.
+      expect(readOwnedDevServer(REAP_PROJECT)).toBeNull();
+      reapManager.dispose();
+    });
+
+    it('_reapOrphanedDevServer is a no-op when no record exists (best-effort, no throw)', () => {
+      const reapManager = new DevServerManager(REAP_PROJECT);
+      clearOwnedDevServer(REAP_PROJECT);
+      expect(() => callReap(reapManager)).not.toThrow();
+      reapManager.dispose();
+    });
+
+    it('stop() clears the orphan record for the project', async () => {
+      const reapManager = new DevServerManager(REAP_PROJECT);
+      recordOwnedDevServer({ pid: 999999, projectPath: REAP_PROJECT, command: 'bun run dev', startedAt: Date.now() });
+      expect(readOwnedDevServer(REAP_PROJECT)).not.toBeNull();
+
+      await reapManager.stop();
+
+      expect(readOwnedDevServer(REAP_PROJECT)).toBeNull();
+      reapManager.dispose();
+    });
+
+    it('_killPidGroup terminates a real detached process group', async () => {
+      const pid = spawnSleeper();
+      const killed = (manager as unknown as { _killPidGroup(pid: number, sig: string): boolean })._killPidGroup(
+        pid,
+        'SIGKILL',
+      );
+      expect(killed).toBe(true);
+      expect(await waitForDeath(pid)).toBe(true);
     });
   });
 });

@@ -23,6 +23,19 @@ export const ERROR_PATTERNS = [
   /Cannot read propert/i, // Property access errors
   /is not a function/i, // Function call errors
   /compiled with \d+ error/i, // webpack/CRA "compiled with 1 error" — must beat the success pattern
+  // Port-in-use crashes. A dev server that loses the port-assignment race (an
+  // orphaned previous instance still holds the port, or another server is bound
+  // to it) exits with one of these. Bun is the motivating case: it hardcodes
+  // serve({ port: 3000 }), ignores PORT/--port, and on collision prints
+  // "error: Failed to start server. Is port 3000 in use?" then exits. That string
+  // matched none of the patterns above, so the failure was invisible and
+  // _waitForReady() timed out with a generic "Server startup timeout" instead of
+  // surfacing the real cause (HYP-753, orphan-reap-on-reload). Node/Vite/webpack
+  // emit EADDRINUSE / "address already in use" for the same condition.
+  /EADDRINUSE/i, // Node/libuv address-in-use error code
+  /address already in use/i, // libuv / common server message
+  /Failed to start server\. Is port \d+ in use/i, // Bun.serve port collision
+  /port \d+ (?:is )?(?:already )?in use/i, // generic "port 3000 is already in use"
 ];
 
 // Success patterns to detect in dev-server logs
