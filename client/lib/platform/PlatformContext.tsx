@@ -6,6 +6,7 @@
  */
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { RETARGET_ROUTE } from '@shared/i18n-text/retarget/contract';
 import { authFetch } from '@/utils/authFetch';
 import { createBrowserAdapters } from './BrowserAdapter';
 import type {
@@ -410,6 +411,40 @@ function createBrowserAstOperations(): AstOperations {
     },
 
     async writeI18nResource(params) {
+      // Existing-key retarget (HYP-372): the user picked a DIFFERENT existing key from the
+      // combobox. `skipResourceWrite` means "don't touch the locale dictionary, just retarget the
+      // JSX call site" — which is exactly the server's retarget route. Routing it here (the
+      // platform AstOperations seam) keeps RightSidebar transport-agnostic.
+      const isExistingKeyRetarget =
+        params.skipResourceWrite === true &&
+        typeof params.previousKey === 'string' &&
+        params.previousKey !== params.key &&
+        typeof params.filePath === 'string' &&
+        params.bindingLoc != null;
+
+      if (isExistingKeyRetarget) {
+        const response = await authFetch(RETARGET_ROUTE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath: params.filePath,
+            oldKey: params.previousKey,
+            newKey: params.key,
+            bindingLoc: params.bindingLoc,
+            library: params.library,
+            namespace: params.namespace,
+            activeLocale: params.activeLocale,
+          }),
+        });
+        const result = (await response.json()) as { code?: string; reason?: string };
+        if (!response.ok || result.code !== 'ok') {
+          throw new Error(result.reason || `Retarget failed (${result.code ?? response.statusText})`);
+        }
+        // The SaaS retarget route rewrites JSX in place but does not reassign a node ID, so there
+        // is no newElementId to surface. Caller falls back to the prior selection id.
+        return {};
+      }
+
       const response = await authFetch('/api/write-i18n-resource', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -419,7 +454,7 @@ function createBrowserAstOperations(): AstOperations {
         const error = await response.json();
         throw new Error(error.error || response.statusText);
       }
-      // SaaS route doesn't rewrite JSX (only locale JSON), so it has no new ID
+      // SaaS write-i18n-resource only writes locale JSON (no JSX rewrite), so it has no new ID
       // to surface. Return an empty object so callers can uniformly destructure.
       return {};
     },

@@ -16,6 +16,9 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
+import { composeBrowserI18nText } from '@/lib/platform/hooks/composeBrowserI18nText';
+import { getSelectedElementRange } from '@/lib/platform/hooks/getSelectedElementRange';
+import { useBrowserI18nText } from '@/lib/platform/hooks/useBrowserI18nText';
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
@@ -139,8 +142,10 @@ export default function RightSidebar({
     loading,
     childrenLocation,
     styleReadResult,
-    i18nText,
-    availableKeys: availableI18nKeys,
+    // Canvas/VS-Code path values (RPC). The browser path merges its own source in below WITHOUT
+    // touching useElementStyleData, so the canvas data flow stays byte-identical (HYP-372 M3 P1).
+    i18nText: canvasI18nText,
+    availableKeys: canvasAvailableI18nKeys,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -154,6 +159,48 @@ export default function RightSidebar({
     domTextContent: selectedElementDomText ?? undefined,
     activeLocale: i18nActiveLocale,
   });
+
+  // ── Browser-mode i18n READ (HYP-372 M3 P1) ──────────────────────────────────────────────────
+  // VS Code mode owns i18nText via the styles:response RPC (above). In SaaS browser mode there is
+  // no host RPC, so the binding is read from the server scan route and folded in here — keeping
+  // useElementStyleData's effects untouched (the byte-identical-canvas-path requirement).
+  // The selected element's loc range comes from the engine AST node (the wrapping JSXElement); the
+  // scan returns each t(...) call's own loc, and composeBrowserI18nText matches by range containment.
+  // getSelectedElementRange handles both selection paths (AST UUID and canvas-click nodeRef) and
+  // returns direct-child ranges for the descendant-exclusion. The element's source range is stable
+  // across a retarget (same JSXElement) — the post-write re-scan is driven by the hook's refreshKey,
+  // so this memo only depends on the selection.
+  const selectedElementRange = useMemo(() => getSelectedElementRange(engine, selectedId), [engine, selectedId]);
+
+  const browserI18n = useBrowserI18nText({
+    // Pass null (= browser mode, hook activates) only when the engine is present; otherwise pass the
+    // canvas adapter so the hook NO-OPS in VS Code mode (usePlatformCanvas is non-null in both modes).
+    canvas: engine ? null : canvas,
+    filePath: componentPath,
+    // The element start loc drives the scan fetch + re-fetch on selection change. We don't rely on
+    // the hook's exact-loc `binding` (the element loc != the inner t() call loc); composeBrowserI18nText
+    // resolves the active binding by range containment instead.
+    sourceLocation: selectedElementRange?.start ?? null,
+    library: null,
+    // Re-scan after a retarget (source changed, element loc unchanged) and on external refreshes.
+    refreshKey: styleRefreshKey + styleVersion,
+  });
+  const browserI18nText = useMemo(
+    () =>
+      composeBrowserI18nText({
+        result: browserI18n,
+        filePath: componentPath,
+        elementRange: selectedElementRange,
+        activeLocale: i18nActiveLocale ?? 'en',
+      }),
+    [browserI18n, componentPath, selectedElementRange, i18nActiveLocale],
+  );
+
+  // VS Code (no engine) keeps the canvas RPC values verbatim — byte-identical to before this hook
+  // existed. Browser/SaaS (engine present) uses the scan-derived source. Discriminating on `engine`
+  // (not on canvasI18nText) guarantees the VS Code branch is untouched even when no binding exists.
+  const i18nText = engine ? (canvasI18nText ?? browserI18nText) : canvasI18nText;
+  const availableI18nKeys = engine ? browserI18n.retargetableKeys : canvasAvailableI18nKeys;
   const sourceTabs = useMemo(
     () =>
       resolveInspectorStyleSourceTabs({
@@ -578,6 +625,8 @@ export default function RightSidebar({
             filePath: i18nText.sourceLocation.filePath,
             elementId: effectiveSelectedId,
             skipResourceWrite: !isNewKey,
+            // Drives the browser-mode retarget's server-side locate (HYP-372); VS Code RPC ignores it.
+            bindingLoc: { line: i18nText.sourceLocation.line, column: i18nText.sourceLocation.column },
           });
           lastWrittenI18nKeyRef.current = newKey;
           dbg('writeI18nResource resolved', writeResult);

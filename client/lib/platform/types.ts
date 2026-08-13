@@ -451,6 +451,13 @@ export interface AstOperations {
     elementId?: string;
     /** Skip writing to the locale dictionary; only update the JSX expression. */
     skipResourceWrite?: boolean;
+    /**
+     * The t(...) call's source location (Babel: 1-based line, 0-based column). Browser-mode
+     * existing-key retarget needs it to drive the server's deterministic locate (HYP-372). The
+     * VS Code RPC path IGNORES it — the extension host locates by elementId itself — so passing
+     * it keeps the canvas wire message byte-identical.
+     */
+    bindingLoc?: { line: number; column: number };
   }): Promise<{ newElementId?: string }>;
 }
 
