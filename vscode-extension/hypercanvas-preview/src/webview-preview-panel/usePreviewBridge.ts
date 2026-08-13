@@ -292,6 +292,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // Cached so we can re-forward them into the iframe after a (re)load, when the
   // iframe's message listener was not yet registered the first time around.
   const generatedPropsByPathRef = useRef<Record<string, Record<string, unknown>>>({});
+  // HYP-880: bumped per componentPath on every setGeneratedProps message so an
+  // in-flight deliverGeneratedProps retry loop (see below) can tell it has been
+  // superseded by a newer message for the same path and stop rescheduling,
+  // instead of continuing to post its now-stale closed-over payload for up to 10s.
+  // A Map (not a plain object keyed by bracket notation) so a component path
+  // never resolves as a dynamic property write CodeQL has to reason about.
+  const generatedPropsSeqRef = useRef<Map<string, number>>(new Map());
   // #51 — latest selection / interaction state forwarded into the iframe. Mirrors every
   // hypercanvas:stateUpdate we send so we can replay it when the late-loading Remix bridge
   // posts hypercanvas:bridgeReady (its listener mounts several async hops after hydration, so
@@ -567,10 +574,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         const cachedProps = generatedPropsByPathRef.current[comp];
         if (cachedProps) {
           setTimeout(() => {
-            iframeEl?.contentWindow?.postMessage(
-              { type: 'hypercanvas:setGeneratedProps', componentPath: comp, values: cachedProps },
-              '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-            );
+            postToPreviewIframe(iframeEl, {
+              type: 'hypercanvas:setGeneratedProps',
+              componentPath: comp,
+              values: cachedProps,
+            });
           }, 100);
         }
       }
@@ -770,10 +778,54 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // (re)load, when the iframe's message listener was not yet registered.
           // codeql[js/remote-property-injection] -- comp is the user's own component path from our extension-host message; the ref holds a session-local cache keyed by that path, no cross-user trust boundary
           generatedPropsByPathRef.current[comp] = values;
-          iframeElRef.current?.contentWindow?.postMessage(
-            { type: 'hypercanvas:setGeneratedProps', componentPath: comp, values },
-            '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-          );
+          // HYP-880: the extension host resolves generated props ASYNCHRONOUSLY (AST
+          // parse + sample-value generation), so this message can arrive before the
+          // preview <iframe>'s own page has mounted CanvasPreview's `message` listener.
+          // Two distinct race windows, both silently dropping the values with no crash
+          // and no error overlay — just a component whose required props (e.g. a
+          // `children: ReactNode` slot) stay permanently empty:
+          //   1. iframeElRef.current / .contentWindow is still null (iframe DOM not
+          //      created yet) — a single `?.postMessage()` no-ops via optional chaining.
+          //   2. contentWindow ALREADY exists (same <iframe> element persists across an
+          //      Astro-style full navigation) but the NEW page hasn't run its React
+          //      `useEffect` listener setup yet — postMessage "succeeds" (no error) but
+          //      nobody is listening on the other side, so the message is just lost.
+          //      A single successful post gives no signal that #2 happened, so a
+          //      check-once-then-stop retry (naive fix) still drops the message here.
+          // There is no ack channel from the iframe side today, so redeliver
+          // unconditionally on an interval for a bounded window — repeated posts to an
+          // already-listening page are harmless (same idempotent `values` payload), and
+          // this covers both races without needing a receipt/handshake protocol. The
+          // existing replay-on-'load' path above only helps a SUBSEQUENT navigation;
+          // frameworks that fire a single page load per mount (Astro `client:only`
+          // islands) never get a second 'load' to replay on, so that path alone can't
+          // close either race for this class of project.
+          //
+          // Each retry goes through postToPreviewIframe (the sanctioned, origin-scoped
+          // channel every other message in this file uses) instead of a raw '*' post,
+          // so a mid-startup navigation to a different origin silently drops later
+          // retries instead of leaking componentPath/values into that cross-origin page.
+          //
+          // A newer setGeneratedProps for the SAME comp (reselecting it, or switching
+          // between two projects that both use e.g. src/App.tsx) must supersede an
+          // older still-running retry loop — otherwise the old loop keeps reposting its
+          // stale closed-over `values` for up to 10s and can clobber the newer payload
+          // on the far side. generatedPropsSeqRef tracks the current sequence number per
+          // path; each loop captures its own number at start and stops once superseded.
+          const mySeq = (generatedPropsSeqRef.current.get(comp) ?? 0) + 1;
+          generatedPropsSeqRef.current.set(comp, mySeq);
+          let deliverAttempts = 0;
+          const deliverGeneratedProps = (): void => {
+            if (generatedPropsSeqRef.current.get(comp) !== mySeq) return; // superseded — stop
+            deliverAttempts += 1;
+            postToPreviewIframe(iframeElRef.current, {
+              type: 'hypercanvas:setGeneratedProps',
+              componentPath: comp,
+              values,
+            });
+            if (deliverAttempts < 40) setTimeout(deliverGeneratedProps, 250); // ~10s window
+          };
+          deliverGeneratedProps();
           break;
         }
 

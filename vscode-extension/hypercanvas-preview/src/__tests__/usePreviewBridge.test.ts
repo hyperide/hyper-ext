@@ -320,6 +320,140 @@ describe('iframe:scrollToElement → iframe forwarding', () => {
   });
 });
 
+describe('setGeneratedProps → iframe retry delivery (HYP-880)', () => {
+  it('routes retries through the origin-scoped channel, never the "*" wildcard', async () => {
+    let capturedSpy: PostMessageSpy | null = null;
+    const cleanup = renderBridgeWithSpy((spy) => {
+      capturedSpy = spy;
+    });
+
+    try {
+      await act(async () => {
+        postHostMessage({
+          type: 'setGeneratedProps',
+          componentPath: 'src/App.tsx',
+          values: { children: 'Section' },
+        });
+      });
+
+      const calls = (capturedSpy as PostMessageSpy).mock.calls;
+      const genPropsCalls = calls.filter(
+        (args) => (args[0] as Record<string, unknown>).type === 'hypercanvas:setGeneratedProps',
+      );
+      expect(genPropsCalls.length).toBeGreaterThan(0);
+      // targetOrigin must be the derived dev-server origin, never the '*' wildcard —
+      // a raw postMessage(..., '*') would leak componentPath/values to any cross-origin
+      // page the preview frame navigates to mid-startup.
+      for (const call of genPropsCalls) {
+        expect(call[1]).toBe('http://localhost:5173');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('stops an older retry loop once a newer setGeneratedProps for the same path supersedes it', async () => {
+    let capturedSpy: PostMessageSpy | null = null;
+    const cleanup = renderBridgeWithSpy((spy) => {
+      capturedSpy = spy;
+    });
+
+    try {
+      await act(async () => {
+        postHostMessage({
+          type: 'setGeneratedProps',
+          componentPath: 'src/App.tsx',
+          values: { children: 'stale' },
+        });
+      });
+      const callsBeforeSecond = (capturedSpy as PostMessageSpy).mock.calls.length;
+
+      // A second message for the SAME componentPath arrives before the first loop's
+      // 10s/40-tick window ends (e.g. reselecting the component) — this must supersede
+      // the first loop so it stops posting its now-stale 'stale' payload.
+      await act(async () => {
+        postHostMessage({
+          type: 'setGeneratedProps',
+          componentPath: 'src/App.tsx',
+          values: { children: 'fresh' },
+        });
+      });
+
+      // Let one 250ms retry tick elapse for both loops (real timers — generous margin
+      // over the single tick this asserts on to avoid CI-load flakiness).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      });
+
+      const genPropsPayloads = (capturedSpy as PostMessageSpy).mock.calls
+        .slice(callsBeforeSecond)
+        .map((args) => args[0] as Record<string, unknown>)
+        .filter((m) => m.type === 'hypercanvas:setGeneratedProps');
+
+      // At least the second loop's immediate synchronous post plus one retry tick.
+      expect(genPropsPayloads.length).toBeGreaterThan(1);
+      // Every post after the second message must carry the NEW values — the
+      // superseded first loop must not have posted 'stale' again in this window.
+      for (const payload of genPropsPayloads) {
+        expect((payload.values as Record<string, unknown>).children).toBe('fresh');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not let a message for a DIFFERENT componentPath cancel an unrelated retry loop', async () => {
+    let capturedSpy: PostMessageSpy | null = null;
+    const cleanup = renderBridgeWithSpy((spy) => {
+      capturedSpy = spy;
+    });
+
+    try {
+      await act(async () => {
+        postHostMessage({
+          type: 'setGeneratedProps',
+          componentPath: 'src/App.tsx',
+          values: { children: 'app-value' },
+        });
+      });
+      const callsBeforeSecond = (capturedSpy as PostMessageSpy).mock.calls.length;
+
+      // A different componentPath must NOT supersede src/App.tsx's retry loop —
+      // supersession is scoped per path (switching to another file mid-flight).
+      await act(async () => {
+        postHostMessage({
+          type: 'setGeneratedProps',
+          componentPath: 'src/Other.tsx',
+          values: { children: 'other-value' },
+        });
+      });
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      });
+
+      const genPropsPayloads = (capturedSpy as PostMessageSpy).mock.calls
+        .slice(callsBeforeSecond)
+        .map((args) => args[0] as Record<string, unknown>)
+        .filter((m) => m.type === 'hypercanvas:setGeneratedProps');
+
+      const appPaths = genPropsPayloads.filter((m) => m.componentPath === 'src/App.tsx');
+      const otherPaths = genPropsPayloads.filter((m) => m.componentPath === 'src/Other.tsx');
+      // Both loops must still be alive and posting their own values independently.
+      expect(appPaths.length).toBeGreaterThan(0);
+      expect(otherPaths.length).toBeGreaterThan(0);
+      for (const payload of appPaths) {
+        expect((payload.values as Record<string, unknown>).children).toBe('app-value');
+      }
+      for (const payload of otherPaths) {
+        expect((payload.values as Record<string, unknown>).children).toBe('other-value');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe('mergeForwardedState (#51 — selection replay accumulator)', () => {
   it('returns prev unchanged for a null/empty patch (no needless allocation)', () => {
     const prev = { selectedIds: ['a'] };
