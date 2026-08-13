@@ -471,6 +471,65 @@ describe('computeOverlayRects', () => {
   });
 });
 
+/* B3: display:contents yields zero getBoundingClientRect */
+
+it('computes union-of-children rect for a display:contents selected element (B3)', () => {
+  const parent = document.createElement('div');
+  parent.style.display = 'contents';
+  const child1 = document.createElement('div');
+  const child2 = document.createElement('div');
+  parent.appendChild(child1);
+  parent.appendChild(child2);
+  document.body.appendChild(parent);
+  Object.defineProperty(parent, 'getBoundingClientRect', {
+    value: () => ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 }),
+  });
+  Object.defineProperty(child1, 'getBoundingClientRect', {
+    value: () => ({ left: 10, top: 20, width: 50, height: 30, right: 60, bottom: 50 }),
+  });
+  Object.defineProperty(child2, 'getBoundingClientRect', {
+    value: () => ({ left: 70, top: 15, width: 40, height: 40, right: 110, bottom: 55 }),
+  });
+  try {
+    const resolver = createResolver(new Map([['ref-contents', [parent as unknown as HTMLElement]]]));
+    const result = computeOverlayRects({ selectedIds: ['ref-contents'], hoveredId: null }, resolver);
+    expect(result.overlayRects).toHaveLength(1);
+    expect(result.overlayRects[0].type).toBe('selection');
+    expect(result.overlayRects[0].left).toBe(10);
+    expect(result.overlayRects[0].top).toBe(15);
+    expect(result.overlayRects[0].width).toBe(100);
+    expect(result.overlayRects[0].height).toBe(40);
+  } finally {
+    document.body.removeChild(parent);
+  }
+});
+
+it('also applies display:contents fallback to hover rect (B3)', () => {
+  const parent = document.createElement('div');
+  parent.style.display = 'contents';
+  const child = document.createElement('div');
+  parent.appendChild(child);
+  document.body.appendChild(parent);
+  Object.defineProperty(parent, 'getBoundingClientRect', {
+    value: () => ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 }),
+  });
+  Object.defineProperty(child, 'getBoundingClientRect', {
+    value: () => ({ left: 5, top: 10, width: 80, height: 60, right: 85, bottom: 70 }),
+  });
+  try {
+    const resolver = createResolver(new Map([['ref-contents', [parent as unknown as HTMLElement]]]));
+    const result = computeOverlayRects({ selectedIds: [], hoveredId: 'ref-contents' }, resolver);
+    expect(result.overlayRects).toHaveLength(1);
+    expect(result.overlayRects[0].type).toBe('hover');
+    expect(result.overlayRects[0].left).toBe(5);
+    expect(result.overlayRects[0].top).toBe(10);
+    expect(result.overlayRects[0].width).toBe(80);
+    expect(result.overlayRects[0].height).toBe(60);
+  } finally {
+    document.body.removeChild(parent);
+  }
+});
+
 describe('detectTailwindExplicitSize', () => {
   it('detects w-12 h-12 as explicit width and height', () => {
     expect(detectTailwindExplicitSize('w-12 h-12')).toEqual({ width: true, height: true });

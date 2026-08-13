@@ -108,6 +108,40 @@ export interface OverlayComputeResult {
   placeholderRects: PlaceholderRect[];
 }
 
+/**
+ * Compute the bounding rect for a display:contents element, which itself has no own box.
+ * Returns the union of direct children rects (the visual area the element "occupies").
+ */
+function contentsElementRect(el: Element): { left: number; top: number; width: number; height: number } | null {
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (let i = 0; i < el.children.length; i++) {
+    const child = el.children[i];
+    const r = child.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    if (r.left < left) left = r.left;
+    if (r.top < top) top = r.top;
+    if (r.right > right) right = r.right;
+    if (r.bottom > bottom) bottom = r.bottom;
+  }
+  if (!isFinite(left)) return null;
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Get the effective bounding rect for an element.
+ * For display:contents elements, falls back to the union rect of direct children.
+ */
+function effectiveRect(el: Element): { left: number; top: number; width: number; height: number } {
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0 && getComputedStyle(el).display === 'contents') {
+    return contentsElementRect(el) ?? rect;
+  }
+  return rect;
+}
+
 /** Read itemIndex from Map or Record. */
 function getItemIndex(
   indices: Map<string, number | null> | Record<string, number | null> | undefined,
@@ -137,7 +171,7 @@ export function computeOverlayRects(
     if (!isExactItemSelected) {
       const hoverElements = resolver.findElements(state.hoveredId, hoveredItemIdx ?? 0);
       if (hoverElements.length > 0) {
-        const rect = hoverElements[0].getBoundingClientRect();
+        const rect = effectiveRect(hoverElements[0]);
         const key = hoveredItemIdx !== null ? `hover-${state.hoveredId}-${hoveredItemIdx}` : `hover-${state.hoveredId}`;
         overlayRects.push({
           key,
@@ -178,7 +212,7 @@ export function computeOverlayRects(
     }
 
     for (let i = 0; i < elements.length; i++) {
-      const rect = elements[i].getBoundingClientRect();
+      const rect = effectiveRect(elements[i]);
       const key = effectiveItemIndex !== null ? `select-${id}-${effectiveItemIndex}` : `select-${id}-${i}`;
       const overlayRect: OverlayRect = {
         key,
