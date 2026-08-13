@@ -107,11 +107,11 @@ describe('orchestrator.run — Phase 1 create-key gating', () => {
     expect(res.reason).toBeDefined();
   });
 
-  // Locale-JSON-first ordering scaffold: for a new key, Phase 2 must write the locale dictionary
-  // BEFORE touching the JSX. Phase 1 hard-returns before any write — this test pins that the
-  // create flow performs NO file write yet (neither locale nor JSX), so the future Phase-2
-  // addition is the only thing that introduces the locale write.
-  it('createIfMissing=true for a new key → deferred to Phase 2, performs NO write', async () => {
+  // Without a createLocaleKey hook (the Docker Phase-1 context shape), createIfMissing for a new
+  // key STILL cannot create — the orchestrator has no way to write the dictionary. It stays
+  // not-retargetable and performs no write. This preserves the Docker backend's Phase-1 behavior
+  // until that route opts into create by supplying the hook.
+  it('createIfMissing=true but NO createLocaleKey hook → not-retargetable, no write', async () => {
     const store = memStore({ [ABS]: SRC_OLD });
     let wrote = false;
     const spyStore: FileStore = {
@@ -130,6 +130,81 @@ describe('orchestrator.run — Phase 1 create-key gating', () => {
     );
     expect(res.code).toBe('not-retargetable');
     expect(res.written).toBe(false);
-    expect(wrote).toBe(false); // no locale write, no JSX write — ordering scaffold only
+    expect(wrote).toBe(false);
+  });
+});
+
+describe('orchestrator.run — Phase 2 new-key create (locale-JSON-first)', () => {
+  it('createIfMissing=true + createLocaleKey: writes locale FIRST, then rewrites JSX', async () => {
+    const store = memStore({ [ABS]: SRC_OLD });
+    const calls: string[] = [];
+    const res = await run(
+      {
+        resolveAbsolute: () => ABS,
+        availableKeys: ['hero.title'], // newKey NOT present → triggers create
+        async createLocaleKey(req) {
+          // The locale write must happen before any JSX write.
+          calls.push(`locale:${req.newKey}`);
+          return { ok: true, localePath: '/proj/locales/en.json' };
+        },
+      },
+      store,
+      baseReq({ newKey: 'hero.brandNew', createIfMissing: true, activeLocale: 'en' }),
+    );
+    expect(res.code).toBe('ok');
+    expect(res.written).toBe(true);
+    expect(res.resultingKey).toBe('hero.brandNew');
+    expect(store.dump(ABS)).toContain("t('hero.brandNew')");
+    // The JSX now binds the new key, AND the locale write ran (locale-first ordering).
+    expect(calls).toEqual(['locale:hero.brandNew']);
+  });
+
+  it('createLocaleKey FAILS → locale-write-failed, JSX is left UNTOUCHED', async () => {
+    const store = memStore({ [ABS]: SRC_OLD });
+    let jsxWrote = false;
+    const spyStore: FileStore = {
+      read: store.read,
+      hash: store.hash,
+      withLock: store.withLock,
+      async write(p, c) {
+        jsxWrote = true;
+        return store.write(p, c);
+      },
+    };
+    const res = await run(
+      {
+        resolveAbsolute: () => ABS,
+        availableKeys: ['hero.title'],
+        async createLocaleKey() {
+          return { ok: false };
+        },
+      },
+      spyStore,
+      baseReq({ newKey: 'hero.brandNew', createIfMissing: true, activeLocale: 'en' }),
+    );
+    expect(res.code).toBe('locale-write-failed');
+    expect(res.written).toBe(false);
+    expect(jsxWrote).toBe(false); // JSX untouched — locale failed before it
+    expect(store.dump(ABS)).toBe(SRC_OLD);
+  });
+
+  it('createLocaleKey is NOT called when the key already exists (plain existing-key retarget)', async () => {
+    const store = memStore({ [ABS]: SRC_OLD });
+    let createCalled = false;
+    const res = await run(
+      {
+        resolveAbsolute: () => ABS,
+        availableKeys: ['hero.title', 'hero.heading'], // newKey present
+        async createLocaleKey() {
+          createCalled = true;
+          return { ok: true };
+        },
+      },
+      store,
+      baseReq({ newKey: 'hero.heading', createIfMissing: true }),
+    );
+    expect(res.code).toBe('ok');
+    expect(res.written).toBe(true);
+    expect(createCalled).toBe(false); // existing key — no locale create needed
   });
 });

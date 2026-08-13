@@ -4,7 +4,7 @@
  *   retargetable candidate set.
  */
 import { describe, expect, mock, test } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { CanvasAdapter } from '../types';
 
 const HERO_BINDINGS = [
@@ -18,7 +18,17 @@ const authFetch = mock<(url: string, init?: RequestInit) => Promise<Response>>(
 );
 mock.module('@/utils/authFetch', () => ({ authFetch }));
 
+// The NodePod scan transport — mocked so the runtime-subscription test exercises the routing
+// (which transport the active runtime selects) without a real OPFS tree.
+const scanNodePodBindings = mock<(...args: unknown[]) => Promise<unknown>>(async () => ({
+  success: true,
+  bindings: [{ bindingLoc: { line: 4, column: 14 }, key: 'pod.key', retargetable: true }],
+  library: 'react-i18next',
+}));
+mock.module('../nodepod/nodepodRetargetTransport', () => ({ scanNodePodBindings }));
+
 const { useBrowserI18nText } = await import('./useBrowserI18nText');
+const { useNodePodRuntimeStore } = await import('../nodepod/nodepodRuntimeStore');
 
 describe('useBrowserI18nText', () => {
   test('NO-OP when a canvas adapter exists (VS Code mode) — never fetches', async () => {
@@ -160,5 +170,86 @@ describe('useBrowserI18nText', () => {
     authFetch.mockImplementation(
       async () => ({ ok: true, json: async () => ({ success: true, bindings: HERO_BINDINGS }) }) as unknown as Response,
     );
+  });
+
+  test('re-scans via the NodePod transport when the runtime store resolves docker→nodepod', async () => {
+    authFetch.mockClear();
+    scanNodePodBindings.mockClear();
+    // Start in the store's default Docker state — the first scan runs the Docker (authFetch) path.
+    useNodePodRuntimeStore.getState().setRuntime('docker', null);
+
+    const { result, unmount } = renderHook(() =>
+      useBrowserI18nText({
+        canvas: null,
+        filePath: 'src/Hero.tsx',
+        sourceLocation: { line: 4, column: 14 },
+        library: 'react-i18next',
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(authFetch).toHaveBeenCalledTimes(1);
+    expect(scanNodePodBindings).not.toHaveBeenCalled();
+
+    // The active runtime resolves to NodePod AFTER the first scan (the real-world race: the store is
+    // still at the Docker default when the hook first mounts on a NodePod project). The scan effect
+    // must re-run against the NodePod transport — it only does so if the hook SUBSCRIBES to the store.
+    act(() => {
+      useNodePodRuntimeStore.getState().setRuntime('nodepod', 'proj-1');
+    });
+    await waitFor(() => expect(scanNodePodBindings).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.binding?.key).toBe('pod.key'));
+
+    // Unmount before resetting the shared store so no post-test async scan update escapes act().
+    unmount();
+    useNodePodRuntimeStore.getState().setRuntime('docker', null);
+  });
+
+  test('docker→nodepod transition clears the Docker bindings while the NodePod scan loads', async () => {
+    authFetch.mockClear();
+    scanNodePodBindings.mockClear();
+    useNodePodRuntimeStore.getState().setRuntime('docker', null);
+
+    // Gate the NodePod scan so we can observe the loading window between the runtime flip and its
+    // resolution — the Docker bindings must NOT remain visible there (they read a different FS).
+    let releasePodScan!: (v: unknown) => void;
+    const podScanGate = new Promise((r) => {
+      releasePodScan = r;
+    });
+    scanNodePodBindings.mockImplementationOnce(async () => {
+      await podScanGate;
+      return {
+        success: true,
+        bindings: [{ bindingLoc: { line: 4, column: 14 }, key: 'pod.key', retargetable: true }],
+        library: 'react-i18next',
+      };
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useBrowserI18nText({
+        canvas: null,
+        filePath: 'src/Hero.tsx',
+        sourceLocation: { line: 4, column: 14 },
+        library: 'react-i18next',
+      }),
+    );
+    // Docker scan resolves first → hero.title visible.
+    await waitFor(() => expect(result.current.binding?.key).toBe('hero.title'));
+
+    // Flip to NodePod; the pod scan is parked. The stale Docker binding must be cleared immediately.
+    act(() => {
+      useNodePodRuntimeStore.getState().setRuntime('nodepod', 'proj-1');
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.binding).toBeNull();
+    expect(result.current.retargetableKeys).toEqual([]);
+
+    // Let the pod scan finish → its bindings replace the (already cleared) Docker ones.
+    act(() => {
+      releasePodScan(undefined);
+    });
+    await waitFor(() => expect(result.current.binding?.key).toBe('pod.key'));
+
+    unmount();
+    useNodePodRuntimeStore.getState().setRuntime('docker', null);
   });
 });

@@ -19,6 +19,8 @@ import {
 import { composeBrowserI18nText } from '@/lib/platform/hooks/composeBrowserI18nText';
 import { getSelectedElementRange } from '@/lib/platform/hooks/getSelectedElementRange';
 import { useBrowserI18nText } from '@/lib/platform/hooks/useBrowserI18nText';
+import { useNodePodLocaleKeys } from '@/lib/platform/hooks/useNodePodLocaleKeys';
+import { useNodePodRuntimeStore } from '@/lib/platform/nodepod/nodepodRuntimeStore';
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
@@ -171,6 +173,9 @@ export default function RightSidebar({
   // across a retarget (same JSXElement) — the post-write re-scan is driven by the hook's refreshKey,
   // so this memo only depends on the selection.
   const selectedElementRange = useMemo(() => getSelectedElementRange(engine, selectedId), [engine, selectedId]);
+  // Active runtime: NodePod (serverless) routes i18n retarget/scan to the in-browser OPFS tree and
+  // supports brand-new key creation; Docker keeps the server-route behavior (HYP-746).
+  const nodePodRuntimeMode = useNodePodRuntimeStore((s) => s.mode);
 
   const browserI18n = useBrowserI18nText({
     // Pass null (= browser mode, hook activates) only when the engine is present; otherwise pass the
@@ -200,7 +205,29 @@ export default function RightSidebar({
   // existed. Browser/SaaS (engine present) uses the scan-derived source. Discriminating on `engine`
   // (not on canvasI18nText) guarantees the VS Code branch is untouched even when no binding exists.
   const i18nText = engine ? (canvasI18nText ?? browserI18nText) : canvasI18nText;
-  const availableI18nKeys = engine ? browserI18n.retargetableKeys : canvasAvailableI18nKeys;
+
+  // Full locale dictionary keys for the combobox in NodePod mode (HYP-746 item 4) — every key in
+  // the active locale, not just the in-file retargetable ones. NO-OPS ([]) outside NodePod, so the
+  // Docker/VS-Code candidate sets are untouched.
+  const browserI18nBinding = browserI18nText?.kind === 'i18n' ? browserI18nText : null;
+  const nodePodLocaleKeys = useNodePodLocaleKeys({
+    enabled: !!engine && !!browserI18nBinding,
+    library: browserI18nBinding?.library ?? null,
+    namespace: browserI18nBinding?.namespace,
+    activeLocale: i18nActiveLocale ?? 'en',
+    refreshKey: styleRefreshKey + styleVersion,
+  });
+  // Browser candidate set: prefer the full dictionary (NodePod) when available; always union the
+  // in-file retargetable keys so the current binding is offered even if the dict read lags/fails.
+  // Memoized so a fresh array identity each render doesn't churn the hooks that depend on it.
+  const browserRetargetableKeys = browserI18n.retargetableKeys;
+  const availableI18nKeys = useMemo(
+    () => (engine ? [...new Set([...nodePodLocaleKeys, ...browserRetargetableKeys])] : canvasAvailableI18nKeys),
+    [engine, nodePodLocaleKeys, browserRetargetableKeys, canvasAvailableI18nKeys],
+  );
+  // NodePod (serverless) supports brand-new key creation end-to-end; gate the create affordance +
+  // the createIfMissing flag in the write call on it (HYP-746 item 3).
+  const nodePodCanCreate = !!engine && nodePodRuntimeMode === 'nodepod';
   const sourceTabs = useMemo(
     () =>
       resolveInspectorStyleSourceTabs({
@@ -624,7 +651,12 @@ export default function RightSidebar({
             previousKey: lastWrittenI18nKeyRef.current ?? i18nText.key,
             filePath: i18nText.sourceLocation.filePath,
             elementId: effectiveSelectedId,
-            skipResourceWrite: !isNewKey,
+            // NodePod (serverless) handles a NEW key end-to-end through the retarget transport
+            // (locale-JSON-first create THEN JSX), so it stays on the retarget path
+            // (skipResourceWrite:true) and signals create via createIfMissing. Other runtimes keep
+            // the existing behavior: a new key takes the locale-write path (skipResourceWrite:false).
+            skipResourceWrite: nodePodCanCreate ? true : !isNewKey,
+            createIfMissing: nodePodCanCreate ? isNewKey : false,
             // Drives the browser-mode retarget's server-side locate (HYP-372); VS Code RPC ignores it.
             bindingLoc: { line: i18nText.sourceLocation.line, column: i18nText.sourceLocation.column },
           });
@@ -663,7 +695,7 @@ export default function RightSidebar({
         }
       })();
     },
-    [i18nText, astOps, selectedId, i18nDispatch, availableI18nKeys, canvas],
+    [i18nText, astOps, selectedId, i18nDispatch, availableI18nKeys, canvas, nodePodCanCreate],
   );
 
   const handleI18nResolvedTextChange = useCallback(
@@ -1103,7 +1135,10 @@ export default function RightSidebar({
                   rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
                   availableKeys={availableI18nKeys}
                   keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
-                  canCreateKeys={i18nText.writable}
+                  // NodePod (serverless) can create a brand-new key end-to-end (locale-JSON-first
+                  // then JSX) via the retarget transport — so the combobox offers a create path
+                  // there. Other runtimes keep the binding's own writable flag (HYP-746 item 3).
+                  canCreateKeys={i18nText.writable || nodePodCanCreate}
                   keyBusy={
                     loading ||
                     (!!i18nDispatch && !!writeInProgress) ||

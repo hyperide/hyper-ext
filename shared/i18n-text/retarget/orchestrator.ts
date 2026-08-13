@@ -25,6 +25,13 @@ import { retargetBinding } from './core';
 import type { FileStore } from './file-store';
 import { isValidI18nKey } from './validate-key';
 
+/** Outcome of a locale-dictionary create. localePath is telemetry/diagnostics only. */
+export interface CreateLocaleKeyResult {
+  ok: boolean;
+  /** The locale file written, when known — surfaced for diagnostics, never a gate. */
+  localePath?: string;
+}
+
 export interface OrchestratorContext {
   /**
    * Map the request's project-relative filePath to the TRUSTED absolute path. The route supplies
@@ -33,11 +40,22 @@ export interface OrchestratorContext {
    */
   resolveAbsolute(filePath: string): string | null;
   /**
-   * The keys that already exist in the project's active locale dictionary. Drives the Phase-1
-   * create gate: a newKey not in this list is "not-retargetable" until Phase 2 enables creation.
-   * Undefined means "unknown" — treated as not-present (conservative: gate stays closed).
+   * The keys that already exist in the project's active locale dictionary. A newKey not in this
+   * list is created via createLocaleKey when createIfMissing is set (Phase 2); without that hook a
+   * missing key stays "not-retargetable" (the Docker Phase-1 behavior). Undefined means "unknown"
+   * — treated as not-present (conservative: a missing-key path is taken, not a blind rewrite).
    */
   availableKeys?: string[];
+  /**
+   * Phase 2 (HYP-746) locale-JSON-first create hook. When createIfMissing is true and newKey is
+   * absent from availableKeys, the orchestrator calls this to write the locale dictionary entry
+   * BEFORE touching the JSX. On ok:false the orchestrator returns 'locale-write-failed' and never
+   * rewrites the JSX (so a failed dictionary write can't leave a JSX call pointing at a key with no
+   * translation). When the hook is absent, create is unavailable and a missing key is
+   * 'not-retargetable'. The hook owns its own atomic write + lock of the locale file (it runs the
+   * same transport's store under the hood).
+   */
+  createLocaleKey?(req: RetargetRequest): Promise<CreateLocaleKeyResult>;
 }
 
 function fail(code: RetargetErrorCode, reason?: string, resultingKey = ''): RetargetResponse {
@@ -56,22 +74,31 @@ export async function run(ctx: OrchestratorContext, store: FileStore, req: Retar
     return fail('unsupported', 'filePath did not resolve within the project', req.oldKey);
   }
 
-  // 3) Phase-1 create gate. An existing-key retarget requires newKey to already exist.
-  //    Phase 2 (createIfMissing=true) will instead take the locale-JSON-first branch:
-  //      a. write the new key into the active locale dictionary (store.write(localeFile)),
-  //      b. on success, fall through to the JSX rewrite below,
-  //      c. on locale write failure → 'locale-write-failed' (reserved code) before touching JSX.
+  // 3) Create gate. An existing-key retarget requires newKey to already exist. A NEW key is only
+  //    creatable when createIfMissing is set AND a createLocaleKey hook is supplied (Phase 2 /
+  //    HYP-746 — the NodePod transport and any route that opts in). Without the hook, a missing key
+  //    is not-retargetable (the Docker Phase-1 behavior, preserved).
   const newKeyVerified = (ctx.availableKeys ?? []).includes(req.newKey);
-  if (!newKeyVerified) {
-    // Both flag values are deferred in Phase 1; the reason differs so the combobox can show the
-    // right disabled-with-reason text. createIfMissing=true is the Phase-2 locale-first branch.
+  const wantsCreate = !newKeyVerified && req.createIfMissing === true && typeof ctx.createLocaleKey === 'function';
+  if (!newKeyVerified && !wantsCreate) {
     const reason = req.createIfMissing
-      ? 'createIfMissing (new-key creation) is deferred to Phase 2'
-      : `key "${req.newKey}" does not exist yet; creating keys is not available in this phase`;
+      ? 'createIfMissing was set but no locale-create capability is available in this runtime'
+      : `key "${req.newKey}" does not exist yet; enable create to add it`;
     return fail('not-retargetable', reason, req.oldKey);
   }
 
-  // 4) Lock the file (Phase 2 will also lock the localeFile), read, rewrite, write.
+  // 3b) Locale-JSON-first create (Phase 2). Write the dictionary entry BEFORE locking/rewriting the
+  //     JSX, so a failed locale write leaves the JSX untouched (no call site bound to a missing
+  //     translation). createLocaleKey owns its own atomic write + lock of the locale file.
+  if (wantsCreate) {
+    const created = await ctx.createLocaleKey!(req);
+    if (!created.ok) {
+      return fail('locale-write-failed', `failed to create locale key "${req.newKey}"`, req.oldKey);
+    }
+  }
+
+  // 4) Lock the JSX file, read, rewrite, write. (The locale write, when any, already happened and
+  //    self-locked in 3b — locale-first ordering.)
   return store.withLock([abs], async (): Promise<RetargetResponse> => {
     let source: string;
     try {

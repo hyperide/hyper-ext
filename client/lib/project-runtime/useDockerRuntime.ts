@@ -24,6 +24,7 @@ const INERT: ProjectRuntime = {
   stop: async () => {},
   restart: async () => {},
   writeFile: async () => {},
+  writeToPod: async () => {},
 };
 
 export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRuntimeOptions): ProjectRuntime {
@@ -89,5 +90,6 @@ export function useDockerRuntime(project: ProjectData | null, opts: UseDockerRun
     stop: async () => {},
     restart: handleRestartProject,
     writeFile: async () => {},
+    writeToPod: async () => {},
   };
 }

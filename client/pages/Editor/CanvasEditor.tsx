@@ -71,6 +71,7 @@ import {
 
 import { useOpenAIChat } from '@/lib/platform/PlatformContext';
 import { useProjectRuntime } from '@/lib/project-runtime';
+import { useNodePodRuntimeStore } from '@/lib/platform/nodepod/nodepodRuntimeStore';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -252,6 +253,19 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     setIsStarting,
     setProjectRole,
   });
+
+  // Publish the active runtime (mode + NodePod project id) to the platform layer, so the
+  // transport-agnostic AstOperations seam + i18n scan path route the i18n retarget/scan to the
+  // in-browser OPFS tree in NodePod mode and to the Docker backend otherwise (HYP-746).
+  useEffect(() => {
+    useNodePodRuntimeStore
+      .getState()
+      .setRuntime(
+        runtime.mode,
+        runtime.mode === 'nodepod' ? (activeProject?.id ?? null) : null,
+        runtime.mode === 'nodepod' ? runtime.writeToPod : undefined,
+      );
+  }, [runtime.mode, activeProject?.id, runtime.writeToPod]);
 
   // Convert NodePod runtime error string to RuntimeError shape for LogsPanel
   const nodePodRuntimeError = useMemo(

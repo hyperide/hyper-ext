@@ -32,6 +32,7 @@ const INERT: ProjectRuntime = {
   stop: async () => {},
   restart: async () => {},
   writeFile: async () => {},
+  writeToPod: async () => {},
 };
 
 export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodRuntimeOptions): ProjectRuntime {
@@ -204,17 +205,25 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
     await start();
   }, [stop, start]);
 
+  // Write into the running pod FS (the live dev server's separate filesystem) to trigger Vite HMR.
+  // No-op when no pod is running. The HMR half of writeFile, exposed on its own so the i18n retarget
+  // transport — which persists to OPFS itself, via OpfsFileStore — can mirror its change into the
+  // pod without re-persisting to OPFS (a double write).
+  const writeToPod = useCallback(async (path: string, content: string) => {
+    if (podRef.current) {
+      await podRef.current.fs.writeFile(`/app/${path}`, content);
+    }
+  }, []);
+
   const writeFile = useCallback(
     async (path: string, content: string) => {
       if (!project?.id) return;
       // Persist to OPFS so future restarts pick it up
       await clientFileStore.writeFile(project.id, path, content);
       // Write into running pod FS to trigger Vite HMR
-      if (podRef.current) {
-        await podRef.current.fs.writeFile(`/app/${path}`, content);
-      }
+      await writeToPod(path, content);
     },
-    [project?.id],
+    [project?.id, writeToPod],
   );
 
   useEffect(() => {
@@ -241,5 +250,6 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
     stop,
     restart,
     writeFile,
+    writeToPod,
   };
 }

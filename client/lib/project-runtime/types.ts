@@ -28,4 +28,11 @@ export interface ProjectRuntime {
   restart(): Promise<void>;
   /** Write a file to the project FS and OPFS. NodePod: triggers Vite HMR. Docker: no-op. */
   writeFile(path: string, content: string): Promise<void>;
+  /**
+   * Write a file ONLY into the running project FS to trigger HMR, WITHOUT persisting to OPFS — for
+   * callers that already persisted (e.g. the i18n retarget transport writes OPFS via OpfsFileStore,
+   * then mirrors into the pod for HMR via this). NodePod: pod-FS write when a pod is running, else
+   * no-op. Docker: no-op.
+   */
+  writeToPod(path: string, content: string): Promise<void>;
 }

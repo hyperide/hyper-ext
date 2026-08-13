@@ -452,6 +452,12 @@ export interface AstOperations {
     /** Skip writing to the locale dictionary; only update the JSX expression. */
     skipResourceWrite?: boolean;
     /**
+     * Create the key if it does not yet exist (HYP-746 new-key create). When set, an existing-key
+     * retarget whose newKey is absent from the dictionary writes the locale entry first (default
+     * locale, locale-JSON-first) THEN rewrites the JSX. Ignored by the VS Code RPC path.
+     */
+    createIfMissing?: boolean;
+    /**
      * The t(...) call's source location (Babel: 1-based line, 0-based column). Browser-mode
      * existing-key retarget needs it to drive the server's deterministic locate (HYP-372). The
      * VS Code RPC path IGNORES it — the extension host locates by elementId itself — so passing

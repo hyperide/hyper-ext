@@ -38,13 +38,6 @@
     //   server/main.ts, served at /__hypercanvas/iframe-console-capture.js, and
     //   bundled as an esbuild entryPoint in the extension (esbuild.js).
     "shared/scripts/iframe-console-capture.js",
-    // Phase-2 STUB, intentionally not yet wired (HYP-746 / HYP-372 M3.5): the in-browser NodePod
-    // FileStore over OPFS. The FileStore seam is proven pluggable now (NodeFileStore is the live
-    // Phase-1 impl); OpfsFileStore is injected by the Phase-2 service-worker intercept that does
-    // not exist yet. Every method throws until then. Wiring it requires the NodePod runtime + an
-    // SRE review of OPFS atomic-write + cross-tab locking — out of scope for Phase 1. Ignore here
-    // (rather than deleting a deliberate, documented seam) until the Phase-2 consumer lands.
-    "shared/i18n-text/retarget/opfs-file-store.ts",
     // DOUBTFUL — pending CTO decision (HYP-489 follow-up ticket). NOT confirmed
     // dead; do not delete without a product call:
     // (useNetworkAwarePolling was here — now consumed by useDiagnosticSync, HYP-518.)

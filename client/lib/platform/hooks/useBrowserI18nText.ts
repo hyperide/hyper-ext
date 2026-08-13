@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from 'react';
 import { authFetch } from '@/utils/authFetch';
 import type { ScannedBinding } from '@shared/i18n-text/retarget/core';
 import type { I18nLibrary } from '@shared/i18n-text/types';
+import { scanNodePodBindings } from '../nodepod/nodepodRetargetTransport';
+import { useNodePodRuntimeStore } from '../nodepod/nodepodRuntimeStore';
 import type { CanvasAdapter } from '../types';
 
 /** A retargetable binding that carries a static key — the one definition of a combobox candidate. */
@@ -77,10 +79,22 @@ export interface UseBrowserI18nTextOptions {
 
 export function useBrowserI18nText(options: UseBrowserI18nTextOptions): BrowserI18nTextResult {
   const { canvas, filePath, sourceLocation, library, refreshKey } = options;
+  // Subscribe to the active runtime so the scan effect RE-RUNS when it resolves (e.g. the store is
+  // still at its Docker default the moment the hook first mounts on a NodePod project, then flips to
+  // nodepod). Reading getActiveRuntime() imperatively inside the effect without these deps would let
+  // the first scan run against the wrong (Docker) transport and never retrigger → stale scan.
+  const mode = useNodePodRuntimeStore((s) => s.mode);
+  const projectId = useNodePodRuntimeStore((s) => s.projectId);
   const [result, setResult] = useState<BrowserI18nTextResult>(EMPTY);
   // The target (file + loc) of the last scan, so a refreshKey-only re-scan (same target) can keep
   // the current bindings on screen while loading instead of clearing — see the setResult below.
-  const prevTargetRef = useRef<{ filePath: string; line: number; column: number } | null>(null);
+  const prevTargetRef = useRef<{
+    filePath: string;
+    line: number;
+    column: number;
+    mode: string;
+    projectId: string | null;
+  } | null>(null);
 
   // Depend on the PRIMITIVE loc fields, not the sourceLocation object. Callers pass a fresh object
   // literal each render; depending on its identity would re-run the effect every render and loop
@@ -100,16 +114,20 @@ export function useBrowserI18nText(options: UseBrowserI18nTextOptions): BrowserI
     }
 
     let cancelled = false;
-    // On a NEW target (different file or loc) clear the prior binding so a stale one never renders
-    // under the new selection. On a SAME-target re-scan (only refreshKey changed — e.g. after a
-    // retarget rewrote the file) KEEP the current bindings while loading: otherwise the i18n
-    // section (and the combobox the user just used) would unmount and flash back, not just flicker.
+    // On a NEW target (different file/loc OR a different active runtime) clear the prior binding so a
+    // stale one never renders under the new selection — including the docker→nodepod transition,
+    // where the Docker scan's bindings must NOT stay visible while the NodePod scan loads (they read
+    // different filesystems and may disagree). On a SAME-target re-scan (only refreshKey changed —
+    // e.g. after a retarget rewrote the file) KEEP the current bindings while loading: otherwise the
+    // i18n section (and the combobox the user just used) would unmount and flash back, not flicker.
     setResult((prev) => {
       const sameTarget =
         prevTargetRef.current?.filePath === filePath &&
         prevTargetRef.current?.line === line &&
-        prevTargetRef.current?.column === column;
-      prevTargetRef.current = { filePath, line, column };
+        prevTargetRef.current?.column === column &&
+        prevTargetRef.current?.mode === mode &&
+        prevTargetRef.current?.projectId === projectId;
+      prevTargetRef.current = { filePath, line, column, mode, projectId };
       return sameTarget
         ? { ...prev, loading: true, error: null }
         : { binding: null, retargetableBindings: [], retargetableKeys: [], library: null, loading: true, error: null };
@@ -117,17 +135,31 @@ export function useBrowserI18nText(options: UseBrowserI18nTextOptions): BrowserI
 
     void (async () => {
       try {
-        const response = await authFetch('/api/scan-i18n-bindings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filePath, library: library ?? undefined }),
-        });
-        if (!response.ok) throw new Error(response.statusText);
-        const data = (await response.json()) as {
-          success: boolean;
-          bindings?: ScannedBinding[];
-          library?: I18nLibrary | null;
-        };
+        // One scan call, the active runtime decides the source: NodePod (serverless) scans the
+        // in-browser OPFS file with the SAME shared scanBindings; Docker hits the server route.
+        // Without this, a NodePod scan would read the Docker filesystem (stale/absent), so the
+        // combobox would never see the project's real bindings.
+        let data: { success: boolean; bindings?: ScannedBinding[]; library?: I18nLibrary | null };
+        if (mode === 'nodepod') {
+          const scan = await scanNodePodBindings(
+            { filePath, library: library ?? null },
+            { projectId: projectId ?? '' },
+          );
+          if (!scan.success) throw new Error(scan.error ?? 'NodePod scan failed');
+          data = { success: scan.success, bindings: scan.bindings, library: scan.library };
+        } else {
+          const response = await authFetch('/api/scan-i18n-bindings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath, library: library ?? undefined }),
+          });
+          if (!response.ok) throw new Error(response.statusText);
+          data = (await response.json()) as {
+            success: boolean;
+            bindings?: ScannedBinding[];
+            library?: I18nLibrary | null;
+          };
+        }
         if (cancelled) return;
 
         const bindings = data.bindings ?? [];
@@ -161,7 +193,7 @@ export function useBrowserI18nText(options: UseBrowserI18nTextOptions): BrowserI
     return () => {
       cancelled = true;
     };
-  }, [canvas, filePath, line, column, library, refreshKey]);
+  }, [canvas, filePath, line, column, library, refreshKey, mode, projectId]);
 
   return result;
 }

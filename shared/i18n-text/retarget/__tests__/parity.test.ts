@@ -15,8 +15,10 @@ import { join } from 'node:path';
 import type { RetargetRequest } from '../contract';
 import { scanBindings } from '../core';
 import { NodeFileStore } from '../node-file-store';
+import { OpfsFileStore } from '../opfs-file-store';
 import { type OrchestratorContext, run } from '../orchestrator';
 import { memStore } from './helpers/in-memory-store';
+import { MockDirectoryHandle, MockLockManager } from './helpers/opfs-mock';
 
 const FIXTURE = `import { useTranslation } from 'react-i18next';
 
@@ -64,10 +66,25 @@ describe('ACCEPTANCE #1 — NodeFileStore vs in-memory FileStore parity', () => 
     const memRes = await run({ ...ctx, resolveAbsolute: () => abs }, mem, req);
     const memContent = await mem.read(abs);
 
-    // Byte-identical responses.
+    // Path 3: OpfsFileStore over the in-memory OPFS + Web Locks mock — the NodePod transport. The
+    // store keys on project-relative paths under hyper-nodepod/<projectId>/, so resolveAbsolute
+    // returns the relative path here (the orchestrator just forwards whatever the ctx resolves).
+    const opfsRoot = new MockDirectoryHandle();
+    const opfs = new OpfsFileStore({
+      projectId: 'parity-proj',
+      getRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      locks: new MockLockManager() as unknown as LockManager,
+    });
+    await opfs.write('Hero.tsx', FIXTURE);
+    const opfsRes = await run({ ...ctx, resolveAbsolute: () => 'Hero.tsx' }, opfs, req);
+    const opfsContent = await opfs.read('Hero.tsx');
+
+    // Byte-identical responses across ALL THREE transports — the orchestrator is transport-agnostic.
     expect(memRes).toEqual(nodeRes);
-    // Byte-identical resulting file content.
+    expect(opfsRes).toEqual(nodeRes);
+    // Byte-identical resulting file content across disk, in-memory, and OPFS.
     expect(memContent).toBe(nodeContent);
+    expect(opfsContent).toBe(nodeContent);
     // And the rewrite actually happened.
     expect(nodeRes.code).toBe('ok');
     expect(nodeContent).toContain("t('hero.heading')");

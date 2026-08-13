@@ -6,9 +6,11 @@
  */
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import { RETARGET_ROUTE } from '@shared/i18n-text/retarget/contract';
+import { RETARGET_ROUTE, type RetargetRequest } from '@shared/i18n-text/retarget/contract';
 import { authFetch } from '@/utils/authFetch';
 import { createBrowserAdapters } from './BrowserAdapter';
+import { getActiveRuntime } from './nodepod/nodepodRuntimeStore';
+import { runNodePodRetarget } from './nodepod/nodepodRetargetTransport';
 import type {
   AstOperations,
   CanvasAdapter,
@@ -423,18 +425,35 @@ function createBrowserAstOperations(): AstOperations {
         params.bindingLoc != null;
 
       if (isExistingKeyRetarget) {
+        const retargetReq: RetargetRequest = {
+          filePath: params.filePath as string,
+          oldKey: params.previousKey as string,
+          newKey: params.key,
+          bindingLoc: params.bindingLoc as { line: number; column: number },
+          library: params.library,
+          namespace: params.namespace,
+          activeLocale: params.activeLocale,
+          createIfMissing: params.createIfMissing === true,
+        };
+
+        // One call site, the active runtime decides the transport. NodePod (serverless) runs the
+        // SAME shared handler over the in-browser OPFS tree; Docker hits the backend route. A
+        // Docker→NodePod project mismatch can't split-brain — NodePod only touches its own OPFS.
+        const { mode, projectId, writeToPod } = getActiveRuntime();
+        if (mode === 'nodepod') {
+          // writeToPod mirrors the persisted change into the running pod FS so Vite HMR fires (the
+          // retarget persists to the OPFS tree the pod was seeded from, not the pod's live FS).
+          const result = await runNodePodRetarget(retargetReq, { projectId: projectId ?? '', writeToPod });
+          if (result.code !== 'ok') {
+            throw new Error(result.reason || `Retarget failed (${result.code})`);
+          }
+          return {};
+        }
+
         const response = await authFetch(RETARGET_ROUTE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filePath: params.filePath,
-            oldKey: params.previousKey,
-            newKey: params.key,
-            bindingLoc: params.bindingLoc,
-            library: params.library,
-            namespace: params.namespace,
-            activeLocale: params.activeLocale,
-          }),
+          body: JSON.stringify(retargetReq),
         });
         const result = (await response.json()) as { code?: string; reason?: string };
         if (!response.ok || result.code !== 'ok') {
