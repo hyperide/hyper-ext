@@ -111,5 +111,5 @@ real source for aria-hidden targets).
 
 - [ ] `npm run package`, `code --install-extension`, reload.
 - [ ] Run the new E2E case, capture before/after screenshots.
-- [ ] `send-tg-photo.sh` with both shots and a critical visual review of
+- [ ] `tg --photo <path> "caption"` with both shots and a critical visual review of
       what they prove.

@@ -283,7 +283,7 @@ tests/project-dependent/bulka-i18n-key-change-no-flicker.spec.ts`.
       Task-5 polling-document bug to fix in a follow-up (move the
       `evaluate` into the canvas iframe via Playwright's FrameLocator
       `.evaluate`, or query through `WebviewFrame`).
-- [x] `send-tg-photo.sh` with critical visual review.
+- [x] `tg --photo <path> "caption"` with critical visual review.
       Three screenshots + a status report sent to Telegram via
       the `tg` CLI (`tg --photo <path> "caption"` and
       `tg "..."`). Critical visual review: the selection rectangle

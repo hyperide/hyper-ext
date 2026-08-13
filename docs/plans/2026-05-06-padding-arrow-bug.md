@@ -243,7 +243,7 @@ Reproduction (from `~/.claude/projects/-Users-ultra-work-hyper-canvas-draft/memo
       end-to-end. Surviving the round-trip is the only unverified link;
       that's the manual step left for the user.
 
-- [x] `send-tg-photo.sh` with critical visual review.
+- [x] `tg --photo <path> "caption"` with critical visual review.
 
       [x] sent text status report via the `tg` CLI — explicitly NOT
       claiming "fixed" / "✅". Listed: build OK, install OK, unit tests

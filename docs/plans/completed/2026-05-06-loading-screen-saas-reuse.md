@@ -191,4 +191,4 @@ preview UI that should be reused instead of the bare-bones text.
       reload window
 - [ ] Open a working component → see SaaS spinner briefly → see component
 - [ ] Force a failure (e.g. wrong component path) → see error screen with retry
-- [ ] Send before/after screenshots to Telegram via send-tg-photo.sh
+- [ ] Send before/after screenshots to Telegram via `tg --photo <path> "caption"`

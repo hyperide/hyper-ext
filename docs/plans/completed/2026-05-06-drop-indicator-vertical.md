@@ -58,4 +58,4 @@ disappears (or overlaps the wrong axis).
       → vertical line appears between them
 - [ ] Drag "Soft ears" toward "Face like an Akita Inu" (vertical layout)
       → horizontal line appears between them (regression check)
-- [ ] Send screenshots to Telegram via send-tg-photo.sh
+- [ ] Send screenshots to Telegram via `tg --photo <path> "caption"`

@@ -345,13 +345,13 @@ N adjustments") rather than blocking the drop.
       reload — not driven from this loop iteration to avoid
       perturbing the user's primary VS Code session.
 - [x] Run all new E2E cases. Screenshot each move. Critical visual
-      review. Send all screenshots to TG via send-tg-photo.sh.
+      review. Send all screenshots to TG via `tg --photo <path> "caption"`.
       [x] manual test (skipped — not automatable in ralphex). Same
       precedent as commit `2843b223` ("Task 6: mark verification
       steps skipped — non-automatable in ralphex") on this plan's
       sibling worktree. Three blockers from this loop:
-      (a) `send-tg-photo.sh` / the `tg` CLI referenced in
-      `CLAUDE.md` do not exist anywhere in this repo or its
+      (a) the `tg` CLI referenced in
+      `CLAUDE.md` does not exist anywhere in this repo or its
       siblings, no `TELEGRAM_BOT_TOKEN` / `TELEGRAM_REPORT_CHAT_ID`
       in env, so TG submission cannot be performed from this
       session;

@@ -373,8 +373,8 @@ wrapping CarouselContent + CarouselItem + Prev/Next).
       Running the full Docker e2e from a ralphex loop iteration is too
       heavy; the user runs `bun run test:docker` separately when
       validating bulka-the-dog regressions.)
-- [x] `send-tg-photo.sh` with critical visual review. (skipped — script
+- [x] `tg --photo <path> "caption"` with critical visual review. (skipped — script
       doesn't exist in this repo. CLAUDE.md mentions it but no
-      `send-tg-photo.sh` ships under scripts/ here. The screenshot
+      `tg --photo <path> "caption"` ships under scripts/ here. The screenshot
       artifact lands in the e2e run's `docker-artifacts/` for the user
       to forward manually if needed.)
