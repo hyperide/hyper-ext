@@ -1,5 +1,5 @@
 /**
- * GLM/Fire Pass recommendation texts and provider labels.
+ * Provider recommendation texts and labels (GLM, Fire Pass, Command Code).
  *
  * Shared between SaaS client and VS Code extension so that
  * marketing copy, URLs, and pricing stay in sync.
@@ -28,9 +28,24 @@ export const FIREPASS_INFO = {
   subscribeUrl: 'https://docs.fireworks.ai/firepass',
 } as const;
 
+export const COMMANDCODE_INFO = {
+  tagline: 'Command Code',
+  description:
+    'Credit-based subscription from $1/mo. One API for DeepSeek V4 Pro, Qwen 3.7 Max, Kimi K2.6, MiniMax M3, Nemotron, Claude, GPT-5 and more.',
+  plans: [
+    { name: 'Go', price: '$1/mo', note: '$10 credits' },
+    { name: 'Pro', price: '$15/mo', note: '$30 credits, API access' },
+    { name: 'Max', price: '$100/mo', note: '$150 credits' },
+    { name: 'Ultra', price: '$200/mo', note: '$300 credits' },
+  ],
+  getKeyUrl: 'https://commandcode.ai/studio/',
+  subscribeUrl: 'https://commandcode.ai/pricing',
+} as const;
+
 export const PROVIDER_LABELS: Record<AIProvider, string> = {
   glm: 'GLM (Z.ai)',
   firepass: 'Fire Pass (Fireworks AI)',
+  commandcode: 'Command Code (DeepSeek, Qwen, Kimi…)',
   claude: 'Claude (Anthropic)',
   openai: 'OpenAI or compatible',
   proxy: 'Proxy (Gemini, DeepSeek, Mistral, Groq)',
@@ -41,6 +56,7 @@ export const PROVIDER_LABELS: Record<AIProvider, string> = {
 export const PROVIDER_KEY_URLS: Partial<Record<AIProvider, { url: string; label: string }>> = {
   glm: { url: GLM_RECOMMENDATION.getKeyUrl, label: 'Z.ai' },
   firepass: { url: FIREPASS_INFO.getKeyUrl, label: 'Fireworks AI' },
+  commandcode: { url: COMMANDCODE_INFO.getKeyUrl, label: 'Command Code Studio' },
   claude: { url: 'https://console.anthropic.com/settings/keys', label: 'Anthropic Console' },
   openai: { url: 'https://platform.openai.com/api-keys', label: 'OpenAI Platform' },
 };

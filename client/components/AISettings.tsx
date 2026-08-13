@@ -9,7 +9,7 @@ import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../shared/ai-provider-defaults';
-import { FIREPASS_INFO, GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
+import { COMMANDCODE_INFO, FIREPASS_INFO, GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
 
 interface AIConfig {
   id: number;
@@ -351,6 +351,10 @@ export default function AISettings() {
         newConfig.baseURL = AI_PROVIDER_DEFAULTS.firepass.baseURL;
         newConfig.model = AI_PROVIDER_DEFAULTS.firepass.model;
         break;
+      case 'commandcode':
+        newConfig.baseURL = AI_PROVIDER_DEFAULTS.commandcode.baseURL;
+        newConfig.model = AI_PROVIDER_DEFAULTS.commandcode.model;
+        break;
       case 'claude':
         newConfig.baseURL = AI_PROVIDER_DEFAULTS.claude.baseURL;
         newConfig.model = AI_PROVIDER_DEFAULTS.claude.model;
@@ -533,6 +537,7 @@ export default function AISettings() {
             >
               <option value="glm">{PROVIDER_LABELS.glm}</option>
               <option value="firepass">{PROVIDER_LABELS.firepass}</option>
+              <option value="commandcode">{PROVIDER_LABELS.commandcode}</option>
               <option value="claude">{PROVIDER_LABELS.claude}</option>
               <option value="openai">{PROVIDER_LABELS.openai}</option>
               <option value="proxy">{PROVIDER_LABELS.proxy}</option>
@@ -764,6 +769,75 @@ export default function AISettings() {
                   value={config.baseURL || ''}
                   onChange={(e) => setConfig({ ...config, baseURL: e.target.value || null })}
                   placeholder={AI_PROVIDER_DEFAULTS.firepass.baseURL ?? ''}
+                />
+              </div>
+            </>
+          ) : config.provider === 'commandcode' ? (
+            <>
+              {/* Command Code info */}
+              <div className="rounded-md border border-border bg-muted/50 p-3 space-y-1.5">
+                <p className="text-sm font-medium">{COMMANDCODE_INFO.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {COMMANDCODE_INFO.plans.map((p) => `${p.name} ${p.price} — ${p.note}`).join(' · ')}
+                </p>
+                <a
+                  href={COMMANDCODE_INFO.subscribeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs underline hover:text-foreground"
+                >
+                  Learn more at Command Code
+                </a>
+              </div>
+
+              {/* Command Code provider UI */}
+              <div className="space-y-2">
+                <Label htmlFor="model">Model</Label>
+                <Input
+                  id="model"
+                  value={config.model}
+                  onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                  placeholder={AI_PROVIDER_DEFAULTS.commandcode.model}
+                  required
+                />
+                <p className="text-sm text-muted-foreground">
+                  Examples: deepseek/deepseek-v4-pro, Qwen/Qwen3.7-Max, moonshotai/Kimi-K2.6, MiniMaxAI/MiniMax-M3,
+                  claude-sonnet-4-6 — full catalog at api.commandcode.ai/provider/v1/models. Requests route
+                  automatically: claude-* models via Anthropic Messages, all others via Chat Completions.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key</Label>
+                <Input
+                  id="apiKey"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={config.apiKey ? `Current: ${config.apiKey}` : 'Enter API key'}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {config.apiKey
+                    ? 'Enter a new key to update it, or leave blank to keep current.'
+                    : 'Your API key will be stored securely.'}{' '}
+                  <a
+                    href={COMMANDCODE_INFO.getKeyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    Create &amp; Manage API key — Command Code Studio
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="baseURL">Base URL</Label>
+                <Input
+                  id="baseURL"
+                  value={config.baseURL || ''}
+                  onChange={(e) => setConfig({ ...config, baseURL: e.target.value || null })}
+                  placeholder={AI_PROVIDER_DEFAULTS.commandcode.baseURL ?? ''}
                 />
               </div>
             </>

@@ -26,6 +26,7 @@ import {
   GIT_COMMAND,
   type ToolDefinition,
 } from '../../../../shared/ai-agent-tools';
+import { resolveAIConfig } from '../../../../lib/ai-client/config';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../../shared/ai-provider-defaults';
 import { ALLOWED_COMMANDS } from '../../../../shared/allowed-bash-commands';
 import type { DiagnosticHub } from '../DiagnosticHub';
@@ -477,12 +478,27 @@ export class AIBridge {
       const freshModel = freshConfig.get<string>('model') || freshDefaults.model;
       const baseURL = freshConfig.get<string>('baseURL') || freshDefaults.baseURL;
 
-      if (freshDefaults.protocol === 'openai') {
+      // resolveAIConfig owns per-provider routing (e.g. commandcode sends claude
+      // models to Anthropic /messages but OSS models to OpenAI /chat/completions).
+      // Fall back to the static defaults for providers it cannot resolve
+      // (proxy/opencode without a backend) — previous behavior.
+      const resolved = resolveAIConfig({
+        provider: freshProvider,
+        apiKey,
+        model: freshModel,
+        baseURL,
+        backend: freshConfig.get<string>('backend') || null,
+      });
+      const wireProtocol = resolved?.provider ?? freshDefaults.protocol;
+      const wireModel = resolved?.model ?? freshModel;
+      const wireBaseURL = resolved?.baseURL ?? (baseURL || undefined);
+
+      if (wireProtocol === 'openai') {
         await this._streamOpenAI(
           requestId,
           apiKey,
-          freshModel,
-          baseURL || 'https://api.openai.com/v1',
+          wireModel,
+          wireBaseURL || 'https://api.openai.com/v1',
           messages,
           abortController.signal,
           callback,
@@ -491,9 +507,9 @@ export class AIBridge {
         await this._streamAnthropic(
           requestId,
           apiKey,
-          freshModel,
-          baseURL ?? undefined,
-          freshDefaults.auth,
+          wireModel,
+          wireBaseURL,
+          resolved?.authMethod ?? freshDefaults.auth,
           messages,
           abortController.signal,
           callback,

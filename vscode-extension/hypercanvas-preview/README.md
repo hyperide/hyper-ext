@@ -53,15 +53,15 @@ Recommended: **GLM via Z.ai** — flat-rate starting from $10/mo.
 
 ## Settings
 
-| Setting                             | Default | Description                                                             |
-| ----------------------------------- | ------- | ----------------------------------------------------------------------- |
-| `hypercanvas.ai.provider`           | `glm`   | AI provider: `claude`, `openai`, `glm`, `firepass`, `proxy`, `opencode` |
-| `hypercanvas.ai.backend`            | —       | Backend for proxy/opencode providers (e.g. `gemini`, `deepseek`)        |
-| `hypercanvas.ai.model`              | —       | Model identifier (e.g. `claude-sonnet-4-20250514`, `gpt-4o`)            |
-| `hypercanvas.ai.baseURL`            | —       | Custom base URL for AI provider API                                     |
-| `hypercanvas.devServer.autoStart`   | `false` | Auto-start dev server when opening preview                              |
-| `hypercanvas.preview.defaultPort`   | `3000`  | Default port for dev server                                             |
-| `hypercanvas.preview.syncPositions` | `true`  | Sync cursor position with canvas selection                              |
+| Setting                             | Default | Description                                                                            |
+| ----------------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `hypercanvas.ai.provider`           | `glm`   | AI provider: `claude`, `openai`, `glm`, `firepass`, `commandcode`, `proxy`, `opencode` |
+| `hypercanvas.ai.backend`            | —       | Backend for proxy/opencode providers (e.g. `gemini`, `deepseek`)                       |
+| `hypercanvas.ai.model`              | —       | Model identifier (e.g. `claude-sonnet-4-20250514`, `gpt-4o`)                           |
+| `hypercanvas.ai.baseURL`            | —       | Custom base URL for AI provider API                                                    |
+| `hypercanvas.devServer.autoStart`   | `false` | Auto-start dev server when opening preview                                             |
+| `hypercanvas.preview.defaultPort`   | `3000`  | Default port for dev server                                                            |
+| `hypercanvas.preview.syncPositions` | `true`  | Sync cursor position with canvas selection                                             |
 
 ## Commands
 

@@ -73,6 +73,73 @@ describe('resolveAIConfig', () => {
     });
   });
 
+  it('should route commandcode OSS models to OpenAI chat completions', () => {
+    // Command Code docs: /messages serves Anthropic models ONLY; OSS models
+    // (deepseek, qwen, kimi, …) must use /chat/completions or they get a 400.
+    const result = resolveAIConfig({
+      provider: 'commandcode',
+      apiKey: 'cc-key',
+      model: 'deepseek/deepseek-v4-pro',
+    });
+    expect(result).toEqual({
+      apiKey: 'cc-key',
+      model: 'deepseek/deepseek-v4-pro',
+      baseURL: 'https://api.commandcode.ai/provider/v1',
+      provider: 'openai',
+    });
+  });
+
+  it('should route commandcode claude models to Anthropic Messages', () => {
+    const result = resolveAIConfig({
+      provider: 'commandcode',
+      apiKey: 'cc-key',
+      model: 'claude-sonnet-4-6',
+    });
+    expect(result).toEqual({
+      apiKey: 'cc-key',
+      model: 'claude-sonnet-4-6',
+      baseURL: 'https://api.commandcode.ai/provider',
+      provider: 'anthropic',
+    });
+  });
+
+  it('should normalize a saved default commandcode baseURL per model family', () => {
+    // The settings UI persists the provider default into config.baseURL — that
+    // saved default must still be re-routed per model, not treated as custom.
+    const oss = resolveAIConfig({
+      provider: 'commandcode',
+      apiKey: 'cc-key',
+      model: 'deepseek/deepseek-v4-pro',
+      baseURL: 'https://api.commandcode.ai/provider',
+    });
+    expect(oss?.baseURL).toBe('https://api.commandcode.ai/provider/v1');
+    expect(oss?.provider).toBe('openai');
+
+    const claude = resolveAIConfig({
+      provider: 'commandcode',
+      apiKey: 'cc-key',
+      model: 'claude-sonnet-4-6',
+      baseURL: 'https://api.commandcode.ai/provider/v1',
+    });
+    expect(claude?.baseURL).toBe('https://api.commandcode.ai/provider');
+    expect(claude?.provider).toBe('anthropic');
+  });
+
+  it('should prefer explicit baseURL over default for commandcode', () => {
+    const result = resolveAIConfig({
+      provider: 'commandcode',
+      apiKey: 'cc-key',
+      model: 'Qwen/Qwen3.7-Max',
+      baseURL: 'https://custom.commandcode.proxy',
+    });
+    expect(result).toEqual({
+      apiKey: 'cc-key',
+      model: 'Qwen/Qwen3.7-Max',
+      baseURL: 'https://custom.commandcode.proxy',
+      provider: 'openai',
+    });
+  });
+
   it('should resolve openai provider', () => {
     const result = resolveAIConfig({
       provider: 'openai',

@@ -9,19 +9,23 @@
  *
  * | Provider | callAI (text) | Server Agent (tools)         | Extension chat |
  * |----------|---------------|------------------------------|----------------|
- * | claude   | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | glm      | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | firepass | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
- * | openai   | Yes           | Yes (OpenAI function calling) | Text-only      |
- * | proxy    | Yes           | Yes (litellm + Anthropic)    | Text-only      |
- * | opencode | Yes (via SDK) | Yes (MCP bridge + SSE)       | Text-only      |
+ * | claude      | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | glm         | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | firepass    | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | commandcode | Yes           | Yes (routed by model)        | claude-*: tools; OSS: text-only |
+ * | openai      | Yes           | Yes (OpenAI function calling) | Text-only      |
+ * | proxy       | Yes           | Yes (litellm + Anthropic)    | Text-only      |
+ * | opencode    | Yes (via SDK) | Yes (MCP bridge + SSE)       | Text-only      |
  *
  * Tool support per provider:
  * - claude/glm/firepass/proxy: Anthropic Messages API with native tool_use
+ * - commandcode: routed by model in resolveAIConfig — claude-* models use Anthropic
+ *   /messages (native tool_use), all other models use OpenAI /chat/completions
+ *   (their /messages endpoint serves Anthropic models ONLY, wrong family = 400)
  * - openai: OpenAI Chat Completions with function calling (chatWithOpenAITools)
  * - opencode: Tools via SaaS MCP server (/api/mcp), streaming via promptAsync + event.subscribe
  */
-export type AIProvider = 'claude' | 'openai' | 'glm' | 'firepass' | 'proxy' | 'opencode';
+export type AIProvider = 'claude' | 'openai' | 'glm' | 'firepass' | 'commandcode' | 'proxy' | 'opencode';
 
 export interface AIProviderDefaults {
   baseURL: string | null;
@@ -52,6 +56,13 @@ export const AI_PROVIDER_DEFAULTS: Record<AIProvider, AIProviderDefaults> = {
     model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
     protocol: 'anthropic',
     auth: 'bearer',
+  },
+  commandcode: {
+    baseURL: 'https://api.commandcode.ai/provider',
+    // Actual wire protocol is chosen per model by resolveAIConfig (claude-* →
+    // anthropic, everything else → openai); this field is the catalog default.
+    model: 'deepseek/deepseek-v4-pro',
+    protocol: 'openai',
   },
   openai: {
     baseURL: 'https://api.openai.com/v1',

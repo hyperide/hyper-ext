@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
 import {
+  COMMANDCODE_INFO,
   FIREPASS_INFO,
   GLM_RECOMMENDATION,
   PROVIDER_KEY_URLS,
@@ -739,6 +740,12 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
           detail: `${FIREPASS_INFO.description} ${FIREPASS_INFO.plans[0].price}`,
           description: currentProvider === 'firepass' ? 'current' : '',
           providerId: 'firepass',
+        },
+        {
+          label: PROVIDER_LABELS.commandcode,
+          detail: `${COMMANDCODE_INFO.description} From ${COMMANDCODE_INFO.plans[0].price}`,
+          description: currentProvider === 'commandcode' ? 'current' : '',
+          providerId: 'commandcode',
         },
         {
           label: PROVIDER_LABELS.claude,

@@ -368,6 +368,7 @@
             "openai",
             "glm",
             "firepass",
+            "commandcode",
             "proxy",
             "opencode"
           ],
@@ -377,6 +378,7 @@
             "OpenAI or compatible",
             "GLM (Z.ai)",
             "Fire Pass (Fireworks AI) — Kimi K2.6 Turbo flat-rate, other Fireworks models per-token",
+            "Command Code — credit-based access to DeepSeek V4 Pro, Qwen, Kimi, MiniMax, Claude, GPT-5 and more",
             "Multi-provider proxy (Gemini, DeepSeek, Mistral, Groq)",
             "OpenCode native SDK (Gemini, DeepSeek, Qwen)"
           ],
@@ -395,7 +397,7 @@
             "groq",
             "qwen"
           ],
-          "description": "Backend key type for proxy/opencode providers (e.g. 'gemini', 'anthropic', 'deepseek'). Not needed for claude, glm, firepass, or openai providers."
+          "description": "Backend key type for proxy/opencode providers (e.g. 'gemini', 'anthropic', 'deepseek'). Not needed for claude, glm, firepass, commandcode, or openai providers."
         },
         "hypercanvas.ai.model": {
           "type": "string",

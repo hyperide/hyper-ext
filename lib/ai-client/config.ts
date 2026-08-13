@@ -65,6 +65,33 @@ export function resolveAIConfig(opts: {
         authMethod: AI_PROVIDER_DEFAULTS.firepass.auth,
       };
 
+    case 'commandcode': {
+      // Command Code routes by model family: /messages serves Anthropic models
+      // ONLY, everything else (deepseek, qwen, kimi, …) must use OpenAI
+      // /chat/completions — sending the wrong family returns a 400.
+      const ccDefault = AI_PROVIDER_DEFAULTS.commandcode.baseURL;
+      // The settings UI persists the provider default into the stored baseURL,
+      // so a saved default (either family's shape) is normalized per model —
+      // only a genuinely custom URL is passed through untouched.
+      const isDefaultBase = !baseURL || baseURL === ccDefault || baseURL === `${ccDefault}/v1`;
+      if (model.startsWith('claude')) {
+        return {
+          apiKey,
+          model,
+          baseURL: isDefaultBase ? ccDefault || undefined : baseURL,
+          provider: 'anthropic',
+        };
+      }
+      // OpenAI-compatible callers append /chat/completions themselves, so the
+      // default base gains the /v1 segment.
+      return {
+        apiKey,
+        model,
+        baseURL: isDefaultBase ? `${ccDefault}/v1` : baseURL,
+        provider: 'openai',
+      };
+    }
+
     case 'openai':
       return {
         apiKey,
