@@ -532,21 +532,53 @@ function buildErrorBoundary(): string[] {
 
 function buildRemixMockWrapper(): string[] {
   return [
-    'function RemixMockWrapper({ Component }: { Component: React.ComponentType<Record<string, unknown>> }) {',
-    '  const router = createMemoryRouter([',
-    '    {',
-    "      id: 'root',",
-    "      path: '/',",
-    '      loader: () => ({}),',
-    '      Component: React.Fragment,',
-    '      children: [{',
-    "        path: 'preview',",
-    '        Component: Component as React.ComponentType,',
-    '        loader: () => ({}),',
-    '      }],',
-    '    },',
-    "  ], { initialEntries: ['/preview'] });",
-    '  return <RouterProvider router={router} />;',
+    'function RemixMockWrapper({ Component, componentPath }: { Component: React.ComponentType<Record<string, unknown>>; componentPath: string }) {',
+    '  // createMemoryRouter + RouterProvider is a CLIENT-ONLY data-router API: it cannot',
+    '  // render during server rendering. Remix SSRs this /test-preview route via',
+    '  // renderToPipeableStream, so building the router at render time threw on the server',
+    '  // and returned a 500 — the previewed route file (e.g. notifications.tsx) got an empty',
+    '  // #root, the preview iframe never stabilised, and the e2e "switch" walk wedged on a',
+    '  // perpetually-(re)loading frame (ext-test-projects matrix red #83). Gate the router behind a client-mount flag:',
+    '  // SSR and the first client render emit a stable placeholder (so hydration sees matching',
+    '  // markup), and the memory router mounts only after the effect runs on the client.',
+    '  const [mounted, setMounted] = React.useState(false);',
+    '  React.useEffect(() => { setMounted(true); }, []);',
+    '  const router = React.useMemo(',
+    '    () =>',
+    '      mounted',
+    '        ? createMemoryRouter(',
+    '            [',
+    '              {',
+    "                id: 'root',",
+    "                path: '/',",
+    '                loader: () => ({}),',
+    '                Component: React.Fragment,',
+    '                children: [',
+    '                  {',
+    "                    path: 'preview',",
+    '                    Component: Component as React.ComponentType,',
+    '                    loader: () => ({}),',
+    '                  },',
+    '                ],',
+    '              },',
+    '            ],',
+    "            { initialEntries: ['/preview'] },",
+    '          )',
+    '        : null,',
+    '    [mounted, Component],',
+    '  );',
+    '  // While only the pre-mount placeholder exists, do NOT emit the success signal:',
+    '  // the route component has not rendered yet, so reporting render-success here would',
+    '  // clear a real error prematurely (usePreviewBridge consumes componentRenderSucceeded).',
+    '  // The SSR-route callsites suppress the OUTER success signal (!ssrRouteSet.has(...)),',
+    '  // so the only success signal for these routes is the one below, fired post-mount.',
+    '  if (!router) return <div data-hyper-ssr-route-placeholder style={{ padding: 20 }} />;',
+    '  return (',
+    '    <>',
+    '      <RouterProvider router={router} />',
+    '      <_ComponentSuccessSignal componentPath={componentPath} />',
+    '    </>',
+    '  );',
     '}',
   ];
 }
@@ -721,14 +753,21 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     ? "{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: 20, boxSizing: 'border-box' }"
     : '{ padding: 20 }';
   const singleRender = hasSSR
-    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...filterFallback(componentPath)} {...generatedProps} />}`
+    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} componentPath={componentPath} /> : <Component {...filterFallback(componentPath)} {...generatedProps} />}`
     : `{SampleDefault ? <SampleDefault /> : <Component {...filterFallback(componentPath)} {...generatedProps} />}`;
   const multiRender = hasSSR
-    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...filterFallback(componentPath)} />}`
+    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} componentPath={componentPath} /> : <Component {...filterFallback(componentPath)} />}`
     : `<Component {...filterFallback(componentPath)} />`;
   const multiMergedRender = hasSSR
-    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...mergedProps} />}`
+    ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} componentPath={componentPath} /> : <Component {...mergedProps} />}`
     : `<Component {...mergedProps} />`;
+  // For SSR routes RemixMockWrapper owns the success signal (fired post-mount, once the
+  // route actually renders — not on the pre-mount placeholder). So the OUTER success
+  // signal must be suppressed for those, or it would fire on the placeholder and clear a
+  // real error prematurely (ext-test-projects matrix red #83 review). Non-SSR components keep the outer signal.
+  const outerSuccessSignal = hasSSR
+    ? '{!ssrRouteSet.has(componentPath) && <_ComponentSuccessSignal componentPath={componentPath} />}'
+    : '<_ComponentSuccessSignal componentPath={componentPath} />';
   return [
     '  if (!componentPath) {',
     "    return <div style={{ padding: 20, fontFamily: 'sans-serif' }}>",
@@ -784,7 +823,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '        </div>',
     '      );',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary key={errorBoundaryKey} componentPath={componentPath} propsReady={generatedPropsReady}><div style={${singleWrapperStyle}}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary key={errorBoundaryKey} componentPath={componentPath} propsReady={generatedPropsReady}><div style={${singleWrapperStyle}}>${singleRender}${outerSuccessSignal}</div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',
@@ -825,7 +864,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '          </div>',
     '        );',
     '      })}',
-    '      <_ComponentSuccessSignal componentPath={componentPath} />',
+    `      ${outerSuccessSignal}`,
     '    </div>',
     `    </ComponentErrorBoundary>${wc}`,
     '  );',

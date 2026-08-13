@@ -712,7 +712,67 @@ describe('generatePreviewContent — SSR mock (Remix)', () => {
     const entry = makeSSREntry('app/routes/_index.tsx', 'Index');
     const content = generatePreviewContent([entry], { ssrMock });
     expect(content).toContain('ssrRouteSet.has(componentPath)');
-    expect(content).toContain('<RemixMockWrapper Component={Component} />');
+    expect(content).toContain('<RemixMockWrapper Component={Component} componentPath={componentPath} />');
+  });
+
+  // Isolate the RemixMockWrapper function body from the generated module. The function
+  // is a top-level declaration, so its closing brace is the only `}` at column 0 after it
+  // — but to avoid relying on indentation we slice from its declaration to the next
+  // top-level `function ` declaration (or end of module).
+  function extractRemixMockWrapper(content: string): string {
+    const start = content.indexOf('function RemixMockWrapper');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const rest = content.slice(start + 'function RemixMockWrapper'.length);
+    const nextFn = rest.indexOf('\nfunction ');
+    return rest.slice(0, nextFn === -1 ? undefined : nextFn);
+  }
+
+  it('RemixMockWrapper defers createMemoryRouter to a client mount (SSR-safe)', () => {
+    // ext-test-projects matrix red #83: the client-only data router must not run during Remix SSR (the rationale
+    // lives in buildRemixMockWrapper in generator.ts). Here we lock in the SSR-safe shape:
+    // a mount flag gates createMemoryRouter, and the pre-mount return is a stable placeholder.
+    const entry = makeSSREntry('app/routes/notifications.tsx', 'Notifications');
+    const content = generatePreviewContent([entry], { ssrMock });
+    const wrapper = extractRemixMockWrapper(content);
+    // A client-mount guard: createMemoryRouter must not run during the SSR/first render.
+    expect(wrapper).toMatch(/useState|useSyncExternalStore/);
+    expect(wrapper).toMatch(/useEffect/);
+    // Every createMemoryRouter call must be reachable only when `mounted` is true — assert
+    // the call is gated on the mount flag rather than checking one specific source shape
+    // (so an inlined-ternary or renamed-variable regression is still caught).
+    const memoryRouterCalls = wrapper.match(/createMemoryRouter\(/g) ?? [];
+    expect(memoryRouterCalls.length).toBe(1);
+    expect(wrapper).toMatch(/mounted[\s\S]*createMemoryRouter\(/);
+    // The pre-mount return must be the stable placeholder, not the router.
+    expect(wrapper).toContain('data-hyper-ssr-route-placeholder');
+  });
+
+  it('SSR-route success signal fires only after mount, never on the placeholder', () => {
+    // The render-success signal (hypercanvas:componentRenderSucceeded) must NOT fire while
+    // only the pre-mount placeholder exists — usePreviewBridge consumes it to clear errors,
+    // so a placeholder-time success would wipe a real error before the route renders (Codex
+    // review on ext-test-projects matrix red #83). For SSR routes the wrapper owns the signal (post-mount) and the
+    // OUTER sibling signal is suppressed via `!ssrRouteSet.has(componentPath)`.
+    const entry = makeSSREntry('app/routes/notifications.tsx', 'Notifications');
+    const content = generatePreviewContent([entry], { ssrMock });
+    const wrapper = extractRemixMockWrapper(content);
+    // The placeholder branch returns BEFORE any success signal.
+    const placeholderIdx = wrapper.indexOf('data-hyper-ssr-route-placeholder');
+    const wrapperSuccessIdx = wrapper.indexOf('_ComponentSuccessSignal');
+    expect(placeholderIdx).toBeGreaterThanOrEqual(0);
+    expect(wrapperSuccessIdx).toBeGreaterThan(placeholderIdx);
+    // The outer success signal is gated so it does not fire for SSR routes.
+    expect(content).toContain(
+      '{!ssrRouteSet.has(componentPath) && <_ComponentSuccessSignal componentPath={componentPath} />}',
+    );
+  });
+
+  it('non-SSR component keeps the unconditional outer success signal', () => {
+    const entry = makeEntry('src/Button.tsx', 'Button');
+    const content = generatePreviewContent([entry]);
+    // No ssrRouteSet gate — the signal is emitted directly for ordinary components.
+    expect(content).toContain('<_ComponentSuccessSignal componentPath={componentPath} />');
+    expect(content).not.toContain('!ssrRouteSet.has(componentPath)');
   });
 
   it('does NOT import react-router-dom when no SSR route entries', () => {
