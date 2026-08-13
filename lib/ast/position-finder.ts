@@ -5,12 +5,10 @@
  * Assumptions: AST was parsed with `loc: true` (Babel default)
  */
 
-import _traverse, { type NodePath } from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
 import type { FindElementResult } from '../types';
-
-// @ts-expect-error - babel/traverse ESM/CJS
-const traverse = _traverse.default || _traverse;
+import { traverseWithoutScope } from './traverser';
 
 /**
  * Find a JSX element at the given source position (1-based line, 0-based column).
@@ -33,7 +31,11 @@ export function findElementByPosition(ast: t.File, line: number, column: number)
   // First match per source line — used for line-only and nearby-line fallbacks
   const lineResults = new Map<number, FindElementResult>();
 
-  traverse(ast, {
+  // noScope: this walk is purely positional (reads `loc` only). A scope-enabled crawl throws
+  // `Duplicate declaration` on a Remix root.tsx-style top-level name collision (HYP-785, sibling of
+  // the read-path HYP-784 fix) — and every mutation resolves its target element through here first,
+  // so a scope crawl makes insert/paste/wrap/edit/move/style all throw on such a file.
+  traverseWithoutScope(ast, {
     JSXElement(path: NodePath<t.JSXElement>) {
       const loc = path.node.loc;
       if (!loc) return;

@@ -3,6 +3,8 @@
  */
 
 import { describe, expect, it } from 'bun:test';
+import type { NodePath } from '@babel/traverse';
+import type * as t from '@babel/types';
 import { parseCode } from './parser';
 import {
   analyzeJSXChildren,
@@ -11,7 +13,27 @@ import {
   getChildrenLocation,
   getJSXTagName,
   traverseJSXElements,
+  traverseWithoutScope,
 } from './traverser';
+
+describe('traverseWithoutScope', () => {
+  it('does not throw on a top-level duplicate declaration that the scope crawl rejects (HYP-785)', () => {
+    // `@babel/parser` tolerates the collision; a scope-enabled `traverse` throws `Duplicate
+    // declaration "Layout"`. The noScope helper must walk it structurally without crashing.
+    const ast = parseCode(
+      `import { Layout } from 'antd';\nexport function Layout() {\n  return <div className="x" />;\n}\n`,
+    );
+    let visited = 0;
+    expect(() =>
+      traverseWithoutScope(ast, {
+        JSXElement(_path: NodePath<t.JSXElement>) {
+          visited++;
+        },
+      }),
+    ).not.toThrow();
+    expect(visited).toBe(1);
+  });
+});
 
 describe('findAllJSXElements', () => {
   it('should find all JSX elements', () => {

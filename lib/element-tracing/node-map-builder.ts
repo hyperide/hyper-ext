@@ -5,12 +5,9 @@
  * Assumptions: AST has source locations (parsed with standard Babel config)
  */
 
-import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import type { NodeMapEntry, NodeRef, SourceLocation } from '../../shared/element-tracing/types';
-
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = (_traverse.default || _traverse) as typeof _traverse;
+import { traverseWithoutScope } from '../ast/traverser';
 
 /** Convert Babel SourceLocation to our SourceLocation type */
 function toSourceLocation(loc: t.SourceLocation | null | undefined, fileName: string, isEnd = false): SourceLocation {
@@ -123,8 +120,11 @@ export function buildNodeMap(ast: t.File, filePath: string): NodeMapEntry[] {
   // Per-entry prop names collected during first pass (keyed by nodeRef)
   const entryPropNames = new Map<NodeRef, string[]>();
 
-  // First pass: collect entries, assign nodeRefs, determine parentRef
-  traverse(ast, {
+  // First pass: collect entries, assign nodeRefs, determine parentRef.
+  // noScope: structural walk (tag/loc/parentPath only, no scope/binding reads). A scope-enabled
+  // crawl throws `Duplicate declaration` on a top-level name collision (HYP-785) — the nodeRef map
+  // feeds every mutation's nodeRef->loc resolution, so a scope crawl breaks the whole file's edits.
+  traverseWithoutScope(ast, {
     JSXElement(path) {
       const node = path.node;
       const opening = node.openingElement;

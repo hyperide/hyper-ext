@@ -5,15 +5,13 @@
  * Extracted from AstService for reuse across server and extension.
  */
 
-import _traverse, { type NodePath } from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 import { calculateRealIndex } from './element-builder';
 import { cloneElement, makeNotSelfClosing, valueToJSXAttribute } from './mutator';
 import { parseCode } from './parser';
-
-// @ts-expect-error - babel/traverse has ESM/CJS issues
-const traverse = _traverse.default || _traverse;
+import { traverseWithoutScope } from './traverser';
 
 /**
  * Insert a JSX element into an AST at the given parent or at root return.
@@ -32,8 +30,11 @@ export function insertElementIntoAST(
   let actualIndex: number | undefined;
 
   if (!parent) {
-    // Insert at root level - find return statement
-    traverse(ast, {
+    // Insert at root level - find return statement.
+    // noScope: structural walk (no scope/binding reads). A scope-enabled crawl throws
+    // `Duplicate declaration` on a top-level name collision (HYP-785) — root-level insert into such
+    // a file (e.g. a Remix root.tsx) would otherwise throw before splicing.
+    traverseWithoutScope(ast, {
       ReturnStatement(path: NodePath<t.ReturnStatement>) {
         if (t.isJSXElement(path.node.argument)) {
           const returnElement = path.node.argument;
@@ -149,7 +150,10 @@ export function parseTSXElements(tsxCode: string): {
   }
 
   const newElements: t.JSXElement[] = [];
-  traverse(parsedAst, {
+  // noScope: structural walk of a freshly-parsed `<>{...}</>` snippet. The snippet can't carry a
+  // top-level declaration collision (no imports/exports inside a fragment), so this never crashes —
+  // routed through the shared helper for file consistency with the scope-free walk above.
+  traverseWithoutScope(parsedAst, {
     JSXFragment(path: NodePath<t.JSXFragment>) {
       for (const child of path.node.children) {
         if (t.isJSXElement(child)) {

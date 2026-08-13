@@ -20,12 +20,9 @@
  */
 
 import * as nodePath from 'node:path';
-import _traverse, { type NodePath } from '@babel/traverse';
+import type { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-
-// @ts-expect-error - babel/traverse has ESM/CJS interop quirks; this matches
-// the same shim used in lib/ast/operations.ts.
-const traverse = _traverse.default || _traverse;
+import { traverseWithoutScope } from './traverser';
 
 /**
  * Walk a JSX subtree and collect every identifier name it references from the
@@ -116,7 +113,10 @@ export function collectJsxLocalBindings(root: t.JSXElement): Set<string> {
   // JSXElement isn't a valid Program-level statement, so we wrap it in an
   // ExpressionStatement (matching `collectExprIdentifiers`).
   const file = t.file(t.program([t.expressionStatement(root as unknown as t.Expression)]));
-  traverse(file, {
+  // noScope: collects bound names by node shape (params / declarators / catch params), never reads
+  // scope. The synthetic single-subtree file can't carry a top-level collision, but the helper keeps
+  // this consistent with the scope-free walks the rest of the module uses (HYP-785).
+  traverseWithoutScope(file, {
     Function(path: NodePath<t.Function>) {
       for (const param of path.node.params) {
         collectPatternBindings(param, bound);
@@ -211,8 +211,9 @@ function collectExprIdentifiers(expr: t.Node | null | undefined, out: Set<string
   }
 
   // Wrap arbitrary expression in a synthetic file and traverse for identifiers.
+  // noScope: collects identifier references by node shape (reads `path.parent`, never scope).
   const file = t.file(t.program([t.expressionStatement(expr as t.Expression)]));
-  traverse(file, {
+  traverseWithoutScope(file, {
     Identifier(path: NodePath<t.Identifier>) {
       // Skip non-references (object keys, member properties without computed,
       // import specifiers — the latter doesn't appear inside an expression
@@ -448,7 +449,11 @@ export function pruneOrphanImports(ast: t.File): string[] {
   // ImportDeclaration. Cheap to be inclusive — false positives just keep an
   // import alive, never the other way around.
   const live = new Set<string>();
-  traverse(ast, {
+  // noScope: hand-rolled reference counting (Identifier/JSXIdentifier by `path.parent`, plus
+  // `path.skip()` on imports) — deliberately NOT scope/binding analysis. This walks the FULL source
+  // AST, so a scope-enabled crawl throws `Duplicate declaration` on a top-level name collision
+  // (HYP-785); moveElement's cross-file orphan-import prune would then throw on such a file.
+  traverseWithoutScope(ast, {
     ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
       // Don't descend; specifiers' local Identifier nodes shouldn't count as
       // references to themselves.
