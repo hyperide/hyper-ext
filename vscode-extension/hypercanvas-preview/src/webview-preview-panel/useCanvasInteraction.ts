@@ -9,7 +9,9 @@
 import type { SelectedElementRuntimeStyle, SharedEditorState } from '@lib/types';
 import { iframeLocalToViewport } from '@shared/canvas-interaction/iframe-point-mapping';
 import {
+  applyOverlayErrorState,
   clearOverlays,
+  elementIdsMatch,
   renderOverlayRects,
   renderPlaceholderOverlays,
 } from '@shared/canvas-interaction/overlay-renderer';
@@ -20,6 +22,7 @@ import {
   renderSpacingGuides,
 } from '@shared/canvas-interaction/spacing-guides';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
+import { isTrustedMessageOrigin } from '@shared/utils/trusted-message-origin';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canvasRPC } from '@/lib/platform/PlatformContext';
 import type { CanvasAdapter } from '@/lib/platform/types';
@@ -206,6 +209,10 @@ export function useCanvasInteraction(
   const overlayElements = useRef(new Map<string, HTMLDivElement>());
   const iframeOriginRef = useRef<string | null>(null);
   const placeholderElements = useRef(new Map<string, HTMLDivElement>());
+  // HYP-991 — the elementId whose source the last visual edit left with a new language-server
+  // error, or null. Re-applied after every overlayRects rebuild so the red outline + "!" badge
+  // survive selection/scroll updates until a later clean edit clears it.
+  const errorElementIdRef = useRef<string | null>(null);
   // Telemetry: rage/error click detection. Posts telemetry:event via the canvas
   // bridge (same channel as runtime:error). recordClick on each element click,
   // noteError when a runtime error arrives in the iframe message stream.
@@ -229,6 +236,46 @@ export function useCanvasInteraction(
   // last overlayRects message was computed. On overlayScroll we apply a CSS transform so
   // overlay positions track the content immediately, without waiting for the next RAF cycle.
   const scrollBaselineRef = useRef(0);
+
+  // HYP-991 — host-broadcast listener for the post-edit language-server error flag. These come from
+  // the extension host via StateHub, NOT from the preview iframe. Toggles the red outline + "!"
+  // badge on the errored element's overlay and remembers it in errorElementIdRef so overlay
+  // rebuilds re-apply it.
+  useEffect(() => {
+    function handleHostMessage(event: MessageEvent) {
+      // Positive allowlist: host StateHub broadcasts arrive with the webview's own trusted origin
+      // (`vscode-webview://…`), whereas the preview iframe (and any nested iframe) runs the user's
+      // app on the dev-server origin, which this rejects — so app content cannot spoof a highlight
+      // (review). Verified live: genuine host broadcasts pass and the overlay renders.
+      if (!isTrustedMessageOrigin(event)) return;
+      const data = event.data;
+      if (!data || typeof data.type !== 'string') return;
+      if (data.type === 'diagnostic:postEditError') {
+        const id = data.warning?.elementId;
+        // Only (re)flag when the incoming warning resolved to an element. A null/empty id means the
+        // mutation target was unresolved — leave any existing highlight in place rather than wiping
+        // a still-valid one (review); the native notification carries the message regardless.
+        if (typeof id === 'string' && id.length > 0) {
+          errorElementIdRef.current = id;
+          applyOverlayErrorState(overlayElements.current, id);
+          // Tell the iframe to emit an INDEPENDENT error rect for this id, so the highlight
+          // survives after the user selects/hovers a different element (the errored node is no
+          // longer in the selection/hover rect set, so without this its overlay would vanish).
+          postToPreviewIframe(iframeElRef.current, { type: 'hypercanvas:setErrorElement', elementId: id });
+        }
+      } else if (data.type === 'diagnostic:postEditErrorCleared') {
+        // Scoped clear: only drop the highlight when the clear targets the SAME element that is
+        // currently flagged, so an unrelated clear never wipes a still-valid highlight.
+        if (elementIdsMatch(errorElementIdRef.current, data.elementId)) {
+          errorElementIdRef.current = null;
+          applyOverlayErrorState(overlayElements.current, null);
+          postToPreviewIframe(iframeElRef.current, { type: 'hypercanvas:setErrorElement', elementId: null });
+        }
+      }
+    }
+    window.addEventListener('message', handleHostMessage); // nosemgrep: insufficient-postmessage-origin-validation -- checked via isTrustedMessageOrigin (allowlist) above
+    return () => window.removeEventListener('message', handleHostMessage);
+  }, []);
 
   useEffect(() => {
     if (!iframeEl || !overlayEl) return;
@@ -406,6 +453,9 @@ export function useCanvasInteraction(
           container.style.transform = '';
 
           renderOverlayRects(container, msg.rects as OverlayRect[], overlayElements.current);
+          // HYP-991 — re-apply the post-edit error flag: the rects were just rebuilt, so the red
+          // outline + badge would otherwise be lost on the errored element's overlay.
+          applyOverlayErrorState(overlayElements.current, errorElementIdRef.current);
 
           const pRects = (msg.placeholderRects ?? []) as PlaceholderRect[];
           renderPlaceholderOverlays(container, pRects, placeholderElements.current, openInsertPanel);

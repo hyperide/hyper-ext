@@ -20,6 +20,12 @@ import type {
 const HOVER_BORDER = '2px solid rgba(59, 130, 246, 0.5)';
 const SELECTION_BORDER = '2px solid rgb(59, 130, 246)';
 
+// HYP-991 — error overlay: a red OUTLINE (not border) so it stacks on top of the existing
+// selection/hover border without fighting it, plus a small warning badge. Applied to the overlay
+// of the element whose source the last visual edit left with a new language-server error.
+const ERROR_OUTLINE = '2px solid rgb(239, 68, 68)';
+const ERROR_BADGE_ATTR = 'data-post-edit-error-badge';
+
 const HANDLE_SIZE = 8;
 
 function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
@@ -87,10 +93,18 @@ export function renderOverlayRects(
     let element = overlayElements.get(rect.key);
     if (!element) {
       element = document.createElement('div');
-      element.setAttribute('data-selection-overlay', 'true');
+      // HYP-991 — error overlays carry a DISTINCT attribute, not data-selection-overlay: they must
+      // NOT be counted by the selection-overlay invariant (checkSelectionOverlayInvariant) nor be
+      // measured as sibling geometry by the spacing-guide collector (collectSiblingRects). Both of
+      // those query [data-selection-overlay]; a standing error overlay is neither a selection nor a
+      // real sibling. applyOverlayErrorState flags it by matching dataset.elementId, so the
+      // attribute rename does not affect the highlight itself.
+      element.setAttribute(rect.type === 'error' ? 'data-error-overlay' : 'data-selection-overlay', 'true');
       element.style.position = 'absolute';
       element.style.pointerEvents = 'none';
-      element.style.border = rect.type === 'hover' ? HOVER_BORDER : SELECTION_BORDER;
+      // HYP-991 — 'error' overlays are borderless: the red outline + "!" badge come from
+      // applyOverlayErrorState, so a base border here would fight it. hover/selection keep theirs.
+      element.style.border = rect.type === 'error' ? 'none' : rect.type === 'hover' ? HOVER_BORDER : SELECTION_BORDER;
       container.appendChild(element);
       overlayElements.set(rect.key, element);
     }
@@ -121,6 +135,81 @@ export function renderOverlayRects(
       overlayElements.delete(key);
     }
   }
+}
+
+/**
+ * HYP-991 — flag (or unflag) the overlay of the element whose source the last visual edit left
+ * with a NEW language-server error. Uses a red OUTLINE plus a small "!" badge so it layers over
+ * the normal selection/hover border without replacing it. Idempotent and safe to re-run after any
+ * `renderOverlayRects` rebuild (call it again with the same `errorElementId` to re-apply).
+ *
+ * Shared home per the repo's overlay-rendering rule; the VS Code extension consumes it today.
+ * SaaS has no in-browser language server to source these diagnostics from, so it does not wire
+ * this yet — when it gains a diagnostics source it reuses this same helper.
+ */
+export function applyOverlayErrorState(
+  overlayElements: Map<string, HTMLDivElement>,
+  errorElementId: string | null,
+): void {
+  for (const element of overlayElements.values()) {
+    const isError = elementIdsMatch(element.dataset.elementId, errorElementId);
+    const badge = element.querySelector(`[${ERROR_BADGE_ATTR}]`);
+    if (isError) {
+      element.style.outline = ERROR_OUTLINE;
+      element.style.outlineOffset = '1px';
+      if (!badge) element.appendChild(createErrorBadge());
+    } else if (badge) {
+      // Clear only the overlays WE flagged — the presence of our badge is the ownership signal, so
+      // this never touches an overlay this helper did not flag. (No other overlay feature uses
+      // `outline` today — they use `border` — so resetting it to '' here is safe; review.)
+      element.style.outline = '';
+      element.style.outlineOffset = '';
+      badge.remove();
+    }
+  }
+}
+
+/**
+ * Whether two element ids refer to the same element, tolerating a path-prefix difference on a `/`
+ * boundary. In a monorepo the mutation's id that reaches the AST bridge is re-rooted to
+ * repo-relative (e.g. `targets/web/src/App.tsx:5:8`) while the overlay's dataset.elementId is
+ * sub-project-relative (`src/App.tsx:5:8`), so one is a `/`-boundary suffix of the other. (The
+ * bridge cannot reliably re-derive the sub-project prefix on the PanelRouter path — PanelRouter
+ * re-roots with its own prefix — so the tolerant match lives here.)
+ *
+ * The `/`-boundary keeps `src/a/index.tsx:5:8` and `src/b/index.tsx:5:8` DISTINCT (neither is a
+ * `/`-suffix of the other), avoiding the basename-only collision a naive tail match would cause.
+ * The remaining theoretical case — two sibling sub-projects that share a path SUFFIX (HYP-430) —
+ * is not reachable here: only ONE sub-project is previewed at a time, so the overlay layer only
+ * ever holds the active sub-project's elements, and the broadcast id is from an edit in that same
+ * active sub-project. There is no second sub-project's overlay present to mis-match against.
+ */
+export function elementIdsMatch(a: string | undefined | null, b: string | undefined | null): boolean {
+  if (a == null || b == null) return false;
+  if (a === b) return true;
+  return a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+/** A small red "!" badge pinned to the top-right corner of an overlay div. Purely decorative. */
+function createErrorBadge(): HTMLDivElement {
+  const badge = document.createElement('div');
+  badge.setAttribute(ERROR_BADGE_ATTR, 'true');
+  badge.textContent = '!';
+  badge.style.position = 'absolute';
+  badge.style.top = '-9px';
+  badge.style.right = '-9px';
+  badge.style.width = '16px';
+  badge.style.height = '16px';
+  badge.style.borderRadius = '50%';
+  badge.style.background = 'rgb(239, 68, 68)';
+  badge.style.color = '#fff';
+  badge.style.fontSize = '11px';
+  badge.style.fontWeight = '700';
+  badge.style.lineHeight = '16px';
+  badge.style.textAlign = 'center';
+  badge.style.pointerEvents = 'none';
+  badge.style.zIndex = '2';
+  return badge;
 }
 
 /**

@@ -857,4 +857,81 @@ describe('AstBridge', () => {
       expect(mockAstService.getElementLocation).toHaveBeenCalledWith('src/App.tsx', 'src/App.tsx:4:6', undefined);
     });
   });
+
+  // HYP-991 — post-edit diagnostic watcher wiring (gating, elementId extraction, failure skip).
+  describe('post-edit diagnostic check', () => {
+    function fakeWatcher() {
+      const snapshot = mock(() => new Map());
+      const checkAfterEdit = mock(() => Promise.resolve());
+      // Only the two methods AstBridge calls; cast through unknown for the DI slot.
+      return {
+        watcher: { snapshot, checkAfterEdit } as unknown as Parameters<typeof bridge.setPostEditWatcher>[0],
+        snapshot,
+        checkAfterEdit,
+      };
+    }
+
+    it('snapshots before and checks after a successful mutation, forwarding the elementId', async () => {
+      const { watcher, snapshot, checkAfterEdit } = fakeWatcher();
+      bridge.setPostEditWatcher(watcher);
+      await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r',
+          filePath: 'f.tsx',
+          elementId: 'e1',
+          styles: { color: 'red' },
+        } as never,
+        createMockWebview() as never,
+      );
+      expect(snapshot).toHaveBeenCalled();
+      expect(checkAfterEdit).toHaveBeenCalledTimes(1);
+      const args = checkAfterEdit.mock.calls[0] as unknown as [unknown, string, string | null, string, string];
+      expect(args[2]).toBe('e1'); // elementId
+      expect(args[3]).toBe('f.tsx'); // componentPath
+      expect(args[4]).toBe('ast:updateStyles'); // mutationType
+    });
+
+    it('does NOT run the check when the mutation fails', async () => {
+      mockAstService.updateStyles.mockImplementation(() => Promise.resolve({ success: false, error: 'nope' }));
+      const { watcher, checkAfterEdit } = fakeWatcher();
+      bridge.setPostEditWatcher(watcher);
+      await bridge.handleMessage(
+        { type: 'ast:updateStyles', requestId: 'r', filePath: 'f.tsx', elementId: 'e1', styles: {} } as never,
+        createMockWebview() as never,
+      );
+      expect(checkAfterEdit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT snapshot for a non-mutation (non-allowlisted) message type', async () => {
+      const { watcher, snapshot, checkAfterEdit } = fakeWatcher();
+      bridge.setPostEditWatcher(watcher);
+      await bridge.handleMessage(
+        { type: 'ast:someRead', requestId: 'r', filePath: 'f.tsx' } as never,
+        createMockWebview() as never,
+      );
+      expect(snapshot).not.toHaveBeenCalled();
+      expect(checkAfterEdit).not.toHaveBeenCalled();
+    });
+
+    it('derives the elementId from elementIds[0] for a delete mutation', async () => {
+      const { watcher, checkAfterEdit } = fakeWatcher();
+      bridge.setPostEditWatcher(watcher);
+      await bridge.handleMessage(
+        { type: 'ast:deleteElements', requestId: 'r', filePath: 'f.tsx', elementIds: ['del-1', 'del-2'] } as never,
+        createMockWebview() as never,
+      );
+      const args = checkAfterEdit.mock.calls[0] as unknown as [unknown, string, string | null, string, string];
+      expect(args[2]).toBe('del-1');
+    });
+
+    it('does not throw when no watcher is wired', async () => {
+      await bridge.handleMessage(
+        { type: 'ast:updateStyles', requestId: 'r', filePath: 'f.tsx', elementId: 'e1', styles: {} } as never,
+        createMockWebview() as never,
+      );
+      // reaching here without throwing is the assertion
+      expect(true).toBe(true);
+    });
+  });
 });

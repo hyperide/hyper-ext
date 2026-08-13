@@ -428,6 +428,10 @@ const state = {
   hoveredItemIndex: null as number | null,
   selectedItemIndices: {} as Record<string, number | null>,
   engineMode: 'design' as string,
+  // HYP-991 — element flagged with a NEW post-edit language-server error (or null). Set by the
+  // host via 'hypercanvas:setErrorElement' so computeOverlayRects emits an independent error rect,
+  // keeping the highlight alive after the user selects/hovers a different element.
+  errorElementId: null as string | null,
 };
 (window as unknown as Record<string, unknown>).__hyperCanvasState = state;
 (window as unknown as Record<string, unknown>).__hyperCanvasStateGen = 0;
@@ -1115,6 +1119,18 @@ window.addEventListener('message', (event: MessageEvent) => {
     scheduleOverlayLoopIfNeeded();
     (window as unknown as Record<string, unknown>).__hyperCanvasStateGen =
       (((window as unknown as Record<string, unknown>).__hyperCanvasStateGen as number) ?? 0) + 1;
+    return;
+  }
+  if (msg.type === 'hypercanvas:setErrorElement') {
+    // HYP-991 — host tells us which element carries the standing post-edit error (or null to
+    // clear). Recompute overlays so an independent `error` rect is emitted for it (or dropped),
+    // decoupling the highlight from the current selection/hover.
+    const next = typeof msg.elementId === 'string' && msg.elementId.length > 0 ? msg.elementId : null;
+    if (state.errorElementId !== next) {
+      state.errorElementId = next;
+      needsOverlayUpdate = true;
+      scheduleOverlayLoopIfNeeded();
+    }
     return;
   }
   if (msg.type === 'hypercanvas:goToVisual') {

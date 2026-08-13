@@ -14,6 +14,9 @@ interface OverlayState {
   hoveredItemIndex: number | null;
   selectedItemIndices: Record<string, number | null>;
   engineMode: string;
+  // HYP-991 — post-edit-errored element id (or null); forwarded into computeOverlayRects so an
+  // independent `error` rect is produced for it even when it is not selected/hovered.
+  errorElementId: string | null;
 }
 
 export interface OverlayContext {
@@ -58,6 +61,7 @@ export function sendOverlayRects(ctx: OverlayContext): void {
       hoveredItemIndex: ctx.state.hoveredItemIndex,
       selectedItemIndices: effectiveSelectedItemIndices,
       engineMode: ctx.state.engineMode,
+      errorElementId: ctx.state.errorElementId,
     },
     ctx.iframeElementResolver,
   );

@@ -19,6 +19,7 @@ import { toRepoRelativeElementId, toRepoRelativePath } from './bridges/monorepo-
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
 import type { AstService } from './services/AstService';
+import type { PostEditDiagnosticWatcher } from './services/PostEditDiagnosticWatcher';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
 import type { CssSystemId } from '@lib/style-read/types';
 import { ComponentService, type ScanResult } from './services/ComponentService';
@@ -42,6 +43,11 @@ interface PanelRouterConfig {
    */
   astService?: AstService;
   componentService?: ComponentService;
+  /**
+   * HYP-991 — the post-edit diagnostic watcher. Applied to the AstBridge on construction and
+   * re-applied whenever a workspace switch rebuilds the bridge. Optional so tests omit it.
+   */
+  postEditDiagnosticWatcher?: PostEditDiagnosticWatcher;
 }
 
 export class PanelRouter {
@@ -50,6 +56,7 @@ export class PanelRouter {
   private _componentService: ComponentService;
   private _styleReadService: StyleReadService;
   private _workspaceRoot: string;
+  private _postEditDiagnosticWatcher?: PostEditDiagnosticWatcher;
   private _context: vscode.ExtensionContext;
   private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
@@ -97,6 +104,8 @@ export class PanelRouter {
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot, config.astService);
+    this._postEditDiagnosticWatcher = config.postEditDiagnosticWatcher;
+    this._astBridge.setPostEditWatcher(this._postEditDiagnosticWatcher);
     this._stateHub = config.stateHub;
     this._context = config.context;
     this._componentService = config.componentService ?? this._createComponentService(config.workspaceRoot);
@@ -843,7 +852,11 @@ export class PanelRouter {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot || workspaceRoot === this._workspaceRoot) return;
     this._workspaceRoot = workspaceRoot;
+    // HYP-991 — forget any standing post-edit warning from the OLD workspace (its diagnostics no
+    // longer apply) before re-wiring the watcher into the rebuilt bridge.
+    this._postEditDiagnosticWatcher?.reset();
     this._astBridge = new AstBridge(workspaceRoot);
+    this._astBridge.setPostEditWatcher(this._postEditDiagnosticWatcher);
     if (this._currentWebview) this._astBridge.setWebview(this._currentWebview);
     // CLEAR the default on a workspace switch — this branch only runs when the root actually changed,
     // so the previous workspace's UIKit default is now stale (a Tailwind project's default must NOT

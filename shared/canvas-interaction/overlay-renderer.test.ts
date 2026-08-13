@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { clearOverlays, renderOverlayRects, renderPlaceholderOverlays } from './overlay-renderer';
+import { checkSelectionOverlayInvariant } from './assert-selection-overlays';
+import {
+  applyOverlayErrorState,
+  clearOverlays,
+  renderOverlayRects,
+  renderPlaceholderOverlays,
+} from './overlay-renderer';
 import type { OverlayRect, PlaceholderRect } from './types';
 
 /**
@@ -424,5 +430,153 @@ describe('renderOverlayRects — resize handles for explicit Tailwind sizes', ()
 
     const overlay = getEl(elements, 'select-no-eid');
     expect(overlay.dataset.elementId).toBeUndefined();
+  });
+});
+
+describe('applyOverlayErrorState (HYP-991)', () => {
+  let container: HTMLDivElement;
+  let elements: Map<string, HTMLDivElement>;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    elements = new Map();
+    renderOverlayRects(
+      container,
+      [{ key: 'sel', left: 0, top: 0, width: 10, height: 10, type: 'selection', elementId: 'src/app/Home.tsx:15:8' }],
+      elements,
+    );
+  });
+
+  it('flags the matching overlay with a red outline + badge', () => {
+    applyOverlayErrorState(elements, 'src/app/Home.tsx:15:8');
+    const el = getEl(elements, 'sel');
+    expect(el.style.outline).toContain('rgb(239, 68, 68)');
+    expect(el.querySelector('[data-post-edit-error-badge]')).not.toBeNull();
+  });
+
+  it('matches a re-rooted (repo-relative) id against the sub-project-relative overlay id', () => {
+    // The mutation id that reaches the bridge is re-rooted; the overlay id is sub-project-relative,
+    // so one is a `/`-boundary suffix of the other. This is the live monorepo case (conloca).
+    applyOverlayErrorState(elements, 'targets/web/src/app/Home.tsx:15:8');
+    const el = getEl(elements, 'sel'); // overlay id: src/app/Home.tsx:15:8
+    expect(el.style.outline).toContain('rgb(239, 68, 68)');
+    expect(el.querySelector('[data-post-edit-error-badge]')).not.toBeNull();
+  });
+
+  it('does NOT cross-match two same-basename ids in different directories (`/`-boundary)', () => {
+    applyOverlayErrorState(elements, 'src/other/Home.tsx:15:8');
+    const el = getEl(elements, 'sel'); // overlay id: src/app/Home.tsx:15:8
+    expect(el.style.outline).toBe('');
+    expect(el.querySelector('[data-post-edit-error-badge]')).toBeNull();
+  });
+
+  it('clears the outline + badge when passed null', () => {
+    applyOverlayErrorState(elements, 'src/app/Home.tsx:15:8');
+    applyOverlayErrorState(elements, null);
+    const el = getEl(elements, 'sel');
+    expect(el.style.outline).toBe('');
+    expect(el.querySelector('[data-post-edit-error-badge]')).toBeNull();
+  });
+
+  it('does not flag a non-matching element', () => {
+    applyOverlayErrorState(elements, 'src/app/Other.tsx:1:1');
+    const el = getEl(elements, 'sel');
+    expect(el.style.outline).toBe('');
+    expect(el.querySelector('[data-post-edit-error-badge]')).toBeNull();
+  });
+});
+
+describe('post-edit error highlight persists across selection change (HYP-991 P2)', () => {
+  // This is the regression the codex P2 flagged: renderOverlayRects rebuilds the overlay map from
+  // the current selection/hover rects, so the errored element used to lose its highlight the moment
+  // the user selected a different element. The fix emits an independent borderless `error` rect for
+  // the errored element (computeOverlayRects) so a DOM node always exists for applyOverlayErrorState
+  // to (re-)flag. This test reproduces the full host render path at the DOM level.
+  const ERRORED = 'src/app/Card.tsx:10:4';
+  const OTHER = 'src/app/Button.tsx:20:6';
+
+  function renderAndReapply(container: HTMLDivElement, elements: Map<string, HTMLDivElement>, rects: OverlayRect[]) {
+    renderOverlayRects(container, rects, elements);
+    // Mirrors useCanvasInteraction's re-apply after every overlayRects rebuild.
+    applyOverlayErrorState(elements, ERRORED);
+  }
+
+  it('keeps the red outline + badge on the errored node after selecting a DIFFERENT element, then clears it', () => {
+    const container = document.createElement('div');
+    const elements = new Map<string, HTMLDivElement>();
+
+    // 1. Errored element is selected → gets a selection rect + the error highlight.
+    renderAndReapply(container, elements, [
+      { key: `select-${ERRORED}-0`, elementId: ERRORED, left: 0, top: 0, width: 50, height: 50, type: 'selection' },
+    ]);
+    let erroredEl = getEl(elements, `select-${ERRORED}-0`);
+    expect(erroredEl.style.outline).toContain('rgb(239, 68, 68)');
+    expect(erroredEl.querySelector('[data-post-edit-error-badge]')).not.toBeNull();
+
+    // 2. User selects a DIFFERENT element. The iframe now sends the other element's selection rect
+    //    PLUS the independent error rect for the (now unselected) errored element. The old
+    //    select-<errored> overlay is removed; the error-<errored> overlay carries the highlight.
+    renderAndReapply(container, elements, [
+      { key: `select-${OTHER}-0`, elementId: OTHER, left: 100, top: 0, width: 50, height: 50, type: 'selection' },
+      { key: `error-${ERRORED}-0`, elementId: ERRORED, left: 0, top: 0, width: 50, height: 50, type: 'error' },
+    ]);
+    expect(elements.has(`select-${ERRORED}-0`)).toBe(false); // old selection overlay gone
+    erroredEl = getEl(elements, `error-${ERRORED}-0`);
+    // Error rect is borderless — no blue selection/hover border to fight the red outline.
+    expect(erroredEl.style.border).not.toContain('rgb(59, 130, 246)');
+    expect(erroredEl.style.outline).toContain('rgb(239, 68, 68)'); // highlight STILL present
+    expect(erroredEl.querySelector('[data-post-edit-error-badge]')).not.toBeNull();
+    // The newly selected element is NOT flagged.
+    const otherEl = getEl(elements, `select-${OTHER}-0`);
+    expect(otherEl.style.outline).toBe('');
+
+    // 3. Diagnostic cleared → error rect drops, highlight gone.
+    renderOverlayRects(
+      container,
+      [{ key: `select-${OTHER}-0`, elementId: OTHER, left: 100, top: 0, width: 50, height: 50, type: 'selection' }],
+      elements,
+    );
+    applyOverlayErrorState(elements, null);
+    expect(elements.has(`error-${ERRORED}-0`)).toBe(false);
+    const remaining = getEl(elements, `select-${OTHER}-0`);
+    expect(remaining.style.outline).toBe('');
+    expect(remaining.querySelector('[data-post-edit-error-badge]')).toBeNull();
+  });
+});
+
+describe('error overlays are not selection overlays (HYP-991 — Codex P2)', () => {
+  it('tags error rects with data-error-overlay, NOT data-selection-overlay', () => {
+    const container = document.createElement('div');
+    const elements = new Map<string, HTMLDivElement>();
+    renderOverlayRects(
+      container,
+      [
+        { key: 'select-a', elementId: 'a', left: 0, top: 0, width: 10, height: 10, type: 'selection' },
+        { key: 'error-b', elementId: 'b', left: 20, top: 0, width: 10, height: 10, type: 'error' },
+      ],
+      elements,
+    );
+    expect(getEl(elements, 'select-a').getAttribute('data-selection-overlay')).toBe('true');
+    expect(getEl(elements, 'error-b').getAttribute('data-error-overlay')).toBe('true');
+    expect(getEl(elements, 'error-b').getAttribute('data-selection-overlay')).toBeNull();
+  });
+
+  it('does not inflate the [data-selection-overlay] count (checkSelectionOverlayInvariant)', () => {
+    const container = document.createElement('div');
+    const elements = new Map<string, HTMLDivElement>();
+    // One selected element + one standing error overlay for a DIFFERENT, unselected element.
+    renderOverlayRects(
+      container,
+      [
+        { key: 'select-a', elementId: 'a', left: 0, top: 0, width: 10, height: 10, type: 'selection' },
+        { key: 'error-b', elementId: 'b', left: 20, top: 0, width: 10, height: 10, type: 'error' },
+      ],
+      elements,
+    );
+    // Only ONE selection overlay is expected; the error overlay must not be counted.
+    expect(container.querySelectorAll('[data-selection-overlay="true"]')).toHaveLength(1);
+    const result = checkSelectionOverlayInvariant(container, 1);
+    expect(result.foundCount).toBe(1);
+    expect(result.ok).toBe(true);
   });
 });

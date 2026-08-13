@@ -28,13 +28,16 @@ export interface OverlayRendererOptions {
 
 export interface OverlayRect {
   key: string;
-  /** nodeRef (fileName:line:col) used for AST mutation — only set on selection rects */
+  /** nodeRef (fileName:line:col) used for AST mutation — set on selection and error rects */
   elementId?: string;
   left: number;
   top: number;
   width: number;
   height: number;
-  type: 'selection' | 'hover';
+  // HYP-991 — 'error' rects carry NO base border (rendered borderless); the red error outline +
+  // "!" badge is layered on by applyOverlayErrorState. They exist so a post-edit-errored element
+  // stays highlighted even when it is neither selected nor hovered.
+  type: 'selection' | 'hover' | 'error';
   /** Present when the selected element has an explicit Tailwind/CSS size on that axis */
   resizable?: { width: boolean; height: boolean; hasSizeClass?: boolean };
 }

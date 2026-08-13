@@ -765,3 +765,101 @@ describe('computeOverlayRects — resizable gating on special dimensions', () =>
     expect(result.overlayRects[0].resizable).toEqual({ width: true, height: false });
   });
 });
+
+describe('computeOverlayRects — post-edit error rect (HYP-991)', () => {
+  it('emits an independent borderless error rect for an errored, UNSELECTED element', () => {
+    // The core P2 scenario: the errored element is not selected (the user moved selection
+    // elsewhere). Without an independent error rect the highlight would vanish.
+    const errored = mockElement({ left: 10, top: 20, width: 100, height: 40 });
+    const other = mockElement({ left: 200, top: 0, width: 50, height: 50 });
+    const resolver = createResolver(
+      new Map([
+        ['errored-ref', [errored]],
+        ['other-ref', [other]],
+      ]),
+    );
+
+    const result = computeOverlayRects(
+      { selectedIds: ['other-ref'], hoveredId: null, errorElementId: 'errored-ref' },
+      resolver,
+    );
+
+    const errorRect = result.overlayRects.find((r) => r.type === 'error');
+    expect(errorRect).toBeDefined();
+    expect(errorRect?.elementId).toBe('errored-ref');
+    expect(errorRect?.key).toBe('error-errored-ref-0');
+    expect(errorRect).toMatchObject({ left: 10, top: 20, width: 100, height: 40 });
+    // The other element still gets its own selection rect — the error rect is additive.
+    expect(result.overlayRects.some((r) => r.type === 'selection' && r.elementId === 'other-ref')).toBe(true);
+  });
+
+  it('does NOT emit a duplicate error rect when the errored element is also selected', () => {
+    // A selection rect already carries the element id, so applyOverlayErrorState flags it directly;
+    // emitting a second error rect would produce a duplicate overlay.
+    const el = mockElement({ left: 0, top: 0, width: 30, height: 30 });
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null, errorElementId: 'ref-1' }, resolver);
+
+    expect(result.overlayRects.filter((r) => r.elementId === 'ref-1')).toHaveLength(1);
+    expect(result.overlayRects[0].type).toBe('selection');
+  });
+
+  it('emits no error rect when errorElementId is null/unset', () => {
+    const el = mockElement({ left: 0, top: 0, width: 30, height: 30 });
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects({ selectedIds: ['ref-1'], hoveredId: null, errorElementId: null }, resolver);
+
+    expect(result.overlayRects.some((r) => r.type === 'error')).toBe(false);
+  });
+
+  it('emits an error rect per live instance of a repeated errored id', () => {
+    const a = mockElement({ left: 0, top: 0, width: 10, height: 10 });
+    const b = mockElement({ left: 40, top: 0, width: 10, height: 10 });
+    const resolver = createResolver(new Map([['repeated', [a, b]]]));
+
+    const result = computeOverlayRects({ selectedIds: [], hoveredId: null, errorElementId: 'repeated' }, resolver);
+
+    const errorRects = result.overlayRects.filter((r) => r.type === 'error');
+    expect(errorRects.map((r) => r.key)).toEqual(['error-repeated-0', 'error-repeated-1']);
+  });
+
+  it('dedups per DOM instance: a repeated errored id keeps error rects on the UNSELECTED instances', () => {
+    // Codex P2: for a repeated JSX element, selection emits a rect for only ONE instance (the one at
+    // selectedItemIndices), while the error path otherwise emits all live instances. Per-source-id
+    // dedup would drop the error highlight on the other instances. Per-DOM-element dedup keeps them.
+    const a = mockElement({ left: 0, top: 0, width: 10, height: 10 });
+    const b = mockElement({ left: 40, top: 0, width: 10, height: 10 });
+    const resolver = createResolver(new Map([['rep', [a, b]]]));
+
+    const result = computeOverlayRects(
+      // instance 1 (b) is selected; the errored id 'rep' covers both instances.
+      { selectedIds: ['rep'], hoveredId: null, selectedItemIndices: { rep: 1 }, errorElementId: 'rep' },
+      resolver,
+    );
+
+    // b (selected) gets a selection rect and no error rect; a (unselected) still gets an error rect.
+    const selectionRects = result.overlayRects.filter((r) => r.type === 'selection');
+    expect(selectionRects).toHaveLength(1);
+    const errorRects = result.overlayRects.filter((r) => r.type === 'error');
+    expect(errorRects).toHaveLength(1);
+    expect(errorRects[0]).toMatchObject({ left: 0, top: 0 }); // element a, the unselected instance
+  });
+
+  it('emits no error rect for a STALE selected id (no selection rect drawn) — still shows the error', () => {
+    // Per-source-id dedup would suppress the error rect here (id is "selected") even though the
+    // selection resolved to nothing, leaving no highlight at all. Per-element dedup emits it.
+    const el = mockElement({ left: 5, top: 5, width: 20, height: 20 });
+    // 'stale-sel' resolves to nothing (unmounted); the errored 'ref-1' resolves to el.
+    const resolver = createResolver(new Map([['ref-1', [el]]]));
+
+    const result = computeOverlayRects(
+      { selectedIds: ['stale-sel'], hoveredId: null, errorElementId: 'ref-1' },
+      resolver,
+    );
+
+    expect(result.overlayRects.filter((r) => r.type === 'selection')).toHaveLength(0);
+    expect(result.overlayRects.filter((r) => r.type === 'error')).toHaveLength(1);
+  });
+});

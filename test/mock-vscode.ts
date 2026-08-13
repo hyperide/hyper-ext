@@ -196,6 +196,16 @@ const commands = {
   executeCommand: mock(() => Promise.resolve()),
 };
 
+/* ---------- namespace: languages (HYP-991 — post-edit diagnostic watcher) ---------- */
+
+// Matches VS Code's real numeric enum: Error=0, Warning=1, Information=2, Hint=3.
+const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 } as const;
+
+const languages = {
+  getDiagnostics: mock(() => [] as Array<[MockUri, unknown[]]>),
+  onDidChangeDiagnostics: mock((_cb: (...args: never) => unknown) => ({ dispose: mock() })),
+};
+
 /* ---------- register mock ---------- */
 
 mock.module('vscode', () => ({
@@ -216,6 +226,8 @@ mock.module('vscode', () => ({
   window,
   workspace,
   commands,
+  languages,
+  DiagnosticSeverity,
   env,
 }));
 
@@ -243,6 +255,8 @@ const allMockFns = [
   workspace.fs.readDirectory,
   commands.registerCommand,
   commands.executeCommand,
+  languages.getDiagnostics,
+  languages.onDidChangeDiagnostics,
 ];
 
 beforeEach(() => {
@@ -262,6 +276,8 @@ beforeEach(() => {
   workspace.applyEdit.mockImplementation(() => Promise.resolve(true));
   window.showTextDocument.mockImplementation(() => Promise.resolve({ selection: null, revealRange: mock() }));
   commands.executeCommand.mockImplementation(() => Promise.resolve());
+  languages.getDiagnostics.mockImplementation(() => [] as Array<[MockUri, unknown[]]>);
+  languages.onDidChangeDiagnostics.mockImplementation(() => ({ dispose: mock() }));
 
   window.activeTextEditor = undefined;
   window.visibleTextEditors = [];

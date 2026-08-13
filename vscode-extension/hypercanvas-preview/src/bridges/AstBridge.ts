@@ -16,11 +16,34 @@ import type {
   WrapElementResult,
 } from '../services/AstService';
 import { AstService } from '../services/AstService';
+import type { ErrorSnapshot, PostEditDiagnosticWatcher } from '../services/PostEditDiagnosticWatcher';
 import type { NodeRef } from '@shared/element-tracing/types';
 import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
 import { toRepoRelativeElementId, toRepoRelativePath } from './monorepo-path-translate';
+
+/**
+ * HYP-991 — the AST message types that MUTATE source and therefore warrant a post-edit
+ * language-server diagnostic check. Every handled `ast:*` type is a mutation today, but gating on
+ * an explicit allowlist keeps a future read-only handler (which may still carry a `filePath`) from
+ * triggering a check and broadcasting a spurious "cleared" that dismisses a still-valid warning.
+ */
+// `satisfies` pins every entry to a real AstMessage type, so a typo or a removed type fails the
+// build (guards against the allowlist silently drifting from the union — review).
+const POST_EDIT_CHECKED_MUTATION_TYPES = [
+  'ast:updateStyles',
+  'ast:updateProps',
+  'ast:insertElement',
+  'ast:deleteElements',
+  'ast:duplicateElement',
+  'ast:updateText',
+  'ast:wrapElement',
+  'ast:moveElement',
+  'ast:swapElements',
+  'ast:writeI18nResource',
+] as const satisfies ReadonlyArray<AstMessage['type']>;
+const POST_EDIT_CHECKED_MUTATIONS: ReadonlySet<string> = new Set(POST_EDIT_CHECKED_MUTATION_TYPES);
 
 // File sink only when explicitly requested or in CI — never in normal production use
 const _BRIDGE_DEBUG_LOG: string | null =
@@ -47,6 +70,12 @@ export class AstBridge {
    * even when two sub-projects share a path suffix (HYP-430).
    */
   private _subProjectPrefix = '';
+  /**
+   * HYP-991 — optional post-edit diagnostic watcher. When set, every successful mutation is
+   * checked against the language server for NEW errors it introduced. Optional so tests and the
+   * public direct-call paths that don't wire it keep working unchanged.
+   */
+  private _postEditWatcher?: PostEditDiagnosticWatcher;
 
   /**
    * @param astService Optional pre-built AstService. Production passes nothing
@@ -89,6 +118,14 @@ export class AstBridge {
   }
 
   /**
+   * HYP-991 — attach the post-edit diagnostic watcher. Re-applied by PanelRouter after a
+   * workspace-switch rebuilds this bridge, so the check never goes stale on the old instance.
+   */
+  setPostEditWatcher(watcher: PostEditDiagnosticWatcher | undefined): void {
+    this._postEditWatcher = watcher;
+  }
+
+  /**
    * Widen the undo/redo workspace boundary to also accept paths under `root`
    * (or narrow back to just the opened folder with null). Set from
    * ComponentsData.monorepoRoot whenever the Explorer's ancestor-fallback scan
@@ -108,6 +145,12 @@ export class AstBridge {
     // direct-call methods below DO translate, because PreviewPanel invokes them
     // directly, bypassing PanelRouter (HYP-435).
     _dbgBridge(`[AstBridge.handleMessage] type=${message.type}`);
+
+    // HYP-991 — snapshot workspace error diagnostics BEFORE the mutation (cheap, in-memory) so
+    // the after-check can report only errors this edit newly introduced. Gated on the mutation
+    // allowlist so a read-type message never pays the snapshot cost (review). `undefined` when no
+    // watcher is wired (tests / direct-call paths), which short-circuits the after-check.
+    const preEditErrors = POST_EDIT_CHECKED_MUTATIONS.has(message.type) ? this._postEditWatcher?.snapshot() : undefined;
 
     let response: AstResponse;
 
@@ -172,6 +215,52 @@ export class AstBridge {
     }
 
     this._sendResponse(response, targetWebview);
+
+    // HYP-991 — after a successful MUTATION (explicit allowlist — never a read, which would
+    // broadcast a spurious "cleared" and dismiss a still-valid warning), fire-and-forget a
+    // language-server diagnostic check for NEW errors the edit introduced. Never awaited (must
+    // not delay the response) and never throws out (best-effort safety net).
+    if (preEditErrors && response.success) {
+      this._schedulePostEditDiagnosticCheck(message, preEditErrors);
+    }
+  }
+
+  /**
+   * HYP-991 — kick off the debounced post-edit diagnostic diff for a committed mutation.
+   * Resolves the edited file to an absolute path (to compare with diagnostic URIs) and derives a
+   * best-effort target elementId for the canvas overlay. Deliberately fire-and-forget.
+   *
+   * Overlay caveat: the derived id is the element's PRE-edit `file:line:col`. For position-shifting
+   * mutations (wrap/move/insert, and delete whose target is gone) the post-render overlay id may no
+   * longer match, so the canvas highlight is best-effort and can be absent for those — the native
+   * notification (the primary surface) always fires. Style/prop/text edits (the common case, and
+   * the CTO's dimensional-on-non-forwarding repro) keep a stable position and highlight reliably.
+   */
+  private _schedulePostEditDiagnosticCheck(message: AstMessage, baseline: ErrorSnapshot): void {
+    const m = message as {
+      filePath?: string;
+      elementId?: string;
+      sourceId?: string;
+      aId?: string;
+      parentId?: string;
+      elementIds?: string[];
+    };
+    if (!m.filePath) return;
+    // Best-effort target across the mutation shapes (updateStyles/Props/wrap: elementId; move/swap:
+    // sourceId/aId; delete: elementIds[0]; insert: parentId). `null` when unresolved — the native
+    // notification still fires, the overlay simply has nothing to anchor (never the empty string).
+    // The id is whatever namespace the mutation carried (re-rooted repo-relative on the PanelRouter
+    // path); the preview overlay reconciles it via `elementIdsMatch`'s `/`-boundary tolerance.
+    // Truthiness fallback (NOT `??`): an empty-string id must fall through to `null`, else the
+    // scoped clear's `elementIdsMatch(current, '')` never matches and a real clear is lost (review).
+    const elementId = m.elementId || m.sourceId || m.aId || m.elementIds?.[0] || m.parentId || null;
+    void this._postEditWatcher?.checkAfterEdit(
+      baseline,
+      this._resolvePath(m.filePath),
+      elementId,
+      m.filePath,
+      message.type,
+    );
   }
 
   // === Undo tracking helpers ===

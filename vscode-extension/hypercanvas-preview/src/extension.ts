@@ -49,6 +49,12 @@ import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
+import { PostEditDiagnosticWatcher } from './services/PostEditDiagnosticWatcher';
+import {
+  AUTO_FIX_ACTION,
+  buildPostEditAiFixPrompt,
+  buildPostEditNotificationMessage,
+} from './services/post-edit-diagnostic-notify';
 import { buildNonPreviewablePayload, flattenComponentTree } from './preview-panel-non-previewable';
 import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
 import { isWebviewDisposedError } from './webview-post';
@@ -349,10 +355,27 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create StateHub and PanelRouter for cross-panel coordination
   stateHub = new StateHub();
+  // HYP-991 — post-edit diagnostic watcher: after any AST mutation commits, it diffs language-
+  // server error diagnostics. `broadcast` drives the on-canvas element highlight; `notifyError`
+  // raises a STANDARD platform notification (native warning toast + "Auto fix via AI"), per the
+  // CTO UX directive that the message be a native notification, not a custom banner.
+  const postEditDiagnosticWatcher = new PostEditDiagnosticWatcher({
+    broadcast: (message) => stateHub?.broadcast(message),
+    notifyError: (warning) => {
+      void vscode.window
+        .showWarningMessage(buildPostEditNotificationMessage(warning), AUTO_FIX_ACTION)
+        .then((choice) => {
+          // aiChatProvider is created just below; this callback only runs after a later edit.
+          if (choice === AUTO_FIX_ACTION) aiChatProvider?.sendAIPrompt(buildPostEditAiFixPrompt(warning));
+        });
+    },
+  });
+  context.subscriptions.push({ dispose: () => postEditDiagnosticWatcher.dispose() });
   panelRouter = new PanelRouter({
     workspaceRoot,
     stateHub,
     context,
+    postEditDiagnosticWatcher,
   });
 
   // Create preview panel instance

@@ -101,6 +101,13 @@ export interface OverlayComputeState {
   hoveredItemIndex?: number | null;
   selectedItemIndices?: Map<string, number | null> | Record<string, number | null>;
   engineMode?: string;
+  /**
+   * HYP-991 — the element whose source the last visual edit left with a NEW language-server error,
+   * or null. When set and NOT already covered by a selection rect, an independent `error`-type rect
+   * is emitted for it, so the red error outline + badge persists on the errored element even after
+   * the user selects/hovers a different element (the highlight is decoupled from selection/hover).
+   */
+  errorElementId?: string | null;
 }
 
 export interface OverlayComputeResult {
@@ -185,6 +192,15 @@ export function computeOverlayRects(
     }
   }
 
+  // Track the exact DOM elements that got a selection rect, so the error rect below dedups
+  // per-element rather than per-source-id. Per-id dedup is wrong in two cases the reviewer flagged:
+  // a STALE selected id resolves to zero elements (no selection rect, yet per-id dedup would still
+  // suppress the error rect → no highlight at all), and a REPEATED id with a selectedItemIndex gets
+  // a selection rect for only ONE instance (per-id dedup would drop the error highlight on the other
+  // live instances). Comparing resolved elements handles both, and also the monorepo case: an
+  // errored element that is selected resolves to the same DOM node under either id namespace.
+  const selectedElements = new Set<Element>();
+
   // Selection rects
   for (const id of state.selectedIds) {
     const itemIndex = getItemIndex(state.selectedItemIndices, id);
@@ -212,6 +228,7 @@ export function computeOverlayRects(
     }
 
     for (let i = 0; i < elements.length; i++) {
+      selectedElements.add(elements[i]);
       const rect = effectiveRect(elements[i]);
       const key = effectiveItemIndex !== null ? `select-${id}-${effectiveItemIndex}` : `select-${id}-${i}`;
       const overlayRect: OverlayRect = {
@@ -238,6 +255,35 @@ export function computeOverlayRects(
         overlayRect.resizable = hasSizeClass ? { ...resizable, hasSizeClass: true } : resizable;
       }
       overlayRects.push(overlayRect);
+    }
+  }
+
+  // HYP-991 — independent error rect: keep the post-edit-errored element highlighted even when it
+  // is neither selected nor hovered. Any instance that already got a selection rect is skipped
+  // (applyOverlayErrorState flags that selection overlay directly via the tolerant dataset match),
+  // so we only draw a dedicated borderless `error` rect for the still-uncovered live instances.
+  // NOTE (tracked follow-up): resolver.findElements is an exact-id lookup, so in a MONOREPO a
+  // repo-relative diagnostic id does not resolve against the sub-project-relative DOM ids and no
+  // error rect is drawn for an UNSELECTED errored element. Single-project previews (the common
+  // case) are unaffected, and the selected-element highlight still works in monorepos via the
+  // tolerant apply-time match. Cross-namespace exact-location resolution is deferred to the
+  // anchoring-accuracy follow-up.
+  if (state.errorElementId) {
+    const errorElements = resolver.findElements(state.errorElementId, null);
+    let emitted = 0;
+    for (const errorElement of errorElements) {
+      if (selectedElements.has(errorElement)) continue;
+      const rect = effectiveRect(errorElement);
+      overlayRects.push({
+        key: `error-${state.errorElementId}-${emitted}`,
+        elementId: state.errorElementId,
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        type: 'error',
+      });
+      emitted++;
     }
   }
 
