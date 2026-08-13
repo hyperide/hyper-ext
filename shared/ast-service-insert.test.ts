@@ -62,7 +62,7 @@ export function App() {
 
     const output = files['/workspace/src/App.tsx'];
     expect(output).toContain('<span');
-    expect(output).toContain('className="text-red"');
+    expect(output).toContain("className='text-red'");
   });
 
   it('does not add import for lowercase (native) elements', async () => {
