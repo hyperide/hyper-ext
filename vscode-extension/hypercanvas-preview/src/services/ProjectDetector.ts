@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
+import type { ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
 import { WRITABLE_CSS_SYSTEMS } from '../types';
 
 /**
@@ -39,6 +39,59 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Detect monorepo topology for the workspace root.
+ * Returns 'simple' for ordinary single-package projects.
+ */
+export async function detectRepoType(projectPath: string): Promise<RepoType> {
+  const pkg = await readPackageJson(projectPath);
+  const allDeps = {
+    ...(pkg?.dependencies as Record<string, string> | undefined),
+    ...(pkg?.devDependencies as Record<string, string> | undefined),
+  };
+
+  // Nx: nx.json config file OR nx package in deps
+  if ((await fileExists(path.join(projectPath, 'nx.json'))) || allDeps.nx) return 'mono-nx';
+
+  // Turborepo: turbo.json config file OR turbo in deps
+  if ((await fileExists(path.join(projectPath, 'turbo.json'))) || allDeps.turbo) return 'mono-turbo';
+
+  // pnpm workspaces: pnpm-workspace.yaml
+  if (await fileExists(path.join(projectPath, 'pnpm-workspace.yaml'))) return 'mono-pnpm';
+
+  // Lerna
+  if (await fileExists(path.join(projectPath, 'lerna.json'))) return 'mono-lerna';
+
+  // Generic workspaces (npm/yarn workspaces field in package.json)
+  if (pkg && Array.isArray((pkg as { workspaces?: unknown }).workspaces)) return 'mono-generic';
+
+  return 'simple';
+}
+
+/**
+ * Read merged deps from all sub-packages in a monorepo.
+ * Scans apps/ and packages/ directories one level deep.
+ */
+async function readSubPackageDeps(projectPath: string): Promise<Record<string, string>> {
+  const merged: Record<string, string> = {};
+  // Common sub-package directory names across different monorepo conventions
+  for (const dir of ['apps', 'packages', 'targets', 'libs', 'services']) {
+    try {
+      const entries = await fs.readdir(path.join(projectPath, dir));
+      for (const entry of entries) {
+        const sub = await readPackageJson(path.join(projectPath, dir, entry));
+        if (sub) {
+          Object.assign(merged, sub.dependencies as Record<string, string> | undefined);
+          Object.assign(merged, sub.devDependencies as Record<string, string> | undefined);
+        }
+      }
+    } catch {
+      // dir doesn't exist — skip
+    }
+  }
+  return merged;
 }
 
 /**
@@ -86,6 +139,18 @@ export async function detectProjectType(projectPath: string): Promise<ProjectTyp
   if (await fileExists(path.join(projectPath, 'vite.config.js'))) return 'vite';
   if (await fileExists(path.join(projectPath, 'webpack.config.js'))) return 'webpack';
   if (await fileExists(path.join(projectPath, 'webpack.config.ts'))) return 'webpack';
+
+  // Monorepo fallback: root package.json had no framework dep, but a sub-package might
+  const repoType = await detectRepoType(projectPath);
+  if (repoType !== 'simple') {
+    const subDeps = await readSubPackageDeps(projectPath);
+    if (subDeps.next) return 'nextjs';
+    if (subDeps['react-scripts']) return 'cra';
+    if (subDeps['@remix-run/react']) return 'remix';
+    if (subDeps.astro) return 'vite';
+    if (subDeps.vite) return 'vite';
+    if (subDeps.webpack || subDeps['webpack-dev-server']) return 'webpack';
+  }
 
   return 'unknown';
 }
@@ -321,6 +386,24 @@ export async function detectCssSystem(
   // for *.module.css / *.module.scss / *.module.less files.
   if (await hasCssModuleFiles(projectPath)) return 'cssmodules';
 
+  // Monorepo fallback: root package.json had no CSS dep, check sub-packages.
+  // Runs regardless of whether packageJson was pre-resolved — by the time we reach
+  // here, we know root has nothing. Skipping it when pkg is pre-passed (the production
+  // path from extension.ts) would leave Conloca targets/ tailwindcss invisible.
+  {
+    const repoType = await detectRepoType(projectPath);
+    if (repoType !== 'simple') {
+      const subDeps = await readSubPackageDeps(projectPath);
+      const hasSub = (name: string) => name in subDeps;
+      if (hasSub('@shadcn/ui') || hasSub('class-variance-authority')) return 'shadcn';
+      if (hasSub('daisyui')) return 'daisyui';
+      if (hasSub('tamagui') || hasSub('@tamagui/core')) return 'tamagui';
+      if (hasSub('styled-components')) return 'styled-components';
+      if (hasSub('@emotion/react') || hasSub('@emotion/styled')) return 'emotion';
+      if (hasSub('tailwindcss') || hasSub('@astrojs/tailwind') || hasSub('@tailwindcss/vite')) return 'tailwind';
+    }
+  }
+
   return 'unknown';
 }
 
@@ -373,6 +456,7 @@ export function computeCapabilities(
   uiKit: 'tailwind' | 'tamagui' | 'none',
   projectError: import('../types').UnsupportedProjectError | null,
   projectType?: import('../types').ProjectType,
+  repoType?: RepoType,
 ): import('../types').ProjectCapabilities {
   const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
   const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
@@ -382,6 +466,7 @@ export function computeCapabilities(
     cssSystem,
     uiKit,
     projectType,
+    repoType,
     canWriteStyles,
     canRender,
     readonly: canRender && !canWriteStyles,

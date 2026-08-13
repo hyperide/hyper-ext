@@ -11,6 +11,9 @@ import type { I18nLibrary } from '../../../shared/i18n-text/types';
 
 export type ProjectType = 'vite' | 'nextjs' | 'cra' | 'remix' | 'webpack' | 'bun' | 'unknown';
 
+/** Monorepo topology of the workspace */
+export type RepoType = 'simple' | 'mono-nx' | 'mono-turbo' | 'mono-pnpm' | 'mono-lerna' | 'mono-generic';
+
 export interface ProjectInfo {
   type: ProjectType;
   devCommand: string;
@@ -78,6 +81,8 @@ export interface ProjectCapabilities {
   uiKit: 'tailwind' | 'tamagui' | 'none';
   /** Detected project/bundler type */
   projectType?: ProjectType;
+  /** Monorepo topology of the workspace */
+  repoType?: RepoType;
   /** Whether the extension can write styles (AST mutations) */
   canWriteStyles: boolean;
   /** Whether the preview can render (Vite/webpack dev server works) */
