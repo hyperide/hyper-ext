@@ -8,6 +8,8 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { extractComponentPropsTypes } from '@lib/component-props/extract-props-types';
+import { extractTamaguiTokens, isTamaguiProject, nodeTamaguiFsHost } from '@lib/tamagui/extract-tokens';
 import { generateTailwindClasses, getConflictingPrefixes } from '@lib/tailwind/generator';
 import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
 import type { I18nLibrary } from '@shared/i18n-text/types';
@@ -356,6 +358,47 @@ export class PanelRouter {
       try {
         const structure = await this._componentService.parseStructure(componentPath);
         webview.postMessage({ type: 'component:response', requestId, success: true, data: structure });
+      } catch (e) {
+        webview.postMessage({ type: 'component:response', requestId, success: false, error: String(e) });
+      }
+      return true;
+    }
+
+    // Typed props schema for the inspector PropsEditor (HYP-709). Runs the SAME shared TS
+    // Compiler extraction the SaaS route uses, off the real project file on disk. `filePath`
+    // is resolved against the workspace root (and re-rooted for monorepo sub-projects above).
+    if (type === 'component:propsTypes') {
+      const { requestId, filePath, componentName } = message as {
+        requestId: string;
+        filePath: string;
+        componentName?: string;
+      };
+      try {
+        const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(this._workspaceRoot, filePath);
+        // Read-only type analysis; never executes project code.
+        const schema = extractComponentPropsTypes(absolutePath, componentName);
+        webview.postMessage({
+          type: 'component:response',
+          requestId,
+          success: !!schema,
+          data: schema ?? undefined,
+        });
+      } catch (e) {
+        webview.postMessage({ type: 'component:response', requestId, success: false, error: String(e) });
+      }
+      return true;
+    }
+
+    // Tamagui design tokens for the inspector PropsEditor (HYP-709). Runs the SAME hardened
+    // static extraction core the SaaS route uses (no host code execution; symlink/realpath/size
+    // guards from HYP-676 preserved). Returns empty tokens for non-Tamagui projects.
+    if (type === 'tamagui:getTokens') {
+      const { requestId } = message as { requestId: string };
+      try {
+        const tokens = isTamaguiProject(this._workspaceRoot, nodeTamaguiFsHost)
+          ? extractTamaguiTokens(this._workspaceRoot, nodeTamaguiFsHost).tokens
+          : { color: [], size: [], space: [] };
+        webview.postMessage({ type: 'component:response', requestId, success: true, data: { tokens } });
       } catch (e) {
         webview.postMessage({ type: 'component:response', requestId, success: false, error: String(e) });
       }

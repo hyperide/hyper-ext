@@ -19,6 +19,13 @@ export default {
     '../../client/components/LoadingSpinner.tsx',
     // Reused components for right panel (inspector)
     '../../client/components/RightSidebar/**/*.{ts,tsx}',
+    // Tamagui-tokens PropsEditor reused in the right panel (HYP-709). These live
+    // directly under client/components, so they need their own globs — otherwise
+    // Tailwind's JIT never scans them and the theme utility classes (bg-muted,
+    // text-foreground, text-muted-foreground, …) are silently dropped from
+    // webview.css, leaving the inputs unstyled/light on a dark VS Code theme.
+    '../../client/components/PropsEditor.tsx',
+    '../../client/components/PropsFormField.tsx',
     // Shared context menu
     '../../client/components/CanvasElementContextMenu.tsx',
   ],

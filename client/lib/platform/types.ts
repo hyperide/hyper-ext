@@ -10,6 +10,7 @@ import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
+import type { RuntimeError } from '../../../shared/runtime-error';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -234,6 +235,22 @@ export type PlatformMessage =
       requestId: string;
       componentPath: string;
     }
+  // Typed props schema for a component (HYP-709 — PropsEditor parity in the ext).
+  // Browser uses authFetch('/api/component-props-types'); the ext host extracts via the TS
+  // Compiler API directly off disk and answers on `component:response`.
+  | {
+      type: 'component:propsTypes';
+      requestId: string;
+      filePath: string;
+      componentName?: string;
+    }
+  // Tamagui design tokens for the active project (HYP-709). Browser uses
+  // authFetch('/api/tamagui/tokens'); the ext host runs the shared static extraction core
+  // (lib/tamagui/extract-tokens) and answers on `component:response`.
+  | {
+      type: 'tamagui:getTokens';
+      requestId: string;
+    }
   | {
       type: 'component:response';
       requestId: string;
@@ -259,7 +276,7 @@ export type PlatformMessage =
 
   // Diagnostics (cross-webview sync in ext, local in SaaS)
   | { type: 'diagnostic:log'; entries: DiagnosticLogEntry[] }
-  | { type: 'diagnostic:runtimeError'; error: import('../../../shared/runtime-error').RuntimeError | null }
+  | { type: 'diagnostic:runtimeError'; error: RuntimeError | null }
   | { type: 'diagnostic:buildStatus'; status: DiagnosticState['buildStatus'] }
   | { type: 'diagnostic:clear' }
   | { type: 'diagnostic:state'; state: DiagnosticState }

@@ -75,6 +75,17 @@ function RightPanelContent() {
     };
   }, [canvas]);
 
+  // Test-only: expose the parsed source astStructure (the SAME tree the PropsEditor reads for the
+  // selected element's type) so E2E can find a node by source type and select it via the bridge.
+  // Needed because in compiled-component projects (tamagui RN) click selection resolves to the
+  // rendered primitive (View/Text), never the source-level typed component. Mirrors the existing
+  // `__hyperTestBridge` testability hook on this same webview window. No-op for users.
+  const astStructureForTest = useSharedEditorState((s) => s.astStructure);
+  useEffect(() => {
+    (window as Window & { __hyperInspectorAstStructure?: unknown[] | null }).__hyperInspectorAstStructure =
+      astStructureForTest ?? null;
+  }, [astStructureForTest]);
+
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
   const componentPath = useSharedEditorState((s) => s.currentComponent?.path);
   const insertTargetId = useSharedEditorState((s) => s.insertTargetId);

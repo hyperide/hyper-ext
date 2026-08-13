@@ -1,16 +1,26 @@
 /**
- * Props editor component that generates form based on TypeScript types
+ * Props editor — a TypeScript-type-driven form for the selected element's component props,
+ * with Tamagui design-token autocomplete (color/size/space datalists).
+ *
+ * Accessed via: RightSidebar inspector body (PropsSection), in BOTH realms — the SaaS web
+ * client and the VS Code extension right panel (HYP-709).
+ *
+ * Assumptions: every environment-backed dependency (selection + selected AST node, props schema,
+ * Tamagui tokens, prop writes) is sourced through the platform-converged seam in
+ * `@/hooks/usePropsEditorSource`. This component holds NO direct `useCanvasEngine`/`authFetch`
+ * coupling, so it renders identically in both realms — see that file's header for the seam map.
  */
 
-import type { ComponentPropsSchema } from '@shared/types/props';
 import { IconChevronDown, IconSearch } from '@tabler/icons-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import type { PropColorUIKit } from '@/components/ui/prop-color-field';
-import { useTamaguiTokens } from '@/hooks/useTamaguiTokens';
-import { useCanvasEngine, useSelectedIds } from '@/lib/canvas-engine';
-import type { ASTNode } from '@/lib/canvas-engine/types/ast';
-import { authFetch } from '@/utils/authFetch';
+import {
+  usePropsEditorSelection,
+  usePropsSchemaSource,
+  usePropWriter,
+  useTamaguiTokensSource,
+} from '@/hooks/usePropsEditorSource';
 import { PropsFormField } from './PropsFormField';
 
 interface PropsEditorProps {
@@ -21,218 +31,48 @@ interface PropsEditorProps {
 }
 
 export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps = {}) {
-  const engine = useCanvasEngine();
-  const selectedIds = useSelectedIds();
-  const { tokens: tamaguiTokens } = useTamaguiTokens();
+  const { selectedId, filePath, elementType, astNode } = usePropsEditorSelection();
+  const { tokens: tamaguiTokens } = useTamaguiTokensSource();
+  const { schema, loading, error } = usePropsSchemaSource(filePath, elementType);
+  const writeProp = usePropWriter(selectedId, filePath);
 
-  const [schema, setSchema] = useState<ComponentPropsSchema | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [propsValues, setPropsValues] = useState<Record<string, unknown>>({});
   const [isExpanded, setIsExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllProps, setShowAllProps] = useState(false);
 
-  // Get file path from metadata
-  const getFilePath = useCallback((): string | null => {
-    if (selectedIds.length === 0) {
-      return null;
-    }
-
-    const root = engine.getRoot();
-
-    // For iframe components: check root.metadata.filePath
-    if (root.metadata?.filePath) {
-      return root.metadata.filePath as string;
-    }
-
-    // For registered components: check children metadata
-    const rootChildren = root.children || [];
-    for (const childId of rootChildren) {
-      const inst = engine.getInstance(childId);
-      if (inst?.metadata?.filePath) {
-        return inst.metadata.filePath as string;
-      }
-    }
-
-    return null;
-  }, [selectedIds, engine]);
-
-  // Get selected element from AST
-  const getSelectedElementFromAST = useCallback((): ASTNode | null => {
-    if (selectedIds.length === 0) return null;
-
-    const selectedId = selectedIds[0];
-    const root = engine.getRoot();
-
-    // Helper to find node by id
-    const findNodeById = (nodes: ASTNode[], id: string): ASTNode | null => {
-      for (const node of nodes) {
-        if (node.id === id) return node;
-        if (node.children) {
-          const found = findNodeById(node.children, id);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    // Check root AST
-    const rootAst = root.metadata?.astStructure;
-    if (Array.isArray(rootAst)) {
-      const node = findNodeById(rootAst, selectedId);
-      if (node) return node;
-    }
-
-    // Check children AST
-    const rootChildren = root.children || [];
-    for (const childId of rootChildren) {
-      const inst = engine.getInstance(childId);
-      const childAst = inst?.metadata?.astStructure;
-      if (Array.isArray(childAst)) {
-        const node = findNodeById(childAst, selectedId);
-        if (node) return node;
-      }
-    }
-
-    return null;
-  }, [selectedIds, engine]);
-
-  // Get selected element type from AST
-  const getSelectedElementType = useCallback((): string | null => {
-    const node = getSelectedElementFromAST();
-    return node?.type || null;
-  }, [getSelectedElementFromAST]);
-
-  // Load props schema from API
-  /* eslint-disable react-hooks/exhaustive-deps -- selectedIds and engine are intentional triggers; getFilePath/getSelectedElementType/getSelectedElementFromAST are derived from them and not memoized stably */
+  // Seed the form's local values from the selected element's AST node whenever a schema
+  // resolves for a new selection. Optimistic local state: edits update here immediately while
+  // the async write round-trips (esp. the ext host roundtrip), then reconcile when the next
+  // astNode arrives. Keyed by selectedId so switching elements re-seeds.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: schema presence + selectedId are the intended re-seed triggers; astNode is read at seed time only.
   useEffect(() => {
-    // Guards against a stale in-flight response applying to a newer selection:
-    // if the user selects another element while the fetch is pending, the cleanup
-    // flips `cancelled` so the old response is dropped instead of populating the
-    // schema/values for the now-current element.
-    let cancelled = false;
-
-    const filePath = getFilePath();
-    const elementType = getSelectedElementType();
-
-    if (!filePath || !elementType) {
-      setSchema(null);
-      setError(null);
-      // Clear any stale loading left by a prior in-flight fetch whose `finally`
-      // is now suppressed by the cancellation guard for this selection change.
-      setLoading(false);
-      return;
+    if (schema && astNode?.props) {
+      setPropsValues(astNode.props);
+    } else if (!schema) {
+      setPropsValues({});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schema, selectedId]);
 
-    // Skip HTML elements (lowercase) - they don't have TypeScript types
-    // React components start with uppercase, HTML elements with lowercase
-    const isHtmlElement = elementType[0] === elementType[0].toLowerCase();
-    if (isHtmlElement) {
-      setSchema(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
+  const handlePropChange = (propName: string, value: unknown) => {
+    if (!selectedId) return;
+    // Update local state for immediate UI feedback, then sync to the source file.
+    setPropsValues((prev) => ({ ...prev, [propName]: value }));
+    writeProp(propName, value);
+  };
 
-    setLoading(true);
-    setError(null);
-    // Clear the previous selection's schema/values before the new lookup so a
-    // silent miss (400/404) or a slow response can't leave the prior component's
-    // props visible — and thus editable — for the now-selected element.
-    setSchema(null);
-    setPropsValues({});
-
-    // Fetch component props - server will follow imports if needed
-    const url = `/api/component-props-types?filePath=${encodeURIComponent(filePath)}&componentName=${encodeURIComponent(elementType)}`;
-
-    authFetch(url)
-      .then((res) => {
-        if (!res.ok) {
-          // For 404 or 400 errors (component without types), fail silently
-          if (res.status === 404 || res.status === 400) {
-            console.debug('[PropsEditor] Component has no TypeScript types');
-            return { success: false, silent: true };
-          }
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (cancelled) return;
-        if (data.success) {
-          setSchema({
-            componentName: data.componentName,
-            props: data.props,
-          });
-
-          // Initialize props values from AST node
-          const astNode = getSelectedElementFromAST();
-          if (astNode?.props) {
-            setPropsValues(astNode.props);
-          }
-        } else if (!data.silent) {
-          setError('Could not load component props');
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('[PropsEditor] Error loading schema:', err);
-        setError('Failed to load props schema');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedIds, engine]);
-  /* eslint-enable react-hooks/exhaustive-deps */
-
-  // Sync prop change to file
-  const syncPropToFile = useCallback(
-    (propName: string, value: unknown) => {
-      const filePath = getFilePath();
-      if (!filePath || selectedIds.length === 0) {
-        return;
-      }
-
-      // Route through engine for undo/redo support
-      engine.updateASTProp(selectedIds[0], filePath, propName, value);
-    },
-    [getFilePath, selectedIds, engine],
-  );
-
-  // Update prop value
-  const handlePropChange = useCallback(
-    (propName: string, value: unknown) => {
-      if (selectedIds.length === 0) return;
-
-      // Update local state for immediate UI feedback
-      setPropsValues((prev) => ({
-        ...prev,
-        [propName]: value,
-      }));
-
-      // Sync to file - the file change will trigger re-parse and update the canvas
-      syncPropToFile(propName, value);
-    },
-    [selectedIds, syncPropToFile],
-  );
-
-  // Don't show if no file path
-  if (!getFilePath()) {
+  // Don't show if no file path for the selection.
+  if (!filePath) {
     return null;
   }
 
   // Loading state
   if (loading) {
     return (
-      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center gap-2 text-[11px] text-gray-400">
-          <div className="animate-spin h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full" />
+      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="animate-spin h-3 w-3 border-2 border-muted-foreground border-t-transparent rounded-full" />
           Loading props...
         </div>
       </div>
@@ -242,7 +82,7 @@ export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps 
   // Error state
   if (error) {
     return (
-      <div className="px-4 py-3 border-b border-gray-200">
+      <div className="px-4 py-3 border-b border-border">
         <div className="text-[11px] text-red-500">{error}</div>
       </div>
     );
@@ -258,23 +98,25 @@ export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps 
   // No props to edit
   if (propsCount === 0) {
     return (
-      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
-        <div className="text-[11px] text-gray-400 italic">No editable props</div>
+      <div data-testid="PropsEditor" className="px-4 py-3 border-b border-border">
+        <div className="text-[11px] text-muted-foreground italic">No editable props</div>
       </div>
     );
   }
 
   return (
-    <div data-testid="PropsEditor" className="px-4 py-3 border-b border-gray-200">
+    <div data-testid="PropsEditor" className="px-4 py-3 border-b border-border">
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between w-full mb-3"
       >
-        <span className="text-xs font-semibold text-black">Component Props</span>
+        <span className="text-xs font-semibold text-foreground">Component Props</span>
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400">{propsCount}</span>
-          <IconChevronDown className={`h-3 w-3 transition-transform text-gray-400 ${isExpanded ? '' : '-rotate-90'}`} />
+          <span className="text-[10px] text-muted-foreground">{propsCount}</span>
+          <IconChevronDown
+            className={`h-3 w-3 transition-transform text-muted-foreground ${isExpanded ? '' : '-rotate-90'}`}
+          />
         </div>
       </button>
 
@@ -282,14 +124,14 @@ export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps 
         <div className="space-y-3">
           {/* Search input */}
           {propsCount > 3 && (
-            <div className="h-6 px-2 bg-gray-100 rounded flex items-center gap-1.5">
-              <IconSearch className="w-3.5 h-3.5 text-gray-400" stroke={1.5} />
+            <div className="h-6 px-2 bg-muted rounded flex items-center gap-1.5">
+              <IconSearch className="w-3.5 h-3.5 text-muted-foreground" stroke={1.5} />
               <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search props..."
-                className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 placeholder:text-gray-500 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                className="h-auto border-0 bg-transparent !text-[11px] text-foreground placeholder:text-muted-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
               />
             </div>
           )}
@@ -316,7 +158,7 @@ export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps 
                     onChange={(value) => handlePropChange(propName, value)}
                     tamaguiTokens={tamaguiTokens}
                     uiKit={uiKit}
-                    engine={engine}
+                    engine={null}
                     componentPath={componentPath}
                   />
                 ))}
@@ -326,7 +168,7 @@ export function PropsEditor({ uiKit = 'none', componentPath }: PropsEditorProps 
                   <button
                     type="button"
                     onClick={() => setShowAllProps(true)}
-                    className="w-full h-6 px-2 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center text-[11px] text-gray-600 font-medium transition-colors"
+                    className="w-full h-6 px-2 bg-muted hover:bg-accent rounded flex items-center justify-center text-[11px] text-muted-foreground font-medium transition-colors"
                   >
                     Show all ({filteredProps.length})
                   </button>

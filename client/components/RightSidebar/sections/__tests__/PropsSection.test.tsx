@@ -1,17 +1,18 @@
 /**
- * @file PropsSection tests — restored inspector props editor (HYP-437)
+ * @file PropsSection tests — props editor, SaaS (engine) realm (HYP-437, HYP-709).
  *
  * Accessed via: RightSidebar inspector body (mounts <PropsSection /> for a single
  * selected source element that exposes a typed props schema).
  *
- * Assumptions:
+ * Assumptions (SaaS / engine path — selected by `useCanvasEngineOptional()` returning an engine):
  *   - Current prop VALUES are read from the selected node in
  *     `engine.getRoot().metadata.astStructure` (per-node `{ id, type, props }`).
- *   - The props SCHEMA is fetched from `/api/component-props-types` (same endpoint
- *     InstanceEditPopup uses — proven-live).
+ *   - The props SCHEMA is fetched from `/api/component-props-types` via the browser branch
+ *     of the platform-converged seam (`@/hooks/usePropsEditorSource`).
  *   - Edits route through `engine.updateASTProp(elementId, filePath, propName, value)`
- *     — the source-AST write path, NOT the canvas.json instance REST path that
- *     InstanceEditPopup uses. Different surface (source element vs placed instance).
+ *     — the source-AST write path. The ext realm (no engine) instead routes schema/tokens
+ *     through canvasRPC and writes through usePlatformAst().updateProps; that path is covered
+ *     by the seam's own tests + the Docker e2e.
  */
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
@@ -54,17 +55,41 @@ const fakeEngine = {
 
 // ─── Module mocks (before importing the component under test) ────────────────
 
+// Engine present → the seam takes the SaaS branch for selection + writes.
 mock.module('@/lib/canvas-engine', () => ({
   useCanvasEngine: () => fakeEngine,
+  useCanvasEngineOptional: () => fakeEngine,
   useSelectedIds: () => mockState.selectedIds,
+  useSelectedIdsOptional: () => mockState.selectedIds,
 }));
 
-mock.module('@/hooks/useTamaguiTokens', () => ({
-  useTamaguiTokens: () => ({ tokens: { color: [], size: [], space: [] }, loading: false, error: null }),
+// Platform seam: browser context, inert canvas/ast (engine branch wins for writes).
+// Singletons: the real PlatformProvider memoizes these — a fresh identity each render would
+// re-trigger the schema/tokens effects forever (stuck on "Loading props...").
+const stableCanvas = { sendEvent() {}, onEvent: () => () => {} };
+const stableAst = { updateProps: async () => {} };
+mock.module('@/lib/platform', () => ({
+  usePlatformContext: () => 'browser',
+  usePlatformCanvas: () => stableCanvas,
+  usePlatformAst: () => stableAst,
+  canvasRPC: async () => ({ success: false }),
+}));
+
+// SharedEditorState hooks are called unconditionally but inert in the engine branch.
+mock.module('@/lib/platform/shared-editor-state', () => ({
+  useSelectedIds: () => [] as string[],
+  useSharedEditorState: (selector: (s: unknown) => unknown) => selector({ currentComponent: null, astStructure: null }),
 }));
 
 mock.module('@/utils/authFetch', () => ({
   authFetch: async (url: string) => {
+    if (url.includes('/api/tamagui/tokens')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, tokens: { color: [], size: [], space: [] } }),
+      };
+    }
     if (url.includes('/api/component-props-types')) {
       const compName = new URL(url, 'http://x').searchParams.get('componentName') ?? '';
       if (mockState.noSchemaTypes.includes(compName)) {
@@ -103,11 +128,12 @@ afterEach(() => {
 
 describe('PropsSection', () => {
   it('renders the props form for a selected element with a typed schema', async () => {
-    const { findByTestId, getByDisplayValue } = render(<PropsSection />);
+    const { findByTestId, findByDisplayValue } = render(<PropsSection />);
 
     expect(await findByTestId('PropsEditor')).toBeTruthy();
-    // Current value of `label` read from astStructure node props
-    expect(getByDisplayValue('Click me')).toBeTruthy();
+    // Current value of `label` read from astStructure node props (seeded once the async
+    // schema resolves, then the form values are populated from the selected AST node).
+    expect(await findByDisplayValue('Click me')).toBeTruthy();
   });
 
   it('routes prop edits through engine.updateASTProp (source-AST write path)', async () => {

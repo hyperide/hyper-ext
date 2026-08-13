@@ -1722,21 +1722,17 @@ export default function RightSidebar({
         </>
       )}
 
-      {/* Component Props — edits typed props of the selected source element via
-          engine.updateASTProp (source-AST write path). Mounted as a sibling of the
-          style-inspector fragment (gated on parsedStyles) so it still shows for
-          component instances whose styles aren't inspectable — matching the original
-          standalone <PropsEditor /> callsite (commit 869760ad^), which did NOT depend
-          on parsedStyles and was NOT inside the readonly/style-sync wrapper.
-          Gated on `engine` presence: PropsEditor calls the throwing useCanvasEngine()
-          hook, which requires a CanvasEngineProvider. That provider exists only on the
-          SaaS path; the VS Code webview renders RightSidebar without it (hence the
-          useCanvasEngineOptional above), so mounting unguarded would crash the sidebar.
-          The original monolithic callsite was SaaS-only for the same reason.
-          Self-gates further: renders nothing unless the selection has a file path +
-          a typed props schema. */}
-      {engine &&
-        selectedIds.length === 1 &&
+      {/* Component Props — edits typed props of the selected source element. Mounted as a
+          sibling of the style-inspector fragment (gated on parsedStyles) so it still shows for
+          component instances whose styles aren't inspectable — matching the original standalone
+          <PropsEditor /> callsite (commit 869760ad^), which did NOT depend on parsedStyles and
+          was NOT inside the readonly/style-sync wrapper.
+          HYP-709: now renders in BOTH realms. PropsEditor sources selection/AST, schema, tokens,
+          and writes through the platform-converged seam (@/hooks/usePropsEditorSource) instead of
+          the throwing useCanvasEngine(), so the old `engine &&` gate — which existed only to keep
+          the ext webview from crashing on a missing CanvasEngineProvider — is gone. PropsEditor
+          self-gates: renders nothing unless the selection has a file path + a typed props schema. */}
+      {selectedIds.length === 1 &&
         (canvasMode !== 'multi' || activeInstanceId) && (
           // Readonly guard mirrors the style sections (isReadonly → no edits). Unlike
           // them it is NOT blocked during style-sync: prop edits go through a separate

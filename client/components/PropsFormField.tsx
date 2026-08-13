@@ -12,6 +12,7 @@ import { PropColorField, type PropColorUIKit } from '@/components/ui/prop-color-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
+import { TokenCombobox } from '@/components/ui/token-combobox';
 
 // Helper to detect if value is a token (format: $word or $number or $word.number)
 const isTokenValue = (val: unknown): val is string => {
@@ -108,26 +109,18 @@ export function PropsFormField({
 
     return (
       <div className="space-y-1.5">
-        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+        <Label htmlFor={fieldId} className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">
-          <Input
-            id={fieldId}
-            type="text"
-            value={String(value ?? '')}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={propInfo.description || 'Enter token or value'}
-            list={`${fieldId}-tokens`}
-            className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-          />
-          <datalist id={`${fieldId}-tokens`}>
-            {tokenList.map((token) => (
-              <option key={token} value={token} />
-            ))}
-          </datalist>
-        </div>
+        <TokenCombobox
+          id={fieldId}
+          value={String(value ?? '')}
+          onChange={onChange}
+          tokens={tokenList}
+          placeholder={propInfo.description || 'Enter token or value'}
+          listTestId={`${fieldId}-tokens`}
+        />
       </div>
     );
   }
@@ -136,18 +129,18 @@ export function PropsFormField({
   if (propInfo.type === 'string') {
     return (
       <div className="space-y-1.5">
-        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+        <Label htmlFor={fieldId} className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">
+        <div className="w-full h-6 px-2 bg-muted rounded flex items-center">
           <Input
             id={fieldId}
             type="text"
             value={String(value ?? '')}
             onChange={(e) => onChange(e.target.value)}
             placeholder={propInfo.description}
-            className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+            className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
           />
         </div>
       </div>
@@ -158,11 +151,11 @@ export function PropsFormField({
   if (propInfo.type === 'number') {
     return (
       <div className="space-y-1.5">
-        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+        <Label htmlFor={fieldId} className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">
+        <div className="w-full h-6 px-2 bg-muted rounded flex items-center">
           <Input
             id={fieldId}
             type="number"
@@ -172,7 +165,7 @@ export function PropsFormField({
               onChange(Number.isNaN(num) ? undefined : num);
             }}
             placeholder={propInfo.description}
-            className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+            className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
           />
         </div>
       </div>
@@ -183,7 +176,7 @@ export function PropsFormField({
   if (propInfo.type === 'boolean') {
     return (
       <div className="flex items-center justify-between">
-        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+        <Label htmlFor={fieldId} className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
@@ -196,12 +189,12 @@ export function PropsFormField({
   if (propInfo.type === 'enum' && propInfo.enumValues) {
     return (
       <div className="space-y-1.5">
-        <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+        <Label htmlFor={fieldId} className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
         <Select value={String(value ?? '')} onValueChange={onChange}>
-          <SelectTrigger id={fieldId} className="h-6 bg-gray-100 border-0 text-[11px] text-gray-800">
+          <SelectTrigger id={fieldId} className="h-6 bg-muted border-0 text-[11px] text-foreground">
             <SelectValue placeholder="Select value" />
           </SelectTrigger>
           <SelectContent>
@@ -223,14 +216,14 @@ export function PropsFormField({
     return (
       <Accordion type="single" collapsible>
         <AccordionItem value={name}>
-          <AccordionTrigger className="text-[11px] text-gray-700">
+          <AccordionTrigger className="text-[11px] text-foreground">
             <div className="flex items-center gap-2">
               {name}
               {propInfo.required && <span className="text-red-500">*</span>}
             </div>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="space-y-3 pl-3 border-l-2 border-gray-200">
+            <div className="space-y-3 pl-3 border-l-2 border-border">
               {Object.entries(propInfo.objectSchema).map(([propName, propTypeInfo]) => (
                 <PropsFormField
                   key={propName}
@@ -263,11 +256,11 @@ export function PropsFormField({
 
     return (
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-gray-700">
+        <Label className="text-[11px] text-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="space-y-2 pl-3 border-l-2 border-gray-200">
+        <div className="space-y-2 pl-3 border-l-2 border-border">
           {arrValue.map((item, index) => (
             // eslint-disable-next-line react/no-array-index-key -- array items have no stable unique id
             <div key={index} className="flex items-start gap-2">
@@ -289,7 +282,7 @@ export function PropsFormField({
                     componentPath={componentPath}
                   />
                 ) : (
-                  <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">
+                  <div className="w-full h-6 px-2 bg-muted rounded flex items-center">
                     <Input
                       type="text"
                       value={item || ''}
@@ -298,7 +291,7 @@ export function PropsFormField({
                         newArr[index] = e.target.value;
                         onChange(newArr);
                       }}
-                      className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+                      className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
                     />
                   </div>
                 )}
@@ -338,11 +331,11 @@ export function PropsFormField({
   if (propInfo.type === 'function' || propInfo.type === 'reactNode') {
     return (
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-gray-400">
+        <Label className="text-[11px] text-muted-foreground">
           {name}
           {propInfo.required && <span className="text-red-500">*</span>}
         </Label>
-        <div className="text-[11px] text-gray-400 italic">Not editable ({propInfo.type})</div>
+        <div className="text-[11px] text-muted-foreground italic">Not editable ({propInfo.type})</div>
       </div>
     );
   }
@@ -350,18 +343,18 @@ export function PropsFormField({
   // Unknown type - show as text input
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={fieldId} className="text-[11px] text-gray-700">
+      <Label htmlFor={fieldId} className="text-[11px] text-foreground">
         {name}
         {propInfo.required && <span className="text-red-500">*</span>}
       </Label>
-      <div className="w-full h-6 px-2 bg-gray-100 rounded flex items-center">
+      <div className="w-full h-6 px-2 bg-muted rounded flex items-center">
         <Input
           id={fieldId}
           type="text"
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           placeholder={propInfo.description || 'Unknown type'}
-          className="h-auto border-0 bg-transparent !text-[11px] text-gray-800 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+          className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
         />
       </div>
     </div>
