@@ -1342,7 +1342,7 @@ describe('PreviewFileManager.ensureGitExclude', () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/.git/info/exclude',
-      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n',
+      '# HyperIDE — generated preview files\n__canvas_preview__.tsx\n__canvas_preview_standalone__.tsx\n__canvas_samples__.tsx\n*.samples.tsx\n.hyperide/\n**/test-preview/\n**/test-preview.tsx\n',
     );
     const manager = new PreviewFileManager({ projectRoot: '/project', io });
     const before = io.files.get('/project/.git/info/exclude');
@@ -2126,5 +2126,106 @@ export const SampleDefault = () => <FillPicker />;
     expect(content).toContain('Header');
     // src/ component — discovered via supplemental scan
     expect(content).toContain('Sidebar');
+  });
+});
+
+const LOGIN_SCREEN_SOURCE = `
+import React from 'react';
+
+export default function LoginScreen() {
+  return <div>Login</div>;
+}
+`;
+
+const LOGIN_SCREEN_SAMPLES_SOURCE = `
+import React from 'react';
+import LoginScreen from './LoginScreen';
+
+export default function LoginScreenSample() {
+  return (
+    <div style={{ padding: 24, background: '#f5f5f5' }}>
+      <LoginScreen />
+    </div>
+  );
+}
+`;
+
+describe('*.samples.tsx — co-located sample render files', () => {
+  it('isPreviewIneligibleByName excludes *.samples.tsx files', async () => {
+    // isPreviewIneligibleByName is not exported — test indirectly via ensureComponent:
+    // a file named LoginScreen.samples.tsx must NOT appear in the preview registry.
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/LoginScreen.tsx',
+      'src/components/LoginScreen.samples.tsx',
+    ]);
+
+    // The samples file must NOT appear in the componentRegistry or sampleRenderMap
+    expect(content).not.toContain("'src/components/LoginScreen.samples.tsx'");
+    expect(content).not.toContain('LoginScreen.samples');
+    // The real component must still be registered
+    expect(content).toContain("'src/components/LoginScreen.tsx'");
+  });
+
+  it('*.samples.tsx sibling does not cause errors when passed to ensureComponent', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
+    const manager = createManager(io);
+
+    // Should not throw — samples file is silently skipped
+    await expect(
+      manager.ensureComponent(['src/components/LoginScreen.tsx', 'src/components/LoginScreen.samples.tsx']),
+    ).resolves.toBeDefined();
+  });
+
+  it('ensureStandaloneEntry is a no-op for samples sibling — sampleRenderMap stays as generated', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/LoginScreen.tsx', LOGIN_SCREEN_SOURCE);
+    io.files.set('/project/src/components/LoginScreen.samples.tsx', LOGIN_SCREEN_SAMPLES_SOURCE);
+    const manager = createManager(io);
+
+    await manager.ensureComponent(['src/components/LoginScreen.tsx']);
+    await manager.ensureStandaloneEntry();
+
+    const standalone = io.files.get('/project/src/__canvas_preview_standalone__.tsx');
+    expect(standalone).toBeDefined();
+    // The standalone file must not reference the samples file path or import
+    expect(standalone).not.toContain('LoginScreen.samples');
+    // Standard standalone structure must be intact
+    expect(standalone).toContain('sampleRenderMap');
+    expect(standalone).toContain('createRoot');
+  });
+
+  it('multiple *.samples.tsx variants are all excluded from registry', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/components/Button.tsx', BUTTON_SOURCE);
+    io.files.set(
+      '/project/src/components/Button.samples.tsx',
+      `import React from 'react'; import { Button } from './Button'; export default () => <Button>Sample</Button>;`,
+    );
+    io.files.set('/project/src/components/Card.tsx', CARD_SOURCE);
+    io.files.set(
+      '/project/src/components/Card.samples.tsx',
+      `import React from 'react'; import Card from './Card'; export default () => <Card title="Sample" />;`,
+    );
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent([
+      'src/components/Button.tsx',
+      'src/components/Button.samples.tsx',
+      'src/components/Card.tsx',
+      'src/components/Card.samples.tsx',
+    ]);
+
+    expect(content).not.toContain("'src/components/Button.samples.tsx'");
+    expect(content).not.toContain("'src/components/Card.samples.tsx'");
+    // Real components stay
+    expect(content).toContain("'src/components/Button.tsx'");
+    expect(content).toContain("'src/components/Card.tsx'");
   });
 });

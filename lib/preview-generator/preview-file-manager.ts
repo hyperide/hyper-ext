@@ -113,7 +113,13 @@ function isPreviewIneligibleByName(fileName: string): boolean {
   const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android']);
   const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
   const TEST_SUFFIXES = new Set(['test', 'spec', 'stories']);
-  return tail.some((seg) => PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg));
+  // Co-located sample files (Component.samples.tsx) are not previewable components —
+  // they're render helpers discovered separately by ensureStandaloneEntry injection.
+  const SAMPLES_SUFFIXES = new Set(['samples']);
+  return tail.some(
+    (seg) =>
+      PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg) || SAMPLES_SUFFIXES.has(seg),
+  );
 }
 
 function isExplicitWebAppShell(componentPath: string): boolean {
@@ -455,6 +461,10 @@ export class PreviewFileManager {
    */
   async ensureComponent(componentPaths: string[]): Promise<string> {
     await this._awaitProviders();
+    // Filter out ineligible files (*.samples.tsx, *.test.tsx, etc.) before any path logic.
+    // Without this, ineligible paths would appear as perpetually-missing on every call
+    // and trigger unnecessary preview rewrites / HMR churn.
+    componentPaths = componentPaths.filter((p) => !isPreviewIneligibleByName(basename(p)));
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
 
@@ -1026,6 +1036,7 @@ export class PreviewFileManager {
       '# HyperIDE — generated preview files',
       '__canvas_preview__.tsx',
       '__canvas_preview_standalone__.tsx',
+      '__canvas_samples__.tsx',
       '*.samples.tsx',
       '.hyperide/',
       '**/test-preview/',
