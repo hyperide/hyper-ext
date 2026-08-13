@@ -1187,7 +1187,7 @@ export class PreviewFileManager {
           const thenCallback = b.arrowFunctionExpression(
             [b.identifier('m')],
             b.blockStatement([
-              b.variableDeclaration('var', [
+              b.variableDeclaration('const', [
                 b.variableDeclarator(
                   b.identifier('CanvasPreviewComp'),
                   b.memberExpression(b.identifier('m'), b.identifier('default')),
@@ -1238,12 +1238,12 @@ export class PreviewFileManager {
         // Standalone module has its own createRoot() call — just importing it is enough.
         // Replace #root node first to sever any React root the original bootstrap created,
         // preventing createRoot() conflicts when the app framework already mounted to #root.
-        importBody = `(function(){var o=document.getElementById("root");if(o&&o.parentNode){var f=o.cloneNode(false);o.parentNode.replaceChild(f,o);}})();import("${importTarget}")`;
+        importBody = `(function(){const o=document.getElementById("root");if(o&&o.parentNode){const f=o.cloneNode(false);o.parentNode.replaceChild(f,o);}})();import("${importTarget}")`;
       } else {
         // App Shell: __canvas_preview__ only exports a component — must render it explicitly.
         // Replace #root node first to sever any React root the original bootstrap created.
         // React and react-dom/client resolve from Vite's module cache (already loaded by the app).
-        importBody = `import("${importTarget}").then(function(m){var C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){var orig=document.getElementById("root");var el;if(orig&&orig.parentNode){var fr=orig.cloneNode(false);orig.parentNode.replaceChild(fr,orig);el=fr;}else{el=document.body;}mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
+        importBody = `import("${importTarget}").then(function(m){const C=m.default;if(C){Promise.all([import("react"),import("react-dom/client")]).then(function(mods){const orig=document.getElementById("root");let el;if(orig&&orig.parentNode){const fr=orig.cloneNode(false);orig.parentNode.replaceChild(fr,orig);el=fr;}else{el=document.body;}mods[1].createRoot(el).render(mods[0].createElement(C));});}})`;
       }
       const appendedSource = `${source}\n// @hyperide-managed\nif (${condition}) { ${importBody}; }\n`;
       onBeforeWrite?.();
