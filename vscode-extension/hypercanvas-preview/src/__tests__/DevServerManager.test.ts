@@ -474,5 +474,14 @@ describe('DevServerManager', () => {
       expect(setTargetPort).toHaveBeenCalledTimes(1);
       expect(setTargetPort).toHaveBeenCalledWith(3000);
     });
+
+    it('ignores Node/Bun debugger WebSocket URLs (ws://127.0.0.1:9229)', () => {
+      const setTargetPort = mock();
+      Object.assign(manager, { _previewProxy: { setTargetPort }, _port: 5174 });
+
+      firePortDetector(manager, 'Debugger listening on ws://127.0.0.1:9229/uuid');
+
+      expect(setTargetPort).not.toHaveBeenCalled();
+    });
   });
 });

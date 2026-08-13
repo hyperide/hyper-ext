@@ -723,13 +723,16 @@ export class DevServerManager {
    * "http://localhost:3000" or "Local: http://127.0.0.1:5173" and silently
    * corrects the proxy target so requests reach the server. Called once per
    * start(), subsequent calls are no-ops once _portDetected is set.
+   *
+   * Requires the http:// scheme so debugger lines ("Debugger listening on
+   * ws://127.0.0.1:9229") are never mistaken for dev-server ports.
    */
   private _maybeUpdatePortFromOutput(text: string): void {
     if (this._portDetected || !this._previewProxy) return;
-    const match = text.match(/(?:localhost|127\.0\.0\.1):(\d{4,5})/);
+    const match = text.match(/https?:\/\/(?:localhost|127\.0\.0\.1):(\d{4,5})/);
     if (!match) return;
     const detectedPort = Number(match[1]);
-    if (!Number.isFinite(detectedPort) || detectedPort <= 0) return;
+    if (!Number.isFinite(detectedPort) || detectedPort <= 0 || detectedPort > 65535) return;
     this._portDetected = true;
     if (detectedPort === this._port) return;
     console.log(
