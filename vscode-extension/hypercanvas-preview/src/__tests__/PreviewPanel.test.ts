@@ -507,7 +507,12 @@ export default function Home() {
           componentPath: string | undefined,
           propValues?: Record<string, unknown>,
           sampleName?: string,
-          options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
+          options?: {
+            componentName?: string;
+            notifySampleCreated?: boolean;
+            revealInEditor?: boolean;
+            suggestAIKey?: boolean;
+          },
         ) => Promise<boolean>;
       }
     )._handleCreateSampleFromError('app/page.tsx', undefined, 'SampleDefault', { revealInEditor: false });
