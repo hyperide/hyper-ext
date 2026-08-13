@@ -215,23 +215,62 @@ export interface DocumentTree {
 }
 
 /**
+ * "instance" terminology — three distinct concepts (HYP-290b, spec A7)
+ *
+ * The word "instance" historically meant several unrelated things in this codebase.
+ * To avoid the collision that produced wrong prior-art in the HYP-290 ticket, the
+ * map-operation plumbing uses these precise terms:
+ *
+ * - **document-instance** — a {@link ComponentInstance} in the {@link DocumentTree}
+ *   (`tree.getInstance(...)`). One node of the edited component's structure.
+ * - **canvas-instance** — a multi-placement drop of the same component at an `x/y`
+ *   position on the infinite canvas, keyed by `data-canvas-instance-id`
+ *   (`__CANVAS_INSTANCES__`). Unrelated to `.map()`; not touched here.
+ * - **map-iteration** — a single rendered item produced by a `.map()` over a data
+ *   source. Targeted by `parentMapId` (which `.map()`) + `itemIndex` (which item),
+ *   NOT by any DOM attribute. See {@link MapIterationContext}.
+ */
+
+/**
+ * Context identifying a single `.map()` iteration for the operation layer.
+ *
+ * Carried from the selection event through to where structural ops are dispatched,
+ * so a later DOM-mode op can target one rendered item instead of the whole template.
+ * Resolved from the selected AST node's `mapItem` plus the per-id `itemIndex` — no
+ * DOM-attribute (`data-canvas-instance-id`) lookup is involved (spec A1/A7).
+ */
+export interface MapIterationContext {
+  /** Identifier of the `.map()` group the selected element belongs to. */
+  parentMapId: string;
+
+  /** Sibling index of the selected item within the `.map()` render group. */
+  itemIndex: number;
+
+  /**
+   * Raw source text of the `.map()` receiver (e.g. `"items"`, `"data.users"`),
+   * captured by the parser. The data source the iteration was rendered from.
+   */
+  mapExpression: string;
+}
+
+/**
  * Selection state
  */
 export interface SelectionState {
-  /** Selected instance IDs */
+  /** Selected document-instance / AST-node IDs. */
   selectedIds: string[];
 
-  /** Hovered instance ID */
+  /** Hovered document-instance / AST-node ID. */
   hoveredId: string | null;
 
-  /** Hovered item index for map-rendered elements (null = all items) */
+  /** Hovered map-iteration index (null = whole `.map()` group / not a map iteration). */
   hoveredItemIndex: number | null;
 
   /**
-   * Item indices for map-rendered elements.
-   * When an element is rendered multiple times via .map(),
-   * this tracks which specific item was clicked.
-   * Key: uniqId, Value: itemIndex (null = all items selected)
+   * Per-id map-iteration index. When an element is rendered multiple times via
+   * `.map()`, this records which iteration was clicked so the operation layer can
+   * resolve its {@link MapIterationContext}.
+   * Key: selected id, Value: itemIndex (null = whole group / not a map iteration).
    */
   selectedItemIndices: Map<string, number | null>;
 }

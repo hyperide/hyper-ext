@@ -2,6 +2,8 @@
  * Canvas Engine - main facade class
  */
 
+import { getActiveTracer } from '../../element-tracing/active-tracer';
+import { findAstNodeBySourceLoc } from '../../element-tracing/id-bridge';
 import { loadPersistedState, savePersistedState } from '../../storage';
 import { EventEmitter } from '../events/EventEmitter';
 import type { CanvasEngineEvents, CanvasEventName } from '../events/events';
@@ -12,6 +14,7 @@ import type {
   FieldsMap,
   HistoryState,
   DocumentTree as IDocumentTree,
+  MapIterationContext,
   SelectionState,
 } from '../models/types';
 import { ASTBatchDeleteOperation } from '../operations/ASTBatchDeleteOperation';
@@ -152,8 +155,11 @@ export class CanvasEngine {
       if (Array.isArray(astStructure)) {
         const astNode = this.findASTNode(astStructure as ASTNode[], id);
         if (astNode) {
-          // Valid AST node - allow selection
+          // Valid AST node - allow selection. Clear any per-id map-iteration
+          // index from a prior selectWithItemIndex so getMapContext() doesn't
+          // report a stale itemIndex for this plain (non-item) selection.
           this.selection.selectedIds = [id];
+          this.selection.selectedItemIndices.clear();
           this.emitEvent('selection:change', {
             selectedIds: this.selection.selectedIds,
             previousIds,
@@ -176,8 +182,9 @@ export class CanvasEngine {
   }
 
   /**
-   * Select instance with specific item index (for map-rendered elements)
-   * When itemIndex is provided, only that specific item will be highlighted
+   * Select a map-iteration: a single `.map()`-rendered item identified by `id`
+   * plus its `itemIndex`. When `itemIndex` is provided, only that specific item is
+   * highlighted; the pair feeds {@link getMapContext} for the operation layer.
    */
   selectWithItemIndex(id: string, itemIndex: number | null): void {
     const previousIds = [...this.selection.selectedIds];
@@ -286,6 +293,58 @@ export class CanvasEngine {
       ...this.selection,
       selectedItemIndices: new Map(this.selection.selectedItemIndices),
     };
+  }
+
+  /**
+   * Resolve the map-iteration context for a given AST node id (HYP-290b).
+   *
+   * Looks up the node's `mapItem` in the document-instance AST structure and
+   * combines it with the per-id `itemIndex` recorded at selection time. Returns
+   * the {@link MapIterationContext} the operation layer needs to target a single
+   * `.map()` iteration, or `null` when the element is not a map iteration (or its
+   * item index is unknown). No DOM-attribute lookup is involved (spec A1/A7).
+   */
+  getMapContext(id: string): MapIterationContext | null {
+    let astNode: ASTNode | null = null;
+    for (const tree of this.getRenderedAstTrees()) {
+      astNode = this.findASTNode(tree, id);
+      if (astNode) break;
+    }
+    // Production path: a canvas click selects by `nodeRef`, not an AST node id (the
+    // parser assigns AST ids separately, so findASTNode misses real .map() children).
+    // Bridge nodeRef → AST node by source location, mirroring useElementStyleData /
+    // the id-bridge fallback. The canvas-engine ← id-bridge import is type-only, so
+    // there is no runtime import cycle.
+    if (!astNode) {
+      const source = getActiveTracer()?.getSourceByNodeRef(id);
+      if (source) {
+        for (const tree of this.getRenderedAstTrees()) {
+          astNode = findAstNodeBySourceLoc(tree, source.line, source.column);
+          if (astNode) break;
+        }
+      }
+    }
+    const mapItem = astNode?.mapItem;
+    if (!mapItem) return null;
+
+    const itemIndex = this.selection.selectedItemIndices.get(id);
+    if (itemIndex === undefined || itemIndex === null) return null;
+
+    return {
+      parentMapId: mapItem.parentMapId,
+      itemIndex,
+      mapExpression: mapItem.expression ?? '',
+    };
+  }
+
+  /**
+   * Map-iteration context for the current single selection, or `null` when the
+   * selection is empty/multiple or the selected element is not a map iteration.
+   * Convenience for the operation layer, which dispatches against one selection.
+   */
+  getSelectedMapContext(): MapIterationContext | null {
+    if (this.selection.selectedIds.length !== 1) return null;
+    return this.getMapContext(this.selection.selectedIds[0]);
   }
 
   /**
@@ -1096,6 +1155,28 @@ export class CanvasEngine {
     this.emitEvent('history:change', {
       state: this.history.getState(),
     });
+  }
+
+  /**
+   * Rendered AST structures to resolve a selected node id against.
+   *
+   * Prefers `sampleStructure` (the tree actually rendered when a sample drives the
+   * canvas) and falls back to `astStructure`, across the root document-instance and
+   * its children. Mirrors the resolution used by element-tracing so map-iteration
+   * lookups match the ids that selection records (spec A1/A7).
+   */
+  private getRenderedAstTrees(): ASTNode[][] {
+    const trees: ASTNode[][] = [];
+    const root = this.tree.getRoot();
+    const rootAst = root.metadata?.sampleStructure ?? root.metadata?.astStructure;
+    if (Array.isArray(rootAst)) trees.push(rootAst as ASTNode[]);
+
+    for (const childId of root.children ?? []) {
+      const child = this.tree.getInstance(childId);
+      const childAst = child?.metadata?.sampleStructure ?? child?.metadata?.astStructure;
+      if (Array.isArray(childAst)) trees.push(childAst as ASTNode[]);
+    }
+    return trees;
   }
 
   /**
