@@ -46,7 +46,7 @@ function createBrowserEditorAdapter(): EditorAdapter {
       }
     };
 
-    // nosemgrep: insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+    // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
     window.addEventListener('message', messageHandler);
   };
 
@@ -291,7 +291,7 @@ function attachIframeMessageListener() {
   if (iframeMessageListenerAttached) return;
   iframeMessageListenerAttached = true;
 
-  // nosemgrep: insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg?.type) return;
@@ -353,7 +353,7 @@ function createVSCodeIframeEditorAdapter(): EditorAdapter {
           }
         };
 
-        // nosemgrep: insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+        // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
         window.addEventListener('message', handler);
 
         // Request active file

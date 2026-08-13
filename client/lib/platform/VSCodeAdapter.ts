@@ -97,7 +97,7 @@ function attachMessageListener() {
   if (isMessageListenerAttached) return;
   isMessageListenerAttached = true;
 
-  // nosemgrep: insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
+  // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- message type is validated; origin varies between SaaS and VS Code webview contexts
   window.addEventListener('message', (event) => {
     const message = event.data as PlatformMessage;
     if (message?.type) {

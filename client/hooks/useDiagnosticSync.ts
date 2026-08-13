@@ -284,7 +284,7 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
       }
     };
 
-    // nosemgrep: insufficient-postmessage-origin-validation -- type-checked iframe console capture, same-origin
+    // nosemgrep: javascript.browser.security.insufficient-postmessage-origin-validation.insufficient-postmessage-origin-validation -- type-checked iframe console capture, same-origin
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [addConsoleLogs]);
