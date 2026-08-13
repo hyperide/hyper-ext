@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as clientFileStore from '@/lib/client-file-store';
 import type { ProjectData } from '@/pages/Editor/components/hooks/useProjectControl';
+import { authFetch } from '@/utils/authFetch';
 import { INERT_POLL_STATUS, type ProjectRuntime, type RuntimeStatus } from './types';
 
 interface UseNodePodRuntimeOptions {
@@ -90,11 +91,21 @@ export function useNodePodRuntime(project: ProjectData | null, opts: UseNodePodR
       appendLog('[nodepod] runtime booted');
 
       appendLog('[files] loading from OPFS...');
-      const files = await clientFileStore.readFiles(project.id);
+      let files = await clientFileStore.readFiles(project.id);
       if (Object.keys(files).length === 0) {
-        throw new Error('Project has no files. Create the project with AI first.');
+        // First run in this browser: OPFS is empty. Bootstrap from the server,
+        // which serves the project source via GET /api/projects/:id/files, then
+        // seed OPFS so subsequent starts read locally.
+        appendLog('[files] OPFS empty — bootstrapping from server...');
+        const res = await authFetch(`/api/projects/${project.id}/files`);
+        if (!res.ok) throw new Error(`Failed to bootstrap files: ${res.status}`);
+        const { files: serverFiles } = (await res.json()) as { files: Record<string, string> };
+        await clientFileStore.seedFiles(project.id, serverFiles);
+        files = serverFiles;
+        appendLog(`[files] seeded ${Object.keys(files).length} files into OPFS`);
+      } else {
+        appendLog(`[files] ${Object.keys(files).length} files from OPFS`);
       }
-      appendLog(`[files] ${Object.keys(files).length} files from OPFS`);
       if (isStale()) return;
 
       // Pin Vite to 7.3.1 in both deps fields — Vite 8 has HMR WS bug in NodePod v1.8.2
