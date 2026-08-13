@@ -402,7 +402,6 @@ export class PreviewPanel {
         msg.componentPath as string | undefined,
         msg.propValues as Record<string, unknown> | undefined,
         msg.sampleName as string | undefined,
-        { suggestAIKey: true },
       );
       return;
     }
@@ -564,12 +563,7 @@ export class PreviewPanel {
     componentPath: string | undefined,
     propValues?: Record<string, unknown>,
     sampleName?: string,
-    options?: {
-      componentName?: string;
-      notifySampleCreated?: boolean;
-      revealInEditor?: boolean;
-      suggestAIKey?: boolean;
-    },
+    options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
   ): Promise<boolean> {
     if (!componentPath) return false;
 
@@ -639,78 +633,42 @@ export class PreviewPanel {
       return true;
     }
 
-    // AI generation is a fallback only for components with required props (complex case).
-    // For simple components (no required props), the deterministic scaffold is sufficient.
-    // When propDefs is null (parse error), we conservatively skip AI — we can't fill unknown props.
-    //
-    // IMPORTANT: when AI cannot run for a required-prop component, we return false instead of
-    // writing a propless scaffold. A broken scaffold short-circuits the existingRegex check on
-    // subsequent "Create Sample" clicks, permanently locking out the AI path.
+    // When no prop values were provided, try AI generation first (BUG-6: auto-generate props).
+    // Falls through to the deterministic scaffold if AI is not configured or returns null.
     const hasPropValues = propValues && Object.keys(propValues).length > 0;
-    let sampleWrittenByAI = false;
-
     if (!hasPropValues) {
-      const propDefs = await this._panelRouter.componentService
-        ?.getComponentDefinitions(componentPath)
-        .catch(() => null);
-      const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
-
-      if (hasRequiredProps) {
-        const apiKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
-        if (apiKey) {
-          const aiGenerated = await ensureSample({
-            io: new VSCodeFileIO(),
-            absolutePath: absPath,
-            componentName,
-            sampleName: exportName,
-            generate: createExtensionSampleGenerator(this._context),
-          });
-          if (aiGenerated.exists) {
-            sampleWrittenByAI = true;
-            // Fall through to shared reveal + watcher block below
-          } else {
-            // AI tried and failed — don't write a broken propless scaffold
-            return false;
-          }
-        } else {
-          if (options?.suggestAIKey) {
-            const action = await vscode.window.showInformationMessage(
-              `"${componentName}" has required props. Configure an AI key to auto-fill them.`,
-              'Configure AI Key',
-            );
-            if (action === 'Configure AI Key') {
-              void vscode.commands.executeCommand('hypercanvas.configureAIKey');
-            }
-          }
-          // No key — writing a propless scaffold would permanently block the AI path on
-          // subsequent clicks via the existingRegex short-circuit. Return false so
-          // ComponentErrorOverlay stays open and the user can configure a key and retry.
-          return false;
+      const aiGenerated = await ensureSample({
+        io: new VSCodeFileIO(),
+        absolutePath: absPath,
+        componentName,
+        sampleName: exportName,
+        generate: createExtensionSampleGenerator(this._context),
+      });
+      if (aiGenerated.exists) {
+        if (notifySampleCreated) {
+          await this._onSampleCreatedCallback?.(componentPath);
         }
+        return true;
       }
     }
 
-    // Generate a minimal sample scaffold when AI did not write the sample
-    let updatedCode: string | undefined;
-    if (!sampleWrittenByAI) {
-      const propEntries = this._buildPropEntries(propValues);
-      const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
-      updatedCode = `${sourceCode}\n${scaffold}\n`;
-      try {
-        const fileUri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
-      } catch {
-        void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
-        return false;
-      }
-      console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
+    // Generate a minimal sample scaffold — include user-provided prop values if available
+    const propEntries = this._buildPropEntries(propValues);
+    const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
+
+    // Append to file
+    const updatedCode = `${sourceCode}\n${scaffold}\n`;
+    try {
+      const fileUri = vscode.Uri.file(absPath);
+      await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
+    } catch {
+      void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
+      return false;
     }
 
     if (revealInEditor) {
-      // For AI-written samples re-read the file; for scaffold use the content just written
-      const codeToSearch =
-        updatedCode ?? Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(absPath))).toString('utf-8');
-      const lines = codeToSearch.split('\n');
+      // Open the file and position cursor at the scaffold
+      const lines = updatedCode.split('\n');
       const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
       const sampleIdx = lines.findIndex((line) => line.includes(exportName));
       const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
@@ -722,6 +680,8 @@ export class PreviewPanel {
         selection: new vscode.Range(targetLine, 0, targetLine, 0),
       });
     }
+
+    console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
 
     // Watch file for sample deletion — notify webview to reset sampleCreated state
     if (this._panel) {
