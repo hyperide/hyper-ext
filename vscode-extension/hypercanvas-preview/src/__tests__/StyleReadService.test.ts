@@ -396,6 +396,233 @@ describe('StyleReadService — i18n binding detection', () => {
     }
   });
 
+  it('does not treat a non-i18n hook destructuring t as custom i18n via import-chain', async () => {
+    // const { t } = useTheme() — the local name `t` matches an i18n callee, but the hook it
+    // comes from is not an i18n hook. The import-chain gate must only accept origins whose hook
+    // name looks like i18n (isLikelyI18nOrigin veto); otherwise `useTheme().t` is misclassified
+    // as custom i18n. No package.json and no locale files → import-chain is the only path that
+    // could fire, so this isolates the veto.
+    const JSX_THEME_T = `const Greeting = () => {
+  const { t } = useTheme();
+  return <p className="text-lg">{t("habits.walks")}</p>;
+};`;
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_THEME_T, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: JSX_THEME_T });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    // Veto fires: useTheme is not an i18n hook → library stays null → detectI18nBinding
+    // reports unsupported instead of a false 'i18n' binding.
+    expect(result.i18nText?.kind).not.toBe('i18n');
+  });
+
+  it('still detects custom i18n when t comes from an i18n-named hook (veto allows i18n origins)', async () => {
+    // Counterpart to the veto test: const { t } = useTranslation() must still be accepted by the
+    // import-chain gate, so the veto narrows but does not block legitimate i18n hooks.
+    const JSX_USE_TRANSLATION = `const Greeting = () => {
+  const { t } = useTranslation();
+  return <p className="text-lg">{t("habits.walks")}</p>;
+};`;
+    const LOCALES_EN_LOCAL = JSON.stringify({ habits: { walks: 'Go for a walk' } });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_USE_TRANSLATION, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    // No package.json: import-chain alone must recognise the i18n hook and resolve the key.
+    const fileIO = makeFileIO({
+      [FILE_PATH]: JSX_USE_TRANSLATION,
+      '/workspace/locales/en.json': LOCALES_EN_LOCAL,
+    });
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+    }
+  });
+
+  it('detects namespaced custom layout under src/i18n (multi-dir locale probe)', async () => {
+    // The namespaced-layout probe historically only scanned locales/{locale}/{ns}.json. Projects
+    // that keep dictionaries under src/i18n/ or messages/ were missed. The probe must iterate all
+    // known flat-locale dirs so e.g. src/i18n/en/common.json is discovered.
+    const JSX_USE_COPY_NS = `const Greeting = () => {
+  const { t } = useCopy();
+  return <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;
+};`;
+    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_USE_COPY_NS, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const files: Record<string, string> = {
+      [FILE_PATH]: JSX_USE_COPY_NS,
+      '/workspace/src/i18n/en/common.json': LOCALES_COMMON,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.namespace).toBe('common');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+    }
+  });
+
+  it('detects namespaced custom layout under messages/ (multi-dir locale probe)', async () => {
+    // Second multi-dir variant: messages/{locale}/{ns}.json must also be probed.
+    const JSX_USE_COPY_NS = `const Greeting = () => {
+  const { t } = useCopy();
+  return <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;
+};`;
+    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_USE_COPY_NS, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const files: Record<string, string> = {
+      [FILE_PATH]: JSX_USE_COPY_NS,
+      '/workspace/messages/en/common.json': LOCALES_COMMON,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.namespace).toBe('common');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+    }
+  });
+
+  it('detects namespaced custom layout under public/locales (multi-dir locale probe)', async () => {
+    // Regression test for codex P2: NAMESPACED_LOCALE_DIRS omitted public/locales, which
+    // FLAT_LOCALE_DIRS in resolve-i18n-resource.ts already supports. A custom hook like
+    // useCopy().t(...) in a project with public/locales/{locale}/{ns}.json was misclassified
+    // as unsupported because the probe never scanned public/locales/.
+    const JSX_USE_COPY_NS = `const Greeting = () => {
+  const { t } = useCopy();
+  return <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;
+};`;
+    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_USE_COPY_NS, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const files: Record<string, string> = {
+      [FILE_PATH]: JSX_USE_COPY_NS,
+      '/workspace/public/locales/en/common.json': LOCALES_COMMON,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.namespace).toBe('common');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+    }
+  });
+
+  it('detects namespaced custom layout under src/locales (multi-dir locale probe)', async () => {
+    // Regression test for codex P2: NAMESPACED_LOCALE_DIRS omitted src/locales, which
+    // FLAT_LOCALE_DIRS in resolve-i18n-resource.ts already supports. A custom hook like
+    // useCopy().t(...) in a project with src/locales/{locale}/{ns}.json was misclassified
+    // as unsupported because the probe never scanned src/locales/.
+    const JSX_USE_COPY_NS = `const Greeting = () => {
+  const { t } = useCopy();
+  return <p className="text-lg">{t("habits.walks", { ns: "common" })}</p>;
+};`;
+    const LOCALES_COMMON = JSON.stringify({ 'habits.walks': 'Go for a walk' });
+
+    const nodeMap = new NodeMapService();
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(JSX_USE_COPY_NS, 'src/App.tsx');
+    const pEntry = entries.find((e) => e.tag === 'p');
+    if (!pEntry) throw new Error('<p> not found in fixture');
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', pEntry.loc.line, pEntry.loc.column);
+
+    const files: Record<string, string> = {
+      [FILE_PATH]: JSX_USE_COPY_NS,
+      '/workspace/src/locales/en/common.json': LOCALES_COMMON,
+    };
+    const fileIO: FileIO & { listFiles: (dir: string, exts: string[]) => Promise<string[]> } = {
+      ...makeFileIO(files),
+      listFiles: async (dir: string, exts: string[]) => {
+        return Object.keys(files).filter((f) => f.startsWith(`${dir}/`) && exts.some((e) => f.endsWith(e)));
+      },
+    };
+
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    expect(result.i18nText?.kind).toBe('i18n');
+    if (result.i18nText?.kind === 'i18n') {
+      expect(result.i18nText.library).toBe('custom');
+      expect(result.i18nText.key).toBe('habits.walks');
+      expect(result.i18nText.namespace).toBe('common');
+      expect(result.i18nText.resolvedText).toBe('Go for a walk');
+    }
+  });
+
   it('returns i18nText with null resolvedText when locale file is missing', async () => {
     const nodeMap = new NodeMapService();
     const helper = new NodeMapService();

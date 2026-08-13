@@ -27,10 +27,11 @@ import type {
   StyleReadManager,
 } from '@lib/style-read/types';
 import type { NodeRef } from '@shared/element-tracing/types';
+import type { CalleeOrigin } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nBinding, resolveCalleeOriginAtLocation } from '@shared/i18n-text/detect-i18n-binding';
 import { detectI18nPackage } from '@shared/i18n-text/detect-i18n-package';
 import { type DomTextI18nMatch, resolveI18nByDomText } from '@shared/i18n-text/resolve-by-dom-text';
-import { discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
+import { FLAT_LOCALE_DIRS, discoverLayout, resolveI18nResource } from '@shared/i18n-text/resolve-i18n-resource';
 import type { I18nBindingResult, I18nLibrary, I18nTextBinding, PackageJsonDeps } from '@shared/i18n-text/types';
 import { isBundleArtifactPath } from './bundle-artifact-path';
 import { AdapterFactory } from './i18n/AdapterFactory';
@@ -51,6 +52,11 @@ const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
   resolvedColorScheme: 'light',
   source: 'vscode',
 };
+
+// Reuse the shared directory list from resolve-i18n-resource so this probe and discoverLayout
+// never drift. Covers the namespace-undefined case: discoverLayout only scans namespaced layouts
+// ({dir}/{locale}/{namespace}.json) when namespace is known, so we probe here for the case where
+// no namespace was resolved yet. Uses FLAT_LOCALE_DIRS to include public/locales, src/locales, etc.
 
 export class StyleReadService {
   private _workspaceRoot: string;
@@ -297,9 +303,13 @@ export class StyleReadService {
     // Import-chain analysis: walk imports/destructures to identify custom i18n helpers.
     // Runs before locale-file heuristics so hook patterns (useLanguage, useTranslation) are
     // recognised even when locale files are absent or haven't been discovered yet.
+    // Veto via isLikelyI18nOrigin: a callee origin that merely exists (kind !== 'unknown') is
+    // not enough — `const { t } = useTheme()` destructures a `t` that has nothing to do with
+    // i18n. Only accept origins whose hook name / import path looks like i18n so non-i18n hooks
+    // destructuring `t` are not misclassified as custom i18n.
     if (library === null) {
       const calleeResult = resolveCalleeOriginAtLocation(content, exprLoc);
-      if (calleeResult && calleeResult.origin.kind !== 'unknown') {
+      if (calleeResult && isLikelyI18nOrigin(calleeResult.origin)) {
         library = 'custom';
         confidence = 'import-chain';
       }
@@ -314,19 +324,24 @@ export class StyleReadService {
       }
     }
 
-    // Also detect namespaced custom layouts: locales/{locale}/{namespace}.json
+    // Also detect namespaced custom layouts: {dir}/{locale}/{namespace}.json
     // discoverLayout skips this branch when namespace is undefined, so probe separately.
+    // Probe every known locale dir, not just locales/ — dictionaries also live under
+    // src/i18n/ and messages/, which the single-dir scan silently missed.
     if (library === null && this._fileIO.listFiles) {
-      const localesDir = `${this._workspaceRoot}/locales`;
-      const namespacedFiles = await this._fileIO.listFiles(localesDir, ['.json']).catch(() => []);
-      const prefix = `${localesDir}/`;
-      const hasNamespacedFiles = namespacedFiles.some((f) => {
-        const rel = f.slice(prefix.length);
-        return rel.split('/').length === 2;
-      });
-      if (hasNamespacedFiles) {
-        library = 'custom';
-        confidence = confidence ?? 'locale-heuristic';
+      for (const relDir of FLAT_LOCALE_DIRS) {
+        const localesDir = `${this._workspaceRoot}/${relDir}`;
+        const namespacedFiles = await this._fileIO.listFiles(localesDir, ['.json']).catch(() => []);
+        const prefix = `${localesDir}/`;
+        const hasNamespacedFiles = namespacedFiles.some((f) => {
+          const rel = f.slice(prefix.length);
+          return rel.split('/').length === 2;
+        });
+        if (hasNamespacedFiles) {
+          library = 'custom';
+          confidence = confidence ?? 'locale-heuristic';
+          break;
+        }
       }
     }
 
@@ -561,6 +576,22 @@ export class StyleReadService {
       confidence,
     };
   }
+}
+
+/**
+ * Veto for the import-chain detection gate. A resolved callee origin (kind !== 'unknown')
+ * only proves the `t` symbol came from *somewhere*, not that the somewhere is i18n. Accept
+ * the origin as custom-i18n only when its hook name or import path looks i18n-related, so a
+ * `const { t } = useTheme()` is not mistaken for a translation helper.
+ */
+function isLikelyI18nOrigin(origin: CalleeOrigin): boolean {
+  if (origin.kind === 'hook-destructure') {
+    return /i18n|translation|intl|locale|language|trans|lingui/i.test(origin.hookName ?? '');
+  }
+  if (origin.kind === 'import') {
+    return /i18n|intl|locale|translation|lang|message|lingui/i.test(origin.importFrom ?? '');
+  }
+  return false;
 }
 
 function getClassNameExpressionFacts(

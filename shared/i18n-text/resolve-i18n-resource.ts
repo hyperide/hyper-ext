@@ -77,7 +77,8 @@ async function discoverMergedLayout(
 }
 
 // Well-known flat locale directory layouts, tried in priority order.
-const FLAT_LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'];
+// Exported so consumers like StyleReadService can reuse the same list without drift.
+export const FLAT_LOCALE_DIRS = ['locales', 'public/locales', 'src/i18n', 'src/locales', 'messages'] as const;
 
 export async function discoverLayout(
   projectRoot: string,
