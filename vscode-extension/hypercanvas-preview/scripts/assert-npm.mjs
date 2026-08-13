@@ -5,8 +5,10 @@
  * `vscode` external ("Cannot find package 'vscode'"). See AGENTS.md.
  *
  * Wired as the package's `preinstall`, so a `bun install` here fails fast with a
- * clear message instead of silently writing a bun.lock that breaks `vsce package`
- * later. Fires ONLY when bun is detected — `npm ci` / `npm install` pass through.
+ * clear message. Note bun still writes `bun.lock` to disk BEFORE this preinstall runs,
+ * so this is only the early human-facing warning — the durable stop against a committed
+ * lockfile is the lefthook hook (`no-ext-bun-lock`) + CI (`ci.yml`) + `.gitignore`.
+ * Fires ONLY when bun is detected — `npm ci` / `npm install` pass through.
  */
 const ua = process.env.npm_config_user_agent || '';
 const isBun = ua.startsWith('bun') || typeof process.versions.bun === 'string';

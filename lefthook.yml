@@ -75,3 +75,19 @@ pre-commit:
           exit 1
         fi
       stage_fixed: false
+    no-ext-bun-lock:
+      # The VS Code extension (vscode-extension/hypercanvas-preview) is npm-only:
+      # @vscode/vsce runs `npm list` during packaging and a bun.lock breaks `vsce package`.
+      # The preinstall guard (scripts/assert-npm.mjs) fails a `bun install` but bun writes
+      # bun.lock to disk BEFORE preinstall runs, so the lockfile artifact still appears.
+      # This hook is the durable stop: it blocks committing a bun.lock/bun.lockb in the ext.
+      # CI re-checks this on every PR (ci.yml extension-build) as the backstop.
+      run: |
+        BAD=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^vscode-extension/hypercanvas-preview/bun\.lockb?$' || true)
+        if [ -n "$BAD" ]; then
+          echo "BLOCKED: a bun lockfile is staged in the npm-only VS Code extension:" >&2
+          echo "$BAD" >&2
+          echo "  The extension is npm-only — a bun.lock breaks 'vsce package' (@vscode/vsce runs 'npm list')." >&2
+          echo "  Remove it:  git rm --cached <file> && rm <file>   then use 'npm ci' in the ext dir, not bun." >&2
+          exit 1
+        fi
