@@ -10,6 +10,7 @@ import { CONSOLE_CAPTURE_EVENT } from '@shared/diagnostic-types';
 import type { RuntimeError } from '@shared/runtime-error';
 import type { ProjectStatus } from '@shared/types/statuses';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNetworkAwarePolling } from '@/hooks/useNetworkAwarePolling';
 import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnectingEventSource';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiagnosticStore } from '@/stores/diagnosticStore';
@@ -260,15 +261,19 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
     ),
   });
 
-  // Polling fallback
-  useEffect(() => {
-    if (!projectId || loadingInitial || !usePolling) return;
-    if (containerStatus === 'stopped') return;
+  // Polling fallback — network-aware: pauses when offline, resumes on reconnect.
+  const logPollEnabled = !!projectId && !loadingInitial && usePolling && containerStatus !== 'stopped';
 
-    setConnected(true);
-    const pollInterval = setInterval(() => fetchLogs(false), 2000);
-    return () => clearInterval(pollInterval);
-  }, [projectId, loadingInitial, usePolling, fetchLogs, containerStatus, setConnected]);
+  // Preserve the previous "polling => connected" signal that the plain setInterval set.
+  useEffect(() => {
+    if (logPollEnabled) setConnected(true);
+  }, [logPollEnabled, setConnected]);
+
+  useNetworkAwarePolling(() => fetchLogs(false), {
+    interval: 2000,
+    enabled: logPollEnabled,
+    deps: [projectId],
+  });
 
   // Listen for console capture messages from iframe
   useEffect(() => {
@@ -285,56 +290,57 @@ export function useDiagnosticSync({ projectId, containerStatus, runtimeError, pr
   }, [addConsoleLogs]);
 
   // Fetch K8s metadata (events, restart info, previous logs) — push to store
-  useEffect(() => {
+  const fetchMetadata = useCallback(async () => {
     if (!projectId) return;
 
-    const fetchMetadata = async () => {
-      // Previous logs
-      try {
-        const res = await authFetch(`/api/docker/logs/${projectId}/previous?lines=100`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.logs) {
-            const logLines: string[] = data.logs.split('\n').filter((line: string) => line.trim());
-            addLogs(
-              logLines.map((line) => ({
-                line,
-                timestamp: Date.now() - 1_000_000, // ensure they sort before current logs
-                source: 'server' as const,
-                isError: false,
-              })),
-            );
-          }
+    // Previous logs
+    try {
+      const res = await authFetch(`/api/docker/logs/${projectId}/previous?lines=100`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logs) {
+          const logLines: string[] = data.logs.split('\n').filter((line: string) => line.trim());
+          addLogs(
+            logLines.map((line) => ({
+              line,
+              timestamp: Date.now() - 1_000_000, // ensure they sort before current logs
+              source: 'server' as const,
+              isError: false,
+            })),
+          );
         }
-      } catch {
-        // ignore
       }
+    } catch {
+      // ignore
+    }
 
-      // K8s events
-      try {
-        const res = await authFetch(`/api/docker/events/${projectId}?limit=20`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.events) {
-            addLogs(
-              data.events.map((e: { type: string; reason: string; message: string; timestamp: string }) => ({
-                line: `[K8s ${e.type}] ${e.reason}: ${e.message}`,
-                timestamp: new Date(e.timestamp).getTime(),
-                source: 'system' as const,
-                isError: e.type === 'Warning',
-              })),
-            );
-          }
+    // K8s events
+    try {
+      const res = await authFetch(`/api/docker/events/${projectId}?limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.events) {
+          addLogs(
+            data.events.map((e: { type: string; reason: string; message: string; timestamp: string }) => ({
+              line: `[K8s ${e.type}] ${e.reason}: ${e.message}`,
+              timestamp: new Date(e.timestamp).getTime(),
+              source: 'system' as const,
+              isError: e.type === 'Warning',
+            })),
+          );
         }
-      } catch {
-        // ignore
       }
-    };
-
-    fetchMetadata();
-    const interval = setInterval(fetchMetadata, 30000);
-    return () => clearInterval(interval);
+    } catch {
+      // ignore
+    }
   }, [projectId, addLogs]);
+
+  // Network-aware metadata poll: immediate fetch on enable, pauses offline, resumes on reconnect.
+  useNetworkAwarePolling(fetchMetadata, {
+    interval: 30000,
+    enabled: !!projectId,
+    deps: [projectId],
+  });
 
   // ── Postgres persistence ──
 

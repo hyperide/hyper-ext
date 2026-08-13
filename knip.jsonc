@@ -29,16 +29,12 @@
     "shared/scripts/iframe-console-capture.js",
     // DOUBTFUL — pending CTO decision (HYP-489 follow-up ticket). NOT confirmed
     // dead; do not delete without a product call:
-    // - useNetworkAwarePolling: orphaned member of a still-live network-handling
-    //   feature (siblings useNetworkAwareFetch/useOnReconnect/networkStore/
-    //   NetworkStatusIndicator are all consumed). The concept (preserve data on
-    //   polling error) is useful — reconnect it or drop it, a roadmap call.
     // - WorkspacePicker: a workspace-switcher UI component with no current
     //   callsite; may be a not-yet-wired feature rather than dead scaffolding.
     // - PushPopover/**: the component is unused, BUT git-push popover STATE
     //   (isPushPopoverOpen/setIsPushPopoverOpen) is live in gitStore + SidebarHeader,
     //   suggesting a half-wired feature, not dead code.
-    "client/hooks/useNetworkAwarePolling.ts",
+    // (useNetworkAwarePolling was here — now consumed by useDiagnosticSync, HYP-518.)
     "client/components/WorkspacePicker.tsx",
     "client/components/PushPopover/**",
   ],
