@@ -1253,10 +1253,12 @@ export class AstService {
 
   async getElementLocation(
     _filePath: string,
-    _elementId: string,
+    elementId: string,
     nodeRef?: NodeRef,
   ): Promise<{ line: number; column: number } | null> {
-    return getElementLocation(this._queryDeps(), _filePath, _elementId, nodeRef);
+    // elementId is used: when no explicit nodeRef is passed it IS the ref (non-LSP callers).
+    // _filePath stays unused — the ref carries its own file; resolution scans all tracked files.
+    return getElementLocation(this._queryDeps(), _filePath, elementId, nodeRef);
   }
 
   /**

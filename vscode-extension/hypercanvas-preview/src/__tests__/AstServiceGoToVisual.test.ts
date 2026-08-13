@@ -45,4 +45,40 @@ describe('AstService go-to-visual: findElementAtPosition nodeRef', () => {
     expect(result?.nodeRef).toBe(sourceRef(button));
     expect(result?.nodeRef).not.toBe(button.nodeRef); // not the synthetic counter ref
   });
+
+  // Multiline-element source: the opening tag spans several lines, so its attributes sit on
+  // lines AFTER the element's start. A cursor parked on an attribute line is still inside the
+  // element, so findElementAtPosition must resolve THAT element. The old code keyed the node
+  // map on the raw cursor line (which has no element start) → line-only fallback → nothing.
+  const MULTILINE_SOURCE = `export function App() {
+  return (
+    <main>
+      <button
+        className="save"
+        type="submit"
+      >
+        Save
+      </button>
+    </main>
+  );
+}
+`;
+
+  it('resolves a multiline element from a cursor on a non-start (attribute) line', async () => {
+    const componentPath = '/workspace/src/App.tsx';
+    const service = new AstService('/workspace', new InMemoryFileIO({ [componentPath]: MULTILINE_SOURCE }));
+    await service.ensureInitialized();
+
+    const button = service.nodeMapService.getNodeMap(componentPath)?.find((e) => e.tag === 'button');
+    if (!button) throw new Error('expected button entry');
+
+    // The `<button` opening tag starts on line 4; `className="save"` is line 5. Park the cursor
+    // there (1-based line / 1-based column as VS Code sends). Before the fix this missed.
+    const result = await service.findElementAtPosition('src/App.tsx', 5, 9);
+
+    expect(result?.tagName).toBe('button');
+    expect(result?.nodeRef).toBeDefined();
+    expect(result?.nodeRef).toMatch(SOURCE_REF_FORMAT);
+    expect(result?.nodeRef).toBe(sourceRef(button)); // the element's START loc, not the cursor line
+  });
 });

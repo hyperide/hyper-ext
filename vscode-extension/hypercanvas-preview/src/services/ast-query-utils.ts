@@ -4,7 +4,7 @@
  */
 
 import * as t from '@babel/types';
-import type { NodeRef } from '@shared/element-tracing/types';
+import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { extractElementSource } from '@lib/ast/operations';
 import { findElementAtPosition as findElementAtPositionInAST } from '@lib/ast/traverser';
 import type { NodeMapService } from '@lib/element-tracing/node-map-service';
@@ -19,7 +19,11 @@ export interface QueryDeps {
   };
   nodeMapService: NodeMapService;
   resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) => FindElementResult | null;
-  resolveNodeMapEntry: (nodeRef: NodeRef) => { parentRef: string | null; children: string[]; nodeRef: string } | null;
+  // Tolerant node-map resolver (AstService._resolveNodeMapEntry): parses a source-location
+  // `fileName:line:column` ref via resolveSourceLocation, else falls back to the synthetic
+  // `filePath:counter` form. Returns the full entry — getElementLocation needs `.loc`, the
+  // sibling navigators only read parentRef/children/nodeRef.
+  resolveNodeMapEntry: (nodeRef: NodeRef) => NodeMapEntry | null;
   normalizeNodeRef: (nodeRef: NodeRef) => string;
 }
 
@@ -38,7 +42,18 @@ export async function findElementAtPosition(
     const nameNode = result.element.openingElement.name;
     const tagName = t.isJSXIdentifier(nameNode) ? nameNode.name : 'unknown';
 
-    const sourceLocation = { fileName: absolutePath, line, column: column - 1 };
+    // Node-map entries are keyed on each element's START position (`node-map-builder` stores
+    // `node.loc.start`, the JSX opening `<`). Query with the MATCHED element's own start loc —
+    // not the raw cursor — so a cursor placed anywhere inside a multiline element (e.g. on an
+    // attribute line) still resolves to that element via an exact key hit instead of missing
+    // and falling through to the line-only fallback (which returns the first/wrong element on
+    // the cursor's line, or nothing). Babel `loc` is 1-based line / 0-based column, exactly how
+    // node-map keys are built, so feed it directly. Fall back to cursor coords (1-based → Babel
+    // 0-based) only when the element has no loc.
+    const elementStart = result.element.loc?.start;
+    const sourceLocation = elementStart
+      ? { fileName: absolutePath, line: elementStart.line, column: elementStart.column }
+      : { fileName: absolutePath, line, column: column - 1 };
     const entry = deps.nodeMapService.resolveSourceLocation(sourceLocation);
 
     // Go-to-visual sends this nodeRef to the iframe, which resolves it against its fiber
@@ -62,12 +77,21 @@ export async function findElementAtPosition(
 export async function getElementLocation(
   deps: QueryDeps,
   _filePath: string,
-  _elementId: string,
+  elementId: string,
   nodeRef?: NodeRef,
 ): Promise<{ line: number; column: number } | null> {
   try {
-    if (nodeRef) {
-      const entry = deps.nodeMapService.resolveNodeRef(nodeRef);
+    // Non-LSP callers — MCP `hyper_navigate_to_element` (onNavigate) and SyncPositionService's
+    // legacy cursor-sync fallback — pass only `(componentPath, elementId)`; the elementId IS the
+    // ref. Mirror getElementCode / getMasterComponentLocation and fall back to elementId when no
+    // explicit nodeRef is given. Resolve through the TOLERANT resolveNodeMapEntry: those callers
+    // send a source-location ref (`fileName:line:column`), which a bare resolveNodeRef (exact
+    // match on the synthetic `filePath:counter` form only) always missed — so Go to Code silently
+    // no-op'd for them. resolveNodeMapEntry parses source refs via resolveSourceLocation and only
+    // then falls back to the synthetic form the LSP path (PanelRouter) passes as the 3rd arg.
+    const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
+    if (effectiveNodeRef) {
+      const entry = deps.resolveNodeMapEntry(effectiveNodeRef);
       if (entry) {
         return { line: entry.loc.line, column: entry.loc.column };
       }

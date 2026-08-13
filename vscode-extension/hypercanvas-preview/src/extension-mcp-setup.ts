@@ -6,6 +6,27 @@ import type { PanelRouter } from './PanelRouter';
 import type { PreviewPanel } from './PreviewPanel';
 import type { StateHub } from './StateHub';
 import type { DiagnosticHub } from './DiagnosticHub';
+import type { AstService } from './services/AstService';
+
+/**
+ * MCP `hyper_navigate_to_element` handler: resolve an element ref to its source location and
+ * navigate the editor there. Extracted from the inline onNavigate closure so the 0-based →
+ * 1-based column conversion (the off-by-one guard) is unit-testable without standing up the
+ * whole MCP server. `navigate` is injected (defaults to goToCode) for the same reason.
+ */
+export async function navigateToElement(
+  astService: Pick<AstService, 'getElementLocation'>,
+  filePath: string,
+  elementId: string,
+  navigate: typeof goToCode = goToCode,
+): Promise<void> {
+  const location = await astService.getElementLocation(filePath, elementId);
+  if (!location) return;
+  // getElementLocation returns a Babel 0-based column; goToCode expects a 1-based column (it
+  // subtracts 1 for the VS Code Position). Add 1 like the other callers (SyncPositionService,
+  // goToCodeSelected) — otherwise navigation lands one char left and column 0 underflows to -1.
+  await navigate(filePath, location.line, location.column + 1);
+}
 
 export function setupMcpServer(
   context: vscode.ExtensionContext,
@@ -24,12 +45,7 @@ export function setupMcpServer(
     stateHub,
     diagnosticHub,
     workspaceRoot,
-    onNavigate: async (filePath, elementId) => {
-      const location = await astService.getElementLocation(filePath, elementId);
-      if (location) {
-        await goToCode(filePath, location.line, location.column);
-      }
-    },
+    onNavigate: (filePath, elementId) => navigateToElement(astService, filePath, elementId),
     onRefresh: () => previewPanel?.refresh(),
     onOpenComponent: (path) => {
       stateHub?.applyUpdate({
