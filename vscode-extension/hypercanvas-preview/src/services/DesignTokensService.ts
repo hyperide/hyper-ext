@@ -13,6 +13,11 @@ import * as path from 'node:path';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
+/**
+ * Bucket a design token sorts into. Public vocabulary paired with
+ * {@link DesignToken.category} for consumers grouping tokens.
+ * @public
+ */
 export type DesignTokenCategory = 'colors' | 'typography' | 'spacing' | 'shadows' | 'other';
 
 export interface DesignToken {

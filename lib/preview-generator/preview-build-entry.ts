@@ -1,8 +1,8 @@
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import type { FileIO } from '../ast/file-io';
 import {
+  detectEntryRootProviderShell,
   detectExportStyle,
-  detectProviderShell,
   detectRouterShell,
   detectSelfBootstrapRoot,
   detectSSRHooks,
@@ -185,15 +185,17 @@ export async function buildEntry(
     }
   }
 
-  // HYP-546 (provider-shell gate, narrowed by HYP-758) — exclude pure provider-wrapper
-  // shells in entryRootPaths. A pure shell imports *Provider symbols AND exports a
-  // component that accepts {children} to wrap (e.g. Providers.tsx). Components that merely
-  // USE a provider in their own JSX (e.g. App.tsx with <TooltipProvider> around its own
-  // layout) are NOT shells and must NOT be excluded — they are real components that enter
-  // the registry. The narrowed detectProviderShell now requires the children-param check.
+  // HYP-546 (provider-shell gate, narrowed by HYP-758) — exclude provider shells in
+  // entryRootPaths. A shell either imports *Provider symbols AND exports a component
+  // that accepts {children} to wrap (e.g. Providers.tsx), OR is an entry-root component
+  // whose render tree is pure provider composition with no host elements of its own
+  // (conloca-style `App()` wrapping `<AuthRouter/>` in providers). Components that merely
+  // USE a provider around their OWN layout (e.g. App.tsx with <TooltipProvider> around a
+  // <div> tree) are NOT shells and must NOT be excluded — they are real components that
+  // enter the registry (HYP-758). See detectEntryRootProviderShell for the boundary.
   let isProviderShell = false;
   try {
-    isProviderShell = detectProviderShell(sourceCode);
+    isProviderShell = detectEntryRootProviderShell(sourceCode);
   } catch {
     isProviderShell = false;
   }

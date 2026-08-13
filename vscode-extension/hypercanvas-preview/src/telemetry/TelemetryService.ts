@@ -29,7 +29,13 @@ import { createTelemetrySender, type TelemetrySender } from './sender';
 const CONFIG_SECTION = 'hypercanvas.telemetry';
 const FLUSH_INTERVAL_MS = 30000;
 
-/** Truncate a sha256 hex digest — enough to dedupe, too short to reverse. */
+/**
+ * Truncate a sha256 hex digest — enough to dedupe, too short to reverse.
+ * The documented PII-scrubbing API for event emitters: the PII RULE in
+ * events.ts instructs callers to send `hashString(message)` instead of raw
+ * user/source-derived strings.
+ * @public
+ */
 export function hashString(input: string): string {
   return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
@@ -312,5 +318,8 @@ export class TelemetryService {
   }
 }
 
-/** Re-export for callers building props inline. */
+/**
+ * Re-export for callers building props inline.
+ * @public
+ */
 export type { TelemetryValue, TelemetryProps };

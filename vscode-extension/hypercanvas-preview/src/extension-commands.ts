@@ -40,10 +40,16 @@ import {
 /**
  * Minimal telemetry surface threaded into commands. Avoids importing the full
  * TelemetryService/SessionTelemetry types into this large command module.
+ * Exported as the contract wiring code (extension.ts) satisfies structurally.
+ * @public
  */
 export interface CommandTelemetry {
   track(name: string, props?: Record<string, string | number | boolean>): void;
 }
+/**
+ * Session-counter counterpart of {@link CommandTelemetry} — same wiring seam.
+ * @public
+ */
 export interface CommandSession {
   incCommand(): void;
   onInvoke(key: string): void;

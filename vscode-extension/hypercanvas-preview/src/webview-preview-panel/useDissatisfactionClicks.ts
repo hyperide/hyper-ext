@@ -33,6 +33,7 @@ const ERROR_WINDOW_MS = 3000;
  * generic is parameterized over the telemetry shape (the same out-of-band
  * bridging pattern `runtime:error` uses). The host message router validates the
  * event name against the allow-list.
+ * @public
  */
 export interface TelemetryEventMessage {
   type: 'telemetry:event';

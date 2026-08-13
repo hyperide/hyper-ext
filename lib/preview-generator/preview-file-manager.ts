@@ -34,7 +34,7 @@ import { clearSkipWorktree, ensureGitExclude, ensureSkipWorktree, ensureStandalo
 import { buildEntry, computeImportPath } from './preview-build-entry';
 import { getSampleFilePath } from './sample-ensurer';
 import {
-  detectProviderShell,
+  detectEntryRootProviderShell,
   detectPushStateRouterShell,
   extractMountedRootImportSources,
   scanSampleExports,
@@ -326,7 +326,7 @@ export class PreviewFileManager {
       }
       let isShell = false;
       try {
-        isShell = detectProviderShell(source);
+        isShell = detectEntryRootProviderShell(source);
       } catch {
         isShell = false;
       }

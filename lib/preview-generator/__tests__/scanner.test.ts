@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   containsReactRootMount,
   detectCompoundExports,
+  detectEntryRootProviderShell,
   detectExportStyle,
   detectProviderShell,
   detectPushStateRouterShell,
@@ -632,6 +633,111 @@ describe('detectProviderShell', () => {
       export default function Page() { return <div />; }
     `;
     expect(detectProviderShell(source)).toBe(false);
+  });
+});
+
+describe('detectEntryRootProviderShell', () => {
+  // Reconciles HYP-546 with HYP-758: on top of the {children}-wrapper check it also
+  // treats PURE PROVIDER COMPOSITION (provider element, zero host elements in the
+  // exported component's own body) as a shell. Callers still gate on entryRootPaths.
+
+  it('returns true for the conloca-style App: providers wrapping a component, no own DOM (HYP-546)', () => {
+    // The regression fixture: same-file AuthRouter DOES render a <div>, but that is a
+    // different component — App's own body has no host elements and must stay a shell.
+    const source = `
+      import { AuthProvider, useAuth } from './auth/use-auth';
+      import { FeatureFlagsProvider } from './feature-flags';
+      export default function App() {
+        return (
+          <FeatureFlagsProvider>
+            <AuthProvider><AuthRouter /></AuthProvider>
+          </FeatureFlagsProvider>
+        );
+      }
+      function AuthRouter() {
+        const { state } = useAuth();
+        return <div>{state.kind}</div>;
+      }
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(true);
+  });
+
+  it("returns FALSE for the shadcn-linear App: provider around the component's OWN layout (HYP-758)", () => {
+    const source = `
+      import { TooltipProvider } from '@/components/ui/tooltip';
+      import { Sidebar } from '@/components/Sidebar';
+      function App() {
+        return (
+          <TooltipProvider delayDuration={200}>
+            <div className="flex h-screen overflow-hidden">
+              <Sidebar />
+            </div>
+          </TooltipProvider>
+        );
+      }
+      export default App;
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(false);
+  });
+
+  it('returns true for a {children}-forwarding Providers wrapper (detectProviderShell case)', () => {
+    const source = `
+      import { ThemeProvider } from './theme';
+      import type { ReactNode } from 'react';
+      export const AppProviders = ({ children }: { children: ReactNode }) => (
+        <ThemeProvider>{children}</ThemeProvider>
+      );
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(true);
+  });
+
+  it('returns false when no provider is imported, even for a DOM-free composition', () => {
+    const source = `
+      import { Dashboard } from './Dashboard';
+      export default function App() { return <Dashboard />; }
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(false);
+  });
+
+  it('detects a <Ctx.Provider> member-expression element as provider composition', () => {
+    const source = `
+      import { ThemeProvider } from './theme';
+      import { AppCtx } from './ctx';
+      export default function App() {
+        return <AppCtx.Provider value={null}><Body /></AppCtx.Provider>;
+      }
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(true);
+  });
+
+  it('resolves a named `export { App }` to its top-level function (HYP-546 shape, named export)', () => {
+    const source = `
+      import { AuthProvider } from './auth/use-auth';
+      function App() { return <AuthProvider><Router /></AuthProvider>; }
+      export { App };
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(true);
+  });
+
+  it('treats a lowercase member-expression element (motion.div) as a host element', () => {
+    const source = `
+      import { ThemeProvider } from './theme';
+      import { motion } from 'framer-motion';
+      export default function App() {
+        return <ThemeProvider><motion.div animate={{ x: 1 }} /></ThemeProvider>;
+      }
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(false);
+  });
+
+  it('lets the DEFAULT export decide: real default component + named provider helper is NOT a shell', () => {
+    // A co-exported wrapper helper must not condemn the real default component.
+    const source = `
+      import { ThemeProvider } from './theme';
+      export function WithTheme() { return <ThemeProvider><Body /></ThemeProvider>; }
+      export default function App() { return <div className="app"><Body /></div>; }
+    `;
+    expect(detectEntryRootProviderShell(source)).toBe(false);
   });
 });
 

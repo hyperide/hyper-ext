@@ -33,6 +33,12 @@ export interface DissatisfactionThresholds {
   errorThenQuitMs: number;
 }
 
+/**
+ * Default detector tuning. Exported as the staged configuration surface for
+ * threshold overrides (the telemetry plan spec tracks per-signal tuning);
+ * the constructor falls back to it when no thresholds are injected.
+ * @public
+ */
 export const DEFAULT_DISSATISFACTION_THRESHOLDS: DissatisfactionThresholds = {
   quickUndoMs: 5000,
   retryThreshold: 3,

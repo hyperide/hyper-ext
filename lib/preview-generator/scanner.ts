@@ -677,6 +677,154 @@ export function detectProviderShell(sourceCode: string): boolean {
 }
 
 /**
+ * Detect whether a file is an ENTRY-ROOT provider shell — the shape excluded from the
+ * preview registry when the file is the SPA entry root (HYP-546). Reconciles HYP-546
+ * with HYP-758, which are contradictory on `detectProviderShell` alone:
+ *
+ *  - HYP-546 (conloca): `App()` with NO children param whose render tree is PURE
+ *    PROVIDER COMPOSITION (`<FeatureFlagsProvider><AuthProvider><AuthRouter/></…>`,
+ *    zero host/DOM elements of its own) is wiring, not content — rendering it
+ *    standalone fires provider-consumer hooks outside the providers main.tsx mounts.
+ *    Must stay OUT of the registry.
+ *  - HYP-758 (shadcn-linear): `App()` with NO children param that renders its OWN
+ *    layout (`<TooltipProvider><div className=…>…`) is a real previewable component.
+ *    Must stay IN the registry (excluding it wedged the preview on "Generating
+ *    sample..." forever).
+ *
+ * So on top of the narrowed `detectProviderShell` ({children}-forwarding wrappers),
+ * this also treats as a shell any exported component whose JSX contains a `*Provider`
+ * element but NO host (lowercase/intrinsic) element — "pure provider composition".
+ * The presence of a host element is the HYP-758 signal that the component owns real
+ * layout. Only meaningful for entry-root candidates: callers must still gate on
+ * `entryRootPaths` membership, exactly like the `detectProviderShell` gate it extends.
+ */
+export function detectEntryRootProviderShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  if (!hasProviderImportFromAst(ast)) return false;
+  if (exportedComponentAcceptsChildrenFromAst(ast)) return true;
+  return exportedComponentIsPureProviderCompositionFromAst(ast);
+}
+
+type ComponentFnNode = {
+  type: 'FunctionDeclaration' | 'ArrowFunctionExpression' | 'FunctionExpression';
+  body?: unknown;
+};
+
+/**
+ * Resolve exported components to their function nodes: default-exported
+ * function/arrow (inline or via a top-level identifier) and named-exported
+ * function/const declarations. Used by the pure-provider-composition check to
+ * scope the JSX scan to the exported component's OWN body — same-file private
+ * components (e.g. conloca's `AuthRouter` with its `<div>`) must not leak host
+ * elements into the verdict.
+ *
+ * When the file HAS a default export, only that node is returned: the SPA entry
+ * root is default-imported in the mounted shape this feeds (see
+ * `extractMountedRootImportSources`), and letting a co-exported named helper
+ * (e.g. a small provider wrapper next to a real default component) decide the
+ * shell verdict would wrongly exclude the real component. Named exports are the
+ * fallback when no default component exists.
+ */
+function exportedComponentFunctionsFromAst(ast: ParsedProgram): ComponentFnNode[] {
+  const topLevelByName = new Map<string, ComponentFnNode>();
+  for (const node of ast.program.body) {
+    if (node.type === 'FunctionDeclaration' && node.id) {
+      topLevelByName.set(node.id.name, node as ComponentFnNode);
+    }
+    if (node.type === 'VariableDeclaration') {
+      for (const decl of node.declarations) {
+        const init = (decl as { init?: { type: string } }).init;
+        const id = (decl as { id?: { type: string; name?: string } }).id;
+        if (!init || id?.type !== 'Identifier' || !id.name) continue;
+        if (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') {
+          topLevelByName.set(id.name, init as ComponentFnNode);
+        }
+      }
+    }
+  }
+
+  const isFn = (n: { type: string } | undefined | null): n is ComponentFnNode =>
+    !!n &&
+    (n.type === 'FunctionDeclaration' || n.type === 'ArrowFunctionExpression' || n.type === 'FunctionExpression');
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ExportDefaultDeclaration') continue;
+    const decl = node.declaration as { type: string; name?: string };
+    if (isFn(decl)) return [decl];
+    if (decl.type === 'Identifier' && decl.name && topLevelByName.has(decl.name)) {
+      return [topLevelByName.get(decl.name)!];
+    }
+  }
+
+  const result: ComponentFnNode[] = [];
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportNamedDeclaration') {
+      const decl = node.declaration as { type: string; declarations?: unknown[] } | null | undefined;
+      if (isFn(decl as { type: string } | null | undefined)) result.push(decl as ComponentFnNode);
+      else if (decl?.type === 'VariableDeclaration' && Array.isArray(decl.declarations)) {
+        for (const varDecl of decl.declarations) {
+          const init = (varDecl as { init?: { type: string } }).init;
+          if (isFn(init)) result.push(init);
+        }
+      }
+      for (const spec of (node as { specifiers?: { type: string; local?: { name?: string } }[] }).specifiers ?? []) {
+        if (spec.type !== 'ExportSpecifier') continue;
+        const local = spec.local?.name;
+        if (local && topLevelByName.has(local)) result.push(topLevelByName.get(local)!);
+      }
+    }
+  }
+  return result;
+}
+
+/** The rendered name of a JSX element: `Foo`, `Foo.Bar` → `Bar`, `div` → `div`. */
+function jsxElementName(nameNode: { type?: string; name?: unknown; property?: unknown } | undefined): string | null {
+  if (!nameNode) return null;
+  if (nameNode.type === 'JSXIdentifier' && typeof nameNode.name === 'string') return nameNode.name;
+  if (nameNode.type === 'JSXMemberExpression') {
+    return jsxElementName(nameNode.property as { type?: string; name?: unknown });
+  }
+  return null;
+}
+
+/**
+ * True when an exported component's JSX is pure provider composition: it
+ * renders a `*Provider` element and NO host (lowercase intrinsic) element in
+ * its own body. The default-exported component decides alone when present
+ * (see `exportedComponentFunctionsFromAst`); otherwise any named export
+ * counts. See `detectEntryRootProviderShell` for the HYP-546/HYP-758
+ * boundary this encodes.
+ */
+function exportedComponentIsPureProviderCompositionFromAst(ast: ParsedProgram): boolean {
+  for (const fn of exportedComponentFunctionsFromAst(ast)) {
+    let hasProviderElement = false;
+    let hasHostElement = false;
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object' || hasHostElement) return;
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item);
+        return;
+      }
+      const node = value as { type?: string; name?: unknown } & Record<string, unknown>;
+      if (node.type === 'JSXOpeningElement') {
+        const name = jsxElementName(node.name as { type?: string });
+        if (name) {
+          if (/^[a-z]/.test(name)) hasHostElement = true;
+          else if (name.endsWith('Provider')) hasProviderElement = true;
+        }
+      }
+      for (const key of Object.keys(node)) {
+        if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') continue;
+        visit(node[key]);
+      }
+    };
+    visit(fn.body);
+    if (hasProviderElement && !hasHostElement) return true;
+  }
+  return false;
+}
+
+/**
  * Extract the set of RELATIVE import sources for components rendered inside any
  * `createRoot(...).render(<tree/>)` (or legacy `ReactDOM.render(<tree/>)`) call —
  * i.e. the entry file's mounted application shell and the local components it

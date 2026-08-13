@@ -289,4 +289,10 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * Companion re-exports: consumers of the classifier annotate its results
+ * (a dimension and its WHY-table rows) from this module without also
+ * importing ../types.
+ * @public
+ */
 export type { SupportDimension, SupportEvidence };

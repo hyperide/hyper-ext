@@ -13,6 +13,12 @@
 
 import * as vscode from 'vscode';
 
+/**
+ * globalState key recording that the one-time notice was shown. Exported as
+ * the stable reference for future reset/opt-in flows and tests (the telemetry
+ * plan spec tracks the notice feature).
+ * @public
+ */
 export const TELEMETRY_NOTICE_SHOWN_KEY = 'hypercanvas.telemetry.noticeShown';
 const ENABLED_SETTING = 'hypercanvas.telemetry.enabled';
 

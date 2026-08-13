@@ -149,7 +149,11 @@ export const CSS_SYSTEM_TO_ADAPTER_ID: Record<CssSystem, CssSystemId | null> = {
  */
 export type SupportStatus = 'supported' | 'inspect-only' | 'needs-setup' | 'unsupported' | 'unknown';
 
-/** The five support dimensions classified per (sub-)repo. */
+/**
+ * The five support dimensions classified per (sub-)repo. Public vocabulary
+ * keyed by {@link SupportDimension.id}.
+ * @public
+ */
 export type SupportDimensionId = 'framework' | 'bundler' | 'styleSystem' | 'router' | 'packageManager';
 
 /** A single row in a dimension's WHY table — what was detected and where. */

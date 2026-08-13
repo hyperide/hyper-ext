@@ -317,9 +317,15 @@ function resolveImportPath(
           for (const mapping of mappings) {
             let resolvedMapping = mapping;
 
-            // Replace * with captured group if present
+            // Substitute the captured group for the '*' wildcard. This is tsconfig
+            // path-mapping resolution, not sanitization: a mapping holds at most one
+            // '*' per the TS spec, but replaceAll keeps CodeQL's
+            // js/incomplete-sanitization quiet and is correct for malformed
+            // multi-star mappings too. The function replacer stops `$`-patterns in
+            // the captured import segment from being interpreted.
             if (match[1] !== undefined) {
-              resolvedMapping = mapping.replace('*', match[1]); // nosemgrep: incomplete-sanitization -- TypeScript path mapping resolution, not security sanitization
+              const captured = match[1];
+              resolvedMapping = mapping.replaceAll('*', () => captured);
             }
 
             // Resolve relative to baseUrl

@@ -131,7 +131,10 @@ export const TelemetryEvents = {
   dissatisfactionErrorClick: 'dissatisfaction.errorClick',
 } as const;
 
-/** Union of every valid event name. */
+/**
+ * Union of every valid event name. Public vocabulary for emitters/tests.
+ * @public
+ */
 export type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
 
 /**
@@ -163,19 +166,28 @@ export const WEBVIEW_ALLOWED_EVENTS: ReadonlySet<string> = new Set<string>([
 // Enum-ish value vocabularies (kept narrow so dashboards stay aggregatable).
 // ---------------------------------------------------------------------------
 
-/** Categorized error class for a preview render failure. */
+/**
+ * Categorized error class for a preview render failure. Public vocabulary.
+ * @public
+ */
 export type PreviewErrorClass = 'componentError' | 'runtimeError' | 'componentMissing';
 
 /** Coarse error category used by preview + devServer failures. */
 export type ErrorCategory = 'process_not_defined' | 'provider_context' | 'module_missing' | 'syntax' | 'other';
 
-/** Outcome of a wrapped command or AI request. */
+/**
+ * Outcome of a wrapped command or AI request. Public vocabulary.
+ * @public
+ */
 export type Outcome = 'ok' | 'error' | 'cancelled' | 'aborted';
 
 /** Where a handled error originated (for `error.handled`). */
 export type HandledErrorWhere = 'aiBridge' | 'devServer' | 'preview' | 'mcp' | 'panelRouter' | 'telemetry';
 
-/** Kind of unhandled process-level error. */
+/**
+ * Kind of unhandled process-level error. Public vocabulary.
+ * @public
+ */
 export type UnhandledErrorKind = 'unhandledRejection' | 'uncaughtException';
 
 /**
