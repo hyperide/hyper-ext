@@ -116,11 +116,17 @@ export class AstService {
    * doesn't set it — `updateStyles`'s auto-wrap retry then runs best-effort, unverified.
    */
   private _verifyComputedStyle?: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>;
+  private _verifyPollBudget?: { delayMs: number; maxAttempts: number };
 
   setVerifyComputedStyleProvider(
     provider: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>,
   ): void {
     this._verifyComputedStyle = provider;
+  }
+
+  /** Test seam: shrink the HMR-settle poll budget so tests don't burn real seconds. */
+  setVerifyPollBudget(budget: { delayMs: number; maxAttempts: number }): void {
+    this._verifyPollBudget = budget;
   }
 
   /** Convert relative nodeRef (src/foo.tsx:10:5) to absolute (/workspace/src/foo.tsx:10:5) */
@@ -324,6 +330,7 @@ export class AstService {
       // non-forwarding-component pre-write check resolves imported components identically.
       getAliasMap: (importerFilePath: string) => this._loadAliasMap(importerFilePath),
       verifyComputedStyle: this._verifyComputedStyle,
+      verifyPollBudget: this._verifyPollBudget,
       resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
         this._resolveElement(ast, nodeRef, filePath),
       projectDefaultCssSystem: this._projectDefaultCssSystem,

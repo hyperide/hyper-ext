@@ -18,6 +18,21 @@
  *      OWN definition, which would leak the change to every other usage) and verify THAT landed.
  *   4. Only once wrap is ineligible or fails to verify does this surface the last-resort warning
  *      — and by then the file is restored to its pre-edit content, never left with debris.
+ *   5. HYP-1162 — cascade-inert utility escalation (direct path, verify-gated): a dev server
+ *      whose stylesheets nest the Tailwind preflight inside a cascade layer that OUTRANKS the
+ *      top-level `utilities` layer (live-verified on conloca: cms-spa main.css declares
+ *      `@layer …, utilities, cms-admin, …` and nests the whole Tailwind stack — preflight's
+ *      `* { margin:0; padding:0 }` included — inside `@layer cms-admin`) makes every NEWLY
+ *      WRITTEN utility class cascade-inert: the HMR round-trip works end-to-end (vite pushes
+ *      the css-update, the iframe swaps the stylesheet, the DOM class appears) but the rule
+ *      never wins the cascade, so the computed style never changes. When the live preview
+ *      verify PROVES the class write did not land, the same edit is escalated to an inline
+ *      `style={{…}}` override on the element (inline beats all cascade layers) — the same
+ *      redirect style-write-executor already applies for inline/var/module-driven writes.
+ *      The class write is NOT rolled back (it is inert but harmless, and a future stylesheet
+ *      fix reactivates it); the escalation only fires on a PROVEN failure (verify provider
+ *      wired + value unchanged after the poll budget), so a slow-HMR false positive costs an
+ *      inline duplicate of the intended value, never a lost edit.
  *
  * NOTE on scope: step 2 does NOT gate on runtime verify even when `deps.verifyComputedStyle` is
  * available. This repo's only computed-style read today is a simple before/after diff (no HMR-
@@ -31,6 +46,7 @@
 
 import generate from '@babel/generator';
 import type * as t from '@babel/types';
+import { applyInlineStyleUpdate } from '@lib/ast/inline-style-mutator';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import { runStyleWriteTransaction } from '@lib/style-write/transaction/index.node';
@@ -84,6 +100,8 @@ export interface UpdateStylesDeps {
    * explicitly deferred gap (see the ticket's follow-up note).
    */
   verifyComputedStyle?: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>;
+  /** Test seam: override the HMR-settle poll budget (defaults VERIFY_POLL_DELAY_MS/MAX_ATTEMPTS). */
+  verifyPollBudget?: { delayMs: number; maxAttempts: number };
   /**
    * HYP-987 P1 #3 — the iframe-relative (pre-re-root) elementId to address the preview iframe's
    * `findElementsByRef` for the write-verify RPC, threaded per call from PanelRouter. In a
@@ -149,7 +167,7 @@ export async function updateStyles(
 
   if (forwardCheck.kind !== 'not-forwarding') {
     return writeDirectCandidate(
-      { styles, state, selectedSourceTabId, domClasses, ast, result, resolvedPath },
+      { elementId, styles, state, selectedSourceTabId, domClasses, ast, result, resolvedPath },
       deps,
       contentBeforeWrite,
     );
@@ -171,6 +189,7 @@ export async function updateStyles(
 }
 
 interface DirectCandidateInput {
+  elementId: string;
   styles: Record<string, string>;
   state: string | undefined;
   selectedSourceTabId: string | undefined;
@@ -180,12 +199,28 @@ interface DirectCandidateInput {
   resolvedPath: string;
 }
 
-/** Candidate 1 — today's only path: write through the shared style-write planner/executor, B0-transactional. */
+/**
+ * Candidate 1 — write through the shared style-write planner/executor, B0-transactional.
+ * HYP-1162: when a live-preview verify is wired and PROVES the write never changed the computed
+ * style (cascade-inert utility — see the file header step 5), escalate the same edit to an
+ * inline `style={{…}}` override, the only write that beats an arbitrarily hostile layer stack.
+ */
 async function writeDirectCandidate(
   input: DirectCandidateInput,
   deps: UpdateStylesDeps,
   contentBeforeWrite: string | undefined,
 ): Promise<UpdateStylesResult> {
+  const cssProperties = Object.keys(input.styles);
+  // HYP-987 P1 #3 — verify addresses the iframe by its PRE-re-root id (threaded per call), same
+  // as the non-forwarding path; both ids coincide outside a monorepo sub-project.
+  const verifyElementId = deps.verifyElementId ?? input.elementId;
+  const canVerify = !!deps.verifyComputedStyle && isBaseState(input.state) && cssProperties.length > 0;
+  // Snapshot BEFORE the class write — the after-write polls compare against this to PROVE
+  // landing (or non-landing) instead of assuming it.
+  const beforeSnapshot = canVerify
+    ? await deps.verifyComputedStyle?.(verifyElementId, verifyRequestKeys(cssProperties)).catch(() => null)
+    : null;
+
   const writeResult = await runStyleWriteTransaction({
     execute: executeStyleWriteRequest,
     baseFileIO: deps.fileIO,
@@ -209,7 +244,145 @@ async function writeDirectCandidate(
   for (const mutatedFile of writeResult.mutatedFiles) {
     if (isJsxSourceFile(mutatedFile)) await deps.updateNodeMap(mutatedFile);
   }
+
+  // HYP-1162 — the class write is on disk but that says nothing about the CASCADE. Only escalate
+  // on a PROVEN non-landing (`false`); `null` (no verify capability / read error) keeps today's
+  // best-effort behavior, and `true` means HMR delivered — nothing more to do. A transaction that
+  // mutated nothing is a no-op repeat write — verifying it would read an unchanged-computed edit
+  // as "didn't land" and escalate a duplicate, so it skips verify entirely.
+  if (beforeSnapshot && writeResult.mutatedFiles.length > 0) {
+    // Ownership baseline for the escalation's CAS check, captured BEFORE the verify window
+    // opens: the escalation re-reads the file ~VERIFY_POLL_DELAY_MS × VERIFY_POLL_MAX_ATTEMPTS
+    // later and must refuse to write when the bytes no longer match — a concurrent save in
+    // that window is foreign content this op must not absorb (P1, HYP-1023 family).
+    const postClassWriteContent = await deps.fileIO.readFile(input.resolvedPath).catch(() => null);
+    const landed = await verifyLanded(deps, verifyElementId, cssProperties, beforeSnapshot);
+    if (landed === false) {
+      const escalation = await escalateCascadeInertWrite(
+        input,
+        deps,
+        cssProperties,
+        verifyElementId,
+        beforeSnapshot,
+        postClassWriteContent,
+      );
+      if (escalation) {
+        return {
+          success: true,
+          resolvedPath: input.resolvedPath,
+          contentBeforeWrite,
+          ...(escalation.warning ? { warning: escalation.warning } : {}),
+          ...(escalation.skipUndoTracking ? { skipUndoTracking: true } : {}),
+        };
+      }
+    }
+  }
   return { success: true, resolvedPath: input.resolvedPath, contentBeforeWrite };
+}
+
+/** What the cascade-inert escalation resolved about the file's ownership: an advisory warning
+ *  when one needs surfacing, and skipUndoTracking whenever the op cannot PROVE it owns the final
+ *  content — the same rule the wrap path applies (a coarse whole-file undo entry recorded over
+ *  foreign content would erase that content on the next Undo). Undefined means the escalation
+ *  never touched the file and the plain class-write undo entry is correct. */
+interface EscalationOutcome {
+  warning?: StyleForwardingWarning;
+  skipUndoTracking?: boolean;
+}
+
+/**
+ * HYP-1162 — the direct class write provably lost the cascade (see file header step 5). Re-parse
+ * the current file, re-find the SAME element by position (the class write only touched its
+ * className, so the opening-element start position is stable), and merge the edit into its
+ * inline `style` — the universal floor that no stylesheet layer stack can outrank. The inert
+ * class is kept (harmless; reactivates if the stylesheet's layer order is ever fixed), matching
+ * the executor's documented literal-className + inline-style coexistence contract.
+ *
+ * The element name for the persistent-failure warning comes from the opening tag. The outcome
+ * carries a StyleForwardingWarning when the escalation was aborted (concurrent save) or when even
+ * the inline override could not be proven to land — the strongest possible write is on disk by
+ * then, so the file is kept and the warning is advisory.
+ */
+async function escalateCascadeInertWrite(
+  input: DirectCandidateInput,
+  deps: UpdateStylesDeps,
+  cssProperties: string[],
+  verifyElementId: string,
+  beforeSnapshot: Record<string, string>,
+  postClassWriteContent: string | null,
+): Promise<EscalationOutcome | undefined> {
+  const tagName = jsxOpeningTagName(input.result.element.openingElement.name) ?? 'element';
+  const currentContent = await deps.fileIO.readFile(input.resolvedPath).catch(() => null);
+  const targetLoc = input.result.element.loc;
+  if (currentContent === null || !targetLoc) return undefined;
+
+  // Ownership CAS over the verify window between the class write and now (P1, HYP-1023 family):
+  // this path writes a WHOLE-FILE reprint, so if a user/formatter save landed in that window the
+  // reprint would fold their edit into this op's result and the undo tracker would record the
+  // pre-op snapshot against the combined content — the next Undo would erase their save. A
+  // line-shifting save can also make targetLoc resolve a DIFFERENT element. Abort instead: the
+  // inert-but-harmless class write stays, the concurrent edit is preserved, the node map is
+  // refreshed to the foreign content, and undo tracking is skipped because this op no longer
+  // owns the file's final content. A null baseline (the post-write read failed) fails closed.
+  if (postClassWriteContent === null || currentContent !== postClassWriteContent) {
+    await deps.updateNodeMap(input.resolvedPath);
+    return {
+      warning: {
+        componentName: tagName,
+        message:
+          `The style was written as a utility class on <${tagName}>, but the live preview did not show the ` +
+          `change, and the file was modified by a concurrent save before the inline-style escalation could ` +
+          `be applied. The escalation was skipped so that save is not overwritten — re-apply the style edit to retry.`,
+      },
+      skipUndoTracking: true,
+    };
+  }
+
+  let freshAst: t.File;
+  try {
+    freshAst = parseCode(currentContent);
+  } catch {
+    return undefined; // unparseable concurrent save — never touch a file we can't read safely.
+  }
+  const freshResult = findElementByPosition(freshAst, targetLoc.start.line, targetLoc.start.column);
+  if (!freshResult) return undefined;
+
+  const applied = applyInlineStyleUpdate(freshResult.element, input.styles);
+  if (applied.length === 0) return undefined;
+  // Plain @babel/generator reprint, deliberately NOT the format-preserving recast
+  // fileParser.writeAST pair: recast's incremental reuse-original-bytes heuristic corrupts this
+  // mutation shape (verified live in AstServiceCascadeInertEscalation — closing tags dropped,
+  // `}}Git identity` glue), the same failure mode the wrap candidate documents. Correct-but-
+  // reformatted beats byte-faithful-but-corrupted.
+  const generatedCode = generate(freshAst).code;
+  await deps.fileIO.writeFile(input.resolvedPath, generatedCode);
+  await deps.updateNodeMap(input.resolvedPath);
+
+  const landed = await verifyLanded(deps, verifyElementId, cssProperties, beforeSnapshot);
+
+  // The wrap path's clean-land ownership rule, applied to the escalation's OWN verify window: a
+  // concurrent save landing after our write is not clobbered (it reached disk after us), but the
+  // coarse whole-file undo tracker would absorb it into this op's undo entry and Undo would erase
+  // it — so skip undo tracking whenever ownership is not PROVEN clean, and refresh the node map
+  // (refreshed to our output above) when the disk diverged.
+  const postContent = await deps.fileIO.readFile(input.resolvedPath).catch(() => null);
+  const cleanLand = postContent === generatedCode;
+  if (!cleanLand && postContent !== null) await deps.updateNodeMap(input.resolvedPath);
+
+  return {
+    ...(landed === false
+      ? {
+          warning: {
+            componentName: tagName,
+            message:
+              `The style was written as an inline style override on <${tagName}> because the project's stylesheet ` +
+              `layers made the utility class lose the cascade, but the live preview still does not show the change. ` +
+              `The element may be re-rendered from cached data or covered by another layer.`,
+          },
+        }
+      : {}),
+    ...(cleanLand ? {} : { skipUndoTracking: true }),
+  };
 }
 
 interface RetargetInput {
@@ -475,9 +648,11 @@ async function verifyLanded(
 ): Promise<boolean | null> {
   if (!deps.verifyComputedStyle || beforeSnapshot === null || cssProperties.length === 0) return null;
   const requestKeys = verifyRequestKeys(cssProperties);
+  const delayMs = deps.verifyPollBudget?.delayMs ?? VERIFY_POLL_DELAY_MS;
+  const maxAttempts = deps.verifyPollBudget?.maxAttempts ?? VERIFY_POLL_MAX_ATTEMPTS;
 
-  for (let attempt = 0; attempt < VERIFY_POLL_MAX_ATTEMPTS; attempt++) {
-    await delay(VERIFY_POLL_DELAY_MS);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await delay(delayMs);
     const after = await deps.verifyComputedStyle(elementId, requestKeys).catch(() => null);
     if (after === null) return null;
     const allChanged = cssProperties.every((prop) => {

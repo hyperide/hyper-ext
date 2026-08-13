@@ -44,6 +44,8 @@ export interface MutationWrapperDeps {
   getAliasMap?: (importerFilePath: string) => Record<string, string>;
   /** HYP-901 — B1-lite runtime computed-style verify for the auto-wrap retry candidate. */
   verifyComputedStyle?: (elementId: string, cssProperties: string[]) => Promise<Record<string, string> | null>;
+  /** Test seam: override the HMR-settle poll budget (defaults in ast-update-utils). */
+  verifyPollBudget?: { delayMs: number; maxAttempts: number };
 }
 
 export async function updateStylesWrapper(
@@ -69,6 +71,7 @@ export async function updateStylesWrapper(
       projectDefaultCssSystem: deps.projectDefaultCssSystem,
       getAliasMap: deps.getAliasMap,
       verifyComputedStyle: deps.verifyComputedStyle,
+      verifyPollBudget: deps.verifyPollBudget,
       verifyElementId,
     });
     return result;
