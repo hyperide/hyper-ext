@@ -1,20 +1,21 @@
 /**
- * @file Unit tests for ComponentService's graceful degradation on component
- *       shapes the static AST analyzer can't handle (unsupported-CSS-framework
- *       projects: antd / mui / mantine / vanilla-extract / stylex / …).
+ * @file Unit tests for ComponentService's handling of component shapes with
+ *       duplicate top-level bindings (unsupported-CSS-framework projects: antd /
+ *       mui / mantine / vanilla-extract / stylex / …).
  *
  * Accessed via: the Explorer (scanComponents / getComponent) and the Inspector
  *               element tree (parseStructure) for ANY project the user opens.
  * Assumptions: the global vscode mock (test/mock-vscode.ts) supplies
  *              `workspace.fs.readFile`, overridden per-test to feed source bytes.
  *
- * Past bug (unsupported-css-smoke cluster, 8 projects): these parse/traverse
- * failures are CAUGHT and the methods degrade gracefully (empty tree / null), but
- * they were logged at `console.error`. The e2e harness flags any Extension-Host
- * console.error as an unexpected diagnostic, so a HANDLED fallback failed the test
- * ("saw N unexpected iframe/diagnostic error(s): [ComponentService] Error parsing
- * structure …"). They are now logged at `console.warn` — these tests pin that a
- * recoverable fallback emits NO console.error.
+ * Pre-#542 behavior: antd `Layout` and mui `Box` fixtures had duplicate top-level
+ * bindings that caused @babel/traverse's scope builder to throw
+ * `TypeError: Duplicate declaration "…"`. The catch block returned fallback values
+ * (empty tree / null) and emitted console.warn.
+ *
+ * Post-#542 (c767b15d): traverseWithoutScope(noScope:true) bypasses scope
+ * construction entirely — no TypeError is thrown, real data is returned, and no
+ * console.warn/error is emitted. These tests pin the successful-parse behavior.
  */
 import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from 'bun:test';
 import * as vscode from 'vscode';
@@ -83,32 +84,38 @@ describe('ComponentService — graceful readonly fallback for unsupported-framew
     warnSpy.mockRestore();
   });
 
-  it('parseStructure returns an empty tree (no console.error) on antd duplicate-Layout binding', async () => {
+  it('parseStructure parses successfully (no console.warn/error) on antd duplicate-Layout binding', async () => {
     setFileContent(antdDuplicateLayoutSource);
     const service = new ComponentService(ROOT, async () => undefined);
 
-    // Must not throw — the duplicate binding makes @babel/traverse fail.
+    // Post-#542: traverseWithoutScope bypasses scope-builder so no TypeError is thrown.
     const tree = await service.parseStructure('app/root.tsx');
 
-    expect(tree).toEqual([]);
-    // The fix: a HANDLED fallback must not be reported at error severity.
+    // Parsing succeeds — real JSX tree returned, not an empty fallback.
+    expect(tree.length).toBeGreaterThan(0);
+    expect(tree[0].label).toBe('Layout');
+    // No warn/error emitted because no exception was caught.
     expect(errorSpy).not.toHaveBeenCalled();
-    // And it must still leave a breadcrumb at warn severity.
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('getComponent returns null (no console.error) on mui duplicate-Box binding', async () => {
+  it('getComponent returns ComponentInfo (no console.warn/error) on mui duplicate-Box binding', async () => {
     setFileContent(muiDuplicateBindingSource);
     const service = new ComponentService(ROOT, async () => undefined);
 
+    // Post-#542: traverseWithoutScope bypasses scope-builder so no TypeError is thrown.
     const info = await service.getComponent('src/Layout.tsx');
 
-    expect(info).toBeNull();
+    // Parsing succeeds — real ComponentInfo returned, not null fallback.
+    expect(info).not.toBeNull();
+    expect(info!.name).toBe('Layout');
+    expect(info!.path).toBe('src/Layout.tsx');
+    // No warn/error emitted because no exception was caught.
     expect(errorSpy).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('scanComponents skips an unparseable file without console.error and keeps going', async () => {
+  it('_parseComponentFile parses successfully (no console.warn/error) on antd duplicate-Layout binding', async () => {
     setFileContent(antdDuplicateLayoutSource);
     const service = new ComponentService(ROOT, async () => undefined);
     // Drive _parseComponentFile directly (scanComponents uses vscode.workspace.findFiles,
@@ -117,8 +124,12 @@ describe('ComponentService — graceful readonly fallback for unsupported-framew
       service as unknown as { _parseComponentFile: (uri: vscode.Uri) => Promise<unknown> }
     )._parseComponentFile(vscode.Uri.file(`${ROOT}/app/root.tsx`));
 
-    expect(result).toBeNull();
+    // Post-#542: traverseWithoutScope bypasses scope-builder so no TypeError is thrown.
+    // Real ComponentInfo returned — not null fallback.
+    expect(result).not.toBeNull();
+    expect((result as { name: string }).name).toBe('App');
+    // No warn/error emitted because no exception was caught.
     expect(errorSpy).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
