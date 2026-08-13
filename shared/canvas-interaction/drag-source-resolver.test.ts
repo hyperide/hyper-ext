@@ -588,6 +588,102 @@ describe('resolveDragSource', () => {
       });
     }
 
+    /**
+     * DR-16 REGRESSION: aria-hidden target inside another aria-hidden parent.
+     *
+     * DOM structure:
+     *   grandparent (source: real)
+     *   └── aria-hidden-parent (aria-hidden="true", has source in map)
+     *       └── aria-hidden-child (aria-hidden="true", is drag target)
+     *
+     * The resolver must walk PAST both aria-hidden elements and return grandparent.
+     * Before the fix, Step 2a resolved to aria-hidden-parent (it has a source in the
+     * map) and returned it as the drag source — a garbage nodeRef because the element
+     * is decorative and its source position has no meaningful drag semantics.
+     * Step 3 had the same flaw: the first ancestor with a source was aria-hidden-parent.
+     */
+    it('walks past an aria-hidden parent to reach the first non-aria-hidden ancestor (DR-16)', () => {
+      const grandparent = makeEl({ tagName: 'DIV' });
+      const ariaHiddenParent = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+      const ariaHiddenChild = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+
+      (ariaHiddenParent as unknown as Record<string, unknown>).parentElement = grandparent;
+      (ariaHiddenChild as unknown as Record<string, unknown>).parentElement = ariaHiddenParent;
+
+      const body = makeEl({ tagName: 'BODY' });
+      (grandparent as unknown as Record<string, unknown>).parentElement = body;
+      (body as unknown as Record<string, unknown>).parentElement = null;
+
+      const SRC_GRANDPARENT: SourceLocation = { fileName: 'Card.tsx', line: 5, column: 2 };
+      const SRC_ARIA_PARENT: SourceLocation = { fileName: 'Card.tsx', line: 8, column: 4 };
+
+      // Both grandparent and ariaHiddenParent have sources, but the walk must skip
+      // ariaHiddenParent and land on grandparent.
+      const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+        if (el === grandparent) return SRC_GRANDPARENT;
+        if (el === ariaHiddenParent) return SRC_ARIA_PARENT;
+        return null;
+      });
+      const getMappedSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+        if (el === grandparent) return SRC_GRANDPARENT;
+        if (el === ariaHiddenParent) return SRC_ARIA_PARENT;
+        return null;
+      });
+
+      // Without getMappedSourceLocation (legacy path): Step 3 also must skip aria-hidden ancestors.
+      const resultLegacy = resolveDragSource(ariaHiddenChild, getSourceLocation, 'Card.tsx');
+      expect(resultLegacy?.el).toBe(grandparent);
+      expect(resultLegacy?.source).toEqual(SRC_GRANDPARENT);
+
+      // With getMappedSourceLocation: Step 2a must skip ariaHiddenParent, Step 3 must skip it too.
+      const resultMapped = resolveDragSource(ariaHiddenChild, getSourceLocation, 'Card.tsx', getMappedSourceLocation);
+      expect(resultMapped?.el).toBe(grandparent);
+      expect(resultMapped?.source).toEqual(SRC_GRANDPARENT);
+    });
+
+    /**
+     * DR-16 — STEP 3 PATH: forces the ancestor walk (Step 3) to skip an aria-hidden element.
+     *
+     * DOM structure:
+     *   root (source: via getMapped)
+     *   └── grandparent (no getMapped source, not aria-hidden)
+     *       └── aria-hidden-parent (aria-hidden="true")
+     *           └── aria-hidden-child (drag target, aria-hidden="true")
+     *
+     * With getMappedSourceLocation: Step 2a walks to grandparent, but getMapped returns null
+     * there → Step 2a fails. Step 2b is skipped (getMapped !== undefined). Step 3 runs:
+     * must skip ariaHiddenParent (aria-hidden), then skip grandparent (no source via getMapped),
+     * then find root. This directly tests the Step 3 aria-hidden skip logic.
+     */
+    it('Step-3 ancestor walk skips aria-hidden intermediate and finds source above it (DR-16)', () => {
+      const root = makeEl({ tagName: 'DIV' });
+      const grandparent = makeEl({ tagName: 'DIV' });
+      const ariaHiddenParent = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+      const ariaHiddenChild = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+
+      (grandparent as unknown as Record<string, unknown>).parentElement = root;
+      (ariaHiddenParent as unknown as Record<string, unknown>).parentElement = grandparent;
+      (ariaHiddenChild as unknown as Record<string, unknown>).parentElement = ariaHiddenParent;
+
+      const body = makeEl({ tagName: 'BODY' });
+      (root as unknown as Record<string, unknown>).parentElement = body;
+      (body as unknown as Record<string, unknown>).parentElement = null;
+
+      const SRC_ROOT: SourceLocation = { fileName: 'Card.tsx', line: 2, column: 0 };
+
+      // getMappedSourceLocation: only root has a source (grandparent is cold)
+      const getMappedSourceLocation = mock((el: HTMLElement): SourceLocation | null => (el === root ? SRC_ROOT : null));
+      // getSourceLocation: also only root has a source in this scenario
+      const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => (el === root ? SRC_ROOT : null));
+
+      const result = resolveDragSource(ariaHiddenChild, getSourceLocation, 'Card.tsx', getMappedSourceLocation);
+
+      // Step 3 must have: skipped ariaHiddenParent (aria-hidden), continued past grandparent
+      // (no source), and found root.
+      expect(result?.el).toBe(root);
+      expect(result?.source).toEqual(SRC_ROOT);
+    });
+
     it('resolves emoji-span (aria-hidden, no own source) to nearest source ancestor', () => {
       const { outerCard, emojiSpan, innerDiv, textDiv, otherCard } = buildTree();
       const getSourceLocation = makeGetSourceLocation(outerCard, innerDiv, textDiv, otherCard);
