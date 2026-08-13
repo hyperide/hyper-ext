@@ -273,6 +273,14 @@ export class ComponentScanner {
         if (entryName === 'interface') {
           // Scan for atom-like subdirs
           this.categorizeInterfaceDir(entryPath, atoms, composites);
+          continue;
+        }
+
+        // src/app/ in non-Next.js projects (common Vite+React pattern: all features under src/app/)
+        // Treat like components/ — ui/ subdir → atoms, everything else → composites
+        if (entryName === 'app' && dirName === 'src' && framework !== 'nextjs') {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
+          continue;
         }
       }
 

@@ -433,4 +433,41 @@ describe('ComponentScanner.detectProjectStructure', () => {
 
     expect(structure.compositeComponentsPaths).toContain(path.join(root, 'client', 'components'));
   });
+
+  it('should detect src/app/ as composites for Vite+React projects (conloca pattern)', () => {
+    const root = createProject('vite-react-src-app', ['src/app/account', 'src/app/workspace', 'src/app/ui'], {
+      'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
+      'src/main.tsx': 'import { render } from "react-dom";',
+      'src/app/App.tsx': 'export function App() { return <div/>; }',
+      'src/app/account/AccountPage.tsx': 'export function AccountPage() { return <div/>; }',
+      'src/app/workspace/WorkspaceRouter.tsx': 'export function WorkspaceRouter() { return <div/>; }',
+      'src/app/ui/HostField.tsx': 'export function HostField() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // src/app/ is treated as a composites root (like components/)
+    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'src', 'app'));
+    // src/app/ui/ gets detected as atoms
+    expect(structure.atomComponentsPaths).toContain(path.join(root, 'src', 'app', 'ui'));
+    // Must NOT appear as pages (it's not a Next.js project)
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src', 'app'));
+  });
+
+  it('should NOT treat app/ as composites for Next.js projects (next-router pattern)', () => {
+    const root = createProject('nextjs-app-router', ['app/dashboard', 'app/api'], {
+      'package.json': '{"dependencies":{"next":"14","react":"18"}}',
+      'app/page.tsx': 'export default function Home() { return <div/>; }',
+      'app/layout.tsx': 'export default function Layout({ children }) { return <html>{children}</html>; }',
+      'app/dashboard/page.tsx': 'export default function Dashboard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // app/ for Next.js is pages, not composites
+    expect(structure.pagesPaths).toContain(path.join(root, 'app'));
+    expect(structure.compositeComponentsPaths).not.toContain(path.join(root, 'app'));
+  });
 });
