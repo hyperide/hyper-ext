@@ -28,7 +28,7 @@ describe('AstService wrap element', () => {
     const result = await service.wrapElement('src/App.tsx', buttonNodeRef, 'section', { className: 'wrapper' });
 
     expect(result).toEqual({ success: true });
-    expect(fileIO.content(componentPath)).toContain('<section className="wrapper">');
+    expect(fileIO.content(componentPath)).toContain("<section className='wrapper'>");
     expect(fileIO.content(componentPath)).toContain('<button>Save</button>');
   });
 });
@@ -60,8 +60,8 @@ describe('AstService updateI18nKey', () => {
     );
 
     expect(result).toEqual(expect.objectContaining({ success: true }));
-    expect(fileIO.content(componentPath)).toContain('richText(t("hero.new_title"))');
-    expect(fileIO.content(componentPath)).not.toContain("t('hero.new_title')");
+    expect(fileIO.content(componentPath)).toContain("richText(t('hero.new_title'))");
+    expect(fileIO.content(componentPath)).not.toContain('t("hero.new_title")');
   });
 });
 

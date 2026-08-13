@@ -91,7 +91,7 @@ export default function App() {
 
     expect(result).toEqual(expect.objectContaining({ success: true }));
     // The change must land in RecordScreen.tsx, not App.tsx
-    expect(fileIO.content(screenPath)).toContain('backgroundColor="$red10"');
+    expect(fileIO.content(screenPath)).toContain("backgroundColor='$red10'");
     expect(fileIO.content(appPath)).toBe(appSource); // App.tsx unchanged
   });
 
