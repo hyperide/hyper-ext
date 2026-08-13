@@ -24,12 +24,14 @@ import {
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
 import type { PlatformMessage } from '@/lib/platform/types';
+import { selectDimensionTabs } from '../services/support-dimensions';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
 import { CanvasComponentPicker, hasPickerComponents, shouldShowComponentPicker } from './CanvasComponentPicker';
 import { DisconnectedScreen } from './DisconnectedScreen';
 import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
 import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
+import { SupportDimensionsTabs } from './SupportDimensionsTabs';
 import { useAutoCreateEmptySample } from './useAutoCreateEmptySample';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { UnsupportedFrameworkScreen } from './UnsupportedFrameworkScreen';
@@ -271,6 +273,23 @@ function PreviewContent() {
       command: 'hypercanvas.showDevServerOutput',
     } as unknown as PlatformMessage);
   }, [canvas]);
+
+  // Fix action for an auto-fixable needs-setup dimension (react-native-web). Only the
+  // framework dimension currently carries a fixLabel; the tabs render the button solely
+  // for dimensions that have one, so this maps to the existing fix command.
+  const handleDimensionFix = useCallback(() => {
+    canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
+  }, [canvas]);
+
+  // HYP-788: per-(sub-)repo support breakdown → one tab per BLOCKING dimension
+  // (unsupported | needs-setup), each a table of WHY, for the currently-open repo or the
+  // active monorepo sub-repo. This is the authoritative unsupported surface: it supersedes
+  // the legacy single-message screens when the host provides supportDimensions, and falls
+  // back to them when absent (older host) or when nothing is blocking.
+  const supportTabs = selectDimensionTabs(projectCapabilities?.supportDimensions ?? []);
+  if (supportTabs.length > 0) {
+    return <SupportDimensionsTabs dimensions={supportTabs} onFix={handleDimensionFix} />;
+  }
 
   // Unsupported project — full blocking screen. Two flavours:
   //  - 'framework': no supported bundler/framework → compatibility table (HYP-442,

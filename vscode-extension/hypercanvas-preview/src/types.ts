@@ -132,6 +132,52 @@ export const CSS_SYSTEM_TO_ADAPTER_ID: Record<CssSystem, CssSystemId | null> = {
   unknown: null,
 };
 
+// ============================================
+// Support Dimensions (per-(sub-)repo support breakdown — HYP-788)
+// ============================================
+
+/**
+ * Support status for a single dimension of a project, worst-to-best:
+ * - 'unsupported': HyperIDE cannot handle this dimension at all (Vue render gate,
+ *   unknown bundler). A hard block — surfaced as a dimension tab.
+ * - 'needs-setup': supported once a one-time fix is applied (react-native-web, a
+ *   /test-preview route patch). Surfaced as a dimension tab (often with a Fix action).
+ * - 'inspect-only': renders + inspects today, full edit in progress. CSS-in-JS systems
+ *   (MUI/Chakra/Mantine/…) live here — NOT a hard "unsupported"/readonly. NOT a tab.
+ * - 'supported': fully works.
+ * - 'unknown': could not be determined (e.g. no CSS system detected). NOT a tab.
+ */
+export type SupportStatus = 'supported' | 'inspect-only' | 'needs-setup' | 'unsupported' | 'unknown';
+
+/** The five support dimensions classified per (sub-)repo. */
+export type SupportDimensionId = 'framework' | 'bundler' | 'styleSystem' | 'router' | 'packageManager';
+
+/** A single row in a dimension's WHY table — what was detected and where. */
+export interface SupportEvidence {
+  /** Short label for the row (e.g. "Detected framework", "Dependency", "Why"). */
+  label: string;
+  /** The value / explanation for the label. */
+  detail: string;
+}
+
+/**
+ * One dimension's support classification — {status, reason, evidence} — for the
+ * currently-open (sub-)repo. Rendered as a tab (a table of WHY) when the status is a
+ * blocking one (unsupported | needs-setup). See lib `support-dimensions.ts`.
+ */
+export interface SupportDimension {
+  id: SupportDimensionId;
+  /** Human-readable tab title (e.g. "Framework", "Build / Bundler", "Style system"). */
+  title: string;
+  status: SupportStatus;
+  /** One-line reason for the status — the dimension's headline. */
+  reason: string;
+  /** Table rows explaining the classification. */
+  evidence: SupportEvidence[];
+  /** Optional auto-fix action label for needs-setup (e.g. "Fix: Add react-native-web"). */
+  fixLabel?: string;
+}
+
 /** What the extension can do with this project */
 export interface ProjectCapabilities {
   /** Detected CSS framework */
@@ -148,6 +194,13 @@ export interface ProjectCapabilities {
   canRender: boolean;
   /** If true, show readonly badge instead of full editing UI */
   readonly: boolean;
+  /**
+   * Per-(sub-)repo support breakdown across the five dimensions (HYP-788). Additive:
+   * absent on older hosts. The webview renders one tab per blocking dimension
+   * (unsupported | needs-setup) — a table of WHY — for the currently-open repo / active
+   * monorepo sub-repo. The whole-monorepo traversal is explicitly NOT this feature.
+   */
+  supportDimensions?: SupportDimension[];
 }
 
 // ============================================

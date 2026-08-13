@@ -1112,6 +1112,26 @@ export class PreviewPanel {
     this._capabilities = capabilities;
     this._postToWebview({ type: 'projectCapabilities', capabilities });
   }
+
+  /**
+   * Merge a freshly-computed per-(sub-)repo support breakdown into the cached
+   * capabilities and re-post (HYP-788). Additive: only the `supportDimensions` field is
+   * touched, so the existing readonly/cssSystem behavior set by notifyCapabilities is
+   * preserved. Used on component selection in a monorepo, where the active sub-repo (and
+   * thus its dimension tabs) changes without a full capability re-detection.
+   *
+   * No-op (returns false) until activation detection has produced a base capabilities
+   * object — the dimensions only make sense alongside the rest of the project's
+   * capabilities. The caller uses the return value to avoid caching a sub-repo as "already
+   * applied" when the merge was dropped (so a later selection retries once caps exist).
+   */
+  public updateSupportDimensions(supportDimensions: import('./types').SupportDimension[]): boolean {
+    if (!this._capabilities) return false;
+    const merged = { ...this._capabilities, supportDimensions };
+    this._capabilities = merged;
+    this._postToWebview({ type: 'projectCapabilities', capabilities: merged });
+    return true;
+  }
   /**
    * Refresh preview
    */

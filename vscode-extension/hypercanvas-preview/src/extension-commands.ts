@@ -24,6 +24,7 @@ import { StateHub } from './StateHub';
 import { AstService } from './services/AstService';
 import { DevServerManager } from './services/DevServerManager';
 import { detectPackageManager, detectUnsupportedProject } from './services/ProjectDetector';
+import { computeSupportDimensionsForRoot } from './services/support-dimensions-detect';
 import { VSCodeFileIO } from './vscode-file-io';
 import {
   detectConfiguredAgents,
@@ -60,6 +61,15 @@ export interface CommandContext {
   prepareDevServerTargetRef: (() => Promise<{ kind: 'ready' } | { kind: 'ambiguous'; targets: string[] }>) | null;
   rerootDevServerTargetRef: ((target: string) => Promise<void>) | null;
   getWorkspaceRoot: () => string | null;
+  /**
+   * Returns the ACTIVE project root — may be a monorepo sub-project after a component
+   * selection (activeWorkspaceRoot in extension.ts). Always returns a non-empty string:
+   * extension.ts initializes activeWorkspaceRoot to workspaceRoot (guarded non-null)
+   * and only updates it to valid targetRoot strings via rerootPreviewPipeline.
+   * Use this instead of getWorkspaceRoot() for commands that operate on the currently
+   * previewed project, e.g. fixUnsupportedProject.
+   */
+  getActiveProjectRoot: () => string;
 }
 
 /**
@@ -339,7 +349,9 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   // Fix unsupported project — installs react-native-web + Vite config for React Native / Tamagui projects
   context.subscriptions.push(
     vscode.commands.registerCommand('hypercanvas.fixUnsupportedProject', async () => {
-      const root = getCurrentRoot();
+      // Use the active project root (may be a monorepo sub-repo) rather than the
+      // VS Code workspace folder root, so the fix runs in the selected sub-project.
+      const root = ctx.getActiveProjectRoot();
       const pkgManager = await detectPackageManager(root);
       const installCmd =
         pkgManager === 'bun'
@@ -773,6 +785,15 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
               : 'react-native-web + Vite configured. Run "dev" to start the Vite dev server.';
           vscode.window.showInformationMessage(successMsg);
           ctx.previewPanel?.notifyUnsupportedProject(null);
+          // HYP-788: the react-native framework dimension was 'needs-setup' (a blocking
+          // support tab). After a successful fix it is supported, so recompute and post the
+          // fresh dimensions — otherwise the cached needs-setup tab keeps the blocking
+          // screen up even though the project now renders (codex P1).
+          try {
+            ctx.previewPanel?.updateSupportDimensions(await computeSupportDimensionsForRoot(root));
+          } catch (err) {
+            console.warn('[HyperIDE] support-dimension refresh after fix failed:', err);
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

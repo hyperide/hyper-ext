@@ -88,8 +88,15 @@ export async function detectRepoType(projectPath: string): Promise<RepoType> {
   // Lerna
   if (await fileExists(path.join(projectPath, 'lerna.json'))) return 'mono-lerna';
 
-  // Generic workspaces (npm/yarn workspaces field in package.json)
-  if (pkg && Array.isArray((pkg as { workspaces?: unknown }).workspaces)) return 'mono-generic';
+  // Generic workspaces (npm/yarn workspaces field in package.json).
+  // Two forms: array ["packages/*"] or object { packages: ["packages/*"] } (Yarn/npm v7+).
+  if (pkg) {
+    const ws = (pkg as { workspaces?: unknown }).workspaces;
+    const isMonorepo =
+      Array.isArray(ws) ||
+      (typeof ws === 'object' && ws !== null && Array.isArray((ws as { packages?: unknown }).packages));
+    if (isMonorepo) return 'mono-generic';
+  }
 
   return 'simple';
 }
@@ -159,8 +166,12 @@ async function isRenderableReactTarget(memberPath: string, pkg: Record<string, u
  * Check whether a package directory ships React source (.tsx/.jsx) under its common
  * source directories. Mirrors hasCssModuleFiles' scan shape so it stays compatible with
  * the same fs.readdir behavior and avoids walking node_modules.
+ *
+ * Exported (additive) so the support-dimension framework render-gate (support-dimensions.ts)
+ * can reuse the same "is there React source?" signal for the no-dependency 'none' case,
+ * instead of duplicating the scan.
  */
-async function hasReactSourceFiles(memberPath: string): Promise<boolean> {
+export async function hasReactSourceFiles(memberPath: string): Promise<boolean> {
   const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
   for (const dir of SOURCE_DIRS) {
     try {
@@ -555,6 +566,81 @@ export async function detectCssSystem(
   }
 
   return 'unknown';
+}
+
+/**
+ * Dependency signals for each CSS system, in detection priority order (most specific
+ * first). Single source of truth for the per-member `detectCssSystems` set detector.
+ *
+ * Deliberately NOT reused by the singular `detectCssSystem` above: that function has a
+ * load-bearing chakra-before-emotion ordering, tailwind-design-system precedence, and a
+ * monorepo sibling-union fallback whose exact behavior is pinned by HYP-786/HYP-787
+ * regression tests. Re-expressing it through this table risks silently shifting one of
+ * those results, so the two stay independent (the singular is left byte-for-byte).
+ *
+ * Each entry: the CssSystem key + the package.json dependency names that prove it.
+ * `cssmodules` is absent here — it has no dependency and is detected by scanning source
+ * for *.module.css files (hasCssModuleFiles), appended separately.
+ */
+const CSS_SYSTEM_SIGNALS: ReadonlyArray<{ system: CssSystem; deps: readonly string[] }> = [
+  { system: 'shadcn', deps: ['@shadcn/ui', 'class-variance-authority'] },
+  { system: 'daisyui', deps: ['daisyui'] },
+  { system: 'nextui', deps: ['@nextui-org/react', '@nextui-org/theme'] },
+  { system: 'tamagui', deps: ['tamagui', '@tamagui/core'] },
+  { system: 'vanilla-extract', deps: ['@vanilla-extract/css'] },
+  { system: 'pandacss', deps: ['@pandacss/dev', 'pandacss'] },
+  { system: 'unocss', deps: ['unocss', '@unocss/preset-uno'] },
+  { system: 'stylex', deps: ['@stylexjs/stylex', 'stylex'] },
+  { system: 'styled-components', deps: ['styled-components'] },
+  { system: 'chakra', deps: ['@chakra-ui/react'] },
+  { system: 'emotion', deps: ['@emotion/react', '@emotion/styled'] },
+  { system: 'mui', deps: ['@mui/material', '@mui/system'] },
+  { system: 'antd', deps: ['antd', '@ant-design/icons'] },
+  { system: 'mantine', deps: ['@mantine/core'] },
+  { system: 'fluentui', deps: ['@fluentui/react-components', '@fluentui/react'] },
+  { system: 'tailwind', deps: ['tailwindcss', '@astrojs/tailwind', '@tailwindcss/vite'] },
+  { system: 'sass', deps: ['sass', 'node-sass', 'sass-embedded'] },
+];
+
+/**
+ * Detect the COMPLETE SET of CSS systems present for a single project/member root —
+ * every matching dependency in that member's OWN package.json, not the single
+ * priority-winner and NOT a union across sibling packages.
+ *
+ * This is the root-cause fix for HYP-787 (master-spec §5.6 — "the complete set of css
+ * systems per project, not a single winner"). The singular `detectCssSystem` collapses
+ * to one system for the whole workspace and its monorepo fallback UNIONS all sub-package
+ * deps, so one Chakra sibling poisons the whole workspace into readonly. Callers that
+ * resolve the active sub-project root (resolveActiveProjectRoot) and pass it here get a
+ * per-member set: a tailwind+emotion app stays writable even when a chakra sibling exists.
+ *
+ * Additive — the singular detector is unchanged. Pass the MEMBER root (never the
+ * monorepo root) so the set reflects exactly that member.
+ *
+ * Returns systems in priority order (CSS_SYSTEM_SIGNALS order, then cssmodules). Empty
+ * when the member declares no recognizable CSS system.
+ */
+export async function detectCssSystems(
+  projectPath: string,
+  packageJson?: Record<string, unknown> | null,
+): Promise<CssSystem[]> {
+  const pkg = packageJson ?? (await readPackageJson(projectPath));
+  const found: CssSystem[] = [];
+
+  if (pkg) {
+    const deps = {
+      ...(pkg.dependencies as Record<string, string> | undefined),
+      ...(pkg.devDependencies as Record<string, string> | undefined),
+    };
+    for (const { system, deps: signals } of CSS_SYSTEM_SIGNALS) {
+      if (signals.some((name) => name in deps)) found.push(system);
+    }
+  }
+
+  // CSS Modules have no dependency — detect by scanning the member's own source.
+  if (await hasCssModuleFiles(projectPath)) found.push('cssmodules');
+
+  return found;
 }
 
 /**

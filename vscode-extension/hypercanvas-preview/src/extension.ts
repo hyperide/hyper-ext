@@ -55,6 +55,7 @@ import { shouldInjectGeneratedProps } from './services/no-props-sample';
 import {
   computeCapabilities,
   detectCssSystem,
+  detectPackageManager,
   detectProjectType,
   detectRepoType,
   detectUIKit,
@@ -63,6 +64,7 @@ import {
   readPackageJson,
   resolveRunnableTargets,
 } from './services/ProjectDetector';
+import { computeSupportDimensionsForRoot, gatherSupportDimensions } from './services/support-dimensions-detect';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { ensureIsolationWrapper } from './services/WrapperGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
@@ -319,6 +321,10 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   let detectionSeq = 0;
+  // Topology of the last-detected workspace root. The HYP-788 selection hook reads it to
+  // decide whether to recompute support dimensions per sub-repo (monorepo) or leave the
+  // activation-time pass authoritative (simple repo).
+  let workspaceRepoIsSimple = true;
   const runProjectDetection = (root: string): void => {
     const seq = ++detectionSeq;
     // HYP-588: capture the panel's screen-decision token BEFORE awaiting the
@@ -336,9 +342,28 @@ export function activate(context: vscode.ExtensionContext) {
         const projectError = await detectUnsupportedProject(root, pkg);
         if (seq !== detectionSeq) return;
 
+        workspaceRepoIsSimple = repoType === 'simple';
         stateHub?.applyUpdate({ projectUIKit: kit });
 
         const capabilities = computeCapabilities(cssSystem, kit, projectError, projectType, repoType);
+
+        // HYP-788: per-(sub-)repo support breakdown for the dimension tabs. For a SIMPLE
+        // repo the workspace root IS the project, so compute it here. For a monorepo the
+        // root is not a renderable project (it would mis-classify as "No React components
+        // found") — the active sub-repo's dimensions are computed on component selection
+        // (refreshSupportDimensions) instead, so leave them absent until then.
+        if (repoType === 'simple') {
+          const packageManager = await detectPackageManager(root);
+          capabilities.supportDimensions = await gatherSupportDimensions(root, pkg, {
+            projectType,
+            projectError,
+            packageManager,
+          });
+          // Re-check freshness AFTER the added async gather: a newer detection (folder
+          // change) may have started while we scanned, and must not be clobbered by this
+          // stale run's post (codex P2).
+          if (seq !== detectionSeq) return;
+        }
         console.log('[HyperIDE] Project capabilities:', JSON.stringify(capabilities));
 
         // Send capabilities to preview panel (readonly badge, style write guard)
@@ -874,6 +899,57 @@ export function activate(context: vscode.ExtensionContext) {
     };
   };
 
+  // HYP-788: recompute the support-dimension tabs for the active monorepo sub-repo on
+  // component selection. The activation-time pass fills supportDimensions for SIMPLE repos
+  // (a monorepo root is not a renderable project); for monorepos the per-sub-repo
+  // dimensions are computed here. We resolve the SAME runnable root the preview pipeline
+  // uses (resolveRunnableProjectRoot) — NOT the owning package — so a shared-library
+  // component (no dev script of its own) is classified against the consuming app that
+  // actually renders it, instead of wrongly showing an "unknown bundler" block and
+  // regressing HYP-441/HYP-443 (codex P1). Additive: only supportDimensions is updated, so
+  // the readonly/cssSystem state from activation is untouched. A sequence guard drops a
+  // stale resolve that finishes after a newer selection (codex P1 — mirrors the preview
+  // reroot's createSequencedReroot race fix).
+  let lastSupportDimRoot: string | null = null;
+  let supportDimSeq = 0;
+  const refreshSupportDimensions = async (componentPath: string): Promise<void> => {
+    if (workspaceRepoIsSimple) return; // simple repo: the activation-time pass is authoritative
+    const seq = ++supportDimSeq;
+    const repoRoot = workspaceFolderRoot();
+    const absComponent = isAbsolute(componentPath) ? componentPath : join(repoRoot, componentPath);
+    const activeRoot = await resolveRunnableProjectRoot(repoRoot, absComponent, vsCodeIO);
+
+    // No runnable sub-repo (root-owned / non-renderable selection): clear any stale
+    // sub-repo tabs so they don't linger over an unrelated selection, then stop.
+    if (activeRoot === repoRoot) {
+      if (seq === supportDimSeq) {
+        previewPanel?.updateSupportDimensions([]);
+        lastSupportDimRoot = repoRoot;
+      }
+      return;
+    }
+    if (activeRoot === lastSupportDimRoot) return;
+
+    const dims = await computeSupportDimensionsForRoot(activeRoot);
+    if (seq !== supportDimSeq) return; // a newer selection superseded this resolve
+    // Cache only when the merge actually applied — if base capabilities aren't ready yet
+    // (activation detection still in flight) the update is dropped, so leave the cache
+    // unset and let the next selection retry.
+    if (previewPanel?.updateSupportDimensions(dims)) lastSupportDimRoot = activeRoot;
+  };
+  // stateHub.onChange returns an unsubscribe function (not a Disposable) — wrap it so the
+  // subscription is cleaned up on deactivate, mirroring the unsubFlush usage above.
+  context.subscriptions.push({
+    dispose: stateHub.onChange((_state, patch) => {
+      const componentPath = patch.currentComponent?.path;
+      if (componentPath) {
+        void refreshSupportDimensions(componentPath).catch((err) =>
+          console.warn('[HyperIDE] support-dimension refresh failed:', err),
+        );
+      }
+    }),
+  });
+
   // Hyper: Preview as App — render the active entry root AS AN APP (its own router +
   // providers) and show the address bar. Registered here (not in registerCommands) because
   // it closes over previewManager/activeWorkspaceRoot/the reroot helpers, which live in
@@ -1376,6 +1452,7 @@ export function activate(context: vscode.ExtensionContext) {
     prepareDevServerTargetRef,
     rerootDevServerTargetRef,
     getWorkspaceRoot,
+    getActiveProjectRoot: () => activeWorkspaceRoot,
   });
 
   // --- MCP Server for AI Agents ---

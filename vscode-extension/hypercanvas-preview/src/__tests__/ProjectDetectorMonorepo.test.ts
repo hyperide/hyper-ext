@@ -83,8 +83,13 @@ describe('detectRepoType', () => {
     expect(await detectRepoType(ROOT)).toBe('mono-lerna');
   });
 
-  it('returns mono-generic when root package.json has workspaces field', async () => {
+  it('returns mono-generic when root package.json has workspaces field (array form)', async () => {
     setup({ [`${ROOT}/package.json`]: JSON.stringify({ workspaces: ['packages/*'] }) });
+    expect(await detectRepoType(ROOT)).toBe('mono-generic');
+  });
+
+  it('returns mono-generic when root package.json has workspaces field (object form with packages)', async () => {
+    setup({ [`${ROOT}/package.json`]: JSON.stringify({ workspaces: { packages: ['packages/*'] } }) });
     expect(await detectRepoType(ROOT)).toBe('mono-generic');
   });
 

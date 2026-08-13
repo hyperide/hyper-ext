@@ -31,6 +31,13 @@ export const TID = {
     // picked with no panel open. Clicking an item drives the normal stateHub selection pipeline.
     componentPicker: 'hyper-preview-component-picker',
     componentPickerItem: (name: string) => `hyper-preview-component-picker-item-${name}`,
+    // Per-(sub-)repo support-dimension tabs (HYP-788): one tab per BLOCKING dimension
+    // (unsupported | needs-setup), each a table of WHY for the currently-open repo / the
+    // active monorepo sub-repo.
+    supportTabsRoot: 'hyper-preview-support-tabs',
+    supportTab: (id: string) => `hyper-preview-support-tab-${id}`,
+    supportTabPanel: (id: string) => `hyper-preview-support-panel-${id}`,
+    supportFixButton: 'hyper-preview-support-fix',
   },
 
   // Inspector (Right Sidebar)
