@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec Review Results — 2026-04-01</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --text-dim: #484f58;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+    --red: #f85149; --purple: #bc8cff; --orange: #d18616;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.4rem; margin: 2rem 0 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: var(--purple); }
+  .subtitle { color: var(--text-muted); margin-bottom: 2rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+  .card-title { font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+  .card-type { font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; }
+  .type-system { background: #1f6feb33; color: var(--accent); }
+  .type-rules { background: #238636aa; color: var(--green); }
+  .type-research { background: #8957e533; color: var(--purple); }
+  .score { font-size: 1.5rem; font-weight: 700; }
+  .score-good { color: var(--green); }
+  .score-mid { color: var(--yellow); }
+  .main-issue { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .severity-critical { color: var(--red); font-weight: 600; }
+  .severity-major { color: var(--orange); font-weight: 600; }
+  .severity-minor { color: var(--text-muted); }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; }
+  .tag { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; margin-right: 0.5rem; }
+  .tag-strength { background: #238636aa; color: var(--green); }
+  .tag-question { background: #1f6feb33; color: var(--accent); }
+  details { margin: 0.75rem 0; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 0.5rem 0; }
+  summary:hover { color: var(--purple); }
+  ul, ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+  li { margin: 0.4rem 0; }
+  code { background: #30363d; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+  .cross-cutting { background: linear-gradient(135deg, #1f6feb15, #8957e515); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; }
+  .verdict { font-style: italic; color: var(--text-muted); margin-top: 1rem; border-left: 3px solid var(--accent); padding-left: 1rem; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1.5rem 0; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { counter-reset: toc; list-style: none; padding-left: 0; }
+  .toc li { counter-increment: toc; padding: 0.3rem 0; }
+  .toc li::before { content: counter(toc) ". "; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<h1>Spec Review Results</h1>
+<p class="subtitle">8 documents reviewed &mdash; 2026-04-01 &bull; 4 system specs, 3 design rules, 1 research</p>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#summary">Summary Dashboard</a></li>
+    <li><a href="#ds-core">DS Core Design</a></li>
+    <li><a href="#ai-test">AI Test Design</a></li>
+    <li><a href="#component-stage">Component Stage Design</a></li>
+    <li><a href="#mock-server">Mock Server Design</a></li>
+    <li><a href="#apple-hig">Apple HIG Design Rules</a></li>
+    <li><a href="#material">Material Design Rules</a></li>
+    <li><a href="#fluent2">Fluent 2 Design Rules</a></li>
+    <li><a href="#self-improving">Self-Improving Templates Research</a></li>
+    <li><a href="#cross-cutting">Cross-Cutting Issues</a></li>
+  </ol>
+</nav>
+
+<!-- ==================== SUMMARY ==================== -->
+<h2 id="summary">Summary Dashboard</h2>
+
+<div class="summary-grid">
+  <div class="card">
+    <div class="card-title">ds-core-design <span class="card-type type-system">system</span></div>
+    <div class="score score-mid">7 / 10</div>
+    <div class="main-issue">Rule ID naming: 3 conflicting conventions</div>
+  </div>
+  <div class="card">
+    <div class="card-title">ai-test-design <span class="card-type type-system">system</span></div>
+    <div class="score score-mid">7 / 10</div>
+    <div class="main-issue"><code>AIProvider.validate()</code> undefined &mdash; implementation blocker</div>
+  </div>
+  <div class="card">
+    <div class="card-title">component-stage <span class="card-type type-system">system</span></div>
+    <div class="score score-mid">6.5 / 10</div>
+    <div class="main-issue">Monkey story not in registry, <code>screenshot()</code> not in API</div>
+  </div>
+  <div class="card">
+    <div class="card-title">mock-server <span class="card-type type-system">system</span></div>
+    <div class="score score-mid">7 / 10</div>
+    <div class="main-issue">Security gaps in <code>unmask</code>, proxy vs monkey-patch contradiction</div>
+  </div>
+  <div class="card">
+    <div class="card-title">apple-hig-rules <span class="card-type type-rules">rules</span></div>
+    <div class="score score-good">7.5 / 10</div>
+    <div class="main-issue">Summary stats arithmetic errors, no web/native mapping</div>
+  </div>
+  <div class="card">
+    <div class="card-title">material-rules <span class="card-type type-rules">rules</span></div>
+    <div class="score score-mid">6.5 / 10</div>
+    <div class="main-issue">Generation artifact in file, 3 rule formats, missing components</div>
+  </div>
+  <div class="card">
+    <div class="card-title">fluent2-rules <span class="card-type type-rules">rules</span></div>
+    <div class="score score-good">7.5 / 10</div>
+    <div class="main-issue">Format inconsistent with sibling docs, no layout/component rules</div>
+  </div>
+  <div class="card">
+    <div class="card-title">self-improving-research <span class="card-type type-research">research</span></div>
+    <div class="score score-mid">7 / 10</div>
+    <div class="main-issue">No architecture synthesis (fixed), incomplete summary table (fixed)</div>
+  </div>
+</div>
+
+<!-- ==================== DS CORE ==================== -->
+<h2 id="ds-core">1. DS Core Design</h2>
+<div class="section">
+  <p><strong>What it is:</strong> Standalone design system validation/enforcement engine. ESLint/Biome-like pluggable linter + Kubernetes-like desired/actual state reconciliation. Three-tier validation (GritQL &rarr; TypeScript &rarr; AI), self-improving decision templates, 151 rules.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> Mature DI architecture with read/write adapter separation</li>
+    <li><span class="tag tag-strength">strong</span> State model with provenance tracking and confidence scores</li>
+    <li><span class="tag tag-strength">strong</span> Validation priority chain: algorithmic &rarr; template &rarr; AI</li>
+    <li><span class="tag tag-strength">strong</span> 151 rules catalog &mdash; count verified, matches summary table</li>
+    <li><span class="tag tag-strength">strong</span> W3C DTCG as native token format</li>
+    <li><span class="tag tag-strength">strong</span> Biome integration via WASM + GritQL</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>RuleDefinition</code> schema says "no <code>validation</code> field" but examples contain <code>validation: ['algorithmic']</code>. Rule ID regex forbids dots, examples use <code>color.contrast-min</code>. Config uses bare <code>contrast-min</code>. Three conventions.</td></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>RuleSeveritySchema</code> referenced but undefined (only <code>SeveritySchema</code> exists)</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>Super-section strategy (<code>tokens</code>&rarr;algorithmic) contradicts rules like <code>color.independence</code>, <code>color.harmony</code> which require AI</td></tr>
+    <tr><td class="severity-major">Major</td><td>Template DSL: no parser description, no sandbox, no ReDoS protection for <code>match()</code></td></tr>
+    <tr><td class="severity-major">Major</td><td>No error handling strategy &mdash; zero error types, zero recovery patterns</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>ActualState</code> missing elevation, motion, shape &mdash; no extractors, reconciler can't find drift</td></tr>
+    <tr><td class="severity-major">Major</td><td>Incremental validation uses undefined <code>cache</code> &mdash; no caching strategy described</td></tr>
+    <tr><td class="severity-major">Major</td><td>Config rule names vs catalog IDs vs code examples &mdash; three different names for one rule</td></tr>
+    <tr><td class="severity-major">Major</td><td>Custom rules have no <code>validate</code> callback &mdash; type-only stubs</td></tr>
+    <tr><td class="severity-major">Major</td><td>Adapter import paths don't match file tree</td></tr>
+    <tr><td class="severity-minor">Minor</td><td><code>z.instanceof(z.ZodType)</code> technically doesn't work &mdash; need <code>z.custom</code></td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Backtest accuracy metric is fiction: dataset is violations-only, "always violation" = 100%</td></tr>
+    <tr><td class="severity-minor">Minor</td><td><code>color.independence</code> in <code>tokens.*</code> duplicates <code>a11y.*</code> rules</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> Multi-framework projects (Tailwind + CSS modules + inline) &mdash; how is adapter selected per file?</li>
+      <li><span class="tag tag-question">?</span> Pre-commit: 10 AI calls &times; 1-3s = 10-30s. Acceptable?</li>
+      <li><span class="tag tag-question">?</span> Template conflict resolution "specificity > recency > frequency" &mdash; no concrete algorithm</li>
+      <li><span class="tag tag-question">?</span> <code>packages/ui-quality-shared</code> mentioned but doesn't exist in file tree</li>
+    </ul>
+  </details>
+
+  <div class="verdict">Architecture is solid, problems are fixable without redesign. But naming inconsistency (rule IDs) will block the first developer who opens this spec.</div>
+</div>
+
+<!-- ==================== AI TEST ==================== -->
+<h2 id="ai-test">2. AI Test Design</h2>
+<div class="section">
+  <p><strong>What it is:</strong> Three-level UI testing &mdash; snapshot tests (screenshots), spec-based (validation against specs/Figma), monkey tests (AI exploration). Self-improving templates crystallize AI decisions.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> DI architecture with 8 adapter interfaces</li>
+    <li><span class="tag tag-strength">strong</span> Template promotion chain: AI &rarr; template &rarr; DS Core rule</li>
+    <li><span class="tag tag-strength">strong</span> Cost control: pixel diff pre-filter, per-category budgets, Haiku/Sonnet split</li>
+    <li><span class="tag tag-strength">strong</span> Monkey agent: Explorer/Observer/Reporter separation</li>
+    <li><span class="tag tag-strength">strong</span> Biome-style config (<code>'error'</code> / <code>['warning', {...}]</code> / <code>'off'</code>)</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>AIProvider.validate()</code> used everywhere but never defined &mdash; no contract, no type signature. Implementation blocker.</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>No concurrency model &mdash; 40 screenshots sequential <code>await</code>. CI blocker.</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>Browser lifecycle management absent &mdash; who creates/closes, shared vs separate, crash recovery</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>dom-exists</code> assertion via <code>html.includes(selector)</code> &mdash; string search, not CSS query. False positives.</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>SpecIndex</code> indexing logic undefined &mdash; how does markdown spec map to a page?</td></tr>
+    <tr><td class="severity-major">Major</td><td>Form validation search via <code>text.includes('validat')</code> &mdash; substring match, false positives</td></tr>
+    <tr><td class="severity-major">Major</td><td>Monkey runner: findings in memory, no limits on evidence, no streaming to disk</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>getConsoleMessages()</code> "since last check" &mdash; implicit mutable state, race condition</td></tr>
+    <tr><td class="severity-major">Major</td><td>~15 types mentioned but undefined (<code>ThemeConfig</code>, <code>DataSchema</code>, <code>PropTypeInfo</code>...)</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Hardcoded model <code>claude-haiku-4-5-20251001</code></td></tr>
+    <tr><td class="severity-minor">Minor</td><td>CI workflow: <code>npm run dev &amp;</code> without wait-for-server</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> Monkey test reproducibility &mdash; is there a seed for replay?</li>
+      <li><span class="tag tag-question">?</span> Figma API rate limits &mdash; caching strategy?</li>
+      <li><span class="tag tag-question">?</span> How are baselines updated on intentional redesign?</li>
+    </ul>
+  </details>
+
+  <div class="verdict">Mature for Pass 1. Serious architecture. Main problem: ~15 undefined types create uncertainty. Critical #1 (<code>AIProvider.validate()</code>) must be closed before implementation starts.</div>
+</div>
+
+<!-- ==================== COMPONENT STAGE ==================== -->
+<h2 id="component-stage">3. Component Stage Design</h2>
+<div class="section">
+  <p><strong>What it is:</strong> Component introspection and rendering system &mdash; auto-generates stories from TypeScript types, feeds DS Core linter, AI Test runner, and Board Mode IDE. Storybook replacement.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> DI architecture with 7 adapters</li>
+    <li><span class="tag tag-strength">strong</span> Recursive <code>PropType</code> AST-like model</li>
+    <li><span class="tag tag-strength">strong</span> Three story sources with clear priority (manual > AI > auto)</li>
+    <li><span class="tag tag-strength">strong</span> Edge case categories (XSS, RTL, emoji, NaN, MAX_SAFE_INTEGER)</li>
+    <li><span class="tag tag-strength">strong</span> Honest Storybook comparison (Appendix B)</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>packages/component-stage/</code> doesn't exist &mdash; no description of how to create in monorepo</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>Monkey testing: temporary story not registered in StoryRegistry &mdash; <code>renderStory(id)</code> won't find it</td></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>screenshot()</code> not in public API of <code>ComponentStage</code> &mdash; only on <code>Renderer</code> adapter</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>StoryGenerationConfig</code> defined twice with different fields (<code>maxStories</code> vs <code>maxStoriesPerComponent</code>)</td></tr>
+    <tr><td class="severity-major">Major</td><td>Board Mode adapter references <code>BoardCard</code> &mdash; doesn't exist in codebase</td></tr>
+    <tr><td class="severity-major">Major</td><td>Cache mentioned in <code>ComponentDiscovery.invalidate()</code> but never described</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>TypeAnalyzer.resolveType()</code> scope for cross-file types undefined</td></tr>
+    <tr><td class="severity-major">Major</td><td>No error handling strategy at all</td></tr>
+    <tr><td class="severity-major">Major</td><td>Animation capture for framer-motion/react-spring = runtime JS analysis, completely different from CSS parsing</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>ScanResult</code> type undefined despite being in public API</td></tr>
+    <tr><td class="severity-minor">Minor</td><td><code>Keyframe</code> name conflicts with Web Animations API global</td></tr>
+    <tr><td class="severity-minor">Minor</td><td><code>StoryChildren</code> recursion without depth limit</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> Hot reload / watch mode? Does Board Mode auto-update on component edit?</li>
+      <li><span class="tag tag-question">?</span> <code>InteractionState</code> (hover, focus, active) simulation mechanism?</li>
+      <li><span class="tag tag-question">?</span> <code>defineStories</code> &mdash; runtime execute or static parse? If execute, needs sandbox.</li>
+    </ul>
+  </details>
+
+  <div class="verdict">Good architecture, types well thought out. But critical gaps (monkey registration, screenshot API, missing package) will force API redesign in Phase 1. Fix before implementation.</div>
+</div>
+
+<!-- ==================== MOCK SERVER ==================== -->
+<h2 id="mock-server">4. Mock Server Design</h2>
+<div class="section">
+  <p><strong>What it is:</strong> Smart Mock Server &mdash; standalone HTTP interception package for snapshot record/replay, PII masking, AI data generation, stateful expression language, edge case injection.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> DI architecture with clean adapter contracts</li>
+    <li><span class="tag tag-strength">strong</span> Stateful mocking with expression language (pipe operators, session isolation)</li>
+    <li><span class="tag tag-strength">strong</span> Two-level PII detection (pattern + field name heuristics + confidence)</li>
+    <li><span class="tag tag-strength">strong</span> Tiered generation: Faker &rarr; AI &rarr; Edge cases (80% without AI)</li>
+    <li><span class="tag tag-strength">strong</span> Integration matrix between 4 packages</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-critical">Critical</td><td><code>unmask</code> with auth token &mdash; security not described (algorithm, format, rotation, leak prevention)</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>Proxy-based interception claimed, but interface allows monkey-patching &mdash; spec contradicts itself</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>Expression language &mdash; no error handling contract (missing key, invalid JWT, missing field)</td></tr>
+    <tr><td class="severity-major">Major</td><td>GraphQL introspection &mdash; no fallback when disabled</td></tr>
+    <tr><td class="severity-major">Major</td><td>Vault for tokenize strategy &mdash; 2 paragraphs for core infrastructure</td></tr>
+    <tr><td class="severity-major">Major</td><td>WebSocket mock/record &mdash; mentioned in structure, not described</td></tr>
+    <tr><td class="severity-major">Major</td><td>Per-endpoint vs global config &mdash; no merge/override rules</td></tr>
+    <tr><td class="severity-major">Major</td><td>No rate limiting on admin API &mdash; memory leak in CI with parallel tests</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>introspect(target: string)</code> &mdash; one string for URL and file path</td></tr>
+    <tr><td class="severity-major">Major</td><td>HAR import/export &mdash; no mapping to internal Snapshot format</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>MCP tools count: text says "9", table lists 8</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>PII phone pattern US-only, no E.164</td></tr>
+    <tr><td class="severity-minor">Minor</td><td><code>mock</code> vs <code>static-mock</code> &mdash; two names for one thing</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> How does Hybrid Mode interact with Stateful Mocking? POST changes state, GET returns snapshot &mdash; undefined behavior</li>
+      <li><span class="tag tag-question">?</span> Docker network alias mechanism for hostname binding</li>
+      <li><span class="tag tag-question">?</span> Who owns mock server lifecycle in AI Test Runner?</li>
+    </ul>
+  </details>
+
+  <div class="verdict">Stateful expression language is the strongest part. Security gaps in PII vault and auth tokens are the most concerning &mdash; must be specified before any implementation touches real data.</div>
+</div>
+
+<!-- ==================== APPLE HIG ==================== -->
+<h2 id="apple-hig">5. Apple HIG Design Rules</h2>
+<div class="section">
+  <p><strong>What it is:</strong> 224 Apple HIG rules for automated linter, 12 categories, each with measurability (algorithmic/heuristic/subjective) and severity (error/warning/info).</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> Uniform table structure across all 12 sections</li>
+    <li><span class="tag tag-strength">strong</span> Concrete numerical values (Dynamic Type matrix with all 7 size categories)</li>
+    <li><span class="tag tag-strength">strong</span> Strong accessibility section (25 rules, 10 errors)</li>
+    <li><span class="tag tag-strength">strong</span> Current: includes Liquid Glass / WWDC25</li>
+    <li><span class="tag tag-strength">strong</span> Full data sources with traceability</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-major">Major</td><td>Summary statistics contain arithmetic errors &mdash; warnings/info counts in Color and Typography don't match actual rules</td></tr>
+    <tr><td class="severity-major">Major</td><td>Measurability key inconsistent: <code>Subjective</code> here vs <code>AI-assisted</code> in Material Design</td></tr>
+    <tr><td class="severity-major">Major</td><td>No "How to Use" section &mdash; rules use SwiftUI/UIKit terms but HyperCanvas is web. No token mapping.</td></tr>
+    <tr><td class="severity-major">Major</td><td>Rule duplication between Color and Accessibility (C-015&harr;A-018, T-024&harr;A-019)</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Russian text at end (lines 582-589) &mdash; leftover prompt artifact</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Large Title missing from Dynamic Type table</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>watchOS / visionOS coverage minimal</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>No versioning &mdash; "Based on HIG as of June 2025" nowhere stated</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> Web or Native? 51% "algorithmic" rules not implementable without translation layer</li>
+      <li><span class="tag tag-question">?</span> Liquid Glass &mdash; only 4 rules for Apple's entire visual system redesign?</li>
+      <li><span class="tag tag-question">?</span> What false positive rate is acceptable for 38% heuristic rules?</li>
+    </ul>
+  </details>
+</div>
+
+<!-- ==================== MATERIAL ==================== -->
+<h2 id="material">6. Material Design Rules</h2>
+<div class="section">
+  <p><strong>What it is:</strong> 180 Material Design 3 validation rules, 13 categories, with precise numerical values (tone mapping, type scale, duration tokens, easing curves, elevation shadows).</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> Full light/dark tone mapping (32+ color roles with concrete tone values)</li>
+    <li><span class="tag tag-strength">strong</span> 78% algorithmic rules &mdash; realistic assessment</li>
+    <li><span class="tag tag-strength">strong</span> Precise bezier curves and CSS shadow values</li>
+    <li><span class="tag tag-strength">strong</span> Summary statistics verified and correct</li>
+    <li><span class="tag tag-strength">strong</span> <code>easing-emphasized</code> correctly noted as Path-based, not cubic-bezier</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-critical">Critical</td><td>Lines 771-788: generation artifact ("I didn't have Write permissions..."). Must delete.</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>A-001 and I-001 duplicate same rule (48&times;48dp touch target) &mdash; double reporting</td></tr>
+    <tr><td class="severity-critical">Critical</td><td>S-004 "Buttons use shape-full" = error, but ambiguous (20dp vs 9999dp at non-standard height)</td></tr>
+    <tr><td class="severity-major">Major</td><td>3 different rule formats (expanded, one-line, table) &mdash; parser can't handle all three</td></tr>
+    <tr><td class="severity-major">Major</td><td>No "Incorrect" examples for 179 of 180 rules</td></tr>
+    <tr><td class="severity-major">Major</td><td>Missing components: Bottom Sheet, Switch, Slider, Checkbox, Radio, Tabs, Divider</td></tr>
+    <tr><td class="severity-major">Major</td><td>C-009 "13 required tones" but dark theme mapping uses tones 4, 6, 12, 17, 22 not in the list. Internal contradiction.</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Inconsistent severity: button shape = error, FAB shape = warning. No justification.</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>E-002 shadows only for levels 1-3, levels 4-5 missing</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>No document metadata (Date, Author, Status)</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> <code>easing-emphasized</code> is path-based. How will DS Core extractor parse it from CSS?</li>
+      <li><span class="tag tag-question">?</span> C-014 "HCT color space" &mdash; how to validate palette was generated via HCT vs HSL?</li>
+      <li><span class="tag tag-question">?</span> L-003 window size classes in dp &mdash; what about device pixel ratio for web?</li>
+    </ul>
+  </details>
+</div>
+
+<!-- ==================== FLUENT 2 ==================== -->
+<h2 id="fluent2">7. Fluent 2 Design Rules</h2>
+<div class="section">
+  <p><strong>What it is:</strong> 108 Fluent 2 linter rules, 8 categories, based on <code>@fluentui/tokens</code>. Boolean measurability, concrete token values throughout.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> 81% programmatically verifiable rules</li>
+    <li><span class="tag tag-strength">strong</span> Precise token values everywhere</li>
+    <li><span class="tag tag-strength">strong</span> Summary table numbers verified and correct (108 total)</li>
+    <li><span class="tag tag-strength">strong</span> Brand shadow opacity formulas</li>
+  </ul>
+
+  <h3>Issues</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th></tr>
+    <tr><td class="severity-major">Major</td><td>Format differs from Material/Apple HIG: boolean measurability vs 3-tier, no <code>Validates</code> column. Unified parser won't work.</td></tr>
+    <tr><td class="severity-major">Major</td><td>No Layout / Grid / Responsive section (Fluent 2 has breakpoints and grid system)</td></tr>
+    <tr><td class="severity-major">Major</td><td>No Component Anatomy rules (Button height, Dialog width, Input height...)</td></tr>
+    <tr><td class="severity-major">Major</td><td><code>subtitle1</code> line-height: 26px in composite styles vs 28px (<code>lineHeightBase500</code>) in token table. Contradiction.</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>SPACE-012 attributes 44&times;44px to "WCAG" &mdash; actually Apple HIG. WCAG 2.5.8 = 24px.</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Shadow reference shows raw <code>rgba()</code> but SHADOW-012 forbids raw values</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>COLOR-009 conflates tertiary and disabled</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Stroke width rules web-only, mobile values not in rules</td></tr>
+  </table>
+
+  <details>
+    <summary>Key Questions</summary>
+    <ul>
+      <li><span class="tag tag-question">?</span> Scope web only? Mobile stroke values present but rules are web.</li>
+      <li><span class="tag tag-question">?</span> TYPO-015 forbids <code>px</code> for font-size, but all tokens are in <code>px</code>. Implied rem conversion?</li>
+      <li><span class="tag tag-question">?</span> Will there be a unified format with Material and Apple HIG specs?</li>
+    </ul>
+  </details>
+</div>
+
+<!-- ==================== SELF IMPROVING ==================== -->
+<h2 id="self-improving">8. Self-Improving Templates Research</h2>
+<div class="section">
+  <p><strong>What it is:</strong> Literature review of 30 analogs for "self-improving decision template system" where AI decisions crystallize into deterministic templates with human review. From MYCIN (1970s) to NeurIPS 2025.</p>
+
+  <h3>Strengths</h3>
+  <ul>
+    <li><span class="tag tag-strength">strong</span> Scale: 30 analogs with consistent 4-axis analysis</li>
+    <li><span class="tag tag-strength">strong</span> Practical architectural lessons (not Wikipedia summaries)</li>
+    <li><span class="tag tag-strength">strong</span> Actionable conclusions with source attribution</li>
+  </ul>
+
+  <h3>Issues (pre-fix)</h3>
+  <table>
+    <tr><th>Severity</th><th>Issue</th><th>Status</th></tr>
+    <tr><td class="severity-major">Major</td><td>No "Our System" definition</td><td style="color:var(--green)">Fixed</td></tr>
+    <tr><td class="severity-major">Major</td><td>Summary table incomplete (9 of 30 analogs)</td><td style="color:var(--green)">Fixed</td></tr>
+    <tr><td class="severity-major">Major</td><td>No analysis gaps / limitations</td><td style="color:var(--yellow)">Partially</td></tr>
+    <tr><td class="severity-major">Major</td><td>10 conclusions without prioritization</td><td style="color:var(--green)">Fixed</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>Self-review notes in document</td><td style="color:var(--green)">Fixed</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>No version/date/author</td><td style="color:var(--green)">Fixed</td></tr>
+    <tr><td class="severity-minor">Minor</td><td>No cross-references between analogs</td><td style="color:var(--green)">Fixed</td></tr>
+  </table>
+
+  <h3>New Content Added</h3>
+  <ul>
+    <li><strong>RETE-inspired approach:</strong> Alpha memory as TemplateIndex (O(1) lookup), incremental invalidation, conflict resolution formula: <code>0.5*specificity + 0.3*recency + 0.2*frequency</code></li>
+    <li><strong>Recommended Architecture:</strong> RDR + Agentic Plan Caching core, RETE-inspired matching, Reflexion meta-knowledge, PROSE ranked alternatives, NeMo-inspired DSL</li>
+    <li><strong>Prioritized conclusions:</strong> 5 MVP must-haves, 5 future iterations</li>
+  </ul>
+</div>
+
+<!-- ==================== CROSS-CUTTING ==================== -->
+<h2 id="cross-cutting">Cross-Cutting Issues</h2>
+<div class="cross-cutting">
+  <h3>Issues affecting multiple documents</h3>
+  <table>
+    <tr><th>#</th><th>Issue</th><th>Affected Specs</th></tr>
+    <tr><td>1</td><td><strong>Measurability key not unified</strong> &mdash; <code>Algorithmic/Heuristic/Subjective</code> vs <code>Algorithmic/Heuristic/AI-assisted</code> vs <code>Yes/No</code></td><td>Apple HIG, Material, Fluent 2</td></tr>
+    <tr><td>2</td><td><strong>Rule format not unified</strong> &mdash; tables vs bullet lists vs mixed, three documents three formats</td><td>Apple HIG, Material, Fluent 2</td></tr>
+    <tr><td>3</td><td><strong>~20+ undefined types</strong> across system specs</td><td>DS Core, AI Test, Component Stage</td></tr>
+    <tr><td>4</td><td><strong>No error handling</strong> in any of the 4 system specs</td><td>DS Core, AI Test, Component Stage, Mock Server</td></tr>
+    <tr><td>5</td><td><strong>Hardcoded model versions</strong> (<code>claude-haiku-4-5-20251001</code>)</td><td>AI Test, Component Stage</td></tr>
+    <tr><td>6</td><td><strong>No document metadata</strong> (Date, Author, Status, Linear) in most specs</td><td>Material, Fluent 2, Apple HIG, Component Stage</td></tr>
+  </table>
+
+  <h3>Recommended Resolution Order</h3>
+  <ol>
+    <li>Unify measurability key and rule format across all 3 design rules specs</li>
+    <li>Define all missing types in a shared <code>packages/ui-quality-shared</code> spec</li>
+    <li>Add error handling strategy section to each system spec</li>
+    <li>Fix Material Design artifacts and summary statistics</li>
+    <li>Add metadata to all documents</li>
+  </ol>
+</div>
+
+<p style="text-align: center; color: var(--text-dim); margin-top: 3rem; font-size: 0.85rem;">
+  Generated by Claude &bull; Review date: 2026-04-01
+</p>
+
+</body>
+</html>
