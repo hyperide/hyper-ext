@@ -91,3 +91,21 @@ pre-commit:
           echo "  Remove it:  git rm --cached <file> && rm <file>   then use 'npm ci' in the ext dir, not bun." >&2
           exit 1
         fi
+
+pre-push:
+  scripts:
+    # Block DIRECT pushes to main/master (HYP-856). GitHub branch protection is a
+    # paid feature on this private free-plan repo, so this client-side gate is the
+    # enforcement — land changes via a PR (gh ship). This repo's local core.hooksPath
+    # bypasses the machine-wide global-hooks dispatcher, hence the committed copy
+    # (.lefthook/pre-push/protect-main.sh). Legit release flow (build-and-install.sh)
+    # uses the audited escape hatch:
+    #   PUSH_MAIN_OK=1 PUSH_MAIN_REASON="why" git push …  (appended to
+    #   ~/.cache/agent-tools/overrides.log — never silent).
+    # A `scripts:` entry, NOT `commands:` — lefthook SKIPS pre-push commands whenever
+    # its "push files" list is empty (e.g. the first push of a branch), which would
+    # fail OPEN; scripts always run. use_stdin: git delivers the pushed refs on the
+    # hook's stdin ("<local-ref> <local-sha> <remote-ref> <remote-sha>" lines).
+    "protect-main.sh":
+      runner: sh
+      use_stdin: true

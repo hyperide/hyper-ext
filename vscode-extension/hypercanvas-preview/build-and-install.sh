@@ -38,7 +38,17 @@ if [[ "$BUMPED" == true ]]; then
   git -C "$REPO_ROOT" add "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/package-lock.json"
   git -C "$REPO_ROOT" commit -m "chore: bump hypercanvas-preview to v${VERSION}"
   git -C "$REPO_ROOT" tag -a "$TAG" -m "hypercanvas-preview v${VERSION}"
-  if ! git -C "$REPO_ROOT" push origin HEAD || ! git -C "$REPO_ROOT" push origin "$TAG"; then
+  # The pre-push protect-main gate (lefthook, HYP-856) blocks direct pushes to main;
+  # this release script is the SANCTIONED exception — run from main, it pushes the
+  # version-bump commit together with the ext-v* tag ("push origin HEAD" targets the
+  # CURRENT branch; the gate only engages when that is main/master). PUSH_MAIN_OK is
+  # the audited escape hatch: the override is appended to
+  # ~/.cache/agent-tools/overrides.log. Scoped as per-command prefix assignments
+  # (not export) so it can never leak past these two pushes — not even if this file
+  # is ever sourced.
+  PUSH_MAIN_REASON_TEXT="build-and-install.sh release: hypercanvas-preview v${VERSION} (${TAG})"
+  if ! PUSH_MAIN_OK=1 PUSH_MAIN_REASON="$PUSH_MAIN_REASON_TEXT" git -C "$REPO_ROOT" push origin HEAD \
+     || ! PUSH_MAIN_OK=1 PUSH_MAIN_REASON="$PUSH_MAIN_REASON_TEXT" git -C "$REPO_ROOT" push origin "$TAG"; then
     echo "ERROR: Failed to push branch and/or tag ${TAG}. Please resolve the issue and push manually." >&2
     exit 1
   fi
