@@ -21,8 +21,15 @@ mock.module('../services/PreviewProxy', () => ({
     stop = mock();
   },
 }));
-const { appendScriptCliArgs, buildInstallCommand, devScriptDeclaresPort, DevServerManager, shouldRepairDependencies } =
-  await import('../services/DevServerManager');
+const {
+  appendScriptCliArgs,
+  buildInstallCommand,
+  devScriptDeclaresPort,
+  devScriptUsesWrapper,
+  DevServerManager,
+  portInjectionArgs,
+  shouldRepairDependencies,
+} = await import('../services/DevServerManager');
 
 describe('devScriptDeclaresPort', () => {
   it('detects a CLI --port / -p flag (the only reliable pin)', () => {
@@ -98,6 +105,101 @@ describe('devScriptDeclaresPort', () => {
       expect(devScriptDeclaresPort('build && next -p 4000')).toBe(true); // space before -p
       expect(devScriptDeclaresPort('build &&next -p 4000')).toBe(true); // still has space before -p
     });
+  });
+});
+
+describe('devScriptUsesWrapper', () => {
+  // HYP-547: monorepo task runners (nx, turbo, pnpm -r, …) wrap the real dev
+  // process. A `--port` appended to `bun run dev` reaches the WRAPPER (nx/bun),
+  // not the underlying vite/next/astro, so it never binds the port we asked for.
+  // Detecting the wrapper lets start() skip the blind injection and fall back to
+  // stdout port auto-detection (_maybeUpdatePortFromOutput), which works because
+  // vite still prints `http://localhost:PORT`.
+  it('detects nx task-runner wrappers', () => {
+    expect(devScriptUsesWrapper('nx run conloca-website:dev --outputStyle=stream')).toBe(true);
+    expect(devScriptUsesWrapper('nx run @conloca/conloca-app:dev')).toBe(true);
+    expect(devScriptUsesWrapper('nx run-many --target=dev')).toBe(true);
+    expect(devScriptUsesWrapper('nx dev my-app')).toBe(true);
+  });
+
+  it('detects turbo wrappers', () => {
+    expect(devScriptUsesWrapper('turbo run dev')).toBe(true);
+    expect(devScriptUsesWrapper('turbo dev --filter=web')).toBe(true);
+  });
+
+  it('detects pnpm recursive / filtered wrappers', () => {
+    expect(devScriptUsesWrapper('pnpm -r dev')).toBe(true);
+    expect(devScriptUsesWrapper('pnpm --recursive run dev')).toBe(true);
+    expect(devScriptUsesWrapper('pnpm --filter web dev')).toBe(true);
+  });
+
+  it('detects yarn workspace wrappers', () => {
+    expect(devScriptUsesWrapper('yarn workspace web dev')).toBe(true);
+    expect(devScriptUsesWrapper('yarn workspaces foreach run dev')).toBe(true);
+  });
+
+  it('detects lerna and npm-run-all wrappers', () => {
+    expect(devScriptUsesWrapper('lerna run dev')).toBe(true);
+    expect(devScriptUsesWrapper('npm-run-all -p dev:*')).toBe(true);
+    expect(devScriptUsesWrapper('run-p dev:client dev:server')).toBe(true);
+    expect(devScriptUsesWrapper('run-s build dev')).toBe(true);
+  });
+
+  it('returns false for direct dev-server invocations', () => {
+    expect(devScriptUsesWrapper('vite dev')).toBe(false);
+    expect(devScriptUsesWrapper('vite')).toBe(false);
+    expect(devScriptUsesWrapper('next dev')).toBe(false);
+    expect(devScriptUsesWrapper('remix vite:dev')).toBe(false);
+    expect(devScriptUsesWrapper('astro dev')).toBe(false);
+    expect(devScriptUsesWrapper('react-scripts start')).toBe(false);
+    expect(devScriptUsesWrapper('')).toBe(false);
+    // Must not false-positive on substrings: a component named "turbofan",
+    // a flag --next, a path containing nx, etc.
+    expect(devScriptUsesWrapper('vite dev --turbofan')).toBe(false);
+    expect(devScriptUsesWrapper('node ./scripts/lernaesque.js')).toBe(false);
+  });
+});
+
+describe('portInjectionArgs', () => {
+  // HYP-547: the actual decision start() makes. Tested as a pure function so the
+  // wiring (not just the predicate) is covered without spawning a process.
+  it('injects --port for direct vite', () => {
+    expect(portInjectionArgs('vite', 'vite dev', 5173)).toEqual(['--port', '5173']);
+  });
+
+  it('injects --port for direct remix', () => {
+    expect(portInjectionArgs('remix', 'remix vite:dev', 5173)).toEqual(['--port', '5173']);
+  });
+
+  it('injects -p for direct nextjs', () => {
+    expect(portInjectionArgs('nextjs', 'next dev', 3000)).toEqual(['-p', '3000']);
+  });
+
+  it('injects --port for direct webpack', () => {
+    expect(portInjectionArgs('webpack', 'webpack serve', 3000)).toEqual(['--port', '3000']);
+  });
+
+  it('injects nothing for cra (reads PORT env var)', () => {
+    expect(portInjectionArgs('cra', 'react-scripts start', 3000)).toEqual([]);
+  });
+
+  it('injects nothing for bun type', () => {
+    expect(portInjectionArgs('bun', 'bun run server.ts', 3000)).toEqual([]);
+  });
+
+  it('skips injection when the script already declares its own port', () => {
+    expect(portInjectionArgs('vite', 'vite dev --port 4000', 5173)).toEqual([]);
+    expect(portInjectionArgs('nextjs', 'next dev -p 4001', 3000)).toEqual([]);
+  });
+
+  it('skips injection for an nx-wrapped vite dev script (the HYP-547 bug)', () => {
+    // Without the wrapper guard this returned ['--port','5173'], which got
+    // appended after `bun run dev` and clobbered onto nx instead of vite.
+    expect(portInjectionArgs('vite', 'nx run conloca-website:dev --outputStyle=stream', 5173)).toEqual([]);
+  });
+
+  it('skips injection for a turbo-wrapped nextjs dev script', () => {
+    expect(portInjectionArgs('nextjs', 'turbo run dev --filter=web', 3000)).toEqual([]);
   });
 });
 

@@ -9,7 +9,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import * as vscode from 'vscode';
 import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-patterns';
 import type { RuntimeError } from '../../../../shared/runtime-error';
-import type { DevServerState, DevServerStatus } from '../types';
+import type { DevServerState, DevServerStatus, ProjectType } from '../types';
 import { findFreePort, probeOpen } from './netProbe';
 import { PreviewProxy } from './PreviewProxy';
 import { detectPackageManager, getPackageScripts, getProjectInfo } from './ProjectDetector';
@@ -67,6 +67,64 @@ export function appendScriptCliArgs(command: { args: string[] }, packageManager:
  */
 export function devScriptDeclaresPort(script: string): boolean {
   return /--port[=\s]+\d/.test(script) || /(?:^|\s)-p[=\s]+\d/.test(script);
+}
+
+/**
+ * True when a dev script delegates to a monorepo task runner / multi-process
+ * wrapper (`nx run x:dev`, `turbo run dev`, `pnpm -r dev`, `yarn workspace …`,
+ * `lerna run dev`, `npm-run-all`/`run-p`/`run-s`) rather than invoking the
+ * dev-server binary directly (HYP-547).
+ *
+ * This matters for `--port` injection: our injected flag is appended to
+ * `bun run dev` / `npm run dev --`, so it reaches the WRAPPER, not the
+ * underlying vite/next/astro process — the port is silently ignored and the
+ * server binds its own default ("dev server starts on wrong port" class).
+ * When a wrapper is detected we skip injection and rely on stdout port
+ * auto-detection (_maybeUpdatePortFromOutput); the underlying tool still prints
+ * `http://localhost:PORT`, so the proxy retargets to the real bound port.
+ *
+ * False positives are benign — they only mean "skip injection, auto-detect
+ * instead", the same safe fallback `devScriptDeclaresPort` already relies on.
+ * False negatives are the actual bug, so the matchers lean broad. Word-boundary
+ * anchored to avoid matching substrings (e.g. `--turbofan`, a `nx`-containing path).
+ */
+export function devScriptUsesWrapper(script: string): boolean {
+  return (
+    /(?:^|\s|&&|;|\|)\s*nx\s/.test(script) || // nx run / nx run-many / nx dev
+    /(?:^|\s|&&|;|\|)\s*turbo\s/.test(script) || // turbo run dev / turbo dev
+    /(?:^|\s|&&|;|\|)\s*lerna\s/.test(script) || // lerna run dev
+    /(?:^|\s|&&|;|\|)\s*(?:npm-run-all|run-p|run-s)\b/.test(script) || // parallel/serial script runners
+    /(?:^|\s)pnpm\s+(?:-r\b|--recursive\b|--filter\b|-F\b)/.test(script) || // pnpm workspace fan-out
+    /(?:^|\s)yarn\s+workspaces?\b/.test(script) // yarn workspace / workspaces foreach
+  );
+}
+
+/**
+ * The `--port` CLI args to append for a given project type + dev script (HYP-547).
+ * This is the exact decision `start()` makes, extracted as a pure function so the
+ * wiring — not just the predicates — is unit-testable without spawning a process.
+ *
+ * Returns `[]` (no injection, fall back to stdout port auto-detection) when:
+ *  - the script already pins its own port (`devScriptDeclaresPort`), or
+ *  - the script delegates to a task-runner wrapper (`devScriptUsesWrapper`), or
+ *  - the type does not take a CLI port flag (cra reads PORT env; bun/unknown).
+ *
+ * Otherwise returns the framework-appropriate flag pair (`--port N` for
+ * vite/remix/webpack, `-p N` for nextjs). These args are passed to
+ * `appendScriptCliArgs`, which handles the npm `--` separator.
+ */
+export function portInjectionArgs(type: ProjectType, script: string, port: number): string[] {
+  if (devScriptDeclaresPort(script) || devScriptUsesWrapper(script)) {
+    return [];
+  }
+  if (type === 'vite' || type === 'remix' || type === 'webpack') {
+    return ['--port', String(port)];
+  }
+  if (type === 'nextjs') {
+    return ['-p', String(port)];
+  }
+  // cra reads PORT env var; bun/unknown have no standard CLI port flag.
+  return [];
 }
 
 export function shouldRepairDependencies(errorMessage: string, logs: LogEntry[]): boolean {
@@ -308,32 +366,32 @@ export class DevServerManager {
       ); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       this._outputChannel.appendLine(`[DevServer] Starting ${packageManager} run ${devScript}`);
       this._outputChannel.appendLine(`[DevServer] Project: ${this._projectPath}`);
-      // Skip injecting our CLI --port when the dev script already pins its own via a
-      // CLI flag (`vite dev --port 3000`, `next -p 4000`). A second --port is a
-      // confusing phantom; the real bound port is discovered from stdout
-      // (_maybeUpdatePortFromOutput). The PORT/VITE_PORT env below stays set but is
-      // harmless (Vite ignores it, and an inline PORT= in the script overrides ours).
-      const scriptDeclaresPort = devScriptDeclaresPort(scripts[devScript] ?? '');
-      this._outputChannel.appendLine(
-        scriptDeclaresPort
-          ? '[DevServer] Port: declared by dev script (auto-detected from output)'
-          : `[DevServer] Port: ${this._port}`,
-      );
+      // Decide --port injection. We skip it (relying on stdout port
+      // auto-detection, _maybeUpdatePortFromOutput) when:
+      //  - the script already pins its own port (`vite dev --port 3000`) — a
+      //    second --port is a confusing phantom; or
+      //  - the script delegates to a task-runner wrapper (`nx run x:dev`,
+      //    `turbo run dev`, …) — our flag would land on `bun run dev`/nx, NOT the
+      //    underlying vite/astro, and bind the wrong port (HYP-547).
+      // The PORT/VITE_PORT env below stays set but is harmless (Vite ignores it,
+      // and an inline PORT= in the script overrides ours).
+      const scriptText = scripts[devScript] ?? '';
+      const portArgs = portInjectionArgs(projectInfo.type, scriptText, this._port);
+      if (portArgs.length > 0) {
+        this._outputChannel.appendLine(`[DevServer] Port: ${this._port}`);
+      } else if (devScriptUsesWrapper(scriptText)) {
+        this._outputChannel.appendLine('[DevServer] Port: wrapper command — auto-detecting from output');
+      } else {
+        this._outputChannel.appendLine('[DevServer] Port: declared by dev script (auto-detected from output)');
+      }
 
       // Build command based on package manager
       const command = this._buildCommand(packageManager, devScript);
 
       // Pass --port via CLI for frameworks that support it.
       // Env vars PORT/VITE_PORT alone are not reliable (Vite ignores them).
-      if (!scriptDeclaresPort) {
-        if (projectInfo.type === 'vite' || projectInfo.type === 'remix') {
-          appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
-        } else if (projectInfo.type === 'nextjs') {
-          appendScriptCliArgs(command, packageManager, ['-p', String(this._port)]);
-        } else if (projectInfo.type === 'webpack') {
-          appendScriptCliArgs(command, packageManager, ['--port', String(this._port)]);
-        }
-        // CRA reads PORT env var — no CLI flag needed
+      if (portArgs.length > 0) {
+        appendScriptCliArgs(command, packageManager, portArgs);
       }
 
       // Spawn process
