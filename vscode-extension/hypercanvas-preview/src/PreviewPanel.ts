@@ -24,6 +24,16 @@ import { escapeRegex, extractComponentName } from '../../../lib/preview-generato
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { deriveSubProjectPrefix } from './bridges/monorepo-path-translate';
+import {
+  canNavigate,
+  createComponentState,
+  needsNavigationWait,
+  selectComponentParam,
+  withCurrentComponent,
+  withNavigable,
+  withNeedsRegeneration,
+  type PreviewComponentState,
+} from './PreviewComponentState';
 import { VSCodeFileIO } from './vscode-file-io';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
@@ -61,8 +71,37 @@ export class PreviewPanel {
   private static readonly PANEL_ID = 'preview';
 
   private _panel?: vscode.WebviewPanel;
-  private _currentComponent?: string;
-  private _navigableComponent?: string;
+
+  /**
+   * Single source of truth for the component the preview is showing — repoPath
+   * (astBridge key), previewPath (iframe ?component= path), navigable, and
+   * needsRegeneration. Replaces four formerly-independent shadow fields. The
+   * accessors below preserve their legacy private names so every read/write routes
+   * through this record (HYP-369 Sub-ticket A). See PreviewComponentState.ts.
+   */
+  private _componentState: PreviewComponentState = createComponentState();
+
+  /** Repo-relative component path (astBridge key). Backed by `_componentState.repoPath`. */
+  private get _currentComponent(): string | undefined {
+    return this._componentState.repoPath;
+  }
+  private set _currentComponent(repoPath: string | undefined) {
+    this._componentState = { ...this._componentState, repoPath };
+  }
+
+  /**
+   * Legacy navigability shim. Reads back the repoPath when navigable (so the old
+   * `_navigableComponent === _currentComponent` comparisons keep working), undefined
+   * otherwise. Writing a path marks navigable only when it matches the current
+   * repoPath; writing undefined clears it. Backed by `_componentState.navigable`.
+   */
+  private get _navigableComponent(): string | undefined {
+    return this._componentState.navigable ? this._componentState.repoPath : undefined;
+  }
+  private set _navigableComponent(navigablePath: string | undefined) {
+    this._componentState = withNavigable(this._componentState, navigablePath);
+  }
+
   /**
    * The component path as the preview dev server sees it — relative to the active
    * project root. For a monorepo this is the sub-project-relative path (the key in
@@ -70,9 +109,23 @@ export class PreviewPanel {
    * _currentComponent (always repo-relative, the root for astBridge edits). Used only
    * to build the iframe ?component= URL. Defaults to _currentComponent for
    * single-package projects where the two roots coincide (HYP-420).
+   * Backed by `_componentState.previewPath`.
    */
-  private _previewComponent?: string;
-  private _requiresPreviewRegeneration = false;
+  private get _previewComponent(): string | undefined {
+    return this._componentState.previewPath;
+  }
+  private set _previewComponent(previewPath: string | undefined) {
+    this._componentState = { ...this._componentState, previewPath };
+  }
+
+  /** Whether the preview must be regenerated on re-attach. Backed by `_componentState.needsRegeneration`. */
+  private get _requiresPreviewRegeneration(): boolean {
+    return this._componentState.needsRegeneration;
+  }
+  private set _requiresPreviewRegeneration(needsRegeneration: boolean) {
+    this._componentState = withNeedsRegeneration(this._componentState, needsRegeneration);
+  }
+
   private _defaultComponent?: string;
   private _disposables: vscode.Disposable[] = [];
 
@@ -1158,10 +1211,11 @@ export class PreviewPanel {
     // all onChange listeners). Just cache it locally so the webview gets it.
     const stateComponent = this._stateHub.state.currentComponent;
     if (stateComponent?.path) {
+      // Adopt the path as current and keep navigability only if it already pointed
+      // at this exact component; otherwise the iframe must wait for setComponentParam.
+      const wasNavigableForPath = this._navigableComponent === stateComponent.path;
       this._currentComponent = stateComponent.path;
-      if (this._navigableComponent !== stateComponent.path) {
-        this._navigableComponent = undefined;
-      }
+      this._navigableComponent = wasNavigableForPath ? stateComponent.path : undefined;
       if (this._requiresPreviewRegeneration) {
         this._requiresPreviewRegeneration = false;
         this._stateHub.applyUpdate({ currentComponent: stateComponent });
@@ -1205,9 +1259,8 @@ export class PreviewPanel {
       webview.postMessage({ type: 'projectError', error: this._projectError });
     }
 
-    const canNavigateCurrentComponent = !this._currentComponent || this._navigableComponent === this._currentComponent;
-    if (this._currentComponent && canNavigateCurrentComponent) {
-      webview.postMessage({ type: 'setComponent', component: this._currentComponent });
+    if (this._componentState.repoPath && canNavigate(this._componentState)) {
+      webview.postMessage({ type: 'setComponent', component: this._componentState.repoPath });
     }
 
     if (this._devServerRunning) {
@@ -1283,13 +1336,10 @@ export class PreviewPanel {
   }
 
   private _setCurrentComponent(component: string): void {
-    if (this._currentComponent !== component) {
-      this._navigableComponent = undefined;
-      // Drop any stale sub-project preview path; the extension re-supplies it via
-      // setComponentParam when this component is (re)selected through the pipeline.
-      this._previewComponent = undefined;
-    }
-    this._currentComponent = component;
+    // Changing the component drops navigability and the stale sub-project preview
+    // path; the extension re-supplies the preview path via setComponentParam when
+    // this component is (re)selected through the pipeline.
+    this._componentState = withCurrentComponent(this._componentState, component);
     const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
     const current = this._stateHub.state.currentComponent;
 
@@ -1312,7 +1362,7 @@ export class PreviewPanel {
       return;
     }
 
-    const component = this._currentComponent || this._defaultComponent;
+    const component = this._componentState.repoPath || this._defaultComponent;
 
     // No component selected — show hint instead of loading bare URL
     if (!component) {
@@ -1321,15 +1371,16 @@ export class PreviewPanel {
       return;
     }
 
-    if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
+    if (needsNavigationWait(this._componentState)) {
       return;
     }
 
     // The iframe URL must use the preview (project-root-relative) path so the dev
-    // server's __canvas_preview__ registry key matches. _previewComponent is set
-    // alongside _currentComponent by setComponentParam; fall back to the repo-relative
+    // server's __canvas_preview__ registry key matches. previewPath is set
+    // alongside repoPath by setComponentParam; fall back to the repo-relative
     // component for paths that coincide (single-package projects, _defaultComponent).
-    const previewComponent = this._currentComponent && this._previewComponent ? this._previewComponent : component;
+    const previewComponent =
+      this._componentState.repoPath && this._componentState.previewPath ? this._componentState.previewPath : component;
 
     const baseUrl = `${this._previewBaseUrl}/test-preview`;
     const url = `${baseUrl}?component=${encodeURIComponent(previewComponent)}`;
@@ -1430,10 +1481,7 @@ export class PreviewPanel {
    *   to componentPath when the project and repo roots coincide.
    */
   public setComponentParam(componentPath: string, previewComponentPath: string = componentPath): void {
-    this._currentComponent = componentPath;
-    this._navigableComponent = componentPath;
-    this._previewComponent = previewComponentPath;
-    this._requiresPreviewRegeneration = false;
+    this._componentState = selectComponentParam(this._componentState, componentPath, previewComponentPath);
 
     // Re-root iframe-driven AST edits for monorepo sub-projects. The iframe sees
     // sub-project-relative paths (previewComponentPath form) but the repo-rooted
