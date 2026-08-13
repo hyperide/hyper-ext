@@ -75,8 +75,14 @@ export function toRepoRelativePath(filePath: string, subProjectPrefix: string): 
   const stripped = stripViteFsPrefix(filePath);
   if (!subProjectPrefix) return stripped;
   const fwd = toForwardSlashes(stripped);
+  // Platform-independent absolute-path check on purpose: paths are forward-slash
+  // normalized (see file header), so a host-dependent `path.isAbsolute` would
+  // misclassify `C:/...` on POSIX. POSIX-absolute (`/`) and Windows drive-letter
+  // forms are the only shapes the iframe ever emits here.
   if (fwd.startsWith('/') || /^[a-zA-Z]:/.test(fwd)) return stripped;
-  if (fwd.startsWith(subProjectPrefix)) return fwd === stripped ? stripped : fwd;
+  // Already repo-relative: return the slash-normalized form used throughout this
+  // module (`fwd` equals `stripped` when no backslashes were present).
+  if (fwd.startsWith(subProjectPrefix)) return fwd;
   return `${subProjectPrefix}${fwd}`;
 }
 

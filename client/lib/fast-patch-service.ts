@@ -126,7 +126,7 @@ export class FastPatchService {
 
     let el = this.getStyleElement();
     if (!el) {
-      el = doc.createElement('style') as HTMLStyleElement;
+      el = doc.createElement('style');
       el.id = STYLE_ID;
       doc.head.appendChild(el);
     }
