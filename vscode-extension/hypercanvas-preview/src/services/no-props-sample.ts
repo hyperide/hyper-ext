@@ -1,8 +1,7 @@
 /**
- * @file Decides when the extension should create a deterministic SampleDefault scaffold for no-props components.
+ * @file Decides when the extension should create a deterministic SampleDefault scaffold.
  *
  * Accessed via: VS Code extension component selection flow before preview registration
- * Assumptions: `props` is `[]` only when the component was parsed successfully and truly has no props
  */
 
 import type { EnsureSampleResult } from '@lib/preview-generator';
@@ -18,5 +17,10 @@ export function shouldCreateNoPropsSample(
   const enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('autoSampleGeneration', true);
   if (!enabled) return false;
 
-  return !ensureResult.exists && Array.isArray(props) && props.length === 0;
+  // Create a minimal no-props scaffold whenever no sample was generated — regardless of
+  // whether the component declares props. If the component renders without them, great.
+  // If it crashes, the ErrorBoundary catches it and ComponentErrorOverlay shows instead.
+  // This implements "try first, then ask" rather than "refuse to try".
+  // `props` being null/undefined means the component couldn't be parsed — skip in that case.
+  return !ensureResult.exists && Array.isArray(props);
 }
