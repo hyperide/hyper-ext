@@ -30,9 +30,15 @@ export class ReactAdapter implements FrameworkAdapter {
   readonly name = 'react';
   private sourceIndex: FiberSourceIndex | null = null;
   private readonly doc: Document | null;
+  private projectRoot: string | undefined;
 
   constructor(doc?: Document) {
     this.doc = doc ?? null;
+  }
+
+  setProjectRoot(projectRoot: string): void {
+    this.projectRoot = projectRoot;
+    this.sourceIndex?.setProjectRoot(projectRoot);
   }
 
   detect(doc: Document): boolean {
@@ -87,7 +93,9 @@ export class ReactAdapter implements FrameworkAdapter {
   getSourceIndex(): FiberSourceIndex {
     if (this.sourceIndex === null) {
       const doc = this.doc ?? document;
-      this.sourceIndex = new FiberSourceIndex(() => this.findHostRootFiber(doc), doc);
+      this.sourceIndex = new FiberSourceIndex(() => this.findHostRootFiber(doc), doc, {
+        projectRoot: this.projectRoot,
+      });
     }
     return this.sourceIndex;
   }

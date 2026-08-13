@@ -6,6 +6,7 @@
  */
 
 import { debugSourceToLocation, type Fiber, FiberTag, parseDebugStack } from './fiber-internals';
+import { toProjectRelative } from './path-normalization';
 import type { SourceLocation } from './types';
 
 type RootFiberProvider = () => Fiber | null;
@@ -13,6 +14,14 @@ type RootFiberProvider = () => Fiber | null;
 export interface FiberSourceIndexOptions {
   resolveFiberSource?: (fiber: Fiber) => SourceLocation | null;
   mapSource?: (source: SourceLocation, fiber: Fiber) => SourceLocation;
+  /**
+   * When set, both the indexed fiber paths and query sources are normalized
+   * to project-relative form before comparison. Lets the consumer store
+   * entries as relative paths (e.g. after NodeMapService.setProjectRoot) and
+   * still resolve them against fibers whose `_debugSource.fileName` is in
+   * container, host-absolute, or already-relative form.
+   */
+  projectRoot?: string;
 }
 
 export function sourceKeyFromLocation(source: SourceLocation): string {
@@ -115,12 +124,24 @@ export class FiberSourceIndex {
   private readonly doc: Document;
   private readonly resolveFiberSource: (fiber: Fiber) => SourceLocation | null;
   private readonly mapSource: (source: SourceLocation, fiber: Fiber) => SourceLocation;
+  private projectRoot?: string;
 
   constructor(rootProvider: RootFiberProvider, doc: Document, options: FiberSourceIndexOptions = {}) {
     this.rootProvider = rootProvider;
     this.doc = doc;
     this.resolveFiberSource = options.resolveFiberSource ?? getOwnFiberSourceLocation;
     this.mapSource = options.mapSource ?? ((source) => source);
+    this.projectRoot = options.projectRoot;
+  }
+
+  /**
+   * Update the project root used for path normalization and invalidate the
+   * index so it rebuilds under the new root on next access.
+   */
+  setProjectRoot(projectRoot: string | undefined): void {
+    if (this.projectRoot === projectRoot) return;
+    this.projectRoot = projectRoot;
+    this.index = null;
   }
 
   invalidate(): void {
@@ -136,7 +157,7 @@ export class FiberSourceIndex {
     this.ensureBuilt();
     if (this.index === null) return [];
 
-    const matches = this.index.get(sourceKeyFromLocation(source));
+    const matches = this.index.get(this.makeKey(source));
     if (!matches) return [];
     return matches.filter((el) => this.doc.contains(el));
   }
@@ -145,6 +166,7 @@ export class FiberSourceIndex {
     this.ensureBuilt();
     if (this.index === null) return [];
 
+    const queryFileName = this.normalizeFileName(source.fileName);
     let bestDistance = Number.POSITIVE_INFINITY;
     let best: HTMLElement[] = [];
 
@@ -152,7 +174,7 @@ export class FiberSourceIndex {
       const candidateSource = parseSourceKey(key);
       if (
         candidateSource === null ||
-        candidateSource.fileName !== source.fileName ||
+        candidateSource.fileName !== queryFileName ||
         candidateSource.line !== source.line
       ) {
         continue;
@@ -245,6 +267,14 @@ export class FiberSourceIndex {
     return entries;
   }
 
+  private normalizeFileName(fileName: string): string {
+    return this.projectRoot === undefined ? fileName : toProjectRelative(fileName, this.projectRoot);
+  }
+
+  private makeKey(source: SourceLocation): string {
+    return `${this.normalizeFileName(source.fileName)}:${source.line}:${source.column}`;
+  }
+
   private ensureBuilt(): void {
     if (this.index !== null) return;
 
@@ -264,7 +294,7 @@ export class FiberSourceIndex {
       if (host === null || host.stateNode === null || typeof host.stateNode !== 'object') return;
 
       const element = host.stateNode as HTMLElement;
-      const key = sourceKeyFromLocation(mappedSource);
+      const key = this.makeKey(mappedSource);
       const existing = newIndex.get(key);
       if (existing !== undefined) {
         existing.push(element);

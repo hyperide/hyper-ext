@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { type ParseResult, parse } from '@babel/parser';
 import type * as t from '@babel/types';
+import { toProjectRelative } from '../../shared/element-tracing/path-normalization';
 import type { NodeMapEntry, NodeMapUpdate, NodeRef, SourceLocation } from '../../shared/element-tracing/types';
 import { buildNodeMap } from './node-map-builder';
 import { mapNodeRefs } from './stability';
@@ -26,35 +27,83 @@ interface FileState {
 }
 
 export class NodeMapService {
+  /** Keyed by stored filePath — relative when projectRoot is set, as-passed otherwise. */
   private readonly files = new Map<string, FileState>();
-  private containerPrefix = '';
-  private hostPrefix = '';
+  private projectRoot?: string;
 
   /**
-   * Configure Docker/container path normalization.
-   * Incoming source locations that start with `containerPrefix` will have
-   * that prefix replaced with `hostPrefix` before lookup.
+   * Configure the workspace root used to normalize host-absolute file paths
+   * to project-relative form. When set, `parseAndBuild`, `reparseAndUpdate`,
+   * `getNodeMap`, `resolveSourceLocation`, etc. accept any of the three forms
+   * (host-absolute, sandbox-prefixed, or already-relative) and normalize
+   * internally to a single canonical key. When unset, keys stay exactly as
+   * passed — preserving legacy behaviour while callers migrate.
+   *
+   * Sandbox container prefixes (`/app/`) are handled at lookup time in
+   * `resolveSourceLocation` regardless of this setting.
    */
-  setPathMapping(containerPrefix: string, hostPrefix: string): void {
-    this.containerPrefix = containerPrefix;
-    this.hostPrefix = hostPrefix;
-    // Rebuild locIndex for all files with new path mapping
-    for (const [, state] of this.files) {
-      state.locIndex = buildLocIndex(state.entries, containerPrefix, hostPrefix);
+  setProjectRoot(projectRoot: string): void {
+    if (this.projectRoot === projectRoot) return;
+    this.projectRoot = projectRoot;
+
+    // Rebuild any entries that were populated before the root was known so
+    // they re-key under the new canonical form. Without this, a file seeded
+    // via `onFileChanged` before the initial scan finishes would stay under
+    // its absolute key and future lookups would miss. nodeRef hierarchy is
+    // rewritten in lockstep to keep `filePath`, `loc.fileName`, and
+    // `${nodeRef.prefix}` aligned — inconsistency would break callers that
+    // derive the map key from a selected id (e.g. CanvasElementContextMenu).
+    if (this.files.size === 0) return;
+    const oldStates = [...this.files.values()];
+    this.files.clear();
+    for (const state of oldStates) {
+      if (state.entries.length === 0) continue;
+      const oldFileName = state.entries[0].loc.fileName;
+      const newKey = this.toStorageKey(oldFileName);
+      if (newKey === oldFileName) {
+        this.files.set(newKey, state);
+        continue;
+      }
+
+      const refMap = new Map<NodeRef, NodeRef>();
+      const oldPrefix = `${oldFileName}:`;
+      for (const entry of state.entries) {
+        if (entry.nodeRef.startsWith(oldPrefix)) {
+          refMap.set(entry.nodeRef, `${newKey}:${entry.nodeRef.slice(oldPrefix.length)}`);
+        }
+      }
+      const mapRef = (ref: NodeRef): NodeRef => refMap.get(ref) ?? ref;
+      const rekeyedEntries: NodeMapEntry[] = state.entries.map((entry) => ({
+        ...entry,
+        nodeRef: mapRef(entry.nodeRef),
+        loc: { ...entry.loc, fileName: newKey },
+        endLoc: { ...entry.endLoc, fileName: newKey },
+        parentRef: entry.parentRef === null ? null : mapRef(entry.parentRef),
+        children: entry.children.map(mapRef),
+      }));
+
+      this.files.set(newKey, {
+        entries: rekeyedEntries,
+        version: state.version,
+        hash: state.hash,
+        locIndex: buildLocIndex(rekeyedEntries),
+        refIndex: buildRefIndex(rekeyedEntries),
+      });
     }
   }
 
   /** Parse `sourceCode` for `filePath`, build entries, and store them. Returns the entry list. */
   parseAndBuild(sourceCode: string, filePath: string): NodeMapEntry[] {
-    const ast = this.safeParse(sourceCode, filePath);
+    const key = this.toStorageKey(filePath);
+    const ast = this.safeParse(sourceCode, key);
     if (ast === null) return [];
 
-    const entries = buildNodeMap(ast, filePath);
+    const entries = buildNodeMap(ast, key);
     const hash = createHash('sha256').update(sourceCode).digest('hex').slice(0, 16);
-    const locIndex = buildLocIndex(entries, this.containerPrefix, this.hostPrefix);
+    const locIndex = buildLocIndex(entries);
     const refIndex = buildRefIndex(entries);
 
-    this.files.set(filePath, { entries, version: 1, hash, locIndex, refIndex });
+    this.files.set(key, { entries, version: 1, hash, locIndex, refIndex });
     return entries;
   }
 
@@ -62,30 +111,35 @@ export class NodeMapService {
    * Re-parse `sourceCode` for an already-tracked `filePath`.
    * Computes ref stability mapping from the old entries to the new ones.
    * Returns a `NodeMapUpdate` with the new entries, incremented version, and refMapping.
+   *
+   * When projectRoot is set, normalizes `filePath` so mutation callsites
+   * (host-absolute) and populate callers (sandbox or relative) converge on
+   * the same entry. Without projectRoot, behaves as before — key is `filePath`.
    */
   reparseAndUpdate(sourceCode: string, filePath: string): NodeMapUpdate {
-    const existing = this.files.get(filePath);
+    const key = this.toStorageKey(filePath);
+    const existing = this.files.get(key);
     const oldEntries = existing?.entries ?? [];
     const oldVersion = existing?.version ?? 0;
 
-    const ast = this.safeParse(sourceCode, filePath);
+    const ast = this.safeParse(sourceCode, key);
     if (ast === null) {
       return {
         type: 'node-map-update',
-        filePath,
+        filePath: key,
         fileHash: existing?.hash ?? '',
         version: oldVersion,
         nodes: oldEntries,
       };
     }
 
-    const newEntries = buildNodeMap(ast, filePath);
+    const newEntries = buildNodeMap(ast, key);
     const hash = createHash('sha256').update(sourceCode).digest('hex').slice(0, 16);
     const newVersion = oldVersion + 1;
-    const locIndex = buildLocIndex(newEntries, this.containerPrefix, this.hostPrefix);
+    const locIndex = buildLocIndex(newEntries);
     const refIndex = buildRefIndex(newEntries);
 
-    this.files.set(filePath, {
+    this.files.set(key, {
       entries: newEntries,
       version: newVersion,
       hash,
@@ -97,7 +151,7 @@ export class NodeMapService {
 
     return {
       type: 'node-map-update',
-      filePath,
+      filePath: key,
       fileHash: hash,
       version: newVersion,
       nodes: newEntries,
@@ -107,12 +161,12 @@ export class NodeMapService {
 
   /** Returns current entries for a file, or null if not tracked. */
   getNodeMap(filePath: string): NodeMapEntry[] | null {
-    return this.files.get(filePath)?.entries ?? null;
+    return this.files.get(this.toStorageKey(filePath))?.entries ?? null;
   }
 
   /** Returns the 16-char SHA-256 hash of the last parsed content, or null. */
   getFileHash(filePath: string): string | null {
-    return this.files.get(filePath)?.hash ?? null;
+    return this.files.get(this.toStorageKey(filePath))?.hash ?? null;
   }
 
   /** Returns all currently tracked file paths. */
@@ -122,30 +176,36 @@ export class NodeMapService {
 
   /** Remove a file from tracking (e.g. on file deletion). */
   removeFile(filePath: string): void {
-    this.files.delete(filePath);
+    this.files.delete(this.toStorageKey(filePath));
   }
 
   /**
    * Resolve a source location (from a React fiber's _debugSource) to its NodeMapEntry.
-   * Normalizes the fileName via the configured path mapping, then tries an exact locKey
-   * match across all files, falling back to column=0 tolerance.
+   * Tries an exact locKey match first; then re-tries with the input normalized via
+   * the configured projectRoot or sandbox prefix strip; falls back to column=0
+   * tolerance and suffix-match for edge cases.
    */
   resolveSourceLocation(source: SourceLocation): NodeMapEntry | null {
-    const normalized = this.normalizeFileName(source.fileName);
-    const locKey = makeLocKey(normalized, source.line, source.column);
-
-    // Try exact match first — iterate all files since normalized name may not match filePath key
+    const exactKey = makeLocKey(source.fileName, source.line, source.column);
     for (const state of this.files.values()) {
-      const exact = state.locIndex.get(locKey);
-      if (exact) return exact;
+      const hit = state.locIndex.get(exactKey);
+      if (hit) return hit;
     }
 
-    // Fallback: column=0 tolerance (some React versions report column as 0)
+    const normalized = toProjectRelative(source.fileName, this.projectRoot);
+    if (normalized !== source.fileName) {
+      const normKey = makeLocKey(normalized, source.line, source.column);
+      for (const state of this.files.values()) {
+        const hit = state.locIndex.get(normKey);
+        if (hit) return hit;
+      }
+    }
+
     if (source.column !== 0) {
       const fallbackKey = makeLocKey(normalized, source.line, 0);
       for (const state of this.files.values()) {
-        const fallback = state.locIndex.get(fallbackKey);
-        if (fallback) return fallback;
+        const hit = state.locIndex.get(fallbackKey);
+        if (hit) return hit;
       }
     }
 
@@ -154,25 +214,20 @@ export class NodeMapService {
     // if this becomes a hot path.
     for (const state of this.files.values()) {
       for (const entry of state.entries) {
-        if (
-          normalizeFileName(entry.loc.fileName, this.containerPrefix, this.hostPrefix) === normalized &&
-          entry.loc.line === source.line
-        ) {
+        if (entry.loc.fileName === normalized && entry.loc.line === source.line) {
           return entry;
         }
       }
     }
 
-    // Suffix-match fallback for React 19: parseDebugStack returns relative paths like 'src/App.tsx'
-    // while NodeMapService stores absolute paths like '/workspace/project/src/App.tsx'.
-    // Two-pass: first exact line+column, then line-only (handles column=0 tolerance).
-    if (!normalized.startsWith('/') && !normalized.match(/^[A-Za-z]:\\/)) {
+    // Suffix-match: handles the React 19 case where fiber source is relative
+    // (`src/App.tsx`) but entries are still stored under absolute paths.
+    if (!normalized.startsWith('/') && !normalized.match(/^[A-Za-z]:\//)) {
       const suffix = `/${normalized}`;
       for (const state of this.files.values()) {
         for (const entry of state.entries) {
-          const normalizedEntry = normalizeFileName(entry.loc.fileName, this.containerPrefix, this.hostPrefix);
           if (
-            normalizedEntry.endsWith(suffix) &&
+            entry.loc.fileName.endsWith(suffix) &&
             entry.loc.line === source.line &&
             entry.loc.column === source.column
           ) {
@@ -180,11 +235,9 @@ export class NodeMapService {
           }
         }
       }
-      // Line-only fallback for column=0 tolerance or bundler-variant column values
       for (const state of this.files.values()) {
         for (const entry of state.entries) {
-          const normalizedEntry = normalizeFileName(entry.loc.fileName, this.containerPrefix, this.hostPrefix);
-          if (normalizedEntry.endsWith(suffix) && entry.loc.line === source.line) {
+          if (entry.loc.fileName.endsWith(suffix) && entry.loc.line === source.line) {
             return entry;
           }
         }
@@ -208,11 +261,12 @@ export class NodeMapService {
    * Returns null if the file is not tracked.
    */
   buildUpdateMessage(filePath: string): NodeMapUpdate | null {
-    const state = this.files.get(filePath);
+    const key = this.toStorageKey(filePath);
+    const state = this.files.get(key);
     if (!state) return null;
     return {
       type: 'node-map-update',
-      filePath,
+      filePath: key,
       fileHash: state.hash,
       version: state.version,
       nodes: state.entries,
@@ -231,31 +285,25 @@ export class NodeMapService {
     }
   }
 
-  private normalizeFileName(fileName: string): string {
-    return normalizeFileName(fileName, this.containerPrefix, this.hostPrefix);
+  /**
+   * Normalize `filePath` to its canonical storage key. When projectRoot is not
+   * set this returns `filePath` unchanged — preserving legacy behaviour so
+   * existing callers see no surprise migrations until they opt in.
+   */
+  private toStorageKey(filePath: string): string {
+    if (this.projectRoot === undefined) return filePath;
+    return toProjectRelative(filePath, this.projectRoot);
   }
-}
-
-function normalizeFileName(fileName: string, containerPrefix: string, hostPrefix: string): string {
-  if (containerPrefix && fileName.startsWith(containerPrefix)) {
-    return hostPrefix + fileName.slice(containerPrefix.length);
-  }
-  return fileName;
 }
 
 function makeLocKey(fileName: string, line: number, column: number): string {
   return `${fileName}:${line}:${column}`;
 }
 
-function buildLocIndex(
-  entries: NodeMapEntry[],
-  containerPrefix: string,
-  hostPrefix: string,
-): Map<string, NodeMapEntry> {
+function buildLocIndex(entries: NodeMapEntry[]): Map<string, NodeMapEntry> {
   const index = new Map<string, NodeMapEntry>();
   for (const entry of entries) {
-    const normalized = normalizeFileName(entry.loc.fileName, containerPrefix, hostPrefix);
-    const key = makeLocKey(normalized, entry.loc.line, entry.loc.column);
+    const key = makeLocKey(entry.loc.fileName, entry.loc.line, entry.loc.column);
     // First entry at a location wins (outer element for nested same-location cases)
     if (!index.has(key)) {
       index.set(key, entry);

@@ -229,6 +229,32 @@ describe('ElementTracer', () => {
       expect(transport.sent).toHaveLength(0);
     });
 
+    it('should resolve when fiber source is relative (React 19) but nodeMap stores container path', () => {
+      // HYP-351: parseDebugStack on React 19 fibers yields relative paths (src/App.tsx)
+      // while server populates nodeMap with /app/-prefixed paths. Local resolution
+      // must still succeed without a server round-trip.
+      adapter = mockAdapter({
+        getSourceLocation: () => ({ fileName: 'src/App.tsx', line: 5, column: 4 }),
+        getItemIndex: () => 0,
+      });
+      transport = mockTransport();
+      tracer = new ElementTracer(adapter, transport);
+
+      transport.simulateMessage({
+        type: 'node-map-update',
+        filePath: '/app/src/App.tsx',
+        fileHash: 'abc123',
+        version: 1,
+        nodes: [cachedNode],
+      });
+
+      const result = tracer.resolveClickLocal({} as HTMLElement);
+
+      expect(result).not.toBeNull();
+      expect(result?.nodeRef).toBe('/app/src/App.tsx:0');
+      expect(transport.sent).toHaveLength(0);
+    });
+
     it('should fall back to server when node exists in map but location does not match', () => {
       adapter = mockAdapter({
         getSourceLocation: () => ({ fileName: '/app/src/App.tsx', line: 99, column: 0 }),
@@ -328,6 +354,43 @@ describe('ElementTracer', () => {
         column: 11,
       });
       expect(transport.sent).toHaveLength(0);
+    });
+  });
+
+  describe('buildSourceKeyIndex', () => {
+    // HYP-351/HYP-366: keys are always normalized to project-relative form.
+    // Callers that look up by fiber source should either use resolveBySource
+    // (which normalizes the query) or strip the prefix themselves.
+    const entry: NodeMapEntry = {
+      nodeRef: 'app-0',
+      tag: 'div',
+      loc: { fileName: '/app/src/App.tsx', line: 15, column: 11 },
+      endLoc: { fileName: '/app/src/App.tsx', line: 15, column: 30 },
+      parentRef: null,
+      children: [],
+      isComponent: false,
+      fingerprint: 'abcd',
+    };
+
+    beforeEach(() => {
+      transport.simulateMessage({
+        type: 'node-map-update',
+        filePath: '/app/src/App.tsx',
+        fileHash: 'h',
+        version: 1,
+        nodes: [entry],
+      });
+    });
+
+    it('emits keys in relative form regardless of stored prefix', () => {
+      const index = tracer.buildSourceKeyIndex();
+      expect(index.get('src/App.tsx:15:11')?.nodeRef).toBe('app-0');
+      expect(index.has('/app/src/App.tsx:15:11')).toBe(false);
+    });
+
+    it('resolveBySource accepts either the relative or container-prefixed form', () => {
+      expect(tracer.resolveBySource({ fileName: 'src/App.tsx', line: 15, column: 11 })?.nodeRef).toBe('app-0');
+      expect(tracer.resolveBySource({ fileName: '/app/src/App.tsx', line: 15, column: 11 })?.nodeRef).toBe('app-0');
     });
   });
 

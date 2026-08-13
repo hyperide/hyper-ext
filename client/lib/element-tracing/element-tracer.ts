@@ -8,6 +8,7 @@
 import { resolveCallSiteTarget } from '../../../shared/canvas-interaction/resolve-source';
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
 import { getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
+import { toProjectRelative } from '../../../shared/element-tracing/path-normalization';
 import type {
   ComponentTreeNode,
   FrameworkAdapter,
@@ -67,6 +68,7 @@ export class ElementTracer implements TracingResolver {
   private readonly _selectionHandlers = new Set<(response: ResolveElementResponse) => void>();
   private readonly _nodeMapUpdateHandlers = new Set<(msg: NodeMapUpdate) => void>();
   private readonly _disposeTransport: () => void;
+  private _projectRoot: string | undefined;
   /** Currently rendered component file path (set by useElementTracer) */
   renderedFile: string | null = null;
 
@@ -74,6 +76,11 @@ export class ElementTracer implements TracingResolver {
     this._adapter = adapter;
     this._transport = transport;
     this._disposeTransport = transport.onMessage(this._handleMessage.bind(this));
+  }
+
+  /** Normalize any fiber path variant to the tracer's canonical relative form. */
+  private _normalizeFileName(fileName: string): string {
+    return toProjectRelative(fileName, this._projectRoot);
   }
 
   resolveClick(element: HTMLElement): ClickResult | null {
@@ -118,12 +125,26 @@ export class ElementTracer implements TracingResolver {
 
   /** Look up a source location in cached node maps. */
   private _findInNodeMaps(source: SourceLocation, itemIndex: number): LocalResolveResult | null {
-    const nodes = this._nodeMaps.get(source.fileName);
+    const queryFile = this._normalizeFileName(source.fileName);
+
+    let nodes = this._nodeMaps.get(queryFile);
+    if (!nodes) {
+      // Fallback: scan keys and compare on normalized form. Handles maps that
+      // were sent by a server that has not migrated to relative storage yet.
+      for (const [key, value] of this._nodeMaps) {
+        if (this._normalizeFileName(key) === queryFile) {
+          nodes = value;
+          break;
+        }
+      }
+    }
     if (!nodes) return null;
 
-    // Exact line + column match
     let entry = nodes.find(
-      (n) => n.loc.fileName === source.fileName && n.loc.line === source.line && n.loc.column === source.column,
+      (n) =>
+        this._normalizeFileName(n.loc.fileName) === queryFile &&
+        n.loc.line === source.line &&
+        n.loc.column === source.column,
     );
 
     // Fuzzy: Vite Babel plugin _debugSource column can differ from Babel AST loc.start.column.
@@ -154,16 +175,42 @@ export class ElementTracer implements TracingResolver {
     return this._nodeMaps.get(filePath) ?? null;
   }
 
-  /** Build a lookup map from source key ("fileName:line:column") to node entry for all cached maps. */
+  /**
+   * Build a lookup map from source key ("fileName:line:column") to node entry.
+   *
+   * Keys are normalized to project-relative form. Callers looking up by fiber
+   * source must use {@link makeSourceKey} (or {@link resolveBySource}) so the
+   * query path is normalized with the same rules.
+   */
   buildSourceKeyIndex(): Map<string, { nodeRef: string; source: SourceLocation }> {
     const index = new Map<string, { nodeRef: string; source: SourceLocation }>();
     for (const entries of this._nodeMaps.values()) {
       for (const entry of entries) {
-        const key = `${entry.loc.fileName}:${entry.loc.line}:${entry.loc.column}`;
+        const fileName = this._normalizeFileName(entry.loc.fileName);
+        const key = `${fileName}:${entry.loc.line}:${entry.loc.column}`;
         index.set(key, { nodeRef: entry.nodeRef, source: entry.loc });
       }
     }
     return index;
+  }
+
+  /**
+   * Format a fiber source into the canonical key used by {@link buildSourceKeyIndex}.
+   * Lets hot-loop consumers (overlay RAF) keep O(1) Map lookups while still
+   * accepting any fiber path variant.
+   */
+  makeSourceKey(source: SourceLocation): string {
+    return `${this._normalizeFileName(source.fileName)}:${source.line}:${source.column}`;
+  }
+
+  /**
+   * Resolve a fiber source location (in any path form) to its cached node
+   * entry. Convenience for cold-path callers — overlay RAF code should use
+   * {@link buildSourceKeyIndex} + {@link makeSourceKey} instead.
+   */
+  resolveBySource(source: SourceLocation): { nodeRef: string; source: SourceLocation } | null {
+    const index = this.buildSourceKeyIndex();
+    return index.get(this.makeSourceKey(source)) ?? null;
   }
 
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null {
@@ -261,8 +308,21 @@ export class ElementTracer implements TracingResolver {
     this._nodeMapUpdateHandlers.clear();
   }
 
+  /**
+   * Configure the project root used for path normalization across the tracer
+   * and its adapter's fiber-source index. Normally invoked via the server's
+   * `tracing-config` message; ext-side bridges can call this directly.
+   */
+  setProjectRoot(projectRoot: string): void {
+    this._projectRoot = projectRoot;
+    this._adapter.setProjectRoot?.(projectRoot);
+  }
+
   private _handleMessage(msg: TracingServerMessage): void {
     switch (msg.type) {
+      case 'tracing-config':
+        this.setProjectRoot(msg.projectRoot);
+        break;
       case 'node-map-update':
         this._nodeMaps.set(msg.filePath, msg.nodes);
         for (const handler of this._nodeMapUpdateHandlers) handler(msg);

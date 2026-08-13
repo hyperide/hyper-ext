@@ -944,7 +944,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
         function visit(nodes: typeof tree): void {
           for (const node of nodes) {
             if (node.domElement && node.source && isContainerEmpty(node.domElement)) {
-              const key = `${node.source.fileName}:${node.source.line}:${node.source.column}`;
+              // makeSourceKey normalizes fiber path variants against the
+              // tracer's projectRoot so the O(1) Map lookup still hits even
+              // when fiber source differs from the stored canonical form.
+              const key = tracer!.makeSourceKey(node.source);
               const entry = sourceIndex.get(key);
               if (entry) {
                 results.push({ elementId: entry.nodeRef, element: node.domElement });

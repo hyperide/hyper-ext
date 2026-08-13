@@ -52,8 +52,7 @@ describe('NodeMapService', () => {
     expect(r2.version).toBe(3);
   });
 
-  it('should normalize container paths', () => {
-    service.setPathMapping('/app/', '');
+  it('should resolve sandbox container paths automatically', () => {
     const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
     const containerLoc: SourceLocation = {
       fileName: '/app/src/App.tsx',
@@ -184,18 +183,90 @@ describe('NodeMapService', () => {
     expect(resolved?.tag).toBe('span');
   });
 
-  it('should rebuild locIndex when setPathMapping is called after parse', () => {
-    const entries = service.parseAndBuild(simpleJSX, 'src/App.tsx');
-    // Before setPathMapping — container path won't resolve via locIndex
-    service.setPathMapping('/container/', '');
-    // After setPathMapping — locIndex rebuilt, container path resolves
-    const containerLoc: SourceLocation = {
-      fileName: '/container/src/App.tsx',
-      line: entries[0].loc.line,
-      column: entries[0].loc.column,
-    };
-    const resolved = service.resolveSourceLocation(containerLoc);
-    expect(resolved).not.toBeNull();
-    expect(resolved?.tag).toBe('div');
+  describe('setProjectRoot', () => {
+    it('stores entries under the project-relative key when projectRoot is set', () => {
+      service.setProjectRoot('/workspace/project');
+      service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      expect(service.getTrackedFiles()).toEqual(['src/App.tsx']);
+    });
+
+    it('getNodeMap accepts host-absolute input and returns the relative-keyed entry', () => {
+      service.setProjectRoot('/workspace/project');
+      service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      // Both forms resolve to the same entries — the API is input-tolerant.
+      const byRelative = service.getNodeMap('src/App.tsx');
+      const byHost = service.getNodeMap('/workspace/project/src/App.tsx');
+      expect(byRelative).not.toBeNull();
+      expect(byHost).toBe(byRelative);
+    });
+
+    it('stores entry.loc.fileName as the relative form', () => {
+      service.setProjectRoot('/workspace/project');
+      const entries = service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      expect(entries[0].loc.fileName).toBe('src/App.tsx');
+    });
+
+    it('resolves host-absolute fiber sources when projectRoot is set', () => {
+      service.setProjectRoot('/workspace/project');
+      const entries = service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      const resolved = service.resolveSourceLocation({
+        fileName: '/workspace/project/src/App.tsx',
+        line: entries[0].loc.line,
+        column: entries[0].loc.column,
+      });
+      expect(resolved?.nodeRef).toBe(entries[0].nodeRef);
+    });
+
+    it('resolves sandbox container fiber sources regardless of projectRoot', () => {
+      service.setProjectRoot('/workspace/project');
+      const entries = service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      const resolved = service.resolveSourceLocation({
+        fileName: '/app/src/App.tsx',
+        line: entries[0].loc.line,
+        column: entries[0].loc.column,
+      });
+      expect(resolved?.nodeRef).toBe(entries[0].nodeRef);
+    });
+
+    it('rekeys pre-seeded entries when setProjectRoot is called after parseAndBuild', () => {
+      // Race scenario: onFileChanged() seeds an entry under its absolute key
+      // before populateNodeMaps() gets a chance to call setProjectRoot.
+      service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      expect(service.getTrackedFiles()).toEqual(['/workspace/project/src/App.tsx']);
+
+      service.setProjectRoot('/workspace/project');
+      expect(service.getTrackedFiles()).toEqual(['src/App.tsx']);
+
+      // Entry loc.fileName, nodeRef prefix, and map key must stay aligned —
+      // consumers that derive the map key from a nodeRef (e.g. SaaS
+      // CanvasElementContextMenu.handleSelectChild) rely on that invariant.
+      const rekeyed = service.getNodeMap('src/App.tsx');
+      expect(rekeyed).not.toBeNull();
+      const entry = rekeyed?.[0];
+      expect(entry?.loc.fileName).toBe('src/App.tsx');
+      expect(entry?.nodeRef.startsWith('src/App.tsx:')).toBe(true);
+      expect(entry?.endLoc.fileName).toBe('src/App.tsx');
+
+      // parentRef/children that pointed to the rekeyed file must also shift.
+      const child = rekeyed?.[1];
+      expect(child?.parentRef).toBe(entry?.nodeRef);
+    });
+
+    it('reparseAndUpdate with host-absolute filePath updates the existing relative entry', () => {
+      // Regression: before this refactor, mutation routes passed host-absolute
+      // filePaths while populate used a different format, so reparseAndUpdate
+      // created duplicate entries keyed by the mutation path. With projectRoot
+      // the two paths collapse to the same relative key.
+      service.setProjectRoot('/workspace/project');
+      service.parseAndBuild(simpleJSX, '/workspace/project/src/App.tsx');
+      expect(service.getTrackedFiles()).toEqual(['src/App.tsx']);
+
+      const modified = `const App = () => <div><p>new</p></div>;`;
+      const update = service.reparseAndUpdate(modified, '/workspace/project/src/App.tsx');
+
+      expect(service.getTrackedFiles()).toEqual(['src/App.tsx']);
+      expect(update.filePath).toBe('src/App.tsx');
+      expect(update.version).toBe(2);
+    });
   });
 });

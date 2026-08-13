@@ -40,6 +40,16 @@ export interface NodeMapEntry {
 
 /* ─── Protocol messages ──────────────────────────────────────────── */
 
+/**
+ * Server → Client: one-shot configuration pushed before the first node map.
+ * Carries the project root the server used to normalize entry paths so the
+ * client can configure its FiberSourceIndex with the same root.
+ */
+export interface TracingConfig {
+  type: 'tracing-config';
+  projectRoot: string;
+}
+
 /** Server → Client: pushed after every file parse */
 export interface NodeMapUpdate {
   type: 'node-map-update';
@@ -74,7 +84,7 @@ export interface ResolveElementResponse {
 }
 
 export type TracingClientMessage = ResolveElement;
-export type TracingServerMessage = NodeMapUpdate | NodeMapInvalidate | ResolveElementResponse;
+export type TracingServerMessage = TracingConfig | NodeMapUpdate | NodeMapInvalidate | ResolveElementResponse;
 
 /* ─── Framework adapter ──────────────────────────────────────────── */
 
@@ -105,6 +115,13 @@ export interface FrameworkAdapter {
   getItemIndex(element: HTMLElement): number;
   walkComponentTree(rootElement: HTMLElement): ComponentTreeNode[];
   findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null;
+  /**
+   * Propagate the project root to the framework's internal fiber-source index
+   * so reverse lookups (entry.loc → DOM) normalize paths consistently with
+   * the server's node-map keys. Optional — adapters without a source index
+   * may ignore it.
+   */
+  setProjectRoot?(projectRoot: string): void;
 }
 
 /* ─── Transport ──────────────────────────────────────────────────── */

@@ -119,7 +119,7 @@ describe('element-tracing integration', () => {
 
   it('should handle container path normalization', () => {
     const service = new NodeMapService();
-    service.setPathMapping('/app/', '');
+    // Sandbox mount prefix is normalized automatically — no explicit configuration.
     service.parseAndBuild(FIXTURE, 'src/Page.tsx');
 
     const entries = assertNotNull(service.getNodeMap('src/Page.tsx'), 'entries');
