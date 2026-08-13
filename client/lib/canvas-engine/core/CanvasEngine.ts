@@ -4,18 +4,14 @@
 
 import { getActiveTracer } from '../../element-tracing/active-tracer';
 import { findAstNodeBySourceLoc } from '../../element-tracing/id-bridge';
-import { loadPersistedState, savePersistedState } from '../../storage';
 import { EventEmitter } from '../events/EventEmitter';
-import type { CanvasEngineEvents, CanvasEventName } from '../events/events';
+import type { CanvasEngineEvents, CanvasEventName, TreeChangeEvent } from '../events/events';
 import type {
   CanvasEngineConfig,
   ComponentDefinition,
   ComponentInstance,
   FieldsMap,
-  HistoryState,
   DocumentTree as IDocumentTree,
-  MapIterationContext,
-  SelectionState,
 } from '../models/types';
 import { ASTBatchDeleteOperation } from '../operations/ASTBatchDeleteOperation';
 import { ASTDeleteOperation } from '../operations/ASTDeleteOperation';
@@ -36,7 +32,10 @@ import { deserialize, serialize } from '../utils/serialization';
 import { ClipboardManager } from './ClipboardManager';
 import { ComponentRegistry } from './ComponentRegistry';
 import { DocumentTree } from './DocumentTree';
+import { HistoryController } from './HistoryController';
 import { HistoryManager } from './HistoryManager';
+import { ModeManager } from './ModeManager';
+import { SelectionManager } from './SelectionManager';
 import { ServerSyncManager } from './ServerSyncManager';
 
 interface LoadInstanceChild {
@@ -53,22 +52,14 @@ export class CanvasEngine {
   public readonly events: EventEmitter;
   public readonly registry: ComponentRegistry;
   private tree: DocumentTree;
-  private history: HistoryManager;
+  private historyManager: HistoryManager;
+  private historyController: HistoryController;
   private clipboard: ClipboardManager;
   private serverSync: ServerSyncManager | null;
 
-  // State
-  private selection: SelectionState = {
-    selectedIds: [],
-    hoveredId: null,
-    hoveredItemIndex: null,
-    selectedItemIndices: new Map(),
-  };
-  private mode: 'design' | 'interact' | 'code' = (() => {
-    const persistedMode = loadPersistedState().mode;
-    // Filter out 'board' mode - it's handled at UI level
-    return (persistedMode === 'board' ? 'interact' : persistedMode) || 'design';
-  })();
+  // State managers
+  private selectionManager: SelectionManager;
+  private modeManager: ModeManager;
 
   // Config
   private config: CanvasEngineConfig;
@@ -81,9 +72,6 @@ export class CanvasEngine {
     payload: CanvasEngineEvents[CanvasEventName];
   }> = [];
 
-  // Undo/redo debounce to prevent concurrent operations
-  private _undoRedoInProgress: boolean = false;
-
   // AST API service for operations
   private api: ASTApiService;
 
@@ -95,10 +83,20 @@ export class CanvasEngine {
     this.events = new EventEmitter();
     this.registry = new ComponentRegistry();
     this.tree = new DocumentTree(config.initialTree);
-    this.history = new HistoryManager(config.maxHistoryLength ?? 100);
+    this.historyManager = new HistoryManager(config.maxHistoryLength ?? 100);
+    this.historyController = new HistoryController(this.historyManager, this.events);
     this.clipboard = new ClipboardManager();
     this.serverSync = config.serverSync ? new ServerSyncManager(config.serverSync) : null;
     this.api = new ASTApiServiceImpl();
+    this.selectionManager = new SelectionManager({
+      events: this.events,
+      tree: this.tree,
+      getRenderedAstTrees: () => this.getRenderedAstTrees(),
+      findASTNode: (nodes, id) => this.findASTNode(nodes, id),
+      getActiveTracer,
+      findAstNodeBySourceLoc,
+    });
+    this.modeManager = new ModeManager(this.events);
 
     this.log('CanvasEngine initialized');
   }
@@ -139,398 +137,103 @@ export class CanvasEngine {
   // Selection
   // ============================================
 
-  /**
-   * Select instance (supports both regular instances and AST nodes)
-   */
   select(id: string): void {
-    const previousIds = [...this.selection.selectedIds];
-
-    // Check if ID exists as a regular instance
-    const instance = this.tree.getInstance(id);
-
-    // If not found as instance, check if it's an AST node ID
-    if (!instance) {
-      const root = this.tree.getRoot();
-      const astStructure = root.metadata?.astStructure;
-      if (Array.isArray(astStructure)) {
-        const astNode = this.findASTNode(astStructure as ASTNode[], id);
-        if (astNode) {
-          // Valid AST node - allow selection. Clear any per-id map-iteration
-          // index from a prior selectWithItemIndex so getMapContext() doesn't
-          // report a stale itemIndex for this plain (non-item) selection.
-          this.selection.selectedIds = [id];
-          this.selection.selectedItemIndices.clear();
-          this.emitEvent('selection:change', {
-            selectedIds: this.selection.selectedIds,
-            previousIds,
-          });
-          return;
-        }
-      }
-      // ID not found as instance or AST node - log warning but still select
-      console.warn(`[CanvasEngine] Selecting unknown ID: ${id}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-    }
-
-    // Normal instance selection
-    this.selection.selectedIds = [id];
-    this.selection.selectedItemIndices.clear();
-
-    this.emitEvent('selection:change', {
-      selectedIds: this.selection.selectedIds,
-      previousIds,
-    });
+    this.selectionManager.select(id, this._buildSelectionDeps());
   }
 
-  /**
-   * Select a map-iteration: a single `.map()`-rendered item identified by `id`
-   * plus its `itemIndex`. When `itemIndex` is provided, only that specific item is
-   * highlighted; the pair feeds {@link getMapContext} for the operation layer.
-   */
   selectWithItemIndex(id: string, itemIndex: number | null): void {
-    const previousIds = [...this.selection.selectedIds];
-
-    this.selection.selectedIds = [id];
-    this.selection.selectedItemIndices.clear();
-
-    if (itemIndex !== null) {
-      this.selection.selectedItemIndices.set(id, itemIndex);
-    }
-
-    this.emitEvent('selection:change', {
-      selectedIds: this.selection.selectedIds,
-      previousIds,
-    });
+    this.selectionManager.selectWithItemIndex(id, itemIndex);
   }
 
-  /**
-   * Select multiple instances
-   */
   selectMultiple(ids: string[]): void {
-    const previousIds = [...this.selection.selectedIds];
-    this.selection.selectedIds = ids;
-
-    this.emitEvent('selection:change', {
-      selectedIds: this.selection.selectedIds,
-      previousIds,
-    });
+    this.selectionManager.selectMultiple(ids);
   }
 
-  /**
-   * Add to selection
-   */
   addToSelection(id: string): void {
-    if (!this.selection.selectedIds.includes(id)) {
-      const previousIds = [...this.selection.selectedIds];
-      this.selection.selectedIds = [...this.selection.selectedIds, id];
-
-      this.emitEvent('selection:change', {
-        selectedIds: this.selection.selectedIds,
-        previousIds,
-      });
-    }
+    this.selectionManager.addToSelection(id);
   }
 
-  /**
-   * Remove from selection
-   */
   removeFromSelection(id: string): void {
-    const previousIds = [...this.selection.selectedIds];
-    this.selection.selectedIds = this.selection.selectedIds.filter((selectedId) => selectedId !== id);
-
-    this.emitEvent('selection:change', {
-      selectedIds: this.selection.selectedIds,
-      previousIds,
-    });
+    this.selectionManager.removeFromSelection(id);
   }
 
-  /**
-   * Clear selection
-   */
   clearSelection(): void {
-    const previousIds = [...this.selection.selectedIds];
-    this.selection.selectedIds = [];
-    this.selection.selectedItemIndices.clear();
-
-    this.emitEvent('selection:change', {
-      selectedIds: [],
-      previousIds,
-    });
+    this.selectionManager.clearSelection();
   }
 
-  /**
-   * Set hovered instance
-   */
   setHovered(id: string | null): void {
-    const previousId = this.selection.hoveredId;
-    this.selection.hoveredId = id;
-    this.selection.hoveredItemIndex = null;
-
-    this.emitEvent('hover:change', {
-      hoveredId: id,
-      previousId,
-    });
+    this.selectionManager.setHovered(id);
   }
 
-  /**
-   * Set hovered instance with specific item index (for map-rendered elements)
-   */
   setHoveredWithItemIndex(id: string | null, itemIndex: number | null): void {
-    const previousId = this.selection.hoveredId;
-    this.selection.hoveredId = id;
-    this.selection.hoveredItemIndex = itemIndex;
-
-    this.emitEvent('hover:change', {
-      hoveredId: id,
-      previousId,
-    });
+    this.selectionManager.setHoveredWithItemIndex(id, itemIndex);
   }
 
-  /**
-   * Get selection state
-   */
-  getSelection(): SelectionState {
-    return {
-      ...this.selection,
-      selectedItemIndices: new Map(this.selection.selectedItemIndices),
-    };
+  getSelection() {
+    return this.selectionManager.getSelection();
   }
 
-  /**
-   * Resolve the map-iteration context for a given AST node id (HYP-290b).
-   *
-   * Looks up the node's `mapItem` in the document-instance AST structure and
-   * combines it with the per-id `itemIndex` recorded at selection time. Returns
-   * the {@link MapIterationContext} the operation layer needs to target a single
-   * `.map()` iteration, or `null` when the element is not a map iteration (or its
-   * item index is unknown). No DOM-attribute lookup is involved (spec A1/A7).
-   */
-  getMapContext(id: string): MapIterationContext | null {
-    let astNode: ASTNode | null = null;
-    for (const tree of this.getRenderedAstTrees()) {
-      astNode = this.findASTNode(tree, id);
-      if (astNode) break;
-    }
-    // Production path: a canvas click selects by `nodeRef`, not an AST node id (the
-    // parser assigns AST ids separately, so findASTNode misses real .map() children).
-    // Bridge nodeRef → AST node by source location, mirroring useElementStyleData /
-    // the id-bridge fallback. The canvas-engine ← id-bridge import is type-only, so
-    // there is no runtime import cycle.
-    if (!astNode) {
-      const source = getActiveTracer()?.getSourceByNodeRef(id);
-      if (source) {
-        for (const tree of this.getRenderedAstTrees()) {
-          astNode = findAstNodeBySourceLoc(tree, source.line, source.column);
-          if (astNode) break;
-        }
-      }
-    }
-    const mapItem = astNode?.mapItem;
-    if (!mapItem) return null;
-
-    const itemIndex = this.selection.selectedItemIndices.get(id);
-    if (itemIndex === undefined || itemIndex === null) return null;
-
-    return {
-      parentMapId: mapItem.parentMapId,
-      itemIndex,
-      mapExpression: mapItem.expression ?? '',
-    };
+  getMapContext(id: string) {
+    return this.selectionManager.getMapContext(id, this._buildSelectionDeps());
   }
 
-  /**
-   * Map-iteration context for the current single selection, or `null` when the
-   * selection is empty/multiple or the selected element is not a map iteration.
-   * Convenience for the operation layer, which dispatches against one selection.
-   */
-  getSelectedMapContext(): MapIterationContext | null {
-    if (this.selection.selectedIds.length !== 1) return null;
-    return this.getMapContext(this.selection.selectedIds[0]);
+  getSelectedMapContext() {
+    return this.selectionManager.getSelectedMapContext(this._buildSelectionDeps());
   }
 
-  /**
-   * Get selected instances
-   */
   getSelectedInstances(): ComponentInstance[] {
-    return this.selection.selectedIds
-      .map((id) => this.tree.getInstance(id))
-      .filter((instance): instance is ComponentInstance => instance !== undefined);
+    return this.selectionManager.getSelectedInstances(this._buildSelectionDeps());
   }
 
   // ============================================
   // Mode (Design/Interact)
   // ============================================
 
-  /**
-   * Set mode
-   */
   setMode(mode: 'design' | 'interact' | 'code'): void {
-    const previousMode = this.mode;
-    if (previousMode === mode) {
-      return;
-    }
-
-    this.mode = mode;
-
-    // Persist mode to localStorage
-    savePersistedState({ mode });
-
-    this.emitEvent('mode:change', {
-      mode,
-      previousMode,
-    });
-
-    this.log(`Mode changed: ${previousMode} -> ${mode}`);
+    this.modeManager.setMode(mode);
+    this.log(`Mode changed: ${this.modeManager.getMode()} -> ${mode}`);
   }
 
-  /**
-   * Get current mode
-   */
   getMode(): 'design' | 'interact' | 'code' {
-    return this.mode;
+    return this.modeManager.getMode();
   }
 
   // ============================================
   // History (Undo/Redo)
   // ============================================
 
-  /**
-   * Undo last operation
-   */
   async undo(): Promise<boolean> {
-    // Prevent concurrent undo/redo operations
-    if (this._undoRedoInProgress) {
-      console.log('[CanvasEngine] Undo already in progress, ignoring');
-      return false;
+    const success = await this.historyController.undo(this.tree);
+    if (success) {
+      this.notifyStateChange();
+      this.log('Undo successful');
     }
-
-    this._undoRedoInProgress = true;
-
-    try {
-      const operation = this.history.getCurrentOperation();
-      const success = this.history.undo(this.tree);
-
-      if (success) {
-        // Wait for any pending async work (API calls) in the operation
-        if (operation && '_pendingPromise' in operation && operation._pendingPromise instanceof Promise) {
-          try {
-            await operation._pendingPromise;
-          } catch {
-            // Operation failure is already handled by HistoryManager
-          }
-        }
-
-        this.notifyStateChange();
-        this.emitHistoryChange();
-
-        if (operation) {
-          this.emitEvent('history:undo', {
-            operationName: operation.name,
-          });
-        }
-
-        this.log('Undo successful');
-      }
-
-      return success;
-    } finally {
-      this._undoRedoInProgress = false;
-    }
+    return success;
   }
 
-  /**
-   * Redo next operation
-   */
   async redo(): Promise<boolean> {
-    // Prevent concurrent undo/redo operations
-    if (this._undoRedoInProgress) {
-      console.log('[CanvasEngine] Redo already in progress, ignoring');
-      return false;
+    const success = await this.historyController.redo(this.tree);
+    if (success) {
+      this.notifyStateChange();
+      this.log('Redo successful');
     }
-
-    this._undoRedoInProgress = true;
-
-    try {
-      const success = this.history.redo(this.tree);
-
-      if (success) {
-        const operation = this.history.getCurrentOperation();
-
-        // Wait for any pending async work (API calls) in the operation
-        if (operation && '_pendingPromise' in operation && operation._pendingPromise instanceof Promise) {
-          try {
-            await operation._pendingPromise;
-          } catch {
-            // Operation failure is already handled by HistoryManager
-          }
-        }
-
-        this.notifyStateChange();
-        this.emitHistoryChange();
-
-        if (operation) {
-          this.emitEvent('history:redo', {
-            operationName: operation.name,
-          });
-        }
-
-        this.log('Redo successful');
-      }
-
-      return success;
-    } finally {
-      this._undoRedoInProgress = false;
-    }
+    return success;
   }
 
-  /**
-   * Can undo?
-   */
   canUndo(): boolean {
-    // Can't undo if operation is in progress
-    if (this._undoRedoInProgress) {
-      return false;
-    }
-    return this.history.canUndo();
+    return this.historyController.canUndo();
   }
 
-  /**
-   * Can redo?
-   */
   canRedo(): boolean {
-    // Can't redo if operation is in progress
-    if (this._undoRedoInProgress) {
-      return false;
-    }
-    return this.history.canRedo();
+    return this.historyController.canRedo();
   }
 
-  /**
-   * Get history state
-   */
-  getHistoryState(): HistoryState {
-    return this.history.getState();
+  getHistoryState() {
+    return this.historyController.getHistoryState();
   }
 
-  /**
-   * Execute an annotation operation and record it in history.
-   * Annotation operations work with external AnnotationStore passed in params,
-   * not with the internal DocumentTree.
-   *
-   * @param operation - The annotation operation to execute
-   * @returns true if operation succeeded
-   */
   executeAnnotationOperation(operation: BaseOperation): boolean {
-    const result = operation.execute(this.tree);
-
-    if (result.success) {
-      this.history.record(operation);
-      this.emitHistoryChange();
-      this.log(`Annotation operation "${operation.name}" executed`);
-      return true;
-    }
-
-    console.error('[CanvasEngine] Annotation operation failed:', result.error);
-    return false;
+    return this.historyController.executeAnnotationOperation(this.tree, operation);
   }
 
   /**
@@ -548,7 +251,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST prop "${propName}" updated for element ${elementId}`);
     } else {
@@ -585,7 +288,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST styles updated for element ${elementId}`);
       return operation._pendingPromise;
@@ -609,7 +312,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST ${params.type} expression edited for element ${params.elementId}`);
     } else {
@@ -631,7 +334,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST props updated for element ${elementId}: ${Object.keys(props).join(', ')}`);
     } else {
@@ -661,7 +364,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST element "${componentType}" inserted`);
     } else {
@@ -682,7 +385,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST element ${elementId} deleted`);
 
@@ -727,7 +430,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST elements deleted: ${elementIds.length} elements`);
 
@@ -752,7 +455,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST element ${elementId} duplicated`);
 
@@ -779,7 +482,7 @@ export class CanvasEngine {
     const result = operation.execute(this.tree);
 
     if (result.success) {
-      this.history.record(operation);
+      this.historyManager.record(operation);
       this.emitHistoryChange();
       this.log(`AST element pasted into ${parentId || 'root'}`);
 
@@ -892,7 +595,7 @@ export class CanvasEngine {
   deserialize(json: string): void {
     const tree = deserialize(json);
     this.tree = new DocumentTree(tree);
-    this.history.clear();
+    this.historyManager.clear();
     this.clearSelection();
     this.notifyStateChange();
     this.log('Tree deserialized');
@@ -939,8 +642,8 @@ export class CanvasEngine {
     for (const { eventName, payload } of events) {
       // For tree:change events, merge changedIds
       if (eventName === 'tree:change') {
-        const existing = uniqueEvents.get(eventName) as import('../events/events').TreeChangeEvent | undefined;
-        const treePayload = payload as import('../events/events').TreeChangeEvent;
+        const existing = uniqueEvents.get(eventName) as TreeChangeEvent | undefined;
+        const treePayload = payload as TreeChangeEvent;
         if (existing) {
           const mergedIds = new Set([...(existing.changedIds || []), ...(treePayload.changedIds || [])]);
           uniqueEvents.set(eventName, { changedIds: Array.from(mergedIds) });
@@ -1027,7 +730,7 @@ export class CanvasEngine {
    * Clear undo/redo history (e.g. when switching components)
    */
   clearHistory(): void {
-    this.history.clear();
+    this.historyManager.clear();
     this.emitHistoryChange();
   }
 
@@ -1037,7 +740,7 @@ export class CanvasEngine {
    */
   recordExternalFileChange(params: FileSnapshotOperationParams): void {
     const operation = new FileSnapshotOperation(this.api, params);
-    this.history.record(operation);
+    this.historyManager.record(operation);
     this.emitHistoryChange();
     this.log(`External file change recorded: ${operation.name}`);
   }
@@ -1067,10 +770,7 @@ export class CanvasEngine {
   /**
    * Emit event or batch it if in batch mode
    */
-  private emitEvent<K extends keyof import('../events/events').CanvasEngineEvents>(
-    eventName: K,
-    payload: import('../events/events').CanvasEngineEvents[K],
-  ): void {
+  private emitEvent<K extends keyof CanvasEngineEvents>(eventName: K, payload: CanvasEngineEvents[K]): void {
     if (this._isBatchMode) {
       this._batchedEvents.push({ eventName, payload });
     } else {
@@ -1089,7 +789,7 @@ export class CanvasEngine {
     }
 
     // Record in history
-    this.history.record(operation);
+    this.historyManager.record(operation);
 
     // Sync to server if configured
     if (this.serverSync) {
@@ -1103,7 +803,7 @@ export class CanvasEngine {
         operation.undo(this.tree);
 
         // Remove from history
-        this.history.undo(this.tree);
+        this.historyManager.undo(this.tree);
 
         // Notify error
         if (this.config.serverSync?.onSyncError) {
@@ -1153,7 +853,7 @@ export class CanvasEngine {
    */
   private emitHistoryChange(): void {
     this.emitEvent('history:change', {
-      state: this.history.getState(),
+      state: this.historyManager.getState(),
     });
   }
 
@@ -1195,6 +895,20 @@ export class CanvasEngine {
       }
     }
     return null;
+  }
+
+  /**
+   * Build dependencies object for SelectionManager
+   */
+  private _buildSelectionDeps() {
+    return {
+      events: this.events,
+      tree: this.tree,
+      getRenderedAstTrees: () => this.getRenderedAstTrees(),
+      findASTNode: (nodes: ASTNode[], id: string) => this.findASTNode(nodes, id),
+      getActiveTracer,
+      findAstNodeBySourceLoc,
+    };
   }
 
   /**

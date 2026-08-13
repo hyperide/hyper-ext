@@ -3,7 +3,6 @@ import { IconCode, IconComponents, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
-import type { CanvasEngine } from '@/lib/canvas-engine';
 import { useCanvasEngineOptional } from '@/lib/canvas-engine';
 import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
 import { TailwindAdapter } from '@/lib/canvas-engine/adapters/TailwindAdapter';
@@ -20,8 +19,7 @@ import {
 import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
-import { authFetch } from '@/utils/authFetch';
-import type { ComponentGroup } from '../../../lib/component-scanner/types';
+
 import { useElementSelection } from '../LeftSidebar/hooks/useElementSelection';
 import { useElementsTree } from '../LeftSidebar/hooks/useElementsTree';
 import { useFunctionNavigate } from '../LeftSidebar/hooks/useFunctionNavigate';
@@ -30,6 +28,11 @@ import { SetupTailwindButton } from '../SetupTailwindButton';
 import type { FillMode } from '../ui/fill-picker';
 import { Input } from '../ui/input';
 import { ToastAction } from '../ui/toast';
+import { ComponentQuickList } from './ComponentQuickList';
+import { useComponentPathCompat, useSelectionCompat } from './hooks/useSelectionCompat';
+import { useNavigationHandlers } from './hooks/useNavigationHandlers';
+import { usePopulateStyleState } from './hooks/usePopulateStyleState';
+import { useStyleHandlers } from './hooks/useStyleHandlers';
 import { useStyleSync } from './hooks/useStyleSync';
 import {
   AppearanceSection,
@@ -49,110 +52,7 @@ import {
 } from './sections';
 import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
-import {
-  computeNumericArrowValue,
-  cssToPosition,
-  findNodeById,
-  mapShadowSizeToValues,
-  parseHexWithAlpha,
-  positionToCss,
-} from './utils';
-
-// ============================================================================
-// Component quick-list (Inspector empty state, VS Code only)
-// ============================================================================
-
-function ComponentQuickList({
-  atomGroups,
-  compositeGroups,
-  onComponentClick,
-}: {
-  atomGroups: ComponentGroup[];
-  compositeGroups: ComponentGroup[];
-  onComponentClick?: (name: string, path: string) => void;
-}) {
-  return (
-    <div className="px-3 pb-4 space-y-3">
-      {atomGroups.length > 0 && (
-        <ComponentGroupSection title="Atoms" groups={atomGroups} onComponentClick={onComponentClick} />
-      )}
-      {compositeGroups.length > 0 && (
-        <ComponentGroupSection title="Composite" groups={compositeGroups} onComponentClick={onComponentClick} />
-      )}
-    </div>
-  );
-}
-
-function ComponentGroupSection({
-  title,
-  groups,
-  onComponentClick,
-}: {
-  title: string;
-  groups: ComponentGroup[];
-  onComponentClick?: (name: string, path: string) => void;
-}) {
-  return (
-    <div>
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-1">{title}</p>
-      <div className="space-y-0.5">
-        {groups.flatMap((group) =>
-          group.components.map((comp) => (
-            <button
-              key={comp.path}
-              type="button"
-              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors text-foreground truncate"
-              onClick={() => onComponentClick?.(comp.name, comp.path)}
-              title={comp.path}
-            >
-              {comp.name}
-            </button>
-          )),
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Compatibility hooks — work in both SaaS and VS Code
-// ============================================================================
-
-/**
- * Get selected IDs from engine (SaaS) or shared editor state (VS Code).
- * Both hooks always run — no conditional hook violation.
- */
-function useSelectionCompat(engine: CanvasEngine | null): string[] {
-  const [engineIds, setEngineIds] = useState<string[]>([]);
-  const sharedIds = useSharedEditorState((s) => s.selectedIds);
-
-  useEffect(() => {
-    if (!engine) return;
-    setEngineIds(engine.getSelection().selectedIds);
-    return engine.events.on('selection:change', (event) => {
-      setEngineIds([...event.selectedIds]);
-    });
-  }, [engine]);
-
-  return engine ? engineIds : sharedIds;
-}
-
-/**
- * Get component file path from engine (SaaS) or shared editor state (VS Code).
- */
-function useComponentPathCompat(engine: CanvasEngine | null): string | null {
-  const sharedComponent = useSharedEditorState((s) => s.currentComponent);
-
-  if (engine) {
-    return (engine.getRoot().metadata?.filePath as string) ?? null;
-  }
-
-  return sharedComponent?.path ?? null;
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
+import { findNodeById } from './utils';
 
 export default function RightSidebar({
   onOpenSettings,
@@ -475,68 +375,38 @@ export default function RightSidebar({
   // Root ref for wheel event handling
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard handler for numeric inputs (ArrowUp/Down)
-  const handleNumericKeyDown = useCallback(
-    (
-      e: React.KeyboardEvent<HTMLInputElement>,
-      currentValue: string,
-      setValue: (value: string) => void,
-      styleKey?: string,
-      defaultValue?: string,
-    ) => {
-      const newValue = computeNumericArrowValue({
-        key: e.key,
-        currentValue,
-        styleKey,
-        defaultValue,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-      });
-      if (newValue === null) return;
-      e.preventDefault();
-      setValue(newValue);
-      if (styleKey) syncStyleChange(styleKey, newValue);
-    },
-    [syncStyleChange],
-  );
-
-  // Position handlers
-  const handlePositionChange = useCallback(
-    (pos: PositionType) => {
-      setSelectedPosition(pos);
-      syncStyleChange('position', positionToCss(pos));
-    },
-    [syncStyleChange],
-  );
-
-  const handlePositionValueChange = useCallback(
-    (key: 'top' | 'right' | 'bottom' | 'left', value: string) => {
-      const setters = {
-        top: setPosTop,
-        right: setPosRight,
-        bottom: setPosBottom,
-        left: setPosLeft,
-      };
-      setters[key](value);
-      syncStyleChange(key, value);
-    },
-    [syncStyleChange],
-  );
-
-  // Margin handlers
-  const handleMarginChange = useCallback(
-    (key: string, value: string) => {
-      const setters: Record<string, (v: string) => void> = {
-        marginTop: setMarginTop,
-        marginRight: setMarginRight,
-        marginBottom: setMarginBottom,
-        marginLeft: setMarginLeft,
-      };
-      setters[key]?.(value);
-      syncStyleChange(key, value);
-    },
-    [syncStyleChange],
-  );
+  const {
+    handleNumericKeyDown,
+    handlePositionChange,
+    handlePositionValueChange,
+    handleMarginChange,
+    handleWidthChange,
+    handleHeightChange,
+    handleWidthBlur,
+    handleHeightBlur,
+    handlePaddingChange,
+    handleSetupTailwind,
+  } = useStyleHandlers({
+    syncStyleChange,
+    setWidth,
+    setHeight,
+    setSelectedPosition,
+    setPosTop,
+    setPosRight,
+    setPosBottom,
+    setPosLeft,
+    setMarginTop,
+    setMarginRight,
+    setMarginBottom,
+    setMarginLeft,
+    setPaddingTop,
+    setPaddingRight,
+    setPaddingBottom,
+    setPaddingLeft,
+    width,
+    height,
+    openAIChat,
+  });
 
   // Layout change handler
   const handleLayoutChange = useCallback(
@@ -563,63 +433,6 @@ export default function RightSidebar({
     [selectedIds, componentPath, styleAdapter],
   );
 
-  // Width/Height handlers
-  const handleWidthChange = useCallback(
-    (value: string) => {
-      setWidth(value);
-      syncStyleChange('width', value.replace(' Auto', ''));
-    },
-    [syncStyleChange],
-  );
-
-  const handleHeightChange = useCallback(
-    (value: string) => {
-      setHeight(value);
-      syncStyleChange('height', value.replace(' Auto', ''));
-    },
-    [syncStyleChange],
-  );
-
-  const handleWidthBlur = useCallback(() => {
-    const cleanWidth = width.replace(' Auto', '');
-    const num = Number.parseFloat(cleanWidth);
-    if (!Number.isNaN(num) && !cleanWidth.includes('px')) {
-      const newValue = `${num}px`;
-      setWidth(newValue);
-      syncStyleChange('width', newValue);
-    }
-  }, [width, syncStyleChange]);
-
-  const handleHeightBlur = useCallback(() => {
-    const cleanHeight = height.replace(' Auto', '');
-    const num = Number.parseFloat(cleanHeight);
-    if (!Number.isNaN(num) && !cleanHeight.includes('px')) {
-      const newValue = `${num}px`;
-      setHeight(newValue);
-      syncStyleChange('height', newValue);
-    }
-  }, [height, syncStyleChange]);
-
-  // Padding handler
-  const handlePaddingChange = useCallback((key: string, value: string) => {
-    const setters: Record<string, (v: string) => void> = {
-      paddingTop: setPaddingTop,
-      paddingRight: setPaddingRight,
-      paddingBottom: setPaddingBottom,
-      paddingLeft: setPaddingLeft,
-    };
-    setters[key]?.(value);
-  }, []);
-
-  // Setup Tailwind handler (works in both SaaS and VS Code)
-  const handleSetupTailwind = useCallback(() => {
-    openAIChat({
-      prompt:
-        'Install and configure TailwindCSS in this project. Add tailwindcss to devDependencies, create tailwind.config.js file, and add TailwindCSS directives to the main CSS file.',
-      forceNewChat: true,
-    });
-  }, [openAIChat]);
-
   // Text content handler
   const handleTextContentChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -645,87 +458,14 @@ export default function RightSidebar({
     [syncTextChange],
   );
 
-  // Go to text in code editor (SaaS only)
-  const handleGoToTextCode = useCallback(async () => {
-    if (selectedIds.length === 0 || !componentPath || !engine) {
-      return;
-    }
-
-    const goToSelectedId = selectedIds[0];
-
-    try {
-      // Get element and children location from server
-      const response = await authFetch(
-        `/api/get-element-location?filePath=${encodeURIComponent(componentPath)}&uniqId=${encodeURIComponent(goToSelectedId)}`,
-      );
-
-      if (!response.ok) {
-        toast({
-          variant: 'destructive',
-          title: 'Navigation Error',
-          description: 'Could not find element location in code',
-        });
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!data.success || !data.location) {
-        toast({
-          variant: 'destructive',
-          title: 'Navigation Error',
-          description: 'Could not find element location in code',
-        });
-        return;
-      }
-
-      // Use childrenLocation if available, otherwise fall back to element location
-      const targetLocation = data.childrenLocation || data.location;
-
-      // Read file content
-      const fileResponse = await authFetch(`/api/read-file?path=${encodeURIComponent(componentPath)}`);
-
-      if (!fileResponse.ok) {
-        return;
-      }
-
-      const fileData = await fileResponse.json();
-
-      // Switch to code mode
-      engine.setMode('code');
-
-      // Open file in editor
-      openFile(componentPath, fileData.content);
-
-      // Dispatch navigation event after React updates
-      requestAnimationFrame(() => {
-        window.dispatchEvent(
-          new CustomEvent('monaco-goto-position', {
-            detail: {
-              line: targetLocation.line,
-              column: targetLocation.column,
-              endLine: targetLocation.endLine,
-              endColumn: targetLocation.endColumn,
-              filePath: componentPath,
-            },
-          }),
-        );
-      });
-    } catch (error) {
-      console.error('[Go to Text Code] Error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Navigation Error',
-        description: 'Failed to navigate to code',
-      });
-    }
-  }, [selectedIds, componentPath, engine, openFile]);
-
-  // Go to text in code editor (VS Code — uses childrenLocation from RPC)
-  const handleGoToTextCodeVSCode = useCallback(() => {
-    if (!componentPath || !childrenLocation) return;
-    goToCode(componentPath, childrenLocation.line, childrenLocation.column);
-  }, [componentPath, childrenLocation, goToCode]);
+  const { handleGoToTextCode, handleGoToTextCodeVSCode } = useNavigationHandlers({
+    selectedIds,
+    componentPath,
+    engine,
+    openFile,
+    goToCode,
+    childrenLocation,
+  });
 
   // "Go to main component" (HYP-563): jump from the selected instance to its
   // master component definition. The extension resolves the JSX tag's import to a
@@ -960,220 +700,53 @@ export default function RightSidebar({
   // Populate UI state from parsedStyles
   // ========================================================================
 
-  useEffect(() => {
-    if (!selectedId || !parsedStyles) {
-      // Reset all values
-      setSelectedPosition('static');
-      setPosTop('');
-      setPosRight('');
-      setPosBottom('');
-      setPosLeft('');
-      setWidth('');
-      setHeight('');
-      setMarginTop('');
-      setMarginRight('');
-      setMarginBottom('');
-      setMarginLeft('');
-      setPaddingTop('');
-      setPaddingRight('');
-      setPaddingBottom('');
-      setPaddingLeft('');
-      setGap('');
-      setJustifyContent('');
-      setAlignItems('');
-      setColumnGap('');
-      setRowGap('');
-      setGridJustifyItems('');
-      setGridAlignItems('');
-      setGridCols('');
-      setGridRows('');
-      setBackgroundColor('');
-      setTextColor('');
-      setFontSize('');
-      setTextOpacity('');
-      setBorderRadius('');
-      setOpacity('');
-      setClipContent(false);
-      setSelectedLayout('layout');
-      setStrokes([]);
-      setEffects([]);
-      setTextContent('');
-      setIsTextFromProps(false);
-      return;
-    }
-
-    const ep = effectiveParsed;
-
-    // Update position
-    setSelectedPosition(cssToPosition(ep.position || 'static'));
-    setPosTop(ep.top || '');
-    setPosRight(ep.right || '');
-    setPosBottom(ep.bottom || '');
-    setPosLeft(ep.left || '');
-
-    // Update dimensions
-    setWidth(ep.width || '');
-    setHeight(ep.height || '');
-
-    // Update margin
-    setMarginTop(ep.marginTop || '');
-    setMarginRight(ep.marginRight || '');
-    setMarginBottom(ep.marginBottom || '');
-    setMarginLeft(ep.marginLeft || '');
-
-    // Update padding
-    setPaddingTop(ep.paddingTop || '');
-    setPaddingRight(ep.paddingRight || '');
-    setPaddingBottom(ep.paddingBottom || '');
-    setPaddingLeft(ep.paddingLeft || '');
-
-    // Update flex/grid
-    setGap(ep.gap || '');
-    setJustifyContent(ep.justifyContent || '');
-    setAlignItems(ep.alignItems || '');
-
-    // Update grid-specific
-    setColumnGap(ep.columnGap || '');
-    setRowGap(ep.rowGap || '');
-    setGridJustifyItems(ep.justifyItems || '');
-    setGridAlignItems(ep.alignItems || '');
-    setGridCols(ep.gridTemplateColumns || '');
-    setGridRows(ep.gridTemplateRows || '');
-
-    // Update colors
-    if (ep.backgroundColor) {
-      const { color, opacity: parsedFillOpacity } = parseHexWithAlpha(ep.backgroundColor);
-      setBackgroundColor(color);
-      setFillOpacity(parsedFillOpacity ?? '100');
-    } else {
-      setBackgroundColor('');
-      setFillOpacity('');
-    }
-    setOpacity(ep.opacity || '');
-    setBackgroundImage(ep.backgroundImage || null);
-
-    if (ep.color) {
-      const { color, opacity: parsedTextOpacity } = parseHexWithAlpha(ep.color);
-      setTextColor(color);
-      setTextOpacity(parsedTextOpacity ?? '100');
-    } else {
-      setTextColor('');
-      setTextOpacity('');
-    }
-
-    setFontSize(ep.fontSize ?? '');
-
-    // Update border radius
-    setBorderRadius(ep.borderRadius || '');
-
-    // Update overflow
-    if (ep.overflow === 'hidden' || ep.overflow === 'scroll' || ep.overflow === 'auto') {
-      setClipContent(true);
-    } else {
-      setClipContent(false);
-    }
-
-    // Update layout
-    setSelectedLayout(ep.layoutType || 'layout');
-
-    // Update strokes
-    const hasAnyBorder =
-      (ep.borderWidth && ep.borderWidth !== '0' && ep.borderWidth !== '0px') ||
-      (ep.borderTopWidth && ep.borderTopWidth !== '0') ||
-      (ep.borderRightWidth && ep.borderRightWidth !== '0') ||
-      (ep.borderBottomWidth && ep.borderBottomWidth !== '0') ||
-      (ep.borderLeftWidth && ep.borderLeftWidth !== '0');
-
-    if (hasAnyBorder) {
-      const borderWidth =
-        ep.borderWidth ||
-        ep.borderTopWidth ||
-        ep.borderRightWidth ||
-        ep.borderBottomWidth ||
-        ep.borderLeftWidth ||
-        '1px';
-
-      setStrokes([
-        {
-          id: '1',
-          visible: true,
-          color: ep.borderColor || '#000000',
-          opacity: '100',
-          width: borderWidth.replace('px', ''),
-          style: (ep.borderStyle as StrokeItem['style']) || 'solid',
-          sides: {
-            top: !!ep.borderWidth || !!ep.borderTopWidth,
-            right: !!ep.borderWidth || !!ep.borderRightWidth,
-            bottom: !!ep.borderWidth || !!ep.borderBottomWidth,
-            left: !!ep.borderWidth || !!ep.borderLeftWidth,
-          },
-        },
-      ]);
-    } else {
-      setStrokes([]);
-    }
-
-    // Update effects
-    const newEffects: EffectItem[] = [];
-    if (ep.shadow && ep.shadow !== 'none') {
-      const hasArbitraryValues = ep.shadowX || ep.shadowY || ep.shadowBlur || ep.shadowSpread;
-      const isPreset = !hasArbitraryValues && ['sm', 'default', 'md', 'lg', 'xl', '2xl', 'inner'].includes(ep.shadow);
-
-      const values = hasArbitraryValues
-        ? {
-            x: ep.shadowX,
-            y: ep.shadowY,
-            blur: ep.shadowBlur,
-            spread: ep.shadowSpread,
-          }
-        : mapShadowSizeToValues(
-            ep.shadow === 'inner' ? 'default' : ep.shadow,
-            ep.shadow === 'inner' ? 'inner-shadow' : 'drop-shadow',
-          );
-
-      let color = '#000000';
-      let shadowOpacity = '100';
-      if (ep.shadowColor?.match(/^#[0-9a-fA-F]{8}$/)) {
-        color = ep.shadowColor.slice(0, 7);
-        const alpha = Number.parseInt(ep.shadowColor.slice(7, 9), 16);
-        shadowOpacity = Math.round((alpha / 255) * 100).toString();
-      } else if (ep.shadowColor) {
-        color = ep.shadowColor;
-        shadowOpacity = ep.shadowOpacity || '100';
-      }
-
-      newEffects.push({
-        id: '1',
-        visible: true,
-        type: ep.shadow === 'inner' ? 'inner-shadow' : 'drop-shadow',
-        x: values.x,
-        y: values.y,
-        blur: values.blur,
-        spread: values.spread,
-        color,
-        opacity: shadowOpacity,
-        preset: isPreset ? ep.shadow : undefined,
-      });
-    }
-    if (ep.blur && ep.blur !== 'none') {
-      newEffects.push({
-        id: '2',
-        visible: true,
-        type: 'blur',
-        value: ep.blur,
-        color: '#000000',
-        opacity: '100',
-      });
-    }
-    setEffects(newEffects);
-
-    // Update text content — skip if user is actively typing to prevent cursor reset
-    if (!isEditingTextRef.current) {
-      setTextContent(dataTextContent);
-    }
-    // In browser mode, text from DOM (no childrenType) is "from props"
-    setIsTextFromProps(engine !== null && !childrenType && !!dataTextContent);
-  }, [selectedId, parsedStyles, effectiveParsed, dataTextContent, childrenType, engine]);
+  usePopulateStyleState({
+    selectedId,
+    parsedStyles,
+    effectiveParsed,
+    dataTextContent,
+    childrenType,
+    engine,
+    setSelectedPosition,
+    setPosTop,
+    setPosRight,
+    setPosBottom,
+    setPosLeft,
+    setWidth,
+    setHeight,
+    setMarginTop,
+    setMarginRight,
+    setMarginBottom,
+    setMarginLeft,
+    setPaddingTop,
+    setPaddingRight,
+    setPaddingBottom,
+    setPaddingLeft,
+    setGap,
+    setJustifyContent,
+    setAlignItems,
+    setColumnGap,
+    setRowGap,
+    setGridJustifyItems,
+    setGridAlignItems,
+    setGridCols,
+    setGridRows,
+    setBackgroundColor,
+    setFillOpacity,
+    setOpacity,
+    setBackgroundImage,
+    setTextColor,
+    setTextOpacity,
+    setFontSize,
+    setBorderRadius,
+    setClipContent,
+    setSelectedLayout,
+    setStrokes,
+    setEffects,
+    setTextContent,
+    setIsTextFromProps,
+    isEditingTextRef,
+  });
 
   // Auto-reset unsupported values when UI kit is Tamagui
   useEffect(() => {
@@ -1662,28 +1235,3 @@ export default function RightSidebar({
     </div>
   );
 }
-
-export const SampleDefault = () => {
-  return (
-    <MemoryRouter>
-      <div style={{ height: '100vh', display: 'flex' }}>
-        {/* Mock the CanvasEngine provider */}
-        <div style={{ flex: 1 }}>
-          {/* This would normally be wrapped in CanvasEngineProvider */}
-          <RightSidebar
-            onOpenSettings={() => {}}
-            viewport={{ panX: 1200, panY: 800, zoom: 1 }}
-            onZoomChange={() => {}}
-            onFitToContent={() => {}}
-            activeInstanceId="instance-1"
-            canvasMode="single"
-            instanceSize={{ width: 1200, height: 800 }}
-            onInstanceSizeChange={() => {}}
-          />
-        </div>
-      </div>
-    </MemoryRouter>
-  );
-};
-
-import { MemoryRouter } from 'react-router-dom';

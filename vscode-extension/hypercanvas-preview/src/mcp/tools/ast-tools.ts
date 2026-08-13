@@ -32,7 +32,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ newId: result.newId, index: result.index }) }],
+        content: [{ type: 'text' as const, text: JSON.stringify({ index: result.index }) }],
       };
     },
   );
@@ -179,7 +179,7 @@ export function registerAstTools(server: McpServer, astService: AstService, stat
       if (!result.success) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ wrapperId: result.wrapperId }) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ success: result.success }) }] };
     },
   );
 }

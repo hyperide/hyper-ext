@@ -10,9 +10,22 @@
 import * as fsSync from 'node:fs';
 import * as nodePath from 'node:path';
 import * as t from '@babel/types';
-import { buildJSXElement } from '@lib/ast/element-builder';
 import type { FileIO } from '@lib/ast/file-io';
-import { ensureImport } from '@lib/ast/import-manager';
+import { insertElement, duplicateElement, pasteElement, wrapElement } from './ast-element-ops';
+import {
+  updateStylesWrapper,
+  updatePropsWrapper,
+  updateTextWrapper,
+  deleteElementsWrapper,
+} from './ast-service-mutations';
+import {
+  findElementAtPosition,
+  getElementLocation,
+  getElementCode,
+  getParentElementId,
+  getChildElementIds,
+  getSiblingElementId,
+} from './ast-query-utils';
 import {
   collectJsxExternalRefs,
   collectJsxLocalBindings,
@@ -23,22 +36,34 @@ import {
 } from '@lib/ast/jsx-deps';
 import { type MasterComponentResolution, resolveMasterComponent } from '@lib/ast/master-component-resolver';
 import { buildAliasMapFromTsconfig } from '@lib/ast/tsconfig-alias-map';
-import { cloneElement, setAttribute, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
-import {
-  duplicateElementInAST,
-  extractElementSource,
-  insertElementIntoAST,
-  parseTSXElements,
-  wrapElementInAST,
-} from '@lib/ast/operations';
+import { cloneElement, updateElementChildren, valueToJSXAttribute } from '@lib/ast/mutator';
 import { createFileParser } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
-import { findElementAtPosition, traverseJSXElements } from '@lib/ast/traverser';
+import { traverseJSXElements } from '@lib/ast/traverser';
 import { NodeMapService } from '@lib/element-tracing/node-map-service';
-import { executeStyleWriteRequest } from '@lib/style-write/style-write-executor';
 import type { FindElementResult } from '@lib/types';
 import type { NodeMapEntry, NodeRef } from '@shared/element-tracing/types';
 import { resolveWorkspacePath } from './workspace-path';
+import { describeJsxName, jsxContains, liftToCommonJsxParent, replaceStringLiteralValue } from './ast-utils';
+import type {
+  AstOperationResult,
+  DuplicateElementResult,
+  InsertElementResult,
+  MoveResult,
+  UpdateStylesResult,
+  UpdateTextResult,
+  WrapElementResult,
+} from './ast-types';
+
+export type {
+  AstOperationResult,
+  DuplicateElementResult,
+  InsertElementResult,
+  MoveResult,
+  UpdateStylesResult,
+  UpdateTextResult,
+  WrapElementResult,
+} from './ast-types';
 
 // File sink only when explicitly requested or in CI — never in normal production use
 const DEBUG_LOG: string | null =
@@ -50,305 +75,6 @@ function dbg(msg: string) {
     fsSync.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
   } catch {}
 }
-
-function replaceStringLiteralValue(node: t.Node, previousValue: string, nextValue: string): boolean {
-  let changed = false;
-
-  const visit = (current: t.Node | null | undefined): void => {
-    if (!current) return;
-    if (t.isStringLiteral(current) && current.value === previousValue) {
-      current.value = nextValue;
-      changed = true;
-      return;
-    }
-    if (t.isTemplateLiteral(current) && current.expressions.length === 0) {
-      const raw = current.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join('');
-      if (raw === previousValue) {
-        current.quasis = [t.templateElement({ raw: nextValue, cooked: nextValue }, true)];
-        changed = true;
-      }
-      return;
-    }
-
-    for (const value of Object.values(current)) {
-      if (!value) continue;
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          if (item && typeof item === 'object' && 'type' in item) visit(item as t.Node);
-        }
-      } else if (typeof value === 'object' && 'type' in value) {
-        visit(value as t.Node);
-      }
-    }
-  };
-
-  visit(node);
-  return changed;
-}
-
-// ============================================
-// Response Types
-// ============================================
-
-export interface AstOperationResult {
-  success: boolean;
-  error?: string;
-  data?: unknown;
-  /** Absolute path of the file that was actually mutated (may differ from the requested filePath for cross-file writes) */
-  resolvedPath?: string;
-  /** Content of resolvedPath read BEFORE the write (for undo tracking in cross-file scenarios) */
-  contentBeforeWrite?: string;
-  /** All cross-file paths mutated, with pre-write content — for multi-file undo tracking in batch operations */
-  allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
-}
-
-export interface UpdateStylesResult extends AstOperationResult {
-  className?: string;
-}
-
-// ============================================
-// moveElement contract — spec for Task 2+ in
-// docs/plans/2026-05-06-move-any-to-any-no-shared-parent.md
-// ============================================
-//
-// Semantics (the "any element to any place" promise):
-//
-// 1. moveElement(source, target, position) ALWAYS succeeds from the user's
-//    standpoint. There is no "must share JSX parent" / "rejected" branch —
-//    if the move would otherwise be ambiguous, the implementation does its
-//    best (auto-import what it can, inline what it cannot) and returns a
-//    list of `adjustments` describing what it had to do.
-//
-// 2. Cases the implementation MUST handle:
-//    a) Same JSX parent — sibling reorder (array splice in shared parent).
-//    b) Different JSX parents in the same file — cut-and-splice across
-//       subtrees of one module.
-//    c) Different files in the same component graph — cut from source file,
-//       paste into target file. Auto-add imports that the moved subtree
-//       references; auto-remove imports orphaned in the source file.
-//    d) Cross-component (e.g. drag from <Sidebar> into <Hero>) — same as
-//       (c). If the moved subtree references symbols bound only in the
-//       source component scope, surface them as new props on the target
-//       (or inline the resolved value when trivially safe).
-//    e) Drop into a non-container leaf (e.g. <img>) — insert as a sibling
-//       at `position`, never split the leaf.
-//
-// 3. The `position` parameter is the visual direction the user dragged
-//    toward — 'before' means "land just before target in document order",
-//    'after' means "land just after target". It is always defined; callers
-//    compute it from pointer geometry.
-//
-// 4. NodeRef inputs are raw — no client-side "lift to common parent"
-//    pre-processing. Both `source` and `target` may sit anywhere in the
-//    workspace. The shared/canvas-interaction/drop-target-lift module that
-//    used to enforce the "siblings only" precondition has been deleted.
-//
-// MoveResult shape:
-//   { success: true }                                 // clean move, no adjustments
-//   { success: true; adjustments: string[] }          // best-effort move
-//
-// Note: there is intentionally no `success: false` variant. Internal
-// failures (file I/O, parse errors) propagate as exceptions; the bridge
-// layer surfaces them as toasts but the contract from the iframe's
-// standpoint is "moveElement always returns success".
-
-export interface MoveResult {
-  success: true;
-  /** Human-readable list of best-effort adjustments (e.g. "added import: Foo from './Foo'", "inlined prop value `theme.primary`"). Omitted when the move was clean. */
-  adjustments?: string[];
-  /** Absolute path of the file that received the moved subtree (may differ from the source file for cross-file moves). */
-  resolvedPath?: string;
-  /** Pre-write content of the target file (for undo tracking). */
-  contentBeforeWrite?: string;
-  /** Pre-write content of every file mutated (source file + target file for cross-file moves). */
-  allCrossFileSnapshots?: ReadonlyArray<{ readonly resolvedPath: string; readonly contentBefore: string }>;
-}
-
-export interface InsertElementResult extends AstOperationResult {
-  newId?: string;
-  index?: number;
-}
-
-export interface DuplicateElementResult extends AstOperationResult {
-  newId?: string;
-}
-
-export interface WrapElementResult extends AstOperationResult {
-  wrapperId?: string;
-}
-
-export interface UpdateTextResult extends AstOperationResult {
-  /**
-   * Source location of the JSX element's opening tag AFTER the write.
-   * line is 1-based, column is 0-based — matches React fiber `_debugSource`/`_debugStack`
-   * conventions, so callers can construct `${fileName}:${line}:${column}` IDs that the
-   * iframe FSM will recognize without re-resolving from a stale ref.
-   *
-   * The opening tag's start position is invariant for child-only mutations because
-   * recast preserves the original tokens up to the change site, and `updateElementChildren`
-   * only replaces JSXElement.children. Returned regardless to let callers verify.
-   */
-  newLocation?: { line: number; column: number };
-}
-
-function isJsxSourceFile(filePath: string): boolean {
-  return /\.(jsx|tsx)$/.test(filePath);
-}
-
-/**
- * Test whether `needle` is a descendant of `haystack` in the JSX tree.
- * Used by moveElement to refuse cycles (move a subtree into itself).
- * Walks JSXElement/JSXFragment children recursively; expressions inside
- * `{…}` containers are unwrapped so e.g. `<div>{cond && <Foo />}</div>`
- * is still detected.
- */
-function jsxContains(haystack: t.JSXElement, needle: t.JSXElement): boolean {
-  for (const child of haystack.children) {
-    if (child === needle) return true;
-    if (t.isJSXElement(child) || t.isJSXFragment(child)) {
-      if (jsxContains(child as t.JSXElement, needle)) return true;
-    } else if (t.isJSXExpressionContainer(child)) {
-      // Walk inside `{…}` expressions in case the source contains the target
-      // through a conditional / fragment inside an expression slot.
-      const found = findJsxInExpression(child.expression, needle);
-      if (found) return true;
-    }
-  }
-  return false;
-}
-
-function findJsxInExpression(expr: t.Expression | t.JSXEmptyExpression, needle: t.JSXElement): boolean {
-  if (t.isJSXElement(expr)) {
-    if (expr === needle) return true;
-    return jsxContains(expr, needle);
-  }
-  if (t.isJSXFragment(expr)) {
-    for (const child of expr.children) {
-      if (child === needle) return true;
-      if (t.isJSXElement(child) && jsxContains(child, needle)) return true;
-    }
-  }
-  if (t.isLogicalExpression(expr) || t.isBinaryExpression(expr)) {
-    return findJsxInExpression(expr.left as t.Expression, needle) || findJsxInExpression(expr.right, needle);
-  }
-  if (t.isConditionalExpression(expr)) {
-    return (
-      findJsxInExpression(expr.test, needle) ||
-      findJsxInExpression(expr.consequent, needle) ||
-      findJsxInExpression(expr.alternate, needle)
-    );
-  }
-  return false;
-}
-
-/**
- * Walk the JSX hierarchy upward from sourcePath and targetPath, find the
- * deepest common JSX ancestor, and return the source/target JSXElements
- * that are direct children of that common ancestor.
- *
- * This is the server-side counterpart of the deleted DOM-side
- * `liftToCommonSiblings` (shared/canvas-interaction/drop-target-lift.ts —
- * removed in 7864d180). Without lift, dragging an inner element of card-1
- * onto an inner element of card-2 would just relocate the inner node into
- * card-2's parent — which is rarely what the user wants. With lift, the
- * outer cards reorder, matching the visual gesture.
- *
- * Returns null when:
- *   - no common JSX ancestor exists (different return statements / fragments);
- *   - the common ancestor is the source or target itself (one is an ancestor
- *     of the other — caller decides whether to throw or extract);
- *   - the lifted source/target is not itself a JSXElement (e.g. raw text
- *     child of a fragment).
- */
-function liftToCommonJsxParent(
-  sourcePath: import('@babel/traverse').NodePath<t.JSXElement>,
-  targetPath: import('@babel/traverse').NodePath<t.JSXElement>,
-): {
-  sourceLifted: t.JSXElement;
-  targetLifted: t.JSXElement;
-  commonParent: t.JSXElement | t.JSXFragment;
-} | null {
-  type AnyPath = import('@babel/traverse').NodePath;
-  const buildChain = (start: AnyPath): t.Node[] => {
-    const chain: t.Node[] = [];
-    let p: AnyPath | null = start;
-    while (p) {
-      chain.push(p.node);
-      p = p.parentPath ?? null;
-    }
-    return chain;
-  };
-  const sourceChain = buildChain(sourcePath as AnyPath);
-  const targetChain = buildChain(targetPath as AnyPath);
-
-  const sourceSet = new Set(sourceChain);
-  let commonIdxInTarget = -1;
-  for (let i = 0; i < targetChain.length; i++) {
-    if (sourceSet.has(targetChain[i])) {
-      commonIdxInTarget = i;
-      break;
-    }
-  }
-  if (commonIdxInTarget === -1) return null;
-
-  const commonNode = targetChain[commonIdxInTarget];
-  const sourceNode = sourceChain[0];
-  const targetNode = targetChain[0];
-
-  // Case A — common ancestor IS the source. Means source contains target.
-  // Caller guards this via jsxContains() and throws as a cycle, so we just
-  // refuse here too (defense-in-depth).
-  if (commonNode === sourceNode) return null;
-
-  // Case B — common ancestor IS the target. Means target is in source's
-  // ancestor chain (user dropped an inner element onto its own outer
-  // container). Extract: move sourceNode itself out of its current parent
-  // and into target's parent as a sibling of target.
-  if (commonNode === targetNode) {
-    const targetParent = targetChain[1];
-    if (!targetParent || (!t.isJSXElement(targetParent) && !t.isJSXFragment(targetParent))) {
-      return null;
-    }
-    if (!t.isJSXElement(sourceNode) || !t.isJSXElement(targetNode)) return null;
-    return {
-      sourceLifted: sourceNode,
-      targetLifted: targetNode,
-      commonParent: targetParent as t.JSXElement | t.JSXFragment,
-    };
-  }
-
-  // Case C — common ancestor is a third JSX node strictly above both.
-  if (!t.isJSXElement(commonNode) && !t.isJSXFragment(commonNode)) return null;
-  const commonIdxInSource = sourceChain.indexOf(commonNode);
-  if (commonIdxInSource < 1 || commonIdxInTarget < 1) return null;
-
-  const sourceLifted = sourceChain[commonIdxInSource - 1];
-  const targetLifted = targetChain[commonIdxInTarget - 1];
-  if (!t.isJSXElement(sourceLifted) || !t.isJSXElement(targetLifted)) return null;
-
-  return {
-    sourceLifted,
-    targetLifted,
-    commonParent: commonNode,
-  };
-}
-
-/** Render a short JSX tag name for debug logs (e.g. "p", "div", "Card.Header"). */
-function describeJsxName(el: t.JSXElement): string {
-  const name = el.openingElement.name;
-  if (t.isJSXIdentifier(name)) return name.name;
-  if (t.isJSXMemberExpression(name)) {
-    const obj = t.isJSXIdentifier(name.object) ? name.object.name : '?';
-    return `${obj}.${name.property.name}`;
-  }
-  if (t.isJSXNamespacedName(name)) return `${name.namespace.name}:${name.name.name}`;
-  return '?';
-}
-
-// ============================================
-// AstService Class
-// ============================================
-
 export class AstService {
   private _workspaceRoot: string;
   private _fileParser: ReturnType<typeof createFileParser>;
@@ -383,7 +109,6 @@ export class AstService {
         return entry;
       }
     }
-
     return this._nodeMapService.resolveNodeRef(normalizedRef) ?? this._nodeMapService.resolveNodeRef(nodeRef);
   }
 
@@ -439,7 +164,6 @@ export class AstService {
         // Directory doesn't exist
       }
     }
-
     // Also scan root-level .tsx/.jsx files (e.g. tamagui projects with App.tsx at root).
     // listFiles is recursive, so filter to only files directly in the workspace root.
     try {
@@ -455,7 +179,6 @@ export class AstService {
     } catch {
       // Workspace root scan failed — non-critical
     }
-
     for (const filePath of allFiles) {
       try {
         const sourceCode = await this._fileIO.readFile(filePath);
@@ -464,7 +187,6 @@ export class AstService {
         // Skip unreadable files
       }
     }
-
     this._initialized = true;
     if (allFiles.length > 0) {
       dbg(`[AstService] NodeMapService populated with ${this._nodeMapService.getTrackedFiles().length} files`);
@@ -474,6 +196,17 @@ export class AstService {
   /** Expose the NodeMapService for external callers (e.g. SyncPositionService). */
   get nodeMapService(): NodeMapService {
     return this._nodeMapService;
+  }
+
+  /** Build DI context for shared mutation utilities. */
+  private _mutationDeps() {
+    return {
+      workspaceRoot: this._workspaceRoot,
+      fileIO: this._fileIO,
+      fileParser: this._fileParser,
+      updateNodeMap: (fp: string) => this._updateNodeMap(fp),
+      resolveElementInCorrectFile: (ap: string, nr: NodeRef) => this._resolveElementInCorrectFile(ap, nr),
+    };
   }
 
   /** Parse file and update node map (called after every AST write operation). */
@@ -488,6 +221,43 @@ export class AstService {
     } catch {
       // File read failure — node map will be stale but functional
     }
+  }
+
+  /** Build DI context for element insertion/duplicate/paste operations. */
+  private _elementOpsDeps() {
+    return {
+      workspaceRoot: this._workspaceRoot,
+      fileParser: this._fileParser,
+      updateNodeMap: (fp: string) => this._updateNodeMap(fp),
+      resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
+        this._resolveElement(ast, nodeRef, filePath),
+    };
+  }
+
+  /** Build DI context for read-only query operations. */
+  private _queryDeps() {
+    return {
+      workspaceRoot: this._workspaceRoot,
+      fileParser: this._fileParser,
+      nodeMapService: this._nodeMapService,
+      resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
+        this._resolveElement(ast, nodeRef, filePath),
+      resolveNodeMapEntry: (nodeRef: NodeRef) => this._resolveNodeMapEntry(nodeRef),
+      normalizeNodeRef: (nodeRef: NodeRef) => this._normalizeNodeRef(nodeRef),
+    };
+  }
+
+  /** Build DI context for mutation wrapper functions. */
+  private _mutationWrapperDeps() {
+    return {
+      workspaceRoot: this._workspaceRoot,
+      fileIO: this._fileIO,
+      fileParser: this._fileParser,
+      updateNodeMap: (fp: string) => this._updateNodeMap(fp),
+      resolveElementInCorrectFile: (ap: string, nr: NodeRef) => this._resolveElementInCorrectFile(ap, nr),
+      resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
+        this._resolveElement(ast, nodeRef, filePath),
+    };
   }
 
   /**
@@ -565,7 +335,6 @@ export class AstService {
         );
         return posResult;
       }
-
       // Fallback: parse as source location "filePath:line:column" (from React fiber _debugSource)
       const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
       if (m) {
@@ -595,7 +364,6 @@ export class AstService {
           // locEntry belongs to a different file — caller should parse that file instead.
           return null;
         }
-
         // Fallback: if source map resolution failed, try direct AST position lookup.
         // Vite source maps may return positions that match original source (not transformed),
         // especially for React 18 _debugSource which gives original positions directly.
@@ -648,59 +416,17 @@ export class AstService {
       `[AstService.updateStyles] filePath=${filePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${nodeRef ?? elementId} styles=${JSON.stringify(styles)}`,
     );
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
-
-      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
-      if (!resolved) {
-        dbg(`[AstService.updateStyles] element NOT FOUND nodeRef=${nodeRef} elementId=${elementId}`);
-        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
-      }
-      const { result, ast, resolvedPath } = resolved;
-      dbg(
-        `[AstService.updateStyles] resolved element=${(result.element.openingElement?.name as { name?: string })?.name ?? '?'} resolvedPath=${resolvedPath}`,
-      );
-
-      // Read content BEFORE the write so _withUndoTracking can compare before/after for cross-file writes.
-      // Must be done after resolvedPath is known but before executeStyleWriteRequest mutates the file.
-      let contentBeforeWrite: string | undefined;
-      if (resolvedPath !== absolutePath) {
-        try {
-          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
-        } catch {}
-      }
-
-      const writeResult = await executeStyleWriteRequest({
-        ast,
-        sourceFilePath: resolvedPath,
-        element: result.element,
-        styles,
-        state,
-        selectedSourceTabId,
-        runtimeThemeContext: {
-          ideThemePreference: 'system',
-          resolvedColorScheme: 'light',
-          source: 'vscode',
-        },
-        fileIO: this._fileIO,
-        projectRoot: this._workspaceRoot,
-      });
-      if (writeResult.success === false) return { success: false, error: writeResult.error };
-
-      for (const mutatedFile of writeResult.mutatedFiles) {
-        if (isJsxSourceFile(mutatedFile)) {
-          await this._updateNodeMap(mutatedFile);
-        }
-      }
-      return { success: true, resolvedPath, contentBeforeWrite };
-    } catch (error) {
-      console.error('[AstService.updateStyles] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return updateStylesWrapper(
+      this._mutationWrapperDeps(),
+      filePath,
+      elementId,
+      styles,
+      state,
+      nodeRef,
+      selectedSourceTabId,
+    );
   }
 
-  /** Update element props (arbitrary key-value pairs). */
   async updateProps(
     filePath: string,
     elementId: string,
@@ -708,89 +434,12 @@ export class AstService {
     nodeRef?: NodeRef,
   ): Promise<AstOperationResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
-
-      dbg(
-        `[AstService.updateProps] filePath=${filePath} absolutePath=${absolutePath} elementId=${elementId} nodeRef=${nodeRef} effectiveNodeRef=${effectiveNodeRef} props=${JSON.stringify(props)}`,
-      );
-
-      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
-      if (!resolved) {
-        dbg(
-          `[AstService.updateProps] _resolveElementInCorrectFile returned null for effectiveNodeRef=${effectiveNodeRef}`,
-        );
-        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
-      }
-      const { result, ast, resolvedPath } = resolved;
-      dbg(
-        `[AstService.updateProps] resolved element=${result.element.openingElement?.name && 'name' in result.element.openingElement.name ? result.element.openingElement.name.name : '?'} resolvedPath=${resolvedPath}`,
-      );
-
-      let contentBeforeWrite: string | undefined;
-      if (resolvedPath !== absolutePath) {
-        try {
-          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
-        } catch {}
-      }
-
-      for (const [propName, propValue] of Object.entries(props)) {
-        setAttribute(result.element, propName, valueToJSXAttribute(propValue));
-      }
-
-      await this._fileParser.writeAST(ast, resolvedPath);
-      await this._updateNodeMap(resolvedPath);
-      return { success: true, resolvedPath, contentBeforeWrite };
-    } catch (error) {
-      console.error('[AstService.updateProps] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return updatePropsWrapper(this._mutationWrapperDeps(), filePath, elementId, props, nodeRef);
   }
 
-  /**
-   * Update text/expression children of a JSX element.
-   * Uses shared updateElementChildren utility for proper JSX children replacement.
-   */
   async updateText(filePath: string, elementId: string, text: string, nodeRef?: NodeRef): Promise<UpdateTextResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
-
-      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
-      if (!resolved) {
-        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
-      }
-      const { result, ast, resolvedPath } = resolved;
-
-      let contentBeforeWrite: string | undefined;
-      if (resolvedPath !== absolutePath) {
-        try {
-          contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
-        } catch {}
-      }
-
-      // Snapshot the opening tag's location BEFORE mutation. recast preserves the
-      // original tokens for unchanged AST nodes, so for child-only mutations the
-      // opening tag's printed position equals its parsed position — same line:col
-      // post-write. Snapshotting before writeAST avoids any risk of internal loc
-      // wrangling by the printer affecting the value we hand back.
-      const openingLoc = result.element.openingElement?.loc?.start ?? result.element.loc?.start;
-      const newLocation =
-        openingLoc !== undefined && openingLoc !== null
-          ? { line: openingLoc.line, column: openingLoc.column }
-          : undefined;
-
-      updateElementChildren(result.element, text);
-
-      await this._fileParser.writeAST(ast, resolvedPath);
-      await this._updateNodeMap(resolvedPath);
-      return { success: true, resolvedPath, contentBeforeWrite, newLocation };
-    } catch (error) {
-      console.error('[AstService.updateText] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return updateTextWrapper(this._mutationWrapperDeps(), filePath, elementId, text, nodeRef);
   }
 
   async updateI18nKey(
@@ -823,7 +472,6 @@ export class AstService {
           contentBeforeWrite = await this._fileIO.readFile(resolvedPath);
         } catch {}
       }
-
       let changed = false;
       for (const child of result.element.children) {
         if (!t.isJSXExpressionContainer(child)) continue;
@@ -917,7 +565,6 @@ export class AstService {
           }
         } catch {}
       }
-
       return { success: true, resolvedPath, contentBeforeWrite };
     } catch (error) {
       console.error('[AstService.updateI18nKey] Error:', error);
@@ -942,139 +589,28 @@ export class AstService {
     parentNodeRef?: NodeRef,
   ): Promise<InsertElementResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
-
-      const { element: newElement } = buildJSXElement({
-        componentType,
-        props,
-      });
-
-      // Add import for PascalCase component types
-      if (/^[A-Z]/.test(componentType)) {
-        ensureImport(ast, {
-          componentName: componentType,
-          targetFilePath: absolutePath,
-          componentFilePath,
-          workspaceRoot: this._workspaceRoot,
-        });
-      }
-
-      // Resolve parent element if parentId/parentNodeRef provided
-      const parentResult = parentNodeRef ? this._resolveElement(ast, parentNodeRef, absolutePath) : null;
-
-      const { inserted, actualIndex } = insertElementIntoAST(ast, {
-        parent: parentResult,
-        newElement,
-        logicalIndex: index,
-      });
-
-      if (!inserted) {
-        return {
-          success: false,
-          error: parentId ? `Parent element not found in ${filePath}` : 'Could not find return statement with JSX',
-        };
-      }
-
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
-      return { success: true, index: actualIndex };
-    } catch (error) {
-      console.error('[AstService.insertElement] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return insertElement(
+      this._elementOpsDeps(),
+      filePath,
+      parentId,
+      componentType,
+      props,
+      index,
+      _targetId,
+      componentFilePath,
+      parentNodeRef,
+    );
   }
 
-  /** Delete elements by nodeRefs. Re-reads AST between deletions (children may disappear). */
   async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      let deletedCount = 0;
-
-      // For cross-file deletes: capture content before the first write to each non-requested file.
-      const contentBeforeByPath = new Map<string, string>();
-
-      for (const id of elementIds) {
-        // _resolveElementInCorrectFile re-reads the AST on every call, so child nodes
-        // removed by earlier deletions do not corrupt Babel path references.
-        const resolved = await this._resolveElementInCorrectFile(absolutePath, id as NodeRef);
-
-        if (!resolved) {
-          // nosemgrep: unsafe-formatstring -- safe: only first 8 chars of id are logged
-          console.log(
-            `[AstService.deleteElements] Element ${id.substring(0, 8)} not found (may have been deleted as child)`,
-          );
-          continue;
-        }
-
-        const { result, ast, resolvedPath } = resolved;
-
-        // Capture contentBefore for any new cross-file path before writing (once per path).
-        if (resolvedPath !== absolutePath && !contentBeforeByPath.has(resolvedPath)) {
-          try {
-            contentBeforeByPath.set(resolvedPath, await this._fileIO.readFile(resolvedPath));
-          } catch {
-            // Leave unset — AstBridge will skip undo snapshot for this path
-          }
-        }
-
-        // Remove element and write to the actual resolved file (may differ from
-        // absolutePath for cross-file nodeRefs, e.g. Tamagui child components).
-        result.path.remove();
-        await this._fileParser.writeAST(ast, resolvedPath);
-        // Refresh node map immediately so subsequent iterations resolve against
-        // up-to-date coordinates (sibling line numbers shift after each deletion).
-        await this._updateNodeMap(resolvedPath);
-        deletedCount++;
-      }
-
-      if (deletedCount === 0) {
-        return { success: false, error: 'No elements found with provided IDs' };
-      }
-
-      const allCrossFileSnapshots =
-        contentBeforeByPath.size > 0
-          ? Array.from(contentBeforeByPath.entries()).map(([rp, cb]) => ({ resolvedPath: rp, contentBefore: cb }))
-          : undefined;
-      return {
-        success: true,
-        data: { deletedCount },
-        allCrossFileSnapshots,
-      };
-    } catch (error) {
-      console.error('[AstService.deleteElements] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return deleteElementsWrapper(this._mutationWrapperDeps(), filePath, elementIds);
   }
 
   /** Duplicate element and insert clone after the original. */
   async duplicateElement(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<DuplicateElementResult> {
     await this.ensureInitialized();
-    try {
-      const effectiveNodeRef = nodeRef ?? elementId;
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-
-      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
-      if (!resolved) {
-        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
-      }
-      const { result, ast, resolvedPath: actualPath } = resolved;
-
-      const { inserted } = duplicateElementInAST(result);
-
-      if (!inserted) {
-        return { success: false, error: `Could not duplicate element (parent is not a JSX element or fragment)` };
-      }
-
-      await this._fileParser.writeAST(ast, actualPath);
-      await this._updateNodeMap(actualPath);
-      return { success: true };
-    } catch (error) {
-      console.error('[AstService.duplicateElement] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return duplicateElement(this._elementOpsDeps(), filePath, elementId, nodeRef);
   }
 
   /**
@@ -1127,7 +663,6 @@ export class AstService {
         // will produce a clear "not found" error below.
       }
     }
-
     // Discover which file each endpoint actually lives in. We only use
     // the resolvedPath here — the AST returned is parsed-once-per-call,
     // so we re-parse below to ensure both endpoints share one AST object.
@@ -1141,7 +676,6 @@ export class AstService {
     if (!targetLocate) {
       throw new Error(`moveElement: target element not found (nodeRef=${targetId})`);
     }
-
     // Cross-file branch — both endpoints in different files. Cut from source's
     // AST, splice into target's AST, replicate imports the moved subtree
     // depends on, prune any source-file imports orphaned by the cut, write
@@ -1159,7 +693,6 @@ export class AstService {
         position,
       });
     }
-
     const targetFilePath = sourceLocate.resolvedPath;
 
     // Re-parse so both endpoints resolve into the SAME AST instance.
@@ -1180,7 +713,6 @@ export class AstService {
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared after re-parse (nodeRef=${targetId})`);
     }
-
     const sourceNode = sourceResult.element;
     const targetNode = targetResult.element;
 
@@ -1189,7 +721,6 @@ export class AstService {
       dbg(`[moveElement] no-op: source === target`);
       return { success: true, resolvedPath: targetFilePath };
     }
-
     // Refuse to move a subtree into one of its own descendants — that
     // would create a cycle and corrupt the AST. Throw rather than
     // best-effort because the user-visible drop indicator should never
@@ -1197,7 +728,6 @@ export class AstService {
     if (jsxContains(sourceNode, targetNode)) {
       throw new Error('moveElement: cannot move a node into one of its descendants');
     }
-
     const sourceParent = sourceResult.path.parent;
     const targetParent = targetResult.path.parent;
 
@@ -1217,7 +747,6 @@ export class AstService {
         `moveElement: target has no JSX parent (parent type=${targetParent?.type}); cannot insert before/after the root JSX`,
       );
     }
-
     // Capture content before write for undo tracking.
     let contentBeforeWrite: string | undefined;
     try {
@@ -1268,7 +797,6 @@ export class AstService {
         dbg(`[moveElement] no common ancestor → fallback to cross-parent splice`);
       }
     }
-
     // Splice movingNode out of movingParent.children, then insert it
     // into pivotParent.children at position relative to pivotNode.
     // When movingParent === pivotParent the recompute after the cut
@@ -1356,7 +884,6 @@ export class AstService {
     if (!targetResult) {
       throw new Error(`moveElement: target disappeared in ${targetFilePath} (nodeRef=${targetId})`);
     }
-
     const sourceNode = sourceResult.element;
     const targetNode = targetResult.element;
 
@@ -1377,7 +904,6 @@ export class AstService {
         `moveElement: target has no JSX parent (parent type=${targetParent?.type}); cannot insert before/after the root JSX`,
       );
     }
-
     // 1. Decide which imports the moved subtree needs in the target file.
     //    Over-collect identifiers from the subtree, then subtract names BOUND
     //    inside the subtree (arrow params like `(item) => …`, inline
@@ -1481,7 +1007,6 @@ export class AstService {
         `unresolved references in moved subtree: ${unresolvedLocalRefs.join(', ')} — bound in source-component scope, not auto-replicated`,
       );
     }
-
     // 5. Splice the cloned subtree into target.
     const targetSiblings = targetParent.children;
     const tgtIdx = targetSiblings.indexOf(targetNode);
@@ -1495,7 +1020,6 @@ export class AstService {
     for (const name of orphaned) {
       adjustments.push(`removed orphaned import: ${name}`);
     }
-
     // 7. Write both files. Target FIRST, then source — this ordering matters
     //    for crash safety: if the second write throws (disk full, permission
     //    denied, race), we leave the user with a visible duplicate (original
@@ -1531,7 +1055,6 @@ export class AstService {
     if (targetContentBefore !== undefined) {
       snapshots.push({ resolvedPath: targetFilePath, contentBefore: targetContentBefore });
     }
-
     return {
       success: true,
       resolvedPath: targetFilePath,
@@ -1575,7 +1098,6 @@ export class AstService {
       dbg(`[AstService._resolveElementInCorrectFile] resolved in primary file=${absolutePath}`);
       return { result, ast, resolvedPath: absolutePath };
     }
-
     // Cross-file fallback: primary file miss.  Two ways to get the real source file:
     // 1. Source-location nodeRef ("src/screens/Foo.tsx:10:5") — _extractFileFromNodeRef
     // 2. Hash nodeRef ("abc123") — look up nodeMapEntry and read loc.fileName
@@ -1603,7 +1125,6 @@ export class AstService {
         // File unreadable — fall through to null
       }
     }
-
     dbg(`[AstService._resolveElementInCorrectFile] NOT FOUND, returning null`);
     return null;
   }
@@ -1617,87 +1138,23 @@ export class AstService {
     nodeRef?: NodeRef,
   ): Promise<WrapElementResult> {
     await this.ensureInitialized();
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
-
-      const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
-      if (!resolved) {
-        return { success: false, error: `Element not found (nodeRef=${nodeRef}, elementId=${elementId})` };
-      }
-      const { result, ast, resolvedPath } = resolved;
-
-      const { wrapped } = wrapElementInAST(result, wrapperType, wrapperProps);
-
-      if (!wrapped) {
-        return { success: false, error: 'Could not wrap element' };
-      }
-
-      await this._fileParser.writeAST(ast, resolvedPath);
-      await this._updateNodeMap(resolvedPath);
-      return { success: true };
-    } catch (error) {
-      console.error('[AstService.wrapElement] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return wrapElement(this._elementOpsDeps(), filePath, elementId, wrapperType, wrapperProps, nodeRef);
   }
 
-  /**
-   * Find element at cursor position (for Go to Visual).
-   * Returns tagName and nodeRef when available.
-   */
   async findElementAtPosition(
     filePath: string,
     line: number,
     column: number,
   ): Promise<{ tagName: string; nodeRef?: NodeRef } | null> {
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
-      const result = findElementAtPosition(ast, line, column);
-      if (!result) return null;
-
-      // Get tag name from the found element
-      const nameNode = result.element.openingElement.name;
-      const tagName = t.isJSXIdentifier(nameNode) ? nameNode.name : 'unknown';
-
-      // Try to find nodeRef via NodeMapService for the same position
-      const sourceLocation = { fileName: absolutePath, line, column: column - 1 };
-      const entry = this._nodeMapService.resolveSourceLocation(sourceLocation);
-
-      return {
-        tagName,
-        ...(entry ? { nodeRef: entry.nodeRef } : {}),
-      };
-    } catch (error) {
-      console.warn('[AstService.findElementAtPosition] parse failed (expected for broken/partial files):', error);
-      return null;
-    }
+    return findElementAtPosition(this._queryDeps(), filePath, line, column);
   }
 
-  /**
-   * Get element source location (for Go to Code).
-   * Uses nodeRef resolution via NodeMapService.
-   */
   async getElementLocation(
     _filePath: string,
     _elementId: string,
     nodeRef?: NodeRef,
   ): Promise<{ line: number; column: number } | null> {
-    try {
-      // Resolve nodeRef directly from NodeMapService (no AST parse needed)
-      if (nodeRef) {
-        const entry = this._nodeMapService.resolveNodeRef(nodeRef);
-        if (entry) {
-          return { line: entry.loc.line, column: entry.loc.column };
-        }
-      }
-
-      return null;
-    } catch (error) {
-      console.error('[AstService.getElementLocation] Error:', error);
-      return null;
-    }
+    return getElementLocation(this._queryDeps(), _filePath, _elementId, nodeRef);
   }
 
   /**
@@ -1779,99 +1236,25 @@ export class AstService {
     return {};
   }
 
-  /** Get element's TSX source code (for Copy operation). */
   async getElementCode(filePath: string, elementId: string, nodeRef?: NodeRef): Promise<string | null> {
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
-      const sourceCode = await this._fileParser.readFileContent(absolutePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
-
-      const result = this._resolveElement(ast, effectiveNodeRef, absolutePath);
-      if (!result) return null;
-
-      return extractElementSource(sourceCode, result.element);
-    } catch (error) {
-      console.error('[AstService.getElementCode] Error:', error);
-      return null;
-    }
+    return getElementCode(this._queryDeps(), filePath, elementId, nodeRef);
   }
 
-  /** Find parent element nodeRef (for Select Parent). */
   async getParentElementId(_filePath: string, _elementId: string, nodeRef?: NodeRef): Promise<string | null> {
-    try {
-      if (nodeRef) {
-        const entry = this._resolveNodeMapEntry(nodeRef);
-        if (entry?.parentRef) {
-          return entry.parentRef;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('[AstService.getParentElementId] Error:', error);
-      return null;
-    }
+    return getParentElementId(this._queryDeps(), _filePath, _elementId, nodeRef);
   }
 
-  /** Find direct child element nodeRefs (for Select Child). */
   async getChildElementIds(nodeRef?: NodeRef): Promise<string[]> {
-    try {
-      if (nodeRef) {
-        const entry = this._resolveNodeMapEntry(nodeRef);
-        if (entry) {
-          return [...entry.children];
-        }
-      }
-      return [];
-    } catch (error) {
-      console.error('[AstService.getChildElementIds] Error:', error);
-      return [];
-    }
+    return getChildElementIds(this._queryDeps(), nodeRef);
   }
 
-  /** Find next or previous sibling element nodeRef (for Tab/Shift+Tab navigation). */
   async getSiblingElementId(
     _filePath: string,
     _elementId: string,
     direction: 'next' | 'prev',
     nodeRef?: NodeRef,
   ): Promise<string | null> {
-    try {
-      if (nodeRef) {
-        const entry = this._resolveNodeMapEntry(nodeRef);
-        if (entry?.parentRef) {
-          const parent = this._nodeMapService.resolveNodeRef(entry.parentRef);
-          if (parent) {
-            const siblings = parent.children;
-            let currentIndex = siblings.indexOf(entry.nodeRef);
-            if (currentIndex === -1) {
-              const normalizedRef = this._normalizeNodeRef(nodeRef);
-              const m = normalizedRef.match(/^(.+):(\d+):(\d+)$/);
-              if (m) {
-                const [, file, line] = m;
-                currentIndex = siblings.findIndex((s) => {
-                  const sm = s.match(/^(.+):(\d+):(\d+)$/);
-                  return sm && sm[1] === file && sm[2] === line;
-                });
-              }
-            }
-            if (currentIndex !== -1) {
-              let targetIndex: number;
-              if (direction === 'prev') {
-                targetIndex = currentIndex === 0 ? siblings.length - 1 : currentIndex - 1;
-              } else {
-                targetIndex = currentIndex === siblings.length - 1 ? 0 : currentIndex + 1;
-              }
-              return siblings[targetIndex] ?? null;
-            }
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('[AstService.getSiblingElementId] Error:', error);
-      return null;
-    }
+    return getSiblingElementId(this._queryDeps(), _filePath, _elementId, direction, nodeRef);
   }
 
   /**
@@ -1884,56 +1267,6 @@ export class AstService {
     tsxCode: string,
     targetNodeRef?: NodeRef,
   ): Promise<InsertElementResult> {
-    try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
-      const { ast } = await this._fileParser.readAndParseFile(absolutePath);
-
-      const { elements: newElements } = parseTSXElements(tsxCode);
-
-      if (newElements.length === 0) {
-        return { success: false, error: 'No valid JSX elements in clipboard' };
-      }
-
-      let inserted = false;
-
-      // Insert after target element via nodeRef
-      if (targetNodeRef) {
-        const result = this._resolveElement(ast, targetNodeRef, absolutePath);
-        if (result) {
-          const parent = result.path.parent;
-          if (t.isJSXElement(parent)) {
-            const children = parent.children;
-            const idx = children.indexOf(result.path.node);
-            if (idx !== -1) {
-              children.splice(idx + 1, 0, ...newElements);
-              inserted = true;
-            }
-          }
-        }
-      }
-
-      if (!inserted) {
-        // Insert at root return
-        const rootResult = insertElementIntoAST(ast, { parent: null, newElement: newElements[0] });
-        if (rootResult.inserted) {
-          // Insert remaining elements after the first
-          for (let i = 1; i < newElements.length; i++) {
-            insertElementIntoAST(ast, { parent: null, newElement: newElements[i] });
-          }
-          inserted = true;
-        }
-      }
-
-      if (!inserted) {
-        return { success: false, error: 'Could not find insertion point' };
-      }
-
-      await this._fileParser.writeAST(ast, absolutePath);
-      await this._updateNodeMap(absolutePath);
-      return { success: true };
-    } catch (error) {
-      console.error('[AstService.pasteElement] Error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+    return pasteElement(this._elementOpsDeps(), filePath, _targetId, tsxCode, targetNodeRef);
   }
 }

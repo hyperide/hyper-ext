@@ -1,10 +1,7 @@
-import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
 import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { IconTerminal2 } from '@tabler/icons-react';
 import cn from 'clsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { MemoryRouter } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import type { RuntimeError } from '@/../../shared/runtime-error';
 import type { ViewportState } from '@/../../shared/types/canvas';
@@ -24,7 +21,18 @@ import { MapEditPopup } from '@/components/MapEditPopup';
 import type { MapBoundary } from '@/components/MapOverlay';
 import RightSidebar from '@/components/RightSidebar';
 import { useProjectUIKit } from '@/components/RightSidebar/hooks/useProjectUIKit';
-import Toolbar, { type Tool } from '@/components/Toolbar';
+import { AnnotationsLayerPortal } from './components/AnnotationsLayerPortal';
+import { useElementResolver } from './hooks/useElementResolver';
+import { useCanvasModeSync } from './hooks/useCanvasModeSync';
+import { useDeferredMount } from './hooks/useDeferredMount';
+import { useComponentChangeReset } from './hooks/useComponentChangeReset';
+import { useEngineModeSync } from './hooks/useEngineModeSync';
+import { useExternalFileChangeListener, useGitStatusListener } from './hooks/useWindowListeners';
+import { useIDEHandlers } from './hooks/useIDEHandlers';
+import { useIframeScrollTracking } from './hooks/useIframeScrollTracking';
+import { useModeHandlers } from './hooks/useModeHandlers';
+import { useViewportHandlers } from './hooks/useViewportHandlers';
+import Toolbar from '@/components/Toolbar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,16 +58,13 @@ import {
   useSelectedIds,
   useSelectedItemIndices,
 } from '@/lib/canvas-engine';
-import { getPreviewIframe } from '@/lib/dom-utils';
-import { getActiveTracer, subscribeToTracer } from '@/lib/element-tracing/active-tracer';
-import { resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
+
 import { useProjectRuntime } from '@/lib/project-runtime';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useEditorStore } from '@/stores/editorStore';
-import { useGitStore } from '@/stores/gitStore';
-import { authFetch } from '@/utils/authFetch';
+
 import { CommentStickersOverlay } from './components/CommentStickersOverlay';
 import { ConfigErrorOverlay } from './components/ConfigErrorOverlay';
 import { useBezelOverlays } from './components/hooks/useBezelOverlays';
@@ -97,75 +102,6 @@ type Props = {
   onOpenSettings: () => void;
 };
 
-/**
- * Portal component that renders annotations layer with fixed positioning
- * relative to the canvas container bounds.
- * Uses pointer-events: none on container, auto only on SVG children.
- */
-function AnnotationsLayerPortal({
-  containerRef,
-  children,
-}: {
-  containerRef: React.RefObject<HTMLDivElement>;
-  children: React.ReactNode;
-}) {
-  const [bounds, setBounds] = useState({
-    top: 0,
-    left: 0,
-    width: 0,
-    height: 0,
-  });
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const updateBounds = () => {
-      const rect = container.getBoundingClientRect();
-      setBounds({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      });
-    };
-
-    updateBounds();
-
-    // Update on resize
-    const resizeObserver = new ResizeObserver(updateBounds);
-    resizeObserver.observe(container);
-
-    // Update on scroll (window level)
-    window.addEventListener('scroll', updateBounds, true);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('scroll', updateBounds, true);
-    };
-  }, [containerRef]);
-
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: bounds.top,
-        left: bounds.left,
-        width: bounds.width,
-        height: bounds.height,
-        zIndex: 45, // Below dialogs (z-50) but above canvas content
-        // Container is always pointer-events: none
-        // SVG inside controls its own pointer-events
-        pointerEvents: 'none',
-        overflow: 'hidden',
-      }}
-    >
-      {children}
-    </div>,
-    document.body,
-  );
-}
-
 export function CanvasEditor({ onOpenSettings }: Props) {
   // Resize handlers (sidebar, logs)
   const { logsHeight, commentsSidebarWidth, setLogsHeight, setCommentsSidebarWidth } = useCanvasResizeHandlers();
@@ -201,21 +137,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     canvasMode === 'multi' || loadPersistedState().mode === 'board',
   );
 
-  // Sync board mode when canvas mode changes (IframeCanvas detects multi-instance composition)
-  // Skip initial render — isBoardModeActive is already initialized from localStorage
-  const canvasModeInitRef = useRef(true);
-  useEffect(() => {
-    if (canvasModeInitRef.current) {
-      canvasModeInitRef.current = false;
-      return;
-    }
-    if (canvasMode === 'multi') {
-      setBoardModeActive(true);
-      setActiveDesignInstanceId(null);
-    } else {
-      setBoardModeActive(false);
-    }
-  }, [canvasMode]);
+  useCanvasModeSync(canvasMode, setBoardModeActive, setActiveDesignInstanceId);
 
   const [editPopupOpen, setEditPopupOpen] = useState(false);
   const [sidebarsHidden, setSidebarsHidden] = useState(false);
@@ -380,41 +302,16 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   const [iframeReady, setIframeReady] = useState(mode !== 'code');
 
   // Deferred mount of secondary component after primary is loaded
-  useEffect(() => {
-    if (activeProject?.status !== 'running') return;
-
-    // If user switches to code mode before deferred mount - mount immediately
-    if (isCodeEditorMode && !codeServerReady) {
-      setCodeServerReady(true);
-      return;
-    }
-
-    // If starting in code mode - mount IDE first, iframe deferred
-    if (initialModeRef.current === 'code') {
-      setCodeServerReady(true);
-      const timer = setTimeout(() => setIframeReady(true), 1000);
-      return () => clearTimeout(timer);
-    }
-
-    // If starting in design mode - mount iframe first, IDE deferred
-    setIframeReady(true);
-    const timer = setTimeout(() => setCodeServerReady(true), 1000);
-    return () => clearTimeout(timer);
-  }, [activeProject?.status, isCodeEditorMode, codeServerReady]);
-
-  // If user switches to design mode before deferred mount - mount immediately
-  useEffect(() => {
-    if (!isCodeEditorMode && !iframeReady && activeProject?.status === 'running') {
-      setIframeReady(true);
-    }
-  }, [isCodeEditorMode, iframeReady, activeProject?.status]);
-
-  // Auto-undock AI chat when switching to code mode
-  useEffect(() => {
-    if (isCodeEditorMode && isAIChatDocked) {
-      setIsAIChatDocked(false);
-    }
-  }, [isCodeEditorMode, isAIChatDocked, setIsAIChatDocked]);
+  useDeferredMount({
+    activeProjectStatus: activeProject?.status,
+    isCodeEditorMode,
+    iframeReady,
+    codeServerReady,
+    setIframeReady,
+    setCodeServerReady,
+    isAIChatDocked,
+    setIsAIChatDocked,
+  });
 
   // Track iframe load events to trigger overlay recomputation
   const { iframeLoadedCounter, instancesReadyCounter, triggerIframeReload } = useIframeLoadTracking({
@@ -539,9 +436,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
   const logsClear = runtime.mode === 'nodepod' ? nodePodLogsClear : dockerLogsClear;
 
-  const handleIframeErrorChange = useCallback((error: string | null, retryCount: number) => {
-    setIframeError({ message: error, retryCount });
-  }, []);
+  const { handleIframeErrorChange, handleIDEActiveFileChange } = useIDEHandlers({
+    setIframeError,
+    setActiveFile,
+  });
 
   // Comment handlers
   const {
@@ -627,73 +525,23 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     isCodeEditorMode && activeFilePath ? activeFilePath.split('/').pop() || null : meta?.componentName || null;
   useDocumentTitle(documentTitle);
 
-  // Sync mode state with engine
-  useEffect(() => {
-    const handleModeChange = ({ mode }: { mode: 'design' | 'interact' | 'code' }) => {
-      setMode(mode);
+  useEngineModeSync(engine, setMode);
 
-      // Clear className analysis cache when entering interact mode
-      if (mode === 'interact') {
-        authFetch('/api/clear-classname-cache', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }).catch((error) => {
-          console.error('[CanvasEditor] Failed to clear className cache:', error);
-        });
-      }
-    };
+  useGitStatusListener(activeProject?.path);
 
-    engine.events.on('mode:change', handleModeChange);
-
-    return () => {
-      engine.events.off('mode:change', handleModeChange);
-    };
-  }, [engine]);
-
-  // Setup git status listener (listens to window events from consolidated SSE)
-  useEffect(() => {
-    if (!activeProject?.path) return;
-    return useGitStore.getState().setupGitStatusListener();
-  }, [activeProject?.path]);
-
-  // Handle active file change from code-server IDE (for title/preview sync)
-  const handleIDEActiveFileChange = useCallback(
-    (filePath: string | null) => {
-      if (filePath) {
-        // Normalize path - remove /app prefix if present
-        const normalizedPath = filePath.replace(/^\/app\//, '');
-        setActiveFile(normalizedPath);
-      }
-    },
-    [setActiveFile],
-  );
-
-  // Handle Go to Visual from code-server IDE (SSE event)
-  const handleGoToVisual = useCallback(
-    (uniqId: string, elementType: string, filePath: string) => {
-      console.log(`[CanvasEditor] Go to Visual: ${uniqId} (${elementType}) in ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-
-      // Load the component (triggers canvas reload)
-      loadComponent(filePath);
-
-      // Switch to design mode after component loads
-      // Need to wait for component-loaded event before selecting
-      const handleComponentLoaded = () => {
-        if (engine.getMode() !== 'design') {
-          engine.setMode('design');
-        }
-        // Small delay to ensure canvas DOM is updated
-        setTimeout(() => {
-          engine.select(uniqId);
-        }, 100);
-        window.removeEventListener('component-loaded', handleComponentLoaded);
-      };
-
-      window.addEventListener('component-loaded', handleComponentLoaded);
-    },
-    [engine, loadComponent],
-  );
+  const { handleSingleModeBadgeClick, handleToolbarModeChange, handleGoToVisual } = useModeHandlers({
+    engine,
+    isBoardModeActive,
+    isCodeEditorMode,
+    mode,
+    setActiveDesignInstanceId,
+    setActiveBoardInstance,
+    setBoardModeActive,
+    setEditingInstanceId,
+    setEditPopupOpen,
+    savePersistedState,
+    loadComponent,
+  });
 
   // Handlers for saving conditional and map expressions
   const { handleCondSave, handleMapSave } = useCondMapSave({
@@ -761,209 +609,21 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     enabled: canvasMode === 'multi',
   });
 
-  // Reset zoom to 100% and pan to show top-left instance (Shift+0)
-  const resetZoomToTopLeftInstance = useCallback(() => {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) {
-      // Fallback to origin if no iframe
-      setViewport({ zoom: 1, panX: 0, panY: 0 });
-      return;
-    }
+  const { resetZoomToTopLeftInstance, handleFitToContent } = useViewportHandlers({
+    viewport,
+    setViewport,
+    canvasContainerRef,
+    isBoardModeActive,
+  });
 
-    const instanceElements = iframe.contentDocument.querySelectorAll('[data-canvas-instance-id]');
+  useComponentChangeReset(meta?.relativeFilePath, setActiveDesignInstanceId, setActiveBoardInstance);
 
-    if (instanceElements.length === 0) {
-      // No instances - reset to origin
-      setViewport({ zoom: 1, panX: 0, panY: 0 });
-      return;
-    }
+  useIframeScrollTracking(iframeScrollRef, iframeLoadedCounter, activeProject?.status);
 
-    // Find top-left instance (minimum x, minimum y)
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-
-    for (const element of instanceElements) {
-      const htmlElement = element as HTMLElement;
-      const left = Number.parseInt(htmlElement.style.left || '0', 10);
-      const top = Number.parseInt(htmlElement.style.top || '0', 10);
-
-      minX = Math.min(minX, left);
-      minY = Math.min(minY, top);
-    }
-
-    // Set zoom to 100% and pan to show top-left instance with padding
-    const padding = 40;
-    setViewport({
-      zoom: 1,
-      panX: -minX + padding,
-      panY: -minY + padding,
-    });
-  }, []);
-
-  // Fit to content - calculate zoom to fit all instances
-  const handleFitToContent = useCallback(() => {
-    if (!isBoardModeActive || !canvasContainerRef.current) return;
-
-    const iframe = getPreviewIframe();
-    if (!iframe || !iframe.contentDocument) return;
-
-    const instanceElements = iframe.contentDocument.querySelectorAll('[data-canvas-instance-id]');
-    if (instanceElements.length === 0) return;
-
-    // Find bounding box of all instances
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-
-    for (const element of instanceElements) {
-      const htmlElement = element as HTMLElement;
-      const left = Number.parseInt(htmlElement.style.left || '0', 10);
-      const top = Number.parseInt(htmlElement.style.top || '0', 10);
-      const rect = htmlElement.getBoundingClientRect();
-      const width = rect.width / viewport.zoom; // Divide by current zoom to get actual size
-      const height = rect.height / viewport.zoom;
-
-      minX = Math.min(minX, left);
-      minY = Math.min(minY, top);
-      maxX = Math.max(maxX, left + width);
-      maxY = Math.max(maxY, top + height);
-    }
-
-    const contentWidth = maxX - minX;
-    const contentHeight = maxY - minY;
-
-    const containerRect = canvasContainerRef.current.getBoundingClientRect();
-    const padding = 80; // 80px padding around content
-
-    // Calculate zoom to fit
-    const zoomX = (containerRect.width - padding * 2) / contentWidth;
-    const zoomY = (containerRect.height - padding * 2) / contentHeight;
-    const newZoom = Math.min(zoomX, zoomY, 2); // Max 200%
-
-    // Center content
-    const newPanX = (containerRect.width - contentWidth * newZoom) / 2 - minX * newZoom;
-    const newPanY = (containerRect.height - contentHeight * newZoom) / 2 - minY * newZoom;
-
-    setViewport({
-      zoom: newZoom,
-      panX: newPanX,
-      panY: newPanY,
-    });
-  }, [isBoardModeActive, viewport.zoom]);
-
-  // Reset instance selection when component changes
-  const prevComponentPathRef = useRef(meta?.relativeFilePath);
-  useEffect(() => {
-    const currentPath = meta?.relativeFilePath;
-    if (prevComponentPathRef.current !== currentPath && currentPath !== undefined) {
-      setActiveDesignInstanceId(null);
-      setActiveBoardInstance(null);
-    }
-    prevComponentPathRef.current = currentPath;
-  }, [meta?.relativeFilePath]);
-
-  // Listen for scroll events in iframe to update comment positions (updates ref, not state - no re-render)
-  /* eslint-disable react-hooks/exhaustive-deps -- dependencies are triggers to re-attach listener on iframe reload */
-  useEffect(() => {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) return;
-
-    const doc = iframe.contentDocument;
-    const updateScroll = () => {
-      iframeScrollRef.current = {
-        x: doc.documentElement.scrollLeft || doc.body.scrollLeft || 0,
-        y: doc.documentElement.scrollTop || doc.body.scrollTop || 0,
-      };
-    };
-
-    // Initial sync
-    updateScroll();
-
-    // Listen to scroll on both document and body (different browsers)
-    doc.addEventListener('scroll', updateScroll, { passive: true });
-    doc.body?.addEventListener('scroll', updateScroll, { passive: true });
-
-    return () => {
-      doc.removeEventListener('scroll', updateScroll);
-      doc.body?.removeEventListener('scroll', updateScroll);
-    };
-    // Re-attach listener when iframe reloads or project status changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iframeLoadedCounter, activeProject?.status]);
-  /* eslint-enable react-hooks/exhaustive-deps */
-
-  // Listen for external file changes (AI agent, code-server, Monaco, chokidar) → record in undo/redo history
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.redoSnapshotId !== undefined || detail?.undoSnapshotId !== undefined) {
-        engine.recordExternalFileChange(detail);
-      }
-    };
-    window.addEventListener('hypercanvas:externalFileChange', handler);
-    return () => window.removeEventListener('hypercanvas:externalFileChange', handler);
-  }, [engine]);
-
-  // Re-run elementResolver memo when tracer becomes ready (async detection after iframe load).
-  // tracerVersion increments whenever setActiveTracer() is called (set or cleared).
-  const [tracerVersion, setTracerVersion] = useState(0);
-  useEffect(() => subscribeToTracer(() => setTracerVersion((v) => v + 1)), []);
+  useExternalFileChangeListener(engine);
 
   // Build OverlayElementResolver from the active tracer (fiber-based DOM lookup).
-  // Depends on both iframeLoadedCounter (new iframe = new tracer) and tracerVersion
-  // (tracer ready after async React detection).
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter forces re-creation when iframe reloads (new tracer) */
-  const elementResolver: OverlayElementResolver | undefined = useMemo(() => {
-    const tracer = getActiveTracer();
-    if (!tracer) return undefined;
-
-    return {
-      findElements(id: string, itemIndex: number | null): HTMLElement[] {
-        // Try as nodeRef first (canvas click stores nodeRef)
-        const elements = tracer.findDOMElements(id, itemIndex);
-        if (elements.length > 0) return elements;
-
-        // id might be a UUID (tree click) — resolve to nodeRef via source location
-        const nodeRef = resolveUuidToNodeRef(id, engine);
-        if (nodeRef !== id) {
-          return tracer.findDOMElements(nodeRef, itemIndex);
-        }
-        return [];
-      },
-      findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }> {
-        const iframe = getPreviewIframe();
-        const doc = iframe?.contentDocument;
-        const root = doc?.body?.firstElementChild;
-        if (!root) return [];
-
-        const tree = tracer.walkComponentTree(root as HTMLElement);
-        const sourceIndex = tracer.buildSourceKeyIndex();
-        const results: Array<{ elementId: string; element: HTMLElement }> = [];
-
-        function visit(nodes: typeof tree): void {
-          for (const node of nodes) {
-            if (node.domElement && node.source && isContainerEmpty(node.domElement)) {
-              // makeSourceKey normalizes fiber path variants against the
-              // tracer's projectRoot so the O(1) Map lookup still hits even
-              // when fiber source differs from the stored canonical form.
-              const key = tracer!.makeSourceKey(node.source);
-              const entry = sourceIndex.get(key);
-              if (entry) {
-                results.push({ elementId: entry.nodeRef, element: node.domElement });
-              }
-            }
-            visit(node.children);
-          }
-        }
-
-        visit(tree);
-        return results;
-      },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iframeLoadedCounter, tracerVersion]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  const elementResolver: OverlayElementResolver | undefined = useElementResolver(iframeLoadedCounter, engine);
 
   // Selection overlays (hover + selection rectangles + empty container placeholders) via RAF
   useSelectionOverlays({
@@ -984,66 +644,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     onPlaceholderClick: handleOpenPanel,
     elementResolver,
   });
-
-  // Handle single mode badge click
-  const handleSingleModeBadgeClick = useCallback(() => {
-    setEditingInstanceId('default');
-    setEditPopupOpen(true);
-  }, []);
-
-  // Unified handler for Toolbar mode changes
-  const handleToolbarModeChange = useCallback(
-    (newMode: Tool) => {
-      console.log(
-        '[CanvasEditor] handleToolbarModeChange:',
-        newMode,
-        'boardModeActive:',
-        isBoardModeActive,
-        'currentMode:',
-        mode,
-      );
-
-      setBoardModeActive(newMode === 'board');
-
-      if (newMode === 'board') {
-        // Persist board mode so it survives HMR remounts
-        savePersistedState({ mode: 'board' });
-        // Enter board mode → clear active instance and board selection
-        setActiveDesignInstanceId(null);
-        setActiveBoardInstance(null);
-        return;
-      }
-
-      engine.setMode(newMode);
-
-      if (newMode === 'code') {
-        // Code mode doesn't use instances
-        setActiveDesignInstanceId(null);
-        setActiveBoardInstance(null);
-        return;
-      }
-
-      // For design/interact modes
-      // If coming from code mode or board mode without active instance, select first instance
-      if (isCodeEditorMode || isBoardModeActive) {
-        // Clear board selection when entering design/interact
-        setActiveBoardInstance(null);
-
-        // Need to select first instance before switching mode
-        const iframe = getPreviewIframe();
-        if (iframe?.contentDocument) {
-          const iframeInstances = iframe.contentDocument.querySelectorAll('[data-canvas-instance-id]');
-          if (iframeInstances.length > 0) {
-            const firstInstanceId = (iframeInstances[0] as HTMLElement).dataset.canvasInstanceId;
-            if (firstInstanceId) {
-              setActiveDesignInstanceId(firstInstanceId);
-            }
-          }
-        }
-      }
-    },
-    [engine, isBoardModeActive, mode, isCodeEditorMode],
-  );
 
   return (
     <CanvasElementContextMenu
@@ -1594,14 +1194,3 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     </CanvasElementContextMenu>
   );
 }
-
-export const SampleDefault = () => {
-  const onOpenSettings = () => {
-    console.log('Opening settings dialog');
-  };
-  return (
-    <MemoryRouter>
-      <CanvasEditor onOpenSettings={onOpenSettings} />
-    </MemoryRouter>
-  );
-};

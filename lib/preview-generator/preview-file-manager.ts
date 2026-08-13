@@ -31,6 +31,8 @@ import {
   type SSRMockConfig,
 } from './generator';
 import { buildContainerSampleJsxBody } from './sample-scaffold';
+import { ensureGitExclude, ensureStandaloneEntry } from './preview-file-ops';
+import { buildEntry, computeImportPath } from './preview-build-entry';
 import {
   detectExportStyle,
   detectProviderShell,
@@ -44,342 +46,28 @@ import {
   scanRenderableExportNames,
   scanSampleExports,
 } from './scanner';
+import { isExplicitWebAppShell, isFrameworkReserved, isPreviewIneligibleByName } from './preview-constants';
+import { pathCaseKey, RECAST_PARSER } from './preview-ast-helpers';
+import {
+  buildCanonicalPathMap,
+  canonicalizeComponentPath,
+  hasPathCaseMismatch,
+  normalizeImportPath,
+} from './preview-path-utils';
+import { isValidTypeScript, PreviewGenerationError } from './preview-validation';
+import { parseExistingPreview } from './preview-validation';
 
-interface BuildEntryOptions {
-  allowRouterShell?: boolean;
-}
-
-/**
- * Next.js App Router special file names that must not be added to the preview registry.
- * These files have framework-level semantics (metadata exports, error boundaries, etc.)
- * that conflict with being imported as Client Components.
- */
-const NEXTJS_APP_ROUTER_RESERVED = new Set([
-  'layout.tsx',
-  'layout.ts',
-  'layout.jsx',
-  'layout.js',
-  'error.tsx',
-  'error.jsx',
-  'loading.tsx',
-  'loading.jsx',
-  'not-found.tsx',
-  'not-found.jsx',
-  'template.tsx',
-  'template.jsx',
-  'default.tsx',
-  'default.jsx',
-]);
-
-/**
- * Remix reserved file names that must not be added to the preview registry.
- * - `root.tsx` renders the full HTML document and uses Remix-specific hooks
- *   (useLoaderData, useNavigate, useLocation) that crash without Remix router context.
- * - `entry.client.tsx` / `entry.server.tsx` are hydration/SSR entry points, not components.
- */
-const REMIX_RESERVED = new Set([
-  'root.tsx',
-  'root.jsx',
-  'entry.client.tsx',
-  'entry.client.jsx',
-  'entry.server.tsx',
-  'entry.server.jsx',
-]);
-
-/** Check if a filename is a framework-reserved file that must not appear in the preview. */
-function isFrameworkReserved(fileName: string): boolean {
-  return NEXTJS_APP_ROUTER_RESERVED.has(fileName) || REMIX_RESERVED.has(fileName);
-}
-
-/**
- * Files that look like components by extension+casing but aren't renderable React components:
- *
- * - Platform-specific React Native variants (Foo.native.tsx, Foo.ios.tsx, Foo.android.tsx).
- *   The web bundler resolves the bare `./Foo` to the non-suffixed file. Including the
- *   suffixed variant generates a duplicate `import { Foo } from './Foo.native'` next to
- *   `import { Foo } from './Foo'`, producing "Identifier has already been declared".
- *
- * - vanilla-extract / linaria / stylex style sheets (Foo.css.ts, Foo.css.tsx, Foo.styles.ts,
- *   Foo.module.ts). They start with PascalCase so the basename guard accepts them, but they
- *   export style tokens, not components — `extractComponentName` falls back to the filename
- *   `Foo.css` (with a dot), which then becomes an invalid JS identifier in the import line.
- */
-function isPreviewIneligibleByName(fileName: string): boolean {
-  // Strip terminal .tsx/.ts/.jsx/.js to inspect any inner segment (e.g. `.native`, `.css`).
-  const base = fileName.replace(/\.(tsx?|jsx?)$/, '');
-  if (!base.includes('.')) return false;
-  const segments = base.split('.');
-  // Last segment after the leading PascalCase name (e.g. `native` in `Foo.native`).
-  const tail = segments.slice(1);
-  // '.web' is intentionally excluded: App.web.tsx is the web entry and must be
-  // previewable. Alias collision with App.tsx is resolved in deriveUniquePrefix.
-  const PLATFORM_SUFFIXES = new Set(['native', 'ios', 'android']);
-  const STYLE_SUFFIXES = new Set(['css', 'styles', 'style', 'module']);
-  const TEST_SUFFIXES = new Set(['test', 'spec', 'stories']);
-  // Co-located sample files (Component.samples.tsx) are not previewable components —
-  // they're render helpers discovered separately by ensureStandaloneEntry injection.
-  const SAMPLES_SUFFIXES = new Set(['samples']);
-  return tail.some(
-    (seg) =>
-      PLATFORM_SUFFIXES.has(seg) || STYLE_SUFFIXES.has(seg) || TEST_SUFFIXES.has(seg) || SAMPLES_SUFFIXES.has(seg),
-  );
-}
-
-function isExplicitWebAppShell(componentPath: string): boolean {
-  return /^App\.web\.[jt]sx$/.test(basename(componentPath));
-}
+export { PreviewGenerationError } from './preview-validation';
+export { isValidTypeScript } from './preview-validation';
+export { parseExistingPreview } from './preview-validation';
 
 export interface PreviewFileManagerConfig {
   projectRoot: string;
   io: FileIO;
   isNextPagesRouter?: boolean;
-  /** Wrap preview components with project-specific providers (theme, safe area, etc.) */
   providerWrap?: ProviderWrapConfig;
-  /** SSR mock config — when set, route components using data hooks are wrapped in a mock router */
   ssrMock?: SSRMockConfig;
 }
-
-export class PreviewGenerationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PreviewGenerationError';
-  }
-}
-
-/** Validate that code is valid TypeScript/TSX using Babel parser */
-export function isValidTypeScript(code: string): boolean {
-  try {
-    parse(code, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Parse an existing __canvas_preview__.tsx to extract registered component entries.
- * Uses @babel/parser AST to correctly handle comments, string literals,
- * type annotations with `=>`, and nested braces.
- */
-export function parseExistingPreview(content: string): PreviewComponentEntry[] {
-  let ast: ReturnType<typeof parse>;
-  try {
-    ast = parse(content, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
-      errorRecovery: true,
-    });
-  } catch {
-    return [];
-  }
-
-  const pathToName = new Map<string, string>();
-  const sampleAliasToPath = new Map<string, string>();
-  const pathToSamples = new Map<string, string[]>();
-
-  // 1. Extract data from top-level variable declarations
-  for (const decl of iterateVarDeclarators(ast.program.body)) {
-    if (decl.id.type !== 'Identifier') continue;
-    const varName = decl.id.name;
-
-    const obj = unwrapToObject(decl.init);
-    if (!obj) continue;
-
-    if (varName === 'componentRegistry') {
-      for (const prop of iterateObjectProperties(obj)) {
-        const key = getStringValue(prop.key);
-        const value = getIdentName(prop.value);
-        if (key && value) pathToName.set(key, value);
-      }
-    }
-
-    if (varName === 'SampleDefaultMap' || varName === 'sampleRenderMap') {
-      for (const prop of iterateObjectProperties(obj)) {
-        const key = getStringValue(prop.key);
-        if (!key) continue;
-        const value = getIdentName(prop.value);
-        if (value) {
-          // Authored: `'path': ButtonSampleDefault,` — captured as alias.
-          sampleAliasToPath.set(value, key);
-          if (!pathToName.has(key)) {
-            pathToName.set(key, stripExtension(basename(key)));
-          }
-        } else if (!pathToName.has(key)) {
-          // Synthesized: `'path': () => (<…>),` — no alias to track, and we
-          // intentionally do NOT mark sampleExports for it. The persistence
-          // path for synthesized primitives is `_scanAllComponents` salvage
-          // inside `_initPreviewFile` — `buildEntry` re-derives
-          // `syntheticSampleDefault` from source on every regen — so we don't
-          // need to round-trip a marker here. Just register the path so other
-          // code (componentRegistry parser, alias inference) sees it.
-          pathToName.set(key, stripExtension(basename(key)));
-        }
-      }
-    }
-
-    if (varName === 'sampleRenderersMap') {
-      for (const prop of iterateObjectProperties(obj)) {
-        const compPath = getStringValue(prop.key);
-        if (!compPath) continue;
-        const innerObj = unwrapToObject(prop.value);
-        if (!innerObj) continue;
-        const samples: string[] = [];
-        for (const inner of iterateObjectProperties(innerObj)) {
-          const sampleKey = getStringValue(inner.key);
-          if (sampleKey) {
-            samples.push(`Sample${sampleKey.charAt(0).toUpperCase()}${sampleKey.slice(1)}`);
-          }
-        }
-        pathToSamples.set(compPath, samples);
-      }
-    }
-  }
-
-  // For SampleDefaultMap-only paths or paths with empty sampleRenderersMap, infer SampleDefault
-  for (const [, compPath] of sampleAliasToPath) {
-    const existing = pathToSamples.get(compPath);
-    if (!existing || existing.length === 0) {
-      pathToSamples.set(compPath, ['SampleDefault']);
-    }
-  }
-
-  if (pathToName.size === 0) return [];
-
-  // 2. Build import maps from ImportDeclaration AST nodes
-  const aliasToImportPath = new Map<string, string>();
-  const defaultImportNames = new Set<string>();
-
-  for (const node of ast.program.body) {
-    if (node.type !== 'ImportDeclaration') continue;
-    const importPath = node.source.value;
-    if (importPath === 'react' || importPath.startsWith('next/')) continue;
-
-    for (const spec of node.specifiers) {
-      if (spec.type === 'ImportDefaultSpecifier') {
-        aliasToImportPath.set(spec.local.name, importPath);
-        defaultImportNames.add(spec.local.name);
-      } else if (spec.type === 'ImportSpecifier') {
-        aliasToImportPath.set(spec.local.name, importPath);
-      }
-    }
-  }
-
-  // 3. Resolve import paths and build entries
-  const entries: PreviewComponentEntry[] = [];
-
-  for (const [compPath, compName] of pathToName) {
-    // Try direct match via component name alias
-    let importPath = aliasToImportPath.get(compName) ?? '';
-
-    // Try match via basename
-    if (!importPath) {
-      const compBase = stripExtension(basename(compPath));
-      for (const [, ip] of aliasToImportPath) {
-        if (ip === compBase || ip.endsWith(`/${compBase}`)) {
-          importPath = ip;
-          break;
-        }
-      }
-    }
-
-    // Try match via sample alias from SampleDefaultMap
-    if (!importPath) {
-      for (const [alias, samplePath] of sampleAliasToPath) {
-        if (samplePath === compPath) {
-          importPath = aliasToImportPath.get(alias) ?? '';
-          if (importPath) break;
-        }
-      }
-    }
-
-    const sampleExports = pathToSamples.get(compPath) ?? [];
-    const exportStyle = defaultImportNames.has(compName) ? 'default-named' : 'named';
-
-    entries.push({
-      componentPath: compPath,
-      componentName: compName,
-      exportStyle,
-      sampleExports,
-      importPath,
-    });
-  }
-
-  return entries;
-}
-
-// --- AST helpers for parseExistingPreview ---
-
-import type { Expression, Node, ObjectExpression, ObjectProperty, PatternLike, VariableDeclarator } from '@babel/types';
-
-/** Yield VariableDeclarators from top-level statements (exported or not) */
-function* iterateVarDeclarators(body: ReturnType<typeof parse>['program']['body']): Generator<VariableDeclarator> {
-  for (const node of body) {
-    const varDecl =
-      node.type === 'VariableDeclaration'
-        ? node
-        : node.type === 'ExportNamedDeclaration' && node.declaration?.type === 'VariableDeclaration'
-          ? node.declaration
-          : null;
-    if (varDecl) yield* varDecl.declarations;
-  }
-}
-
-/** Yield ObjectProperty nodes from an ObjectExpression, skipping spread elements */
-function* iterateObjectProperties(obj: ObjectExpression): Generator<ObjectProperty> {
-  for (const prop of obj.properties) {
-    if (prop.type === 'ObjectProperty') yield prop;
-  }
-}
-
-/** Unwrap TSAsExpression / TSSatisfiesExpression / LogicalExpression to ObjectExpression */
-function unwrapToObject(node: Expression | PatternLike | null | undefined): ObjectExpression | null {
-  if (!node) return null;
-  if (node.type === 'ObjectExpression') return node;
-  if (node.type === 'TSAsExpression' || node.type === 'TSSatisfiesExpression') {
-    return unwrapToObject(node.expression);
-  }
-  // SomeRenderers || {} — try the right operand (the fallback {})
-  if (node.type === 'LogicalExpression') {
-    return unwrapToObject(node.right);
-  }
-  return null;
-}
-
-function getStringValue(node: Node | null | undefined): string | null {
-  return node?.type === 'StringLiteral' ? node.value : null;
-}
-
-function getIdentName(node: Node | null | undefined): string | null {
-  if (!node) return null;
-  if (node.type === 'Identifier') return node.name;
-  if (node.type === 'CallExpression') {
-    const firstArg = node.arguments[0];
-    return firstArg?.type === 'Identifier' ? firstArg.name : null;
-  }
-  return null;
-}
-
-function stripExtension(name: string): string {
-  return name.replace(/\.\w+$/, '');
-}
-
-function pathCaseKey(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
-}
-
-/** Recast parser using @babel/parser for TSX/TS support. Module-level constant shared across methods. */
-const RECAST_PARSER = {
-  parse: (source: string) =>
-    parse(source, {
-      sourceType: 'module',
-      plugins: ['typescript', 'jsx'],
-      tokens: true,
-    }),
-};
-
 export class PreviewFileManager {
   private projectRoot: string;
   private io: FileIO;
@@ -526,7 +214,7 @@ export class PreviewFileManager {
     if (entryRootPaths.size === 0) return stale;
 
     for (const entry of entries) {
-      const canonical = this.canonicalizeComponentPath(entry.componentPath, canonicalPaths);
+      const canonical = canonicalizeComponentPath(entry.componentPath, canonicalPaths);
       if (!entryRootPaths.has(canonical.replace(/\.[jt]sx?$/, ''))) continue;
       let source: string;
       try {
@@ -622,7 +310,7 @@ export class PreviewFileManager {
     // File exists: fast AST check
     const missingPaths: string[] = [];
     for (const compPath of componentPaths) {
-      const importPath = await this.computeImportPath(compPath, previewDir);
+      const importPath = await computeImportPath(this.projectRoot, this.io, compPath, previewDir);
       const hasIt = await this._hasImport(previewPath, importPath);
       if (!hasIt) missingPaths.push(compPath);
     }
@@ -642,7 +330,7 @@ export class PreviewFileManager {
       // @hyperide-managed files (extension's own generated route files).
       const existingEntries = parseExistingPreview(existingContent);
       const discoveredPaths = await this._scanAllComponents();
-      const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
+      const canonicalPaths = buildCanonicalPathMap(discoveredPaths);
       // HYP-546 — an entry-root provider shell (the createRoot bootstrap target) that
       // slipped into a previously-generated preview must be purged on the fast path
       // too; otherwise a persisted __canvas_preview__.tsx keeps the provider shell
@@ -655,8 +343,8 @@ export class PreviewFileManager {
         !/^[A-Z]/.test(e.componentName) ||
         isFrameworkReserved(basename(e.componentPath)) ||
         isPreviewIneligibleByName(basename(e.componentPath)) ||
-        staleShellPaths.has(this.canonicalizeComponentPath(e.componentPath, canonicalPaths)) ||
-        this.hasPathCaseMismatch(e.componentPath, canonicalPaths);
+        staleShellPaths.has(canonicalizeComponentPath(e.componentPath, canonicalPaths)) ||
+        hasPathCaseMismatch(e.componentPath, canonicalPaths);
       const needsSampleUpdate = await this.hasSampleExportMismatch(componentPaths, existingEntries, canonicalPaths);
       if (!existingEntries.some(isStale) && !needsProviderUpdate && !needsGeneratorUpdate && !needsSampleUpdate) {
         return existingContent;
@@ -667,7 +355,7 @@ export class PreviewFileManager {
       // a synthesized compound scaffold).
       const cleanPaths = existingEntries
         .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)))
-        .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
+        .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
         previewDir,
@@ -681,7 +369,7 @@ export class PreviewFileManager {
     // excluding reserved filenames that must not be in the Client Component bundle.
     const existingEntries = parseExistingPreview(existingContent);
     const discoveredPaths = await this._scanAllComponents();
-    const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
+    const canonicalPaths = buildCanonicalPathMap(discoveredPaths);
     const existingPaths = existingEntries
       .filter(
         (e) =>
@@ -689,7 +377,7 @@ export class PreviewFileManager {
           !isPreviewIneligibleByName(basename(e.componentPath)) &&
           (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)),
       )
-      .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
+      .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];
     return this._initPreviewFile(previewPath, previewDir, allPaths, discoveredPaths);
   }
@@ -700,11 +388,10 @@ export class PreviewFileManager {
     canonicalPaths: Map<string, string>,
   ): Promise<boolean> {
     const entryByPath = new Map(
-      existingEntries.map((entry) => [this.canonicalizeComponentPath(entry.componentPath, canonicalPaths), entry]),
+      existingEntries.map((entry) => [canonicalizeComponentPath(entry.componentPath, canonicalPaths), entry]),
     );
-
     for (const componentPath of componentPaths) {
-      const canonicalPath = this.canonicalizeComponentPath(componentPath, canonicalPaths);
+      const canonicalPath = canonicalizeComponentPath(componentPath, canonicalPaths);
       const entry = entryByPath.get(canonicalPath);
       if (!entry) continue;
 
@@ -735,7 +422,7 @@ export class PreviewFileManager {
     const previewDir = dirname(previewPath);
 
     const discoveredPaths = await this._scanAllComponents();
-    const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
+    const canonicalPaths = buildCanonicalPathMap(discoveredPaths);
 
     let allPaths: string[] = [componentPath];
     try {
@@ -746,7 +433,7 @@ export class PreviewFileManager {
           (e) =>
             !isFrameworkReserved(basename(e.componentPath)) && !isPreviewIneligibleByName(basename(e.componentPath)),
         )
-        .map((e) => this.canonicalizeComponentPath(e.componentPath, canonicalPaths));
+        .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
       allPaths = [...new Set([...filteredPaths, componentPath])];
     } catch {
       // No existing preview file — init with just this component
@@ -763,14 +450,19 @@ export class PreviewFileManager {
     knownDiscoveredPaths?: string[],
   ): Promise<string> {
     const discoveredPaths = knownDiscoveredPaths ?? (await this._scanAllComponents());
-    const canonicalPaths = this.buildCanonicalPathMap(discoveredPaths);
-    const canonicalRequestedPaths = requestedPaths.map((path) => this.canonicalizeComponentPath(path, canonicalPaths));
+    const canonicalPaths = buildCanonicalPathMap(discoveredPaths);
+    const canonicalRequestedPaths = requestedPaths.map((path) => canonicalizeComponentPath(path, canonicalPaths));
+
+    // HYP-546 — resolved once (memoized) and passed to every buildEntry so it can
+    // exclude SPA entry-root provider shells from the preview registry.
+    const entryRootPaths = await this._getEntryRootComponentPaths();
 
     // Build entries for explicitly requested paths first
     const requestedEntries: PreviewComponentEntry[] = [];
     for (const compPath of canonicalRequestedPaths) {
-      const entry = await this.buildEntry(compPath, previewDir, {
+      const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         allowRouterShell: isExplicitWebAppShell(compPath),
+        entryRootPaths,
       });
       if (entry) requestedEntries.push(entry);
     }
@@ -782,7 +474,9 @@ export class PreviewFileManager {
     const extraEntries: PreviewComponentEntry[] = [];
     for (const compPath of discoveredPaths) {
       if (requestedPathSet.has(compPath)) continue;
-      const entry = await this.buildEntry(compPath, previewDir);
+      const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
+        entryRootPaths,
+      });
       if (entry) extraEntries.push(entry);
     }
 
@@ -896,23 +590,6 @@ export class PreviewFileManager {
     return Array.from(candidates);
   }
 
-  private buildCanonicalPathMap(paths: string[]): Map<string, string> {
-    const canonicalPaths = new Map<string, string>();
-    for (const path of paths) {
-      canonicalPaths.set(pathCaseKey(path), path);
-    }
-    return canonicalPaths;
-  }
-
-  private canonicalizeComponentPath(componentPath: string, canonicalPaths: Map<string, string>): string {
-    return canonicalPaths.get(pathCaseKey(componentPath)) ?? componentPath;
-  }
-
-  private hasPathCaseMismatch(componentPath: string, canonicalPaths: Map<string, string>): boolean {
-    const canonical = canonicalPaths.get(pathCaseKey(componentPath));
-    return canonical !== undefined && canonical !== componentPath;
-  }
-
   /**
    * Check if a file already imports from the given path.
    * Normalizes relative paths to absolute for comparison.
@@ -922,23 +599,25 @@ export class PreviewFileManager {
     const source = await this.io.readFile(previewFilePath);
     const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'], errorRecovery: true });
     const previewDir = dirname(previewFilePath);
-    const normalizedTarget = this._normalizeImportPath(previewDir, importPath);
+    const normalizedTarget = normalizeImportPath(previewDir, importPath);
 
     for (const node of ast.program.body) {
       if (node.type !== 'ImportDeclaration') continue;
-      const normalized = this._normalizeImportPath(previewDir, node.source.value);
-      if (normalized === normalizedTarget) return true;
+      const sourceValue = node.source.value;
+      if (typeof sourceValue !== 'string') continue;
+      const normalizedSource = normalizeImportPath(previewDir, sourceValue);
+      if (normalizedSource === normalizedTarget) {
+        return true;
+      }
     }
     return false;
   }
 
-  private _normalizeImportPath(fromDir: string, importPath: string): string {
-    if (importPath.startsWith('.')) {
-      return resolve(fromDir, importPath).replace(/\.(tsx?|jsx?)$/, '');
-    }
-    return importPath;
-  }
-
+  /**
+   * Check if a file already imports from the given path.
+   * Normalizes relative paths to absolute for comparison.
+   * Public for testing.
+   */
   /**
    * Full regeneration from scratch — ignores existing file.
    * Reads all component sources, builds entries, generates.
@@ -948,10 +627,13 @@ export class PreviewFileManager {
     const previewPath = await this.getPreviewFilePath();
     const previewDir = dirname(previewPath);
 
+    // HYP-546 — passed so buildEntry excludes SPA entry-root provider shells.
+    const entryRootPaths = await this._getEntryRootComponentPaths();
     const entries: PreviewComponentEntry[] = [];
     for (const compPath of componentPaths) {
-      const entry = await this.buildEntry(compPath, previewDir, {
+      const entry = await buildEntry(this.projectRoot, this.io, this.ssrMock?.framework, compPath, previewDir, {
         allowRouterShell: isExplicitWebAppShell(compPath),
+        entryRootPaths,
       });
       if (entry) entries.push(entry);
     }
@@ -973,213 +655,6 @@ export class PreviewFileManager {
 
     await this.io.writeFile(previewPath, content);
     return content;
-  }
-
-  /** Build a PreviewComponentEntry by reading the component source */
-  private async buildEntry(
-    componentPath: string,
-    previewDir: string,
-    options: BuildEntryOptions = {},
-  ): Promise<PreviewComponentEntry | null> {
-    // Guard against path traversal — componentPath must stay within projectRoot
-    if (componentPath.includes('..')) {
-      console.warn(`[PreviewFileManager] Skipping suspicious path: ${componentPath}`);
-      return null;
-    }
-
-    // Exclude framework-reserved files (Next.js App Router specials, Remix root/entry) —
-    // they export metadata / use framework hooks that crash without router context.
-    const fileName = basename(componentPath);
-    if (isFrameworkReserved(fileName)) {
-      return null;
-    }
-
-    // Exclude platform-specific RN variants (Foo.native.tsx) and CSS-in-JS style sheets
-    // (Foo.css.ts) — they collide with the canonical Foo.tsx import or yield invalid
-    // identifiers like `Foo.css`, breaking the generated preview file.
-    if (isPreviewIneligibleByName(fileName)) {
-      return null;
-    }
-
-    const absolutePath = join(this.projectRoot, componentPath);
-
-    let sourceCode: string;
-    try {
-      sourceCode = await this.io.readFile(absolutePath);
-    } catch {
-      // Component file unreadable — skip silently
-      console.warn(`[PreviewFileManager] Could not read component: ${componentPath}`);
-      return null;
-    }
-
-    // Also skip extension-managed files (e.g. app/test-preview/page.tsx) to prevent
-    // self-referential imports that cause circular Client Component chains.
-    if (sourceCode.includes('@hyperide-managed')) {
-      return null;
-    }
-
-    // Skip the SPA entry-root provider shell (HYP-546). A Vite/CRA `App.tsx` that
-    // `main.tsx` mounts via `createRoot(...).render(<App/>)` and that wraps the app
-    // in context providers (AuthProvider, QueryClientProvider, …) is the application
-    // shell, not a reusable previewable component. Rendering it standalone in the
-    // preview registry fires its providers' consumer hooks (useAuth, useBootstrap, …)
-    // OUTSIDE the surrounding providers main.tsx mounts → "useAuth must be used inside
-    // <AuthProvider>" → blank preview. The two-signal gate (entry-root AND provider
-    // shell) keeps a trivial mounted root that imports no providers selectable, and
-    // honors the same `allowRouterShell` escape hatch as the router-shell skip.
-    // Guarded parse: a mid-edit unparseable file must NOT crash here — let the
-    // dedicated parse-error try/catch below skip it. Treat a parse failure as
-    // "not a provider shell".
-    let isProviderShell = false;
-    try {
-      isProviderShell = detectProviderShell(sourceCode);
-    } catch {
-      isProviderShell = false;
-    }
-    if (!options.allowRouterShell && isProviderShell) {
-      const entryRootPaths = await this._getEntryRootComponentPaths();
-      if (entryRootPaths.has(componentPath.replace(/\.[jt]sx?$/, ''))) {
-        return null;
-      }
-    }
-
-    let componentName: string;
-    let sampleExports: string[];
-    let exportStyle: ExportStyle;
-    let isSSRRoute = false;
-    try {
-      // Skip router application shells (files importing BrowserRouter/HashRouter/StaticRouter).
-      // These files wrap the whole app with a router provider and, when included alongside
-      // the page components they import, cause a Vite/ESM temporal dead zone (TDZ) error
-      // in the generated __canvas_preview__.tsx registry.
-      if (detectRouterShell(sourceCode) && !options.allowRouterShell) {
-        return null;
-      }
-
-      componentName = extractComponentName(sourceCode, fileName);
-      if (!hasComponentExport(sourceCode, componentName)) {
-        return null;
-      }
-      sampleExports = scanSampleExports(sourceCode);
-      exportStyle = detectExportStyle(sourceCode, componentName);
-      if (this.ssrMock?.framework === 'remix') {
-        isSSRRoute = detectSSRHooks(sourceCode).size > 0;
-      }
-    } catch {
-      // Source has syntax errors (e.g. mid-edit). Don't generate a bogus entry —
-      // any guess at exportStyle will produce broken imports and break the dev
-      // server build, cascading failures across every component that imports it.
-      // Skip the component until the user saves valid code; the file watcher
-      // will re-trigger regeneration when the source parses cleanly.
-      console.warn(`[PreviewFileManager] Could not parse component: ${componentPath} — skipping`);
-      return null;
-    }
-
-    // Non-PascalCase name = not a React component (entry files, utils, etc.)
-    if (!/^[A-Z]/.test(componentName)) {
-      return null;
-    }
-
-    // Compute import path relative to preview file
-    const importPath = await this.computeImportPath(componentPath, previewDir);
-
-    // For compound shadcn-style modules without an authored SampleDefault,
-    // try to synthesize one from the named exports so the preview can render
-    // <Carousel><CarouselContent>…</CarouselContent></Carousel> instead of
-    // showing a blank "Loading…" forever (HYP — auto-sample for shadcn/ui).
-    let syntheticSampleDefault: PreviewComponentEntry['syntheticSampleDefault'];
-    let detectedExports: string[] | undefined;
-    if (!sampleExports.includes('SampleDefault')) {
-      try {
-        detectedExports = scanRenderableExportNames(sourceCode);
-      } catch {
-        detectedExports = undefined;
-      }
-      try {
-        const synthetic = buildContainerSampleJsxBody({ sourceCode, componentName });
-        if (synthetic) syntheticSampleDefault = synthetic;
-      } catch {
-        // Source has parse-recoverable artefacts that confuse the JSX scanner —
-        // skip synthesis silently rather than block the whole entry.
-      }
-    }
-
-    // HYP-465 — prop names the component statically destructures. Used by the
-    // generator to filter the fallback-props blob so undeclared keys don't leak
-    // onto host DOM nodes. `null` (unknown — member-access/HOC/no-params) maps to
-    // `undefined` here, which the generator treats as "don't filter".
-    let declaredPropNames: string[] | undefined;
-    try {
-      // Pass `exportStyle` so the scanned function == the export the generated
-      // import binds to. For `default-anonymous` the import renders the DEFAULT
-      // export, which can diverge from the same-named named export; scanning the
-      // wrong one whitelists props the rendered component never reads, leaking
-      // them onto host DOM nodes (HYP-465).
-      declaredPropNames = extractDeclaredPropNames(sourceCode, componentName, exportStyle) ?? undefined;
-    } catch {
-      declaredPropNames = undefined;
-    }
-
-    return {
-      componentPath,
-      componentName,
-      exportStyle,
-      sampleExports,
-      importPath,
-      ...(isSSRRoute && { isSSRRoute: true }),
-      ...(syntheticSampleDefault && { syntheticSampleDefault }),
-      ...(detectedExports && detectedExports.length > 0 && { detectedExports }),
-      ...(declaredPropNames !== undefined && { declaredPropNames }),
-    };
-  }
-
-  /** Compute relative import path from preview file to component */
-  private async computeImportPath(componentPath: string, previewDir: string): Promise<string> {
-    // Check monorepo package import
-    const packageImport = await this.getPackageImportPath(componentPath);
-    if (packageImport) return packageImport;
-
-    // Regular relative path
-    // componentPath is validated in buildEntry (no '..' segments)
-    const absoluteComponent = join(this.projectRoot, componentPath);
-    const relativePath = relative(previewDir, absoluteComponent).replace(/\.\w+$/, '');
-
-    // Ensure it starts with ./
-    if (!relativePath.startsWith('.')) {
-      return `./${relativePath}`;
-    }
-    return relativePath;
-  }
-
-  /**
-   * Get package import path for components in workspace packages (monorepo).
-   * Reads package.json to get the real package name (supports scoped packages like @acme/ui).
-   * Falls back to directory name if package.json is unreadable.
-   */
-  private async getPackageImportPath(componentPath: string): Promise<string | null> {
-    const match = componentPath.match(/packages\/([^/]+)\/(.*)/);
-    if (!match) return null;
-
-    const [, packageDir, relativePath] = match;
-
-    // Guard against path traversal — packageDir must be a plain directory name
-    if (packageDir === '..' || packageDir === '.' || packageDir.includes('\\')) return null;
-
-    const cleanPath = relativePath.replace(/^src\//, '').replace(/\.\w+$/, '');
-
-    // Try to read package.json for real package name (supports @scoped/packages)
-    const pkgJsonPath = join(this.projectRoot, 'packages', packageDir, 'package.json');
-    try {
-      const pkgContent = await this.io.readFile(pkgJsonPath);
-      const pkg = JSON.parse(pkgContent) as { name?: string };
-      if (pkg.name) {
-        return `${pkg.name}/${cleanPath}`;
-      }
-    } catch {
-      // package.json unreadable — fall back to directory name
-    }
-
-    return `${packageDir}/${cleanPath}`;
   }
 
   /**
@@ -1249,38 +724,7 @@ export class PreviewFileManager {
    * No-op if entries are already present or if no .git root is found.
    */
   async ensureGitExclude(): Promise<void> {
-    const gitRoot = await this.findGitRoot(this.projectRoot);
-    if (!gitRoot) return;
-
-    const excludePath = join(gitRoot, '.git/info/exclude');
-    const entries = [
-      '# HyperIDE — generated preview files',
-      '__canvas_preview__.tsx',
-      '__canvas_preview_standalone__.tsx',
-      '__canvas_samples__.tsx',
-      '*.samples.tsx',
-      '.hyperide/',
-      '**/test-preview/',
-      '**/test-preview.tsx',
-      '**/test-preview.astro',
-    ];
-
-    let existing = '';
-    try {
-      existing = await this.io.readFile(excludePath);
-    } catch {
-      // .git/info/exclude may not exist yet — we'll create it
-    }
-
-    const toAdd = entries.filter((line) => !existing.includes(line));
-    if (toAdd.length === 0) return;
-
-    const separator = existing && !existing.endsWith('\n') ? '\n' : '';
-    try {
-      await this.io.writeFile(excludePath, `${existing}${separator}${toAdd.join('\n')}\n`);
-    } catch {
-      // .git is a file in linked worktrees — silently skip
-    }
+    return ensureGitExclude(this.io, this.projectRoot, (dir) => this.findGitRoot(dir));
   }
 
   /**
@@ -1291,73 +735,7 @@ export class PreviewFileManager {
    */
   async ensureStandaloneEntry(): Promise<void> {
     const previewPath = await this.getPreviewFilePath();
-    const previewDir = dirname(previewPath);
-    const standaloneEntryPath = join(previewDir, '__canvas_preview_standalone__.tsx');
-
-    let baseContent: string;
-    try {
-      baseContent = await this.io.readFile(previewPath);
-    } catch {
-      return; // __canvas_preview__.tsx not generated yet
-    }
-
-    // Relative path from src/__canvas_preview_standalone__.tsx to .hyperide/preview
-    const wrapperImportPath = join(relative(previewDir, this.projectRoot), '.hyperide/preview').replace(/\\/g, '/');
-
-    // Detect the app's root element ID from index.html. Many projects use 'app-root',
-    // 'main', or similar instead of the React default 'root'. Fall back to 'root' if
-    // index.html is absent or doesn't contain a recognizable mount point.
-    let rootElementId = 'root';
-    try {
-      const indexHtml = await this.io.readFile(join(this.projectRoot, 'index.html'));
-      const divMatch = indexHtml.match(/<div\s+id="([^"]+)"/);
-      if (divMatch?.[1]) rootElementId = divMatch[1];
-    } catch {
-      // index.html not present — keep 'root'
-    }
-
-    const bootstrap = [
-      '',
-      '// @hyperide-managed',
-      "import { createRoot } from 'react-dom/client';",
-      `import { PreviewWrapper } from '${wrapperImportPath}';`,
-      '',
-      `const _rootEl = document.getElementById('${rootElementId}');`,
-      'if (_rootEl) {',
-      '  // Reuse root across HMR to avoid calling createRoot on the same container twice.',
-      '  // Cast to any so TypeScript in Webpack/Parcel projects (no Vite types) does not error.',
-      '  const _hot = (import.meta as any).hot as { data: Record<string, unknown>; accept: () => void } | undefined;',
-      '  const _existingRoot = _hot?.data?.root as ReturnType<typeof createRoot> | undefined;',
-      '  const _root = _existingRoot ?? createRoot(_rootEl);',
-      '  if (_hot) {',
-      '    _hot.data.root = _root;',
-      '    _hot.accept();',
-      '  }',
-      '  _root.render(',
-      '    <PreviewWrapper>',
-      '      <CanvasPreview />',
-      '    </PreviewWrapper>',
-      '  );',
-      '}',
-      '',
-    ].join('\n');
-
-    const newContent = `${baseContent.trimEnd()}\n${bootstrap}`;
-
-    // Skip write if content is identical — prevents unnecessary HMR full-reload
-    // (this file has side effects: createRoot().render(), so Vite always does a
-    // full page reload when it changes, killing iframe state).
-    try {
-      const existing = await this.io.readFile(standaloneEntryPath);
-      if (existing === newContent) return;
-    } catch {
-      // File doesn't exist yet — proceed with write
-    }
-
-    await this.io.mkdir?.(previewDir);
-    await this.io.writeFile(standaloneEntryPath, newContent);
-    // Ensure __canvas_preview_standalone__.tsx is git-excluded for all frameworks.
-    await this.ensureGitExclude();
+    return ensureStandaloneEntry(this.io, this.projectRoot, previewPath, () => this.ensureGitExclude());
   }
 
   /**

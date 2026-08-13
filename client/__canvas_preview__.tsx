@@ -6,12 +6,12 @@ import { SampleDefault as DividerSampleDefault } from './components/icons/Divide
 import { LoadingSpinner } from './components/LoadingSpinner';
 // Sample component map - React.FC components for HMR compatibility
 import { SampleDefault as indexSampleDefault } from './components/RightSidebar/index';
-import { SampleDefault as RightSidebarSampleDefault } from './components/RightSidebar/RightSidebar';
+import { SampleDefault as RightSidebarSampleDefault } from './components/RightSidebar/SampleDefault';
 import { SampleDefault as FillSectionSampleDefault } from './components/RightSidebar/sections/FillSection';
 import { SampleDefault as fill_pickerSampleDefault } from './components/ui/fill-picker';
 import { SampleDefault as navigation_menuSampleDefault } from './components/ui/navigation-menu';
 import { SampleDefault as paginationSampleDefault } from './components/ui/pagination';
-import { SampleDefault as CanvasEditorSampleDefault } from './pages/Editor/CanvasEditor';
+import { SampleDefault as CanvasEditorSampleDefault } from './pages/Editor/SampleDefault';
 import { SampleDefault as ProjectSettingsSampleDefault } from './pages/ProjectSettings';
 import { SampleDefault as ProjectsSampleDefault } from './pages/Projects';
 
