@@ -13,6 +13,7 @@ import {
   renderPlaceholderOverlays,
 } from '@shared/canvas-interaction/overlay-renderer';
 import { computeResizeStyles } from '@shared/canvas-interaction/resize-utils';
+import { calculateSpacingGuides, renderSpacingGuides } from '@shared/canvas-interaction/spacing-guides';
 import type { OverlayRect, PlaceholderRect } from '@shared/canvas-interaction/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canvasRPC } from '@/lib/platform/PlatformContext';
@@ -97,6 +98,47 @@ export function createDragGhost(axis: 'width' | 'height'): HTMLDivElement {
   ].join(';');
   return ghost;
 }
+
+interface GuideRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Collect sibling rects (in container pixel coordinates) from the overlay container
+ * for spacing-guide computation during a resize drag.
+ *
+ * The webview never receives the full sibling DOM from the iframe (overlayRects only
+ * carries selection + hover + placeholder rects — see overlay-rects.ts), so the only
+ * sibling geometry available here is what is already rendered into the container:
+ * other selection overlays (multi-select) and empty-container placeholders. The
+ * active element's own overlay is excluded so it is not measured against itself.
+ */
+function collectSiblingRects(container: HTMLElement, activeOverlay: HTMLElement): GuideRect[] {
+  const rects: GuideRect[] = [];
+  const candidates = container.querySelectorAll<HTMLElement>('[data-selection-overlay], [data-placeholder-overlay]');
+  for (const el of candidates) {
+    if (el === activeOverlay) continue;
+    const left = parseFloat(el.style.left);
+    const top = parseFloat(el.style.top);
+    const width = parseFloat(el.style.width);
+    const height = parseFloat(el.style.height);
+    if (Number.isNaN(left) || Number.isNaN(top) || Number.isNaN(width) || Number.isNaN(height)) continue;
+    rects.push({ left, top, width, height });
+  }
+  return rects;
+}
+
+/** Remove any spacing-guide lines/labels previously rendered into the container. */
+function clearSpacingGuides(container: HTMLElement): void {
+  const nodes = container.querySelectorAll('[data-spacing-guide], [data-spacing-label]');
+  for (const node of nodes) node.remove();
+}
+
+/** Identity viewport: overlay rects are already in pre-zoomed container px. */
+const IDENTITY_VIEWPORT = { zoom: 1, offsetX: 0, offsetY: 0 };
 
 /** Derive the origin from an iframe's src attribute, or null if unknown. */
 function getIframeOrigin(frame: HTMLIFrameElement): string | null {
@@ -568,10 +610,11 @@ export function useCanvasInteraction(
         document.removeEventListener('pointerup', onDocPointerUp);
         activeDocPointerUp = null;
 
+        clearSpacingGuides(container);
+
         const dX = endX - startX;
         const dY = endY - startY;
-        const styles = computeResizeStyles(axis, baseW, baseH, dX, dY);
-        console.log('[resize] finishDrag', { axis, dX, dY, styles, elementId: capturedElementId });
+        const styles = computeResizeStyles(axis, baseW, baseH, dX, dY, { snap: true });
         if (!styles) return;
 
         // size-* sets both axes — stripping it for one axis loses the other.
@@ -618,6 +661,7 @@ export function useCanvasInteraction(
         capturedHandle.removeEventListener('pointercancel', onPointerCancel);
         document.removeEventListener('pointerup', onDocPointerUp);
         activeDocPointerUp = null;
+        clearSpacingGuides(container);
         // Restore original size in iframe
         postToPreviewIframe(frame, { type: 'hypercanvas:clearPreviewResize', elementId: capturedElementId });
       }
@@ -625,12 +669,28 @@ export function useCanvasInteraction(
       function onPointerMove(e: PointerEvent) {
         const dX = e.clientX - startX;
         const dY = e.clientY - startY;
+        const liveW = axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : Math.round(baseW);
+        const liveH = axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : Math.round(baseH);
         postToPreviewIframe(frame, {
           type: 'hypercanvas:previewResize',
           elementId: capturedElementId,
-          width: axis === 'width' ? Math.max(1, Math.round(baseW + dX)) : undefined,
-          height: axis === 'height' ? Math.max(1, Math.round(baseH + dY)) : undefined,
+          width: axis === 'width' ? liveW : undefined,
+          height: axis === 'height' ? liveH : undefined,
         });
+
+        // Spacing guides: measure the live (resizing) active rect against the
+        // sibling rects currently rendered in the overlay container. Coordinates
+        // are already container pixels (identity viewport). Clear before render —
+        // renderSpacingGuides appends, so stale guides would otherwise accumulate.
+        const activeLeft = parseFloat(capturedOverlayDiv.style.left) || 0;
+        const activeTop = parseFloat(capturedOverlayDiv.style.top) || 0;
+        const activeRect = { left: activeLeft, top: activeTop, width: liveW, height: liveH };
+        const siblingRects = collectSiblingRects(container, capturedOverlayDiv);
+        clearSpacingGuides(container);
+        const guides = calculateSpacingGuides(activeRect, siblingRects);
+        if (guides.length > 0) {
+          renderSpacingGuides(container, guides, IDENTITY_VIEWPORT);
+        }
       }
 
       activeDocPointerUp = onDocPointerUp;
