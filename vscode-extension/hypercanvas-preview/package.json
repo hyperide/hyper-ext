@@ -1,7 +1,7 @@
 {
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
-  "version": "0.1.60",
+  "version": "0.1.61",
   "description": "Visual editor for React components",
   "categories": [
     "Other",
@@ -176,6 +176,10 @@
       {
         "command": "hypercanvas.previewAsApp",
         "title": "Hyper: Preview as App"
+      },
+      {
+        "command": "hypercanvas.resetPreviewToAppShell",
+        "title": "Hyper: Reset Preview to App Shell"
       },
       {
         "command": "hypercanvas.startDevServer",

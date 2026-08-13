@@ -132,4 +132,59 @@ describe('generatePreviewContent — app-mode output', () => {
     const content = generatePreviewContent([plain]);
     expect(content).toContain('const appEntrySet = new Set<string>([\n]);');
   });
+
+  it('route-report cleans the query ONLY on the byte-for-byte bootstrap URL, never after navigation', () => {
+    // The reporter must not echo the preview query into the address bar (the mount entry
+    // `/?component=client/App.tsx` would otherwise filter every suggestion out of the dropdown). It
+    // distinguishes the preview bootstrap from later APP-OWNED URLs by TIME: it snapshots the boot
+    // href and reports just the PATH while the URL is still exactly that bootstrap; after ANY app
+    // navigation (the URL differs) it reports the search VERBATIM, so every real app param survives
+    // (`/gallery?mode=multi`, `/feed?app=1`, duplicates) — codex review. Never suppresses the report.
+    const content = generatePreviewContent([appEntry]);
+    // The boot-href snapshot is SSR-GUARDED (no module-top-level `window` access) — the module is
+    // imported by SSR preview routes (Next/Remix/Astro) where `window` is undefined at load.
+    expect(content).toContain(
+      "const _hyperBootHref = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';",
+    );
+    // The UNGUARDED form must never be emitted (it would crash SSR import before React mounts).
+    expect(content).not.toContain('const _hyperBootHref = window.location.pathname + window.location.search;');
+    // The cleanup is a ONE-SHOT boot phase (a plain boolean — SSR-safe), GATED on the module loading at
+    // a harness MOUNT: the mount PATH (root `/` or `/test-preview`, proxy prefix stripped) AND the
+    // injected `component` param. A module (re)loading on a real app URL — `/gallery?mode=multi` (no
+    // component) OR `/gallery?component=hero` (non-mount path) — never enters boot phase (codex review).
+    expect(content).toContain("const _isMountPath = _p === '/' || _p.indexOf('/test-preview') === 0;");
+    expect(content).toContain("return _isMountPath && new URLSearchParams(window.location.search).has('component');");
+    expect(content).toContain('if (_href !== _hyperBootHref) _hyperInBootPhase = false;');
+    expect(content).toContain('const _onBootstrap = _hyperInBootPhase && _href === _hyperBootHref;');
+    expect(content).toContain('const full = path + _search + window.location.hash;');
+    expect(content).not.toContain('has("component")) return;');
+  });
+
+  it('route-report cleaning BEHAVIOR: boot-gate (mount path + component) + one-shot — else verbatim', () => {
+    // SYNC mirror of the inline `_reportRouteToHost` boot-gate + cleaning in generator.ts. Proves every
+    // case codex raised: a module that LOADS on a real app URL never cleans — whether it has no
+    // `component` (`/gallery?mode=multi`) OR a real `?component=hero` on a NON-mount path
+    // (`/gallery?component=hero`); after the first navigation the boot phase ends forever; navigating
+    // BACK to the exact mount URL is a real route. Real shared-key params (`?mode`, `?app`) survive.
+    const makeReporter = (loadPath: string, loadSearch: string) => {
+      const bootHref = loadPath + loadSearch;
+      const p = loadPath.replace(/^\/project-preview\/[a-fA-F0-9-]+/, '') || '/';
+      const isMountPath = p === '/' || p.indexOf('/test-preview') === 0;
+      let inBoot = isMountPath && new URLSearchParams(loadSearch.replace(/^\?/, '')).has('component');
+      return (pathname: string, search: string): string => {
+        const href = pathname + search;
+        if (href !== bootHref) inBoot = false;
+        return pathname + (inBoot && href === bootHref ? '' : search);
+      };
+    };
+    // Module LOADS on a real app URL → no boot phase → verbatim:
+    expect(makeReporter('/gallery', '?mode=multi')('/gallery', '?mode=multi')).toBe('/gallery?mode=multi');
+    // …even a real `?component=hero` on a NON-mount path (codex round-9 case):
+    expect(makeReporter('/gallery', '?component=hero')('/gallery', '?component=hero')).toBe('/gallery?component=hero');
+    // Module loads at the harness mount → first render cleans, then everything verbatim:
+    const onMount = makeReporter('/', '?component=client/App.tsx&app=1');
+    expect(onMount('/', '?component=client/App.tsx&app=1')).toBe('/'); // untouched mount → path only
+    expect(onMount('/gallery', '?mode=multi')).toBe('/gallery?mode=multi'); // real nav → verbatim, phase ends
+    expect(onMount('/', '?component=client/App.tsx&app=1')).toBe('/?component=client/App.tsx&app=1'); // back → verbatim
+  });
 });

@@ -88,8 +88,8 @@ export async function ensureIsolationWrapper(
 
   void vscode.window.showInformationMessage(
     'HyperIDE: this component reads a React context whose provider lives in your app shell. ' +
-      'Configure an AI key to auto-generate .hyperide/preview.tsx, toggle the preview scope to ' +
-      'component-only, or create .hyperide/preview.tsx manually with the needed providers.',
+      'Configure an AI key to auto-generate .hyperide/preview.tsx, or create ' +
+      '.hyperide/preview.tsx manually with the needed providers.',
   );
   return 'no-key';
 }

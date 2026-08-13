@@ -8,6 +8,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   computeScrollCompensationPx,
   createDragGhost,
+  iframePointToViewport,
   sourceToElementId,
 } from '../webview-preview-panel/useCanvasInteraction';
 
@@ -42,6 +43,30 @@ describe('sourceToElementId', () => {
   it('rejects malformed source payloads', () => {
     expect(sourceToElementId(null)).toBeNull();
     expect(sourceToElementId({ fileName: 'src/components/Card.tsx', line: 12 })).toBeNull();
+  });
+});
+
+describe('iframePointToViewport', () => {
+  // A fake iframe exposing only getBoundingClientRect — enough for the helper.
+  const fakeFrame = (left: number, top: number) =>
+    ({ getBoundingClientRect: () => ({ left, top }) }) as unknown as HTMLIFrameElement;
+
+  it('adds the iframe offset so app-mode (iframe reflowed below the address bar) lands on the click', () => {
+    // App-mode: the address-bar row pushes the iframe down by 48px. A right-click at
+    // iframe-content (120, 30) must map to webview-viewport (120, 78), not (120, 30).
+    expect(iframePointToViewport(fakeFrame(0, 48), 120, 30)).toEqual({ x: 120, y: 78 });
+  });
+
+  it('is an identity map when the iframe sits at the surface top (component-mode, offset 0)', () => {
+    expect(iframePointToViewport(fakeFrame(0, 0), 200, 90)).toEqual({ x: 200, y: 90 });
+  });
+
+  it('also accounts for a horizontal offset (split layout / left padding)', () => {
+    expect(iframePointToViewport(fakeFrame(16, 48), 100, 50)).toEqual({ x: 116, y: 98 });
+  });
+
+  it('falls back to the raw point when the iframe is null (no rect available)', () => {
+    expect(iframePointToViewport(null, 42, 7)).toEqual({ x: 42, y: 7 });
   });
 });
 

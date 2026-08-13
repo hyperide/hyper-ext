@@ -10,7 +10,6 @@ export const TID = {
     unsupportedFrameworkRoot: 'hyper-preview-unsupported-framework',
     unsupportedFrameworkRow: (name: string) => `hyper-preview-unsupported-framework-row-${name}`,
     toolbarMode: (mode: string) => `hyper-preview-mode-${mode}`,
-    toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',
     contextMenuItem: (action: string) => `hyper-preview-context-${action}`,
     componentErrorOverlay: 'hyper-preview-component-error',

@@ -394,8 +394,9 @@ describe('generatePreviewContent', () => {
       expect(content).toContain("'hypercanvas:appRouteChanged'");
       expect(content).toContain("window.addEventListener('popstate', function () { _reportRouteToHost(); });");
       expect(content).toContain('hist.pushState = function');
-      // The reported route includes the hash so `<Link to="/x#frag">` updates the bar fully.
-      expect(content).toContain('path + window.location.search + window.location.hash');
+      // The reported route includes the hash so `<Link to="/x#frag">` updates the bar fully; the
+      // preview query is dropped only on the byte-for-byte bootstrap URL (`_search` is "" there).
+      expect(content).toContain('const full = path + _search + window.location.hash;');
       expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
     });
 

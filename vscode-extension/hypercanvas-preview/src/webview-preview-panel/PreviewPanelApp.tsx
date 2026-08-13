@@ -7,7 +7,7 @@
 
 import { ComponentErrorOverlay, LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
 import { AddressBar } from '@shared/components/preview-chrome';
-import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
+import { IconBrush, IconLayoutGrid, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
@@ -16,7 +16,6 @@ import {
   createSharedDispatch,
   useCanvasMode,
   useEngineMode,
-  useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
 import type { PlatformMessage } from '@/lib/platform/types';
@@ -540,8 +539,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
   const engineMode = useEngineMode();
   const canvasMode = useCanvasMode();
   const dispatch = useMemo(() => createSharedDispatch(canvas), [canvas]);
-  const previewScope = useSharedEditorState((s) => s.previewScope ?? 'full-app');
-  const isIsolated = previewScope === 'component-only';
 
   const isBoardMode = canvasMode === 'multi';
   const activeMode: ToolbarMode = isBoardMode ? 'board' : (engineMode as ToolbarMode);
@@ -564,13 +561,15 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
     [dispatch],
   );
 
-  const handleScopeToggle = useCallback(() => {
-    canvas.sendEvent({
-      type: 'preview:setScope',
-      scope: isIsolated ? 'full-app' : 'component-only',
-    });
-  }, [canvas, isIsolated]);
-
+  // The preview's app-vs-isolated scope is chosen automatically — there is no manual
+  // button. Three automatic paths decide it:
+  //   - app-entry files (router/provider root) auto-engage app-mode in extension.ts
+  //     (isAppEntryCandidate -> activateAppModeForEntry), rendering the full app wrapper.
+  //   - a leaf component that crashes on a missing provider context auto-generates the
+  //     isolation wrapper via the HYP-487 onComponentError recovery path.
+  //   - everything else renders in the app shell (full-app) by default.
+  // The `preview:setScope` message / onScopeChange handler stay for those automatic paths
+  // and the chrome-detected "Generate wrapper" prompt; only the manual toggle was removed.
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 h-12 px-2 bg-popover rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border z-[1000]">
       {TOOLBAR_BUTTONS.map(({ mode, icon: Icon, boardOnly }) => {
@@ -594,25 +593,6 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
           </button>
         );
       })}
-      <div className="w-px h-6 bg-border mx-1" />
-      <button
-        type="button"
-        data-testid={TID.preview.toolbarScope}
-        title={
-          isIsolated
-            ? 'Isolated — component only (click for In app)'
-            : 'In app — component in full app context (click for Isolated)'
-        }
-        onClick={handleScopeToggle}
-        className={cn(
-          'flex items-center gap-1 h-8 px-2 rounded-md text-xs transition-colors',
-          isIsolated && 'bg-primary text-primary-foreground',
-          !isIsolated && 'hover:bg-accent text-muted-foreground hover:text-foreground',
-        )}
-      >
-        <IconLayoutSidebar className="w-4 h-4" stroke={1.5} />
-        {isIsolated ? 'Isolated' : 'In app'}
-      </button>
     </div>
   );
 }
@@ -624,20 +604,23 @@ function ModeToolbar({ canvas }: { canvas: ReturnType<typeof usePlatformCanvas> 
 const wrapperStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
-  height: '100%',
+  // Fill the surface BELOW the address-bar row (flex column). minHeight:0 lets the
+  // iframe shrink within the flex parent instead of overflowing.
+  flex: 1,
+  minHeight: 0,
 };
 
-// Floating top-centered address-bar row (app-mode only). Mirrors the ModeToolbar's
-// float-over-the-preview pattern so it never reflows the iframe; sits above overlays.
+// App-mode address-bar row: a normal-flow toolbar at the TOP of the surface that
+// reflows the iframe DOWN (it must NOT float over / cover the previewed app). The
+// surface is a flex column, so this row takes its own height and the iframe wrapper
+// fills the rest. Centered, capped at the AddressBar's own max-width (420).
 const addressBarRowStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 8,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  zIndex: 20,
+  flexShrink: 0,
   display: 'flex',
   justifyContent: 'center',
-  width: 'min(420px, calc(100% - 32px))',
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '8px 16px',
 };
 
 const surfaceStyle: React.CSSProperties = {
@@ -645,6 +628,10 @@ const surfaceStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
   overflow: 'visible',
+  // Column layout so the app-mode address bar sits ABOVE the iframe and pushes it
+  // down rather than overlapping it (HYP app-preview: "адресная строка не перекрывала").
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 const iframeStyle: React.CSSProperties = {

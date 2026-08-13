@@ -9,7 +9,7 @@ import {
 } from '@shared/components/overlays';
 import { AddressBar } from '@shared/components/preview-chrome';
 import { FRAMEWORK_SUPPORT } from '@shared/framework-support';
-import { IconAppWindow, IconTerminal2 } from '@tabler/icons-react';
+import { IconTerminal2 } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
@@ -188,31 +188,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     setCurrentSampleName,
   } = useComponentMeta();
 
-  // "Preview as app" mode: address bar + app-entry rebuild for the current component.
-  const appPreview = useAppPreviewMode({
-    componentPath: meta?.relativeFilePath,
-    loadComponent,
-    currentSampleName,
-  });
-
-  // Reparse with new sampleName when active design instance changes. Route through the app-preview
-  // hook's reload so that, when app-mode is active, the same-component sample switch keeps the
-  // entry root (`app=1`) — a plain loadComponent() would rebuild in component-mode and leave the
-  // iframe's `app=1` preview stuck on "Loading app…".
-  const reloadPreservingAppMode = appPreview.reloadPreservingAppMode;
-  useEffect(() => {
-    if (!activeDesignInstanceId || !meta?.relativeFilePath) return;
-    if (activeDesignInstanceId === currentSampleName) return;
-    setCurrentSampleName(activeDesignInstanceId);
-    void reloadPreservingAppMode(meta.relativeFilePath, activeDesignInstanceId);
-  }, [
-    activeDesignInstanceId,
-    meta?.relativeFilePath,
-    currentSampleName,
-    setCurrentSampleName,
-    reloadPreservingAppMode,
-  ]);
-
   // Convert parseError string to RuntimeError format for LogsPanel
   const parseErrorAsRuntimeError = useMemo((): RuntimeError | null => {
     if (!parseError) return null;
@@ -285,6 +260,36 @@ export function CanvasEditor({ onOpenSettings }: Props) {
         runtime.mode === 'nodepod' ? runtime.writeToPod : undefined,
       );
   }, [runtime.mode, activeProject?.id, runtime.writeToPod]);
+
+  // "Preview as app" mode: address bar + app-entry rebuild, AUTO-engaged for app-entry wrappers.
+  // Gated off in NodePod (the iframe is driven by overrideSrc, which bypasses the `app=1` URL) and
+  // for readonly viewers (parse-component skips the app-entry rebuild) — there app-mode must never
+  // raise the bar over a preview that never entered app-mode. Declared here (after `runtime` /
+  // `isReadonly`) so the gate reads real values.
+  const appPreview = useAppPreviewMode({
+    componentPath: meta?.relativeFilePath,
+    loadComponent,
+    currentSampleName,
+    enabled: runtime.mode !== 'nodepod' && !isReadonly,
+  });
+
+  // Reparse with new sampleName when active design instance changes. Route through the app-preview
+  // hook's reload so that, when app-mode is active, the same-component sample switch keeps the
+  // entry root (`app=1`) — a plain loadComponent() would rebuild in component-mode and leave the
+  // iframe's `app=1` preview stuck on "Loading app…".
+  const reloadPreservingAppMode = appPreview.reloadPreservingAppMode;
+  useEffect(() => {
+    if (!activeDesignInstanceId || !meta?.relativeFilePath) return;
+    if (activeDesignInstanceId === currentSampleName) return;
+    setCurrentSampleName(activeDesignInstanceId);
+    void reloadPreservingAppMode(meta.relativeFilePath, activeDesignInstanceId);
+  }, [
+    activeDesignInstanceId,
+    meta?.relativeFilePath,
+    currentSampleName,
+    setCurrentSampleName,
+    reloadPreservingAppMode,
+  ]);
 
   // Convert NodePod runtime error string to RuntimeError shape for LogsPanel
   const nodePodRuntimeError = useMemo(
@@ -995,36 +1000,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   onBeforeAddComment={handleBeforeAddComment}
                   onOpenInsertPanel={handleOpenInsertPanel}
                 />
-                {/* Preview-as-app toggle — adds the address bar + rebuilds the entry as an app.
-                    Shown only for real app entries (router/provider roots), or while already in
-                    app-mode so the user can exit. Hidden in NodePod runtime: that path drives the
-                    iframe via `overrideSrc`, which bypasses the `app=1` URL the generated preview
-                    reads — app-mode would show chrome over a preview that never entered app-mode.
-                    Active state mirrors the Toolbar's selected button styling (blue + white). */}
-                {!isCodeEditorMode &&
-                  runtime.mode !== 'nodepod' &&
-                  meta?.relativeFilePath &&
-                  // Editors may ENTER app-mode (canPreviewAsApp); a viewer cannot enter, but if
-                  // app-mode is already ON (e.g. a role change to viewer mid-session) the toggle must
-                  // stay visible so they can EXIT — never trap the user in app preview with no control.
-                  (appPreview.appMode || (!isReadonly && appPreview.canPreviewAsApp)) && (
-                    <button
-                      type="button"
-                      onClick={appPreview.toggleAppMode}
-                      aria-pressed={appPreview.appMode}
-                      className={cn(
-                        'h-12 w-12 rounded-[14px] shadow-[0_2px_4px_rgba(0,0,0,0.15),0_2px_16px_rgba(0,0,0,0.15)] border border-border flex items-center justify-center',
-                        appPreview.appMode ? 'bg-[#4597F7]' : 'bg-background hover:bg-accent',
-                      )}
-                      title={appPreview.appMode ? 'Exit app preview' : 'Preview as app'}
-                      data-testid="app-preview-toggle"
-                    >
-                      <IconAppWindow
-                        className={cn('w-5 h-5', appPreview.appMode ? 'text-white' : 'text-foreground')}
-                        stroke={1.5}
-                      />
-                    </button>
-                  )}
+                {/* App-mode (address bar + the entry's own router) now auto-engages on selecting a
+                    full app-entry wrapper — there is no manual toggle. See useAppPreviewMode: the
+                    candidacy fetch enters app-mode automatically for router/provider roots. */}
                 {!isCodeEditorMode &&
                   isLogsPanelCollapsed &&
                   (hasGatewayError || runtimeError || parseErrorAsRuntimeError) && (

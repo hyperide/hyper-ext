@@ -7,6 +7,7 @@
  */
 
 import type { SelectedElementRuntimeStyle, SharedEditorState } from '@lib/types';
+import { iframeLocalToViewport } from '@shared/canvas-interaction/iframe-point-mapping';
 import {
   clearOverlays,
   renderOverlayRects,
@@ -157,6 +158,25 @@ function getIframeOrigin(frame: HTMLIFrameElement): string | null {
     // Malformed URL — fall through
   }
   return null;
+}
+
+/**
+ * Map a point from iframe-content coordinates (the iframe's own `clientX/clientY`,
+ * relative to the iframe's top-left) to webview-viewport coordinates (relative to
+ * the webview document's top-left).
+ *
+ * The context menu portals to `document.body` and positions itself with
+ * `position: fixed`, so it needs viewport coordinates. When the iframe sits at the
+ * surface top the offset is ~0, but in app-mode the address-bar row reflows the
+ * iframe DOWN — without adding the iframe's `getBoundingClientRect()` offset the
+ * menu lands above the click point (HYP-752 app-preview overlap fix). Mirrors the
+ * SaaS path in CanvasElementContextMenu.tsx (`iframeRect.left/top + e.clientX/Y`).
+ *
+ * Thin DOM adapter over the shared, unit-tested `iframeLocalToViewport` — the
+ * single source of truth both this path and the SaaS path delegate to.
+ */
+export function iframePointToViewport(frame: HTMLIFrameElement | null, x: number, y: number): { x: number; y: number } {
+  return iframeLocalToViewport(frame?.getBoundingClientRect(), x, y);
 }
 
 function isSaveShortcut(event: {
@@ -571,11 +591,15 @@ export function useCanvasInteraction(
           }
           canvas.sendEvent({ type: 'state:update', patch: selectPatch });
 
+          // msg.x/msg.y are the iframe's own clientX/clientY (iframe-content space).
+          // The menu is fixed-positioned against the webview viewport, so add the
+          // iframe's offset — in app-mode the iframe is reflowed below the address bar.
+          const menuPoint = iframePointToViewport(frame, msg.x, msg.y);
           setContextMenu({
             elementId: msg.elementId,
             itemIndex: msg.itemIndex ?? null,
-            x: msg.x,
-            y: msg.y,
+            x: menuPoint.x,
+            y: menuPoint.y,
           });
           break;
         }
@@ -814,6 +838,11 @@ export function useCanvasInteraction(
       const elementId = overlayDiv.dataset.elementId;
       if (!elementId) return;
       event.preventDefault();
+      // NO iframe offset here (unlike the hypercanvas:contextMenu path): this event
+      // fires in the WEBVIEW document on a resize handle, so event.clientX/Y are
+      // already webview-viewport coords. The handle physically sits below the
+      // address bar, so its on-screen position already bakes in the app-mode offset.
+      // Adding iframePointToViewport() here would double-offset the menu.
       setContextMenu({ elementId, itemIndex: null, x: event.clientX, y: event.clientY });
     }
 

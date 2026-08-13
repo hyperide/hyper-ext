@@ -1,11 +1,12 @@
 /**
  * @file App-preview ("preview as app") mode state for the SaaS canvas.
  *
- * Accessed via: the floating "preview as app" toggle near the canvas Toolbar
- *   (client/pages/Editor/CanvasEditor.tsx). When enabled it re-parses the current
- *   component with `app=1` (server marks it an app entry + rebuilds the preview), fetches
- *   code-derived route suggestions for the shared `<AddressBar>`, and drives the previewed
- *   app's OWN router by posting `hypercanvas:navigateRoute` into the preview iframe.
+ * Accessed via: rendered by client/pages/Editor/CanvasEditor.tsx. App-mode AUTO-engages when
+ *   the selected component is a full app-entry wrapper (a router/provider root) — there is no
+ *   manual toggle. On selection it re-parses the component with `app=1` (server marks it an app
+ *   entry + rebuilds the preview), fetches code-derived route suggestions for the shared
+ *   `<AddressBar>`, and drives the previewed app's OWN router by posting
+ *   `hypercanvas:navigateRoute` into the preview iframe.
  * Assumptions: the preview iframe is served same-origin via the proxy path
  *   `/project-preview/<id>/…`, so navigate messages target `window.location.origin` (not '*').
  *   App-mode auto-disables whenever the selected component changes — the bar hides and the
@@ -35,6 +36,15 @@ export interface UseAppPreviewModeParams {
   /** Active sample name, forwarded to `loadComponent` so the re-parse keeps the same sample. */
   currentSampleName: string | null;
   /**
+   * Gate for AUTO app-mode (default `true`). Pass `false` where app-mode must never engage even
+   * for an app-entry candidate: the NodePod runtime drives the iframe via `overrideSrc` (bypassing
+   * the `app=1` URL the generated preview reads, so the bar would show over a preview that never
+   * entered app-mode), and readonly viewers' `parse-component` skips the app-entry rebuild (so a
+   * `loadComponent` success would flip the bar on without a real app build). When `false`, the
+   * candidacy check still runs but never enters app-mode.
+   */
+  enabled?: boolean;
+  /**
    * In-preview navigation strategy (history-bridge / basename / src-swap). Defaults to the
    * recommended `history-bridge`. Drives how `onNavigate` reaches the previewed app's router and
    * how the iframe URL is built (see IframeCanvas). Selectable so the three approaches can be
@@ -46,14 +56,10 @@ export interface UseAppPreviewModeParams {
 export interface UseAppPreviewModeResult {
   /** Whether the current component is being previewed as an app (drives the iframe `app=1` src). */
   appMode: boolean;
-  /** Whether the current component is a valid "preview as app" target (gates the toggle). */
-  canPreviewAsApp: boolean;
   /** Code-derived route suggestions for the address-bar dropdown (empty ⇒ no dropdown). */
   suggestions: RouteSuggestionItem[];
   /** The in-app address currently shown in the preview (resting value for the address bar). */
   currentRoute: string;
-  /** Toggle app-mode on/off for the current component. No-op when not a candidate. */
-  toggleAppMode: () => void;
   /** Navigate the previewed app to `path` and reflect it in the bar. */
   onNavigate: (path: string) => void;
   /**
@@ -114,40 +120,94 @@ export function useAppPreviewMode({
   componentPath,
   loadComponent,
   currentSampleName,
+  enabled = true,
   navStrategy = DEFAULT_NAV_STRATEGY,
 }: UseAppPreviewModeParams): UseAppPreviewModeResult {
   const [appMode, setAppMode] = useState(false);
-  const [canPreviewAsApp, setCanPreviewAsApp] = useState(false);
   const [suggestions, setSuggestions] = useState<RouteSuggestionItem[]>([]);
   const [currentRoute, setCurrentRoute] = useState('/');
 
-  // Latest values for the toggle without re-creating it on every keystroke/re-render.
+  // Latest values read by the auto-enter effect without putting them in its dependency array —
+  // `loadComponent` from the parent is not guaranteed stable, and depending on it (or a callback
+  // closing over it) would re-run the effect on every parent re-render → an infinite reset loop.
   const componentPathRef = useRef(componentPath);
   const sampleNameRef = useRef(currentSampleName);
   const appModeRef = useRef(appMode);
-  const canPreviewRef = useRef(canPreviewAsApp);
+  const loadComponentRef = useRef(loadComponent);
+  const enabledRef = useRef(enabled);
+  // True between issuing the auto `loadComponent(…, true)` and its resolution. `appMode` flips to
+  // true only AFTER the rebuild resolves, so on a disable that lands WHILE the rebuild is in flight
+  // `appMode`/`wasAppMode` are still false — yet the server already ran `enableAppEntry`. This ref
+  // lets the disable branch send a compensating component-mode rebuild in that window (final review
+  // P2). Keyed per component path so a stale request for a switched-away component doesn't linger.
+  const pendingAppModeRequestPathRef = useRef<string | null>(null);
   componentPathRef.current = componentPath;
   sampleNameRef.current = currentSampleName;
   appModeRef.current = appMode;
-  canPreviewRef.current = canPreviewAsApp;
+  loadComponentRef.current = loadComponent;
+  enabledRef.current = enabled;
 
-  // Leaving the component (or selecting another) tears down app-mode: hide the bar, drop `app=1`,
-  // and re-evaluate whether the new component can be previewed as an app (gates the toggle).
-  // Keyed on the path string so a same-path re-render does not reset an active session.
+  // Selecting a component AUTO-engages app-mode when that component is a full app-entry
+  // wrapper (owns a router/provider root) AND app-mode is `enabled` for this runtime/role
+  // (not NodePod overrideSrc, not a readonly viewer) — no manual toggle (Alex's ask: "надо
+  // чтобы само работало"). A non-candidate (or a disabled context) stays in component-mode.
+  // Leaving / switching the component first tears down any active app-mode (hide the bar, drop
+  // `app=1`, reset the route), then re-evaluates. Keyed ONLY on the path string so a same-path
+  // re-render does not reset an active session and `loadComponent`/`enabled` instability cannot
+  // retrigger the reset loop (both are read via refs).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadComponent/enabled are read via refs on purpose (see above)
   useEffect(() => {
+    const wasAppMode = appModeRef.current;
+    // An app-mode rebuild is "in flight" for THIS path if we issued one and it hasn't resolved.
+    const hadPendingRequest = pendingAppModeRequestPathRef.current === componentPath;
     setAppMode(false);
     setSuggestions([]);
     setCurrentRoute('/');
-    setCanPreviewAsApp(false);
-    if (!componentPath) return;
+    // Disabled while app-mode was ON — OR while its rebuild was still in flight (e.g. role → viewer
+    // mid-activation): hiding the bar is not enough — the server already ran / is running
+    // `enableAppEntry` for this path, so the iframe would reload without `app=1` against a raw
+    // router/provider shell and render blank. Send a compensating component-mode rebuild so the
+    // server drops the app entry and the iframe matches (final review P2; the in-flight case is the
+    // deeper edge the first pass missed). Clear the pending marker so the stale `true` rebuild
+    // resolving later can't re-raise the bar (it is already guarded by the disabled re-render).
+    if (componentPath && !enabledRef.current && (wasAppMode || hadPendingRequest)) {
+      pendingAppModeRequestPathRef.current = null;
+      void loadComponentRef.current(componentPath, sampleNameRef.current ?? undefined, false).catch(() => {});
+    }
+    if (!componentPath || !enabledRef.current) return;
     let cancelled = false;
     void fetchAppRoutes(componentPath).then((data) => {
-      if (!cancelled) setCanPreviewAsApp(data.isCandidate);
+      // Re-check path + enabled: the candidacy fetch is async, so a newer selection or a runtime
+      // /role change (NodePod, readonly) may have landed.
+      if (cancelled || !enabledRef.current || componentPathRef.current !== componentPath || !data.isCandidate) return;
+      // Enter app-mode: rebuild the preview with the app entry (`app=1`) FIRST, and only flip
+      // `appMode` when the rebuild actually SUCCEEDED — loadComponent resolves `false` on a
+      // handled failure, so we must not raise the bar over a preview that never rebuilt.
+      pendingAppModeRequestPathRef.current = componentPath;
+      void loadComponentRef
+        .current(componentPath, sampleNameRef.current ?? undefined, true)
+        .then(async (ok) => {
+          if (pendingAppModeRequestPathRef.current === componentPath) pendingAppModeRequestPathRef.current = null;
+          // Disabled / switched / cancelled while in flight, or a handled failure → do not raise
+          // the bar. The disable branch above already issued the compensating component-mode rebuild.
+          if (cancelled || !ok || !enabledRef.current || componentPathRef.current !== componentPath) return;
+          setAppMode(true);
+          // App-mode is now ON — fetch the dropdown suggestions (the expensive whole-project scan).
+          const fetched = await fetchAppRoutes(componentPath, true);
+          if (!cancelled && componentPathRef.current === componentPath) setSuggestions(fetched.suggestions);
+        })
+        .catch(() => {
+          if (pendingAppModeRequestPathRef.current === componentPath) pendingAppModeRequestPathRef.current = null;
+          // Unexpected throw — leave app-mode off.
+        });
     });
     return () => {
       cancelled = true;
     };
-  }, [componentPath]);
+    // `enabled` IS a dependency: flipping it false mid-session (e.g. role → viewer) must re-run
+    // the effect to tear down an active app-mode (the early-return then keeps the bar hidden);
+    // flipping it true re-evaluates candidacy. componentPath/loadComponent/sample are read via refs.
+  }, [componentPath, enabled]);
 
   // Keep the address bar in sync when the user navigates INSIDE the preview (clicks an app <Link>,
   // browser back/forward) — the generated bridge posts `hypercanvas:appRouteChanged` with the
@@ -163,36 +223,6 @@ export function useAppPreviewMode({
     window.addEventListener('message', onAppRouteChanged);
     return () => window.removeEventListener('message', onAppRouteChanged);
   }, []);
-
-  const toggleAppMode = useCallback(() => {
-    const path = componentPathRef.current;
-    if (!path) return;
-    // Gate: only a real app entry (router/provider root) can enter app-mode raw.
-    if (!appModeRef.current && !canPreviewRef.current) return;
-    const next = !appModeRef.current;
-    setSuggestions([]);
-    setCurrentRoute('/');
-    // Rebuild the preview for the new mode FIRST (server enable/disableAppEntry regenerates the
-    // preview with/without the app entry), and only flip `appMode` when the rebuild actually
-    // SUCCEEDED — `loadComponent` resolves `false` (it swallows API/fetch failures), so a `.catch`
-    // alone would miss them and leave the address bar + `app=1` on a preview that never rebuilt.
-    void loadComponent(path, sampleNameRef.current ?? undefined, next)
-      .then(async (ok) => {
-        if (!ok) return; // rebuild failed — stay in the previous mode, no half-state
-        // Stale-guard: the user may have selected another component while the rebuild was in
-        // flight. Apply the result only if THIS path is still the active one — otherwise we'd
-        // turn on app-mode (and show old suggestions) for a component that's no longer shown.
-        if (componentPathRef.current !== path) return;
-        setAppMode(next);
-        if (!next) return;
-        // App-mode is now ON — fetch the dropdown suggestions (the expensive whole-project scan).
-        const fetched = await fetchAppRoutes(path, true);
-        if (componentPathRef.current === path) setSuggestions(fetched.suggestions);
-      })
-      .catch(() => {
-        // Unexpected throw — leave app-mode as it was.
-      });
-  }, [loadComponent]);
 
   // Keep the strategy on a ref so onNavigate stays a stable callback yet always reads the live one.
   const navStrategyRef = useRef(navStrategy);
@@ -213,19 +243,21 @@ export function useAppPreviewMode({
   // Sample-switch reload that honors the LIVE app-mode flag (read off the ref, so this callback
   // is stable and never re-creates on an appMode flip). When app-mode is on, the rebuild keeps the
   // entry root (`app=1`), so the preview never strands on "Loading app…" after a sample change.
+  // A PENDING auto-activation for the same path counts as app-mode too: `appMode` only flips true
+  // AFTER the rebuild resolves, so a sample switch landing mid-activation would otherwise rebuild in
+  // component-mode while the `app=1` rebuild is still in flight and strand the iframe (final review).
   const reloadPreservingAppMode = useCallback(
     (componentPath: string, sampleName?: string): Promise<boolean> => {
-      return loadComponent(componentPath, sampleName, appModeRef.current);
+      const appModeActive = appModeRef.current || pendingAppModeRequestPathRef.current === componentPath;
+      return loadComponent(componentPath, sampleName, appModeActive);
     },
     [loadComponent],
   );
 
   return {
     appMode,
-    canPreviewAsApp,
     suggestions,
     currentRoute,
-    toggleAppMode,
     onNavigate,
     reloadPreservingAppMode,
     navStrategy,

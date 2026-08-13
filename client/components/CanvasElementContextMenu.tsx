@@ -1,3 +1,4 @@
+import { iframeLocalToViewport } from '@shared/canvas-interaction/iframe-point-mapping';
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { type CSSProperties, forwardRef, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -119,13 +120,15 @@ export function CanvasElementContextMenu({
         }
       }
 
+      // Iframe-local clientX/Y -> page-viewport coords for the fixed portal menu.
+      // Shared single source of truth with the EXT app-mode path (HYP-752).
       const iframe = getPreviewIframe();
-      const iframeRect = iframe?.getBoundingClientRect();
+      const menuPoint = iframeLocalToViewport(iframe?.getBoundingClientRect(), e.clientX, e.clientY);
 
       setInternalTarget({
         type: 'design-element',
-        x: (iframeRect?.left || 0) + e.clientX,
-        y: (iframeRect?.top || 0) + e.clientY,
+        x: menuPoint.x,
+        y: menuPoint.y,
       });
     };
 

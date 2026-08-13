@@ -25,8 +25,11 @@ import {
 } from '@lib/preview-generator';
 import { resolveRunnableProjectRoot } from '@lib/preview-generator/monorepo-root';
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
+import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
 import type { SharedEditorState } from '@lib/types';
 import * as vscode from 'vscode';
+import { runAppModeActivation } from './webview-preview-panel/app-mode-activation';
+import { resetPreviewToAppShell } from './webview-preview-panel/reset-to-app-shell';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import {
@@ -439,6 +442,79 @@ export function activate(context: vscode.ExtensionContext) {
     previewPanel?.clearAppMode();
   };
 
+  // Activate app-mode for an already-resolved entry on the CURRENT previewManager:
+  // mark it isAppEntry, rebuild so the preview generates the entry root raw (its own
+  // router + providers), then post the `appMode` message + reload the iframe with
+  // `&app=1`. Shared by the manual `previewAsApp` command and the auto-app-mode path
+  // (component-select detects an app-entry candidate). The caller must have already
+  // re-rooted previewManager to the entry's owning sub-project. Throws on rebuild
+  // failure so the caller can roll back via clearActiveAppMode.
+  //
+  // `isStale` (default: never) is re-checked AFTER every async await: the rebuild +
+  // recompile + route scan take time, so a newer component selection can land mid-flight.
+  // Without the post-await checks the stale activation would finish last and clobber the
+  // newer selection's state (codex #2). On a stale detection we roll back and stop.
+  const activateAppModeForEntry = async (previewPath: string, isStale: () => boolean = () => false): Promise<void> => {
+    // Drop any previous app-mode (possibly on another manager) before marking this one,
+    // so only one entry is ever flagged isAppEntry at a time.
+    clearActiveAppMode();
+    previewManager.enableAppEntry(previewPath);
+    // Capture THIS activation's entry by identity. A stale rollback must only clear when
+    // activeAppModeEntry is still this exact object — a newer activation (selection B) replaces
+    // it, and a global clearActiveAppMode() from the stale A would otherwise tear down B's
+    // address bar + entry flag (codex P1). `=== myEntry` is identity, so B's entry is never hit.
+    const myEntry = { previewPath, manager: previewManager };
+    activeAppModeEntry = myEntry;
+    // Route suggestions are scanned mid-sequence (a step) and consumed by the commit; hold them
+    // across the await boundary so the commit can post them with the `appMode` message.
+    let routeSuggestions: RouteSuggestion[] = [];
+    // The stale-guarded await sequence + identity-guarded rollback live in a pure, unit-tested
+    // helper (app-mode-activation.ts). The rollback only clears when activeAppModeEntry is STILL
+    // this exact object, so a stale rollback never tears down a newer activation (codex P1).
+    await runAppModeActivation({
+      steps: [
+        // Rebuild so the entry is generated with isAppEntry (not excluded as a shell).
+        () => previewManager.forceRefreshComponent(previewPath).then(() => undefined),
+        async () => {
+          // Block until webpack reports a fresh `compiled successfully` so the entry is
+          // rebuilt-as-app BEFORE the route scan + commit run. No-op when there is no dev
+          // server (same immediate-resolve as the prior `?? Promise.resolve()` fallback).
+          if (devServerManager) await devServerManager.awaitRecompile();
+        },
+        async () => {
+          routeSuggestions = await previewManager.getRouteSuggestions();
+        },
+      ],
+      isStale,
+      // setAppMode posts the `appMode` message AND reloads the iframe with `&app=1`.
+      commit: () => previewPanel?.setAppMode({ entryPreviewPath: previewPath, routeSuggestions, currentRoute: '/' }),
+      rollbackIfOwned: () => {
+        if (activeAppModeEntry === myEntry) clearActiveAppMode();
+      },
+    });
+  };
+
+  // Auto-engage app-mode when the just-selected component IS a full app-entry wrapper
+  // (owns a pushState router) — no manual "preview as app" action needed (Alex's ask:
+  // "надо чтобы само работало"). A normal leaf component is left in component-mode by the
+  // caller's prior setComponentParam. `isStale` lets a newer selection cancel this one at
+  // EVERY async boundary (candidacy read, rebuild, recompile, route scan) so a slow
+  // activation can never overwrite a fresher selection's state. On a build failure it
+  // rolls back to component-mode (the setComponentParam URL the caller already posted).
+  const autoEnterAppModeIfCandidate = async (previewPath: string, isStale: () => boolean): Promise<void> => {
+    const isCandidate = await previewManager.isAppEntryCandidate(previewPath).catch(() => false);
+    if (!isCandidate || isStale()) return;
+    try {
+      await activateAppModeForEntry(previewPath, isStale);
+    } catch (err) {
+      // Rebuild-as-app failed — activateAppModeForEntry already rolled THIS activation back
+      // (guarded so it never clears a newer selection). The caller's prior setComponentParam
+      // leaves the user in component-mode. No error toast: this is an automatic path, not a
+      // user-invoked command, so it must degrade silently.
+      console.error('[HyperIDE] Auto app-mode failed; falling back to component-mode:', err);
+    }
+  };
+
   if (devServerManager) {
     aiChatProvider.setDevServerManager(devServerManager);
 
@@ -776,20 +852,11 @@ export function activate(context: vscode.ExtensionContext) {
         );
         return;
       }
-      // Switch the active entry: drop any previous app-mode (possibly on another manager)
-      // before marking this one, so only one entry is ever flagged isAppEntry at a time.
-      clearActiveAppMode();
-      previewManager.enableAppEntry(target.previewPath);
-      activeAppModeEntry = { previewPath: target.previewPath, manager: previewManager };
       try {
-        // Rebuild so the entry is generated with isAppEntry (not excluded as a shell).
-        await previewManager.forceRefreshComponent(target.previewPath);
-        await devServerManager?.awaitRecompile();
-        const routeSuggestions = await previewManager.getRouteSuggestions();
-        // setAppMode posts the `appMode` message AND reloads the iframe with `&app=1`.
-        previewPanel?.setAppMode({ entryPreviewPath: target.previewPath, routeSuggestions, currentRoute: '/' });
+        // activateAppModeForEntry rolls its own entry back on failure (guarded so it never
+        // clears a newer activation), so no clearActiveAppMode() is needed here.
+        await activateAppModeForEntry(target.previewPath);
       } catch (err) {
-        clearActiveAppMode();
         const msg = err instanceof Error ? err.message : String(err);
         void vscode.window.showErrorMessage(`HyperIDE: failed to preview as app: ${msg}`);
       }
@@ -880,23 +947,50 @@ export function activate(context: vscode.ExtensionContext) {
     previewPanel?.refresh();
   });
 
-  // Handle scope toggle from toolbar: write or delete .hyperide/preview.tsx
+  // Switch the preview back to App Shell (full-app) by deleting the isolation wrapper.
+  // The FSWatch in PreviewModeManager picks up the deletion → onWrapperDeleted() →
+  // setIsolatedMode(false). resetPreviewToAppShell (a pure, unit-tested helper) is the
+  // single source of truth for the component-only → full-app transition — shared by the
+  // automatic scope handler and the command-palette "Reset Preview to App Shell" command.
+  const resetActivePreviewToAppShell = (): Promise<boolean> =>
+    resetPreviewToAppShell(vsCodeIO, join(syncWorkspaceRuntime(), '.hyperide/preview.tsx'));
+
+  // Handle scope changes from the automatic paths (chrome-detected "Generate wrapper"
+  // prompt, HYP-487 provider-error recovery): write or delete .hyperide/preview.tsx.
+  // The manual toolbar toggle was removed (the choice is automatic now); the forward
+  // direction is automatic and the reverse direction is the command below.
   previewPanel.setScopeChangeHandler(async (scope) => {
-    const currentWorkspaceRoot = syncWorkspaceRuntime();
-    const wrapperPath = join(currentWorkspaceRoot, '.hyperide/preview.tsx');
     if (scope === 'component-only') {
       // Generate + write .hyperide/preview.tsx (unless one already exists —
       // the user may have written it manually). On success the FSWatch in
       // PreviewModeManager picks the file up → onWrapperCreated → setIsolatedMode(true).
-      // The no-AI-key fallback message lives inside ensureIsolationWrapper so the
-      // manual toggle and the HYP-487 auto-recovery path stay consistent.
-      await ensureIsolationWrapper(currentWorkspaceRoot, context);
+      // The no-AI-key fallback message lives inside ensureIsolationWrapper so this
+      // path and the HYP-487 auto-recovery path stay consistent.
+      await ensureIsolationWrapper(syncWorkspaceRuntime(), context);
     } else {
-      // Switch back to App Shell: delete the wrapper
-      await vsCodeIO.deleteFile?.(wrapperPath);
-      // FSWatch picks up deletion → modeManager.onWrapperDeleted() → setIsolatedMode(false)
+      await resetActivePreviewToAppShell();
     }
   });
+
+  // Command-palette-only escape hatch back to full-app for users who landed in isolated
+  // mode (via the "Generate wrapper" prompt or provider-error auto-recovery) and want out
+  // without hand-deleting .hyperide/preview.tsx. Deliberately NOT a visible button or a
+  // context menu — the app-vs-isolated choice is automatic; this is the discoverable undo.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hypercanvas.resetPreviewToAppShell', async () => {
+      try {
+        const existed = await resetActivePreviewToAppShell();
+        void vscode.window.showInformationMessage(
+          existed
+            ? 'HyperIDE: preview reset to the full app shell.'
+            : 'HyperIDE: preview is already in app-shell mode (no isolation wrapper to remove).',
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(`HyperIDE: failed to reset preview: ${msg}`);
+      }
+    }),
+  );
 
   // AI-powered sample generator (uses extension's API key config)
   const sampleGenerator = createExtensionSampleGenerator(context);
@@ -1132,10 +1226,31 @@ export function activate(context: vscode.ExtensionContext) {
         // race a half-built bundle. No-op for vite/remix/next.
         await devServerManager?.awaitRecompile();
         if (ac.signal.aborted) return;
-        // 5. Update iframe component URL param — no hard reload needed.
-        // _currentComponent stays repo-relative (astBridge identity); the iframe URL
-        // uses the sub-project-relative path (the dev server's preview registry key).
+        // 5. Update iframe component URL param — ALWAYS, even on the app-mode path.
+        // setComponentParam writes _componentState (repoPath + previewPath + sub-project
+        // prefix); app-mode's _updatePreviewUrl reads previewPath and appends `&app=1`
+        // only when _appModeEntryPreviewPath matches it. Skipping this for the app path
+        // would leave the iframe on the PREVIOUS component's URL with no `&app=1` match.
+        // _currentComponent stays repo-relative (astBridge identity); the iframe URL uses
+        // the sub-project-relative path (the dev server's preview registry key).
         previewPanel?.setComponentParam(repoRelativePath, relativePath);
+        if (ac.signal.aborted) return;
+        // 6. Auto-app-mode: if the selected file is a full app-entry wrapper (owns a
+        // pushState router), ALSO render it AS AN APP — the address bar + the app's own
+        // router, no manual toggle. activateAppModeForEntry rebuilds with isAppEntry and
+        // reloads the iframe with `&app=1` for the now-current component. A normal
+        // component is left in component-mode by the setComponentParam above.
+        //
+        // The stale guard checks BOTH the abort signal AND the live selected component path.
+        // `ac` is only aborted once the NEXT selection's handleComponentSelected runs, which is
+        // gated behind its async reroot — so during that gap `ac.signal.aborted` is still false.
+        // The StateHub's currentComponent path flips synchronously on selection (the reroot is
+        // downstream), so comparing it to this activation's captured path catches a newer
+        // selection that landed during the reroot gap and stops A from committing for the old
+        // component (final review P1).
+        const isAutoAppModeStale = (): boolean =>
+          ac.signal.aborted || stateHub?.state.currentComponent?.path !== componentPath;
+        await autoEnterAppModeIfCandidate(relativePath, isAutoAppModeStale);
       })
       .catch((err) => {
         if (ac.signal.aborted) return;

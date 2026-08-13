@@ -1,10 +1,10 @@
 /**
  * Tests for useAppPreviewMode — the SaaS "preview as app" state hook.
  *
- * Covers: toggle on rebuilds the preview with appMode=true and fetches route suggestions;
- * toggle off rebuilds with appMode=false and clears suggestions; selecting a different
- * component auto-disables app-mode; onNavigate posts `hypercanvas:navigateRoute` to the
- * same-origin preview iframe and updates the resting route.
+ * Covers: selecting an app-entry candidate AUTO-enters app-mode (rebuilds with appMode=true and
+ * fetches route suggestions) — there is no manual toggle; a non-candidate stays in component-mode;
+ * selecting a different component tears down app-mode and re-evaluates; onNavigate posts
+ * `hypercanvas:navigateRoute` to the same-origin preview iframe and updates the resting route.
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
@@ -27,11 +27,11 @@ mock.module('@/utils/authFetch', () => ({ authFetch }));
 
 import { useAppPreviewMode } from '../useAppPreviewMode';
 
-function setup(componentPath: string | undefined, loadComponent = mock(() => Promise.resolve(true))) {
+function setup(componentPath: string | undefined, loadComponent = mock(() => Promise.resolve(true)), enabled = true) {
   const view = renderHook(
-    ({ path }: { path: string | undefined }) =>
-      useAppPreviewMode({ componentPath: path, loadComponent, currentSampleName: 'default' }),
-    { initialProps: { path: componentPath } },
+    ({ path, en }: { path: string | undefined; en: boolean }) =>
+      useAppPreviewMode({ componentPath: path, loadComponent, currentSampleName: 'default', enabled: en }),
+    { initialProps: { path: componentPath, en: enabled } },
   );
   return { view, loadComponent };
 }
@@ -57,16 +57,23 @@ describe('useAppPreviewMode', () => {
     expect(view.result.current.currentRoute).toBe('/');
   });
 
-  it('marks the component as previewable-as-app from the mount candidacy fetch', async () => {
-    const { view } = setup('src/App.tsx');
+  it('AUTO-enters app-mode for an app-entry candidate (no manual toggle)', async () => {
+    const { view, loadComponent } = setup('src/App.tsx');
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-    expect(view.result.current.canPreviewAsApp).toBe(true);
+
+    expect(view.result.current.appMode).toBe(true);
+    // The candidacy fetch must use the cheap single-file path…
     expect(authFetch).toHaveBeenCalledWith('/api/app-routes?component=src%2FApp.tsx');
+    // …and entering app-mode rebuilds with appMode=true and fetches the dropdown suggestions.
+    expect(loadComponent).toHaveBeenCalledWith('src/App.tsx', 'default', true);
+    expect(authFetch).toHaveBeenCalledWith('/api/app-routes?component=src%2FApp.tsx&suggestions=1');
+    expect(view.result.current.suggestions).toEqual([{ path: '/x', source: 'link' }]);
   });
 
-  it('does not enter app-mode for a non-candidate component', async () => {
+  it('does NOT enter app-mode for a non-candidate component', async () => {
     authFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ ...APP_ROUTES_BODY, isCandidate: false }),
@@ -74,41 +81,97 @@ describe('useAppPreviewMode', () => {
     const { view, loadComponent } = setup('src/Button.tsx');
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-    expect(view.result.current.canPreviewAsApp).toBe(false);
+    expect(view.result.current.appMode).toBe(false);
+    // A non-candidate never triggers a rebuild from the candidacy path.
+    expect(loadComponent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT auto-enter app-mode for a candidate when disabled (NodePod / readonly viewer)', async () => {
+    // enabled=false models NodePod (overrideSrc bypasses app=1) and readonly viewers (parse-component
+    // skips the app-entry rebuild): app-mode must never raise the bar there even for an App.tsx.
+    const { view, loadComponent } = setup(
+      'src/App.tsx',
+      mock(() => Promise.resolve(true)),
+      false,
+    );
     await act(async () => {
-      view.result.current.toggleAppMode();
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(view.result.current.appMode).toBe(false);
     expect(loadComponent).not.toHaveBeenCalled();
   });
 
-  it('toggle on rebuilds with appMode=true and fetches suggestions', async () => {
-    const { view, loadComponent } = setup('src/App.tsx');
+  it('tears app-mode down AND rebuilds in component-mode when `enabled` flips false mid-session', async () => {
+    const loadComponent = mock(() => Promise.resolve(true));
+    const view = renderHook(
+      ({ en }: { en: boolean }) =>
+        useAppPreviewMode({
+          componentPath: 'src/App.tsx',
+          loadComponent,
+          currentSampleName: 'default',
+          enabled: en,
+        }),
+      { initialProps: { en: true } },
+    );
+    // App.tsx is a candidate and enabled → app-mode engages (rebuild with appMode=true).
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-
-    await act(async () => {
-      view.result.current.toggleAppMode();
-    });
-
     expect(view.result.current.appMode).toBe(true);
-    expect(loadComponent).toHaveBeenCalledWith('src/App.tsx', 'default', true);
-    // Enabling app-mode asks for the dropdown suggestions → suggestions=1 (the expensive scan).
-    expect(authFetch).toHaveBeenCalledWith('/api/app-routes?component=src%2FApp.tsx&suggestions=1');
-    expect(view.result.current.suggestions).toEqual([{ path: '/x', source: 'link' }]);
+    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'default', true);
+
+    // Disable mid-session (e.g. role → viewer): the bar hides AND the preview is rebuilt in
+    // component-mode so the server drops the app entry — not just a local state flip (codex P2).
+    await act(async () => {
+      view.rerender({ en: false });
+      await Promise.resolve();
+    });
+    expect(view.result.current.appMode).toBe(false);
+    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'default', false);
   });
 
-  it('PERF: the per-selection candidacy fetch does NOT request suggestions', async () => {
-    setup('src/App.tsx');
+  it('compensates with a component-mode rebuild when disabled WHILE the app-mode rebuild is in flight', async () => {
+    // The deeper edge (final review P2): `enabled` flips false BEFORE the auto loadComponent(true)
+    // resolves, so appMode is still false (wasAppMode=false) — but the server already ran/began
+    // enableAppEntry. The disable must still send a compensating loadComponent(…, false), and the
+    // later-resolving true rebuild must NOT raise the bar.
+    let resolveLoad: (ok: boolean) => void = () => {};
+    const loadComponent = mock(
+      () =>
+        new Promise<boolean>((r) => {
+          resolveLoad = r;
+        }),
+    );
+    const view = renderHook(
+      ({ en }: { en: boolean }) =>
+        useAppPreviewMode({ componentPath: 'src/App.tsx', loadComponent, currentSampleName: 'default', enabled: en }),
+      { initialProps: { en: true } },
+    );
+    // Candidate + enabled → the app-mode rebuild is ISSUED (loadComponent(true)) but left in flight.
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-    // Mount candidacy check must use the cheap single-file path (no suggestions=1) so a large
-    // repo isn't AST-scanned on every component selection just to gate the toggle.
-    expect(authFetch).toHaveBeenCalledWith('/api/app-routes?component=src%2FApp.tsx');
-    expect(authFetch).not.toHaveBeenCalledWith('/api/app-routes?component=src%2FApp.tsx&suggestions=1');
+    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'default', true);
+    expect(view.result.current.appMode).toBe(false); // not resolved yet
+
+    // Disable while the true rebuild is still pending — must send a compensating component-mode rebuild.
+    await act(async () => {
+      view.rerender({ en: false });
+      await Promise.resolve();
+    });
+    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'default', false);
+
+    // Now the stale true rebuild resolves — it must NOT raise the bar (disabled).
+    await act(async () => {
+      resolveLoad(true);
+      await Promise.resolve();
+    });
+    expect(view.result.current.appMode).toBe(false);
   });
 
   it('does not flip appMode until the preview rebuild (loadComponent) resolves', async () => {
@@ -120,12 +183,10 @@ describe('useAppPreviewMode', () => {
         }),
     );
     const { view } = setup('src/App.tsx', loadComponent);
+    // Let the candidacy fetch resolve (kicks off the rebuild) but keep the rebuild in flight.
     await act(async () => {
       await Promise.resolve();
-    });
-
-    await act(async () => {
-      view.result.current.toggleAppMode();
+      await Promise.resolve();
     });
     // Rebuild still in flight — appMode must NOT be on yet (would race `app=1` ahead of regen).
     expect(view.result.current.appMode).toBe(false);
@@ -143,37 +204,15 @@ describe('useAppPreviewMode', () => {
     const { view } = setup('src/App.tsx', loadComponent);
     await act(async () => {
       await Promise.resolve();
-    });
-
-    await act(async () => {
-      view.result.current.toggleAppMode();
       await Promise.resolve();
     });
 
-    // loadComponent ran but reported failure → no address bar, no app=1.
+    // The candidate triggered a rebuild, but it reported failure → no address bar, no app=1.
     expect(loadComponent).toHaveBeenCalledWith('src/App.tsx', 'default', true);
     expect(view.result.current.appMode).toBe(false);
   });
 
-  it('toggle off rebuilds with appMode=false and clears suggestions', async () => {
-    const { view, loadComponent } = setup('src/App.tsx');
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      view.result.current.toggleAppMode();
-    });
-    await act(async () => {
-      view.result.current.toggleAppMode();
-    });
-
-    expect(view.result.current.appMode).toBe(false);
-    expect(view.result.current.suggestions).toEqual([]);
-    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'default', false);
-  });
-
-  it('ignores a stale toggle result when the component switched mid-rebuild', async () => {
+  it('ignores a stale rebuild result when the component switched mid-rebuild', async () => {
     let resolveLoad: (ok: boolean) => void = () => {};
     const loadComponent = mock(
       () =>
@@ -181,18 +220,24 @@ describe('useAppPreviewMode', () => {
           resolveLoad = r;
         }),
     );
+    // App.tsx is a candidate (auto-enters); the component we switch TO is NOT, so its own
+    // candidacy check does not auto-enter — isolating the stale-guard under test.
+    authFetch.mockImplementation((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ...APP_ROUTES_BODY, isCandidate: !url.includes('Other') }),
+      } as Response),
+    );
     const { view } = setup('src/App.tsx', loadComponent);
+    // Auto-entry kicks off the rebuild for App.tsx (in flight)…
     await act(async () => {
       await Promise.resolve();
+      await Promise.resolve();
     });
-
-    // Start enabling app-mode for App.tsx (rebuild in flight)…
+    // …then the user switches to a different (non-candidate) component before the rebuild resolves.
     await act(async () => {
-      view.result.current.toggleAppMode();
-    });
-    // …then the user switches to a different component before the rebuild resolves.
-    await act(async () => {
-      view.rerender({ path: 'src/Other.tsx' });
+      view.rerender({ path: 'src/Other.tsx', en: true });
+      await Promise.resolve();
       await Promise.resolve();
     });
     // Now the stale App.tsx rebuild resolves — it must NOT turn app-mode on for src/Other.tsx.
@@ -203,19 +248,23 @@ describe('useAppPreviewMode', () => {
     expect(view.result.current.appMode).toBe(false);
   });
 
-  it('selecting a different component auto-disables app-mode', async () => {
+  it('selecting a different (non-candidate) component auto-disables app-mode', async () => {
     const { view } = setup('src/App.tsx');
     await act(async () => {
       await Promise.resolve();
-    });
-
-    await act(async () => {
-      view.result.current.toggleAppMode();
+      await Promise.resolve();
     });
     expect(view.result.current.appMode).toBe(true);
 
+    // The next component is not an app entry.
+    authFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ...APP_ROUTES_BODY, isCandidate: false }),
+    } as Response);
     await act(async () => {
-      view.rerender({ path: 'src/Other.tsx' });
+      view.rerender({ path: 'src/Other.tsx', en: true });
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(view.result.current.appMode).toBe(false);
@@ -310,29 +359,31 @@ describe('useAppPreviewMode', () => {
     expect(view.result.current.navStrategy).toBe('src-swap');
   });
 
-  it('reloadPreservingAppMode forwards appMode=false before app-mode is enabled', async () => {
-    const { view, loadComponent } = setup('src/App.tsx');
+  it('reloadPreservingAppMode forwards appMode=false for a non-candidate (component-mode)', async () => {
+    authFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ...APP_ROUTES_BODY, isCandidate: false }),
+    } as Response);
+    const { view, loadComponent } = setup('src/Button.tsx');
     await act(async () => {
+      await Promise.resolve();
       await Promise.resolve();
     });
 
     await act(async () => {
-      await view.result.current.reloadPreservingAppMode('src/App.tsx', 'compact');
+      await view.result.current.reloadPreservingAppMode('src/Button.tsx', 'compact');
     });
 
     // Not in app-mode → reload rebuilds in component-mode (appMode=false).
-    expect(loadComponent).toHaveBeenLastCalledWith('src/App.tsx', 'compact', false);
+    expect(loadComponent).toHaveBeenLastCalledWith('src/Button.tsx', 'compact', false);
   });
 
   it('reloadPreservingAppMode keeps app=1 on a sample switch while app-mode is active (fix #1)', async () => {
     const { view, loadComponent } = setup('src/App.tsx');
+    // App.tsx is a candidate → app-mode auto-engages.
     await act(async () => {
       await Promise.resolve();
-    });
-
-    // Enable app-mode first.
-    await act(async () => {
-      view.result.current.toggleAppMode();
+      await Promise.resolve();
     });
     expect(view.result.current.appMode).toBe(true);
 
@@ -351,7 +402,8 @@ describe('useAppPreviewMode', () => {
     const { view, loadComponent } = setup(undefined);
 
     await act(async () => {
-      view.result.current.toggleAppMode();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(view.result.current.appMode).toBe(false);
