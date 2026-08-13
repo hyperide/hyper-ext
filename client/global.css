@@ -42,6 +42,24 @@
 
     --radius: 0.5rem;
 
+    /*
+     * Annotation outline/shadow contrast token (HYP-400). Annotation arrows and
+     * text are typically dark fills, so their readability outline must stay light
+     * in BOTH themes — reusing --background killed contrast in dark mode (where it
+     * is near-black). Kept light in :root, .dark, and the prefers-color-scheme
+     * block below. Not mirrored in the extension styles.css: these annotation
+     * components are SaaS-only and not rendered by the VS Code webview.
+     */
+    --annotation-outline: 0 0% 100%;
+    /*
+     * Arrow LABEL outline (HYP-400). The label FILL is --foreground, so its halo
+     * must contrast with --foreground in BOTH themes — it cannot reuse
+     * --annotation-outline, which equals --foreground (both white) in dark mode and
+     * would leave the white label haloless. This token is the inverse of
+     * --foreground (== --background per theme): light here, dark in .dark below.
+     */
+    --annotation-label-outline: 0 0% 100%;
+
     /* Right sidebar widths */
     --right-sidebar-content-width: 202px;
     --right-sidebar-section-width: 234px;
@@ -146,6 +164,9 @@
     --toggle-active: 217.2 32.6% 23%;
     --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     --tree-selection-bg: rgba(248, 250, 252, 0.12);
+    --annotation-outline: 0 0% 100%;
+    /* Inverse of --foreground (near-white in dark) so the white label gets a dark halo. */
+    --annotation-label-outline: 222.2 84% 4.9%;
   }
 
   /* Dark theme via system preference (when no class is set) */
@@ -190,6 +211,9 @@
       --toggle-active: 217.2 32.6% 23%;
       --toggle-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
       --tree-selection-bg: rgba(248, 250, 252, 0.12);
+      --annotation-outline: 0 0% 100%;
+      /* Inverse of --foreground (near-white in dark) so the white label gets a dark halo. */
+      --annotation-label-outline: 222.2 84% 4.9%;
     }
   }
 }

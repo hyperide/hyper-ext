@@ -145,9 +145,11 @@ export const TextElement = memo(function TextElement({
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               display: 'inline-block',
-              // Contrasting text shadow for readability against varying backgrounds
+              // Contrasting text shadow for readability against varying backgrounds.
+              // Uses --annotation-outline (stays light in both themes) so dark text
+              // stays legible in dark mode — --background goes near-black there (HYP-400).
               textShadow:
-                '-1px -1px 0 hsl(var(--background)), 1px -1px 0 hsl(var(--background)), -1px 1px 0 hsl(var(--background)), 1px 1px 0 hsl(var(--background))',
+                '-1px -1px 0 hsl(var(--annotation-outline)), 1px -1px 0 hsl(var(--annotation-outline)), -1px 1px 0 hsl(var(--annotation-outline)), 1px 1px 0 hsl(var(--annotation-outline))',
             }}
           >
             {text.text || 'Double-click to edit'}

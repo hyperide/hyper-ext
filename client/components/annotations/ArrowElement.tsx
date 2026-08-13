@@ -84,7 +84,12 @@ export const ArrowElement = memo(function ArrowElement({
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <polygon points="0 0, 10 3.5, 0 7" fill={arrow.strokeColor} stroke="hsl(var(--background))" strokeWidth={1} />
+          <polygon
+            points="0 0, 10 3.5, 0 7"
+            fill={arrow.strokeColor}
+            stroke="hsl(var(--annotation-outline))"
+            strokeWidth={1}
+          />
         </marker>
       </defs>
 
@@ -106,7 +111,7 @@ export const ArrowElement = memo(function ArrowElement({
         y1={arrow.startY}
         x2={arrow.endX}
         y2={arrow.endY}
-        stroke="hsl(var(--background))"
+        stroke="hsl(var(--annotation-outline))"
         strokeWidth={strokeWidth + 4}
         pointerEvents="none"
       />
@@ -126,17 +131,19 @@ export const ArrowElement = memo(function ArrowElement({
       {/* Label - displayed along the arrow line */}
       {(arrow.label || isEditingLabel) && (
         <g transform={`translate(${midX}, ${midY}) rotate(${angle})`}>
-          {/* Label text with white stroke outline */}
+          {/* Label text with contrasting stroke outline */}
           {arrow.label && !isEditingLabel && (
             <>
-              {/* White stroke outline for readability */}
-              {/* Background stroke outline for readability */}
+              {/* Outline must contrast with the label FILL (--foreground), so it uses
+                  --annotation-label-outline (the inverse of --foreground per theme),
+                  NOT --annotation-outline — in dark mode --annotation-outline ==
+                  --foreground (both white) and the halo would vanish (HYP-400). */}
               <text
                 x={0}
                 y={-labelPadding - 4}
                 textAnchor="middle"
                 fill="none"
-                stroke="hsl(var(--background))"
+                stroke="hsl(var(--annotation-label-outline))"
                 strokeWidth={3}
                 fontSize={labelFontSize}
                 fontFamily="system-ui, sans-serif"
