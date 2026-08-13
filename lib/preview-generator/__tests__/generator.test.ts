@@ -827,12 +827,12 @@ describe('generateStandaloneEntry', () => {
   });
 });
 
-describe('generatePreviewContent — ui-primitive filtering', () => {
-  it('excludes components from components/ui/ path from componentRegistry', () => {
-    // Bulka has 46 shadcn primitives in its registry. Each crashes on event-like fallback
-    // props (Badge passes unknown props to <div> → React warns) and each probe consumes
-    // up to 20s of isPreviewLoaded polling. 46 × 20s = 920s >> 360s test budget.
-    // components/ui/ entries must be excluded from componentRegistry to prevent this.
+describe('generatePreviewContent — ui-primitive registration', () => {
+  // HYP-915 follow-up: registration requires KNOWN declaredPropNames (even an empty array) —
+  // filterFallback only safely restricts the fallback-props spread when it knows which props
+  // the component actually declares. `[]` here simulates a plain, statically-analyzable
+  // primitive (the common case: Badge/Button/Card-style destructured props).
+  it('keeps parsed components/ui/ entries in componentRegistry', () => {
     const entries: PreviewComponentEntry[] = [
       {
         componentPath: 'client/pages/Index.tsx',
@@ -841,37 +841,52 @@ describe('generatePreviewContent — ui-primitive filtering', () => {
         sampleExports: [],
         importPath: './pages/Index',
       },
-      makeEntry('client/components/ui/badge.tsx', 'Badge'),
-      makeEntry('client/components/ui/chart.tsx', 'ChartContainer'),
-      makeEntry('client/components/ui/button.tsx', 'Button'),
+      { ...makeEntry('client/components/ui/badge.tsx', 'Badge'), declaredPropNames: [] },
+      { ...makeEntry('client/components/ui/chart.tsx', 'ChartContainer'), declaredPropNames: [] },
+      { ...makeEntry('client/components/ui/button.tsx', 'Button'), declaredPropNames: [] },
     ];
     const content = generatePreviewContent(entries);
     // Project-level components must appear in the registry
     expect(content).toContain("'client/pages/Index.tsx'");
-    // UI primitives must not appear — they drain the test budget on fallback-prop crashes
-    expect(content).not.toContain("'client/components/ui/badge.tsx'");
-    expect(content).not.toContain("'client/components/ui/chart.tsx'");
-    expect(content).not.toContain("'client/components/ui/button.tsx'");
+    // Plain UI primitives must also appear so in-memory generated props can render them.
+    expect(content).toContain("'client/components/ui/badge.tsx'");
+    expect(content).toContain("'client/components/ui/chart.tsx'");
+    expect(content).toContain("'client/components/ui/button.tsx'");
+  });
+
+  it('excludes a components/ui/ entry with UNKNOWN declaredPropNames and no sample (HYP-915 follow-up)', () => {
+    // declaredPropNames === undefined means extractDeclaredPropNames could not statically
+    // resolve the destructured prop names (HOC-wrapped, member-access, complex spread).
+    // filterFallback then returns the FULL unfiltered fallback-props blob (nested objects /
+    // callback stubs), and shadcn-style primitives typically rest-spread that onto a DOM
+    // element — the exact crash class the original May 2026 exclusion guarded against, and
+    // NOT covered by the June declaredPropNames fallback filter. This is the one case that
+    // must still be excluded.
+    const entries: PreviewComponentEntry[] = [makeEntry('client/components/ui/mystery-hoc.tsx', 'MysteryHoc')];
+    const content = generatePreviewContent(entries);
+    const registrySection = content.slice(
+      content.indexOf('const componentRegistry'),
+      content.indexOf('const sampleRenderMap'),
+    );
+    expect(registrySection).not.toContain("'client/components/ui/mystery-hoc.tsx'");
   });
 
   it('does not exclude components that are only similarly named but not in a /ui/ directory', () => {
     const entries: PreviewComponentEntry[] = [
       makeEntry('client/components/UserInterface.tsx', 'UserInterface'),
       makeEntry('client/pages/ui-dashboard/Dashboard.tsx', 'Dashboard'),
-      makeEntry('client/components/ui/badge.tsx', 'Badge'),
+      { ...makeEntry('client/components/ui/badge.tsx', 'Badge'), declaredPropNames: [] },
     ];
     const content = generatePreviewContent(entries);
     // Not a components/ui/ path — should remain in registry
     expect(content).toContain("'client/components/UserInterface.tsx'");
     expect(content).toContain("'client/pages/ui-dashboard/Dashboard.tsx'");
-    // Actual components/ui/ path without SampleDefault — should be excluded
-    expect(content).not.toContain("'client/components/ui/badge.tsx'");
+    // Actual components/ui/ path without SampleDefault, but with known declaredPropNames,
+    // should still remain previewable.
+    expect(content).toContain("'client/components/ui/badge.tsx'");
   });
 
-  it('excludes components/ui/ entries with non-default sample exports but no SampleDefault', () => {
-    // A UI primitive that exports SamplePrimary (or any named sample) but not SampleDefault
-    // must still be excluded — the render path only uses SampleDefault, so without it the
-    // component falls through to <Component {...previewFallbackProps} /> and can crash.
+  it('keeps components/ui/ entries with non-default sample exports but no SampleDefault', () => {
     const entries: PreviewComponentEntry[] = [
       {
         componentPath: 'client/components/ui/navigation-menu.tsx',
@@ -879,10 +894,11 @@ describe('generatePreviewContent — ui-primitive filtering', () => {
         exportStyle: 'named',
         sampleExports: ['SamplePrimary'],
         importPath: './components/ui/navigation-menu',
+        declaredPropNames: [],
       },
     ];
     const content = generatePreviewContent(entries);
-    expect(content).not.toContain("'client/components/ui/navigation-menu.tsx'");
+    expect(content).toContain("'client/components/ui/navigation-menu.tsx'");
   });
 
   it('keeps components/ui/ entries that have SampleDefault exports in the registry', () => {
@@ -896,13 +912,13 @@ describe('generatePreviewContent — ui-primitive filtering', () => {
         sampleExports: ['SampleDefault'],
         importPath: './components/ui/fill-picker',
       },
-      makeEntry('client/components/ui/badge.tsx', 'Badge'),
+      { ...makeEntry('client/components/ui/badge.tsx', 'Badge'), declaredPropNames: [] },
     ];
     const content = generatePreviewContent(entries);
     // Has SampleDefault — must remain in registry
     expect(content).toContain("'client/components/ui/fill-picker.tsx'");
-    // No SampleDefault — must be excluded
-    expect(content).not.toContain("'client/components/ui/badge.tsx'");
+    // No SampleDefault, but known declaredPropNames — still registered for generated-props fallback.
+    expect(content).toContain("'client/components/ui/badge.tsx'");
   });
 });
 
@@ -998,7 +1014,7 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
     expect(content).toContain("'client/components/ui/alert.tsx': toPreviewComponent(Alert)");
   });
 
-  it('drops UI primitives that have neither authored nor synthetic SampleDefault', () => {
+  it('keeps UI primitives that have neither authored nor synthetic SampleDefault, given known declaredPropNames', () => {
     const entries: PreviewComponentEntry[] = [
       {
         componentPath: 'client/components/ui/divider.tsx',
@@ -1006,17 +1022,18 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
         exportStyle: 'named',
         sampleExports: [],
         importPath: './components/ui/divider',
+        declaredPropNames: [],
       },
     ];
 
     const content = generatePreviewContent(entries);
-    expect(content).not.toContain("'client/components/ui/divider.tsx'");
+    expect(content).toContain("'client/components/ui/divider.tsx': toPreviewComponent(Divider)");
   });
 
-  it('still emits detectedExports in componentExportsMap for UI primitives that were filtered from the registry', () => {
-    // A primitive without authored OR synthetic SampleDefault gets dropped
-    // from componentRegistry / sampleRenderMap, but the iframe fallback UI
-    // still needs its detectedExports to render "Detected exports: …".
+  it('emits detectedExports for plain UI primitives without adding a default sample renderer', () => {
+    // A primitive without authored OR synthetic SampleDefault, but with known
+    // declaredPropNames, still enters componentRegistry so generated props can render it,
+    // while sampleRenderMap remains empty because no default sample exists.
     const entries: PreviewComponentEntry[] = [
       {
         componentPath: 'client/components/ui/divider.tsx',
@@ -1025,12 +1042,12 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
         sampleExports: [],
         importPath: './components/ui/divider',
         detectedExports: ['Divider', 'DividerLabel'],
+        declaredPropNames: [],
       },
     ];
 
     const content = generatePreviewContent(entries);
 
-    // Registry / sampleRenderMap exclusion holds.
     const registrySection = content.slice(
       content.indexOf('const componentRegistry'),
       content.indexOf('const sampleRenderMap'),
@@ -1039,7 +1056,7 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
       content.indexOf('const sampleRenderMap'),
       content.indexOf('const componentExportsMap'),
     );
-    expect(registrySection).not.toContain('client/components/ui/divider.tsx');
+    expect(registrySection).toContain('client/components/ui/divider.tsx');
     expect(sampleRenderMapSection).not.toContain('client/components/ui/divider.tsx');
 
     // componentExportsMap MUST still carry the detected names.

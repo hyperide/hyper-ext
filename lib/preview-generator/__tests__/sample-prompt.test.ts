@@ -100,6 +100,21 @@ describe('buildSamplePrompt', () => {
     expect(prompt).toContain(instructions);
   });
 
+  it('should include deterministic prop baseline context when provided', () => {
+    const prompt = buildSamplePrompt('', 'SampleDefault', undefined, {
+      deterministicProps: {
+        values: { title: 'Sample title', count: 1 },
+        unsatisfied: ['data'],
+      },
+    });
+
+    expect(prompt).toContain('DETERMINISTIC PROP BASELINE');
+    expect(prompt).toContain('"title": "Sample title"');
+    expect(prompt).toContain('"count": 1');
+    expect(prompt).toContain('"unsatisfied": [');
+    expect(prompt).toContain('"data"');
+  });
+
   it('should not include framework block when not provided', () => {
     const prompt = buildSamplePrompt('', 'SampleDefault');
     // No double newlines from empty framework block

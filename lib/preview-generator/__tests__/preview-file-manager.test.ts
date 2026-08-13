@@ -7,6 +7,7 @@ import {
   PreviewGenerationError,
   parseExistingPreview,
 } from '../preview-file-manager';
+import { generateSamplePropValues } from '../sample-values';
 
 /** In-memory FileIO for testing without disk */
 class InMemoryFileIO implements FileIO {
@@ -2583,27 +2584,93 @@ describe('PreviewFileManager._scanAllComponents — multi-root + shadcn pattern'
     expect(content).toContain('SheetModule.SheetTrigger');
   });
 
-  it('excludes components/ui/* with non-default samples but no SampleDefault', async () => {
+  it('keeps a plain components/ui/* primitive with required props in the registry', async () => {
     const io = new InMemoryFileIO();
     io.files.set(
       '/project/index.html',
       `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
     );
+    const requiredPrimitiveSource = `
+import React from 'react';
+export interface NoticeProps {
+  title: string;
+  count: number;
+}
+export function Notice({ title, count }: NoticeProps) {
+  return <section>{title}: {count}</section>;
+}
+`;
+    io.files.set('/project/client/components/ui/notice.tsx', requiredPrimitiveSource);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['client/components/ui/notice.tsx']);
+    const registrySection = content.slice(
+      content.indexOf('const componentRegistry'),
+      content.indexOf('const componentExportsMap'),
+    );
+    expect(registrySection).toContain("'client/components/ui/notice.tsx': toPreviewComponent(Notice)");
+    expect(content).toContain('\'client/components/ui/notice.tsx\': ["title", "count"]');
+
+    const generated = generateSamplePropValues([
+      { name: 'title', type: 'string', required: true },
+      { name: 'count', type: 'number', required: true },
+    ]);
+    expect(generated).toEqual({ values: { title: 'Sample title', count: 1 }, unsatisfied: [] });
+  });
+
+  it('keeps a plain components/ui/* primitive but leaves unresolvable required props unsatisfied', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/index.html',
+      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+    );
+    const unsatisfiedPrimitiveSource = `
+import React from 'react';
+export interface DataBadgeProps {
+  data: ExternalData;
+}
+export function DataBadge({ data }: DataBadgeProps) {
+  return <span>{data.label}</span>;
+}
+`;
+    io.files.set('/project/client/components/ui/data-badge.tsx', unsatisfiedPrimitiveSource);
+    io.files.set('/project/package.json', '{}');
+    const manager = createManager(io);
+
+    const content = await manager.ensureComponent(['client/components/ui/data-badge.tsx']);
+    const registrySection = content.slice(
+      content.indexOf('const componentRegistry'),
+      content.indexOf('const componentExportsMap'),
+    );
+    expect(registrySection).toContain("'client/components/ui/data-badge.tsx': toPreviewComponent(DataBadge)");
+
+    const generated = generateSamplePropValues([{ name: 'data', type: 'ExternalData', required: true }]);
+    expect(generated.values).toEqual({});
+    expect(generated.unsatisfied).toEqual(['data']);
+  });
+
+  it('keeps components/ui/* with non-default samples but no SampleDefault', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set(
+      '/project/index.html',
+      `<!DOCTYPE html><html><body><script type="module" src="/client/main.tsx"></script></body></html>`,
+    );
+    // Destructured (even empty) param so extractDeclaredPropNames resolves a known, safe
+    // [] rather than null/"unknown" (HYP-915 follow-up) — a bare no-params function is
+    // treated as unknown, which is a DIFFERENT axis this test isn't about; it's testing
+    // sample-export completeness (SamplePrimary present, SampleDefault absent), not
+    // declaredPropNames resolution.
     const navMenuSource = `
 import React from 'react';
-export function NavigationMenu() { return <nav />; }
+export function NavigationMenu({}: {}) { return <nav />; }
 export const SamplePrimary = () => <NavigationMenu />;
 `;
     io.files.set('/project/client/components/ui/navigation-menu.tsx', navMenuSource);
     io.files.set('/project/package.json', '{}');
     const manager = createManager(io);
 
-    // Has SamplePrimary but no SampleDefault — render path would fall through to fallback-prop
-    // spread and crash, so must still be excluded from componentRegistry/sampleRenderMap.
-    // It IS allowed (and now expected) to appear in componentExportsMap so the iframe's
-    // fallback UI can show "Detected exports: NavigationMenu" instead of "Generating sample…".
     const content = await manager.ensureComponent(['client/components/ui/navigation-menu.tsx']);
-    // Build the registry/sampleRenderMap region to assert the path is NOT registered there.
     const registrySection = content.slice(
       content.indexOf('const componentRegistry'),
       content.indexOf('const componentExportsMap'),
@@ -2612,9 +2679,9 @@ export const SamplePrimary = () => <NavigationMenu />;
       content.indexOf('const sampleRenderMap'),
       content.indexOf('const componentExportsMap'),
     );
-    expect(registrySection).not.toContain("'client/components/ui/navigation-menu.tsx'");
+    expect(registrySection).toContain("'client/components/ui/navigation-menu.tsx'");
+    // SamplePrimary is still not used as the single-mode default renderer.
     expect(sampleRenderMapSection).not.toContain("'client/components/ui/navigation-menu.tsx'");
-    // componentExportsMap MAY include the path so the fallback UI can list detected exports.
     const exportsSection = content.slice(
       content.indexOf('const componentExportsMap'),
       content.indexOf('const sampleRenderersMap'),

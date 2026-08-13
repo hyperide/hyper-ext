@@ -462,11 +462,17 @@ export class PreviewFileManager {
         return existingContent;
       }
 
-      // Stale entries found — regenerate excluding reserved files and ui-primitive paths.
-      // Keep UI primitives that have a renderable sample (authored SampleDefault or
-      // a synthesized compound scaffold).
+      // Stale entries found — regenerate excluding reserved files and ui-primitive paths that
+      // are neither renderable-sampled nor safely fallback-filterable (HYP-915 follow-up — see
+      // generator.ts generatePreviewContent for the full rationale; parseExistingPreview never
+      // reconstructs declaredPropNames/syntheticSampleDefault, so this check is conservative here
+      // and the authoritative decision happens on the fresh rebuild below).
       const cleanPaths = existingEntries
-        .filter((e) => !isStale(e) && (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)))
+        .filter(
+          (e) =>
+            !isStale(e) &&
+            (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e) || e.declaredPropNames !== undefined),
+        )
         .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
       return this._initPreviewFile(
         previewPath,
@@ -487,7 +493,7 @@ export class PreviewFileManager {
         (e) =>
           !isFrameworkReserved(basename(e.componentPath)) &&
           !isPreviewIneligibleByName(basename(e.componentPath)) &&
-          (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e)),
+          (!isUiPrimitive(e.componentPath) || entryHasRenderableSample(e) || e.declaredPropNames !== undefined),
       )
       .map((e) => canonicalizeComponentPath(e.componentPath, canonicalPaths));
     const allPaths = [...new Set([...existingPaths, ...componentPaths])];

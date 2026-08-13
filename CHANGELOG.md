@@ -2,6 +2,12 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [Unreleased]
+
+### Bug fixes
+
+- **Non-compound UI primitives no longer dead-end on "No sample for this component"** — opening a `components/ui/*.tsx` file with no authored `SampleDefault` and no compound sibling exports (a plain `Card`/`Button`/`Badge`-style shadcn primitive) now renders via the existing deterministic per-prop generator instead of landing on the terminal "no sample" screen; registry inclusion only excludes a UI primitive when it BOTH lacks a renderable sample AND has unresolvable `declaredPropNames` (HYP-915) (`daeb50f9`, `94469cb7`, `7968c1bc`)
+
 ## [0.1.56] — 2026-06-01
 
 ### New features

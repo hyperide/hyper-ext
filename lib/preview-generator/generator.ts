@@ -48,7 +48,17 @@ function jsStr(value: string): string {
 
 /** Generate the full __canvas_preview__.tsx content */
 export function generatePreviewContent(entries: PreviewComponentEntry[], options?: GeneratePreviewOptions): string {
-  const registryEntries = entries.filter((e) => !isUiPrimitive(e.componentPath) || entryHasRenderableSample(e));
+  // HYP-915 follow-up (review finding): a UI primitive with NO renderable sample AND
+  // UNKNOWN declaredPropNames is the one genuinely unsafe case left after opening the
+  // registry back up to non-compound primitives — filterFallback (fallback-data.ts)
+  // returns the FULL unfiltered previewFallbackProps blob (nested objects/callback
+  // stubs) when declaredPropNames is undefined, and shadcn-style primitives typically
+  // rest-spread that straight onto a DOM element. A primitive with KNOWN declaredPropNames
+  // (even an empty array) is safe — filterFallback correctly restricts/empties the spread
+  // for it — so only the unknown-and-unsampled combination stays excluded.
+  const registryEntries = entries.filter(
+    (e) => !isUiPrimitive(e.componentPath) || entryHasRenderableSample(e) || e.declaredPropNames !== undefined,
+  );
   const uniqueNames = deriveUniquePrefix(
     registryEntries,
     extractImportedBindings(options?.providerWrap?.imports ?? []),

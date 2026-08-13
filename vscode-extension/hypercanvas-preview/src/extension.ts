@@ -55,7 +55,7 @@ import { RightPanelProvider } from './RightPanelProvider';
 import { StateHub } from './StateHub';
 import { DevServerManager } from './services/DevServerManager';
 import { extractDesignTokens } from './services/DesignTokensService';
-import { shouldInjectGeneratedProps } from './services/no-props-sample';
+import { getPrimitiveRenderableSampleInfo, shouldInjectGeneratedPropsForSelection } from './services/no-props-sample';
 import {
   computeCapabilities,
   detectCssSystem,
@@ -757,11 +757,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Self-healing: when the generated preview doesn't have the requested component,
     // re-run ensureComponent so the preview file is regenerated with the missing entry.
     // Retry guard prevents an infinite loop if ensureComponent keeps failing.
-    // Do NOT skip UI primitives here: those with SampleDefault — or with a synthesized
-    // compound scaffold (Task 2 / Task 3) — must be addable via this path. The
-    // diff-before-write check in _initPreviewFile prevents HMR when the generated content
-    // is unchanged. Primitives that have neither authored nor synthetic SampleDefault
-    // remain filtered out by entryHasRenderableSample and surface the "no sample" toast.
+    // Do NOT skip UI primitives here: parsed primitives are registry entries even when
+    // they lack SampleDefault so in-memory generated props can render them. The defensive
+    // fallback below is only for entries that still cannot be rebuilt into the registry.
     // Scan the project for renderable component files to recommend when the opened
     // file is not previewable. Empty list on any failure (panelRouter not ready, no
     // workspace) — the overlay then shows the error without suggestions.
@@ -826,14 +824,12 @@ export function activate(context: vscode.ExtensionContext) {
           const entries = parseExistingPreview(content);
           const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
           if (!inRegistry) {
-            // Primitive that has neither an authored SampleDefault nor a synthesizable
-            // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
-            // returned false, so it stays filtered out of the registry. Don't call
-            // setComponentParam — the same-value React state bail-out would leave the
-            // preview stuck on "Loading…" indefinitely. Keep the retry count so repeated
-            // _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+            // Defensive fallback: a parsed UI primitive should normally be in the
+            // registry now, with either Component fallback rendering or synthetic
+            // SampleDefault. If it is still absent, treat it as an unrecoverable build
+            // miss and stop the self-heal loop.
             vscode.window.showInformationMessage(
-              `Hyper Canvas: "${relPath}" has no SampleDefault and its exports don't form a renderable compound — preview not available.`,
+              `Hyper Canvas: "${relPath}" could not be added to the preview registry — preview not available.`,
             );
             return;
           }
@@ -1669,9 +1665,9 @@ export function activate(context: vscode.ExtensionContext) {
     // exports that don't match the suffix allow-list. Instead, preview-file-manager
     // synthesizes a SampleDefault inline inside __canvas_preview__.tsx via
     // syntheticSampleDefault (Task 2). We still need to register the primitive in the
-    // registry so the iframe can find it — call ensureComponent below, but skip the
-    // ensureSample mutation and the in-memory prop injection (the synthetic compound
-    // scaffold already renders shadcn primitives).
+    // registry so the iframe can find it — call ensureComponent below, skip the
+    // ensureSample mutation, and use in-memory generated props only for primitives
+    // that have neither authored SampleDefault nor a synthetic compound scaffold.
     //
     // No unit test covers the !isPrimitive split here — extension.ts is hard to harness
     // in isolation. The behavior is covered by the project-dependent E2E spec
@@ -1700,32 +1696,42 @@ export function activate(context: vscode.ExtensionContext) {
             generate: sampleGenerator,
           })
         : Promise.resolve({ generated: false, exists: false });
+    const primitiveSampleInfoPromise = isPrimitive
+      ? readFile(absComponentPath, 'utf8')
+          // Compound-sibling detection (buildContainerSampleJsxBody) matches on the REAL
+          // component identifier (e.g. `Card` → looks for `CardHeader`/`CardContent`), same as
+          // preview-build-entry.ts uses. Passing sampleComponentName here would search for
+          // siblings of the normalized SCAFFOLD name instead — a no-op for already-valid PascalCase
+          // names, but a silent miss for anything normalizeSampleComponentName had to rewrite,
+          // which would make a real compound primitive look like it has no compound scaffold and
+          // redundantly inject flat generated props on top of it (review finding, HYP-915).
+          .then((sourceCode) => getPrimitiveRenderableSampleInfo(sourceCode, componentName))
+          .catch(() => undefined)
+      : Promise.resolve(undefined);
 
     ensureSamplePromise
       .then(async (sampleResult) => {
         if (ac.signal.aborted) return;
         // Feature #210 — "try first, then ask" via IN-MEMORY generated props.
-        // Skip UI primitives (synthetic compound scaffold already renders them and
-        // spreading event-like fallback props into them triggers React warnings).
         // Unlike the old source-mutation path, this is NOT gated on
         // autoSampleGeneration — generated values are injected at render through the
         // preview bridge and never written to disk, so they survive `git checkout`
         // between E2E specs. Posting happens BEFORE ensureComponent (which writes the
         // preview file and triggers the iframe render) so the webview global is set
         // when the component first renders.
-        if (!isPrimitive) {
-          // componentService is repo-rooted → parse the prop schema with the
-          // repo-relative componentPath. The iframe keys generated props by the
-          // sub-project-relative path (HYP-420) — the same value that lands in the
-          // `?component=` URL and the preview registry — so pass relativePath as the
-          // previewKey; keying by componentPath would make the iframe lookup miss.
-          const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
-          if (previewPanel && shouldInjectGeneratedProps(sampleResult, props)) {
-            await previewPanel.injectGeneratedSampleProps(componentPath, relativePath);
-          }
+        // componentService is repo-rooted → parse the prop schema with the
+        // repo-relative componentPath. The iframe keys generated props by the
+        // sub-project-relative path (HYP-420) — the same value that lands in the
+        // `?component=` URL and the preview registry — so pass relativePath as the
+        // previewKey; keying by componentPath would make the iframe lookup miss.
+        const props = await panelRouter?.componentService.getComponentDefinitions(componentPath);
+        const primitiveSampleInfo = await primitiveSampleInfoPromise;
+        if (previewPanel && shouldInjectGeneratedPropsForSelection(sampleResult, props, primitiveSampleInfo)) {
+          await previewPanel.injectGeneratedSampleProps(componentPath, relativePath);
         }
         // 2. Ensure component is registered in __canvas_preview__.tsx (deterministic).
-        // For UI primitives this is what bakes the syntheticSampleDefault into the registry.
+        // For UI primitives this registers plain components and bakes syntheticSampleDefault
+        // into the registry when compound synthesis is available.
         return previewManager.ensureComponent([relativePath]);
       })
       .then(async () => {

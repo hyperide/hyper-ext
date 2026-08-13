@@ -148,6 +148,19 @@ describe('buildExtensionSamplePrompt (HYP-795: extension runs the shared framewo
     expect(prompt).toContain('DO NOT import the component itself');
   });
 
+  it('passes deterministic prop baseline context into the extension prompt', async () => {
+    const prompt = await buildExtensionSamplePrompt(io, undefined, sourceCode, 'SampleDefault', {
+      deterministicProps: {
+        values: { title: 'Sample title' },
+        unsatisfied: ['data'],
+      },
+    });
+
+    expect(prompt).toContain('DETERMINISTIC PROP BASELINE');
+    expect(prompt).toContain('"title": "Sample title"');
+    expect(prompt).toContain('"data"');
+  });
+
   it('falls back to the base prompt when the project has no detectable framework', async () => {
     const root = makeFixture({ 'package.json': JSON.stringify({ dependencies: { lodash: '4' } }) });
     const prompt = await buildExtensionSamplePrompt(io, root, sourceCode, 'SampleDefault');

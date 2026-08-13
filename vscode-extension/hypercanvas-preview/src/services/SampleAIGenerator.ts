@@ -19,6 +19,7 @@ import {
   buildFrameworkInstructions,
   buildSamplePrompt,
   extractCodeFromAIResponse,
+  type BuildSamplePromptOptions,
   type SampleGeneratorFn,
 } from '@lib/preview-generator';
 import { detectFramework } from '@lib/preview-generator/framework-routing';
@@ -39,6 +40,7 @@ export async function buildExtensionSamplePrompt(
   projectRoot: string | undefined,
   sourceCode: string,
   sampleName: string,
+  options?: BuildSamplePromptOptions,
 ): Promise<string> {
   let frameworkInstructions: string | undefined;
   if (projectRoot) {
@@ -49,7 +51,7 @@ export async function buildExtensionSamplePrompt(
       console.warn('[SampleAI] Framework detection failed, building prompt without it:', error);
     }
   }
-  return buildSamplePrompt(sourceCode, sampleName, frameworkInstructions);
+  return buildSamplePrompt(sourceCode, sampleName, frameworkInstructions, options);
 }
 
 /** Options for {@link createExtensionSampleGenerator}; both default to a real workspace lookup. */
@@ -58,6 +60,8 @@ export interface ExtensionSampleGeneratorOptions {
   getProjectRoot?: () => string | undefined;
   /** FileIO used for framework detection. Defaults to VSCodeFileIO. Injectable for tests. */
   io?: FileIO;
+  /** Extra prompt context, such as deterministic generated props already tried by the preview. */
+  promptOptions?: BuildSamplePromptOptions;
 }
 
 /**
@@ -97,7 +101,7 @@ export function createExtensionSampleGenerator(
 
     const projectRoot = options?.getProjectRoot?.() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const io = options?.io ?? new VSCodeFileIO();
-    const prompt = await buildExtensionSamplePrompt(io, projectRoot, sourceCode, sampleName);
+    const prompt = await buildExtensionSamplePrompt(io, projectRoot, sourceCode, sampleName, options?.promptOptions);
 
     try {
       const text = await callAI(resolved, prompt);

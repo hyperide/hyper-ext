@@ -5,7 +5,7 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { ensureSample } from '@lib/preview-generator';
+import { ensureSample, generateSamplePropValues } from '@lib/preview-generator';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
 import { VSCodeFileIO } from './vscode-file-io';
 import { extractComponentName } from '../../../lib/preview-generator/scanner';
@@ -131,6 +131,7 @@ export async function handleCreateSampleFromError(
     const hasRequiredProps = propDefs?.some((p) => p.required) ?? false;
 
     if (hasRequiredProps) {
+      const deterministicProps = propDefs ? generateSamplePropValues(propDefs, { componentName }) : undefined;
       const apiKey = await deps.context.secrets.get('hypercanvas.ai.apiKey');
       if (apiKey) {
         const aiGenerated = await ensureSample({
@@ -138,7 +139,7 @@ export async function handleCreateSampleFromError(
           absolutePath: absPath,
           componentName,
           sampleName: exportName,
-          generate: createExtensionSampleGenerator(deps.context),
+          generate: createExtensionSampleGenerator(deps.context, { promptOptions: { deterministicProps } }),
         });
         if (aiGenerated.exists) {
           sampleWrittenByAI = true;

@@ -7,6 +7,31 @@
  * `buildFrameworkInstructions`. (HYP-795 — the extension has workspace FS access too.)
  */
 
+import type { SamplePropValuesResult } from './sample-values';
+
+export interface BuildSamplePromptOptions {
+  deterministicProps?: SamplePropValuesResult;
+}
+
+function deterministicPropReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === 'function') return '() => {}';
+  return value;
+}
+
+function buildDeterministicPropsBlock(result: SamplePropValuesResult | undefined): string {
+  if (!result) return '';
+  return `DETERMINISTIC PROP BASELINE:
+The preview already tried these generated prop values. Refine them when useful, and do not invent
+values for unsatisfied required props without enough type information.
+${JSON.stringify(result, deterministicPropReplacer, 2)}`;
+}
+
+function buildContextBlock(blocks: Array<string | undefined>): string {
+  const present = blocks.filter((block): block is string => Boolean(block));
+  if (present.length === 0) return '';
+  return `\n${present.join('\n\n')}\n`;
+}
+
 /**
  * Build a prompt for AI to generate a Sample* component.
  * The base prompt covers React/TypeScript conventions, structure rules,
@@ -17,8 +42,14 @@
  *   `buildFrameworkInstructions` — instructions for Next.js App/Pages Router, React Router,
  *   Remix, Solito. Omitted only when no project root is resolvable (graceful base-prompt fallback).
  */
-export function buildSamplePrompt(sourceCode: string, sampleName: string, frameworkInstructions?: string): string {
-  const frameworkBlock = frameworkInstructions ? `\n${frameworkInstructions}\n` : '';
+export function buildSamplePrompt(
+  sourceCode: string,
+  sampleName: string,
+  frameworkInstructions?: string,
+  options?: BuildSamplePromptOptions,
+): string {
+  const deterministicPropsBlock = buildDeterministicPropsBlock(options?.deterministicProps);
+  const contextBlock = buildContextBlock([deterministicPropsBlock, frameworkInstructions]);
 
   return `Analyze this React/TypeScript component and generate a ${sampleName} component.
 
@@ -50,7 +81,7 @@ Requirements:
    - For Modal/Dialog/Sheet/Drawer: set open={true} and include content
    - For Viewport/Portal: include sample items that would appear inside
    - For Provider: wrap child components that demonstrate the context value
-${frameworkBlock}
+${contextBlock}
 FORBIDDEN:
 - NO jest.mock(), vitest.mock(), or any test mocking utilities
 - NO \`as jest.Mock\`, \`as Mock\`, or any type assertions to Mock types
