@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ParsedStyles } from '@/lib/canvas-engine/adapters/types';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 import type { EffectItem, StrokeItem } from '../types';
@@ -53,6 +53,14 @@ interface UsePopulateStyleStateDeps {
 }
 
 export function usePopulateStyleState(deps: UsePopulateStyleStateDeps) {
+  // Track previous selectedId to detect when the user has switched to a different
+  // element. When selectedId changes, parsedStyles still holds the previous element's
+  // data for this render cycle — useElementStyleData's setData fires in the same
+  // effects batch but its setState won't apply until the next render. Clearing on a
+  // genuine selection transition prevents the inspector from briefly showing stale
+  // values from the old element.
+  const prevSelectedIdRef = useRef<string | null>(null);
+
   const {
     selectedId,
     parsedStyles,
@@ -102,7 +110,18 @@ export function usePopulateStyleState(deps: UsePopulateStyleStateDeps) {
   } = deps;
 
   useEffect(() => {
-    if (!selectedId || !parsedStyles) {
+    // A genuine element-to-element transition: prevRef is non-null (not the initial mount)
+    // and selectedId has changed to a different value. On initial mount prevRef is null, so
+    // the first selection is not treated as a transition — parsedStyles is correct there.
+    const selectionChanged = prevSelectedIdRef.current !== null && prevSelectedIdRef.current !== selectedId;
+    prevSelectedIdRef.current = selectedId;
+
+    // Clear when: no element selected, no styles yet, OR selection just changed to a new element.
+    // The selectionChanged case is the stale-data guard: parsedStyles still carries the previous
+    // element's values in this render cycle (useElementStyleData's setData fires in the same
+    // effects batch but its setState won't apply until the next render). The populate branch
+    // runs on the next render, after useElementStyleData has delivered the new element's data.
+    if (!selectedId || !parsedStyles || selectionChanged) {
       setSelectedPosition('static');
       setPosTop('');
       setPosRight('');
