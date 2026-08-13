@@ -1382,10 +1382,13 @@ export default function RightSidebar({
         !componentPath &&
         explorerVisible !== true &&
         componentGroups &&
-        (componentGroups.atomGroups.length > 0 || componentGroups.compositeGroups.length > 0) && (
+        (componentGroups.atomGroups.length > 0 ||
+          componentGroups.compositeGroups.length > 0 ||
+          componentGroups.pageGroups.length > 0) && (
           <ComponentQuickList
             atomGroups={componentGroups.atomGroups}
             compositeGroups={componentGroups.compositeGroups}
+            pageGroups={componentGroups.pageGroups}
             onComponentClick={onComponentClick}
           />
         )}

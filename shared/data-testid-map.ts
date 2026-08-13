@@ -81,6 +81,9 @@ export const TID = {
     letterSpacing: 'hyper-inspector-letter-spacing',
     // State selector
     stateSelect: 'hyper-inspector-state-select',
+    // Component quick-list (fallback shown when Explorer is hidden + no component open)
+    componentQuickList: 'hyper-inspector-component-quick-list',
+    quickListItem: (name: string) => `hyper-inspector-quick-component-${name}`,
     // Header
     componentName: 'hyper-inspector-component-name',
     goToMasterComponent: 'hyper-inspector-go-to-master-component',

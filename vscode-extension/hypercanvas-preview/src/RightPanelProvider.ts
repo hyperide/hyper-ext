@@ -11,6 +11,7 @@
 import * as vscode from 'vscode';
 import type { LeftPanelProvider } from './LeftPanelProvider';
 import type { PanelRouter } from './PanelRouter';
+import { toPickerGroups } from './PreviewPanel';
 import type { StateHub } from './StateHub';
 import type { ScanResult } from './services/ComponentService';
 import type { ProjectCapabilities } from './types';
@@ -136,6 +137,11 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     // through the safe poster so a disposed view is a no-op, not a worker-poisoning throw.
     this._leftPanelProvider?.onVisibilityChange((visible) => {
       this._postToWebview({ type: 'inspector:explorerVisible', visible });
+      // When the Explorer collapses, the Inspector's ComponentQuickList becomes the active
+      // UI for picking a component. Component groups are otherwise pushed only once on
+      // `webview:ready`; refresh here so the list is fresh+complete (and recovers from a
+      // cold/empty scan at mount) exactly when it is about to be shown.
+      if (!visible) this._sendComponentGroups();
     });
 
     // Broadcast THIS panel's visibility to the PreviewPanel aggregator (#92). onDidChangeVisibility
@@ -195,10 +201,14 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     try {
       const result = await this._getComponentGroups();
       // The view can be disposed across the await above — post through the safe poster.
+      // `toPickerGroups` folds monorepo sub-project page groups into the flat `pageGroups`
+      // (the scanner leaves flat `pageGroups: []` for monorepos to avoid double-render in the
+      // SaaS PagesSection). The Inspector quick-list is a single flat list like the canvas
+      // picker, so it must fold them too — otherwise monorepo pages stay unreachable here.
+      // Shared with the canvas picker (PreviewPanel) so both lists agree (HYP-772/#535).
       this._postToWebview({
         type: 'inspector:componentGroups',
-        atomGroups: result.data.atomGroups,
-        compositeGroups: result.data.compositeGroups,
+        ...toPickerGroups(result.data),
       });
     } catch (e) {
       console.error('[RightPanel] Failed to load component groups:', e);

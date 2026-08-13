@@ -28,6 +28,7 @@ import type { ProjectCapabilities } from '../types';
 interface ComponentGroupsData {
   atomGroups: ComponentGroup[];
   compositeGroups: ComponentGroup[];
+  pageGroups: ComponentGroup[];
 }
 
 export function RightPanelApp() {
@@ -97,6 +98,7 @@ function RightPanelContent() {
         setComponentGroups({
           atomGroups: data.atomGroups ?? [],
           compositeGroups: data.compositeGroups ?? [],
+          pageGroups: data.pageGroups ?? [],
         });
       }
       if (data.type === 'inspector:explorerVisible') {

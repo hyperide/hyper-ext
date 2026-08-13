@@ -1,19 +1,24 @@
+import { TID } from '@shared/data-testid-map';
 import type { ComponentGroup } from '../../../lib/component-scanner/types';
 
 interface Props {
   atomGroups: ComponentGroup[];
   compositeGroups: ComponentGroup[];
+  pageGroups?: ComponentGroup[];
   onComponentClick?: (name: string, path: string) => void;
 }
 
-export function ComponentQuickList({ atomGroups, compositeGroups, onComponentClick }: Props) {
+export function ComponentQuickList({ atomGroups, compositeGroups, pageGroups = [], onComponentClick }: Props) {
   return (
-    <div className="px-3 pb-4 space-y-3">
+    <div data-testid={TID.inspector.componentQuickList} className="px-3 pb-4 space-y-3">
       {atomGroups.length > 0 && (
         <ComponentGroupSection title="Atoms" groups={atomGroups} onComponentClick={onComponentClick} />
       )}
       {compositeGroups.length > 0 && (
         <ComponentGroupSection title="Composite" groups={compositeGroups} onComponentClick={onComponentClick} />
+      )}
+      {pageGroups.length > 0 && (
+        <ComponentGroupSection title="Pages" groups={pageGroups} onComponentClick={onComponentClick} />
       )}
     </div>
   );
@@ -37,6 +42,7 @@ function ComponentGroupSection({
             <button
               key={comp.path}
               type="button"
+              data-testid={TID.inspector.quickListItem(comp.name)}
               className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors text-foreground truncate"
               onClick={() => onComponentClick?.(comp.name, comp.path)}
               title={comp.path}

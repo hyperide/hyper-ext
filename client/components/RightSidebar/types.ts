@@ -23,6 +23,7 @@ export interface RightSidebarProps {
   componentGroups?: {
     atomGroups: ComponentGroup[];
     compositeGroups: ComponentGroup[];
+    pageGroups: ComponentGroup[];
   } | null;
   /** Whether the Explorer sidebar is currently visible */
   explorerVisible?: boolean;

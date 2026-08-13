@@ -505,7 +505,9 @@ describe('RightPanelProvider reuse-after-dispose guard', () => {
 
     const sendPromise = provider._sendComponentGroups();
     // Resolve the scan only now — the post fires here, against the disposed view.
-    resolveScan({ data: { atomGroups: [], compositeGroups: [] } });
+    // `pageGroups: []` keeps the stub conformant with ComponentsData (required field);
+    // `_sendComponentGroups` folds it through `toPickerGroups`, which spreads pageGroups.
+    resolveScan({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] } });
 
     await expect(sendPromise).resolves.toBeUndefined();
     expect(provider._view).toBeUndefined();
