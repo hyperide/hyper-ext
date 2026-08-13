@@ -183,7 +183,7 @@ export class ComponentService {
         containerComponentPath: null,
       };
     });
-    const data = await scanner.getComponentsData(this._workspaceRoot);
+    const data = await scanner.getComponentsDataWithAncestorFallback(this._workspaceRoot);
 
     const isEmpty = data.atomGroups.length === 0 && data.compositeGroups.length === 0 && data.pageGroups.length === 0;
 

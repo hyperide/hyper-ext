@@ -200,6 +200,65 @@ describe('PanelRouter', () => {
     );
   });
 
+  // HYP-909 follow-up (review-diff on #622): getComponentGroups() must be the
+  // single place that threads ComponentsData.monorepoRoot into AstBridge (→
+  // UndoRedoService), on EVERY scan — both widening when a monorepoRoot is
+  // present and narrowing back to null when it isn't (a stale root from a
+  // previous scan must not survive a scan that no longer needs one).
+  describe('getComponentGroups → AstBridge additional-workspace-root wiring', () => {
+    it('threads monorepoRoot from a scan into AstBridge.setAdditionalWorkspaceRoot', async () => {
+      const setAdditionalWorkspaceRootSpy = mock();
+      router.astBridge.setAdditionalWorkspaceRoot = setAdditionalWorkspaceRootSpy;
+      (router.componentService.scanComponentGroups as ReturnType<typeof mock>).mockImplementationOnce(() =>
+        Promise.resolve({
+          data: { atomGroups: [], compositeGroups: [], pageGroups: [], monorepoRoot: '/monorepo' },
+          needsSetup: false,
+        }),
+      );
+
+      await router.getComponentGroups();
+
+      expect(setAdditionalWorkspaceRootSpy).toHaveBeenCalledWith('/monorepo');
+    });
+
+    it('narrows back to null when a later scan has no monorepoRoot', async () => {
+      const setAdditionalWorkspaceRootSpy = mock();
+      router.astBridge.setAdditionalWorkspaceRoot = setAdditionalWorkspaceRootSpy;
+      (router.componentService.scanComponentGroups as ReturnType<typeof mock>)
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            data: { atomGroups: [], compositeGroups: [], pageGroups: [], monorepoRoot: '/monorepo' },
+            needsSetup: false,
+          }),
+        )
+        .mockImplementationOnce(() =>
+          Promise.resolve({ data: { atomGroups: [], compositeGroups: [], pageGroups: [] }, needsSetup: false }),
+        );
+
+      await router.getComponentGroups();
+      await router.getComponentGroups();
+
+      expect(setAdditionalWorkspaceRootSpy).toHaveBeenNthCalledWith(1, '/monorepo');
+      expect(setAdditionalWorkspaceRootSpy).toHaveBeenNthCalledWith(2, null);
+    });
+
+    it('also threads through the component:listGroups message path', async () => {
+      const setAdditionalWorkspaceRootSpy = mock();
+      router.astBridge.setAdditionalWorkspaceRoot = setAdditionalWorkspaceRootSpy;
+      (router.componentService.scanComponentGroups as ReturnType<typeof mock>).mockImplementationOnce(() =>
+        Promise.resolve({
+          data: { atomGroups: [], compositeGroups: [], pageGroups: [], monorepoRoot: '/monorepo' },
+          needsSetup: false,
+        }),
+      );
+      const wv = createMockWebview();
+
+      await router.routeMessage({ type: 'component:listGroups', requestId: 'r1' }, wv as never);
+
+      expect(setAdditionalWorkspaceRootSpy).toHaveBeenCalledWith('/monorepo');
+    });
+  });
+
   it('routes file:read and returns file content', async () => {
     const wv = createMockWebview();
     await router.routeMessage({ type: 'file:read', requestId: 'r2', filePath: 'src/App.tsx' }, wv as never);

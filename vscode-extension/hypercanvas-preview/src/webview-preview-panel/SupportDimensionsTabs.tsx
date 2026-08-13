@@ -1,10 +1,17 @@
 /**
- * Support-dimension tabs for the VS Code preview panel (HYP-788).
+ * Support-dimension table (+ tabs when there is more than one) for the VS Code preview
+ * panel (HYP-788, HYP-905 cleanup).
  *
  * Accessed via: PreviewPanelApp — rendered when the currently-open repo (or the active
  * monorepo sub-repo) has one or more BLOCKING support dimensions (unsupported |
- * needs-setup). One tab per dimension; each tab is a TABLE of WHY (reason + evidence rows),
- * plus an optional Fix action for auto-fixable needs-setup dimensions (react-native-web).
+ * needs-setup). This is the SAME "why is this project not supported" table surface as
+ * before HYP-788 — a single dimension renders the table with no tab bar (there is
+ * nothing to switch between); a tab bar is added ONLY when there is more than one
+ * blocking dimension to choose from. Each panel is a TABLE of WHY (reason + evidence
+ * rows), plus an optional Fix action for auto-fixable needs-setup dimensions
+ * (react-native-web). The heading is always the active dimension's own concrete
+ * `reason` string (e.g. "Vue.js projects not supported") — never a generic
+ * "needs attention"-style placeholder that doesn't say what's actually wrong.
  *
  * Scope: the active (sub-)repo ONLY — the canvas does NOT crawl the whole monorepo (that
  * traversal is a separate capture tool, explicitly NOT this feature). CSS-in-JS / inspect-only
@@ -45,24 +52,24 @@ export function SupportDimensionsTabs({
   if (dimensions.length === 0) return null;
 
   const active = dimensions.find((d) => d.id === activeId) ?? dimensions[0];
+  const hasTabs = dimensions.length > 1;
 
   return (
     <div data-testid={TID.preview.supportTabsRoot} style={rootStyle}>
-      <div style={headerStyle}>
-        <h2 style={headingStyle}>This project needs attention</h2>
-        <p style={subtextStyle}>
-          HyperIDE checks each project across several dimensions. The tabs below show where the currently-open project
-          is not yet fully supported, and why.
-        </p>
-      </div>
+      {/* Tabs only make sense when there's more than one dimension to switch between —
+          a single blocking dimension renders straight to its table, same as the
+          pre-HYP-788 single-message screen. */}
+      {hasTabs && (
+        <div role="tablist" style={tabBarStyle}>
+          {dimensions.map((d) => (
+            <DimensionTab key={d.id} dimension={d} active={d.id === active.id} onSelect={() => setActiveId(d.id)} />
+          ))}
+        </div>
+      )}
 
-      <div role="tablist" style={tabBarStyle}>
-        {dimensions.map((d) => (
-          <DimensionTab key={d.id} dimension={d} active={d.id === active.id} onSelect={() => setActiveId(d.id)} />
-        ))}
-      </div>
-
-      <DimensionPanel dimension={active} onFix={onFix} />
+      {/* codex review: role="tabpanel" is only valid ARIA when a tablist actually
+          owns it — an orphaned tabpanel with no tabs confuses assistive tech. */}
+      <DimensionPanel dimension={active} onFix={onFix} asTabPanel={hasTabs} />
     </div>
   );
 }
@@ -99,12 +106,19 @@ function DimensionTab({
 function DimensionPanel({
   dimension,
   onFix,
+  asTabPanel,
 }: {
   dimension: SupportDimension;
   onFix?: (dimensionId: SupportDimension['id']) => void;
+  /** Only apply tabpanel ARIA semantics when a tablist is actually present (HYP-905). */
+  asTabPanel: boolean;
 }) {
   return (
-    <div role="tabpanel" data-testid={TID.preview.supportTabPanel(dimension.id)} style={panelStyle}>
+    <div
+      role={asTabPanel ? 'tabpanel' : undefined}
+      data-testid={TID.preview.supportTabPanel(dimension.id)}
+      style={panelStyle}
+    >
       <div style={statusRowStyle}>
         <span style={{ ...statusBadgeStyle, color: STATUS_COLOR[dimension.status] }}>
           {STATUS_LABEL[dimension.status]}
@@ -151,12 +165,6 @@ const rootStyle: React.CSSProperties = {
   overflow: 'auto',
 };
 
-const headerStyle: React.CSSProperties = { marginBottom: 12 };
-
-const headingStyle: React.CSSProperties = { margin: '0 0 6px 0', fontSize: 16, fontWeight: 600 };
-
-const subtextStyle: React.CSSProperties = { margin: 0, fontSize: 12, opacity: 0.75, maxWidth: 520 };
-
 const tabBarStyle: React.CSSProperties = {
   display: 'flex',
   gap: 4,
@@ -195,7 +203,9 @@ const statusBadgeStyle: React.CSSProperties = {
   letterSpacing: 0.5,
 };
 
-const reasonStyle: React.CSSProperties = { fontSize: 14, fontWeight: 500 };
+// The reason string doubles as this panel's heading now that the generic
+// "needs attention" header is gone — sized like one (HYP-905).
+const reasonStyle: React.CSSProperties = { fontSize: 16, fontWeight: 600 };
 
 const tableStyle: React.CSSProperties = {
   borderCollapse: 'collapse',

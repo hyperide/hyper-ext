@@ -59,6 +59,69 @@ describe('UndoRedoService', () => {
     });
   });
 
+  // HYP-909 follow-up (codex review #622): the Explorer's ancestor-monorepo fallback
+  // can surface a sibling sub-project living outside the opened folder (VS Code opened
+  // at a leaf package, e.g. packages/cms-spa, with a monorepo ancestor discovered).
+  // Editing that sibling resolves to an absolute path outside `_workspaceRoot` by
+  // design; setAdditionalWorkspaceRoot widens the boundary so its undo snapshot isn't
+  // silently dropped.
+  describe('setAdditionalWorkspaceRoot', () => {
+    it('rejects a sibling path with no additional root set (baseline)', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.recordEdit('/monorepo/packages/sibling/src/App.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('accepts a path under the additional root once set', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('/monorepo');
+      svc.recordEdit('/monorepo/packages/sibling/src/App.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(true);
+    });
+
+    it('still accepts the original workspace root after an additional root is set', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('/monorepo');
+      svc.recordEdit('/workspace/src/a.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(true);
+    });
+
+    it('still rejects paths outside BOTH roots', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('/monorepo');
+      svc.recordEdit('/other/src/a.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('narrows back to just the workspace root when reset to null', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('/monorepo');
+      svc.setAdditionalWorkspaceRoot(null);
+      svc.recordEdit('/monorepo/packages/sibling/src/App.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    // review-diff finding: an empty string additional root must NOT disable the
+    // workspace boundary — '' + path.sep === '/', which startsWith() matches on
+    // every absolute POSIX path.
+    it('treats an empty-string additional root as no additional root (does not disable the boundary)', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('');
+      svc.recordEdit('/anywhere/else/a.tsx', 'before', 'after');
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('recordBatchEdit also honors the additional root', () => {
+      const svc = new UndoRedoService(workspaceRoot);
+      svc.setAdditionalWorkspaceRoot('/monorepo');
+      svc.recordBatchEdit([
+        { filePath: '/monorepo/packages/sibling/a.tsx', contentBefore: 'a', contentAfter: 'a2' },
+        { filePath: '/workspace/src/b.tsx', contentBefore: 'b', contentAfter: 'b2' },
+      ]);
+      expect(svc.canUndo()).toBe(true);
+    });
+  });
+
   describe('canUndo / canRedo', () => {
     it('both false on fresh instance', () => {
       const svc = new UndoRedoService(workspaceRoot);

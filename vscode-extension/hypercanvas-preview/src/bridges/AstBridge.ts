@@ -88,6 +88,19 @@ export class AstBridge {
     this._subProjectPrefix = prefix;
   }
 
+  /**
+   * Widen the undo/redo workspace boundary to also accept paths under `root`
+   * (or narrow back to just the opened folder with null). Set from
+   * ComponentsData.monorepoRoot whenever the Explorer's ancestor-fallback scan
+   * surfaces sibling sub-projects living outside the opened leaf folder — those
+   * sibling paths resolve outside `_workspaceRoot` by design, and without this
+   * the undo/redo snapshot for editing them was silently rejected (HYP-909
+   * follow-up).
+   */
+  setAdditionalWorkspaceRoot(root: string | null): void {
+    this._undoRedoService.setAdditionalWorkspaceRoot(root);
+  }
+
   async handleMessage(message: AstMessage, targetWebview?: vscode.Webview): Promise<void> {
     // Path re-rooting for monorepo sub-projects happens upstream in
     // PanelRouter.routeMessage (the single ingress for ast:/editor:/styles:),

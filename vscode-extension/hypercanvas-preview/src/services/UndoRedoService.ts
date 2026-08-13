@@ -35,10 +35,33 @@ export class UndoRedoService {
   // best, or replay a stale entry at worst.
   private _trackingCount = 0;
 
+  // Extra root accepted alongside `_workspaceRoot`. Set when the Explorer's
+  // ancestor-monorepo fallback surfaces sibling sub-projects that live outside
+  // the opened folder (VS Code is opened at a leaf package, e.g.
+  // `packages/cms-spa`, but a monorepo ancestor was discovered). Those sibling
+  // component paths resolve to absolute paths outside `_workspaceRoot` by
+  // design — without this, `_isInWorkspace` rejected them, so editing a
+  // sibling component succeeded on disk but its undo snapshot was silently
+  // dropped (HYP-909 follow-up).
+  private _additionalWorkspaceRoot: string | null = null;
+
   constructor(private readonly _workspaceRoot: string) {}
 
+  /** Widen the workspace boundary to also accept paths under `root` (or narrow back with null). */
+  setAdditionalWorkspaceRoot(root: string | null): void {
+    // Treat '' the same as null: `_isWithinRoot('', ...)` would otherwise match
+    // every absolute POSIX path (`startsWith('/')`), silently disabling the
+    // workspace-boundary check entirely.
+    this._additionalWorkspaceRoot = root || null;
+  }
+
   private _isInWorkspace(resolved: string): boolean {
-    return resolved.startsWith(this._workspaceRoot + path.sep) || resolved === this._workspaceRoot;
+    if (this._isWithinRoot(resolved, this._workspaceRoot)) return true;
+    return this._additionalWorkspaceRoot !== null && this._isWithinRoot(resolved, this._additionalWorkspaceRoot);
+  }
+
+  private _isWithinRoot(resolved: string, root: string): boolean {
+    return root.length > 0 && (resolved === root || resolved.startsWith(root + path.sep));
   }
 
   /** Record a single-file mutation. Clears redo stack (new edit branch). */

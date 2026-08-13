@@ -16,6 +16,7 @@ export interface ComponentsAPIResponse {
   pageGroups?: ComponentGroup[];
   isMonorepo?: boolean;
   subProjects?: SubProject[];
+  activeSubProjectPath?: string;
 }
 
 let inflightPromise: Promise<ComponentsAPIResponse> | null = null;

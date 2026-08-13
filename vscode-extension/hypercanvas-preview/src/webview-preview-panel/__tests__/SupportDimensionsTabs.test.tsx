@@ -133,4 +133,23 @@ describe('SupportDimensionsTabs', () => {
     const container = renderLocal(<SupportDimensionsTabs dimensions={[]} />);
     expect(findOptional(container, TID.preview.supportTabsRoot)).toBeNull();
   });
+
+  // HYP-905: a single blocking dimension is just the table — no tab bar, and no
+  // generic "needs attention" filler heading above it (Alex's original ask was
+  // "tabs only when there are several dimensions", not a new always-tabbed screen).
+  it('renders no tablist and no generic heading when there is only one dimension', () => {
+    const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim]} />);
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(findOptional(container, TID.preview.supportTab('framework'))).toBeNull();
+    expect(find(container, TID.preview.supportTabPanel('framework')).textContent).toContain(
+      'Vue.js projects not supported',
+    );
+    expect(container.textContent).not.toContain('needs attention');
+  });
+
+  it('renders a tablist when there is more than one dimension', () => {
+    const container = renderLocal(<SupportDimensionsTabs dimensions={[frameworkDim, bundlerDim]} />);
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('needs attention');
+  });
 });

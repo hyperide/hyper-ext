@@ -25,6 +25,7 @@ interface ComponentsSectionProps {
   setupReason?: SetupReason | null;
   isMonorepo?: boolean;
   subProjects?: SubProject[];
+  currentSubProjectPath?: string | null;
 }
 
 export function ComponentsSection({
@@ -43,6 +44,7 @@ export function ComponentsSection({
   onCreateComponent,
   isVSCode,
   setupReason,
+  currentSubProjectPath,
 }: ComponentsSectionProps) {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,6 +151,7 @@ export function ComponentsSection({
               loadingComponent={loadingComponent}
               onComponentClick={onComponentClick}
               searchQuery={searchQuery}
+              currentSubProjectPath={currentSubProjectPath}
             />
           ) : (
             <div className="flex flex-col gap-1 px-2">

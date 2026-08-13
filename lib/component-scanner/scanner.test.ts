@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ComponentScanner } from './scanner';
 import type { ProjectStructurePaths, ProjectStructureStore } from './types';
@@ -651,18 +652,14 @@ describe('ComponentScanner.detectProjectStructure', () => {
   });
 
   it('pages from src/app/ page-subdirs are in pageGroups, not compositeGroups (no double-listing, HYP-758)', async () => {
-    const root = createProject(
-      'vite-react-src-app-no-double',
-      ['src/app/auth', 'src/app/banners', 'src/app/ui'],
-      {
-        'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
-        'src/main.tsx': 'import App from "./app/App";',
-        'src/app/App.tsx': 'export default function App() { return <div/>; }',
-        'src/app/auth/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
-        'src/app/banners/OfflineBanner.tsx': 'export function OfflineBanner() { return <div/>; }',
-        'src/app/ui/HostField.tsx': 'export function HostField() { return <input/>; }',
-      },
-    );
+    const root = createProject('vite-react-src-app-no-double', ['src/app/auth', 'src/app/banners', 'src/app/ui'], {
+      'package.json': '{"dependencies":{"react":"19","vite":"5"}}',
+      'src/main.tsx': 'import App from "./app/App";',
+      'src/app/App.tsx': 'export default function App() { return <div/>; }',
+      'src/app/auth/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'src/app/banners/OfflineBanner.tsx': 'export function OfflineBanner() { return <div/>; }',
+      'src/app/ui/HostField.tsx': 'export function HostField() { return <input/>; }',
+    });
 
     const scanner = new ComponentScanner(createMockStore(null));
     const result = await scanner.getComponentsData(root);
@@ -1187,6 +1184,485 @@ describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)'
     const webPageNames = webProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
     // Root-level pages/ discovered even though src/ exists, exactly once.
     expect(webPageNames.filter((n) => n.includes('About'))).toHaveLength(1);
+  });
+
+  // HYP-908: the sub-project scan (WORKSPACE_MEMBER_DIRS, isMonorepoRoot, the
+  // src/app/** + *Page/*Screen conventions) must be a GENERIC convention detector,
+  // not something tuned to conloca's specific names/paths. These cases deliberately
+  // avoid every conloca-flavored name (no "conloca", "ConlocaCard", etc.) and cover
+  // monorepo shapes + workspace-dir names the existing suite didn't exercise yet:
+  // Turborepo (not Nx/pnpm), and the libs/ + services/ directory names from
+  // WORKSPACE_MEMBER_DIRS that no prior test touched.
+  it('Turborepo with libs/ + services/: generic non-React backend excluded, React lib included', async () => {
+    const root = createSubprojProject('turbo-libs-services', {
+      'turbo.json': '{}',
+      'package.json': '{"devDependencies":{"turbo":"2"}}',
+      'libs/design-kit/package.json': '{"dependencies":{"react":"19"}}',
+      'libs/design-kit/src/Avatar.tsx': 'export function Avatar() { return <div/>; }',
+      'libs/design-kit/src/components/Tooltip.tsx': 'export function Tooltip() { return <div/>; }',
+      'services/billing-api/package.json': '{"dependencies":{"fastify":"4"}}',
+      'services/billing-api/src/server.ts': 'export const app = {};',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+
+    const designKit = result.subProjects?.find((p) => p.name === 'design-kit');
+    expect(designKit).toBeDefined();
+    expect(designKit!.supported).toBe(true);
+    // Bucketing between pages/composites/atoms for a bare top-level src/*.tsx file is
+    // a separate, already-pinned concern (HYP-395); this test is only about libs/ +
+    // services/ as workspace-dir names, so check across all three groups.
+    const designKitNames = [
+      ...designKit!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...designKit!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...designKit!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(designKitNames.some((n) => n.includes('Avatar'))).toBe(true);
+    expect(designKitNames.some((n) => n.includes('Tooltip'))).toBe(true);
+
+    const billingApi = result.subProjects?.find((p) => p.name === 'billing-api');
+    expect(billingApi).toBeDefined();
+    expect(billingApi!.supported).toBe(false);
+  });
+
+  // Lerna signal (lerna.json) — the fourth isMonorepoRoot marker, previously only
+  // exercised for detectProjectStructure, never for the full sub-project grouping flow.
+  it('Lerna workspace (lerna.json): sub-projects grouped same as Nx/Turbo/pnpm', async () => {
+    const root = createSubprojProject('lerna-packages', {
+      'lerna.json': '{"version":"independent"}',
+      'package.json': '{}',
+      'packages/storefront/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/storefront/src/CheckoutPage.tsx': 'export default function CheckoutPage() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+    const storefront = result.subProjects?.find((p) => p.name === 'storefront');
+    expect(storefront).toBeDefined();
+    expect(storefront!.supported).toBe(true);
+    const pageNames = storefront!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    expect(pageNames).toContain('CheckoutPage.tsx');
+  });
+
+  // Same src/app/** feature-hub + *Page/*Screen-suffix conventions the conloca
+  // fixtures pin (HYP-419/758), but on an unrelated app name/component names —
+  // proves the convention detector isn't keyed to conloca's identifiers.
+  it('non-conloca app target: src/app/** feature-hub + *Page/*Screen suffix generalizes', async () => {
+    const root = createSubprojProject('generic-feature-hub', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'apps/dashboard/package.json': '{"dependencies":{"react":"19"}}',
+      'apps/dashboard/src/main.tsx': 'import App from "./app/App";',
+      'apps/dashboard/src/app/App.tsx': 'export default function App() { return <div/>; }',
+      // billing/ has a *Page-suffixed file → promoted to pages, same rule as HYP-758
+      'apps/dashboard/src/app/billing/InvoiceListPage.tsx': 'export function InvoiceListPage() { return <div/>; }',
+      // reports/ has no *Page/*Screen file → stays a composite, same rule as HYP-758
+      'apps/dashboard/src/app/reports/ReportsWidget.tsx': 'export function ReportsWidget() { return <div/>; }',
+      // ui/ → atoms, same convention as HYP-419
+      'apps/dashboard/src/app/ui/IconButton.tsx': 'export function IconButton() { return <button/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+    const dashboard = result.subProjects?.find((p) => p.name === 'dashboard');
+    expect(dashboard).toBeDefined();
+    expect(dashboard!.supported).toBe(true);
+
+    const pageNames = dashboard!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    const compositeNames = dashboard!.compositeGroups.flatMap((g) => g.components.map((c) => c.name));
+    const atomNames = dashboard!.atomGroups.flatMap((g) => g.components.map((c) => c.name));
+
+    expect(pageNames).toContain('InvoiceListPage.tsx');
+    // Page-suffix file must NOT be double-listed in composites (no double-listing).
+    expect(compositeNames).not.toContain('InvoiceListPage.tsx');
+    expect(compositeNames).toContain('reports/ReportsWidget.tsx');
+    expect(atomNames).toContain('IconButton.tsx');
+  });
+
+  it('ancestor fallback: opening a direct sub-package scans the monorepo root and marks it active', async () => {
+    const root = createSubprojProject('ancestor-direct-nx', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/portal/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/portal/src/App.tsx': 'export function App() { return <div/>; }',
+      'packages/library/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/library/src/components/Card.tsx': 'export function Card() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'portal');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.activeSubProjectPath).toBe(path.join('packages', 'portal'));
+    expect(result.subProjects?.map((sp) => sp.path)).toContain(result.activeSubProjectPath);
+  });
+
+  it('ancestor fallback: rebases returned component paths to the opened sub-package root', async () => {
+    const root = createSubprojProject('ancestor-path-rebase-nx', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/cms-spa-shaped/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/cms-spa-shaped/src/HomePage.tsx': 'export function HomePage() { return <div/>; }',
+      'packages/cms-spa-shaped/src/components/Banner.tsx': 'export function Banner() { return <div/>; }',
+      'packages/mdx-shaped/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/mdx-shaped/src/DocPage.tsx': 'export function DocPage() { return <div/>; }',
+      'packages/mdx-shaped/src/components/MdxCard.tsx': 'export function MdxCard() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'cms-spa-shaped');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    const allGroups = [
+      ...result.atomGroups,
+      ...result.compositeGroups,
+      ...result.pageGroups,
+      ...(result.subProjects ?? []).flatMap((sp) => [...sp.atomGroups, ...sp.compositeGroups, ...sp.pageGroups]),
+    ];
+    const returnedComponents = allGroups.flatMap((group) => group.components);
+    const expectedAbsolutePathByName = new Map([
+      ['HomePage.tsx', path.join(openedRoot, 'src', 'HomePage.tsx')],
+      ['Banner.tsx', path.join(openedRoot, 'src', 'components', 'Banner.tsx')],
+      ['DocPage.tsx', path.join(root, 'packages', 'mdx-shaped', 'src', 'DocPage.tsx')],
+      ['MdxCard.tsx', path.join(root, 'packages', 'mdx-shaped', 'src', 'components', 'MdxCard.tsx')],
+    ]);
+
+    expect(result.activeSubProjectPath).toBe(path.join('packages', 'cms-spa-shaped'));
+    expect(returnedComponents.length).toBeGreaterThanOrEqual(expectedAbsolutePathByName.size);
+
+    for (const group of allGroups) {
+      const resolvedDirPath = path.resolve(openedRoot, group.dirPath);
+      expect(fs.existsSync(resolvedDirPath)).toBe(true);
+      expect(fs.statSync(resolvedDirPath).isDirectory()).toBe(true);
+    }
+
+    for (const component of returnedComponents) {
+      const expectedAbsolutePath = expectedAbsolutePathByName.get(component.name);
+      expect(expectedAbsolutePath).toBeDefined();
+
+      const resolvedLikeComponentService = path.join(openedRoot, component.path);
+      expect(path.resolve(openedRoot, component.path)).toBe(expectedAbsolutePath);
+      expect(path.resolve(resolvedLikeComponentService)).toBe(expectedAbsolutePath);
+      expect(fs.existsSync(resolvedLikeComponentService)).toBe(true);
+    }
+
+    const cmsProject = result.subProjects?.find((sp) => sp.name === 'cms-spa-shaped');
+    const siblingProject = result.subProjects?.find((sp) => sp.name === 'mdx-shaped');
+    const ownBanner = cmsProject?.compositeGroups
+      .flatMap((group) => group.components)
+      .find((c) => c.name === 'Banner.tsx');
+    const siblingCard = siblingProject?.compositeGroups
+      .flatMap((group) => group.components)
+      .find((c) => c.name === 'MdxCard.tsx');
+
+    expect(ownBanner?.path).toBe(path.join('src', 'components', 'Banner.tsx'));
+    expect(siblingCard?.path).toBe(path.join('..', 'mdx-shaped', 'src', 'components', 'MdxCard.tsx'));
+    // HYP-909 follow-up (codex review #622): consumers that gate absolute file
+    // operations to the opened folder (e.g. the VS Code extension's
+    // UndoRedoService) must widen that boundary to also accept this root, since
+    // sibling component paths above (`../mdx-shaped/...`) resolve outside the
+    // opened folder by design.
+    expect(result.monorepoRoot).toBe(root);
+  });
+
+  it('ancestor fallback: monorepoRoot is absent when the opened folder already IS the monorepo root', async () => {
+    const root = createSubprojProject('ancestor-not-triggered', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/solo/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/solo/src/App.tsx': 'export function App() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(root);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.activeSubProjectPath).toBeUndefined();
+    expect(result.monorepoRoot).toBeUndefined();
+  });
+
+  it('ancestor fallback: opening a scoped package two levels below packages/ marks the scoped package active', async () => {
+    const root = createSubprojProject('ancestor-scoped-nx', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/acme/dashboard/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/acme/dashboard/src/DashboardPage.tsx': 'export function DashboardPage() { return <div/>; }',
+      'packages/shared-ui/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/shared-ui/src/components/Button.tsx': 'export function Button() { return <button/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'acme', 'dashboard');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.activeSubProjectPath).toBe(path.join('packages', 'acme', 'dashboard'));
+    const activeProject = result.subProjects?.find((sp) => sp.path === result.activeSubProjectPath);
+    expect(activeProject).toBeDefined();
+    expect(activeProject!.supported).toBe(true);
+    expect(activeProject!.pageGroups.flatMap((group) => group.components.map((component) => component.name))).toContain(
+      'DashboardPage.tsx',
+    );
+  });
+
+  // Regression: a scope/grouping folder's ONLY child directory can legitimately be named
+  // the same as one of the generic convention dirs (src/app/pages/etc) — e.g. an
+  // npm-scoped packages/@acme/app/. Detecting "is this a scope folder to recurse into"
+  // by conventional-dir PRESENCE (instead of its own package.json ABSENCE) misfired here:
+  // finding a directory named "app" made the scope folder itself look like a leaf package,
+  // so the scanner never recursed into it and @acme/app's real components were never found.
+  it('ancestor fallback: scope folder whose only child is named "app" still recurses (no leaf-package false positive)', async () => {
+    const root = createSubprojProject('ancestor-scoped-name-collision', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/@acme/app/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/@acme/app/src/App.tsx': 'export function App() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', '@acme', 'app');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.activeSubProjectPath).toBe(path.join('packages', '@acme', 'app'));
+    const activeProject = result.subProjects?.find((sp) => sp.path === result.activeSubProjectPath);
+    expect(activeProject).toBeDefined();
+    expect(activeProject!.supported).toBe(true);
+    const allNames = [
+      ...activeProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...activeProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...activeProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(allNames).toContain('App.tsx');
+  });
+
+  // Regression (codex review #622): a package.json-less package under packages/
+  // that is otherwise a supported source-only React project (checkSubProjectSupport's
+  // own fallback accepts bare .tsx files) must NOT be misread as a grouping/scope
+  // folder just because it holds its own `src/` — that mistook the package's OWN
+  // source folder for a nested sub-package named "src", scanned components scoped to
+  // `packages/no-manifest/src` instead of `packages/no-manifest`, and detectProjectStructureInScope
+  // then looked for `src/src`/`src/app` there, finding nothing: the real components
+  // vanished from the Explorer.
+  it('ancestor fallback: a source-only package (no package.json) is not misread as a scope folder', async () => {
+    const root = createSubprojProject('ancestor-source-only-leaf', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      // No package.json here — deliberately source-only, mirrors a package the
+      // existing checkSubProjectSupport() fallback already treats as supported.
+      'packages/no-manifest/src/components/Button.tsx': 'export function Button() { return <button/>; }',
+      'packages/sibling/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/sibling/src/App.tsx': 'export function App() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'no-manifest');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    // Must be registered as its own sub-project at its real path...
+    const ownProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'no-manifest'));
+    expect(ownProject).toBeDefined();
+    expect(ownProject!.supported).toBe(true);
+    const ownNames = [
+      ...ownProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...ownProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...ownProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(ownNames).toContain('Button.tsx');
+
+    // ...never as a bogus "src" sub-project standing in for it.
+    const bogusSrcProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'no-manifest', 'src'));
+    expect(bogusSrcProject).toBeUndefined();
+  });
+
+  // Regression (review-diff on #622's follow-up fix): a genuinely nested, manifest-less
+  // package whose OWN directory name collides with a generic convention name (here "app",
+  // same name as the earlier @acme/app collision fixture — but this one has NO package.json)
+  // must still be discovered as its own sub-project. An entryName-based rejection (an
+  // earlier attempt at this same fix) misread it as the scope's own source folder instead,
+  // reproducing the exact "components vanish" failure the fix was for — just one name over.
+  it('ancestor fallback: a scoped, manifest-less package named "app" is still discovered (not misread as the scope\'s own src)', async () => {
+    const root = createSubprojProject('ancestor-scoped-name-collision-no-manifest', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      // @acme's ONLY child is "app" — same generic-name collision as the @acme/app fixture
+      // above, except this one has NO package.json (source-only, checkSubProjectSupport's
+      // own fallback already treats it as supported).
+      'packages/@acme/app/src/App.tsx': 'export function App() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', '@acme', 'app');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    expect(result.activeSubProjectPath).toBe(path.join('packages', '@acme', 'app'));
+    const activeProject = result.subProjects?.find((sp) => sp.path === result.activeSubProjectPath);
+    expect(activeProject).toBeDefined();
+    expect(activeProject!.supported).toBe(true);
+    const allNames = [
+      ...activeProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...activeProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...activeProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(allNames).toContain('App.tsx');
+  });
+
+  // Regression (review-diff round 2 on #622's follow-up fix): hasOwnComponentSource (the
+  // scope-vs-leaf gate) must check ONLY the nested src/app scan, not the merged
+  // detectProjectStructureInScope. That merged scan also recognizes "pages"/"components"/
+  // "screens"/"routes" directories sitting directly at a package's OWN root (Codex #251,
+  // for a package that keeps root-level pages/ or components/ alongside a nested src/) —
+  // which false-positives for a scope folder whose ONLY child happens to be named one of
+  // those, vetoing scope-recursion and losing the nested child entirely (the same class of
+  // bug as the "app" collision above, via a different code path).
+  it.each(['components', 'pages', 'screens', 'routes'])(
+    'ancestor fallback: a scoped, manifest-less package named "%s" is still discovered',
+    async (childName) => {
+      const root = createSubprojProject(`ancestor-scoped-collision-${childName}`, {
+        'nx.json': '{}',
+        'package.json': '{"devDependencies":{"nx":"22"}}',
+        [`packages/@acme/${childName}/src/Thing.tsx`]: 'export function Thing() { return <div/>; }',
+      });
+      const openedRoot = path.join(root, 'packages', '@acme', childName);
+
+      const scanner = new ComponentScanner(createMockStore(null));
+      const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+      expect(result.isMonorepo).toBe(true);
+      expect(result.activeSubProjectPath).toBe(path.join('packages', '@acme', childName));
+      const activeProject = result.subProjects?.find((sp) => sp.path === result.activeSubProjectPath);
+      expect(activeProject).toBeDefined();
+      const allNames = [
+        ...activeProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+        ...activeProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+        ...activeProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ];
+      expect(allNames).toContain('Thing.tsx');
+    },
+  );
+
+  // Regression (review-diff round 3 on #622's follow-up fix — hypothesis, verified false alarm):
+  // a source-only leaf with NO nested src/ or app/ at all, whose components sit directly in a
+  // root-level conventional dir (packages/foo/components/Button.tsx, no package.json) was
+  // predicted to reproduce the same "components vanish" failure, since hasOwnComponentSource
+  // deliberately only checks the nested src/app scan (see its doc comment) and would see this
+  // leaf as having no component source of its own, triggering scope-recursion. It does NOT
+  // reproduce: looksLikeSubProjectRoot only accepts a scope-child that itself has package.json
+  // OR its own nested src/app/pages/etc SUBDIRECTORY — a bare .tsx FILE directly inside
+  // `components/` satisfies neither, so `components` is correctly rejected as a scope-child and
+  // `foo` falls through to being pushed as itself. Locked in as a permanent regression test.
+  it('ancestor fallback: a source-only leaf with components only at its OWN root (no nested src/app) is still discovered', async () => {
+    const root = createSubprojProject('ancestor-root-level-only-source', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      // No package.json, no src/, no app/ — components live directly under packages/foo/components/.
+      'packages/foo/components/Button.tsx': 'export function Button() { return <button/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'foo');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    const ownProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'foo'));
+    expect(ownProject).toBeDefined();
+    const ownNames = [
+      ...ownProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...ownProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...ownProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(ownNames).toContain('Button.tsx');
+    // ...never as a bogus "components" sub-project standing in for it.
+    const bogusProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'foo', 'components'));
+    expect(bogusProject).toBeUndefined();
+  });
+
+  // Locks in the "known, deliberate tradeoff" documented on the scope-vs-leaf gate in
+  // findWorkspaceSubProjects (review-diff round 4 on #622's follow-up fix): a folder that is
+  // BOTH a source-only leaf (its own src/components/X.tsx) AND a container for a separately-
+  // manifested nested package (its own child/package.json) resolves as the LEAF — the nested
+  // package is not discovered. This test exists so a future change to the gate can't silently
+  // "fix" this and reintroduce the original bug (a source-only leaf's own src/ misread as a
+  // nested package) without a deliberate decision.
+  it('ancestor fallback: a leaf with its own src/ AND a separately-manifested nested package resolves as the leaf (documented tradeoff)', async () => {
+    const root = createSubprojProject('ancestor-leaf-plus-container-tradeoff', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      // group has NO package.json but has its own src/components/X.tsx (source-only leaf)...
+      'packages/group/src/components/X.tsx': 'export function X() { return <div/>; }',
+      // ...AND ALSO a separately-manifested nested package directly under it.
+      'packages/group/child/package.json': '{"dependencies":{"react":"19"}}',
+      'packages/group/child/src/Y.tsx': 'export function Y() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'group');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(true);
+    // group resolves as the leaf — its own components are found...
+    const groupProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'group'));
+    expect(groupProject).toBeDefined();
+    const groupNames = [
+      ...groupProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...groupProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...groupProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(groupNames).toContain('X.tsx');
+    // ...but the nested, separately-manifested "child" package is NOT discovered (documented
+    // tradeoff — change this assertion deliberately if the gate is ever revisited).
+    const childProject = result.subProjects?.find((sp) => sp.path === path.join('packages', 'group', 'child'));
+    expect(childProject).toBeUndefined();
+  });
+
+  it('ancestor fallback: a monorepo ancestor beyond the search cap does not trigger fallback', async () => {
+    const root = createSubprojProject('ancestor-too-deep', {
+      'nx.json': '{}',
+      'package.json': '{"devDependencies":{"nx":"22"}}',
+      'packages/deep/src/App.tsx': 'export function App() { return <div/>; }',
+    });
+    const openedRoot = path.join(root, 'packages', 'deep', 'one', 'two', 'three', 'four', 'five', 'six');
+    fs.mkdirSync(path.join(openedRoot, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(openedRoot, 'src', 'Standalone.tsx'), 'export function Standalone() { return <div/>; }');
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsDataWithAncestorFallback(openedRoot);
+
+    expect(result.isMonorepo).toBe(false);
+    expect(result.activeSubProjectPath).toBeUndefined();
+    expect(result.subProjects).toBeUndefined();
+  });
+
+  it('ancestor fallback: standalone projects with no monorepo ancestor stay standalone', async () => {
+    const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), 'component-scanner-standalone-'));
+    try {
+      const root = path.join(tempParent, 'standalone-no-ancestor');
+      fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',
+      );
+      fs.writeFileSync(path.join(root, 'src', 'App.tsx'), 'export function App() { return <div/>; }');
+
+      const scanner = new ComponentScanner(createMockStore(null));
+      const result = await scanner.getComponentsDataWithAncestorFallback(root);
+
+      expect(result.isMonorepo).toBe(false);
+      expect(result.activeSubProjectPath).toBeUndefined();
+      expect(result.subProjects).toBeUndefined();
+    } finally {
+      fs.rmSync(tempParent, { recursive: true, force: true });
+    }
   });
 });
 

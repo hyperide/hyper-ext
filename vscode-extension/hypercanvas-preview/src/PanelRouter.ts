@@ -20,7 +20,7 @@ import { type EditorMessage, handleEditorMessage } from './EditorBridge';
 import type { StateHub } from './StateHub';
 import type { AstService } from './services/AstService';
 import type { ColorProbeCandidate, ColorProbeRequest } from './services/color-probe-types';
-import { ComponentService } from './services/ComponentService';
+import { ComponentService, type ScanResult } from './services/ComponentService';
 import { StyleReadService } from './services/StyleReadService';
 import type { AstMessage, SharedEditorState } from './types';
 import { VSCodeFileIO } from './vscode-file-io';
@@ -181,9 +181,30 @@ export class PanelRouter {
     return this._workspaceRoot;
   }
 
-  getComponentGroups() {
+  /**
+   * Scan for component groups and widen the undo/redo workspace boundary to
+   * match. Must be the single call site for scanComponentGroups(): the result's
+   * `monorepoRoot` (set only when the ancestor-fallback surfaced sibling
+   * sub-projects outside the opened folder) has to reach AstBridge/UndoRedoService
+   * every time the scan runs, or a stale/missing boundary silently drops undo
+   * snapshots for sibling-component edits (HYP-909 follow-up).
+   *
+   * The widened boundary covers the WHOLE monorepo root, not just the specific
+   * sibling sub-project paths the scanner happened to surface. That's deliberate,
+   * not a missed narrowing: AstService/resolveWorkspacePath (the actual file
+   * read/write path) has no boundary check of its own beyond string
+   * concatenation — it already reaches anywhere under the opened folder (and,
+   * via sibling paths, the monorepo root) regardless of what the Explorer
+   * currently lists. Narrowing UndoRedoService to just the listed sub-projects
+   * would make undo-tracking MORE restrictive than the writes it's tracking,
+   * silently dropping snapshots again the moment a write touches a monorepo
+   * file the scanner hasn't (yet) enumerated as a sub-project.
+   */
+  async getComponentGroups(): Promise<ScanResult> {
     this._ensureCurrentWorkspace();
-    return this._componentService.scanComponentGroups();
+    const result = await this._componentService.scanComponentGroups();
+    this._astBridge.setAdditionalWorkspaceRoot(result.data.monorepoRoot ?? null);
+    return result;
   }
 
   /** Flush deferred .hyperide writes to disk. Returns true if anything was written. */
@@ -293,7 +314,7 @@ export class PanelRouter {
     if (type === 'component:listGroups') {
       const { requestId } = message as { requestId: string };
       try {
-        const result = await this._componentService.scanComponentGroups();
+        const result = await this.getComponentGroups();
         webview.postMessage({
           type: 'component:response',
           requestId,

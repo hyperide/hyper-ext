@@ -1,7 +1,7 @@
 import { TID } from '@shared/data-testid-map';
 import { IconChevronDown, IconPackage } from '@tabler/icons-react';
 import cn from 'clsx';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ComponentListItem, SubProject } from '../../../../lib/component-scanner/types';
 import { ComponentGroupList } from '../../ComponentGroupList';
 
@@ -25,6 +25,7 @@ interface SubProjectAccordionProps {
   loadingComponent: string | null;
   onComponentClick: (component: ComponentListItem) => void;
   searchQuery: string;
+  currentSubProjectPath?: string | null;
 }
 
 export function SubProjectAccordion({
@@ -33,15 +34,31 @@ export function SubProjectAccordion({
   loadingComponent,
   onComponentClick,
   searchQuery,
+  currentSubProjectPath,
 }: SubProjectAccordionProps) {
   const supportedProjects = subProjects.filter((p) => p.supported);
+  const currentRowRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const sp of subProjects) {
-      initial[sp.path] = !sp.supported;
+      initial[sp.path] = sp.path === currentSubProjectPath ? false : !sp.supported;
     }
     return initial;
   });
+
+  useEffect(() => {
+    if (!currentSubProjectPath) return;
+    setCollapsed((prev) => {
+      if (prev[currentSubProjectPath] === false) return prev;
+      return { ...prev, [currentSubProjectPath]: false };
+    });
+  }, [currentSubProjectPath]);
+
+  useEffect(() => {
+    if (!currentSubProjectPath) return;
+    if (!subProjects.some((sp) => sp.path === currentSubProjectPath)) return;
+    currentRowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [currentSubProjectPath, subProjects]);
 
   const toggleProject = (projectPath: string) => {
     setCollapsed((prev) => ({ ...prev, [projectPath]: !prev[projectPath] }));
@@ -72,7 +89,11 @@ export function SubProjectAccordion({
         const hasComponents = filteredAtoms.length > 0 || filteredComposites.length > 0 || filteredPages.length > 0;
 
         return (
-          <div key={sp.path} className={cn('rounded-md overflow-hidden', idx > 0 && 'mt-1')}>
+          <div
+            key={sp.path}
+            ref={sp.path === currentSubProjectPath ? currentRowRef : undefined}
+            className={cn('rounded-md overflow-hidden', idx > 0 && 'mt-1')}
+          >
             {/* Sub-project header */}
             <button
               type="button"

@@ -38,6 +38,23 @@ export interface ComponentsData {
   isMonorepo?: boolean;
   /** One entry per detected sub-package; only present for monorepos */
   subProjects?: SubProject[];
+  /**
+   * Relative path of the sub-project that should be auto-expanded and scrolled to
+   * because it is the folder the user actually opened. Only set when the opened
+   * folder is not itself the monorepo root but an ancestor is.
+   */
+  activeSubProjectPath?: string;
+  /**
+   * Absolute path of the discovered ancestor monorepo root. Only set alongside
+   * activeSubProjectPath (opened folder is a leaf, not the monorepo root itself).
+   * Component/group paths in this payload are rebased onto the OPENED folder, so
+   * sibling sub-projects surface as `../sibling/...`. Any consumer that enforces a
+   * workspace-root safety boundary on absolute file paths (e.g. the VS Code
+   * extension's UndoRedoService) must widen that boundary to also accept paths
+   * under this root — otherwise editing/undoing a sibling component silently
+   * fails outside-workspace checks (HYP-909 follow-up).
+   */
+  monorepoRoot?: string;
 }
 
 /** Cached project structure paths */

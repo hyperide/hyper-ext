@@ -115,6 +115,63 @@ export class ComponentScanner {
     return this.buildComponentsData(paths, projectRoot);
   }
 
+  async getComponentsDataWithAncestorFallback(projectRoot: string): Promise<ComponentsData> {
+    const data = await this.getComponentsData(projectRoot);
+    if (data.isMonorepo) return data;
+
+    const openedRoot = path.resolve(projectRoot);
+    const monorepoRoot = this.findMonorepoRootUpward(projectRoot);
+    if (!monorepoRoot) return data;
+
+    const monorepoData = await this.getComponentsData(monorepoRoot);
+    if (!monorepoData.isMonorepo) return data;
+
+    return {
+      ...this.rebaseComponentsDataPaths(monorepoData, monorepoRoot, openedRoot),
+      activeSubProjectPath: path.relative(monorepoRoot, openedRoot),
+      monorepoRoot,
+    };
+  }
+
+  /**
+   * File-bearing paths are consumed relative to the folder the extension opened
+   * (`ComponentService._workspaceRoot`). SubProject.path stays monorepo-root-relative
+   * because it is only an accordion identity and must match activeSubProjectPath.
+   */
+  private rebaseComponentsDataPaths(data: ComponentsData, fromRoot: string, toRoot: string): ComponentsData {
+    const rebaseGroups = (groups: ComponentGroup[]): ComponentGroup[] =>
+      groups.map((group) => this.rebaseComponentGroupPaths(group, fromRoot, toRoot));
+
+    return {
+      ...data,
+      atomGroups: rebaseGroups(data.atomGroups),
+      compositeGroups: rebaseGroups(data.compositeGroups),
+      pageGroups: rebaseGroups(data.pageGroups),
+      subProjects: data.subProjects?.map((subProject) => ({
+        ...subProject,
+        atomGroups: rebaseGroups(subProject.atomGroups),
+        compositeGroups: rebaseGroups(subProject.compositeGroups),
+        pageGroups: rebaseGroups(subProject.pageGroups),
+      })),
+    };
+  }
+
+  private rebaseComponentGroupPaths(group: ComponentGroup, fromRoot: string, toRoot: string): ComponentGroup {
+    return {
+      ...group,
+      dirPath: this.rebaseProjectRelativePath(group.dirPath, fromRoot, toRoot),
+      components: group.components.map((component) => ({
+        ...component,
+        path: this.rebaseProjectRelativePath(component.path, fromRoot, toRoot),
+      })),
+    };
+  }
+
+  private rebaseProjectRelativePath(relativePath: string, fromRoot: string, toRoot: string): string {
+    const absolutePath = path.isAbsolute(relativePath) ? relativePath : path.resolve(fromRoot, relativePath);
+    return path.relative(toRoot, absolutePath);
+  }
+
   private normalizeProjectPaths(paths: ProjectStructurePaths, projectRoot: string): ProjectStructurePaths {
     return {
       atomComponentsPaths: this.normalizePathList(paths.atomComponentsPaths, projectRoot),
@@ -426,12 +483,16 @@ export class ComponentScanner {
 
   /** Return true if projectRoot is a monorepo workspace (Nx, Turbo, pnpm, Lerna, generic). */
   private isMonorepoRoot(projectRoot: string): boolean {
-    if (fs.existsSync(path.join(projectRoot, 'nx.json'))) return true;
-    if (fs.existsSync(path.join(projectRoot, 'turbo.json'))) return true;
-    if (fs.existsSync(path.join(projectRoot, 'pnpm-workspace.yaml'))) return true;
-    if (fs.existsSync(path.join(projectRoot, 'lerna.json'))) return true;
+    return this.hasMonorepoMarkers(projectRoot);
+  }
+
+  private hasMonorepoMarkers(dir: string): boolean {
+    if (fs.existsSync(path.join(dir, 'nx.json'))) return true;
+    if (fs.existsSync(path.join(dir, 'turbo.json'))) return true;
+    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return true;
+    if (fs.existsSync(path.join(dir, 'lerna.json'))) return true;
     try {
-      const pkgPath = path.join(projectRoot, 'package.json');
+      const pkgPath = path.join(dir, 'package.json');
       if (fs.existsSync(pkgPath)) {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
         const deps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -442,6 +503,20 @@ export class ComponentScanner {
       // ignore
     }
     return false;
+  }
+
+  private findMonorepoRootUpward(startPath: string, maxLevels = 6): string | null {
+    let current = path.dirname(path.resolve(startPath));
+
+    for (let level = 0; level < maxLevels; level++) {
+      if (this.hasMonorepoMarkers(current)) return current;
+
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+
+    return null;
   }
 
   /** Detect framework from package.json dependencies */
@@ -558,12 +633,7 @@ export class ComponentScanner {
    * detected page dir paths from the composite recursive scan to prevent pages
    * from appearing in both panels.
    */
-  private categorizeAppDir(
-    appPath: string,
-    atoms: string[],
-    composites: string[],
-    pages: string[],
-  ): void {
+  private categorizeAppDir(appPath: string, atoms: string[], composites: string[], pages: string[]): void {
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(appPath, { withFileTypes: true });
@@ -777,22 +847,124 @@ export class ComponentScanner {
       const workspacePath = path.join(projectRoot, workspaceDir);
       if (!fs.existsSync(workspacePath)) continue;
 
-      let pkgEntries: fs.Dirent[];
-      try {
-        pkgEntries = fs.readdirSync(workspacePath, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-
-      for (const pkg of pkgEntries) {
-        if (!pkg.isDirectory() || SKIP_DIRS.has(pkg.name)) continue;
-        const subPkgPath = path.join(workspacePath, pkg.name);
-        const subPkgRelative = path.join(workspaceDir, pkg.name);
-        subProjects.push(this.buildSubProject(pkg.name, subPkgRelative, subPkgPath, projectRoot));
+      for (const subProject of this.findWorkspaceSubProjects(workspacePath, workspaceDir, projectRoot)) {
+        subProjects.push(
+          this.buildSubProject(subProject.name, subProject.relativePath, subProject.absPath, projectRoot),
+        );
       }
     }
 
     return subProjects;
+  }
+
+  private findWorkspaceSubProjects(
+    workspacePath: string,
+    workspaceDir: string,
+    projectRoot: string,
+  ): Array<{ name: string; relativePath: string; absPath: string }> {
+    let pkgEntries: fs.Dirent[];
+    try {
+      pkgEntries = fs.readdirSync(workspacePath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const subProjects: Array<{ name: string; relativePath: string; absPath: string }> = [];
+    for (const pkg of pkgEntries) {
+      if (!pkg.isDirectory() || SKIP_DIRS.has(pkg.name)) continue;
+
+      const subPkgPath = path.join(workspacePath, pkg.name);
+      const subPkgRelative = path.join(workspaceDir, pkg.name);
+      // A grouping/scope folder (e.g. packages/acme/ holding packages/acme/dashboard/) has
+      // neither its own package.json NOR any component source directly reachable through
+      // its own src/app (hasOwnComponentSource, the SAME single-level check a real leaf is
+      // detected with) — only then is it worth trying to recurse into its children as
+      // separately-scoped sub-projects. A directory-NAME check here (own dir literally
+      // named 'src'/'app'/etc) is NOT enough in either direction: requiring absence of
+      // package.json alone misreads a source-only leaf's own `src/` as a nested package
+      // named "src" (packages/foo/src/components/Button.tsx — foo's real components
+      // vanished, HYP-909 follow-up); and rejecting scope-recursion whenever the child
+      // directory NAME collides with a generic name (an earlier attempt at this fix) misreads
+      // a genuinely nested, manifest-less package that happens to be named "app" (e.g.
+      // packages/@acme/app/src/App.tsx with no package.json) as the scope's own source
+      // folder instead. Checking whether the PARENT already yields components on its own
+      // sidesteps both false positives: a source-only leaf's own src/app resolves to real
+      // components immediately (so scope-recursion is skipped, no ambiguity to resolve), while
+      // a genuine scope folder's src/app conventions stay empty at this level regardless of
+      // what its nested children happen to be named.
+      //
+      // Known, deliberate tradeoff: a folder that is BOTH a source-only leaf (its own
+      // src/components/X.tsx) AND a container for a separately-manifested nested package
+      // (its own child/package.json) resolves as the LEAF — the nested package is not
+      // discovered. This shape doesn't correspond to any known monorepo-tool convention
+      // (a package's own src/ holds its own code, not another package), so it's treated as
+      // out of scope rather than adding a third heuristic layer for it.
+      const hasOwnPackageJson = fs.existsSync(path.join(subPkgPath, 'package.json'));
+      if (workspaceDir === 'packages' && !hasOwnPackageJson && !this.hasOwnComponentSource(subPkgPath, projectRoot)) {
+        const scopedProjects = this.findScopedPackageSubProjects(subPkgPath, subPkgRelative);
+        if (scopedProjects.length > 0) {
+          subProjects.push(...scopedProjects);
+          continue;
+        }
+      }
+
+      subProjects.push({ name: pkg.name, relativePath: subPkgRelative, absPath: subPkgPath });
+    }
+
+    return subProjects;
+  }
+
+  /**
+   * Does `subPkgPath` yield any component/page paths of its own via ITS NESTED
+   * src/app only (detectNestedSourceStructure — see that method's doc comment
+   * for why NOT the merged detectProjectStructureInScope, whose root-level
+   * conventional-dirs half would false-positive on a scope folder whose only
+   * child happens to be named "pages"/"components"/etc, and wrongly veto
+   * scope-recursion for those names).
+   */
+  private hasOwnComponentSource(subPkgPath: string, projectRoot: string): boolean {
+    const structure = this.detectNestedSourceStructure(subPkgPath, projectRoot);
+    return (
+      structure.atomComponentsPaths.length > 0 ||
+      structure.compositeComponentsPaths.length > 0 ||
+      structure.pagesPaths.length > 0
+    );
+  }
+
+  private findScopedPackageSubProjects(
+    scopePath: string,
+    scopeRelativePath: string,
+  ): Array<{ name: string; relativePath: string; absPath: string }> {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(scopePath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const subProjects: Array<{ name: string; relativePath: string; absPath: string }> = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
+
+      const absPath = path.join(scopePath, entry.name);
+      if (!this.looksLikeSubProjectRoot(absPath)) continue;
+
+      subProjects.push({
+        name: entry.name,
+        relativePath: path.join(scopeRelativePath, entry.name),
+        absPath,
+      });
+    }
+
+    return subProjects;
+  }
+
+  private looksLikeSubProjectRoot(subPkgPath: string): boolean {
+    if (fs.existsSync(path.join(subPkgPath, 'package.json'))) return true;
+    return ['src', 'app', 'pages', 'components', 'screens', 'routes'].some((dirName) => {
+      const dirPath = path.join(subPkgPath, dirName);
+      return fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory();
+    });
   }
 
   private buildSubProject(name: string, relativePath: string, absPath: string, projectRoot: string): SubProject {
@@ -817,9 +989,7 @@ export class ComponentScanner {
     );
     // Page dirs must also be excluded from the composite scan to prevent double-listing
     // when src/app/ is a feature hub (same rationale as buildComponentsData, HYP-758).
-    const pageDirPaths = new Set(
-      structure.pagesPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
-    );
+    const pageDirPaths = new Set(structure.pagesPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))));
     const compositeDirPaths = new Set(
       structure.compositeComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
@@ -891,6 +1061,63 @@ export class ComponentScanner {
 
   /** Detect project structure scoped to a single sub-package directory. */
   private detectProjectStructureInScope(subPkgRoot: string, workspaceRoot: string): ProjectStructurePaths {
+    const nested = this.detectNestedSourceStructure(subPkgRoot, workspaceRoot);
+    const atoms = [...nested.atomComponentsPaths];
+    const composites = [...nested.compositeComponentsPaths];
+    const pages = [...nested.pagesPaths];
+
+    // Package-root conventional dirs (e.g. apps/web/pages/, packages/ui/components/).
+    // Runs alongside the nested src/app scan above — a package may keep BOTH a nested
+    // src/ AND root-level components/pages, and both must surface (Codex #251). src/ and
+    // app/ entries are skipped here: they were already handled by detectNestedSourceStructure.
+    // No duplication: nested (src/components) and root (components) are distinct dirs,
+    // each yielding its own group keyed by relative dirPath.
+    {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(subPkgRoot, { withFileTypes: true });
+      } catch {
+        entries = [];
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
+        const entryName = entry.name.toLowerCase();
+        if (entryName === 'src' || entryName === 'app') continue;
+        const entryPath = path.join(subPkgRoot, entry.name);
+
+        if (PAGE_DIR_NAMES.has(entryName)) {
+          pages.push(entryPath);
+          continue;
+        }
+        if (entryName === 'components') {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
+          continue;
+        }
+        if (entryName === 'features' || entryName === 'modules') {
+          composites.push(entryPath);
+          continue;
+        }
+      }
+    }
+
+    return { atomComponentsPaths: atoms, compositeComponentsPaths: composites, pagesPaths: pages };
+  }
+
+  /**
+   * Does `subPkgRoot` have its own nested src/ or app/ holding recognizable
+   * component structure? Used both by detectProjectStructureInScope (merged
+   * with the root-level conventional-dirs scan) and, standalone, by
+   * hasOwnComponentSource — the scope-vs-leaf gate in findWorkspaceSubProjects
+   * deliberately does NOT use the merged detectProjectStructureInScope for that
+   * gate: its root-level conventional-dirs scan below also matches a bare
+   * pages/components/etc. directory sitting directly at subPkgRoot's root,
+   * which fires just as easily for a genuine scope folder whose ONLY child
+   * happens to be named "pages"/"components"/etc. as for a real leaf package —
+   * and would wrongly veto scope-recursion for those names. The nested src/app
+   * scan here doesn't have that false-positive mode (HYP-909 follow-up).
+   */
+  private detectNestedSourceStructure(subPkgRoot: string, workspaceRoot: string): ProjectStructurePaths {
     const atoms: string[] = [];
     const composites: string[] = [];
     const pages: string[] = [];
@@ -961,41 +1188,6 @@ export class ComponentScanner {
               pages.push(path.join(srcPath, e.name));
             }
           }
-        }
-      }
-    }
-
-    // Package-root conventional dirs (e.g. apps/web/pages/, packages/ui/components/).
-    // Runs alongside the src/app scan above — a package may keep BOTH a nested src/
-    // AND root-level components/pages, and both must surface (Codex #251). src/ and app/
-    // entries are skipped here: they were already handled by the nested-source loop.
-    // No duplication: nested (src/components) and root (components) are distinct dirs,
-    // each yielding its own group keyed by relative dirPath.
-    {
-      let entries: fs.Dirent[];
-      try {
-        entries = fs.readdirSync(subPkgRoot, { withFileTypes: true });
-      } catch {
-        entries = [];
-      }
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
-        const entryName = entry.name.toLowerCase();
-        if (entryName === 'src' || entryName === 'app') continue;
-        const entryPath = path.join(subPkgRoot, entry.name);
-
-        if (PAGE_DIR_NAMES.has(entryName)) {
-          pages.push(entryPath);
-          continue;
-        }
-        if (entryName === 'components') {
-          this.categorizeComponentsDir(entryPath, atoms, composites);
-          continue;
-        }
-        if (entryName === 'features' || entryName === 'modules') {
-          composites.push(entryPath);
-          continue;
         }
       }
     }

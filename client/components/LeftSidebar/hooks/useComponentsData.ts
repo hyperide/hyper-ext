@@ -55,6 +55,7 @@ export function useComponentsData(): UseComponentsDataResult {
               pageGroups: result.pageGroups || [],
               isMonorepo: result.isMonorepo,
               subProjects: result.subProjects,
+              activeSubProjectPath: result.activeSubProjectPath,
             });
             setLoadedOnce(true);
           } else {

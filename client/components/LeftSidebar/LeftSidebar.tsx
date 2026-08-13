@@ -350,6 +350,7 @@ export default function LeftSidebar({
             compositeGroups={components.compositeGroups}
             isMonorepo={components.isMonorepo}
             subProjects={components.subProjects}
+            currentSubProjectPath={components.activeSubProjectPath}
             activePath={componentsActivePath}
             loadingComponent={componentNav.loadingComponent}
             onComponentClick={onComponentItemClick}
