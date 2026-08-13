@@ -792,11 +792,11 @@ describe('PreviewPanel monorepo prefix wiring', () => {
   });
 });
 
-describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () => {
-  function projectErrorOf(panel: PreviewPanel): { type: string } | null {
-    return (panel as PreviewPanel & { _projectError: { type: string } | null })._projectError;
-  }
+function projectErrorOf(panel: PreviewPanel): { type: string } | null {
+  return (panel as PreviewPanel & { _projectError: { type: string } | null })._projectError;
+}
 
+describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () => {
   it('setReactNativeUnsupported(null) does NOT clobber a standing framework screen', () => {
     const { panel } = createPanel(createStateHub());
 
@@ -806,7 +806,9 @@ describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () 
 
     // Background detector (runProjectDetection) finishes AFTER selection with a null
     // result (non-RN project). It must NOT wipe the framework screen back to blank.
-    panel.setReactNativeUnsupported(null);
+    // Token captured after the framework post (fresh) — this exercises the TYPE
+    // precedence guard, independent of the HYP-588 staleness guard below.
+    panel.setReactNativeUnsupported(null, panel.screenDecisionToken);
     expect(projectErrorOf(panel)?.type).toBe('framework');
   });
 
@@ -817,14 +819,17 @@ describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () 
     expect(projectErrorOf(panel)?.type).toBe('react-native');
 
     // Switching from an RN project to a supported one: the RN screen must clear.
-    panel.setReactNativeUnsupported(null);
+    panel.setReactNativeUnsupported(null, panel.screenDecisionToken);
     expect(projectErrorOf(panel)).toBeNull();
   });
 
-  it('setReactNativeUnsupported(error) always applies the RN error', () => {
+  it('setReactNativeUnsupported(error) with a current token applies the RN error', () => {
     const { panel } = createPanel(createStateHub());
 
-    panel.setReactNativeUnsupported({ type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' });
+    panel.setReactNativeUnsupported(
+      { type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' },
+      panel.screenDecisionToken,
+    );
     expect(projectErrorOf(panel)?.type).toBe('react-native');
   });
 
@@ -833,6 +838,64 @@ describe('PreviewPanel unsupported-project channels (HYP-442/443 race fix)', () 
 
     panel.notifyUnsupportedProject({ type: 'react-native', message: 'needs rn-web', fixLabel: 'Fix' });
     panel.clearSelectionBlockingScreen();
+    expect(projectErrorOf(panel)?.type).toBe('react-native');
+  });
+});
+
+describe('PreviewPanel stale-detection decision-token guard (HYP-588)', () => {
+  const rnError = { type: 'react-native' as const, message: 'needs rn-web', fixLabel: 'Fix' };
+
+  it('a stale detection RN error does not re-post the screen the fix command cleared', () => {
+    const { panel } = createPanel(createStateHub());
+
+    // Background detection starts: captures the decision token (extension.ts
+    // runProjectDetection does this synchronously before awaiting the detectors).
+    const token = panel.screenDecisionToken;
+
+    // User clicks "Fix" → react-native-web installed → fix command re-checks the
+    // project and clears the screen (extension-commands.ts setupReactNativeWeb).
+    // This is a NEWER screen decision than the in-flight detection.
+    panel.notifyUnsupportedProject(null);
+
+    // The slow detection (started before package.json gained react-native-web)
+    // completes with the now-stale RN error. It must be discarded — type
+    // precedence cannot help here because both sides are the RN channel.
+    panel.setReactNativeUnsupported(rnError, token);
+    expect(projectErrorOf(panel)).toBeNull();
+  });
+
+  it('a stale detection RN error does not overwrite a newer framework screen', () => {
+    const { panel } = createPanel(createStateHub());
+
+    const token = panel.screenDecisionToken;
+
+    // Selection path posts the framework compat screen (HYP-442) AFTER detection started.
+    panel.notifyUnsupportedProject({ type: 'framework', message: 'no supported framework' });
+
+    // Stale detection completes with an RN error — must not clobber the newer decision.
+    panel.setReactNativeUnsupported(rnError, token);
+    expect(projectErrorOf(panel)?.type).toBe('framework');
+  });
+
+  it('a stale detection null result is discarded wholesale', () => {
+    const { panel } = createPanel(createStateHub());
+
+    const token = panel.screenDecisionToken;
+
+    // A newer decision posts an RN screen (e.g. a later detection run after a
+    // workspace folder change back to an RN root).
+    panel.notifyUnsupportedProject(rnError);
+
+    // The stale run's null result must not clear the newer RN screen.
+    panel.setReactNativeUnsupported(null, token);
+    expect(projectErrorOf(panel)?.type).toBe('react-native');
+  });
+
+  it('a fresh detection result still applies (token unchanged)', () => {
+    const { panel } = createPanel(createStateHub());
+
+    const token = panel.screenDecisionToken;
+    panel.setReactNativeUnsupported(rnError, token);
     expect(projectErrorOf(panel)?.type).toBe('react-native');
   });
 });

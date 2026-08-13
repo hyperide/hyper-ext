@@ -315,6 +315,12 @@ export function activate(context: vscode.ExtensionContext) {
   let detectionSeq = 0;
   const runProjectDetection = (root: string): void => {
     const seq = ++detectionSeq;
+    // HYP-588: capture the panel's screen-decision token BEFORE awaiting the
+    // detectors. If a direct screen decision lands while detection is in flight
+    // (fix command clears the RN screen after installing react-native-web,
+    // selection posts a framework screen, workspace reset), the token moves on
+    // and setReactNativeUnsupported below discards this run's stale result.
+    const screenDecisionToken = previewPanel?.screenDecisionToken ?? 0;
     readPackageJson(root)
       .then(async (pkg) => {
         const kit = await detectUIKit(root, pkg);
@@ -343,7 +349,9 @@ export function activate(context: vscode.ExtensionContext) {
         // AFTER the selection path posts the framework screen). setReactNativeUnsupported
         // clears only a stale RN screen and never touches a 'framework' one, while
         // still clearing the RN screen when switching from an RN to a supported project.
-        previewPanel?.setReactNativeUnsupported(projectError ?? null);
+        // The screenDecisionToken (captured above) additionally drops the whole
+        // result when ANY newer direct screen decision raced this run (HYP-588).
+        previewPanel?.setReactNativeUnsupported(projectError ?? null, screenDecisionToken);
         if (projectError) {
           console.log('[HyperIDE] Unsupported project detected:', projectError.type);
         }

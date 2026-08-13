@@ -186,6 +186,10 @@ export class PreviewPanel {
   // Unsupported project error (React Native / Tamagui), sent to webview on ready
   private _projectError: UnsupportedProjectError | null = null;
 
+  // Bumped on every direct screen decision (notifyUnsupportedProject); lets
+  // setReactNativeUnsupported discard stale async detection results (HYP-588)
+  private _screenDecisionSeq = 0;
+
   // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
   private _capabilities: import('./types').ProjectCapabilities | null = null;
 
@@ -926,10 +930,26 @@ export class PreviewPanel {
   /**
    * Notify webview that the project type is unsupported (e.g. React Native / Tamagui).
    * Pass null to clear the error (e.g. after fix installed react-native-web).
+   * Every call is a direct, authoritative screen decision — it bumps the decision
+   * token so any async detection that started earlier is recognized as stale and
+   * discarded by setReactNativeUnsupported (HYP-588).
    */
   public notifyUnsupportedProject(error: UnsupportedProjectError | null): void {
+    this._screenDecisionSeq++;
     this._projectError = error;
     this._panel?.webview.postMessage({ type: 'projectError', error });
+  }
+
+  /**
+   * Monotonic token identifying the latest direct screen decision (any
+   * notifyUnsupportedProject call). Background project detection captures it
+   * synchronously BEFORE awaiting its async detectors and hands it back to
+   * setReactNativeUnsupported, which drops the result if a newer decision —
+   * fix-command clear, selection framework screen, workspace reset — landed
+   * while detection was in flight (HYP-588).
+   */
+  public get screenDecisionToken(): number {
+    return this._screenDecisionSeq;
   }
   /**
    * Clear ONLY the selection-driven blocking screen (framework-compat, HYP-442) —
@@ -944,14 +964,22 @@ export class PreviewPanel {
 
   /**
    * Set or clear ONLY the react-native blocking screen owned by background project
-   * detection (runProjectDetection). The async detector only ever produces a
-   * 'react-native' error (or null), so it must never clobber a selection-driven
-   * 'framework' compat screen with its null result — that race wiped the screen
-   * back to blank when detection finished after a component selection. Clearing is
-   * scoped to a stale RN error, preserving the framework screen; setting always
-   * applies the RN error. (Inverse of clearSelectionBlockingScreen.)
+   * detection (runProjectDetection). Two guards, in order (HYP-442/443 + HYP-588):
+   *
+   * 1. Staleness (decisionToken): the caller captures screenDecisionToken before
+   *    starting async detection; if any direct screen decision landed in between
+   *    (fix command cleared the RN screen after installing react-native-web,
+   *    selection posted a framework screen, workspace reset), the detection result
+   *    reflects a project state that decision already superseded — discard it
+   *    wholesale. Type precedence alone cannot catch the fix-command race because
+   *    both sides are the RN channel.
+   * 2. Type precedence: the detector only ever produces a 'react-native' error
+   *    (or null), so its null result must never clobber a selection-driven
+   *    'framework' compat screen — clearing is scoped to a standing RN error.
+   *    (Inverse of clearSelectionBlockingScreen.)
    */
-  public setReactNativeUnsupported(error: UnsupportedProjectError | null): void {
+  public setReactNativeUnsupported(error: UnsupportedProjectError | null, decisionToken: number): void {
+    if (decisionToken !== this._screenDecisionSeq) return;
     if (error) {
       this.notifyUnsupportedProject(error);
       return;
