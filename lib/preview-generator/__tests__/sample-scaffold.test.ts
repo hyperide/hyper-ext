@@ -189,6 +189,37 @@ describe('normalizeSampleComponentName', () => {
   it('still normalizes a path-prefixed component file to its basename identifier', () => {
     expect(normalizeSampleComponentName('components/Sidebar.tsx')).toBe('Sidebar');
   });
+
+  // Adversarial (HYP-460 audit): a Windows backslash path must still resolve to
+  // the basename identifier, not leak separators / extension into the JSX tag.
+  it('handles Windows backslash paths', () => {
+    expect(normalizeSampleComponentName('components\\Sidebar.tsx')).toBe('Sidebar');
+    expect(normalizeSampleComponentName('src\\ui\\user-card.tsx')).toBe('UserCard');
+  });
+
+  // Adversarial (HYP-460 audit): a multi-segment member expression with no
+  // file-extension suffix is preserved verbatim — the extension strip only
+  // targets a trailing source-file ext, not arbitrary dotted segments.
+  it('preserves deep member expressions without a file extension', () => {
+    expect(normalizeSampleComponentName('Foo.Bar.Baz')).toBe('Foo.Bar.Baz');
+  });
+
+  // Documented residual (HYP-460 audit): a member expression whose FINAL
+  // segment is literally one of the stripped extensions (case-insensitive:
+  // `.Ts`, `.Js`, …) gets that segment stripped. This is acceptable — no real
+  // React member component is named `<Foo.Ts/>` / `<Foo.Js/>`; collisions with
+  // the source-file ext list are not legitimate compound-component shapes.
+  // Captured here so the behavior is INTENTIONAL, not an unnoticed regression.
+  it('strips a trailing segment that collides with a source-file extension (documented residual)', () => {
+    expect(normalizeSampleComponentName('Foo.ts')).toBe('Foo');
+    expect(normalizeSampleComponentName('Foo.Ts')).toBe('Foo');
+    expect(normalizeSampleComponentName('Chart.js')).toBe('Chart');
+  });
+
+  // A lowercase-leading bare name (not a component) is Pascalized, not kept.
+  it('pascalizes a lowercase-leading bare identifier', () => {
+    expect(normalizeSampleComponentName('button')).toBe('Button');
+  });
 });
 
 describe('buildContainerSampleJsxBody', () => {

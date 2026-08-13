@@ -27,7 +27,11 @@ import type { ExportStyle } from './scanner';
 // stop leaking onto host DOM nodes as junk attributes via `{...rest}`. Bumped past
 // #305's v13 (both #305 and HYP-465 independently picked v13) so files generated at
 // v13 regenerate and pick up the per-component fallback filtering.
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v14';
+// v14 -> v15: HYP-498 — synthetic SampleDefault now references a default-export
+// parent via its direct alias binding instead of `${alias}Module.<Parent>` (which
+// was `undefined` at runtime → "Element type is invalid" → blank preview). The
+// emitted JSX shape changed, so v14 files must regenerate to pick up the fix.
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v15';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -308,7 +312,12 @@ export function generatePreviewContent(entries: PreviewComponentEntry[], options
     if (entry.sampleExports.includes('SampleDefault')) {
       lines.push(`  '${safeKey}': ${alias}SampleDefault,`);
     } else if (entry.syntheticSampleDefault) {
-      const inline = renderSyntheticSampleArrow(entry.syntheticSampleDefault, `${alias}Module`);
+      const inline = renderSyntheticSampleArrow(
+        entry.syntheticSampleDefault,
+        alias,
+        entry.componentName,
+        entry.exportStyle,
+      );
       lines.push(`  '${safeKey}': ${inline},`);
     }
   }
@@ -835,18 +844,42 @@ if (root) {
 
 /**
  * Render a synthetic SampleDefault as an inline arrow function. The body
- * comes from `buildContainerSampleJsxBody`; we prefix every referenced
- * component identifier with `${moduleAlias}.` so the JSX resolves through
- * the namespace import added in step 2.
+ * comes from `buildContainerSampleJsxBody`; referenced subcomponent identifiers
+ * are prefixed with `${alias}Module.` so they resolve through the namespace
+ * import added in step 2.
+ *
+ * The PARENT component (referencedNames[0], equal to `componentName`) is special:
+ * `buildImportLine` imports it as the direct `alias` binding, NOT necessarily as
+ * a property on the namespace object.
+ *  - Named-export parent (`export function Alert`): the namespace object HAS an
+ *    `Alert` property, so `${alias}Module.Alert` resolves — kept as-is.
+ *  - Default-export parent (`export default function Disclosure`): the component
+ *    lives at `${alias}Module.default`, so `${alias}Module.Disclosure` is
+ *    `undefined` at runtime → React "Element type is invalid" → blank preview
+ *    (HYP-463 residual). For these we reference the parent via its direct `alias`
+ *    import binding instead. `@ts-nocheck` would otherwise hide this at the type
+ *    level while leaving the runtime crash in place.
  */
-function renderSyntheticSampleArrow(synthetic: ContainerSampleJsxBody, moduleAlias: string): string {
+function renderSyntheticSampleArrow(
+  synthetic: ContainerSampleJsxBody,
+  alias: string,
+  componentName: string,
+  exportStyle: ExportStyle,
+): string {
+  const moduleAlias = `${alias}Module`;
+  const parentIsDefaultExport = exportStyle === 'default-named' || exportStyle === 'default-anonymous';
   let body = synthetic.body;
   for (const name of synthetic.referencedNames) {
     // nosemgrep: detect-non-literal-regexp -- name comes from the source-code AST scanner
     // (not user input) and is restricted to /^[A-Z][\w]*$/ by isValidJsxComponentName,
     // so the resulting regex is safe to construct.
     const re = new RegExp(`(<\\/?)\\s*${name}\\b`, 'g');
-    body = body.replace(re, `$1${moduleAlias}.${name}`);
+    // The default-export parent must resolve through its direct alias binding,
+    // not the namespace object (which only carries `default`, not `${name}`).
+    // The `\b` in the regex keeps `Disclosure` from matching inside
+    // `DisclosurePanel`, so child tags are untouched regardless of order.
+    const replacement = parentIsDefaultExport && name === componentName ? `$1${alias}` : `$1${moduleAlias}.${name}`;
+    body = body.replace(re, replacement);
   }
   // Indent body inside the arrow expression
   const indented = body

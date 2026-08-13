@@ -916,6 +916,43 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
     expect(exportsSection).toContain('"DividerLabel"');
   });
 
+  it('references a DEFAULT-EXPORT compound parent via its direct alias, not Module.<Parent> (undefined at runtime)', () => {
+    // A compound module whose PARENT is the default export and whose subcomponents
+    // are named exports. buildContainerSampleJsxBody puts the parent in
+    // referencedNames[0], so renderSyntheticSampleArrow prefixes EVERY name —
+    // including the parent — with `${alias}Module.`. For a named-export parent,
+    // `Module.Alert` resolves. For a DEFAULT-export parent, the component lives at
+    // `Module.default` — `Module.Alert` is `undefined` → React "Element type is
+    // invalid" at runtime → ComponentErrorBoundary renders null → blank preview.
+    // @ts-nocheck hides the type error but does nothing at runtime.
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'src/components/Disclosure.tsx',
+        componentName: 'Disclosure',
+        exportStyle: 'default-named',
+        sampleExports: [],
+        importPath: './components/Disclosure',
+        syntheticSampleDefault: {
+          body: '<Disclosure>\n    <DisclosurePanel>Preview content</DisclosurePanel>\n</Disclosure>',
+          referencedNames: ['Disclosure', 'DisclosurePanel'],
+        },
+      },
+    ];
+
+    const content = generatePreviewContent(entries);
+
+    // The default export is imported as the bare `Disclosure` alias
+    // (`import Disclosure, { ... } from '...'`). The synthetic arrow MUST render
+    // <Disclosure>, NOT <DisclosureModule.Disclosure> — the latter resolves to
+    // the module's `Disclosure` named export, which does not exist for a
+    // default-export parent, so it is `undefined` at runtime.
+    expect(content).not.toContain('<DisclosureModule.Disclosure>');
+    expect(content).not.toContain('</DisclosureModule.Disclosure>');
+    // The named subcomponent is still correctly namespaced.
+    expect(content).toContain('DisclosureModule.DisclosurePanel');
+    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+  });
+
   it('regex-prefixes referenced names safely when one name is a prefix of another', () => {
     // Two referenced names where the shorter is a prefix of the longer
     // (Carousel and CarouselContent). The synthetic-arrow regex must rewrite

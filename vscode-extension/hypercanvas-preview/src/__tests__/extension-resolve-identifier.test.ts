@@ -48,4 +48,16 @@ describe('resolveComponentIdentifier', () => {
   it('preserves a dotted member-expression name (Accordion.Item) — no file ext', () => {
     expect(resolveComponentIdentifier('Accordion.Item', 'src/Accordion.tsx')).toBe('Accordion.Item');
   });
+
+  // Adversarial (HYP-459 audit): a Windows backslash separator in `name` must be
+  // treated as a filename and re-derived from the path basename (backslash split).
+  it('re-derives from a Windows backslash path basename', () => {
+    expect(resolveComponentIdentifier('components\\Foo.tsx', 'src\\components\\Foo.tsx')).toBe('Foo');
+  });
+
+  // A name with a backslash but no extension still looks like a filename (has a
+  // separator) → re-derive from path rather than trusting the raw segment.
+  it('treats a backslash-bearing name as a filename even without an extension', () => {
+    expect(resolveComponentIdentifier('components\\Foo', 'src/components/Foo.tsx')).toBe('Foo');
+  });
 });
