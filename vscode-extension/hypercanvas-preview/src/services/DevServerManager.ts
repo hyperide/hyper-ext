@@ -209,6 +209,22 @@ export class DevServerManager {
    * Get current status
    */
   getState(): DevServerState {
+    return this._buildState();
+  }
+
+  /**
+   * True while a recompile gate is armed (post-patch, pre fresh "compiled
+   * successfully") AND the server is still serving. Guarded by `running` so a gate
+   * that outlives a stop/crash (the gate is only cleared on success or re-arm, not
+   * on exit) never reports an incoherent `{ status: 'stopped', recompiling: true }`.
+   * "Mid-recompile" only means anything while running.
+   */
+  private get _recompiling(): boolean {
+    return this._recompileGate !== null && this._status === 'running';
+  }
+
+  /** Single source of truth for the published DevServerState shape. */
+  private _buildState(): DevServerState {
     // Return proxy URL if available (for script injection), otherwise direct URL
     const proxyUrl = this._previewProxy?.url;
     return {
@@ -216,7 +232,14 @@ export class DevServerManager {
       port: this._port ?? undefined,
       url: proxyUrl ?? (this._port ? `http://localhost:${this._port}` : undefined),
       error: this._error,
+      recompiling: this._recompiling,
     };
+  }
+
+  /** Build the current state and push it to every onStatusChange listener. */
+  private _publishState(): void {
+    const state = this._buildState();
+    for (const cb of this._onStatusChangeListeners) cb(state);
   }
 
   /**
@@ -533,6 +556,9 @@ export class DevServerManager {
     this._recompileGate?.resolve();
     this._recompileGate = { promise, resolve, armedAt: Date.now() };
     console.log('[HyperIDE] DevServer recompile gate armed');
+    // HYP-370 Phase 3: surface the recompiling sub-state so consumers react
+    // (status stays `running`; only `recompiling` flips to true).
+    this._publishState();
   }
 
   /**
@@ -574,6 +600,8 @@ export class DevServerManager {
     console.log('[HyperIDE] DevServer recompile gate released');
     this._recompileGate = null;
     gate.resolve();
+    // HYP-370 Phase 3: gate cleared — `recompiling` flips back to false.
+    this._publishState();
   }
 
   private _isRecompileReadyMessage(text: string): boolean {
@@ -865,15 +893,6 @@ export class DevServerManager {
   private _updateStatus(status: DevServerStatus, error?: string): void {
     this._status = status;
     this._error = error;
-
-    const proxyUrl = this._previewProxy?.url;
-    const state: DevServerState = {
-      status,
-      port: this._port ?? undefined,
-      url: proxyUrl ?? (this._port ? `http://localhost:${this._port}` : undefined),
-      error,
-    };
-
-    for (const cb of this._onStatusChangeListeners) cb(state);
+    this._publishState();
   }
 }

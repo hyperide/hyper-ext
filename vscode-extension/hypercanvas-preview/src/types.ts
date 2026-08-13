@@ -102,6 +102,14 @@ export interface DevServerState {
   port?: number;
   url?: string;
   error?: string;
+  /**
+   * HYP-370 Phase 3 — explicit recompile sub-state. True while a webpack/parcel
+   * recompile gate is armed (after an entry-file patch, before the fresh
+   * `compiled successfully`). `status` stays `running`; this flag lets consumers
+   * distinguish stable-serving from mid-recompile without reaching into the gate
+   * promise. Additive/optional — absence means "not recompiling".
+   */
+  recompiling?: boolean;
 }
 
 // ============================================

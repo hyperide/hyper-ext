@@ -446,6 +446,78 @@ describe('DevServerManager', () => {
       const settled = await Promise.race([manager.awaitRecompile().then(() => 'resolved'), Promise.resolve('pending')]);
       expect(settled).toBe('pending');
     });
+
+    // HYP-370 Phase 3 — recompile surfaced as an explicit sub-state so consumers
+    // can tell stable-serving (`running`) from mid-recompile WITHOUT reaching into
+    // the recompile-gate promise.
+    describe('recompiling sub-state (HYP-370 Phase 3)', () => {
+      function transition(mgr: InstanceType<typeof DevServerManager>, to: DevServerStatus, error?: string) {
+        (mgr as unknown as { transition(to: DevServerStatus, error?: string): boolean }).transition(to, error);
+      }
+
+      it('getState().recompiling reflects the gate: false → armed=true → released=false', async () => {
+        // Force `running` so the reported state isolates the recompiling flag.
+        transition(manager, 'starting');
+        transition(manager, 'running');
+
+        expect(manager.getState().recompiling).toBe(false);
+
+        manager.armRecompileGate();
+        expect(manager.getState().status).toBe('running'); // status unchanged — additive
+        expect(manager.getState().recompiling).toBe(true);
+
+        fireRecompileDetector(manager, 'compiled successfully\n');
+        await manager.awaitRecompile();
+        expect(manager.getState().recompiling).toBe(false);
+      });
+
+      it('onStatusChange fires with recompiling:true on arm and recompiling:false on release', async () => {
+        transition(manager, 'starting');
+        transition(manager, 'running');
+
+        const cb = mock();
+        manager.onStatusChange(cb);
+
+        manager.armRecompileGate();
+        expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'running', recompiling: true }));
+
+        cb.mockClear();
+        fireRecompileDetector(manager, 'compiled successfully\n');
+        await manager.awaitRecompile();
+        expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'running', recompiling: false }));
+      });
+
+      it('re-arming keeps recompiling:true (the new patch supersedes, still mid-recompile)', async () => {
+        transition(manager, 'starting');
+        transition(manager, 'running');
+
+        manager.armRecompileGate();
+        manager.armRecompileGate(); // supersede
+        expect(manager.getState().recompiling).toBe(true);
+
+        fireRecompileDetector(manager, 'compiled successfully\n');
+        await manager.awaitRecompile();
+        expect(manager.getState().recompiling).toBe(false);
+      });
+
+      it('recompiling is false when no gate has ever been armed', () => {
+        expect(manager.getState().recompiling).toBe(false);
+      });
+
+      it('recompiling is false once the server leaves `running`, even if a gate is still armed', () => {
+        // A gate armed while running, then a crash/stop leaves _recompileGate non-null.
+        // The reported sub-state must NOT claim "recompiling" when we are no longer
+        // serving — "mid-recompile" only means anything while running.
+        transition(manager, 'starting');
+        transition(manager, 'running');
+        manager.armRecompileGate();
+        expect(manager.getState().recompiling).toBe(true);
+
+        transition(manager, 'stopped'); // process exited / user stopped
+        expect(manager.getState().status).toBe('stopped');
+        expect(manager.getState().recompiling).toBe(false);
+      });
+    });
   });
 
   describe('status transition guard (HYP-370 Phase 2)', () => {
