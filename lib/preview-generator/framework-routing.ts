@@ -14,9 +14,9 @@ export type FrameworkType =
   | 'nextjs-app-router'
   | 'nextjs-pages-router'
   | 'remix'
+  | 'astro'
   | 'vite-spa-file-based'
   | 'vite-spa-jsx-router'
-  | 'astro'
   | 'bun'
   | 'parcel'
   | 'webpack'
@@ -221,7 +221,7 @@ export function getRouteFilePaths(result: DetectionResult, projectRoot: string):
       // Harmless — the import resolves — but co-locating it under <srcDir> is deferred.
       return { routeFile: join(projectRoot, srcDir, 'pages', 'test-preview.astro') };
     default:
-      // webpack, parcel, vite-spa-jsx-router, unknown — no file-based route
+      // astro, webpack, parcel, vite-spa-jsx-router, unknown — no file-based route
       return { routeFile: '' };
   }
 }

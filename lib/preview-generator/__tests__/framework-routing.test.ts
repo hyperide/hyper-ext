@@ -81,6 +81,20 @@ describe('detectFramework — primary via package.json', () => {
     expect(result.routesDir).toBe('src/routes');
   });
 
+  it('detects Astro via "astro" dep — takes precedence over vite', async () => {
+    const io = makeIO({ dependencies: { astro: '^4.0.0', vite: '^5.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
+  it('detects Astro via astro.config.ts (no dep)', async () => {
+    const io = makeIO({ dependencies: {} }, [`${root}/astro.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('astro');
+  });
+
+  it('returns src/pages/test-preview.astro routeFile for Astro (default srcDir)', () => {
+    expect(getRouteFilePaths({ framework: 'astro' }, root).routeFile).toBe(`${root}/src/pages/test-preview.astro`);
+  });
+
   it('detects Vite SPA (JSX router) via "vite" dep, no routes dir', async () => {
     const io = makeIO({ dependencies: { vite: '^5.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');

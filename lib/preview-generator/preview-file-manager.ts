@@ -368,12 +368,6 @@ function pathCaseKey(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
 }
 
-/** Attribute shape of a recast JSX element (used in revertRouterPatch) */
-type RouteAttr = { name?: { name?: string }; value?: { value?: string } };
-
-/** Recast JSX element shape for <Route> nodes (used in revertRouterPatch) */
-type RouteEl = { openingElement: { name: { name?: string }; attributes: RouteAttr[] } };
-
 /** Recast parser using @babel/parser for TSX/TS support. Module-level constant shared across methods. */
 const RECAST_PARSER = {
   parse: (source: string) =>
@@ -1381,12 +1375,16 @@ export class PreviewFileManager {
         const el = path.node;
         if (el.openingElement.name.type === 'JSXIdentifier' && el.openingElement.name.name === 'Routes') {
           el.children = (el.children ?? []).filter((child) => {
-            if (child.type !== 'JSXElement') return true;
-            // Remove Route elements with path="/test-preview"
-            const childEl = child as RouteEl;
-            if (childEl.openingElement.name.name !== 'Route') return true;
-            return !childEl.openingElement.attributes.some(
-              (attr) => attr.name?.name === 'path' && attr.value?.value === '/test-preview',
+            if (!namedTypes.JSXElement.check(child)) return true;
+            if (child.openingElement.name.type !== 'JSXIdentifier' || child.openingElement.name.name !== 'Route')
+              return true;
+            return !(child.openingElement.attributes ?? []).some(
+              (attr) =>
+                attr.type === 'JSXAttribute' &&
+                attr.name.type === 'JSXIdentifier' &&
+                attr.name.name === 'path' &&
+                attr.value?.type === 'StringLiteral' &&
+                attr.value.value === '/test-preview',
             );
           });
           return false;

@@ -556,7 +556,12 @@ export class ComponentScanner {
   /**
    * Scan a directory for page files with Next.js special file filtering.
    */
-  private scanPagesDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
+  private scanPagesDirectory(
+    dirPath: string,
+    categoryRoot: string,
+    projectRoot: string,
+    skipDirs?: Set<string>,
+  ): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -566,7 +571,8 @@ export class ComponentScanner {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot));
+        if (skipDirs?.has(entry.name)) continue;
+        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot, skipDirs));
       } else if (entry.isFile()) {
         const baseName = entry.name.replace(/\.(tsx?|jsx?)$/, '');
         if (
@@ -594,17 +600,17 @@ export class ComponentScanner {
 
   /** Build ComponentsData from absolute paths */
   private buildComponentsData(paths: ProjectStructurePaths, projectRoot: string): ComponentsData {
+    const resolvePaths = (rawPaths: string[] | null | undefined): Set<string> =>
+      new Set((rawPaths ?? []).map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))));
+
     // Collect atom directory paths so composites scanner can skip them
-    const atomDirPaths = new Set(
-      (paths.atomComponentsPaths ?? []).map((p) => {
-        const resolved = path.isAbsolute(p) ? p : path.join(projectRoot, p);
-        return resolved;
-      }),
-    );
+    const atomDirPaths = resolvePaths(paths.atomComponentsPaths);
+    // Collect composite directory paths so pages scanner can skip them
+    const compositeDirPaths = resolvePaths(paths.compositeComponentsPaths);
 
     const atomGroups = this.buildGroups(paths.atomComponentsPaths, projectRoot, 'component');
     const compositeGroups = this.buildGroups(paths.compositeComponentsPaths, projectRoot, 'component', atomDirPaths);
-    const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page');
+    const pageGroups = this.buildGroups(paths.pagesPaths, projectRoot, 'page', compositeDirPaths);
 
     const isMonorepo = this.isMonorepoRoot(projectRoot);
     if (!isMonorepo) {
@@ -677,6 +683,9 @@ export class ComponentScanner {
     const atomDirPaths = new Set(
       structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
+    const compositeDirPaths = new Set(
+      structure.compositeComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
+    );
     const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
     const compositeGroups = this.buildGroups(
       structure.compositeComponentsPaths,
@@ -684,7 +693,7 @@ export class ComponentScanner {
       'component',
       atomDirPaths,
     );
-    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page');
+    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page', compositeDirPaths);
 
     return { name, path: relativePath, supported: true, atomGroups, compositeGroups, pageGroups };
   }
@@ -941,7 +950,12 @@ export class ComponentScanner {
 
       const components =
         kind === 'page'
-          ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
+          ? this.scanPagesDirectory(
+              categoryPath,
+              categoryPath,
+              projectRoot,
+              applicableSkips.size > 0 ? applicableSkips : undefined,
+            )
           : this.scanComponentDirectory(
               categoryPath,
               categoryPath,

@@ -442,8 +442,8 @@ export class PreviewModeManager {
 
   private async _applyPatchIfNeeded(): Promise<void> {
     const detection = await detectFramework(this._projectRoot, this._io);
-    if (detection.framework === 'vite-spa-jsx-router') {
-      const routerFile = await this.detectRouterFile();
+    if (detection.framework === 'vite-spa-jsx-router' || detection.framework === 'astro') {
+      const routerFile = detection.framework === 'vite-spa-jsx-router' ? await this.detectRouterFile() : null;
       if (routerFile) {
         await this._fileManager.patchRouterConfig(routerFile);
         return;

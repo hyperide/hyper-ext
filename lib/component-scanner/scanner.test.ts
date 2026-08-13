@@ -271,6 +271,44 @@ describe('ComponentScanner.getComponentsData', () => {
     expect(store.saved).toBe(true);
     expect(store.savedPaths?.atomComponentsPaths).toEqual(['src/components/ui']);
   });
+
+  // HYP-392/393: composite subdirs must not appear in pages scan
+  it('should exclude composite subdirs from pages scan', async () => {
+    // Project layout:
+    //   src/pages/Home.tsx        ← a page
+    //   src/pages/components/     ← composites live here; must NOT appear in pages
+    //     Card.tsx
+    const pagesRoot = path.join(TMP_DIR, 'pages-project');
+    fs.mkdirSync(path.join(pagesRoot, 'src', 'pages', 'components'), { recursive: true });
+    fs.writeFileSync(path.join(pagesRoot, 'src', 'pages', 'Home.tsx'), 'export function Home() { return <div/>; }');
+    fs.writeFileSync(
+      path.join(pagesRoot, 'src', 'pages', 'components', 'Card.tsx'),
+      'export function Card() { return <div/>; }',
+    );
+
+    const compositeDir = path.join(pagesRoot, 'src', 'pages', 'components');
+    const pagesDir = path.join(pagesRoot, 'src', 'pages');
+
+    const store = createMockStore({
+      atomComponentsPaths: [],
+      compositeComponentsPaths: [compositeDir],
+      pagesPaths: [pagesDir],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(pagesRoot);
+
+    // Composite group should contain Card.tsx
+    expect(result.compositeGroups).toHaveLength(1);
+    const compositeNames = result.compositeGroups[0].components.map((c) => c.name);
+    expect(compositeNames).toContain('Card.tsx');
+
+    // Pages group should contain Home.tsx but NOT Card.tsx (composite subdir excluded)
+    expect(result.pageGroups).toHaveLength(1);
+    const pageNames = result.pageGroups[0].components.map((c) => c.name);
+    expect(pageNames).toContain('Home.tsx');
+    expect(pageNames).not.toContain('components/Card.tsx');
+  });
 });
 
 describe('ComponentScanner.detectProjectStructure', () => {
