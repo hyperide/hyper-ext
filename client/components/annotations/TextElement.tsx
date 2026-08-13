@@ -39,6 +39,7 @@ export const TextElement = memo(function TextElement({
       onSizeChangeRef.current?.(text.id, width, height);
     };
 
+    // codeql[js/superfluous-trailing-arguments] -- ResizeObserver callback intentionally ignores the observer 2nd arg
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {

@@ -517,7 +517,6 @@ export class FetchOpenAIProvider implements StreamProvider {
 
     if (textOpen) {
       yield { type: 'content_block_stop', index: blockIndex };
-      textOpen = false;
     }
 
     // Emit the accumulated tool calls as complete blocks, in index order.

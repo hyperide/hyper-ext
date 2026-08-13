@@ -106,6 +106,7 @@ describe('FiberSourceIndex resolveFiberSource parity', () => {
 
     // Simulates resolveSourceIndexFiberSource when both source map resolvers return null:
     // resolveOwnServerSourceMap(f) ?? resolveViaClientSourceMap(f) ?? getOwnFiberSourceLocation(f)
+    // codeql[js/useless-conditional] -- intentional stub: both return null to exercise the fallback-to-getOwnFiberSourceLocation branch
     const resolveOwnServerSourceMap = (_f: Fiber): SourceLocation | null => null;
     const resolveViaClientSourceMap = (_f: Fiber): SourceLocation | null => null;
     const customResolver = (f: Fiber): SourceLocation | null =>

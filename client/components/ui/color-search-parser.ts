@@ -37,6 +37,8 @@ function cssColorToHex(input: string): string | null {
   if (!canvasCtx) canvasCtx = document.createElement('canvas').getContext('2d');
   if (!canvasCtx) return null;
 
+  // codeql[js/useless-assignment-to-property] -- sentinel probe: set known color, overwrite with input,
+  // then read back the normalized value. Two probes handle the edge case where input IS '#010101'.
   canvasCtx.fillStyle = '#010101';
   canvasCtx.fillStyle = input;
   if (canvasCtx.fillStyle !== '#010101') return canvasCtx.fillStyle;

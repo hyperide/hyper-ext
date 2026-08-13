@@ -20,6 +20,7 @@ export function AnnotationsLayerPortal({ containerRef, children }: Props) {
     };
 
     updateBounds();
+    // codeql[js/superfluous-trailing-arguments] -- ResizeObserver passes (entries, observer) but updateBounds takes 0 params; harmless JS coercion
     const resizeObserver = new ResizeObserver(updateBounds);
     resizeObserver.observe(container);
     window.addEventListener('scroll', updateBounds, true);

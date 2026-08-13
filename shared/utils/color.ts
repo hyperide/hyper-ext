@@ -148,10 +148,12 @@ export function findContrastFixHex(hex: string, pairedHex: string, targetLevel: 
     const darkL = hsl.l - d;
     const lightL = hsl.l + d;
 
+    // codeql[js/useless-conditional] -- loop optimization: skip direction once a candidate is found
     if (!darkerFix && darkL >= 0) {
       const candidate = hslToHex(hsl.h, hsl.s, darkL);
       if (contrastRatio(candidate, pairedHex) >= targetRatio) darkerFix = candidate;
     }
+    // codeql[js/useless-conditional] -- loop optimization: skip direction once a candidate is found
     if (!lighterFix && lightL <= 100) {
       const candidate = hslToHex(hsl.h, hsl.s, lightL);
       if (contrastRatio(candidate, pairedHex) >= targetRatio) lighterFix = candidate;

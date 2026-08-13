@@ -393,7 +393,8 @@ export function useElementStyleData(options: UseElementStyleDataOptions): Elemen
     // Derive componentPath from syntheticRef when no component is open from Explorer.
     // StyleReadService uses the embedded path in the syntheticRef (fileName:line:col) anyway.
     let effectiveComponentPath = componentPath;
-    if (!effectiveComponentPath && elementId) {
+    if (!effectiveComponentPath) {
+      // elementId is always truthy here (early return at top of effect guards it)
       const m = elementId.match(/^(.+):\d+:\d+$/);
       if (m) effectiveComponentPath = m[1];
     }

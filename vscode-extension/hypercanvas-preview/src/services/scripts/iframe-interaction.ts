@@ -258,7 +258,7 @@ function warmClientSourceMaps(): void {
  * Called from warmClientChunk and serverSourceMapResult when new locations are cached.
  */
 function retryPendingClick(): void {
-  if (!pendingClickElement) return;
+  if (!pendingClickElement) return; // codeql[js/useless-conditional] -- pendingClickElement is mutable state; null-check is a live guard
   if (Date.now() - pendingClickTimestamp.value > PENDING_CLICK_TTL_MS) {
     pendingClickElement = null;
     return;
@@ -552,7 +552,7 @@ attachClickHandler(
       );
     },
     onEmptyClick: (emptyClickEvent) => {
-      if (pendingClickElement) return;
+      if (pendingClickElement) return; // codeql[js/useless-conditional] -- pendingClickElement is mutable state; guard prevents empty-click while a click is pending
       if (emptyClickEvent.metaKey || emptyClickEvent.ctrlKey) return;
       window.parent.postMessage({ type: 'hypercanvas:emptyClick' }, '*');
     },
@@ -935,6 +935,7 @@ function setupBodyObservers(): void {
     overlayResizeObserver.observe(document.body);
   }
 }
+// codeql[js/superfluous-trailing-arguments] -- ResizeObserver callback intentionally ignores entries and observer args
 const overlayResizeObserver =
   typeof ResizeObserver !== 'undefined'
     ? new ResizeObserver(() => {
