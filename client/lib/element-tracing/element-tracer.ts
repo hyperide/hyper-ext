@@ -8,7 +8,7 @@
 import { resolveCallSiteTarget } from '../../../shared/canvas-interaction/resolve-source';
 import { clearTracingDebugOnce, tracingDebugOnce } from '../../../shared/canvas-interaction/tracing-debug';
 import type { LocalResolveResult, TracingResolver } from '../../../shared/canvas-interaction/types';
-import { getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
+import { type Fiber, getFiberFromDOM } from '../../../shared/element-tracing/fiber-internals';
 import { toProjectRelative } from '../../../shared/element-tracing/path-normalization';
 import type {
   ComponentTreeNode,
@@ -70,12 +70,27 @@ export class ElementTracer implements TracingResolver {
   private readonly _nodeMapUpdateHandlers = new Set<(msg: NodeMapUpdate) => void>();
   private readonly _disposeTransport: () => void;
   private _projectRoot: string | undefined;
+  /**
+   * Source-map-MAPPED-only fiber resolver for the call-site walk-up (no compiled fallback).
+   * Under React 19 + Vite a `_debugStack` ancestor's raw position is the COMPILED line in the
+   * transformed module (past the real file's EOF); committing it makes the server node-map /
+   * AST lookup miss. Passing this into `resolveCallSiteTarget` keeps the call site in ORIGINAL
+   * coordinates and SKIPS an ancestor the map can't resolve — mirrors the extension's
+   * `mapOwnFiberSource` (HYP-970). Undefined → the raw `parseDebugStack` fallback (React 18 /
+   * dev servers whose compiled ≈ original).
+   */
+  private readonly _mapCallSiteSource?: (fiber: Fiber) => SourceLocation | null;
   /** Currently rendered component file path (set by useElementTracer) */
   renderedFile: string | null = null;
 
-  constructor(adapter: FrameworkAdapter, transport: TracingTransport) {
+  constructor(
+    adapter: FrameworkAdapter,
+    transport: TracingTransport,
+    mapCallSiteSource?: (fiber: Fiber) => SourceLocation | null,
+  ) {
     this._adapter = adapter;
     this._transport = transport;
+    this._mapCallSiteSource = mapCallSiteSource;
     this._disposeTransport = transport.onMessage(this._handleMessage.bind(this));
   }
 
@@ -109,7 +124,7 @@ export class ElementTracer implements TracingResolver {
 
     // Resolve to call site for imported component internals (shared logic)
     const fiber = getFiberFromDOM(element);
-    const resolvedTarget = resolveCallSiteTarget(source, fiber, this.renderedFile, itemIndex);
+    const resolvedTarget = resolveCallSiteTarget(source, fiber, this.renderedFile, itemIndex, this._mapCallSiteSource);
     const resolvedResult = this._findInNodeMaps(resolvedTarget.source, resolvedTarget.itemIndex);
     if (resolvedResult) return resolvedResult;
 

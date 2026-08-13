@@ -327,6 +327,81 @@ describe('resolveCallSiteTarget', () => {
     });
   });
 
+  it('maps the _debugStack call-site through the source map instead of committing the RAW COMPILED position (HYP-970)', () => {
+    // Regression (0.1.69, react-vite-tw4-twitter, React 19.2.4 + Vite 8 + plugin-react 6):
+    // A `_debugStack` frame carries the COMPILED position in the Vite-served module
+    // (jsxDEV output, ~2x the source line count), NOT the original source position.
+    // HYP-897 added `parseDebugStack(current._debugStack)` to the call-site walk and
+    // committed that compiled position verbatim — e.g. a clicked element inside <Tweet>
+    // resolved to the `tweets.map(...)` call site at the COMPILED "Feed.tsx:65:84", a line
+    // that does not exist in the 51-line source. AstService._resolveElementInCorrectFile
+    // then parsed the real file, found nothing at line 65, and EVERY inspector style write
+    // failed ("Element not found"). The call-site position must be source-map-mapped, using
+    // the SAME mapper that already produced `directSource`, so both are in original-source
+    // coordinates. (HYP-897's own test — dev server whose compiled≈original — stays green
+    // because it passes no mapper and the raw-parseDebugStack fallback is preserved.)
+    const tweetCallSite = makeStackFiber('src/components/Feed.tsx', 65, 84, {
+      tag: 0,
+      type: function Tweet() {},
+    });
+    const internalDiv = makeStackFiber('src/components/Tweet.tsx', 20, 4, {
+      tag: 5,
+      type: 'div',
+      return: tweetCallSite,
+    });
+    tweetCallSite.child = internalDiv;
+
+    // directSource is the source-map-MAPPED leaf (original Tweet.tsx coordinates).
+    const directSource = source({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    // The mapper maps the <Tweet> call-site fiber's compiled frame back to the ORIGINAL
+    // Feed.tsx position (line 30, where `<Tweet .../>` is actually written in source).
+    const mapped: SourceLocation = { fileName: 'src/components/Feed.tsx', line: 30, column: 8 };
+    const resolveLocation = (f: Fiber): SourceLocation | null => (f === tweetCallSite ? mapped : null);
+
+    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/App.tsx', 0, resolveLocation);
+
+    // Must be the MAPPED original position, never the compiled parseDebugStack position
+    // (Feed.tsx:65:83 = column 84 - 1).
+    expect(result.source).toEqual(mapped);
+    expect(result.source.line).not.toBe(65);
+  });
+
+  it('SKIPS a _debugStack ancestor the source map cannot resolve and walks to the next mappable cross-file ancestor (HYP-970)', () => {
+    // The exact react-vite-tw4-twitter shape: clicking a host <div> inside an imported
+    // <Tweet> rendered in `tweets.map(...)`. The <Tweet> COMPONENT fiber's own jsxDEV
+    // column has NO source-map entry (maps to null), while the wrapping <div> in Feed maps
+    // cleanly. The walk must NOT commit the unmappable component fiber's raw compiled
+    // `parseDebugStack` line (Feed.tsx:65:84, past the 51-line source EOF) — it must skip it
+    // and use the next mappable cross-file ancestor.
+    const tweetComponent = makeStackFiber('src/components/Feed.tsx', 65, 84, {
+      tag: 0,
+      type: function Tweet() {},
+    });
+    const feedWrapperDiv = makeStackFiber('src/components/Feed.tsx', 999, 6, {
+      tag: 5,
+      type: 'div',
+      return: null,
+    });
+    tweetComponent.return = feedWrapperDiv;
+    const internalDiv = makeStackFiber('src/components/Tweet.tsx', 20, 4, {
+      tag: 5,
+      type: 'div',
+      return: tweetComponent,
+    });
+
+    const directSource = source({ fileName: 'src/components/Tweet.tsx', line: 20, column: 3 });
+    // Mapper: the <Tweet> component fiber is UNMAPPABLE (null); the Feed wrapper div maps.
+    const wrapper: SourceLocation = { fileName: 'src/components/Feed.tsx', line: 44, column: 6 };
+    const resolveLocation = (f: Fiber): SourceLocation | null => (f === feedWrapperDiv ? wrapper : null);
+
+    const result = resolveCallSiteTarget(directSource, internalDiv, 'src/App.tsx', 0, resolveLocation);
+
+    // Must skip the unmappable component fiber (never commit Feed.tsx:65:83) and return the
+    // mapped wrapper — a real, AST-resolvable position.
+    expect(result.source).toEqual(wrapper);
+    expect(result.source.line).not.toBe(65);
+  });
+
   it('does not use a _debugStack-only ancestor as the call site when directSource started synthetic and recovery found nothing (gate x React 19, HYP-897)', () => {
     // Directly locks in the interaction this diff introduces: adding `_debugStack`
     // support to the call-site walk must NOT resurrect the HYP-424 "unrelated ancestor"

@@ -31,7 +31,95 @@ export interface ResolverContext {
   warmFiberChunkFrames: (fiber: Fiber) => void;
 }
 
+/**
+ * OWN-fiber source-map mapper for the call-site walk-up. Resolves a fiber's own frame
+ * ONLY (no `.return` walk — resolveViaClientSourceMap would bleed an unrelated ancestor's
+ * source into the call site) and NEVER falls back to a raw `_debugStack`/`parseDebugStack`
+ * frame. Passed into resolveCallSiteTarget/Source so the React-19 `_debugStack` ancestor
+ * resolves to an ORIGINAL-source position (matching directSource), instead of the
+ * transformed-module (jsxDEV) `parseDebugStack` line that lies past the real file's EOF and
+ * that AstService can never resolve — every inspector style write then failed with "Element
+ * not found" (HYP-970; same class HYP-49 already guards for the decorative drag path).
+ * Returns null when the source map is still cold, so resolveCallSiteTarget keeps its own
+ * `parseDebugStack` fallback / warm-retry rather than committing a compiled position.
+ */
+export function mapOwnFiberSource(fiber: Fiber): SourceLocation | null {
+  return resolveOwnServerSourceMap(fiber) ?? resolveOwnClientSourceMap(fiber).resolved ?? null;
+}
+
+/** True when the fiber has an OWN client chunk frame whose source map is not yet fetched (cold),
+ *  as opposed to a cached definitive miss. Own-fiber only — never walks `.return`. */
+function hasUnresolvedOwnClientFrame(fiber: Fiber): boolean {
+  if (!fiber._debugStack) return false;
+  for (const frame of extractClientChunkFrames(fiber._debugStack)) {
+    const key = `${frame.url}:${frame.line}:${frame.col}`;
+    if (!clientSourceMapCache.has(key) && !clientInternalFrames.has(key)) return true;
+  }
+  return false;
+}
+
+/**
+ * OWN-fiber call-site mapper that distinguishes the "no location" states `mapOwnFiberSource`
+ * collapses to null (HYP-970 / Codex P1):
+ *   - a mapped hit → return it.
+ *   - a definitive mapped-MISS (client `resolved === null`, or all own frames cached) → return
+ *     null WITHOUT flagging cold, so the caller keeps walking to the next mappable ancestor.
+ *   - genuinely COLD (an own client OR server frame is not yet fetched) → kick off warming for
+ *     THIS fiber's own frames (so it resolves to the TRUE call site next pass) and, when `cold`
+ *     is provided, flag it so the caller keeps the valid leaf source instead of committing a
+ *     wrong ancestor while the call-site map is still warming. Returns null for now.
+ *
+ * The cold flag is gated on an ACTUAL unresolved frame (not just `undefined`) so a server-only /
+ * RSC call-site whose frame is a cached definitive-null is treated as a miss (skip), never as
+ * cold-forever (Codex P1) — otherwise the walk would discard every later mappable ancestor.
+ */
+function mapOrWarmCallSite(
+  fiber: Fiber,
+  warmServer: (f: Fiber) => void,
+  warmFiber: (f: Fiber) => void,
+  cold?: { value: boolean },
+): SourceLocation | null {
+  const server = resolveOwnServerSourceMap(fiber);
+  if (server) return server;
+  const own = resolveOwnClientSourceMap(fiber);
+  if (own.resolved !== undefined) return own.resolved; // mapped hit, or definitive client null-miss
+  warmServer(fiber);
+  warmFiber(fiber);
+  if (cold && (hasUnresolvedOwnClientFrame(fiber) || hasUnresolvedServerFrames(fiber))) {
+    cold.value = true;
+  }
+  return null;
+}
+
+/**
+ * Resolve the call-site target while warming any COLD `_debugStack` ancestor and reporting
+ * whether one was skipped. `coldCallSite === true` means a call-site ancestor's source map was
+ * still warming and got skipped (warming for it was just kicked off) — the caller should keep the
+ * element's own valid LEAF source for this pass rather than committing the further-up ancestor
+ * the walk fell to, and the true call site resolves on the next pass once the frame warms. Used
+ * by `resolveClickLocal` (HYP-970 / Codex P1). Side-effect: warms cold ancestors.
+ */
+function resolveCallSiteWithWarm(
+  source: SourceLocation,
+  fiber: Fiber | null,
+  renderedComponentPath: string | null,
+  directItemIndex: number,
+  warmServer: (f: Fiber) => void,
+  warmFiber: (f: Fiber) => void,
+): { target: ReturnType<typeof resolveCallSiteTarget>; coldCallSite: boolean } {
+  const cold = { value: false };
+  const mapper = (f: Fiber): SourceLocation | null => mapOrWarmCallSite(f, warmServer, warmFiber, cold);
+  const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex, mapper);
+  return { target, coldCallSite: cold.value };
+}
+
 export function createIframeResolver(ctx: ResolverContext): TracingResolver {
+  // Call-site mapper for the read-only get* methods (getSourceLocation / getItemIndex /
+  // getMappedSourceLocation): warm a cold ancestor so it resolves next pass. The cold flag is
+  // not tracked here (no click to specialise). resolveClickLocal uses `resolveCallSiteWithWarm`
+  // so it can keep the valid leaf source on the cold-call-site race.
+  const mapFiberSource = (fiber: Fiber): SourceLocation | null =>
+    mapOrWarmCallSite(fiber, ctx.warmServerChunkFrames, ctx.warmFiberChunkFrames);
   return {
     getSourceLocation(element: HTMLElement): SourceLocation | null {
       const fiber = getFiberFromDOM(element);
@@ -41,7 +129,7 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
         if (smLoc) loc = smLoc;
       }
       if (loc) {
-        return resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath);
+        return resolveCallSiteSource(loc, fiber, ctx.renderedComponentPath, mapFiberSource);
       }
       return loc;
     },
@@ -63,11 +151,11 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       // this path exists to avoid. So we resolve only the element's own frames and fail
       // safe (warm + null) when its own source map is cold. (HYP-49)
       const smLoc = resolveOwnServerSourceMap(fiber) ?? resolveOwnClientSourceMap(fiber).resolved ?? null;
-      if (smLoc) return resolveCallSiteSource(smLoc, fiber, ctx.renderedComponentPath);
+      if (smLoc) return resolveCallSiteSource(smLoc, fiber, ctx.renderedComponentPath, mapFiberSource);
       // React 18: `_debugSource` (and memo/forwardRef wrapper types) is a real
       // source position; `findNearestDebugSource` reads only those, never `_debugStack`.
       const ds = findNearestDebugSource(fiber);
-      if (ds) return resolveCallSiteSource(debugSourceToLocation(ds), fiber, ctx.renderedComponentPath);
+      if (ds) return resolveCallSiteSource(debugSourceToLocation(ds), fiber, ctx.renderedComponentPath, mapFiberSource);
       // No mapped source AND no React 18 `_debugSource` → React 19 with a cold source
       // map. Returning null makes the decorative drag fail safe, but if the map was never
       // warmed (initial prewarm missed/in-flight) the drag would be a silent no-op with
@@ -83,7 +171,7 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       const directItemIndex = getItemIndexFromDOM(element);
       const source = getSourceLocationFromDOM(element);
       if (source === null) return directItemIndex;
-      return resolveCallSiteTarget(source, fiber, ctx.renderedComponentPath, directItemIndex).itemIndex;
+      return resolveCallSiteTarget(source, fiber, ctx.renderedComponentPath, directItemIndex, mapFiberSource).itemIndex;
     },
 
     warmElementSource(element: HTMLElement): void {
@@ -104,7 +192,7 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       // both walk the .return ancestor chain — they would find the CONTAINER's warm source
       // for a COLD LEAF and early-return, skipping the warm-up entirely (the exact scenario
       // this method exists to fix: HYP-31). Use own-fiber checks as in getMappedSourceLocation.
-      if (resolveOwnServerSourceMap(fiber)) return;                        // own server source cached
+      if (resolveOwnServerSourceMap(fiber)) return; // own server source cached
       if (resolveOwnClientSourceMap(fiber).resolved !== undefined) return; // own client resolved or definitive miss
       ctx.warmServerChunkFrames(fiber);
       ctx.warmFiberChunkFrames(fiber);
@@ -155,9 +243,30 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       }
       if (source === null) return null;
       const directItemIndex = getItemIndexFromDOM(element);
-      const target = resolveCallSiteTarget(source, fiber, ctx.renderedComponentPath, directItemIndex);
-      source = target.source;
-      const itemIndex = target.itemIndex;
+      const { target, coldCallSite } = resolveCallSiteWithWarm(
+        source,
+        fiber,
+        ctx.renderedComponentPath,
+        directItemIndex,
+        ctx.warmServerChunkFrames,
+        ctx.warmFiberChunkFrames,
+      );
+      // Normally commit the resolved call-site target (e.g. the `<Tweet/>` usage in Feed). The
+      // eager full-chain warm in `warmClientSourceMaps` makes the call-site frame warm before the
+      // click, so this is the true call site for real (post-render) clicks.
+      //
+      // `coldCallSite` means a `_debugStack` call-site ancestor's source map was still cold and
+      // was SKIPPED (warming for it was just kicked off). In that narrow race we must NOT commit
+      // the further-up ancestor the walk fell to (a wrong container) — keep the element's own
+      // LEAF source: a valid, AST-resolvable, and specific position (the element actually
+      // clicked, matching 0.1.65). `resolveClickLocal` stays side-effect-free for hover reuse and
+      // never returns a "deferred null" the shared click-handler would misread (HYP-970 / Codex
+      // P1). Once the call-site frame warms, the next resolution pass yields the true call site.
+      let itemIndex = directItemIndex;
+      if (!coldCallSite) {
+        source = target.source;
+        itemIndex = target.itemIndex;
+      }
 
       // Belt-and-suspenders: resolveCallSiteTarget already recovers the element's real
       // source when the direct source is the synthetic preview wrapper, but if the
@@ -210,7 +319,7 @@ export function getSourceIndex(renderedComponentPath: string | null): FiberSourc
   if (sourceIndex) return sourceIndex;
   sourceIndex = new FiberSourceIndex(findHostRootFiber, document, {
     resolveFiberSource: resolveSourceIndexFiberSource,
-    mapSource: (source, fiber) => resolveCallSiteSource(source, fiber, renderedComponentPath),
+    mapSource: (source, fiber) => resolveCallSiteSource(source, fiber, renderedComponentPath, mapOwnFiberSource),
   });
   return sourceIndex;
 }

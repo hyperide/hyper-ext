@@ -50,8 +50,9 @@ export function resolveCallSiteSource(
   directSource: SourceLocation,
   fiber: Fiber | null,
   renderedFile: string | null,
+  resolveLocation?: (fiber: Fiber) => SourceLocation | null,
 ): SourceLocation {
-  return resolveCallSiteTarget(directSource, fiber, renderedFile, 0).source;
+  return resolveCallSiteTarget(directSource, fiber, renderedFile, 0, resolveLocation).source;
 }
 
 /**
@@ -67,6 +68,13 @@ export function resolveCallSiteTarget(
   fiber: Fiber | null,
   renderedFile: string | null,
   directItemIndex: number,
+  // Optional source-map mapper (fiber → ORIGINAL SourceLocation | null). Callers with a
+  // source-map cache (the extension iframe resolver) pass it so the React-19 `_debugStack`
+  // ancestor branch resolves the call site in the SAME original-source coordinates as
+  // `directSource`, instead of the RAW COMPILED `parseDebugStack` frame (a position in the
+  // Vite/jsxDEV-transformed module that does not exist in the real file — HYP-970). Callers
+  // without a mapper (SaaS adapter path, tests) keep the `parseDebugStack` fallback.
+  resolveLocation?: (fiber: Fiber) => SourceLocation | null,
 ): ResolvedCallSiteTarget {
   // The synthetic preview entry (__canvas_preview__.tsx) is NEVER a valid go-to-code
   // target, but a direct source can itself BE synthetic (the call-site walk below only
@@ -120,11 +128,27 @@ export function resolveCallSiteTarget(
       // source was committed, silently mismatching the AST-computed nodeRef (HYP-897:
       // Explorer-tree selection on an imported component never showed a selection
       // overlay, e.g. conloca-app's <HostRoutePage> — a real recurring product bug).
-      const callerSource = current._debugSource
-        ? debugSourceToLocation(current._debugSource)
-        : current._debugStack
-          ? parseDebugStack(current._debugStack)
-          : null;
+      // Resolve THIS ancestor's own call-site source:
+      // - React 18 `_debugSource` is already an original-source position — use it directly.
+      // - React 19 `_debugStack` carries the COMPILED position in the transformed module
+      //   (e.g. Vite/jsxDEV output where line 65 is a `.map()` past the real file's EOF).
+      //   Committing that raw `parseDebugStack` line gives a nodeRef AstService can never
+      //   resolve — every inspector style write then failed with "Element not found"
+      //   (HYP-970). So when a source-map mapper is provided we use ONLY the MAPPED position
+      //   (original-source coordinates, matching `directSource`) and SKIP an ancestor the map
+      //   cannot resolve — e.g. an imported component fiber whose exact jsxDEV column has no
+      //   source-map entry — walking on to the next mappable cross-file ancestor rather than
+      //   committing a compiled line. When NO mapper is provided (SaaS adapter path, unit
+      //   tests) the raw `parseDebugStack` fallback preserves the pre-existing behavior
+      //   (HYP-897 — a dev server whose compiled positions ≈ original).
+      let callerSource: SourceLocation | null;
+      if (current._debugSource) {
+        callerSource = debugSourceToLocation(current._debugSource);
+      } else if (current._debugStack) {
+        callerSource = resolveLocation ? resolveLocation(current) : parseDebugStack(current._debugStack);
+      } else {
+        callerSource = null;
+      }
       if (callerSource && callerSource.fileName !== directSource.fileName) {
         // The synthetic preview entry (__canvas_preview__.tsx) imports and renders
         // the user component, so it is the first cross-file ancestor — but it is
@@ -132,7 +156,7 @@ export function resolveCallSiteTarget(
         // wrapper, there is no real call site between the element and the wrapper,
         // so the element's own (direct) source is the correct target. (HYP-429)
         if (isSyntheticPreviewPath(callerSource.fileName)) break;
-        return { source: callerSource, itemIndex: getItemIndexFromFiber(current) };
+        return { source: callerSource, itemIndex: getItemIndexFromFiber(current, resolveLocation) };
       }
       current = current.return;
     }

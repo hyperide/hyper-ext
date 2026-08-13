@@ -66,6 +66,7 @@ import {
   createIframeResolver,
   invalidateSourceCache,
   getSourceIndex,
+  mapOwnFiberSource,
   resolveSourceIndexFiberSource,
 } from './iframe-resolver';
 type DevToolsHook = {
@@ -222,13 +223,23 @@ async function warmClientChunk(url: string, line: number, col: number): Promise<
  * Used to trigger warming on first click without waiting for the next load/commit.
  */
 function warmFiberChunkFrames(fiber: Fiber): void {
+  // Warm EVERY `_debugStack`-bearing fiber up the return chain, not just the nearest one.
+  // A DOM (host) fiber's `_debugStack` only carries frames for where THAT element was written
+  // (e.g. inside <Tweet>); the imported component's own call site (`<Tweet .../>` in Feed) lives
+  // on the FunctionComponent fiber's separate `_debugStack`. Stopping at the first stack left
+  // those component call-site frames permanently uncached, so `resolveOwnClientSourceMap` on the
+  // call-site ancestor stayed `undefined` (cold) forever and the click resolved to a wrong
+  // ancestor instead of the true `<Tweet>` call site (HYP-970 / Codex P1). Walking the whole
+  // chain warms them; `warmClientChunk` de-dupes by key so re-walks are cheap.
+  // Bounded walk (defensive): a fiber `.return` chain is a tree in practice, but cap the depth so
+  // a malformed/cyclic graph can never hang the iframe. 60 comfortably exceeds real component
+  // nesting; the call-site frames of interest are only a few hops from the DOM node.
   let current: Fiber | null = fiber;
-  while (current !== null) {
+  for (let depth = 0; current !== null && depth < 60; depth++) {
     if (current._debugStack) {
       for (const frame of extractClientChunkFrames(current._debugStack)) {
         void warmClientChunk(frame.url, frame.line, frame.col);
       }
-      break;
     }
     current = (current.return as typeof current | undefined) ?? null;
   }
@@ -276,7 +287,7 @@ function retryPendingClick(): void {
   const element = pendingClickElement;
   pendingClickElement = null;
   const directItemIndex = getItemIndexFromDOM(element);
-  const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex);
+  const target = resolveCallSiteTarget(source, fiber, renderedComponentPath, directItemIndex, mapOwnFiberSource);
   source = target.source;
   const itemIndex = target.itemIndex;
   const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
@@ -577,7 +588,7 @@ function getSourceKey(el: HTMLElement): string | null {
   let loc = resolveSourceIndexFiberSource(fiber);
   if (!loc) return null;
   if (renderedComponentPath) {
-    loc = resolveCallSiteSource(loc, fiber, renderedComponentPath);
+    loc = resolveCallSiteSource(loc, fiber, renderedComponentPath, mapOwnFiberSource);
   }
   return `${loc.fileName}:${loc.line}:${loc.column}`;
 }

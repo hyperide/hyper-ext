@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { DebugSource, Fiber } from '../../../shared/element-tracing/fiber-internals';
 import type {
   FrameworkAdapter,
@@ -365,6 +367,60 @@ describe('ElementTracer', () => {
       });
       expect(transport.sent).toHaveLength(0);
     });
+
+    it('maps a React 19 _debugStack call-site ancestor through the source map, not its raw COMPILED line (HYP-970)', () => {
+      // React 19 + Vite: the imported <Tweet> component fiber carries only `_debugStack`, whose
+      // frame is the COMPILED position in the transformed module (Feed.tsx:65:84 — past the real
+      // 51-line file's EOF). Committing that raw line makes the node-map lookup miss and the
+      // element resolve to the wrong file. With the mapCallSiteSource mapper the call site is
+      // resolved in ORIGINAL coords (Feed.tsx:30:8) and matches the server node map.
+      const tweetStack = new Error();
+      tweetStack.stack = 'Error\n    at http://localhost:5173/src/components/Feed.tsx:65:84';
+      const tweetComponent = mockFiber({ tag: 0, type: function Tweet() {}, _debugStack: tweetStack });
+      const internalDiv = mockFiber({
+        tag: 5,
+        type: 'div',
+        return: tweetComponent,
+        _debugSource: { fileName: '/app/src/components/Tweet.tsx', lineNumber: 20, columnNumber: 4 },
+      });
+      tweetComponent.child = internalDiv;
+
+      adapter = mockAdapter({
+        getSourceLocation: () => ({ fileName: '/app/src/components/Tweet.tsx', line: 20, column: 3 }),
+        getItemIndex: () => 0,
+      });
+      transport = mockTransport();
+      // MAPPED-only mapper: the <Tweet> component fiber → original Feed.tsx:30:8 (never 65:84).
+      const mapCallSiteSource = (f: Fiber) =>
+        f === tweetComponent ? { fileName: 'src/components/Feed.tsx', line: 30, column: 8 } : null;
+      tracer = new ElementTracer(adapter, transport, mapCallSiteSource);
+      tracer.renderedFile = 'src/App.tsx';
+      transport.simulateMessage({
+        type: 'node-map-update',
+        filePath: 'src/components/Feed.tsx',
+        fileHash: 'feed',
+        version: 1,
+        nodes: [
+          {
+            nodeRef: 'src/components/Feed.tsx:30:8',
+            tag: 'Tweet',
+            loc: { fileName: 'src/components/Feed.tsx', line: 30, column: 8 },
+            endLoc: { fileName: 'src/components/Feed.tsx', line: 30, column: 40 },
+            parentRef: null,
+            children: [],
+            isComponent: true,
+            fingerprint: 'callsite',
+          },
+        ],
+      });
+
+      const result = tracer.resolveClickLocal(attachFiber({} as HTMLElement, internalDiv));
+
+      // Resolves to the MAPPED call site (never the compiled Feed.tsx:65:83), no server fallback.
+      expect(result?.nodeRef).toBe('src/components/Feed.tsx:30:8');
+      expect(result?.source.line).not.toBe(65);
+      expect(transport.sent).toHaveLength(0);
+    });
   });
 
   describe('buildSourceKeyIndex', () => {
@@ -423,5 +479,30 @@ describe('ElementTracer', () => {
       const result = tracer.getItemIndex({} as HTMLElement);
       expect(result).toBe(3);
     });
+  });
+});
+
+/**
+ * Parity guard (HYP-970): the SaaS entry point must wire a REAL source-map mapper into
+ * ElementTracer's call-site walk-up. ElementTracer's `_mapCallSiteSource` is optional and
+ * defaults to raw `parseDebugStack` when omitted — under React 19 + Vite that commits a
+ * COMPILED `_debugStack` line (past the source file's EOF) and every inspector style write
+ * fails with "Element not found". The wiring lives inside a React `useEffect` in
+ * `useElementTracer.ts` (not unit-testable without rendering an iframe), so this guards the
+ * source directly: if a future refactor drops the 3rd `ElementTracer` arg — or swaps it for a
+ * no-op — the regression is caught here instead of in production.
+ */
+describe('parity guard: useElementTracer wires a real source-map mapper (HYP-970)', () => {
+  const hookSrc = readFileSync(join(import.meta.dir, '..', '..', 'hooks', 'useElementTracer.ts'), 'utf8');
+
+  it('constructs a real ModuleSourceMapResolver (not a no-op mapper)', () => {
+    expect(hookSrc).toMatch(/new\s+ModuleSourceMapResolver\s*\(/);
+  });
+
+  it('passes moduleSourceMapResolver.resolveFiberSource as ElementTracer call-site mapper', () => {
+    // Bind the assertion to the ElementTracer(...) call itself: the mapper reference must appear
+    // WITHIN the constructor arguments (up to the terminating `;`). Dropping the 3rd arg leaves
+    // `new ElementTracer(adapter, transport);` — no resolveFiberSource inside → this fails.
+    expect(hookSrc).toMatch(/new\s+ElementTracer\s*\([^;]*moduleSourceMapResolver\.resolveFiberSource\s*\(/);
   });
 });

@@ -202,7 +202,13 @@ export function useElementTracer({
 
       const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/element-tracing/${projectId}`;
       const transport = new WSTracingTransport(() => new WebSocket(wsUrl));
-      const tracer = new ElementTracer(adapter, transport);
+      // Call-site walk-up mapper: source-map-MAPPED position ONLY (no getOwnFiberSourceLocation
+      // compiled fallback), so a React-19 `_debugStack` ancestor resolves to original coords —
+      // never the transformed-module line that misses the server node-map (HYP-970). Parity with
+      // the extension's mapOwnFiberSource. resolveFiberSource auto-warms the module's map on miss.
+      const tracer = new ElementTracer(adapter, transport, (fiber) =>
+        moduleSourceMapResolver.resolveFiberSource(fiber),
+      );
 
       // Retry-on-resolve for the first-click warmup race (HYP-635): a click that
       // misses the node map while its module's source map is still fetching is
