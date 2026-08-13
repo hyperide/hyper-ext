@@ -2,6 +2,16 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.52] — 2026-05-28
+
+### Bug fixes
+
+- **Explorer shows components in src/app/** — `detectProjectStructure` now handles `src/app/` (non-Next.js) by delegating to `categorizeComponentsDir`; previously the Explorer showed all categories empty for projects with this layout (`b53d8b0f`)
+- **Git excludes on first component switch** — `ensureGitExclude` is now called from `_initPreviewFile` and `ensureStandaloneEntry`, so generated files are hidden from `git status` as soon as they are created rather than only after `ensurePreviewFiles` is invoked (`8e1beddc`)
+- **`.samples.tsx` and `__canvas_samples__.tsx` hidden from git** — `ensureGitExclude` now includes `__canvas_samples__.tsx` (legacy global samples file); `isPreviewIneligibleByName` excludes `*.samples.tsx` siblings so they never appear as previewable components or cause HMR churn (`a39a7288`)
+
+---
+
 ## [0.1.51] — 2026-05-28
 
 ### Bug fixes
