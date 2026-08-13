@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { extractErrors, hasErrorsInLogs, hasSuccessInLogs } from './fix-session';
+import { extractErrors, hasErrorsInLogs, hasSuccessInLogs } from './log-patterns';
 
 describe('hasErrorsInLogs', () => {
   it('detects TypeScript errors', () => {

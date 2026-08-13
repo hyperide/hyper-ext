@@ -93,25 +93,25 @@ The shell interprets `;` as command separator, executing arbitrary commands on t
 Replace `execAsync()` with `spawn()` using array arguments:
 
 ```typescript
-import { spawn } from "node:child_process";
+import { spawn } from 'node:child_process';
 
 const args = [
-  "run",
-  "-d",
-  "--name",
+  'run',
+  '-d',
+  '--name',
   containerName,
-  "-v",
+  '-v',
   `${project.path}:/app`,
-  "-p",
+  '-p',
   `${project.port}:${project.internalPort}`,
-  "-e",
+  '-e',
   `INSTALL_COMMAND=${project.installCommand}`,
-  "-e",
+  '-e',
   `DEV_COMMAND=${devCommand}`,
   imageName,
 ];
 
-const process = spawn("docker", args);
+const process = spawn('docker', args);
 ```
 
 ---
@@ -129,18 +129,18 @@ Test file paths are concatenated into a shell command string and executed via `d
 #### Vulnerable Code
 
 ```typescript
-function buildTestCommand(runner: "vitest" | "jest" | "bun", testPaths: string[]): string {
-  const pathsArg = testPaths.map((p) => `"${p}"`).join(" ");
+function buildTestCommand(runner: 'vitest' | 'jest' | 'bun', testPaths: string[]): string {
+  const pathsArg = testPaths.map((p) => `"${p}"`).join(' ');
 
   switch (runner) {
-    case "vitest":
+    case 'vitest':
       return `npx vitest run --reporter=verbose ${pathsArg}`;
     // ...
   }
 }
 
 // Later executed as:
-spawn("docker", ["exec", containerName, "sh", "-c", command]);
+spawn('docker', ['exec', containerName, 'sh', '-c', command]);
 ```
 
 #### Proof of Concept
@@ -163,8 +163,8 @@ npx vitest run --reporter=verbose "test.ts"; rm -rf /app #"
 Pass arguments directly without shell interpretation:
 
 ```typescript
-const args = ["exec", containerName, "npx", "vitest", "run", "--reporter=verbose", ...testPaths];
-spawn("docker", args);
+const args = ['exec', containerName, 'npx', 'vitest', 'run', '--reporter=verbose', ...testPaths];
+spawn('docker', args);
 ```
 
 ---
@@ -198,13 +198,13 @@ This resolves to `/etc` on the host filesystem, potentially exposing sensitive f
 #### Remediation
 
 ```typescript
-const normalizedSubdir = path.normalize(subdirectory).replace(/^(\.\.[\/\\])+/, "");
+const normalizedSubdir = path.normalize(subdirectory).replace(/^(\.\.[\/\\])+/, '');
 const scanPath = path.join(publicDirPath, normalizedSubdir);
 const resolvedScan = path.resolve(scanPath);
 const resolvedBase = path.resolve(publicDirPath);
 
 if (!resolvedScan.startsWith(resolvedBase)) {
-  return c.json({ error: "Access denied: path traversal detected" }, 403);
+  return c.json({ error: 'Access denied: path traversal detected' }, 403);
 }
 ```
 
@@ -243,13 +243,13 @@ Project code:
 ```javascript
 // Fork bomb
 while (true) {
-  require("child_process").fork(__filename);
+  require('child_process').fork(__filename);
 }
 
 // Memory exhaustion
 const data = [];
 while (true) {
-  data.push(new Array(1000000).fill("x"));
+  data.push(new Array(1000000).fill('x'));
 }
 ```
 
@@ -259,22 +259,22 @@ Add resource limits to container startup:
 
 ```typescript
 const args = [
-  "run",
-  "-d",
-  "--name",
+  'run',
+  '-d',
+  '--name',
   containerName,
-  "--memory=1g",
-  "--memory-swap=1g",
-  "--cpus=2",
-  "--pids-limit=200",
-  "--security-opt=no-new-privileges",
-  "--cap-drop=ALL",
-  "--cap-add=CHOWN",
-  "--cap-add=SETUID",
-  "--cap-add=SETGID",
-  "-v",
+  '--memory=1g',
+  '--memory-swap=1g',
+  '--cpus=2',
+  '--pids-limit=200',
+  '--security-opt=no-new-privileges',
+  '--cap-drop=ALL',
+  '--cap-add=CHOWN',
+  '--cap-add=SETUID',
+  '--cap-add=SETGID',
+  '-v',
   `${project.path}:/app`,
-  "-p",
+  '-p',
   `${project.port}:${project.internalPort}`,
   imageName,
 ];
@@ -353,7 +353,7 @@ WebSocket path is stored and forwarded without complete validation, potentially 
 ```typescript
 const projectIdMatch = pathname.match(/^\/project-preview\/([a-f0-9-]+)/);
 if (!projectIdMatch) {
-  return new Response("Invalid project path", { status: 400 });
+  return new Response('Invalid project path', { status: 400 });
 }
 const projectId = projectIdMatch[1];
 const path: string = pathname + url.search; // Stored as-is
@@ -375,8 +375,8 @@ The regex only validates the beginning of the path, not what follows.
 ```typescript
 // Validate entire path structure
 const pathAfterProject = pathname.slice(projectIdMatch[0].length);
-if (pathAfterProject.includes("..") || pathAfterProject.includes("//")) {
-  return new Response("Invalid path", { status: 400 });
+if (pathAfterProject.includes('..') || pathAfterProject.includes('//')) {
+  return new Response('Invalid path', { status: 400 });
 }
 ```
 
@@ -391,8 +391,8 @@ if (pathAfterProject.includes("..") || pathAfterProject.includes("//")) {
 #### Vulnerable Code
 
 ```typescript
-const artifacts = [".next", "dist", ".vite", "out"];
-const paths = artifacts.map((a) => `"${project.path}/${a}"`).join(" ");
+const artifacts = ['.next', 'dist', '.vite', 'out'];
+const paths = artifacts.map((a) => `"${project.path}/${a}"`).join(' ');
 await execAsync(`rm -rf ${paths}`);
 ```
 
@@ -409,7 +409,7 @@ Results in command substitution, executing `id` command.
 #### Remediation
 
 ```typescript
-import { rm } from "node:fs/promises";
+import { rm } from 'node:fs/promises';
 
 for (const artifact of artifacts) {
   const artifactPath = path.join(project.path, artifact);
@@ -449,13 +449,13 @@ When served with `Content-Type: image/svg+xml`, the script executes in user's br
 4. Or: reject SVG uploads entirely
 
 ```typescript
-import createDOMPurify from "dompurify";
-import { JSDOM } from "jsdom";
+import createDOMPurify from 'dompurify';
+import { JSDOM } from 'jsdom';
 
-const window = new JSDOM("").window;
+const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window);
 
-if (file.type === "image/svg+xml") {
+if (file.type === 'image/svg+xml') {
   const cleanSvg = DOMPurify.sanitize(svgContent, { USE_PROFILES: { svg: true } });
   // Save cleanSvg instead of original
 }
@@ -478,7 +478,7 @@ if (file.type === "image/svg+xml") {
 ```typescript
 const VALID_COMPONENT_PATH = /^[a-zA-Z0-9_\-\/]+\.(tsx?|jsx?)$/;
 if (!VALID_COMPONENT_PATH.test(decodedComponentPath)) {
-  return c.json({ error: "Invalid component path format" }, 400);
+  return c.json({ error: 'Invalid component path format' }, 400);
 }
 ```
 
@@ -497,14 +497,14 @@ No rate limiting on API endpoints allows brute force and DoS attacks.
 #### Remediation
 
 ```typescript
-import { rateLimiter } from "hono-rate-limiter";
+import { rateLimiter } from 'hono-rate-limiter';
 
 app.use(
-  "/api/*",
+  '/api/*',
   rateLimiter({
     windowMs: 60 * 1000, // 1 minute
     limit: 100,
-    keyGenerator: (c) => c.req.header("x-forwarded-for") || "anonymous",
+    keyGenerator: (c) => c.req.header('x-forwarded-for') || 'anonymous',
   }),
 );
 ```
@@ -524,12 +524,12 @@ Path validation uses `path.resolve()` which doesn't resolve symlinks, potentiall
 #### Remediation
 
 ```typescript
-import { realpath } from "node:fs/promises";
+import { realpath } from 'node:fs/promises';
 
 const resolvedPath = await realpath(fullPath);
 const resolvedBase = await realpath(projectPath);
 if (!resolvedPath.startsWith(resolvedBase)) {
-  return c.json({ error: "Access denied" }, 403);
+  return c.json({ error: 'Access denied' }, 403);
 }
 ```
 
@@ -741,27 +741,27 @@ export async function checkWorkspaceAccess(userId: string, workspaceId: string):
 1. Apply check in every route handler:
 
 ```typescript
-const userId = c.get("userId");
+const userId = c.get('userId');
 const project = await getProject(projectId);
-if (!project) return c.json({ error: "Not found" }, 404);
+if (!project) return c.json({ error: 'Not found' }, 404);
 
 const hasAccess = await checkWorkspaceAccess(userId, project.workspaceId);
-if (!hasAccess) return c.json({ error: "Access denied" }, 403);
+if (!hasAccess) return c.json({ error: 'Access denied' }, 403);
 ```
 
 1. Consider using RLS (Row Level Security) in PostgreSQL as defense-in-depth
 
 **Files Modified (commit 10601173):**
 
-| File                               | Changes Made                                           |
-| ---------------------------------- | ------------------------------------------------------ |
-| `server/middleware/workspace.ts`   | Added checkProjectAccess, checkWorkspaceAccess helpers |
-| `server/routes/ai-agent-chats.ts`  | ✅ Added workspace checks to all 5 handlers            |
-| `server/routes/ai-agent.ts`        | ✅ Added workspace check to chat handler               |
-| `server/routes/autoFix.ts`         | ✅ Added access checks to all 6 handlers               |
-| `server/routes/generatePreview.ts` | ✅ Added access checks to AI config endpoints          |
-| `server/routes/docker.ts`          | ✅ Added access checks to all container handlers       |
-| `server/index.ts`                  | ✅ Added authMiddleware to Docker/AI/Auto-Fix routes   |
+| File                               | Changes Made                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| `server/middleware/workspace.ts`   | Added checkProjectAccess, checkWorkspaceAccess helpers                                    |
+| `server/routes/ai-agent-chats.ts`  | ✅ Added workspace checks to all 5 handlers                                               |
+| `server/routes/ai-agent.ts`        | ✅ Added workspace check to chat handler                                                  |
+| `server/routes/autoFix.ts`         | ~~Added access checks to all 6 handlers~~ (file removed — auto-fix loop dropped, HYP-438) |
+| `server/routes/generatePreview.ts` | ✅ Added access checks to AI config endpoints                                             |
+| `server/routes/docker.ts`          | ✅ Added access checks to all container handlers                                          |
+| `server/index.ts`                  | ✅ Added authMiddleware to Docker/AI routes                                               |
 
 **Remaining (lower priority):**
 

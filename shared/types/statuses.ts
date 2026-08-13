@@ -42,11 +42,5 @@ export type ContainerPhase =
   | 'ImagePullBackOff'
   | (string & {});
 
-/** Fix session status (matches `fixSessions.status` varchar values) */
-export type FixSessionStatus = 'running' | 'success' | 'failed' | 'cancelled';
-
-/** Fix attempt result (matches `fixAttempts.result` varchar values) */
-export type FixAttemptResult = 'success' | 'failed' | 'error';
-
 /** AI agent message role (matches `aiAgentMessages.role` varchar values) */
 export type AIMessageRole = 'user' | 'assistant';

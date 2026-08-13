@@ -8,7 +8,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import * as net from 'node:net';
 import * as vscode from 'vscode';
-import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/fix-session';
+import { ERROR_PATTERNS, SUCCESS_PATTERNS } from '../../../../shared/log-patterns';
 import type { RuntimeError } from '../../../../shared/runtime-error';
 import type { DevServerState, DevServerStatus } from '../types';
 import { PreviewProxy } from './PreviewProxy';
