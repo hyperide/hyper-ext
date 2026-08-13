@@ -7,8 +7,9 @@
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, mock, spyOn } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
+import { CanvasEngine } from '@/lib/canvas-engine';
 import type { StyleAdapter } from '@/lib/canvas-engine/adapters/StyleAdapter';
 import type { AstOperations } from '@/lib/platform/types';
 import { STYLE_DEBOUNCE_MS } from '../../constants';
@@ -37,6 +38,19 @@ function createAstOps(updateStyles: AstOperations['updateStyles']): AstOperation
 
 async function waitPastDebounce() {
   await new Promise((resolve) => setTimeout(resolve, STYLE_DEBOUNCE_MS + 50));
+}
+
+/**
+ * Real engine with the network write stubbed out. In jsdom there is no preview
+ * iframe and no active tracer, so FastPatchService's own DOM work is a no-op —
+ * the spies only record what useStyleSync asks it to do.
+ */
+function createEngine() {
+  const engine = new CanvasEngine({ debug: false });
+  spyOn(engine, 'updateASTStyles').mockImplementation(() => Promise.resolve());
+  const applyPatch = spyOn(engine.fastPatch, 'applyPatch');
+  const clearPatch = spyOn(engine.fastPatch, 'clearPatch');
+  return { engine, applyPatch, clearPatch };
 }
 
 describe('useStyleSync', () => {
@@ -97,5 +111,67 @@ describe('useStyleSync', () => {
       state: undefined,
       selectedSourceTabId: undefined,
     });
+  });
+
+  it('clears the injected fast-patch when the selection changes mid-sync (HYP-650)', async () => {
+    const { engine, applyPatch, clearPatch } = createEngine();
+    const astOps = createAstOps(mock(async () => {}));
+
+    const { rerender, result } = renderHook(
+      ({ filePath, selectedIds }) => useStyleSync({ selectedIds, filePath, styleAdapter, astOps, engine }),
+      {
+        initialProps: {
+          filePath: 'src/components/Card.tsx',
+          selectedIds: ['card-root'],
+        },
+      },
+    );
+
+    // Leading-edge flush applies the instant fast-patch immediately.
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red');
+    });
+    expect(applyPatch).toHaveBeenCalled();
+
+    // Switch element before verification settles — the stale !important rule
+    // must not survive on the previous element.
+    rerender({
+      filePath: 'src/components/Card.tsx',
+      selectedIds: ['other-element'],
+    });
+
+    expect(clearPatch).toHaveBeenCalledWith('card-root');
+
+    // The patch id ref is reset on cancel — a later cancel must not re-clear.
+    rerender({
+      filePath: 'src/components/Profile.tsx',
+      selectedIds: ['profile-root'],
+    });
+
+    expect(clearPatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('threads the selected map item index into the fast patch (HYP-651)', () => {
+    const { engine, applyPatch } = createEngine();
+    const astOps = createAstOps(mock(async () => {}));
+
+    const { result } = renderHook(() =>
+      useStyleSync({
+        selectedIds: ['list-item'],
+        filePath: 'src/components/List.tsx',
+        styleAdapter,
+        astOps,
+        engine,
+        itemIndex: 2,
+      }),
+    );
+
+    act(() => {
+      result.current.syncStyleChange('backgroundColor', 'red');
+    });
+
+    // Without the index every .map() item shares one nodeRef and the patch
+    // lands on the first rendered item, not the selected one (HYP-651).
+    expect(applyPatch).toHaveBeenCalledWith('list-item', { backgroundColor: 'red' }, 2);
   });
 });

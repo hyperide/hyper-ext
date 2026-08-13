@@ -51,6 +51,12 @@ export class FastPatchService {
     }
 
     const existing = this.patches.get(elementId);
+    if (existing && existing.element !== element) {
+      // The same nodeRef can resolve to a different DOM node (another .map()
+      // item index, or a re-render) — drop the tag from the old node so the
+      // shared rule doesn't keep styling it (HYP-651).
+      existing.element.removeAttribute(PATCH_ATTR);
+    }
     const patchId = existing?.patchId ?? String(this.nextId++);
     element.setAttribute(PATCH_ATTR, patchId);
     this.patches.set(elementId, { styles, patchId, element });

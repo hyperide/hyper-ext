@@ -285,6 +285,9 @@ export default function RightSidebar({
     astOps,
     currentState,
     engine,
+    // Same .map() item index the read path uses — the fast patch must land on
+    // the selected item, not the first rendered one (HYP-651).
+    itemIndex: selectedItemIndex,
     selectedSourceTabId: explicitSourceTabId,
     onSyncError: handleSyncError,
     onSyncStart: handleSyncStart,

@@ -33,7 +33,10 @@ let mockStyleEl: { textContent: string; id: string; disabled?: boolean } | null 
 let hasIframe = true;
 
 mock.module('@/lib/dom-utils', () => ({
-  getElementFromIframe: (elementId: string) => resolved[elementId] ?? null,
+  // Mirrors the real resolution contract: with an itemIndex the tracer returns
+  // the specific .map() item, without one — the first match for the nodeRef.
+  getElementFromIframe: (elementId: string, itemIndex?: number | null) =>
+    (itemIndex != null ? resolved[`${elementId}@${itemIndex}`] : resolved[elementId]) ?? null,
   getPreviewIframe: () =>
     hasIframe
       ? {
@@ -132,6 +135,34 @@ describe('FastPatchService (tracer bridge)', () => {
     const el = makeEl();
     resolved['elem-1'] = el;
     expect(() => service.applyPatch('elem-1', { color: 'red' })).not.toThrow();
+  });
+
+  describe('map item targeting (HYP-651)', () => {
+    it('resolves through the item index when one is provided', () => {
+      const item2 = makeEl();
+      resolved['list-item@2'] = item2;
+
+      service.applyPatch('list-item', { color: 'red' }, 2);
+
+      const tag = item2.attrs['data-fast-patch-id'];
+      expect(tag).toBeDefined();
+      expect(mockStyleEl?.textContent).toContain(`[data-fast-patch-id="${tag}"]`);
+    });
+
+    it('untags the previously patched element when resolution moves to another item', () => {
+      const item2 = makeEl();
+      const item0 = makeEl();
+      resolved['list-item@2'] = item2;
+      resolved['list-item@0'] = item0;
+
+      service.applyPatch('list-item', { color: 'red' }, 2);
+      service.applyPatch('list-item', { color: 'blue' }, 0);
+
+      // Both items share the elementId (one nodeRef per .map() JSX node) — a
+      // stale tag on item 2 would keep matching the patch rule otherwise.
+      expect(item2.attrs['data-fast-patch-id']).toBeUndefined();
+      expect(item0.attrs['data-fast-patch-id']).toBeDefined();
+    });
   });
 
   describe('measureWithoutPatch (HYP-636)', () => {

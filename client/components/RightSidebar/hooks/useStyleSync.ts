@@ -22,6 +22,12 @@ interface UseStyleSyncOptions {
   currentState?: string;
   /** Optional engine for DOM class reading (browser mode only) */
   engine?: CanvasEngine | null;
+  /**
+   * Rendered .map() item index of the selected element (HYP-651) — same index
+   * the inspector read path uses. Without it every item of a list shares one
+   * nodeRef and the instant fast-patch lands on the first rendered item.
+   */
+  itemIndex?: number | null;
   /** Selected non-computed style source tab for shared write routing */
   selectedSourceTabId?: string;
   /** Called when style sync fails (e.g. to open AI chat as fallback) */
@@ -54,6 +60,7 @@ export function useStyleSync({
   astOps,
   currentState,
   engine,
+  itemIndex,
   selectedSourceTabId,
   onSyncError,
   onSyncStart,
@@ -78,6 +85,15 @@ export function useStyleSync({
       styleTimerRef.current = null;
     }
 
+    // Drop the injected fast-patch too (HYP-650) — cancelling only the
+    // verification would leave the patch's !important rule overriding the
+    // element's real style forever (nothing else clears it after a cancel).
+    const patchId = lastFastPatchIdRef.current;
+    if (engine && patchId) {
+      engine.fastPatch.clearPatch(patchId);
+    }
+    lastFastPatchIdRef.current = null;
+
     // Check before calling — verificationCleanupRef is set only after setIsStyleSyncing(true)
     // in SaaS mode. Cancelling it without resetting the flag leaves the spinner stuck.
     const hadActiveSync = verificationCleanupRef.current !== null;
@@ -86,7 +102,7 @@ export function useStyleSync({
     if (hadActiveSync) {
       setIsStyleSyncing(false);
     }
-  }, []);
+  }, [engine]);
 
   useEffect(() => {
     return cancelPendingStyleSync;
@@ -156,8 +172,9 @@ export function useStyleSync({
         // Instant visual feedback before the backend write + HMR round-trip.
         // Cleared in finishSync once the real change lands. Must use writeId —
         // the tracer resolves nodeRefs, not parse UUIDs (HYP-593), and the
-        // engine write below targets the same id.
-        engine.fastPatch.applyPatch(writeId, styles);
+        // engine write below targets the same id. itemIndex narrows the patch
+        // to the selected .map() item (HYP-651).
+        engine.fastPatch.applyPatch(writeId, styles, itemIndex);
         lastFastPatchIdRef.current = writeId;
 
         const domClasses = getDOMClassesFromIframe(writeId);
@@ -245,6 +262,7 @@ export function useStyleSync({
     astOps,
     currentState,
     engine,
+    itemIndex,
     selectedSourceTabId,
     onSyncError,
     onSyncStart,
