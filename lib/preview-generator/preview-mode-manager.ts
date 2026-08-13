@@ -186,7 +186,13 @@ export class PreviewModeManager {
         }
         return fileResult === 'ok-files-written' ? 'ok' : fileResult;
       }
-      case 'vite-spa-jsx-router': {
+      case 'vite-spa-jsx-router':
+      case 'bun': {
+        // Bun apps are assumed router-less by default (framework-routing.ts), but that's a
+        // classification default, not a guarantee — a Bun-classified app (e.g. a CMS with its
+        // own React Router) still gets real router-aware patching when one is actually found,
+        // exactly like vite-spa-jsx-router. Only a genuinely router-less app falls through to
+        // entry-file patching below.
         const routerFile = await this.detectRouterFile();
         if (routerFile) {
           const wrote = await this._fileManager.patchRouterConfig(routerFile);
@@ -196,8 +202,6 @@ export class PreviewModeManager {
         // No JSX router found — patch entry file and wait for HMR before navigation.
         return this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
       }
-      case 'bun':
-        return this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
       case 'webpack':
         return this._patchEntryFile();
       case 'parcel':
@@ -432,6 +436,14 @@ export class PreviewModeManager {
     } else if (detection.framework === 'webpack' || detection.framework === 'parcel') {
       await this._patchEntryFile();
     } else if (detection.framework === 'bun') {
+      // Same router-vs-entry-only distinction as onComponentSelected's bun case above —
+      // this runs on the isolated→app-shell round trip, so it must restore router-based
+      // patching for a bun-with-router app instead of regressing to entry-only patching.
+      const routerFile = await this.detectRouterFile();
+      if (routerFile) {
+        await this._fileManager.patchRouterConfig(routerFile);
+        return;
+      }
       await this._patchEntryFile({ armRecompileGate: false, waitForPreviewRouteUpdate: true });
     }
   }

@@ -815,3 +815,109 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
     expect(waitForPreviewRouteUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe('PreviewModeManager — bun app with its own router (HYP-931)', () => {
+  // framework-routing.ts classifies some real Bun apps (e.g. a CMS with its own React
+  // Router) as 'bun', which assumes router-less by default. This fixture is unambiguously
+  // 'bun' (bun.lock + react dep, NO vite dep/config — otherwise it would misclassify as
+  // vite-spa-jsx-router and these tests would silently exercise the wrong branch) and has a
+  // REAL router file distinct from its entry file, so a discriminating assertion is possible:
+  // the router file must get the /test-preview route, and the entry file must be left alone.
+  const ROUTER_SOURCE = `import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Home } from './pages/Home';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+`;
+  const ENTRY_SOURCE = `import { createRoot } from 'react-dom/client';
+import App from './App';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+
+  function bunWithRouterFiles(): Record<string, string> {
+    return {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/App.tsx`]: ROUTER_SOURCE,
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    };
+  }
+
+  it('patches the router file (not the entry file) on first component selection', async () => {
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    const result = await m.onComponentSelected();
+
+    expect(result).toBe('ok');
+    const appContent = await io.readFile(`${root}/src/App.tsx`);
+    // Exact-count, not .toContain — a non-idempotent double-injection would still pass a
+    // substring check (review finding, HYP-931).
+    expect(appContent.match(/path="\/test-preview"/g)?.length).toBe(1);
+    expect(await io.readFile(`${root}/src/index.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('restores router-based patching (not entry patching) after an isolated-mode round trip', async () => {
+    // onWrapperCreated/onWrapperDeleted exercise _applyPatchIfNeeded — the same bug existed
+    // there independently of onComponentSelected, so this round trip must ALSO end up with
+    // the router patched, not the entry file, after returning to app-shell mode.
+    const io = makeIO(bunWithRouterFiles());
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onWrapperCreated();
+    expect(m.mode).toBe('isolated');
+    await m.onWrapperDeleted();
+    expect(m.mode).toBe('app-shell');
+
+    const appContent = await io.readFile(`${root}/src/App.tsx`);
+    expect(appContent.match(/path="\/test-preview"/g)?.length).toBe(1);
+    expect(await io.readFile(`${root}/src/index.tsx`)).not.toContain('@hyperide-managed');
+  });
+
+  it('falls back to entry-file patching after an isolated-mode round trip when there is no router (regression guard)', async () => {
+    // Same round trip as above, but a genuinely router-less bun app (no App.tsx/router.tsx/
+    // routes.tsx matching detectRouterFile's candidates) — must still land on entry-file
+    // patching, the original correct behavior for a true bun SPA. detectRouterFile() now runs
+    // unconditionally for 'bun' in _applyPatchIfNeeded too, so this guards against it silently
+    // finding nothing and leaving the app unpatched instead of falling through (review finding,
+    // HYP-931).
+    const io = makeIO({
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { react: '^18' } }),
+      [`${root}/bun.lock`]: '',
+      [`${root}/src/index.tsx`]: ENTRY_SOURCE,
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      waitForPreviewRouteUpdate: mock(() => {}),
+    });
+
+    await m.onWrapperCreated();
+    expect(m.mode).toBe('isolated');
+    await m.onWrapperDeleted();
+    expect(m.mode).toBe('app-shell');
+
+    const entry = await io.readFile(`${root}/src/index.tsx`);
+    expect(entry).toContain('@hyperide-managed');
+    expect(entry).toContain('./__canvas_preview__');
+  });
+});
