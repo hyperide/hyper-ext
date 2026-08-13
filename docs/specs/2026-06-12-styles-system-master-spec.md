@@ -5239,6 +5239,12 @@ Q4 Synthesis, "Safety / reproducibility — commit invariants".)
    any), the chosen tier, and the applied range. The log is the audit trail and the future
    fine-tune corpus.
 
+   > **Future idea, not designed:** this route-evidence log is exactly the raw material a
+   > per-project "decision memory" would need — recording accepted AI resolutions so a
+   > structurally similar edge case can later be retrieved and reused instead of re-generated.
+   > This isn't scoped or scheduled here; it's captured (cross-feature, not styles-specific) in
+   > [`2026-07-04-ai-edge-case-decision-memory-idea.md`](./2026-07-04-ai-edge-case-decision-memory-idea.md).
+
 ### 10.5 Auto UX & A/B
 
 **Auto UX doctrine: silent AI ANALYSIS — yes; silent AI WRITE with no visible target — no.**
