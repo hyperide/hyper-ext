@@ -1,6 +1,28 @@
 pre-commit:
   parallel: true
   commands:
+    secret-scan:
+      # Block secrets BEFORE the commit lands (gitleaks, the secret-scanning standard).
+      # Scans the STAGED diff only; `git --staged` is the modern form of `gitleaks protect
+      # --staged`. BLOCK tier: a high-confidence finding (real provider credential / PEM
+      # private key) aborts the commit. .gitleaks.toml at the repo root is auto-detected.
+      # CI re-runs this on every push as the backstop (.github/workflows/secret-scan.yml),
+      # so this hook is speed, not enforcement — a committer can always --no-verify.
+      # False positive? add a `gitleaks:allow` comment on the line, or an [allowlist] entry
+      # in .gitleaks.toml. Never silence a real leak — rotate and scrub it.
+      run: |
+        if ! command -v gitleaks >/dev/null 2>&1; then
+          echo "WARNING: gitleaks not installed — skipping local secret scan (CI still gates)." >&2
+          echo "  install it: brew install gitleaks  (https://github.com/gitleaks/gitleaks)" >&2
+          exit 0
+        fi
+        if ! gitleaks git --staged --redact --no-banner -v; then
+          echo "BLOCKED: a high-confidence secret was found in the staged changes." >&2
+          echo "  remove it and rotate it before committing." >&2
+          echo "  false positive? add a 'gitleaks:allow' comment on the line, or an" >&2
+          echo "  [allowlist] entry in .gitleaks.toml." >&2
+          exit 1
+        fi
     lint:
       glob: '*.{ts,tsx,js,jsx}'
       run: |

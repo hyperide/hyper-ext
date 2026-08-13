@@ -1,0 +1,51 @@
+# .gitleaks.toml — gitleaks config for the secret-scan gate (CI + local pre-commit).
+#
+# Secret-scanning standard = gitleaks. This file is auto-detected at the repo root by
+# every gitleaks invocation in this repo:
+#   - CI backstop:      .github/workflows/secret-scan.yml  (gitleaks git, full history)
+#   - local pre-commit: lefthook.yml `secret-scan` step    (gitleaks git --staged)
+#   - generic runner:   ci/secret-scan/secret-scan.sh
+#
+# TIER: BLOCK. We inherit gitleaks' maintained provider ruleset (AWS, GCP, Azure, GitHub,
+# Slack, Stripe, PEM private keys, JWTs, ...) and add NO fuzzy custom rules — custom block
+# rules that aren't high-confidence (fixed prefix + length) only generate noise people
+# learn to ignore. If you ever need a custom rule, keep it tight or it doesn't belong here.
+
+title = "hyperide"
+
+[extend]
+# Pull in gitleaks' built-in, regularly-updated rules for hundreds of providers.
+useDefault = true
+
+# -----------------------------------------------------------------------------------------
+# [allowlist] — the false-positive escape hatch. ALWAYS keep this section as the documented
+# recourse so the gate never has to be ripped out when it flags a vetted non-secret.
+#
+# THREE ways to silence a false positive (in order of preference):
+#   1. Inline   — add a `gitleaks:allow` comment on the offending line (most targeted).
+#   2. Allowlist — add a `paths` / `regexes` / `stopwords` entry below (repo-wide).
+#   3. Fingerprint — add the finding's `commit:path:rule:line` to .gitleaksignore (history).
+#
+# RULE: only allowlist PROVEN non-secrets (documented example keys like AKIAIOSFODNN7EXAMPLE,
+# test fixtures, doc placeholders). NEVER wave through a real credential "for now" — rotate
+# it and scrub it instead. A leaked secret in git history is effectively permanent.
+# -----------------------------------------------------------------------------------------
+[allowlist]
+description = "Vetted false positives — proven non-secrets only (see the rule above)."
+
+# Specific literal non-secret strings to ignore wherever they appear. Add documented sample
+# keys here (these never grant access). gitleaks requires this section to hold at least one
+# real check, so it ships seeded with AWS' official docs example credentials — both are
+# published non-secrets. Extend with your own proven sample keys.
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',                        # AWS docs example access key id
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',     # AWS docs example secret access key
+]
+
+# Files/paths that are example/fixture material by construction. Add a path regex here only
+# after confirming by eye it contains no real credentials. Examples (uncomment / extend):
+# paths = [
+#   '''.*\.example$''',                 # *.example template files
+#   '''(^|/)__tests__/.*''',            # unit-test fixtures
+#   '''(^|/)docs/.*\.md$''',            # documentation placeholders
+# ]
