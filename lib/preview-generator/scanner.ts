@@ -22,7 +22,22 @@ export function scanSampleExports(sourceCode: string): string[] {
   const results: string[] = [];
 
   for (const node of ast.program.body) {
-    if (node.type !== 'ExportNamedDeclaration' || !node.declaration) continue;
+    if (node.type !== 'ExportNamedDeclaration') continue;
+
+    if (!node.declaration) {
+      // Barrel re-exports: export { SampleFoo } or export { SampleFoo } from './samples'
+      // Skip type-only export statements: export type { SampleFoo }
+      if (node.exportKind === 'type') continue;
+      for (const spec of node.specifiers) {
+        if (spec.type === 'ExportSpecifier' && spec.exported.type === 'Identifier') {
+          // Skip inline type specifiers: export { type SampleFoo }
+          if (spec.exportKind === 'type') continue;
+          if (SAMPLE_RE.test(spec.exported.name)) results.push(spec.exported.name);
+        }
+      }
+      continue;
+    }
+
     const decl = node.declaration;
 
     if (decl.type === 'VariableDeclaration') {
@@ -33,6 +48,47 @@ export function scanSampleExports(sourceCode: string): string[] {
       }
     } else if (decl.type === 'FunctionDeclaration' && decl.id && SAMPLE_RE.test(decl.id.name)) {
       results.push(decl.id.name);
+    }
+  }
+
+  return results;
+}
+
+/** Scan source code for exported renderable component names. */
+export function scanRenderableExportNames(sourceCode: string): string[] {
+  const ast = parseSource(sourceCode);
+  const results: string[] = [];
+
+  const push = (name: string) => {
+    if (!/^[A-Z]/.test(name) || name.startsWith('Sample')) return;
+    if (!results.includes(name)) results.push(name);
+  };
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ExportNamedDeclaration') continue;
+    if (node.exportKind === 'type') continue;
+
+    if (!node.source) {
+      for (const spec of node.specifiers) {
+        if (spec.type !== 'ExportSpecifier') continue;
+        if (spec.exportKind === 'type') continue;
+        if (spec.exported.type === 'Identifier') push(spec.exported.name);
+      }
+    }
+
+    if (!node.declaration) continue;
+    const decl = node.declaration;
+
+    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id) {
+      push(decl.id.name);
+      continue;
+    }
+
+    if (decl.type !== 'VariableDeclaration') continue;
+    for (const candidate of decl.declarations) {
+      if (candidate.id.type === 'Identifier' && isRenderableVariable(candidate)) {
+        push(candidate.id.name);
+      }
     }
   }
 
@@ -55,8 +111,9 @@ export function detectExportStyle(sourceCode: string, componentName: string): Ex
     const decl = node.declaration;
 
     // export default function Name / export default class Name
-    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id?.name === componentName) {
-      return 'default-named';
+    if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+      if (decl.id?.name === componentName) return 'default-named';
+      if (!decl.id) return 'default-anonymous';
     }
 
     // export default Name
@@ -93,8 +150,8 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     const decl = node.declaration;
 
     // export default function Name / export default class Name
-    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id) {
-      return decl.id.name;
+    if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+      return decl.id?.name ?? fileName.replace(/\.[^.]+$/, '');
     }
 
     // export default Name
@@ -117,7 +174,9 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
 
     // Re-exports: export { default as Button } from './...'
     for (const spec of node.specifiers) {
-      if (spec.type === 'ExportSpecifier' && spec.exported.type === 'Identifier') {
+      if (spec.type !== 'ExportSpecifier') continue;
+      if (node.exportKind === 'type' || spec.exportKind === 'type') continue;
+      if (spec.exported.type === 'Identifier') {
         const name = spec.exported.name;
         if (/^[A-Z]/.test(name) && !name.startsWith('Sample')) {
           return name;
@@ -134,9 +193,11 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     } else if (decl.type === 'ClassDeclaration' && decl.id) {
       name = decl.id.name;
     } else if (decl.type === 'VariableDeclaration') {
-      const first = decl.declarations[0];
-      if (first?.id.type === 'Identifier') {
-        name = first.id.name;
+      for (const candidate of decl.declarations) {
+        if (candidate.id.type === 'Identifier' && isRenderableVariable(candidate)) {
+          name = candidate.id.name;
+          break;
+        }
       }
     }
 
@@ -145,11 +206,156 @@ export function extractComponentName(sourceCode: string, fileName: string): stri
     }
   }
 
-  // 4. Filename fallback
-  return fileName.replace(/\.[^.]+$/, '');
+  // 4. Filename fallback — strip all extensions so App.web.tsx → App, not App.web
+  return fileName.replace(/(\.[^.]+)+$/, '');
+}
+
+type VariableDeclarationNode = ReturnType<typeof parseSource>['program']['body'][number];
+type VariableDeclaratorNode = Extract<
+  Extract<VariableDeclarationNode, { type: 'ExportNamedDeclaration' }>['declaration'],
+  { type: 'VariableDeclaration' }
+>['declarations'][number];
+
+function isRenderableVariable(declaration: VariableDeclaratorNode): boolean {
+  const init = declaration.init;
+  if (!init) return false;
+  if (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') return true;
+  if (init.type === 'Identifier' || init.type === 'MemberExpression') return true;
+  if (init.type === 'TaggedTemplateExpression') return true;
+  if (init.type !== 'CallExpression') return false;
+  return !isCreateContextCall(init);
+}
+
+export function hasComponentExport(sourceCode: string, componentName: string): boolean {
+  const ast = parseSource(sourceCode);
+
+  for (const node of ast.program.body) {
+    if (node.type === 'ExportDefaultDeclaration') {
+      const decl = node.declaration;
+      if (decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') {
+        return !decl.id || decl.id.name === componentName;
+      }
+      if (decl.type === 'Identifier') return decl.name === componentName;
+      if (decl.type === 'CallExpression') {
+        return decl.arguments.some((arg) => arg.type === 'Identifier' && arg.name === componentName);
+      }
+    }
+
+    if (node.type !== 'ExportNamedDeclaration') continue;
+    if (node.exportKind === 'type') continue;
+
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ExportSpecifier') continue;
+      if (spec.exportKind === 'type') continue;
+      if (spec.exported.type === 'Identifier' && spec.exported.name === componentName) return true;
+    }
+
+    if (!node.declaration) continue;
+    const decl = node.declaration;
+    if ((decl.type === 'FunctionDeclaration' || decl.type === 'ClassDeclaration') && decl.id?.name === componentName) {
+      return true;
+    }
+    if (decl.type !== 'VariableDeclaration') continue;
+    for (const candidate of decl.declarations) {
+      if (
+        candidate.id.type === 'Identifier' &&
+        candidate.id.name === componentName &&
+        isRenderableVariable(candidate)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isCreateContextCall(expression: Extract<VariableDeclaratorNode['init'], { type: 'CallExpression' }>): boolean {
+  const callee = expression.callee;
+  if (callee.type === 'Identifier') return callee.name === 'createContext';
+  if (callee.type !== 'MemberExpression') return false;
+  const property = callee.property;
+  return property.type === 'Identifier' && property.name === 'createContext';
+}
+
+// MemoryRouter is intentionally excluded: it is a testing/in-memory router used
+// in SampleDefault wrappers, not a production app-shell router. Including it
+// would falsely exclude previewable components that wrap their samples in
+// MemoryRouter for isolated rendering.
+const ROUTER_SHELL_IMPORTS: ReadonlySet<string> = new Set([
+  'BrowserRouter',
+  'HashRouter',
+  'NavigationContainer',
+  'StaticRouter',
+]);
+
+const ROUTER_SHELL_SOURCES = new Set(['react-router-dom', 'react-router-dom/server', 'react-router']);
+
+const REACT_NAVIGATION_SOURCES = new Set([
+  '@react-navigation/bottom-tabs',
+  '@react-navigation/drawer',
+  '@react-navigation/material-bottom-tabs',
+  '@react-navigation/material-top-tabs',
+  '@react-navigation/native',
+  '@react-navigation/native-stack',
+  '@react-navigation/stack',
+]);
+
+/**
+ * Detect whether the file is a router application shell — a file that imports
+ * a top-level routing container or navigator factory.
+ * Such files set up routing context for the whole app and cause TDZ/native
+ * module failures in the preview registry when co-imported with the pages they wrap.
+ */
+export function detectRouterShell(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.importKind === 'type') continue;
+    const source = node.source.value as string;
+    if (!ROUTER_SHELL_SOURCES.has(source) && !REACT_NAVIGATION_SOURCES.has(source)) continue;
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ImportSpecifier') continue;
+      if (spec.importKind === 'type') continue;
+      const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
+      if (name && ROUTER_SHELL_IMPORTS.has(name)) return true;
+      if (REACT_NAVIGATION_SOURCES.has(source) && name && /^create[A-Z].*Navigator$/.test(name)) return true;
+    }
+  }
+  return false;
 }
 
 /** Escape regex metacharacters in a string */
 export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export type SSRHook = 'useLoaderData' | 'useRouteLoaderData';
+
+const SSR_HOOK_SOURCE = '@remix-run/react';
+const SSR_HOOKS: ReadonlySet<string> = new Set<SSRHook>(['useLoaderData', 'useRouteLoaderData']);
+
+/**
+ * Detect SSR data hooks imported from Remix in the given source code.
+ * Returns the set of hook names found (empty if none).
+ * Only inspects import declarations — does not traverse call sites.
+ */
+export function detectSSRHooks(sourceCode: string): Set<SSRHook> {
+  const ast = parseSource(sourceCode);
+  const found = new Set<SSRHook>();
+
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.source.value !== SSR_HOOK_SOURCE) continue;
+
+    for (const spec of node.specifiers) {
+      if (spec.type !== 'ImportSpecifier') continue;
+      const name = spec.imported.type === 'Identifier' ? spec.imported.name : null;
+      if (name && SSR_HOOKS.has(name)) {
+        found.add(name as SSRHook);
+      }
+    }
+  }
+
+  return found;
 }

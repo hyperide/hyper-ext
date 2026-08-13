@@ -3,9 +3,9 @@
  */
 
 // Using any for excalidraw types due to import complexity
-// biome-ignore lint/suspicious/noExplicitAny: excalidraw types not properly exported
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- excalidraw types not properly exported
 type ExcalidrawElement = any;
-// biome-ignore lint/suspicious/noExplicitAny: excalidraw types not properly exported
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- excalidraw types not properly exported
 type AppState = any;
 
 export type CanvasMode = 'single' | 'multi';

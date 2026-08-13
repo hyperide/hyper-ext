@@ -1,4 +1,3 @@
-import '../../../../test/setup-dom';
 import { describe, expect, mock, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import { normalizeHexInput, resolveTokenSelection, useColorValue } from './use-color-value';

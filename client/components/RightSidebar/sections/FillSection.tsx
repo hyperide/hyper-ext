@@ -2,6 +2,7 @@ import { TID } from '@shared/data-testid-map';
 import { memo } from 'react';
 import { ColorCombobox } from '../../ui/color-combobox';
 import { type FillMode, FillPicker } from '../../ui/fill-picker';
+import { Input } from '../../ui/input';
 import type { UIKitType } from '../types';
 import { hexWithAlpha, parseHexWithAlpha } from '../utils';
 
@@ -10,6 +11,7 @@ interface FillSectionProps {
   fillOpacity: string;
   backgroundImage: string | null;
   textColor: string;
+  fontSize: string;
   fillMode: FillMode;
   projectUIKit: UIKitType;
   publicDirExists: boolean;
@@ -18,8 +20,16 @@ interface FillSectionProps {
   onFillOpacityChange: (value: string) => void;
   onBackgroundImageChange: (path: string | null) => void;
   onTextColorChange: (value: string) => void;
+  onFontSizeChange: (value: string) => void;
   onFillModeChange: (mode: FillMode) => void;
   syncStyleChange: (key: string, value: string) => void;
+  onNumericKeyDown?: (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentValue: string,
+    setValue: (value: string) => void,
+    styleKey?: string,
+    defaultValue?: string,
+  ) => void;
   engine?: import('@/lib/canvas-engine/core/CanvasEngine').CanvasEngine | null;
   componentPath?: string | null;
   textOpacity?: string;
@@ -31,6 +41,7 @@ export const FillSection = memo(function FillSection({
   fillOpacity,
   backgroundImage,
   textColor,
+  fontSize,
   fillMode,
   projectUIKit,
   publicDirExists,
@@ -39,8 +50,10 @@ export const FillSection = memo(function FillSection({
   onFillOpacityChange,
   onBackgroundImageChange,
   onTextColorChange,
+  onFontSizeChange,
   onFillModeChange,
   syncStyleChange,
+  onNumericKeyDown,
   engine,
   componentPath,
   textOpacity,
@@ -81,23 +94,31 @@ export const FillSection = memo(function FillSection({
     }
   };
 
+  const handleFontSizeBlur = () => {
+    const trimmed = fontSize.trim();
+    if (!trimmed) return;
+    if (/^-?\d*\.?\d+$/.test(trimmed)) {
+      const normalized = `${trimmed}px`;
+      if (normalized !== fontSize) {
+        onFontSizeChange(normalized);
+        syncStyleChange('fontSize', normalized);
+      }
+    }
+  };
+
   return (
     <div
       data-testid={TID.inspector.sectionHeader('fill')}
-      data-uniq-id="2f95e299-d823-4ec1-ba66-9d71ab8c8074"
-      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
-      <div data-uniq-id="42945982-1ada-4134-8f07-5756a6c5f2de" className="flex items-center justify-between mb-3">
-        <span data-uniq-id="344f7abc-528e-43a9-b6f0-9146899c1566" className="text-xs font-semibold text-foreground">
-          Fill
-        </span>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-foreground">Fill</span>
       </div>
-      <div data-uniq-id="15b6a55d-3b27-4f99-91b2-a894945e244b" className="flex items-center gap-2">
-        <div data-uniq-id="f16a5fbc-a44e-4bf2-9f47-b3b761107f3c" className="flex items-end gap-px flex-1">
+      <div className="flex items-center gap-2">
+        <div className="flex items-end gap-px flex-1">
           <FillPicker
             testId={TID.inspector.fillColorPicker}
             inputTestId={TID.inspector.fillColorInput}
-            data-uniq-id="d86f7556-47ca-4162-94e1-70539c34dfd0"
             colorValue={backgroundColor || ''}
             onColorChange={handleColorChange}
             tokenSystem={projectUIKit === 'tamagui' ? 'tamagui' : 'tailwind'}
@@ -119,16 +140,10 @@ export const FillSection = memo(function FillSection({
         </div>
       </div>
       {/* Text Color */}
-      <div data-uniq-id="885cbe9f-d98b-442f-b5ad-bf282bc55810" className="flex flex-col gap-2 mt-4">
-        <span
-          data-uniq-id="332590c5-dc7d-462d-96fd-22ea5d625953"
-          className="text-xs text-muted-foreground min-w-[60px]"
-        >
-          Text
-        </span>
+      <div className="flex flex-col gap-2 mt-4">
+        <span className="text-xs text-muted-foreground min-w-[60px]">Text</span>
         <ColorCombobox
           testId={TID.inspector.fillTextColor}
-          data-uniq-id="d59ad045-1334-475e-b11c-440bc0539261"
           value={textColor || ''}
           onChange={(val) => {
             if (val?.startsWith('#')) {
@@ -155,6 +170,23 @@ export const FillSection = memo(function FillSection({
           contrastPairedHex={backgroundColor || undefined}
           contrastRole="text"
         />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground min-w-[60px]">Size</span>
+          <div className="flex-1 h-6 px-2 bg-muted rounded flex items-center">
+            <Input
+              testId={TID.inspector.fontSize}
+              value={fontSize ?? ''}
+              onChange={(e) => {
+                onFontSizeChange(e.target.value);
+                syncStyleChange('fontSize', e.target.value);
+              }}
+              onBlur={handleFontSizeBlur}
+              onKeyDown={(e) => onNumericKeyDown?.(e, fontSize ?? '', onFontSizeChange, 'fontSize')}
+              placeholder="15px"
+              className="h-auto border-0 bg-transparent !text-[11px] text-foreground p-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-full"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -167,6 +199,7 @@ export const SampleDefault = () => {
       fillOpacity="90"
       backgroundImage="/assets/wood-texture.png"
       textColor="#333333"
+      fontSize="15px"
       fillMode="color"
       projectUIKit="tailwind"
       publicDirExists={true}
@@ -175,6 +208,7 @@ export const SampleDefault = () => {
       onFillOpacityChange={(value) => console.log('Fill opacity changed:', value)}
       onBackgroundImageChange={(path) => console.log('Background image changed:', path)}
       onTextColorChange={(value) => console.log('Text color changed:', value)}
+      onFontSizeChange={(value) => console.log('Font size changed:', value)}
       onFillModeChange={(mode) => console.log('Fill mode changed:', mode)}
       syncStyleChange={
         (key, value) => console.log(`Style synchronized: ${key} = ${value}`) // nosemgrep: unsafe-formatstring -- JS template literal, not a format string

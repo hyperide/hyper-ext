@@ -274,25 +274,25 @@ describe('tree-adapter', () => {
           const renderItem = (item) => <li>{item.name}</li>;
 
           return (
-            <div data-uniq-id="root">
-              <header data-uniq-id="hdr">
-                <h1 data-uniq-id="title">Welcome</h1>
+            <div>
+              <header>
+                <h1>Welcome</h1>
               </header>
-              <nav data-uniq-id="nav-main">
-                <Button data-uniq-id="btn1">Click me</Button>
+              <nav>
+                <Button>Click me</Button>
               </nav>
-              <main data-uniq-id="content">
+              <main>
                 {items.map((item) => (
-                  <article data-uniq-id="card" key={item.id}>
-                    <span data-uniq-id="name">{item.name}</span>
+                  <article key={item.id}>
+                    <span>{item.name}</span>
                   </article>
                 ))}
-                {isVisible && <aside data-uniq-id="sidebar">Info</aside>}
+                {isVisible && <aside>Info</aside>}
                 {renderItem(item)}
               </main>
-              <input data-uniq-id="search" placeholder="Search..." />
-              <footer data-uniq-id="ftr">
-                <svg data-uniq-id="icon"><path d="M0 0" /></svg>
+              <input placeholder="Search..." />
+              <footer>
+                <svg><path d="M0 0" /></svg>
               </footer>
             </div>
           );
@@ -317,7 +317,7 @@ describe('tree-adapter', () => {
 
       if (!rootJSX) throw new Error('rootJSX not found');
 
-      const parseContext: ParseContext = { fileAST: ast, seenIds: new Set() };
+      const parseContext: ParseContext = { fileAST: ast };
       const componentNode = parseJSXElement(rootJSX, undefined, undefined, undefined, parseContext);
       if (!componentNode) throw new Error('componentNode is null');
 
@@ -325,34 +325,29 @@ describe('tree-adapter', () => {
 
       // Root div → frame
       expect(tree.type).toBe('frame');
-      expect(tree.id).toBe('root');
+
+      // Find children by label patterns (IDs are generated UUIDs)
+      const children = tree.children ?? [];
 
       // header → frame
-      const header = tree.children?.find((c) => c.id === 'hdr');
+      const header = children.find((c) => c.type === 'frame' && c.label === 'header');
       expect(header).toBeDefined();
-      expect(header?.type).toBe('frame');
 
       // h1 inside header → element
-      const title = header?.children?.find((c) => c.id === 'title');
+      const title = header?.children?.find((c) => c.type === 'element' && c.label === 'h1 "Welcome"');
       expect(title).toBeDefined();
-      expect(title?.type).toBe('element');
-      expect(title?.label).toBe('h1 "Welcome"');
 
       // nav → frame
-      const nav = tree.children?.find((c) => c.id === 'nav-main');
+      const nav = children.find((c) => c.type === 'frame' && c.label === 'nav');
       expect(nav).toBeDefined();
-      expect(nav?.type).toBe('frame');
 
       // Button → component
-      const btn = nav?.children?.find((c) => c.id === 'btn1');
+      const btn = nav?.children?.find((c) => c.type === 'component' && c.label === 'Button "Click me"');
       expect(btn).toBeDefined();
-      expect(btn?.type).toBe('component');
-      expect(btn?.label).toBe('Button "Click me"');
 
       // main → frame, contains map wrapper + conditional + function
-      const main = tree.children?.find((c) => c.id === 'content');
+      const main = children.find((c) => c.type === 'frame' && c.label === 'main');
       expect(main).toBeDefined();
-      expect(main?.type).toBe('frame');
 
       // map wrapper should exist (articles grouped)
       const mapNode = main?.children?.find((c) => c.type === 'map');
@@ -360,9 +355,8 @@ describe('tree-adapter', () => {
       expect(mapNode?.label).toContain('.map()');
 
       // Conditional aside should exist somewhere in main children
-      const aside = main?.children?.find((c) => c.id === 'sidebar');
+      const aside = main?.children?.find((c) => c.type === 'frame' && c.label === 'aside "Info"');
       expect(aside).toBeDefined();
-      expect(aside?.type).toBe('frame');
 
       // Function expansion: renderItem call should produce fn: node
       const fnNode = main?.children?.find((c) => c.type === 'function');
@@ -370,17 +364,15 @@ describe('tree-adapter', () => {
       expect(fnNode?.label).toBe('renderItem()');
 
       // input with placeholder
-      const input = tree.children?.find((c) => c.id === 'search');
+      const input = children.find((c) => c.label === 'input "Search..."');
       expect(input).toBeDefined();
-      expect(input?.label).toBe('input "Search..."');
 
       // footer → frame
-      const footer = tree.children?.find((c) => c.id === 'ftr');
+      const footer = children.find((c) => c.type === 'frame' && c.label === 'footer');
       expect(footer).toBeDefined();
-      expect(footer?.type).toBe('frame');
 
       // SVG children should be pruned
-      const svgNode = footer?.children?.find((c) => c.id === 'icon');
+      const svgNode = footer?.children?.find((c) => c.label === 'svg');
       expect(svgNode).toBeDefined();
       expect(svgNode?.children).toEqual([]);
     });

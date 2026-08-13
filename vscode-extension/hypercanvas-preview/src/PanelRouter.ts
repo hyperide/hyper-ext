@@ -8,6 +8,9 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { resolveInSourceMap, type SourceMapV3 } from '@shared/element-tracing/source-map-resolver';
+import type { TracingClientMessage } from '@shared/element-tracing/types';
+import type { I18nLibrary } from '@shared/i18n-text/types';
 import * as vscode from 'vscode';
 import { AstBridge } from './bridges/AstBridge';
 import { type EditorMessage, handleEditorMessage } from './EditorBridge';
@@ -29,27 +32,37 @@ export class PanelRouter {
   private _componentService: ComponentService;
   private _styleReadService: StyleReadService;
   private _workspaceRoot: string;
+  private _context: vscode.ExtensionContext;
+  private _currentWebview: vscode.Webview | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
+  private _onElementTracingMessage?: (msg: TracingClientMessage) => void;
 
   constructor(config: PanelRouterConfig) {
     this._astBridge = new AstBridge(config.workspaceRoot);
     this._stateHub = config.stateHub;
-    this._componentService = new ComponentService(config.workspaceRoot, () =>
-      Promise.resolve(config.context.secrets.get('hypercanvas.ai.apiKey')),
-    );
-    this._styleReadService = new StyleReadService(config.workspaceRoot, new VSCodeFileIO());
+    this._context = config.context;
+    this._componentService = this._createComponentService(config.workspaceRoot);
+    this._styleReadService = this._createStyleReadService(config.workspaceRoot);
     this._workspaceRoot = config.workspaceRoot;
   }
 
   get astBridge(): AstBridge {
+    this._ensureCurrentWorkspace();
     return this._astBridge;
   }
 
   get componentService(): ComponentService {
+    this._ensureCurrentWorkspace();
     return this._componentService;
   }
 
+  get workspaceRoot(): string {
+    this._ensureCurrentWorkspace();
+    return this._workspaceRoot;
+  }
+
   getComponentGroups() {
+    this._ensureCurrentWorkspace();
     return this._componentService.scanComponentGroups();
   }
 
@@ -63,14 +76,45 @@ export class PanelRouter {
    * Returns true if the message was handled.
    */
   async routeMessage(message: unknown, webview: vscode.Webview): Promise<boolean> {
+    this._ensureCurrentWorkspace();
     const msg = message as { type?: string };
     const type = msg.type;
     if (!type) return false;
+
+    // Element tracing messages — forward to PostMessageTracingTransport
+    const TRACING_PREFIX = 'element-tracing:';
+    if (type.startsWith(TRACING_PREFIX)) {
+      if (this._onElementTracingMessage) {
+        const { payload } = message as { payload: TracingClientMessage };
+        this._onElementTracingMessage(payload);
+      }
+      return true;
+    }
 
     // State sync
     if (type === 'state:update') {
       const { patch } = message as { patch: Partial<SharedEditorState> };
       this._stateHub.applyUpdate(patch);
+      return true;
+    }
+
+    // Canvas scroll — broadcast to ALL registered panels so the PreviewPanel webview
+    // (which hosts the iframe) receives it even when the sender is the LeftPanel webview
+    // (Elements Tree click). VS Code webviews are isolated iframes; DOM events do not
+    // cross — broadcasting through StateHub is the only working path.
+    // The sender (LeftPanel) also receives the message and silently ignores it
+    // (no `case 'iframe:scrollToElement'` in its message handler).
+    if (type === 'iframe:scrollToElement') {
+      this._stateHub.broadcast(message as { type: string } & Record<string, unknown>);
+      return true;
+    }
+
+    // Selection-freeze coordination — sender lives in the right sidebar,
+    // listener lives in the preview panel's iframe. Broadcast so the message
+    // reaches every registered webview; only usePreviewBridge handles it.
+    // See docs/plans/2026-05-06-selection-survives-i18n-write.md (Path B).
+    if (type === 'iframe:writeI18nResource') {
+      this._stateHub.broadcast(message);
       return true;
     }
 
@@ -183,15 +227,66 @@ export class PanelRouter {
       return true;
     }
 
+    // Approach B: server-side (RSC) source map resolution.
+    // The iframe IIFE cannot fetch server chunk source maps (file:// paths, not browser-accessible).
+    // PanelRouter reads the .map file from the local filesystem and decodes VLQ.
+    if (type === 'hypercanvas:resolveServerSourceMap') {
+      const { filePath, line, col } = message as { filePath: string; line: number; col: number };
+      let result = null;
+      try {
+        const mapPath = filePath.endsWith('.map') ? filePath : `${filePath}.map`;
+        const content = await fs.readFile(mapPath, 'utf-8');
+        const sm = JSON.parse(content) as SourceMapV3;
+        result = resolveInSourceMap(sm, line, col);
+      } catch {
+        // File not found or parse error — result stays null
+      }
+      webview.postMessage({ type: 'serverSourceMapResult', filePath, line, col, result });
+      return true;
+    }
+
+    // Right panel input focus — update context variable so keybindings don't fire in inputs
+    if (type === 'panel:inputFocus') {
+      const { active } = message as { active: boolean };
+      vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', active);
+      return true;
+    }
+
+    // Update hypercanvas.devServer.autoStart setting from webview checkbox
+    if (type === 'panel:updateAutoStart') {
+      const { value } = message as { value: boolean };
+      await vscode.workspace
+        .getConfiguration('hypercanvas.devServer')
+        .update('autoStart', value, vscode.ConfigurationTarget.Global);
+      return true;
+    }
+
+    // Open VS Code Settings UI at a specific query
+    if (type === 'panel:openSettings') {
+      const { query } = message as { query: string };
+      await vscode.commands.executeCommand('workbench.action.openSettings', query);
+      return true;
+    }
+
     // Style reading operations (right panel inspector)
     if (type === 'styles:readClassName') {
-      const { requestId, elementId, componentPath } = message as {
+      const { requestId, elementId, componentPath, domTextContent, activeLocale } = message as {
         requestId: string;
         elementId: string;
         componentPath: string;
+        domTextContent?: string;
+        activeLocale?: string;
       };
       try {
-        const result = await this._styleReadService.readElementClassName(elementId, componentPath);
+        // Ensure NodeMapService is populated before reading styles
+        // (same race condition as HYP-268 for writes).
+        await this._astBridge.astService.ensureInitialized();
+        const result = await this._styleReadService.readElementClassName(
+          componentPath,
+          elementId,
+          domTextContent,
+          activeLocale,
+        );
         webview.postMessage({
           type: 'styles:response',
           requestId,
@@ -209,6 +304,33 @@ export class PanelRouter {
       return true;
     }
 
+    // Fetch all available i18n keys from the active locale file
+    if (type === 'styles:fetchI18nKeys') {
+      const { requestId, library, namespace, activeLocale } = message as {
+        requestId: string;
+        library?: I18nLibrary;
+        namespace?: string;
+        activeLocale: string;
+      };
+      if (!activeLocale || typeof activeLocale !== 'string') {
+        webview.postMessage({
+          type: 'styles:i18nKeysResponse',
+          requestId,
+          success: false,
+          keys: [],
+          error: 'activeLocale missing',
+        });
+        return true;
+      }
+      try {
+        const keys = await this._styleReadService.getAvailableKeys(namespace, activeLocale, library);
+        webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: true, keys });
+      } catch (e) {
+        webview.postMessage({ type: 'styles:i18nKeysResponse', requestId, success: false, keys: [], error: String(e) });
+      }
+      return true;
+    }
+
     return false;
   }
 
@@ -217,6 +339,7 @@ export class PanelRouter {
    * Called when a panel is created or focused.
    */
   setAstResponseTarget(webview: vscode.Webview): void {
+    this._currentWebview = webview;
     this._astBridge.setWebview(webview);
   }
 
@@ -228,7 +351,35 @@ export class PanelRouter {
     this._onOpenAIChat = callback;
   }
 
+  /**
+   * Set callback for element-tracing messages from any panel.
+   * Extension host wires this to PostMessageTracingTransport.receiveFromWebview().
+   */
+  setOnElementTracingMessage(callback: (msg: TracingClientMessage) => void): void {
+    this._onElementTracingMessage = callback;
+  }
+
   dispose(): void {
     // Nothing to dispose currently
+  }
+
+  private _createComponentService(workspaceRoot: string): ComponentService {
+    return new ComponentService(workspaceRoot, () =>
+      Promise.resolve(this._context.secrets.get('hypercanvas.ai.apiKey')),
+    );
+  }
+
+  private _createStyleReadService(workspaceRoot: string): StyleReadService {
+    return new StyleReadService(workspaceRoot, new VSCodeFileIO(), this._astBridge.astService.nodeMapService);
+  }
+
+  private _ensureCurrentWorkspace(): void {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot || workspaceRoot === this._workspaceRoot) return;
+    this._workspaceRoot = workspaceRoot;
+    this._astBridge = new AstBridge(workspaceRoot);
+    if (this._currentWebview) this._astBridge.setWebview(this._currentWebview);
+    this._componentService = this._createComponentService(workspaceRoot);
+    this._styleReadService = this._createStyleReadService(workspaceRoot);
   }
 }

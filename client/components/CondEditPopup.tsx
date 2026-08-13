@@ -17,10 +17,11 @@ interface CondEditPopupProps {
 export function CondEditPopup({ boundary, portalContainer, onClose, onSave }: CondEditPopupProps) {
   const [expression, setExpression] = useState('');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: condId is an intentional trigger to reset expression when a different conditional is selected
+  /* eslint-disable react-hooks/exhaustive-deps -- condId is an intentional trigger to reset expression when a different conditional is selected */
   useEffect(() => {
     setExpression(boundary.expression);
   }, [boundary.condId, boundary.expression]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const handleSave = () => {
     onSave(boundary.condId, expression);
@@ -32,7 +33,7 @@ export function CondEditPopup({ boundary, portalContainer, onClose, onSave }: Co
   return createPortal(
     <>
       {/* Backdrop */}
-      {/* biome-ignore lint/a11y/useSemanticElements: backdrop overlay is not a real button */}
+      {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- backdrop overlay is not a real button */}
       <div
         className="fixed inset-0 bg-black/20 z-[60]"
         role="button"

@@ -2,10 +2,26 @@
  * Editor Bridge - handles editor operations from webview
  *
  * Receives platform messages from webview and translates them
- * to VS Code editor commands.
+ * to VS Code editor commands. When the preview panel is the only editor,
+ * files open in a left split via a registered callback that moves the
+ * preview to the right group first.
  */
 
 import * as vscode from 'vscode';
+import { isBundleArtifactPath } from './services/bundle-artifact-path';
+
+export { isBundleArtifactPath };
+
+/**
+ * Callback to move the preview panel to ViewColumn.Two.
+ * Registered by PreviewPanel on setup so EditorBridge can force a split
+ * when no code-only editor group exists.
+ */
+let movePreviewToRightFn: (() => void) | null = null;
+
+export function setMovePreviewToRight(fn: (() => void) | null): void {
+  movePreviewToRightFn = fn;
+}
 
 /**
  * Platform message types (subset relevant to editor operations)
@@ -42,13 +58,21 @@ export async function handleEditorMessage(message: EditorMessage, webview: vscod
  * Open a file in the editor, optionally at a specific line/column
  */
 async function openFile(filePath: string, line?: number, column?: number): Promise<void> {
+  if (isBundleArtifactPath(filePath)) {
+    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    return;
+  }
   try {
     // Resolve path relative to workspace
     const uri = resolveFilePath(filePath);
 
     const doc = await vscode.workspace.openTextDocument(uri);
     const targetColumn = getNonPreviewColumn();
-    const editor = await vscode.window.showTextDocument(doc, targetColumn);
+    const editor = await vscode.window.showTextDocument(doc, {
+      viewColumn: targetColumn,
+      preserveFocus: false,
+      preview: true,
+    });
 
     if (line !== undefined) {
       const position = new vscode.Position(
@@ -75,6 +99,10 @@ export async function goToCode(
   column: number,
   options?: { preserveFocus?: boolean },
 ): Promise<void> {
+  if (isBundleArtifactPath(filePath)) {
+    console.log(`[EditorBridge] Skipping bundle artifact: ${filePath}:${line}:${column}`); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
+    return;
+  }
   try {
     const uri = resolveFilePath(filePath);
     const position = new vscode.Position(line - 1, column - 1);
@@ -128,36 +156,66 @@ export function setupActiveFileListener(webview: vscode.Webview): vscode.Disposa
 /**
  * Find a view column that does NOT contain the HyperCanvas preview webview.
  * When preview is in a split, this ensures files open on the opposite side.
+ * When preview is the only editor, moves it to the right and returns the left column
+ * so VS Code creates a split automatically.
  */
 function getNonPreviewColumn(): vscode.ViewColumn {
   const previewViewType = 'hypercanvas.previewPanel';
 
+  // Collect all non-preview groups, prefer ViewColumn.One (leftmost)
+  let bestColumn: vscode.ViewColumn | undefined;
   for (const group of vscode.window.tabGroups.all) {
     const hasPreview = group.tabs.some(
       (tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.includes(previewViewType),
     );
     if (!hasPreview) {
-      return group.viewColumn;
+      if (group.viewColumn === vscode.ViewColumn.One) {
+        return vscode.ViewColumn.One;
+      }
+      if (bestColumn === undefined) {
+        bestColumn = group.viewColumn;
+      }
     }
   }
+  if (bestColumn !== undefined) {
+    return bestColumn;
+  }
 
-  // Fallback: use column One (code is typically on the left)
+  // Every group contains the preview (or preview is the only tab).
+  // Move preview to the right so the file opens in a left split.
+  if (movePreviewToRightFn) {
+    movePreviewToRightFn();
+  }
   return vscode.ViewColumn.One;
 }
 
 /**
  * Resolve file path to VS Code Uri
- * Handles absolute paths and paths relative to workspace root
+ * Handles absolute paths and paths relative to workspace root.
+ *
+ * Past bugs: HYP-268 — Turbopack source maps produce file:// URLs that are normalized
+ * to paths without a leading '/' (e.g. 'Users/ultra/.../page.tsx' instead of
+ * '/Users/ultra/.../page.tsx'). Detect these stripped absolute paths by checking if
+ * '/' + filePath starts with the workspace root — then it is an absolute path inside
+ * the workspace with the leading slash dropped.
  */
 function resolveFilePath(filePath: string): vscode.Uri {
-  // If path is absolute, use as-is
+  // Absolute path — use as-is
   if (filePath.startsWith('/')) {
     return vscode.Uri.file(filePath);
   }
 
-  // Relative path — resolve against workspace root
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot) {
+    // Turbopack normalizes 'file:///abs/path' → 'abs/path' (strips leading '/').
+    // Check if restoring the slash produces a path that lives inside the workspace.
+    // This is conservative: only fires when the full workspace path is a prefix of
+    // the stripped path, avoiding false positives for legitimate relative paths.
+    if (`/${filePath}`.startsWith(`${workspaceRoot}/`)) {
+      return vscode.Uri.file(`/${filePath}`);
+    }
+
+    // Relative path — resolve against workspace root
     return vscode.Uri.file(`${workspaceRoot}/${filePath}`);
   }
 

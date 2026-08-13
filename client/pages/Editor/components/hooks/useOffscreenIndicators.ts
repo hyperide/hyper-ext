@@ -42,7 +42,7 @@ export function useOffscreenIndicators({
   viewport,
   iframeLoadedCounter,
 }: UseOffscreenIndicatorsProps) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-attach after iframe reload */
   useEffect(() => {
     if (!enabled) return;
 
@@ -263,4 +263,5 @@ export function useOffscreenIndicators({
       indicatorElements.clear();
     };
   }, [enabled, overlayContainerRef, viewport, iframeLoadedCounter]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }

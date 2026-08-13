@@ -2,6 +2,7 @@ import { TID } from '@shared/data-testid-map';
 import { IconBinaryTree, IconBraces, IconChevronDown, IconFrame, IconSquareRotated } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import type { TreeNode } from '../../lib/types';
+import { usePlatformContext } from '../lib/platform';
 import IconSquareRotatedPlus from './icons/IconSquareRotatedPlus';
 
 export type { TreeNode };
@@ -31,12 +32,15 @@ function TreeNodeItem({
 }: TreeNodeItemProps) {
   const [isCollapsed, setIsCollapsed] = useState(node.collapsed ?? false);
   const elementRef = useRef<HTMLDivElement>(null);
+  const isVSCode = usePlatformContext() === 'vscode-webview';
   const hasChildren = node.children && node.children.length > 0;
   const isSelected = selectedElements.includes(node.id);
   const isHovered = hoveredElement === node.id;
 
   useEffect(() => {
-    if (isSelected && elementRef.current && onElementPosition) {
+    if (!isSelected || !elementRef.current) return;
+    elementRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (onElementPosition) {
       const rect = elementRef.current.getBoundingClientRect();
       onElementPosition(node.id, rect.top);
     }
@@ -69,7 +73,7 @@ function TreeNodeItem({
       <div
         ref={elementRef}
         data-testid={TID.explorer.treeItem(node.id)}
-        className={`h-6 px-2 flex items-center justify-between gap-1.5 rounded cursor-pointer ${isSelected ? 'tree-item-selected' : isHovered ? 'tree-item-hovered' : 'hover:bg-muted'}`}
+        className={`h-6 px-2 flex items-center justify-between gap-1.5 rounded cursor-pointer ${isSelected ? (isVSCode ? 'tree-item-selected' : 'bg-accent') : isHovered ? 'tree-item-hovered' : 'hover:bg-muted'}`}
         role="treeitem"
         aria-selected={isSelected}
         tabIndex={0}

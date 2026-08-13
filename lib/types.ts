@@ -54,6 +54,16 @@ export interface PrintOptions {
  * State shared across all VS Code webview panels (Preview, Left, Right).
  * Extension host is the source of truth; webviews sync via state:* messages.
  */
+/** Runtime computed style snapshot from the preview iframe for the selected element. */
+export interface SelectedElementRuntimeStyle {
+  componentPath: string | null;
+  elementId: string;
+  itemIndex?: number | null;
+  /** Monotonic counter originating in the iframe to discard stale snapshots. */
+  seq: number;
+  computedStyle: Record<string, string>;
+}
+
 export interface SharedEditorState {
   /** Currently selected element IDs */
   selectedIds: string[];
@@ -79,6 +89,13 @@ export interface SharedEditorState {
   styleVersion?: number;
   /** Preview render scope: full running app (App Shell) or standalone component (Isolated mode) */
   previewScope?: 'full-app' | 'component-only';
+  /** Computed style snapshot from the preview iframe for the currently selected element. */
+  selectedElementRuntimeStyle?: SelectedElementRuntimeStyle | null;
+  /** Trimmed innerText of the selected DOM element — used for i18n DOM-text search. */
+  selectedElementDomText?: string | null;
+  /** Active i18n write operation. Set by RightSidebar before writeI18nResource, cleared in finally.
+   * Stored in StateHub so it survives panel reloads and reaches the iframe via state:init. */
+  writeInProgress?: { writeId: string; startedAt: number } | null;
 }
 
 // ============================================================================
@@ -100,6 +117,8 @@ export interface PropInfo {
   type: string;
   required: boolean;
   defaultValue?: string;
+  /** Nested object field schema (for inline object types like { user: string; count: number }) */
+  objectFields?: PropInfo[];
 }
 
 export interface ComponentTree {
@@ -119,6 +138,11 @@ export interface TreeNode {
   name?: string;
   collapsed?: boolean;
   children?: TreeNode[];
+  /** Source location of this element in the component file */
+  loc?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
   /** Function location for navigation (only for type="function") */
   functionLoc?: {
     start: { line: number; column: number };

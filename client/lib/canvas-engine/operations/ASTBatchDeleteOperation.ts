@@ -115,7 +115,7 @@ export class ASTBatchDeleteOperation extends BaseOperation {
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
         if (node.id === targetId) {
-          return { element: node, parent: parent || null, index: i };
+          return { element: node, parent, index: i };
         }
         if (node.children) {
           const found = findElementWithParent(node.children, targetId, node, i);

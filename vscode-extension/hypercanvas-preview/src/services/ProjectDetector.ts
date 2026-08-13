@@ -8,6 +8,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ProjectInfo, ProjectType, UnsupportedProjectError } from '../types';
+import { WRITABLE_CSS_SYSTEMS } from '../types';
 
 /**
  * Read and parse package.json from project directory.
@@ -179,10 +180,29 @@ export async function detectUnsupportedProject(
       // react-native-web already installed — project may work, don't block
       return null;
     }
+
+    // Determine fix label based on project type:
+    // - Next.js projects: only install react-native-web (next.config patched at fix-time)
+    // - Tamagui One projects: only install react-native-web (already has Vite via one())
+    // - Default: install react-native-web + full Vite config
+    const hasNext = Boolean(deps.next);
+    let isTamaguiOne = false;
+    if (!hasNext) {
+      try {
+        const viteRaw = await fs.readFile(path.join(projectPath, 'vite.config.ts'), 'utf-8');
+        isTamaguiOne =
+          /\bone\s*\(/.test(viteRaw) || viteRaw.includes("from 'one/vite'") || viteRaw.includes('from "one/vite"');
+      } catch {
+        // No vite.config.ts — not a One project
+      }
+    }
+
+    const fixLabel = hasNext || isTamaguiOne ? 'Fix: Add react-native-web' : 'Fix: Add react-native-web + Vite config';
+
     return {
       type: 'react-native',
-      message: `${what} projects don't render in a browser without react-native-web. Click "Fix" to install it.`,
-      fixLabel: 'Fix: Add react-native-web',
+      message: `${what} projects need react-native-web and a Vite config to render in a browser. Click "Fix" to set it up automatically.`,
+      fixLabel,
     };
   }
 
@@ -222,6 +242,127 @@ export async function detectUIKit(
 }
 
 /**
+ * Detect the primary CSS system used in the project.
+ *
+ * Scans package.json dependencies in priority order — the first match wins.
+ * Returns the most specific match (e.g. 'shadcn' over 'tailwind' if both
+ * shadcn-ui AND tailwindcss are present).
+ */
+export async function detectCssSystem(
+  projectPath: string,
+  packageJson?: Record<string, unknown> | null,
+): Promise<import('../types').CssSystem> {
+  const pkg = packageJson ?? (await readPackageJson(projectPath));
+  if (!pkg) return 'unknown';
+
+  const deps = {
+    ...(pkg.dependencies as Record<string, string> | undefined),
+    ...(pkg.devDependencies as Record<string, string> | undefined),
+  };
+
+  const has = (name: string) => name in deps;
+
+  // Design systems built on Tailwind (check BEFORE bare tailwind)
+  if (has('@shadcn/ui') || has('class-variance-authority')) return 'shadcn';
+  if (has('daisyui')) return 'daisyui';
+  if (has('@nextui-org/react') || has('@nextui-org/theme')) return 'nextui';
+
+  // Tamagui
+  if (has('tamagui') || has('@tamagui/core')) return 'tamagui';
+
+  // CSS-in-JS / zero-runtime
+  if (has('@vanilla-extract/css')) return 'vanilla-extract';
+  if (has('@pandacss/dev') || has('pandacss')) return 'pandacss';
+  if (has('unocss') || has('@unocss/preset-uno')) return 'unocss';
+  if (has('@stylexjs/stylex') || has('stylex')) return 'stylex';
+  if (has('styled-components')) return 'styled-components';
+  if (has('@emotion/react') || has('@emotion/styled')) return 'emotion';
+
+  // Component libraries (check after CSS-in-JS since they often bring their own)
+  if (has('@mui/material') || has('@mui/system')) return 'mui';
+  if (has('antd') || has('@ant-design/icons')) return 'antd';
+  if (has('@chakra-ui/react')) return 'chakra';
+  if (has('@mantine/core')) return 'mantine';
+  if (has('@fluentui/react-components') || has('@fluentui/react')) return 'fluentui';
+
+  // Tailwind (bare — most common, check last so design systems win)
+  if (has('tailwindcss')) return 'tailwind';
+
+  // SASS/SCSS — detected by sass/node-sass dep. Extension treats it like
+  // plain CSS (className-based, no special AST handling needed).
+  if (has('sass') || has('node-sass') || has('sass-embedded')) return 'sass' as import('../types').CssSystem;
+
+  // CSS Modules have no package.json dependency — detect by scanning src/
+  // for *.module.css / *.module.scss / *.module.less files.
+  if (await hasCssModuleFiles(projectPath)) return 'cssmodules';
+
+  return 'unknown';
+}
+
+/**
+ * Check if the project uses CSS Modules by looking for .module.css/.scss/.less
+ * files in common source directories.
+ */
+async function hasCssModuleFiles(projectPath: string): Promise<boolean> {
+  const SOURCE_DIRS = ['src', 'app', 'pages', 'components'];
+  for (const dir of SOURCE_DIRS) {
+    try {
+      const fullDir = path.join(projectPath, dir);
+      const entries = await fs.readdir(fullDir, { recursive: true });
+      const hasModule = entries.some((e) => typeof e === 'string' && /\.module\.(css|scss|less)$/.test(e));
+      if (hasModule) return true;
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+  return false;
+}
+
+/**
+ * Bundlers where the extension's full editing pipeline works:
+ * - Dev server management (start/stop/port detection)
+ * - HMR round-trip (AST write → file save → HMR → preview update)
+ * - File watching (vite.config or webpack.config presence)
+ *
+ * Next.js was historically in READONLY_BUNDLERS due to server components +
+ * SSR re-renders on file change. In practice the AST writes still persist
+ * to disk and Next's Fast Refresh reloads the iframe, so the editing loop
+ * works for the common client-component case. Promoted to full-edit; the
+ * readonly badge stays available for genuine non-writable systems.
+ */
+const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'webpack', 'nextjs'];
+
+// 'unknown' and 'bun' → unsupported (no dev server management)
+
+/**
+ * Compute project capabilities based on three axes:
+ * 1. CSS system (can we read/write styles?)
+ * 2. Bundler (can we manage dev server + HMR round-trip?)
+ * 3. Project error (can it render at all?)
+ *
+ * Full editing = CSS writable + bundler supports full editing
+ * Readonly = preview renders but either CSS or bundler is limited
+ */
+export function computeCapabilities(
+  cssSystem: import('../types').CssSystem,
+  uiKit: 'tailwind' | 'tamagui' | 'none',
+  projectError: import('../types').UnsupportedProjectError | null,
+  projectType?: import('../types').ProjectType,
+): import('../types').ProjectCapabilities {
+  const cssWritable = WRITABLE_CSS_SYSTEMS.includes(cssSystem);
+  const bundlerFullEdit = projectType ? FULL_EDIT_BUNDLERS.includes(projectType) : false;
+  const canWriteStyles = cssWritable && bundlerFullEdit;
+  const canRender = projectError === null;
+  return {
+    cssSystem,
+    uiKit,
+    canWriteStyles,
+    canRender,
+    readonly: canRender && !canWriteStyles,
+  };
+}
+
+/**
  * Get scripts from package.json
  */
 export async function getPackageScripts(projectPath: string): Promise<Record<string, string>> {
@@ -235,14 +376,41 @@ export async function getPackageScripts(projectPath: string): Promise<Record<str
 }
 
 /**
- * Detect package manager used in project
+ * Detect package manager used in project.
+ *
+ * Priority: lock files → `packageManager` field in package.json → npm.
+ *
+ * The `packageManager` field is checked AFTER lock files because a lock file is
+ * authoritative evidence of what was actually used to install. The field alone
+ * (without a lock) is the case for projects that bake the manager into
+ * package.json but ship without a committed lockfile (e.g. fresh templates,
+ * monorepo subpackages). Skipping it here used to fall back to `npm`, which then
+ * tried to forward to corepack and failed with `<manager>: not found` if the
+ * shim wasn't enabled — observed on bulka-the-dog (`packageManager: pnpm@10.14.0`,
+ * no lockfile) blocking dev-server bring-up.
  */
 export async function detectPackageManager(projectPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun'> {
-  // Check for lock files
+  // Check for lock files first — these are the strongest signal.
   if (await fileExists(path.join(projectPath, 'bun.lockb'))) return 'bun';
   if (await fileExists(path.join(projectPath, 'bun.lock'))) return 'bun';
   if (await fileExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
   if (await fileExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
+
+  // Fall back to the `packageManager` field — corepack-style declaration
+  // common in projects that don't commit lock files but pin a manager.
+  try {
+    const pkgRaw = await fs.readFile(path.join(projectPath, 'package.json'), 'utf8');
+    const pkg = JSON.parse(pkgRaw) as { packageManager?: unknown };
+    if (typeof pkg.packageManager === 'string') {
+      // Format is "<name>@<version>[+<integrity>]". We only need the name.
+      const name = pkg.packageManager.split('@', 1)[0]?.trim().toLowerCase();
+      if (name === 'pnpm' || name === 'yarn' || name === 'bun' || name === 'npm') {
+        return name;
+      }
+    }
+  } catch {
+    // No package.json or parse error — fall through to npm default.
+  }
 
   return 'npm';
 }

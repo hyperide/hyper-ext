@@ -3,6 +3,8 @@
  * Used by both SaaS editor and VS Code extension.
  */
 
+import type { NodeMapEntry, NodeRef, SourceLocation } from '../element-tracing/types';
+
 // ============================================================================
 // Overlay Renderer
 // ============================================================================
@@ -20,15 +22,21 @@ export interface OverlayRendererOptions {
   viewportZoom?: number;
   onPlaceholderClick?: (elementId: string) => void;
   editorMode?: 'design' | 'interact' | 'code';
+  /** Platform-specific element resolver for overlay rendering */
+  elementResolver?: OverlayElementResolver;
 }
 
 export interface OverlayRect {
   key: string;
+  /** nodeRef (fileName:line:col) used for AST mutation — only set on selection rects */
+  elementId?: string;
   left: number;
   top: number;
   width: number;
   height: number;
   type: 'selection' | 'hover';
+  /** Present when the selected element has an explicit Tailwind/CSS size on that axis */
+  resizable?: { width: boolean; height: boolean; hasSizeClass?: boolean };
 }
 
 export interface PlaceholderRect {
@@ -43,12 +51,45 @@ export interface PlaceholderRect {
 // Click Handler
 // ============================================================================
 
+/** Result of a local (synchronous, cache-based) element resolution. */
+export interface LocalResolveResult {
+  nodeRef: NodeRef;
+  entry: NodeMapEntry;
+  source: SourceLocation;
+  itemIndex: number;
+}
+
+/**
+ * Interface for fiber-based element resolution — implemented by ElementTracer (client).
+ * Dependency inversion: shared/ defines the interface, client/ provides the implementation.
+ */
+export interface TracingResolver {
+  getSourceLocation(element: HTMLElement): SourceLocation | null;
+  getItemIndex(element: HTMLElement): number;
+  resolveClickLocal(element: HTMLElement): LocalResolveResult | null;
+  findDOMElement(source: SourceLocation, itemIndex: number): HTMLElement | null;
+}
+
 export interface ClickHandlerCallbacks {
-  /** Called when an element with data-uniq-id is clicked in design mode */
-  onElementClick: (elementId: string, element: HTMLElement, event: MouseEvent, itemIndex: number | null) => void;
+  /**
+   * Called when an element is clicked in design mode.
+   * nodeRef is null when local resolution failed (server round-trip pending).
+   */
+  onElementClick: (
+    nodeRef: string | null,
+    element: HTMLElement,
+    event: MouseEvent,
+    itemIndex: number,
+    source: SourceLocation,
+  ) => void;
   /** Called on mouseover/mouseout (null = mouse left all elements) */
-  onElementHover: (elementId: string | null, element: HTMLElement | null, itemIndex: number | null) => void;
-  /** Called when clicking empty space (no data-uniq-id ancestor) */
+  onElementHover: (
+    nodeRef: string | null,
+    element: HTMLElement | null,
+    itemIndex: number | null,
+    source: SourceLocation | null,
+  ) => void;
+  /** Called when clicking empty space (no fiber source found) */
   onEmptyClick?: (event: MouseEvent) => void;
   /** Returns current editor mode */
   getMode: () => 'design' | 'interact';
@@ -62,6 +103,30 @@ export interface ClickHandlerCallbacks {
 export interface ClickHandlerOptions {
   activeInstanceId?: string | null;
   getActiveInstanceId?: () => string | null;
+}
+
+// ============================================================================
+// Overlay Element Resolver (DI for SaaS / Extension overlay rendering)
+// ============================================================================
+
+/**
+ * Abstraction for finding DOM elements by nodeRef — implemented differently in SaaS and Extension.
+ * SaaS: delegates to ElementTracer (FiberSourceIndex, cached node maps)
+ * Extension: uses inline fiber source cache (rebuilt on React commit)
+ */
+export interface OverlayElementResolver {
+  /**
+   * Find DOM elements for a given nodeRef.
+   * When itemIndex is non-null, returns at most one element (specific map item).
+   * When itemIndex is null, returns all elements at that source (for .map() rendering).
+   */
+  findElements(nodeRef: string, itemIndex: number | null): HTMLElement[];
+
+  /**
+   * Find all empty containers (elements with a React source but no meaningful children).
+   * Returns elementId (nodeRef) and the DOM element for rect computation.
+   */
+  findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }>;
 }
 
 // ============================================================================

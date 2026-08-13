@@ -11,6 +11,7 @@ export interface User {
   avatarUrl: string | null;
   theme: 'light' | 'dark' | 'system' | null;
   emailVerifiedAt: string | null;
+  clientSideRuntime: boolean;
 }
 
 export interface Workspace {

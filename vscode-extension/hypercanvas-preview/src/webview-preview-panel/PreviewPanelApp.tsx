@@ -7,8 +7,9 @@
 
 import { IconBrush, IconLayoutGrid, IconLayoutSidebar, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
-import { useCallback, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasElementContextMenu } from '@/components/CanvasElementContextMenu';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlatformProvider, usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
@@ -17,10 +18,28 @@ import {
   useSharedEditorState,
   useSharedEditorStateSync,
 } from '@/lib/platform/shared-editor-state';
+import type { PlatformMessage } from '@/lib/platform/types';
 import { TID } from '../shared/data-testid-map';
 import type { UnsupportedProjectError } from '../types';
+import { PreviewLoadErrorOverlay } from './PreviewLoadErrorOverlay';
+import { PreviewLoadTimeoutOverlay } from './PreviewLoadTimeoutOverlay';
+import { PropsForm } from './PropsForm';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewBridge } from './usePreviewBridge';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * How long to wait for the iframe `load` event before assuming the preview is
+ * stuck and switching to the recovery UI. Most cold starts (Vite + ts-checker)
+ * land well under 5s; webpack-react projects can stretch to 20-40s on second
+ * patch cycle (see `DevServerManager` "compiled successfully" notes), but by
+ * then the iframe has at least painted SOMETHING — so 10s is the right guard
+ * against a truly indefinite hang without false positives on slow first paint.
+ */
+const PREVIEW_LOAD_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Main App
@@ -32,6 +51,14 @@ export function PreviewPanelApp() {
       <PreviewContent />
     </PlatformProvider>
   );
+}
+
+export function getPreviewShellScreen(
+  devServerRunning: boolean,
+  disconnected: boolean,
+): 'preview' | 'start' | 'disconnected' {
+  if (devServerRunning) return 'preview';
+  return disconnected ? 'disconnected' : 'start';
 }
 
 // ============================================================================
@@ -51,28 +78,110 @@ function PreviewContent() {
 
   const { contextMenu, clearContextMenu, updateState } = useCanvasInteraction(iframeEl, overlayEl, canvas);
 
-  const { devServerRunning, disconnected, previewUrl, showNoComponentHint, projectError, handleStartDevServer } =
-    usePreviewBridge({
-      iframeEl,
-      canvas,
-      onStateUpdate: updateState,
-    });
+  const {
+    devServerRunning,
+    disconnected,
+    previewUrl,
+    showNoComponentHint,
+    projectError,
+    projectCapabilities,
+    componentError,
+    clearComponentError,
+    handleStartDevServer,
+    autoStart,
+    handleAutoStartChange,
+    handleOpenAutoStartSettings,
+  } = usePreviewBridge({
+    iframeEl,
+    canvas,
+    onStateUpdate: updateState,
+  });
+
+  // Readonly mode: when CSS system is unsupported for editing but preview renders.
+  // User must click "Continue in Readonly" to dismiss the stub and see the preview.
+  const [readonlyDismissed, setReadonlyDismissed] = useState(false);
+  const isReadonly = projectCapabilities?.readonly === true;
+
+  // Track iframe load state so we can show the SaaS loading spinner while the
+  // dev server / preview HTML is fetching. Without this, the iframe shows a
+  // bare blank/dev-server-default screen until first paint, which the user
+  // perceives as an indefinite "Loading…" hang.
+  const iframeSrc = !showNoComponentHint && previewUrl ? previewUrl : undefined;
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  // After PREVIEW_LOAD_TIMEOUT_MS without an iframe `load` event, surface a
+  // recovery UI (retry + open output panel) instead of leaving the user on
+  // an indefinite spinner.
+  const [iframeLoadTimedOut, setIframeLoadTimedOut] = useState(false);
+  // Set when the iframe `error` event fires (network failure, dev server
+  // crash mid-load, blocked resource that aborts the document). Without this
+  // state the error decayed into a `previewError` console.error inside
+  // `PreviewPanel.ts` that the user never saw — Task 4 wires it to a
+  // visible recovery overlay instead.
+  const [iframeError, setIframeError] = useState<string | null>(null);
+  // Bumped by the retry button to force the iframe to remount (via `key`)
+  // and reload the same `previewUrl` from scratch. We don't mutate the URL
+  // itself because the dev server doesn't need a cache-buster — the entire
+  // <iframe> element is recreated, which guarantees a fresh fetch.
+  const [retryNonce, setRetryNonce] = useState(0);
+  // Reset the loading state when src changes — covers both the initial load
+  // and explicit URL navigations. Component switches over postMessage do not
+  // change src and therefore do not flip the spinner back on. Retry is also
+  // a reset trigger so the spinner reappears while the new iframe loads.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeSrc + retryNonce are the triggers
+  useEffect(() => {
+    setIframeLoaded(false);
+    setIframeLoadTimedOut(false);
+    setIframeError(null);
+  }, [iframeSrc, retryNonce]);
+
+  // Watchdog: while the loading overlay is up, start a 10s timer that flips
+  // the panel into the timeout/error state if the iframe never reports load.
+  // The timer is cleared when the iframe loads, when a component error or
+  // iframe `error` event overrides the loading shell, or when we already
+  // timed out (so we don't restart it). Retry is observed indirectly: the
+  // reset effect above flips iframeLoadTimedOut back to false, which re-runs
+  // this effect.
+  useEffect(() => {
+    if (!iframeSrc || iframeLoaded || componentError || iframeLoadTimedOut || iframeError) return;
+    const id = setTimeout(() => setIframeLoadTimedOut(true), PREVIEW_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [iframeSrc, iframeLoaded, componentError, iframeLoadTimedOut, iframeError]);
 
   const handleIframeLoad = useCallback(() => {
+    setIframeLoaded(true);
+    setIframeLoadTimedOut(false);
+    setIframeError(null);
     canvas.sendEvent({ type: 'previewLoaded' });
   }, [canvas]);
 
   const handleIframeError = useCallback(
     (e: React.SyntheticEvent<HTMLIFrameElement, Event>) => {
+      const message = (e.nativeEvent as ErrorEvent).message || 'iframe load error';
+      // Surface the error in the webview UI — without this the only signal
+      // was a console.error in the extension host, which the user can't
+      // see. Keep the canvas event for downstream telemetry/listeners.
+      setIframeError(message);
       canvas.sendEvent({
         type: 'previewError',
-        error: (e.nativeEvent as ErrorEvent).message || 'iframe load error',
+        error: message,
       });
     },
     [canvas],
   );
 
+  const handleRetry = useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
+
+  const handleOpenOutput = useCallback(() => {
+    canvas.sendEvent({
+      type: 'command:execute',
+      command: 'hypercanvas.showDevServerOutput',
+    } as unknown as PlatformMessage);
+  }, [canvas]);
+
   // Unsupported project type (React Native / Tamagui without react-native-web)
+  // These projects CAN'T render at all — full blocking screen.
   if (projectError) {
     const handleFix = () => {
       canvas.sendEvent({ type: 'command:fixUnsupportedProject' });
@@ -80,20 +189,40 @@ function PreviewContent() {
     return <UnsupportedProjectScreen error={projectError} onFix={handleFix} />;
   }
 
-  // Dev server not running — show start button (with reconnecting banner if was connected)
-  if (!devServerRunning) {
+  const shellScreen = getPreviewShellScreen(devServerRunning, disconnected);
+
+  // Dev server stopped after a successful connection — keep a dedicated disconnected
+  // shell instead of relying on a transient blend of banner + stale iframe content.
+  if (shellScreen === 'disconnected') {
     return (
       <>
-        {disconnected && <ReconnectingBanner />}
-        <StartDevServerScreen onStart={handleStartDevServer} />
+        <ReconnectingBanner />
+        <DisconnectedPreviewScreen onStart={handleStartDevServer} />
       </>
     );
   }
 
+  // Dev server not running before any successful connection — show initial start screen.
+  if (shellScreen === 'start') {
+    return (
+      <StartDevServerScreen
+        onStart={handleStartDevServer}
+        autoStart={autoStart}
+        onAutoStartChange={handleAutoStartChange}
+        onOpenSettings={handleOpenAutoStartSettings}
+      />
+    );
+  }
+
   return (
-    <>
+    <div data-testid={TID.preview.surface} style={surfaceStyle}>
+      {isReadonly && readonlyDismissed && <ReadonlyBadge cssSystem={projectCapabilities.cssSystem} />}
       <div style={wrapperStyle}>
         <iframe
+          // Remount on retry — recreating the element forces a fresh fetch
+          // without poking at the URL or relying on iframe.contentWindow
+          // APIs that may not exist before first load.
+          key={`${iframeSrc ?? 'none'}-${retryNonce}`}
           ref={iframeCallbackRef}
           data-testid={TID.preview.iframe}
           title="Component Preview"
@@ -101,13 +230,47 @@ function PreviewContent() {
             ...iframeStyle,
             display: showNoComponentHint ? 'none' : undefined,
           }}
-          src={!showNoComponentHint && previewUrl ? previewUrl : undefined}
+          src={iframeSrc}
           sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
           onLoad={handleIframeLoad}
           onError={handleIframeError}
         />
         <div ref={overlayCallbackRef} style={overlayStyle} />
+        {iframeSrc && !iframeLoaded && !componentError && !iframeLoadTimedOut && !iframeError && (
+          <div data-testid={TID.preview.loadingOverlay} style={loadingOverlayStyle}>
+            <LoadingSpinner label="Loading component..." />
+          </div>
+        )}
+        {iframeSrc && !componentError && !iframeError && iframeLoadTimedOut && (
+          <PreviewLoadTimeoutOverlay onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
+        )}
+        {iframeSrc && !componentError && iframeError && (
+          <PreviewLoadErrorOverlay error={iframeError} onRetry={handleRetry} onOpenOutput={handleOpenOutput} />
+        )}
       </div>
+
+      {componentError && (
+        <ComponentErrorOverlay
+          componentPath={componentError.componentPath}
+          errorSeq={componentError.errorSeq}
+          error={componentError.error}
+          propsSchema={componentError.propsSchema}
+          onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
+            canvas.sendEvent({
+              type: 'errorBoundary:createSample',
+              componentPath: componentError.componentPath,
+              sampleName,
+              propValues,
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
+          }}
+          onConfigureAIKey={() => {
+            canvas.sendEvent({
+              type: 'errorBoundary:configureAIKey',
+            } as unknown as import('@/lib/platform/types').PlatformMessage);
+          }}
+          onClose={clearComponentError}
+        />
+      )}
 
       {showNoComponentHint && <NoComponentHint />}
 
@@ -118,7 +281,20 @@ function PreviewContent() {
         externalTarget={contextMenu ? { type: 'design-element', x: contextMenu.x, y: contextMenu.y } : null}
         onExternalClose={clearContextMenu}
       />
-    </>
+
+      {/* Readonly mode overlay: shown OVER the preview, not instead of it.
+          The preview renders normally underneath. The stub shows the framework
+          compatibility table. The "Continue in Readonly" button only appears
+          when the preview has loaded successfully with no errors — so the user
+          sees proof that the preview works before choosing readonly mode. */}
+      {isReadonly && !readonlyDismissed && (
+        <ReadonlyStubScreen
+          cssSystem={projectCapabilities?.cssSystem ?? 'unknown'}
+          renderSucceeded={devServerRunning && !componentError && !showNoComponentHint}
+          onContinueReadonly={() => setReadonlyDismissed(true)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -126,11 +302,45 @@ function PreviewContent() {
 // Sub-components
 // ============================================================================
 
-function StartDevServerScreen({ onStart }: { onStart: () => void }) {
+function StartDevServerScreen({
+  onStart,
+  autoStart,
+  onAutoStartChange,
+  onOpenSettings,
+}: {
+  onStart: () => void;
+  autoStart: boolean;
+  onAutoStartChange: (value: boolean) => void;
+  onOpenSettings: () => void;
+}) {
   return (
     <div style={centerScreenStyle}>
       <h2 style={headingStyle}>Hyper Preview</h2>
       <p style={subtextStyle}>Start the dev server to see your components</p>
+      <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
+        Start Dev Server
+      </button>
+      <label style={autoStartLabelStyle}>
+        <input
+          type="checkbox"
+          checked={autoStart}
+          onChange={(e) => onAutoStartChange(e.target.checked)}
+          style={{ marginRight: 6, cursor: 'pointer' }}
+        />
+        Start server automatically
+      </label>
+      <button type="button" style={settingsLinkStyle} onClick={onOpenSettings}>
+        Open in Settings: Hyper Canvas › Auto-start
+      </button>
+    </div>
+  );
+}
+
+function DisconnectedPreviewScreen({ onStart }: { onStart: () => void }) {
+  return (
+    <div data-testid="hyper-preview-disconnected-screen" style={disconnectedScreenStyle}>
+      <h2 style={headingStyle}>Hyper Preview</h2>
+      <p style={subtextStyle}>The dev server stopped. Start it again to restore the live preview.</p>
       <button type="button" data-testid={TID.preview.startServerButton} style={buttonStyle} onClick={onStart}>
         Start Dev Server
       </button>
@@ -146,6 +356,119 @@ function NoComponentHint() {
     </div>
   );
 }
+
+// ============================================================================
+// Readonly Stub — shown for CSS systems that can render but not edit
+// ============================================================================
+
+const SUPPORTED_CSS_TABLE: Array<{ name: string; supported: boolean }> = [
+  { name: 'Tailwind CSS', supported: true },
+  { name: 'CSS Modules', supported: true },
+  { name: 'styled-components', supported: true },
+  { name: 'Emotion', supported: true },
+  { name: 'Tamagui', supported: true },
+  { name: 'shadcn/ui', supported: true },
+  { name: 'DaisyUI', supported: true },
+  { name: 'MUI (Material UI)', supported: false },
+  { name: 'Ant Design', supported: false },
+  { name: 'Chakra UI', supported: false },
+  { name: 'Mantine', supported: false },
+  { name: 'Fluent UI', supported: false },
+  { name: 'NextUI', supported: false },
+  { name: 'Vanilla Extract', supported: false },
+  { name: 'Panda CSS', supported: false },
+  { name: 'UnoCSS', supported: false },
+  { name: 'StyleX', supported: false },
+];
+
+function ReadonlyStubScreen({
+  cssSystem,
+  renderSucceeded,
+  onContinueReadonly,
+}: {
+  cssSystem: string;
+  renderSucceeded: boolean;
+  onContinueReadonly: () => void;
+}) {
+  return (
+    <div
+      data-testid="hyper-preview-readonly-stub"
+      style={{
+        ...centerScreenStyle,
+        position: 'absolute',
+        inset: 0,
+        zIndex: 900,
+        background: 'rgba(30, 30, 30, 0.95)',
+      }}
+    >
+      <div style={warningIconStyle}>🔒</div>
+      <h2 style={headingStyle}>Readonly mode</h2>
+      <p style={{ ...subtextStyle, maxWidth: 480 }}>
+        Visual editing is not available for this project — the CSS system is <strong>{cssSystem}</strong>, but the
+        bundler (Next.js / Remix) does not yet support AST-based style writes. The CSS framework itself may be editable
+        on Vite / webpack — see the table below.
+        {renderSucceeded
+          ? ' Preview rendered successfully — you can inspect computed styles in readonly mode.'
+          : ' Waiting for preview to render...'}
+      </p>
+
+      <table style={{ margin: '16px 0', borderCollapse: 'collapse', fontSize: 12, color: '#ccc' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '4px 12px', borderBottom: '1px solid #555' }}>CSS Framework</th>
+            <th style={{ textAlign: 'center', padding: '4px 12px', borderBottom: '1px solid #555' }}>Editing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SUPPORTED_CSS_TABLE.map((row) => (
+            <tr key={row.name} style={{ opacity: row.supported ? 1 : 0.6 }}>
+              <td style={{ padding: '3px 12px' }}>{row.name}</td>
+              <td style={{ textAlign: 'center', padding: '3px 12px' }}>{row.supported ? '✅' : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {renderSucceeded && (
+        <button
+          type="button"
+          data-testid="hyper-preview-continue-readonly"
+          style={buttonStyle}
+          onClick={onContinueReadonly}
+        >
+          Continue in Readonly
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ReadonlyBadge({ cssSystem }: { cssSystem: string }) {
+  return (
+    <div
+      data-testid="hyper-preview-readonly-badge"
+      style={{
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        zIndex: 1000,
+        background: 'rgba(255, 170, 0, 0.9)',
+        color: '#000',
+        padding: '4px 10px',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 600,
+        pointerEvents: 'none',
+      }}
+    >
+      READONLY — {cssSystem}
+    </div>
+  );
+}
+
+// ============================================================================
+// Unsupported Project Screen (React Native without react-native-web)
+// ============================================================================
 
 function UnsupportedProjectScreen({ error, onFix }: { error: UnsupportedProjectError; onFix: () => void }) {
   const label = error.type === 'react-native' ? 'React Native / Tamagui' : error.type;
@@ -169,6 +492,227 @@ function ReconnectingBanner() {
   return (
     <div data-testid="hyper-preview-reconnecting" style={reconnectingBannerStyle}>
       Dev server disconnected
+    </div>
+  );
+}
+
+// ============================================================================
+// Component Error Overlay (shown over iframe when ErrorBoundary catches)
+// ============================================================================
+
+/** Per-component prop values cache — persists across component switches, cleared on sample creation */
+const propsCache = new Map<string, Record<string, unknown>>();
+
+interface ComponentErrorOverlayProps {
+  componentPath: string;
+  errorSeq?: number;
+  error: string;
+  propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
+  onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
+  onConfigureAIKey: () => void;
+  onClose: () => void;
+}
+
+/**
+ * Extract prop names from common React error messages.
+ * - "Cannot read properties of undefined (reading 'likes')" → ['likes']
+ * - "Cannot read properties of null (reading 'name')" → ['name']
+ * - "tweet is not defined" → ['tweet']
+ * - "props.title is not a function" → ['title']
+ * - Multiple "reading 'x'" in one message → all extracted
+ */
+function extractPropsFromError(errorMsg: string): string[] {
+  // "Cannot read properties of undefined/null (reading 'propName')"
+  const readingMatches = [...errorMsg.matchAll(/reading '(\w+)'/g)];
+  if (readingMatches.length > 0) {
+    return [...new Set(readingMatches.map((m) => m[1]))];
+  }
+
+  // "someVar is not defined" / "someVar is undefined"
+  const undefinedMatch = errorMsg.match(/(\w+) is (?:not defined|undefined)/);
+  if (undefinedMatch) return [undefinedMatch[1]];
+
+  // "props.X is not a function" / "Cannot read X of undefined"
+  const propsDotMatch = errorMsg.match(/props\.(\w+)/);
+  if (propsDotMatch) return [propsDotMatch[1]];
+
+  return [];
+}
+
+function ComponentErrorOverlay({
+  componentPath,
+  error,
+  propsSchema,
+  onCreateSample,
+  onConfigureAIKey,
+  onClose,
+}: ComponentErrorOverlayProps) {
+  const componentName =
+    componentPath
+      .split('/')
+      .pop()
+      ?.replace(/\.tsx?$/, '') ?? componentPath;
+
+  const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
+  const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
+  const propValuesRef = useRef<Record<string, unknown>>(cachedValues ?? {});
+  const [allRequiredFilled, setAllRequiredFilled] = useState(false);
+  const [sampleCreated, setSampleCreated] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+  const [sampleName, setSampleName] = useState('SampleDefault');
+
+  const [hasAnyProps, setHasAnyProps] = useState(false);
+
+  // Listen for sample deletion from file watcher
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'errorOverlay:sampleDeleted') {
+        setSampleCreated(false);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handlePropsChange = useCallback(
+    (values: Record<string, unknown>) => {
+      propValuesRef.current = values;
+      propsCache.set(componentPath, values);
+      const hasFilled = Object.values(values).some((v) => {
+        if (v == null) return false;
+        if (typeof v === 'string') return v.trim() !== '';
+        if (Array.isArray(v)) return v.length > 0;
+        return true;
+      });
+      setHasAnyProps(hasFilled);
+    },
+    [componentPath],
+  );
+
+  const handleCreateSample = useCallback(() => {
+    const filled = Object.entries(propValuesRef.current).filter(([, v]) => {
+      if (v == null) return false;
+      if (typeof v === 'string') return v.trim() !== '';
+      if (Array.isArray(v)) return v.length > 0;
+      return true;
+    });
+    onCreateSample(sampleName, filled.length > 0 ? Object.fromEntries(filled) : undefined);
+    propsCache.delete(componentPath);
+    // Auto-close overlay for SampleDefault — preview will re-render with the sample
+    if (sampleName === 'SampleDefault') {
+      onClose();
+    } else {
+      setSampleCreated(true);
+    }
+  }, [onCreateSample, sampleName, componentPath, onClose]);
+
+  const sampleCountRef = useRef(1);
+  const handleCreateNew = useCallback(() => {
+    sampleCountRef.current += 1;
+    setSampleCreated(false);
+    setAllRequiredFilled(false);
+    setHasAnyProps(false);
+    setSampleName(`Sample${sampleCountRef.current}`);
+    propValuesRef.current = {};
+    setFormKey((k) => k + 1);
+  }, []);
+
+  const hasProps = (propsSchema && propsSchema.length > 0) || extractedProps.length > 0;
+
+  return (
+    <div data-testid={TID.preview.componentErrorOverlay} style={errorOverlayBackdropStyle}>
+      <div style={errorOverlayCardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <h3 style={errorOverlayTitleStyle}>{componentName}</h3>
+          {sampleCreated && (
+            <button type="button" onClick={onClose} style={errorOverlayCloseButtonStyle} title="Close">
+              &times;
+            </button>
+          )}
+        </div>
+        <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
+
+        {hasProps && (
+          <>
+            <PropsForm
+              propsSchema={propsSchema ?? null}
+              extractedPropNames={extractedProps}
+              onChange={handlePropsChange}
+              onAllRequiredFilled={setAllRequiredFilled}
+              resetKey={formKey}
+              initialValues={cachedValues}
+            />
+            <p style={errorOverlayHintStyle}>
+              Fill props here, edit them in the code editor, or combine both approaches.
+            </p>
+          </>
+        )}
+
+        {!hasProps && (
+          <p style={errorOverlayNoPropsHintStyle}>
+            Could not detect required prop names from the error. The sample file will include a TODO placeholder.
+          </p>
+        )}
+
+        {sampleCountRef.current > 1 && (
+          <div style={sampleNameRowStyle}>
+            <label htmlFor="sample-name" style={sampleNameLabelStyle}>
+              Name
+            </label>
+            <input
+              id="sample-name"
+              type="text"
+              value={sampleName}
+              onChange={(e) => setSampleName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              placeholder="SampleDefault"
+              style={sampleNameInputStyle}
+            />
+          </div>
+        )}
+
+        {sampleCreated ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorCreateSample}
+              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
+              onClick={handleCreateSample}
+            >
+              Update Sample
+            </button>
+            <button type="button" onClick={handleCreateNew} style={errorOverlayLinkButtonStyle}>
+              Create New...
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorCreateSample}
+              style={allRequiredFilled ? errorOverlayPrimaryButtonStyle : errorOverlaySecondaryButtonStyle}
+              onClick={handleCreateSample}
+            >
+              {hasAnyProps ? 'Create Sample' : 'Create Empty Sample'}
+            </button>
+            <span style={{ color: 'var(--vscode-descriptionForeground, #666)', fontSize: 12 }}>or</span>
+            <button
+              type="button"
+              data-testid={TID.preview.componentErrorConfigureAI}
+              style={allRequiredFilled ? errorOverlaySecondaryButtonStyle : errorOverlayPrimaryButtonStyle}
+              onClick={onConfigureAIKey}
+            >
+              Configure AI Key
+            </button>
+          </div>
+        )}
+
+        <p style={errorOverlayAIHintStyle}>
+          <button type="button" onClick={onConfigureAIKey} style={errorOverlayAIHintLinkStyle}>
+            Configure an AI provider
+          </button>{' '}
+          to auto-generate sample files with realistic data.
+        </p>
+      </div>
     </div>
   );
 }
@@ -280,6 +824,13 @@ const wrapperStyle: React.CSSProperties = {
   height: '100%',
 };
 
+const surfaceStyle: React.CSSProperties = {
+  position: 'relative',
+  width: '100%',
+  height: '100%',
+  overflow: 'visible',
+};
+
 const iframeStyle: React.CSSProperties = {
   border: 'none',
   width: '100%',
@@ -292,6 +843,15 @@ const overlayStyle: React.CSSProperties = {
   inset: 0,
   pointerEvents: 'none',
   zIndex: 10,
+};
+
+const loadingOverlayStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  // Above the canvas-interaction overlay (z=10) and below the component error
+  // overlay (z=100), so a render error replaces the spinner immediately
+  // instead of showing both stacked.
+  zIndex: 15,
 };
 
 const centerScreenStyle: React.CSSProperties = {
@@ -337,6 +897,27 @@ const buttonStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
+const autoStartLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  marginTop: 16,
+  fontSize: 12,
+  opacity: 0.75,
+  cursor: 'pointer',
+  userSelect: 'none',
+};
+
+const settingsLinkStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #4e94ce)',
+  fontSize: 11,
+  cursor: 'pointer',
+  marginTop: 6,
+  padding: 0,
+  textDecoration: 'underline',
+};
+
 const reconnectingBannerStyle: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -351,9 +932,154 @@ const reconnectingBannerStyle: React.CSSProperties = {
   zIndex: 1001,
 };
 
+const disconnectedScreenStyle: React.CSSProperties = {
+  ...centerScreenStyle,
+  ...absoluteFillStyle,
+  justifyContent: 'flex-start',
+  gap: 12,
+  paddingTop: 88,
+};
+
 const warningIconStyle: React.CSSProperties = {
   fontSize: 36,
   marginBottom: 12,
   color: 'var(--vscode-editorWarning-foreground, #e5a100)',
   lineHeight: 1,
+};
+
+// ============================================================================
+// Component Error Overlay styles
+// ============================================================================
+
+const errorOverlayBackdropStyle: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 100,
+  background: 'rgba(0, 0, 0, 0.85)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontFamily: 'var(--vscode-font-family, system-ui, -apple-system, sans-serif)',
+};
+
+const errorOverlayCardStyle: CSSProperties = {
+  padding: 32,
+  maxWidth: 520,
+  width: '90%',
+  background: 'var(--vscode-editor-background, #1e1e1e)',
+  borderRadius: 12,
+  border: '1px solid var(--vscode-widget-border, #333)',
+};
+
+const errorOverlayTitleStyle: CSSProperties = {
+  color: 'var(--vscode-editor-foreground, #e2e8f0)',
+  margin: '0 0 4px',
+  fontSize: 15,
+  fontWeight: 600,
+};
+
+const errorOverlaySubtitleStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  margin: '0 0 20px',
+};
+
+const errorOverlayNoPropsHintStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  margin: '0 0 16px',
+  lineHeight: 1.6,
+};
+
+const sampleNameRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 12,
+};
+
+const sampleNameLabelStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 12,
+  minWidth: 40,
+};
+
+const sampleNameInputStyle: CSSProperties = {
+  flex: 1,
+  padding: '4px 8px',
+  fontSize: 12,
+  background: 'var(--vscode-input-background, #1e1e1e)',
+  color: 'var(--vscode-input-foreground, #e2e8f0)',
+  border: '1px solid var(--vscode-input-border, #444)',
+  borderRadius: 4,
+  outline: 'none',
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+};
+
+const errorOverlayHintStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 11,
+  margin: '0 0 12px',
+  lineHeight: 1.5,
+};
+
+const errorOverlayLinkButtonStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: 13,
+  textDecoration: 'underline',
+};
+
+const errorOverlayCloseButtonStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 20,
+  cursor: 'pointer',
+  padding: '0 4px',
+  lineHeight: 1,
+  borderRadius: 4,
+  marginTop: -4,
+};
+
+const errorOverlayAIHintStyle: CSSProperties = {
+  color: 'var(--vscode-descriptionForeground, #718096)',
+  fontSize: 11,
+  margin: '12px 0 0',
+  lineHeight: 1.5,
+};
+
+const errorOverlayAIHintLinkStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--vscode-textLink-foreground, #3794ff)',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: 11,
+  textDecoration: 'underline',
+};
+
+const errorOverlayPrimaryButtonStyle: CSSProperties = {
+  padding: '8px 16px',
+  background: 'var(--vscode-button-background, #3182ce)',
+  color: 'var(--vscode-button-foreground, white)',
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const errorOverlaySecondaryButtonStyle: CSSProperties = {
+  padding: '8px 16px',
+  background: 'transparent',
+  color: 'var(--vscode-textLink-foreground, #a78bfa)',
+  border: '1px solid var(--vscode-textLink-foreground, #a78bfa)',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
 };

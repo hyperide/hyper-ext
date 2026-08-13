@@ -87,6 +87,17 @@ class TabInputWebview {
   constructor(public readonly viewType: string) {}
 }
 
+class TabInputText {
+  constructor(public readonly uri: MockUri) {}
+}
+
+class MockRelativePattern {
+  constructor(
+    public readonly base: unknown,
+    public readonly pattern: string,
+  ) {}
+}
+
 /* ---------- namespace: window ---------- */
 
 const window = {
@@ -102,6 +113,7 @@ const window = {
     dispose: mock(),
   })),
   onDidChangeActiveTextEditor: mock(() => ({ dispose: mock() })),
+  visibleTextEditors: [] as unknown[],
   tabGroups: { all: [] as unknown[] },
 };
 
@@ -124,6 +136,9 @@ class MockWorkspaceEdit {
 
 const workspace = {
   workspaceFolders: [{ uri: MockUri.file('/test-workspace'), name: 'test', index: 0 }],
+  getConfiguration: mock(() => ({
+    get: <T>(_key: string, defaultValue?: T) => defaultValue,
+  })),
   openTextDocument: mock(() =>
     Promise.resolve({
       getText: () => '',
@@ -134,6 +149,12 @@ const workspace = {
   ),
   applyEdit: mock(() => Promise.resolve(true)),
   textDocuments: [] as Array<{ uri: MockUri; getText: () => string }>,
+  createFileSystemWatcher: mock(() => ({
+    onDidChange: mock(() => ({ dispose: mock() })),
+    onDidCreate: mock(() => ({ dispose: mock() })),
+    onDidDelete: mock(() => ({ dispose: mock() })),
+    dispose: mock(),
+  })),
   fs: {
     readFile: mock(() => Promise.resolve(new Uint8Array())),
     writeFile: mock(() => Promise.resolve()),
@@ -160,10 +181,12 @@ mock.module('vscode', () => ({
   Selection: MockSelection,
   EventEmitter: MockEventEmitter,
   WorkspaceEdit: MockWorkspaceEdit,
+  RelativePattern: MockRelativePattern,
   ViewColumn,
   TextEditorRevealType,
   FileType,
   TabInputWebview,
+  TabInputText,
   window,
   workspace,
   commands,
@@ -178,6 +201,7 @@ const allMockFns = [
   window.showTextDocument,
   window.createOutputChannel,
   window.onDidChangeActiveTextEditor,
+  workspace.getConfiguration,
   workspace.openTextDocument,
   workspace.applyEdit,
   workspace.fs.readFile,
@@ -209,6 +233,8 @@ beforeEach(() => {
   commands.executeCommand.mockImplementation(() => Promise.resolve());
 
   window.activeTextEditor = undefined;
+  window.visibleTextEditors = [];
   window.tabGroups = { all: [] as unknown[] };
+  workspace.workspaceFolders = [{ uri: MockUri.file('/test-workspace'), name: 'test', index: 0 }];
   workspace.textDocuments.length = 0;
 });

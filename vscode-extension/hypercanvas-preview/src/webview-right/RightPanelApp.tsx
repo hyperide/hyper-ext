@@ -15,6 +15,7 @@ import { useSharedEditorState, useSharedEditorStateSync } from '@/lib/platform/s
 import type { ComponentGroup } from '../../../../lib/component-scanner/types';
 import type { SharedEditorState } from '../../../../lib/types';
 import { TID } from '../shared/data-testid-map';
+import type { ProjectCapabilities } from '../types';
 
 interface ComponentGroupsData {
   atomGroups: ComponentGroup[];
@@ -35,13 +36,43 @@ function RightPanelContent() {
   // RightPanelContent mounts once; canvas is a stable singleton — no duplicate subscriptions
   useSharedEditorStateSync(canvas);
 
+  // Notify extension host when an input/textarea in this panel gains/loses focus,
+  // so the `hypercanvas.rightPanelInputFocused` context variable can be set correctly.
+  // This prevents canvas keybindings (Delete, Backspace, Enter, Tab, Escape) from
+  // firing while the user is typing in an inspector field.
+  useEffect(() => {
+    const isInputEl = (target: EventTarget | null): boolean =>
+      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+
+    const handleFocusIn = (e: FocusEvent) => {
+      if (isInputEl(e.target)) {
+        canvas.sendEvent({ type: 'panel:inputFocus', active: true });
+      }
+    };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      if (!isInputEl(e.target)) return;
+      // Skip if focus is moving to another input within the same panel
+      if (isInputEl(e.relatedTarget)) return;
+      canvas.sendEvent({ type: 'panel:inputFocus', active: false });
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, [canvas]);
+
   const projectUIKit = useSharedEditorState((s) => s.projectUIKit) ?? 'none';
-  const componentPath = useSharedEditorState((s) => s.componentPath);
+  const componentPath = useSharedEditorState((s) => s.currentComponent?.path);
   const insertTargetId = useSharedEditorState((s) => s.insertTargetId);
 
   const [componentGroups, setComponentGroups] = useState<ComponentGroupsData | null>(null);
   const [explorerVisible, setExplorerVisible] = useState(false);
   const [insertPanelExpanded, setInsertPanelExpanded] = useState(false);
+  const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -56,6 +87,9 @@ function RightPanelContent() {
       }
       if (data.type === 'inspector:explorerVisible') {
         setExplorerVisible(!!data.visible);
+      }
+      if (data.type === 'projectCapabilities') {
+        setProjectCapabilities(data.capabilities ?? null);
       }
     };
     window.addEventListener('message', handler); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, extension-controlled messages only
@@ -105,12 +139,13 @@ function RightPanelContent() {
           componentGroups={componentGroups}
           explorerVisible={explorerVisible}
           onComponentClick={handleComponentClick}
+          readonly={projectCapabilities?.readonly === true}
         />
       </div>
       {showInsertPanel && (
         <div
-          className="min-h-0 flex flex-col border-t border-border transition-[height] duration-[233ms] ease-in-out"
-          style={{ height: insertPanelExpanded ? '66.67%' : '33.33%' }}
+          className="min-h-0 flex flex-col border-t border-border transition-[height] ease-in-out"
+          style={{ height: insertPanelExpanded ? '66.67%' : '33.33%', transitionDuration: '233ms' }}
         >
           <div className="flex-1 min-h-0 overflow-y-auto">
             <ComponentNavigatorPanel

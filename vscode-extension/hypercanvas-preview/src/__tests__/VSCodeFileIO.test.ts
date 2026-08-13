@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, type mock } from 'bun:test';
 import * as vscode from 'vscode';
 import { VSCodeFileIO } from '../vscode-file-io';
 
@@ -10,10 +10,43 @@ describe('VSCodeFileIO', () => {
   });
 
   describe('writeFile', () => {
-    it('applies WorkspaceEdit with full-range replace', async () => {
+    it('writes to disk via workspace.fs.writeFile', async () => {
       await fileIO.writeFile('/test/file.tsx', 'new content');
 
-      expect(vscode.workspace.openTextDocument).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      const [uri, buf] = (vscode.workspace.fs.writeFile as ReturnType<typeof mock>).mock.calls[0] as [
+        vscode.Uri,
+        Uint8Array,
+      ];
+      expect(uri.fsPath).toBe('/test/file.tsx');
+      expect(Buffer.from(buf).toString('utf-8')).toBe('new content');
+    });
+
+    it('skips applyEdit for clean open document after disk write', async () => {
+      vscode.workspace.textDocuments.push({
+        getText: () => 'old content',
+        positionAt: (o: number) => new vscode.Position(0, o),
+        isDirty: false,
+        uri: vscode.Uri.file('/test/file.tsx'),
+      } as unknown as vscode.TextDocument);
+
+      await fileIO.writeFile('/test/file.tsx', 'new content');
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+    });
+
+    it('syncs dirty open document via applyEdit when content differs', async () => {
+      vscode.workspace.textDocuments.push({
+        getText: () => 'old content',
+        positionAt: (o: number) => new vscode.Position(0, o),
+        isDirty: true,
+        uri: vscode.Uri.file('/test/file.tsx'),
+      } as unknown as vscode.TextDocument);
+
+      await fileIO.writeFile('/test/file.tsx', 'new content');
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
       expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
 
       const edit = (vscode.workspace.applyEdit as ReturnType<typeof mock>).mock.calls[0][0] as {
@@ -23,60 +56,68 @@ describe('VSCodeFileIO', () => {
       expect(edit.edits[0].newText).toBe('new content');
     });
 
-    it('saves the document after successful edit', async () => {
-      await fileIO.writeFile('/test/file.tsx', 'content');
+    it('skips applyEdit when open document already has same content', async () => {
+      vscode.workspace.textDocuments.push({
+        getText: () => 'same content',
+        positionAt: (o: number) => new vscode.Position(0, o),
+        isDirty: true,
+        uri: vscode.Uri.file('/test/file.tsx'),
+      } as unknown as vscode.TextDocument);
 
-      const doc = await (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.results[0].value;
-      expect(doc.save).toHaveBeenCalledTimes(1);
+      await fileIO.writeFile('/test/file.tsx', 'same content');
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
 
-    it('throws when applyEdit fails', async () => {
-      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockReturnValue(Promise.resolve(false));
+    it('skips applyEdit when no document is open', async () => {
+      await fileIO.writeFile('/test/file.tsx', 'new content');
 
-      await expect(fileIO.writeFile('/test/file.tsx', 'content')).rejects.toThrow(
-        'WorkspaceEdit failed for /test/file.tsx',
-      );
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
+      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     });
 
-    it('does not save when applyEdit fails', async () => {
-      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockReturnValue(Promise.resolve(false));
-
-      try {
-        await fileIO.writeFile('/test/file.tsx', 'content');
-      } catch {
-        // expected
-      }
-
-      const doc = await (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.results[0].value;
-      expect(doc.save).not.toHaveBeenCalled();
-    });
-
-    it('throws when save fails', async () => {
-      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockReturnValue(Promise.resolve(true));
-      (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mockReturnValue(
-        Promise.resolve({
-          getText: () => '',
-          positionAt: (o: number) => new vscode.Position(0, o),
-          uri: vscode.Uri.file('/test'),
-          save: mock(() => Promise.resolve(false)),
-        }),
+    it('does not throw when applyEdit fails on sync', async () => {
+      vscode.workspace.textDocuments.push({
+        getText: () => 'old content',
+        positionAt: (o: number) => new vscode.Position(0, o),
+        isDirty: true,
+        uri: vscode.Uri.file('/test/file.tsx'),
+      } as unknown as vscode.TextDocument);
+      (vscode.workspace.applyEdit as ReturnType<typeof mock>).mockImplementation(() =>
+        Promise.reject(new Error('fail')),
       );
 
-      await expect(fileIO.writeFile('/test/file.tsx', 'content')).rejects.toThrow(
-        'Document save failed for /test/file.tsx',
-      );
+      await fileIO.writeFile('/test/file.tsx', 'new content');
+
+      expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('readFile', () => {
-    it('returns content from open TextDocument when available', async () => {
+    it('returns content from dirty open TextDocument when available', async () => {
       vscode.workspace.textDocuments.push({
         uri: vscode.Uri.file('/test/file.tsx'),
+        isDirty: true,
         getText: () => 'open doc content',
       } as unknown as vscode.TextDocument);
 
       const result = await fileIO.readFile('/test/file.tsx');
       expect(result).toBe('open doc content');
+    });
+
+    it('reads from disk when open TextDocument is clean', async () => {
+      vscode.workspace.textDocuments.push({
+        uri: vscode.Uri.file('/test/file.tsx'),
+        isDirty: false,
+        getText: () => 'stale open doc content',
+      } as unknown as vscode.TextDocument);
+      (vscode.workspace.fs.readFile as ReturnType<typeof mock>).mockReturnValue(
+        Promise.resolve(new TextEncoder().encode('fresh disk content')),
+      );
+
+      const result = await fileIO.readFile('/test/file.tsx');
+      expect(result).toBe('fresh disk content');
     });
 
     it('falls back to disk read when document is not open', async () => {
@@ -91,6 +132,7 @@ describe('VSCodeFileIO', () => {
     it('does not read from disk when open document exists', async () => {
       vscode.workspace.textDocuments.push({
         uri: vscode.Uri.file('/test/file.tsx'),
+        isDirty: true,
         getText: () => 'cached',
       } as unknown as vscode.TextDocument);
 

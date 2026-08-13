@@ -287,7 +287,6 @@ export function detectInteractiveElement(
 
   // Check for existing test IDs
   const existingTestId = getAttributeStringValue(getAttribute(element, 'data-testid')?.value ?? null);
-  const existingUniqId = getAttributeStringValue(getAttribute(element, 'data-uniq-id')?.value ?? null);
 
   const context = {
     ariaLabel: ariaLabel ?? undefined,
@@ -314,7 +313,6 @@ export function detectInteractiveElement(
     column: loc?.start.column ?? 0,
     context,
     existingTestId: existingTestId ?? undefined,
-    existingUniqId: existingUniqId ?? undefined,
   };
 }
 

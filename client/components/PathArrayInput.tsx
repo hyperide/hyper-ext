@@ -55,7 +55,7 @@ export function PathArrayInput({
           <p className="text-xs text-gray-400 italic">No paths configured</p>
         ) : (
           value.map((path, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: array items have no stable unique identifier
+            // eslint-disable-next-line react/no-array-index-key -- array items have no stable unique identifier
             <div key={index} className="flex items-center gap-2">
               <Input
                 type="text"

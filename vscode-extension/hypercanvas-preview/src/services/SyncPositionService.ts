@@ -6,8 +6,13 @@
  *
  * Uses different mechanisms for each direction (webview postMessage vs StateHub),
  * so a simple suppress flag prevents feedback loops.
+ *
+ * Supports both legacy UUID-based and fiber-based source location resolution.
+ * When the iframe sends a source location (fiber path), go-to-code uses it directly
+ * without an AST lookup round-trip.
  */
 
+import type { SourceLocation } from '@shared/element-tracing/types';
 import * as vscode from 'vscode';
 import { goToCode } from '../EditorBridge';
 import type { StateHub } from '../StateHub';
@@ -21,6 +26,12 @@ export class SyncPositionService implements vscode.Disposable {
   private _enabled: boolean;
   private _suppressCursorSync = false;
   private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * Source location received with the latest element click.
+   * Set by the canvas interaction layer when the iframe sends source alongside elementId.
+   * Consumed by _onPreviewSelectionChange for direct go-to-code (no AST lookup).
+   */
+  private _pendingSource: SourceLocation | null = null;
 
   constructor(
     private readonly _astService: AstService,
@@ -30,6 +41,15 @@ export class SyncPositionService implements vscode.Disposable {
     private readonly _getCurrentComponent: () => string | undefined,
   ) {
     this._enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('syncPositions', true);
+  }
+
+  /**
+   * Store source location from an iframe click event.
+   * Called by the canvas interaction layer before StateHub.applyUpdate
+   * so that _onPreviewSelectionChange can use it for direct navigation.
+   */
+  setPendingSource(source: SourceLocation | null): void {
+    this._pendingSource = source;
   }
 
   start(): void {
@@ -43,6 +63,12 @@ export class SyncPositionService implements vscode.Disposable {
     // Preview -> Code: selectedIds changes in StateHub
     const unsub = this._stateHub.onChange((_state, patch) => {
       if (patch.selectedIds !== undefined) {
+        // If the patch includes a source location from fiber-based tracing,
+        // store it so _onPreviewSelectionChange can use it directly
+        const patchWithSource = patch as Partial<typeof _state> & { source?: SourceLocation };
+        if (patchWithSource.source) {
+          this._pendingSource = patchWithSource.source;
+        }
         this._onPreviewSelectionChange(patch.selectedIds);
       }
     });
@@ -102,7 +128,9 @@ export class SyncPositionService implements vscode.Disposable {
         if (result) {
           // Suppress reverse sync (Preview→Code) before updating StateHub
           this._suppressCursorSync = true;
-          this._sendGoToVisual(result.uuid);
+          if (result.nodeRef) {
+            this._sendGoToVisual(result.nodeRef);
+          }
           setTimeout(() => {
             this._suppressCursorSync = false;
           }, SUPPRESS_DURATION_MS);
@@ -120,6 +148,25 @@ export class SyncPositionService implements vscode.Disposable {
     if (this._suppressCursorSync) return;
     if (selectedIds.length !== 1) return;
 
+    // Fast path: if the iframe sent a source location with the click,
+    // navigate directly — no active component file needed, no AST lookup.
+    const pendingSource = this._pendingSource;
+    this._pendingSource = null;
+
+    if (pendingSource) {
+      try {
+        this._suppressCursorSync = true;
+        // source.column is 0-based, goToCode expects 1-based column
+        await goToCode(pendingSource.fileName, pendingSource.line, pendingSource.column + 1);
+      } finally {
+        setTimeout(() => {
+          this._suppressCursorSync = false;
+        }, SUPPRESS_DURATION_MS);
+      }
+      return;
+    }
+
+    // Legacy fallback: resolve via AST lookup (requires active component)
     const component = this._getCurrentComponent();
     if (!component) return;
 

@@ -21,6 +21,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   private _aiBridge: AIBridge;
   private _chatHistory: ChatHistoryService;
   private _pendingAIPrompt: string | null = null;
+  private _ready = false;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -34,13 +35,50 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Returns a promise that resolves when the new React app has mounted and
+   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
+   */
+  public async reset(): Promise<void> {
+    if (!this._view) return;
+    const webview = this._view.webview;
+    this._ready = false;
+    const ready = new Promise<void>((resolve) => {
+      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
+        if (msg?.type === 'webview:ready') {
+          sub.dispose();
+          resolve();
+        }
+      });
+      setTimeout(() => {
+        sub.dispose();
+        resolve();
+      }, 1_500);
+    });
+    webview.html = this._getHtmlForWebview(webview);
+    await ready;
+  }
+
+  async focusAndEnsureReady(): Promise<void> {
+    await vscode.commands.executeCommand(`${AIChatPanelProvider.viewType}.focus`);
+    setTimeout(() => {
+      void this.resetIfNotReady();
+    }, 250);
+  }
+
+  async resetIfNotReady(): Promise<void> {
+    if (!this._view || this._ready) return;
+    await this.reset();
+  }
+
+  /**
    * Send an AI prompt to the chat webview.
    * Focuses the panel and delivers the prompt.
    */
   sendAIPrompt(prompt: string): void {
-    vscode.commands.executeCommand('hypercanvas.aiChatView.focus');
+    void this.focusAndEnsureReady();
 
-    if (this._view) {
+    if (this._view && this._ready) {
       this._view.webview.postMessage({ type: 'ai:openChat', prompt });
     } else {
       this._pendingAIPrompt = prompt;
@@ -67,6 +105,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken,
   ) {
     this._view = webviewView;
+    this._ready = false;
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -79,12 +118,6 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
       await this._handleMessage(message, webviewView.webview);
     });
 
-    // Flush any pending AI prompt that arrived before the webview was ready
-    if (this._pendingAIPrompt) {
-      webviewView.webview.postMessage({ type: 'ai:openChat', prompt: this._pendingAIPrompt });
-      this._pendingAIPrompt = null;
-    }
-
     // Send initial API key status and listen for changes
     this._sendKeyStatus(webviewView.webview);
     const secretsSub = this._context.secrets.onDidChange(() => {
@@ -93,6 +126,7 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
 
     webviewView.onDidDispose(() => {
       this._view = undefined;
+      this._ready = false;
       this._aiBridge.dispose();
       secretsSub.dispose();
     });
@@ -105,6 +139,13 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     if (!message.type) return;
 
     switch (message.type) {
+      case 'webview:ready': {
+        this._ready = true;
+        await this._sendKeyStatus(webview);
+        this._flushPendingPrompt(webview);
+        return;
+      }
+
       case 'ai:chat': {
         const requestId = message.requestId as string;
         const messages = message.messages as Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -184,10 +225,20 @@ export class AIChatPanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private _flushPendingPrompt(webview: vscode.Webview): void {
+    if (!this._pendingAIPrompt) return;
+    webview.postMessage({ type: 'ai:openChat', prompt: this._pendingAIPrompt });
+    this._pendingAIPrompt = null;
+  }
+
   private async _sendKeyStatus(webview: vscode.Webview): Promise<void> {
     const secretKey = await this._context.secrets.get('hypercanvas.ai.apiKey');
     const settingsKey = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('apiKey');
-    webview.postMessage({ type: 'ai:keyStatus', hasApiKey: !!(secretKey || settingsKey) });
+    const provider = vscode.workspace.getConfiguration('hypercanvas.ai').get<string>('provider');
+    // Key must exist AND be non-empty. Also require provider to be configured.
+    const key = secretKey || settingsKey;
+    const hasApiKey = !!(key && key.trim().length > 3 && provider);
+    webview.postMessage({ type: 'ai:keyStatus', hasApiKey });
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

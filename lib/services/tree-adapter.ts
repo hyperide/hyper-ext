@@ -141,6 +141,7 @@ function convertSingleNode(node: ComponentNode): TreeNode {
       type: 'function',
       label: `${fnName}()`,
       name: undefined,
+      loc: node.loc,
       functionLoc: node.functionItem?.functionLoc as TreeNode['functionLoc'],
       children: node.children.length > 0 ? convertChildren(node.children) : [],
     };
@@ -154,6 +155,7 @@ function convertSingleNode(node: ComponentNode): TreeNode {
     type: treeNodeType,
     label,
     name: undefined,
+    loc: node.loc,
     children: node.type === 'svg' ? [] : node.children.length > 0 ? convertChildren(node.children) : [],
   };
 }

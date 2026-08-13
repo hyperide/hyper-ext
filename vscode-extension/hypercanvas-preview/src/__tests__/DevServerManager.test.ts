@@ -20,7 +20,9 @@ mock.module('../services/PreviewProxy', () => ({
     stop = mock();
   },
 }));
-const { DevServerManager } = await import('../services/DevServerManager');
+const { appendScriptCliArgs, buildInstallCommand, DevServerManager, shouldRepairDependencies } = await import(
+  '../services/DevServerManager'
+);
 
 describe('DevServerManager', () => {
   let manager: InstanceType<typeof DevServerManager>;
@@ -48,12 +50,12 @@ describe('DevServerManager', () => {
   });
 
   describe('callbacks', () => {
-    it('onStatusChange fires on status updates', () => {
+    it('onStatusChange fires on status updates', async () => {
       const cb = mock();
       manager.onStatusChange(cb);
 
       // Trigger via stop() which calls _updateStatus('stopped')
-      manager.stop();
+      await manager.stop();
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ status: 'stopped' }));
     });
 
@@ -69,6 +71,116 @@ describe('DevServerManager', () => {
       manager.setRuntimeError(null);
       expect(cb).toHaveBeenCalledWith(null);
       expect(manager.runtimeError).toBeNull();
+    });
+  });
+
+  describe('stop', () => {
+    it('stops the preview proxy before terminating the dev server process', async () => {
+      const events: string[] = [];
+      const proxy = {
+        stop: mock(() => {
+          events.push('proxy.stop');
+        }),
+      };
+      const proc = {
+        killed: false,
+        kill: mock((signal: string) => {
+          events.push(`process.kill:${signal}`);
+          proc.killed = true;
+          return true;
+        }),
+        once: mock((event: string, callback: () => void) => {
+          expect(event).toBe('exit');
+          queueMicrotask(callback);
+          return proc;
+        }),
+      };
+
+      Object.assign(manager, {
+        _previewProxy: proxy,
+        _process: proc,
+        _port: 5173,
+      });
+
+      await manager.stop();
+
+      expect(events).toEqual(['proxy.stop', 'process.kill:SIGTERM']);
+    });
+
+    it('does not let an old stop clear a replacement process', async () => {
+      let resolveOldExit: (() => void) | null = null;
+      const oldProxy = { stop: mock() };
+      const oldProc = {
+        killed: false,
+        kill: mock(() => {
+          oldProc.killed = true;
+          return true;
+        }),
+        once: mock((_event: string, callback: () => void) => {
+          resolveOldExit = callback;
+          return oldProc;
+        }),
+      };
+      Object.assign(manager, {
+        _previewProxy: oldProxy,
+        _process: oldProc,
+        _port: 5173,
+      });
+
+      const stopPromise = manager.stop();
+      await Promise.resolve();
+
+      const replacementProxy = { stop: mock() };
+      const replacementProc = {
+        killed: false,
+        kill: mock(() => true),
+        once: mock(() => replacementProc),
+      };
+      Object.assign(manager, {
+        _previewProxy: replacementProxy,
+        _process: replacementProc,
+        _port: 5174,
+      });
+
+      resolveOldExit?.();
+      await stopPromise;
+
+      expect(oldProxy.stop).toHaveBeenCalled();
+      expect(replacementProxy.stop).not.toHaveBeenCalled();
+      expect((manager as unknown as { _process: unknown })._process).toBe(replacementProc);
+      expect((manager as unknown as { _port: number })._port).toBe(5174);
+    });
+  });
+
+  describe('setProjectPath', () => {
+    it('stops the old server and clears project-scoped state', async () => {
+      const proxy = { stop: mock() };
+      const proc = {
+        killed: false,
+        kill: mock(() => {
+          proc.killed = true;
+          return true;
+        }),
+        once: mock((_event: string, callback: () => void) => {
+          queueMicrotask(callback);
+          return proc;
+        }),
+      };
+      Object.assign(manager, {
+        _previewProxy: proxy,
+        _process: proc,
+        _port: 5173,
+      });
+      manager.setRuntimeError({ message: 'old error' } as never);
+      (manager as unknown as { _appendLog(text: string): void })._appendLog('old log\n');
+
+      await manager.setProjectPath('/next-project');
+
+      expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(proxy.stop).toHaveBeenCalled();
+      expect(manager.runtimeError).toBeNull();
+      expect(manager.getLogs()).toEqual([]);
+      expect((manager as unknown as { _projectPath: string })._projectPath).toBe('/next-project');
     });
   });
 
@@ -144,6 +256,12 @@ describe('DevServerManager', () => {
       )._buildCommand(pm, script);
     }
 
+    function buildCommandWithScriptArgs(pm: 'npm' | 'yarn' | 'pnpm' | 'bun', args: string[]) {
+      const command = buildCommand(manager, pm, 'dev');
+      appendScriptCliArgs(command, pm, args);
+      return command;
+    }
+
     it('builds npm command', () => {
       expect(buildCommand(manager, 'npm', 'dev')).toEqual({ cmd: 'npm', args: ['run', 'dev'] });
     });
@@ -159,11 +277,137 @@ describe('DevServerManager', () => {
     it('builds yarn command (no run)', () => {
       expect(buildCommand(manager, 'yarn', 'dev')).toEqual({ cmd: 'yarn', args: ['dev'] });
     });
+
+    it('uses npm argument separator for script CLI args', () => {
+      expect(buildCommandWithScriptArgs('npm', ['--port', '5173'])).toEqual({
+        cmd: 'npm',
+        args: ['run', 'dev', '--', '--port', '5173'],
+      });
+    });
+
+    it('passes pnpm script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('pnpm', ['--port', '5173'])).toEqual({
+        cmd: 'pnpm',
+        args: ['run', 'dev', '--port', '5173'],
+      });
+    });
+
+    it('passes yarn script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('yarn', ['--port', '5173'])).toEqual({
+        cmd: 'yarn',
+        args: ['dev', '--port', '5173'],
+      });
+    });
+
+    it('passes bun script CLI args without a literal separator', () => {
+      expect(buildCommandWithScriptArgs('bun', ['--port', '5173'])).toEqual({
+        cmd: 'bun',
+        args: ['run', 'dev', '--port', '5173'],
+      });
+    });
+  });
+
+  describe('dependency repair detection', () => {
+    it('detects missing rolldown optional native binding crashes', () => {
+      expect(shouldRepairDependencies("Cannot find module '@rolldown/binding-darwin-arm64'", [])).toBe(true);
+    });
+
+    it('does not repair ordinary syntax errors', () => {
+      expect(shouldRepairDependencies('Unexpected token in client/pages/Index.tsx', [])).toBe(false);
+    });
+
+    it('builds package-manager install commands for dependency repair', () => {
+      expect(buildInstallCommand('pnpm')).toEqual({ cmd: 'pnpm', args: ['install', '--force'] });
+      expect(buildInstallCommand('npm')).toEqual({ cmd: 'npm', args: ['install'] });
+      expect(buildInstallCommand('yarn')).toEqual({ cmd: 'yarn', args: ['install'] });
+      expect(buildInstallCommand('bun')).toEqual({ cmd: 'bun', args: ['install'] });
+    });
   });
 
   describe('dispose', () => {
     it('does not throw when called on fresh instance', () => {
       expect(() => manager.dispose()).not.toThrow();
+    });
+  });
+
+  describe('recompile gate', () => {
+    function appendLog(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      (mgr as unknown as { _appendLog(text: string): void })._appendLog(text);
+    }
+
+    function fireRecompileDetector(mgr: InstanceType<typeof DevServerManager>, text: string) {
+      // Mirrors the path in the stdout/stderr handlers — they call
+      // _maybeResolveRecompileGate(clean) on every chunk.
+      (mgr as unknown as { _maybeResolveRecompileGate(text: string): void })._maybeResolveRecompileGate(text);
+    }
+
+    it('awaitRecompile is a no-op when no gate is armed', async () => {
+      // Should resolve immediately
+      await manager.awaitRecompile();
+    });
+
+    it('arm gate → fire compiled successfully → ready resolves', async () => {
+      manager.armRecompileGate();
+
+      let resolved = false;
+      const wait = manager.awaitRecompile().then(() => {
+        resolved = true;
+      });
+
+      // Microtask flush: gate is armed, awaiter must NOT be resolved yet
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      fireRecompileDetector(manager, 'webpack 5.89.0 compiled successfully in 412 ms\n');
+      await wait;
+      expect(resolved).toBe(true);
+    });
+
+    it('ignores chunks without `compiled successfully`', async () => {
+      manager.armRecompileGate();
+
+      let resolved = false;
+      const wait = manager.awaitRecompile().then(() => {
+        resolved = true;
+      });
+
+      fireRecompileDetector(manager, 'wait until bundle finished\n');
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      fireRecompileDetector(manager, 'compiled successfully\n');
+      await wait;
+      expect(resolved).toBe(true);
+    });
+
+    it('re-arming releases the previous gate so old awaiters do not deadlock', async () => {
+      manager.armRecompileGate();
+      const firstWait = manager.awaitRecompile();
+
+      // Re-arm; previous gate should be released.
+      manager.armRecompileGate();
+      await firstWait; // must not hang
+
+      // Fresh gate is still pending — fire to release.
+      fireRecompileDetector(manager, 'compiled successfully\n');
+      await manager.awaitRecompile();
+    });
+
+    it('case-insensitive match — Webpack capitalizes the line in CRA 5', async () => {
+      manager.armRecompileGate();
+      fireRecompileDetector(manager, 'Compiled successfully!\n');
+      await manager.awaitRecompile();
+    });
+
+    it('logs flowing through _appendLog do not accidentally release the gate', async () => {
+      // _appendLog only buffers/categorizes — it must NOT advance the gate.
+      // The gate is driven only by stdout/stderr handlers via _maybeResolveRecompileGate.
+      manager.armRecompileGate();
+
+      appendLog(manager, 'compiled successfully\n');
+      // Race the gate against a microtask; gate must still be pending.
+      const settled = await Promise.race([manager.awaitRecompile().then(() => 'resolved'), Promise.resolve('pending')]);
+      expect(settled).toBe('pending');
     });
   });
 });

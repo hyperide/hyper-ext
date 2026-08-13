@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { getEmptyContainerRects } from './empty-container-placeholders';
+import type { ComponentTreeNode, SourceLocation } from '../element-tracing/types';
+import { getEmptyContainerRectsFromFiber, isContainerEmpty } from './empty-container-placeholders';
 
 /**
- * Tests for getEmptyContainerRects() — pure query function that finds
- * empty [data-uniq-id] containers and returns their bounding rects.
+ * Tests for isContainerEmpty() and getEmptyContainerRectsFromFiber() —
+ * fiber-based empty container detection for overlay placeholders.
  */
 
 // -- Minimal DOM mocks --
@@ -43,27 +44,16 @@ class MockElement {
     return this._children;
   }
 
+  get firstElementChild(): MockElement | null {
+    return (this._children.find((c) => c instanceof MockElement) as MockElement) ?? null;
+  }
+
   getAttribute(name: string): string | null {
     return this._attrs[name] ?? null;
   }
 
   getBoundingClientRect() {
     return { ...this._rect };
-  }
-
-  querySelectorAll(selector: string): MockElement[] {
-    const results: MockElement[] = [];
-    const walk = (node: MockElement) => {
-      for (const c of node._children) {
-        if (!(c instanceof MockElement)) continue;
-        if (selector === '[data-uniq-id]' && 'data-uniq-id' in c._attrs) {
-          results.push(c);
-        }
-        walk(c);
-      }
-    };
-    walk(this);
-    return results;
   }
 }
 
@@ -80,25 +70,85 @@ function mkEl(
 
 function createDoc(bodyChildren: MockChild[] = []) {
   const body = mkEl('body', {}, bodyChildren);
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
   return { body } as any as Document;
 }
 
-describe('getEmptyContainerRects', () => {
-  it('returns rect for empty div[data-uniq-id]', () => {
-    const container = mkEl('div', { 'data-uniq-id': 'abc123' }, [], {
-      left: 10,
-      top: 20,
-      width: 200,
-      height: 100,
-    });
-    const doc = createDoc([container]);
+describe('isContainerEmpty', () => {
+  it('returns true for element with no children', () => {
+    const el = mkEl('div');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+    expect(isContainerEmpty(el as any)).toBe(true);
+  });
 
-    const rects = getEmptyContainerRects(doc);
+  it('returns false for element with element children', () => {
+    const el = mkEl('div', {}, [mkEl('span')]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+    expect(isContainerEmpty(el as any)).toBe(false);
+  });
+
+  it('returns true for element with whitespace-only text', () => {
+    const el = mkEl('div', {}, [new MockTextNode('   \n  ')]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+    expect(isContainerEmpty(el as any)).toBe(true);
+  });
+
+  it('returns false for element with non-empty text', () => {
+    const el = mkEl('div', {}, [new MockTextNode('Hello')]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+    expect(isContainerEmpty(el as any)).toBe(false);
+  });
+});
+
+// ============================================================================
+// Fiber-based empty container detection
+// ============================================================================
+
+function createTreeNode(overrides: {
+  name?: string;
+  source?: SourceLocation | null;
+  children?: ComponentTreeNode[];
+  domElement?: MockElement | null;
+  fiberTag?: number;
+}): ComponentTreeNode {
+  return {
+    name: overrides.name ?? 'div',
+    source: overrides.source ?? null,
+    children: overrides.children ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock — MockElement duck-types HTMLElement
+    domElement: (overrides.domElement ?? null) as any,
+    fiberTag: overrides.fiberTag,
+  };
+}
+
+function createMockAdapter(tree: ComponentTreeNode[]) {
+  return {
+    walkComponentTree: () => tree,
+  };
+}
+
+function createNodeEntries(
+  entries: Array<{ key: string; nodeRef: string; source: SourceLocation }>,
+): Map<string, { nodeRef: string; source: SourceLocation }> {
+  return new Map(entries.map((e) => [e.key, { nodeRef: e.nodeRef, source: e.source }]));
+}
+
+describe('getEmptyContainerRectsFromFiber', () => {
+  it('returns rect for empty container found in fiber tree', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 5, column: 4 };
+    const emptyEl = mkEl('div', {}, [], { left: 10, top: 20, width: 200, height: 100 });
+
+    const tree = [createTreeNode({ name: 'div', source, domElement: emptyEl })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([{ key: 'App.tsx:5:4', nodeRef: 'App.tsx:0', source }]);
+
+    const doc = createDoc([emptyEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
 
     expect(rects).toHaveLength(1);
     expect(rects[0]).toEqual({
-      elementId: 'abc123',
+      nodeRef: 'App.tsx:0',
+      source,
       left: 10,
       top: 20,
       width: 200,
@@ -106,145 +156,131 @@ describe('getEmptyContainerRects', () => {
     });
   });
 
-  it('does not return rect for container with element children', () => {
+  it('skips containers with element children', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 5, column: 4 };
     const child = mkEl('span');
-    const container = mkEl('div', { 'data-uniq-id': 'abc123' }, [child]);
-    const doc = createDoc([container]);
+    const container = mkEl('div', {}, [child]);
 
-    const rects = getEmptyContainerRects(doc);
+    const tree = [createTreeNode({ name: 'div', source, domElement: container })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([{ key: 'App.tsx:5:4', nodeRef: 'App.tsx:0', source }]);
+
+    const doc = createDoc([container]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
 
     expect(rects).toHaveLength(0);
   });
 
-  it('treats whitespace-only text nodes as empty', () => {
+  it('skips nodes without source location', () => {
+    const emptyEl = mkEl('div', {}, [], { left: 0, top: 0, width: 100, height: 50 });
+
+    const tree = [createTreeNode({ name: 'div', source: null, domElement: emptyEl })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([]);
+
+    const doc = createDoc([emptyEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    expect(rects).toHaveLength(0);
+  });
+
+  it('skips nodes without matching entry in nodeEntries', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 5, column: 4 };
+    const emptyEl = mkEl('div');
+
+    const tree = [createTreeNode({ name: 'div', source, domElement: emptyEl })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([]); // No matching entry
+
+    const doc = createDoc([emptyEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    expect(rects).toHaveLength(0);
+  });
+
+  it('walks nested tree nodes', () => {
+    const source1: SourceLocation = { fileName: 'App.tsx', line: 3, column: 2 };
+    const source2: SourceLocation = { fileName: 'App.tsx', line: 7, column: 6 };
+
+    const parentEl = mkEl('div', {}, [mkEl('span')]); // Not empty
+    const childEl = mkEl('section', {}, [], { left: 5, top: 10, width: 80, height: 40 });
+
+    const tree = [
+      createTreeNode({
+        name: 'div',
+        source: source1,
+        domElement: parentEl,
+        children: [createTreeNode({ name: 'section', source: source2, domElement: childEl })],
+      }),
+    ];
+
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([
+      { key: 'App.tsx:3:2', nodeRef: 'App.tsx:0', source: source1 },
+      { key: 'App.tsx:7:6', nodeRef: 'App.tsx:1', source: source2 },
+    ]);
+
+    const doc = createDoc([parentEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    // Only the nested empty child, not the non-empty parent
+    expect(rects).toHaveLength(1);
+    expect(rects[0].nodeRef).toBe('App.tsx:1');
+  });
+
+  it('enforces minimum height on collapsed containers', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 1, column: 0 };
+    const emptyEl = mkEl('div', {}, [], { left: 0, top: 100, width: 200, height: 0 });
+
+    const tree = [createTreeNode({ name: 'div', source, domElement: emptyEl })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([{ key: 'App.tsx:1:0', nodeRef: 'App.tsx:0', source }]);
+
+    const doc = createDoc([emptyEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0].height).toBe(28);
+    expect(rects[0].top).toBe(86); // 100 - 28/2
+  });
+
+  it('returns empty array when doc.body has no children', () => {
+    const adapter = createMockAdapter([]);
+    const entries = createNodeEntries([]);
+
+    const doc = createDoc([]);
+    // body exists but firstElementChild is null
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    expect(rects).toHaveLength(0);
+  });
+
+  it('skips nodes without domElement', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 1, column: 0 };
+
+    const tree = [createTreeNode({ name: 'MyComponent', source, domElement: null })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([{ key: 'App.tsx:1:0', nodeRef: 'App.tsx:0', source }]);
+
+    const doc = createDoc([mkEl('div')]); // Has firstElementChild to pass guard
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
+
+    expect(rects).toHaveLength(0);
+  });
+
+  it('treats whitespace-only text as empty (through isContainerEmpty)', () => {
+    const source: SourceLocation = { fileName: 'App.tsx', line: 1, column: 0 };
     const ws = new MockTextNode('   \n  ');
-    const container = mkEl('div', { 'data-uniq-id': 'abc123' }, [ws], {
-      left: 5,
-      top: 5,
-      width: 50,
-      height: 30,
-    });
-    const doc = createDoc([container]);
+    const emptyEl = mkEl('div', {}, [ws], { left: 0, top: 0, width: 100, height: 50 });
 
-    const rects = getEmptyContainerRects(doc);
+    const tree = [createTreeNode({ name: 'div', source, domElement: emptyEl })];
+    const adapter = createMockAdapter(tree);
+    const entries = createNodeEntries([{ key: 'App.tsx:1:0', nodeRef: 'App.tsx:0', source }]);
 
-    expect(rects).toHaveLength(1);
-    expect(rects[0].elementId).toBe('abc123');
-  });
-
-  it('does not treat non-empty text as empty', () => {
-    const text = new MockTextNode('Hello');
-    const container = mkEl('div', { 'data-uniq-id': 'abc123' }, [text]);
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects).toHaveLength(0);
-  });
-
-  it('returns [] when doc.body is null', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    const doc = { body: null } as any as Document;
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects).toHaveLength(0);
-  });
-
-  it('returns rects for multiple empty containers', () => {
-    const c1 = mkEl('div', { 'data-uniq-id': 'id-1' }, [], { left: 0, top: 0, width: 100, height: 50 });
-    const c2 = mkEl('div', { 'data-uniq-id': 'id-2' }, [], { left: 0, top: 60, width: 100, height: 50 });
-    const nonEmpty = mkEl('div', { 'data-uniq-id': 'id-3' }, [mkEl('p')]);
-    const doc = createDoc([c1, c2, nonEmpty]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects).toHaveLength(2);
-    expect(rects.map((r) => r.elementId)).toEqual(['id-1', 'id-2']);
-  });
-
-  it('skips containers without data-uniq-id value', () => {
-    const container = mkEl('div', { 'data-uniq-id': '' });
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects).toHaveLength(0);
-  });
-
-  it('returns rect for empty non-div elements (section, main, etc.)', () => {
-    const section = mkEl('section', { 'data-uniq-id': 'sec1' }, [], {
-      left: 0,
-      top: 0,
-      width: 300,
-      height: 150,
-    });
-    const doc = createDoc([section]);
-
-    const rects = getEmptyContainerRects(doc);
+    const doc = createDoc([emptyEl]);
+    const rects = getEmptyContainerRectsFromFiber(doc, adapter, entries);
 
     expect(rects).toHaveLength(1);
-    expect(rects[0].elementId).toBe('sec1');
-  });
-
-  it('enforces minimum height on collapsed containers (height 0) and centers vertically', () => {
-    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
-      left: 0,
-      top: 100,
-      width: 200,
-      height: 0,
-    });
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects).toHaveLength(1);
-    expect(rects[0].height).toBe(28);
-    expect(rects[0].top).toBe(86); // 100 - 28/2 = centered around original top
-    expect(rects[0].width).toBe(200);
-  });
-
-  it('enforces minimum height on tiny containers and centers vertically', () => {
-    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
-      left: 0,
-      top: 50,
-      width: 150,
-      height: 10,
-    });
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects[0].height).toBe(28);
-    expect(rects[0].top).toBe(41); // 50 - (28-10)/2 = centered around original center
-  });
-
-  it('preserves height and top when container is taller than minimum', () => {
-    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
-      left: 0,
-      top: 20,
-      width: 100,
-      height: 40,
-    });
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects[0].height).toBe(40);
-    expect(rects[0].top).toBe(20);
-  });
-
-  it('does not enforce minimum width on zero-width containers', () => {
-    const container = mkEl('div', { 'data-uniq-id': 'c1' }, [], {
-      left: 0,
-      top: 0,
-      width: 0,
-      height: 50,
-    });
-    const doc = createDoc([container]);
-
-    const rects = getEmptyContainerRects(doc);
-
-    expect(rects[0].width).toBe(0);
+    expect(rects[0].nodeRef).toBe('App.tsx:0');
   });
 });

@@ -408,8 +408,8 @@ describe('FIG mapper with vectorNetworkBlob', () => {
     const result = mapFigToGraph(figNodes, { width: 400, height: 300 });
     const pathNode = result.nodes.find((n) => n.type === 'svgPath');
     expect(pathNode).toBeDefined();
-    expect((pathNode?.params.d as string).length).toBeGreaterThan(0);
-    expect(pathNode?.params.d as string).toContain('M');
+    expect(pathNode!.params.d as string).toHaveLength(1);
+    expect(pathNode!.params.d as string).toContain('M');
   });
 
   it('should fallback to fillGeometry when no blob', () => {

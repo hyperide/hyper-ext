@@ -240,7 +240,7 @@ describe('detectUnsupportedProject', () => {
     const result = await detectUnsupportedProject('/proj');
     expect(result).not.toBeNull();
     expect(result?.type).toBe('react-native');
-    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web + Vite config');
   });
 
   it('returns error for tamagui without react-native-web', async () => {
@@ -282,6 +282,58 @@ describe('detectUnsupportedProject', () => {
     setPackageJson('/proj', { devDependencies: { 'react-native': '^0.73.0' } });
     const result = await detectUnsupportedProject('/proj');
     expect(result).not.toBeNull();
+  });
+
+  // ── Next.js + Tamagui combinations ──
+  // fixLabel is context-aware: Next.js and Tamagui One only install react-native-web,
+  // while the default Vite path also generates Vite config + stubs.
+
+  it('returns error for Next.js + tamagui without react-native-web (short fixLabel)', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', tamagui: '^1.0.0', react: '^18.0.0' },
+    });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe('react-native');
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+  });
+
+  it('returns error for Next.js + react-native without react-native-web (short fixLabel)', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', 'react-native': '^0.73.0' },
+    });
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe('react-native');
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+  });
+
+  it('returns short fixLabel for Tamagui One project (vite.config.ts with one())', async () => {
+    setPackageJson('/proj', {
+      dependencies: { tamagui: '^1.0.0', react: '^18.0.0' },
+    });
+    mockFiles['/proj/vite.config.ts'] = `import { one } from 'one/vite'\nexport default { plugins: [one()] }`;
+    const result = await detectUnsupportedProject('/proj');
+    expect(result).not.toBeNull();
+    expect(result?.fixLabel).toBe('Fix: Add react-native-web');
+  });
+
+  it('returns null for Next.js + tamagui when react-native-web is present', async () => {
+    setPackageJson('/proj', {
+      dependencies: {
+        next: '^14.0.0',
+        tamagui: '^1.0.0',
+        'react-native-web': '^0.19.0',
+      },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
+  });
+
+  it('returns null for Next.js without tamagui or react-native (plain Next.js)', async () => {
+    setPackageJson('/proj', {
+      dependencies: { next: '^14.0.0', react: '^18.0.0' },
+    });
+    expect(await detectUnsupportedProject('/proj')).toBeNull();
   });
 });
 

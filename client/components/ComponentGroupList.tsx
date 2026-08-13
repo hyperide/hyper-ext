@@ -6,8 +6,9 @@
  */
 
 import { TID } from '@shared/data-testid-map';
-import { IconTilde } from '@tabler/icons-react';
+import { IconCode, IconEye, IconFileCode, IconTilde } from '@tabler/icons-react';
 import cn from 'clsx';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { usePlatformContext } from '@/lib/platform';
 import type { ComponentGroup, ComponentListItem } from '../../lib/component-scanner/types';
 
@@ -16,6 +17,22 @@ interface ComponentGroupListProps {
   activeComponentPath: string | null;
   loadingComponentPath?: string | null;
   onComponentClick: (component: ComponentListItem) => void;
+  onGoToVisual?: (component: ComponentListItem) => void;
+  onOpenInEditor?: (component: ComponentListItem) => void;
+  searchQuery?: string;
+}
+
+function HighlightedName({ name, query }: { name: string; query?: string }) {
+  if (!query) return <>{name}</>;
+  const idx = name.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{name}</>;
+  return (
+    <>
+      {name.slice(0, idx)}
+      <mark className="bg-yellow-300/50 text-inherit rounded-sm">{name.slice(idx, idx + query.length)}</mark>
+      {name.slice(idx + query.length)}
+    </>
+  );
 }
 
 export function ComponentGroupList({
@@ -23,6 +40,9 @@ export function ComponentGroupList({
   activeComponentPath,
   loadingComponentPath,
   onComponentClick,
+  onGoToVisual,
+  onOpenInEditor,
+  searchQuery,
 }: ComponentGroupListProps) {
   const isVSCode = usePlatformContext() === 'vscode-webview';
 
@@ -39,34 +59,60 @@ export function ComponentGroupList({
               const isActive = activeComponentPath === component.path;
               const isLoading = loadingComponentPath === component.path;
               return (
-                <button
-                  key={component.path}
-                  type="button"
-                  data-testid={TID.explorer.componentItem(component.name)}
-                  className={cn(
-                    'h-6 px-2 flex items-center gap-2 justify-start',
-                    isVSCode ? 'rounded-none' : 'rounded',
-                    {
-                      // VS Code: use native selection vars; SaaS: blue accent
-                      'tree-item-selected': isActive && isVSCode,
-                      'bg-blue-500/20 border border-blue-500/50 rounded': isActive && !isVSCode,
-                      'hover:bg-muted': !isActive,
-                      'opacity-70': isLoading,
-                    },
-                  )}
-                  onClick={() => onComponentClick(component)}
-                  disabled={isLoading}
-                >
-                  {isLoading && <div className="animate-spin rounded-full h-3 w-3 border-b border-muted-foreground" />}
-                  <span
-                    className={cn('text-xs', {
-                      'font-semibold': isActive,
-                      'text-foreground': !isActive,
-                    })}
-                  >
-                    {component.name}
-                  </span>
-                </button>
+                <ContextMenu key={component.path}>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid={TID.explorer.componentItem(component.name)}
+                      className={cn(
+                        'h-6 px-2 flex items-center gap-2 justify-start',
+                        isVSCode ? 'rounded-none' : 'rounded',
+                        {
+                          'tree-item-selected': isActive && isVSCode,
+                          'bg-blue-500/20 border border-blue-500/50 rounded': isActive && !isVSCode,
+                          'hover:bg-muted': !isActive,
+                          'opacity-70': isLoading,
+                        },
+                      )}
+                      onClick={() => onComponentClick(component)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b border-muted-foreground" />
+                      ) : (
+                        <IconCode className="w-3.5 h-3.5 shrink-0 text-muted-foreground" stroke={1.5} />
+                      )}
+                      <span
+                        className={cn('text-xs', {
+                          'font-semibold': isActive,
+                          'text-foreground': !isActive,
+                        })}
+                      >
+                        <HighlightedName name={component.name} query={searchQuery} />
+                      </span>
+                    </button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent data-testid="hyper-explorer-context-menu">
+                    <ContextMenuItem
+                      data-testid="hyper-explorer-ctx-go-to-visual"
+                      onSelect={() => {
+                        onGoToVisual?.(component) ?? onComponentClick(component);
+                      }}
+                    >
+                      <IconEye className="w-3.5 h-3.5 mr-2" stroke={1.5} />
+                      <span className="text-xs">Go to Visual</span>
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      data-testid="hyper-explorer-ctx-open-in-editor"
+                      onSelect={() => {
+                        onOpenInEditor?.(component) ?? onComponentClick(component);
+                      }}
+                    >
+                      <IconFileCode className="w-3.5 h-3.5 mr-2" stroke={1.5} />
+                      <span className="text-xs">Open in Editor</span>
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               );
             })}
           </div>

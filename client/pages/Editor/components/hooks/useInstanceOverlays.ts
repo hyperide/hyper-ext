@@ -2,6 +2,10 @@
  * Hook for rendering instance overlays (frames and badges) in multi-instance mode
  * Overlays are rendered outside iframe using RAF loop for performance
  * Implements drag & drop with 16px grid snap
+ *
+ * Past bugs: HYP-363 — drag lost mousemove events when cursor entered iframe before the 5px
+ * threshold. Fixed by moving iframe.style.pointerEvents='none' to handleDragStart (immediately
+ * on mousedown) so the parent window always receives mousemove/mouseup during a pending drag.
  */
 
 import { type RefObject, useCallback, useEffect, useRef } from 'react';
@@ -89,7 +93,6 @@ export function useInstanceOverlays({
   // Stable refs for drag handlers to prevent cleanup issues
   const handleDragMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
   const handleDragEndRef = useRef<(() => void) | null>(null);
-  const listenersAttachedRef = useRef(false);
 
   // Persistent refs for data accessed by drag handlers
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -108,17 +111,20 @@ export function useInstanceOverlays({
   useEffect(() => {
     window.addEventListener('mousemove', stableHandleDragMove);
     window.addEventListener('mouseup', stableHandleDragEnd);
-    listenersAttachedRef.current = true;
+    // Cancel pending drag if the window loses focus (mouse released outside browser).
+    // Without this, iframe stays pointer-events:none permanently when mouseup fires
+    // outside the viewport.
+    window.addEventListener('blur', stableHandleDragEnd);
 
     return () => {
       // Only cleanup on unmount
       window.removeEventListener('mousemove', stableHandleDragMove);
       window.removeEventListener('mouseup', stableHandleDragEnd);
-      listenersAttachedRef.current = false;
+      window.removeEventListener('blur', stableHandleDragEnd);
     };
   }, [stableHandleDragMove, stableHandleDragEnd]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref.current is not a reactive dependency
+  /* eslint-disable react-hooks/exhaustive-deps -- ref.current is not a reactive dependency */
   useEffect(() => {
     // Render overlays in both board mode and design mode (with different styles)
     // In single mode, activeInstanceId is null - this is expected, skip silently
@@ -170,7 +176,7 @@ export function useInstanceOverlays({
             return;
           }
           const data = await response.json();
-          console.log('[DragDrop] Position saved:', { instanceId, x, y });
+
           if (data.commentsUpdated > 0) {
             window.dispatchEvent(new CustomEvent('canvas:comments-updated'));
           }
@@ -215,8 +221,13 @@ export function useInstanceOverlays({
         initialY: currentY,
       };
 
-      // Note: pointer-events will be disabled in handleDragMove after 5px threshold
-      // to allow Playwright/browser to deliver initial mousemove events
+      // Immediately disable iframe hit-testing so the parent window receives
+      // all mousemove/mouseup events even if the cursor enters the iframe
+      // before the 5px drag threshold is reached (HYP-363).
+      if (iframeRef.current) {
+        iframeRef.current.style.pointerEvents = 'none';
+      }
+
       // Note: window listeners are already attached globally in separate useEffect
     };
 
@@ -239,12 +250,6 @@ export function useInstanceOverlays({
 
         // Start dragging
         dragStateRef.current.isDragging = true;
-
-        // Disable pointer-events on iframe to prevent it from intercepting mouse events
-        // This allows window mousemove listeners to work even when cursor is over iframe
-        if (iframeRef.current) {
-          iframeRef.current.style.pointerEvents = 'none';
-        }
 
         // Disable text selection during drag
         document.body.style.userSelect = 'none';
@@ -322,16 +327,6 @@ export function useInstanceOverlays({
           // Notify about drag end with delta for moving comments
           const deltaX = finalX - dragState.initialX;
           const deltaY = finalY - dragState.initialY;
-          console.log('[useInstanceOverlays] Drag ended:', {
-            instanceId: dragState.instanceId,
-            initialX: dragState.initialX,
-            initialY: dragState.initialY,
-            finalX,
-            finalY,
-            deltaX,
-            deltaY,
-            hasCallback: !!onInstanceDragEnd,
-          });
           if ((deltaX !== 0 || deltaY !== 0) && onInstanceDragEnd) {
             onInstanceDragEnd(dragState.instanceId, deltaX, deltaY);
           }
@@ -349,7 +344,7 @@ export function useInstanceOverlays({
           overlay.badge.style.cursor = 'grab';
         }
         // Don't restore pointer-events here - RAF loop will do it on next frame
-        // when isDragging is false
+        // when instanceId is null (cleared above)
       }
 
       // Always clear drag state (even if drag didn't start)
@@ -617,16 +612,15 @@ export function useInstanceOverlays({
         overlay.badge.style.opacity = opacity;
 
         // Pointer events: in board mode - frame handles interaction, in design/interact - frame transparent for clicks
-        // IMPORTANT: Don't change pointer-events during drag - handleDragStart sets them to 'none'
-        // Check both isDragging AND instanceId (pointer-events disabled on mousedown, before drag starts)
+        // Skip during active drag to avoid unnecessary layout-triggering style mutations.
         if (!dragStateRef.current.instanceId) {
           overlay.frame.style.pointerEvents = boardModeActive ? 'auto' : 'none';
           overlay.badge.style.pointerEvents = 'auto';
         }
       }
 
-      // Restore iframe pointer-events after drag ends
-      // In board mode: iframe should have pointer-events: none for click passthrough to Excalidraw
+      // In board mode: iframe must have pointer-events: none for click passthrough to Excalidraw.
+      // Skip during active drag to avoid unnecessary style mutations.
       if (!dragStateRef.current.instanceId && iframeRef.current) {
         iframeRef.current.style.pointerEvents = boardModeActive ? 'none' : 'auto';
       }
@@ -650,6 +644,10 @@ export function useInstanceOverlays({
       cancelAnimationFrame(rafId);
 
       // Note: window listeners are managed by separate useEffect with empty deps
+      // Note: singleClickTimer and dragStateRef are intentionally NOT reset here —
+      // both refs persist across effect re-runs by design (doubleClickStateRef comment above).
+      // The RAF loop restores iframe pointer-events once dragStateRef.instanceId is cleared
+      // by handleDragEnd (via the stable window mouseup listener).
 
       // Reset cursor and user-select
       document.body.style.cursor = '';
@@ -686,4 +684,5 @@ export function useInstanceOverlays({
     instanceSizes,
     isReadonly,
   ]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }

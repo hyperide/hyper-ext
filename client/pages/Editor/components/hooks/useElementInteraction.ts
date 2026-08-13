@@ -1,8 +1,12 @@
 /**
- * Hook for managing element interaction handlers
- * Handles element click and hover events on the canvas
+ * @file Hook for managing element interaction handlers.
+ *
+ * Accessed via: CanvasEditor → IframeCanvas click/hover callbacks
+ * Assumptions: nodeRef is resolved by TracingResolver before reaching this hook;
+ *   null nodeRef means fiber couldn't resolve (server round-trip pending or no source)
  */
 
+import type { SourceLocation } from '@shared/element-tracing/types';
 import { useCallback } from 'react';
 import type { CanvasEngine } from '@/lib/canvas-engine';
 
@@ -15,13 +19,25 @@ interface UseElementInteractionProps {
 }
 
 interface UseElementInteractionReturn {
-  handleElementClick: (element: HTMLElement | null, event?: MouseEvent, itemIndex?: number | null) => void;
-  handleElementHover: (element: HTMLElement | null, itemIndex?: number | null) => void;
+  handleElementClick: (
+    nodeRef: string | null,
+    element: HTMLElement,
+    event: MouseEvent,
+    itemIndex: number,
+    source: SourceLocation,
+  ) => void;
+  handleElementHover: (
+    nodeRef: string | null,
+    element: HTMLElement | null,
+    itemIndex: number | null,
+    source: SourceLocation | null,
+  ) => void;
   handleHoverElement: (id: string | null) => void;
 }
 
 /**
- * Manages element click and hover interactions
+ * Manages element click and hover interactions.
+ * Uses nodeRef (fiber-resolved) for element identification.
  */
 export function useElementInteraction({
   engine,
@@ -32,7 +48,7 @@ export function useElementInteraction({
 }: UseElementInteractionProps): UseElementInteractionReturn {
   // Handle element click with modifier key support
   const handleElementClick = useCallback(
-    (element: HTMLElement | null, event?: MouseEvent, itemIndex?: number | null) => {
+    (nodeRef: string | null, _element: HTMLElement, event: MouseEvent, itemIndex: number, _source: SourceLocation) => {
       // Deselect comment when clicking on canvas (any element or empty space)
       if (selectedCommentId) {
         setSelectedCommentId(null);
@@ -43,31 +59,24 @@ export function useElementInteraction({
         setSelectedAnnotationIds([]);
       }
 
-      if (!element) {
-        // Clicked on empty canvas - clear selection only if no modifier key pressed
-        if (!event?.metaKey && !event?.ctrlKey) {
-          engine.clearSelection();
-        }
+      if (!nodeRef) {
+        // Fiber couldn't resolve — clear selection (server round-trip may confirm later)
+        engine.clearSelection();
         return;
       }
 
-      const uniqId = element.dataset.uniqId;
-      if (!uniqId) {
-        return;
-      }
-
-      // Cmd/Ctrl+Click - toggle selection
-      if (event?.metaKey || event?.ctrlKey) {
+      // Cmd/Ctrl+Click — toggle selection
+      if (event.metaKey || event.ctrlKey) {
         const currentSelection = engine.getSelection();
-        if (currentSelection.selectedIds.includes(uniqId)) {
-          engine.removeFromSelection(uniqId);
+        if (currentSelection.selectedIds.includes(nodeRef)) {
+          engine.removeFromSelection(nodeRef);
         } else {
-          engine.addToSelection(uniqId);
+          engine.addToSelection(nodeRef);
         }
       } else {
-        // Normal click - replace selection with item index support
+        // Normal click — replace selection with item index support
         // itemIndex is set when element is rendered multiple times via .map()
-        engine.selectWithItemIndex(uniqId, itemIndex ?? null);
+        engine.selectWithItemIndex(nodeRef, itemIndex);
       }
     },
     [engine, selectedCommentId, setSelectedCommentId, selectedAnnotationIds, setSelectedAnnotationIds],
@@ -75,10 +84,14 @@ export function useElementInteraction({
 
   // Handle element hover with item index support
   const handleElementHover = useCallback(
-    (element: HTMLElement | null, itemIndex?: number | null) => {
-      const uniqId = element?.dataset.uniqId;
-      if (uniqId) {
-        engine.setHoveredWithItemIndex(uniqId, itemIndex ?? null);
+    (
+      nodeRef: string | null,
+      _element: HTMLElement | null,
+      itemIndex: number | null,
+      _source: SourceLocation | null,
+    ) => {
+      if (nodeRef) {
+        engine.setHoveredWithItemIndex(nodeRef, itemIndex ?? null);
       } else {
         engine.setHovered(null);
       }

@@ -1,3 +1,4 @@
+// @ts-nocheck — stubbed via esbuild alias in the VS Code extension build; not type-checked there
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import { useCallback, useEffect, useRef, useState } from 'react';

@@ -59,7 +59,7 @@ export const EffectsSection = memo(function EffectsSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('effects')}
-      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
+      className="w-full px-4 py-3 border-t border-border overflow-hidden"
     >
       <div className="flex items-center justify-between mb-3">
         {effects.length === 0 ? (

@@ -137,7 +137,7 @@ export function useNetworkAwarePolling<T>(
   }, []);
 
   // Initial fetch and deps-triggered fetch
-  // biome-ignore lint/correctness/useExhaustiveDependencies: doPoll is stable (useCallback), deps spread is intentional for caller-controlled refetch triggers
+  /* eslint-disable react-hooks/exhaustive-deps -- doPoll is stable (useCallback), deps spread is intentional for caller-controlled refetch triggers */
   useEffect(() => {
     mountedRef.current = true;
     setIsLoading(true);
@@ -150,6 +150,7 @@ export function useNetworkAwarePolling<T>(
       mountedRef.current = false;
     };
   }, [enabled, ...deps]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Polling interval
   useEffect(() => {

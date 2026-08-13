@@ -12,6 +12,7 @@ import type { DiagnosticHub } from './DiagnosticHub';
 export class LogsPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.logsView';
 
+  private _view: vscode.WebviewView | undefined;
   private _diagnosticHub: DiagnosticHub | null = null;
   private _onOpenAIChat?: (prompt: string) => void;
 
@@ -34,6 +35,30 @@ export class LogsPanelProvider implements vscode.WebviewViewProvider {
    */
   setDiagnosticHub(hub: DiagnosticHub): void {
     this._diagnosticHub = hub;
+  }
+
+  /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Returns a promise that resolves when the new React app has mounted and
+   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
+   */
+  public async reset(): Promise<void> {
+    if (!this._view) return;
+    const webview = this._view.webview;
+    const ready = new Promise<void>((resolve) => {
+      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
+        if (msg?.type === 'webview:ready') {
+          sub.dispose();
+          resolve();
+        }
+      });
+      setTimeout(() => {
+        sub.dispose();
+        resolve();
+      }, 1_500);
+    });
+    webview.html = this._getHtmlForWebview(webview);
+    await ready;
   }
 
   public resolveWebviewView(

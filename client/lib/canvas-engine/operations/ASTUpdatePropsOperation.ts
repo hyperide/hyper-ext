@@ -4,7 +4,7 @@
  * Similar to ASTUpdateOperation but handles multiple props in a single operation
  */
 
-import { getPreviewIframe } from '@/lib/dom-utils';
+import { getElementFromIframe } from '@/lib/dom-utils';
 import type { DocumentTree } from '../core/DocumentTree';
 import type { OperationResult } from '../models/types';
 import type { ASTApiService } from '../services/ASTApiService';
@@ -94,13 +94,7 @@ export class ASTUpdatePropsOperation extends BaseOperation {
    * Get prop value from DOM
    */
   private getPropFromDOM(elementId: string, propName: string): unknown {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) {
-      return undefined;
-    }
-
-    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
-
+    const element = getElementFromIframe(elementId);
     if (!element) {
       return undefined;
     }
@@ -123,15 +117,9 @@ export class ASTUpdatePropsOperation extends BaseOperation {
    * Apply prop value to DOM
    */
   private applyPropToDOM(elementId: string, propName: string, propValue: unknown): void {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentDocument) {
-      throw new Error('Iframe not found');
-    }
-
-    const element = iframe.contentDocument.querySelector(`[data-uniq-id="${elementId}"]`) as HTMLElement;
-
+    const element = getElementFromIframe(elementId);
     if (!element) {
-      throw new Error(`Element with data-uniq-id="${elementId}" not found`);
+      throw new Error(`Element "${elementId}" not found in iframe`);
     }
 
     // Apply className

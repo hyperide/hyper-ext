@@ -31,7 +31,7 @@ export function useComponentColors(
     };
   }, [engine]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: treeVersion triggers recalculation on tree:change
+  /* eslint-disable react-hooks/exhaustive-deps -- treeVersion triggers recalculation on tree:change */
   return useMemo(() => {
     if (!engine || !componentPath) return [];
 
@@ -46,4 +46,5 @@ export function useComponentColors(
     if (!astStructure) return [];
     return extractComponentColors(astStructure, tokenSystem);
   }, [engine, componentPath, tokenSystem, treeVersion]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 }

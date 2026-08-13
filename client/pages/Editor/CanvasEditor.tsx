@@ -1,3 +1,5 @@
+import { isContainerEmpty } from '@shared/canvas-interaction/empty-container-placeholders';
+import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { IconTerminal2 } from '@tabler/icons-react';
 import cn from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,6 +49,9 @@ import {
   useSelectedItemIndices,
 } from '@/lib/canvas-engine';
 import { getPreviewIframe } from '@/lib/dom-utils';
+import { getActiveTracer, subscribeToTracer } from '@/lib/element-tracing/active-tracer';
+import { resolveUuidToNodeRef } from '@/lib/element-tracing/id-bridge';
+import { useProjectRuntime } from '@/lib/project-runtime';
 import { loadPersistedState, savePersistedState } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -75,8 +80,7 @@ import { useLogsPanelState } from './components/hooks/useLogsPanelState';
 import { useOffscreenIndicators } from './components/hooks/useOffscreenIndicators';
 import { useOverlayMapCondHighlightComponents } from './components/hooks/useOverlayMapCondHighlightComponents';
 import { usePanelManagement } from './components/hooks/usePanelManagement';
-import { type ProjectData, useProjectControl } from './components/hooks/useProjectControl';
-import { useProjectSSE } from './components/hooks/useProjectSSE';
+import type { ProjectData } from './components/hooks/useProjectControl';
 import { useSelectionOverlays } from './components/hooks/useSelectionOverlays';
 import { useViewportControls } from './components/hooks/useViewportControls';
 import { IframeFailed } from './components/IframeFailed';
@@ -296,24 +300,23 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     leftSidebarWidth,
     setLeftSidebarWidth,
   } = useEditorStore();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const serverOffline = useConnectionStore((s) => s.status !== 'connected');
 
-  // Project control (start/stop/restart, auto-start logic)
-  const { handleStartProject, handleRestartProject, handleProjectUpdate, wasRunningRef } = useProjectControl({
-    activeProject,
+  // Project runtime — selects Docker or NodePod based on user flag + framework
+  const runtime = useProjectRuntime(activeProject, user, {
+    accessToken,
     setActiveProject,
     setIsStarting,
     setProjectRole,
   });
 
-  // SSE subscriptions and network status (project stream, file watcher, polling)
-  const { pollStatus } = useProjectSSE({
-    accessToken,
-    activeProject,
-    setActiveProject,
-    handleProjectUpdate,
-  });
+  // Keep isStarting in sync with runtime status (NodePod sets status, not isStarting directly)
+  useEffect(() => {
+    if (runtime.mode === 'nodepod') {
+      setIsStarting(runtime.status === 'starting');
+    }
+  }, [runtime.mode, runtime.status]);
 
   // Comments for current component
   const {
@@ -566,6 +569,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     isAddingComment,
     selectedCommentId,
     setSelectedCommentId,
+    selectedItemIndices,
   });
 
   // RAF loop for updating comment sticker positions during scroll/drag
@@ -820,7 +824,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
   }, [meta?.relativeFilePath]);
 
   // Listen for scroll events in iframe to update comment positions (updates ref, not state - no re-render)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dependencies are triggers to re-attach listener on iframe reload
+  /* eslint-disable react-hooks/exhaustive-deps -- dependencies are triggers to re-attach listener on iframe reload */
   useEffect(() => {
     const iframe = getPreviewIframe();
     if (!iframe?.contentDocument) return;
@@ -847,6 +851,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     // Re-attach listener when iframe reloads or project status changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeLoadedCounter, activeProject?.status]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Listen for external file changes (AI agent, code-server, Monaco, chokidar) → record in undo/redo history
   useEffect(() => {
@@ -859,6 +864,63 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     window.addEventListener('hypercanvas:externalFileChange', handler);
     return () => window.removeEventListener('hypercanvas:externalFileChange', handler);
   }, [engine]);
+
+  // Re-run elementResolver memo when tracer becomes ready (async detection after iframe load).
+  // tracerVersion increments whenever setActiveTracer() is called (set or cleared).
+  const [tracerVersion, setTracerVersion] = useState(0);
+  useEffect(() => subscribeToTracer(() => setTracerVersion((v) => v + 1)), []);
+
+  // Build OverlayElementResolver from the active tracer (fiber-based DOM lookup).
+  // Depends on both iframeLoadedCounter (new iframe = new tracer) and tracerVersion
+  // (tracer ready after async React detection).
+  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter forces re-creation when iframe reloads (new tracer) */
+  const elementResolver: OverlayElementResolver | undefined = useMemo(() => {
+    const tracer = getActiveTracer();
+    if (!tracer) return undefined;
+
+    return {
+      findElements(id: string, itemIndex: number | null): HTMLElement[] {
+        // Try as nodeRef first (canvas click stores nodeRef)
+        const elements = tracer.findDOMElements(id, itemIndex);
+        if (elements.length > 0) return elements;
+
+        // id might be a UUID (tree click) — resolve to nodeRef via source location
+        const nodeRef = resolveUuidToNodeRef(id, engine);
+        if (nodeRef !== id) {
+          return tracer.findDOMElements(nodeRef, itemIndex);
+        }
+        return [];
+      },
+      findEmptyContainers(): Array<{ elementId: string; element: HTMLElement }> {
+        const iframe = getPreviewIframe();
+        const doc = iframe?.contentDocument;
+        const root = doc?.body?.firstElementChild;
+        if (!root) return [];
+
+        const tree = tracer.walkComponentTree(root as HTMLElement);
+        const sourceIndex = tracer.buildSourceKeyIndex();
+        const results: Array<{ elementId: string; element: HTMLElement }> = [];
+
+        function visit(nodes: typeof tree): void {
+          for (const node of nodes) {
+            if (node.domElement && node.source && isContainerEmpty(node.domElement)) {
+              const key = `${node.source.fileName}:${node.source.line}:${node.source.column}`;
+              const entry = sourceIndex.get(key);
+              if (entry) {
+                results.push({ elementId: entry.nodeRef, element: node.domElement });
+              }
+            }
+            visit(node.children);
+          }
+        }
+
+        visit(tree);
+        return results;
+      },
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iframeLoadedCounter, tracerVersion]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Selection overlays (hover + selection rectangles + empty container placeholders) via RAF
   useSelectionOverlays({
@@ -873,6 +935,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
     iframeLoadedCounter,
     editorMode: mode,
     onPlaceholderClick: handleOpenPanel,
+    elementResolver,
   });
 
   // Handle single mode badge click
@@ -937,7 +1000,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
   return (
     <CanvasElementContextMenu
-      data-uniq-id="91608c9c-873c-4fb5-bc7e-61af77ef410f"
       selectedIds={selectedIds}
       iframeLoadCounter={iframeLoadedCounter}
       boardModeActive={isBoardModeActive}
@@ -950,14 +1012,11 @@ export function CanvasEditor({ onOpenSettings }: Props) {
       onInstanceDuplicate={handleInstanceDuplicate}
       onInstanceDelete={handleInstanceDelete}
     >
-      <div
-        data-uniq-id="d76d68dc-620d-4ad6-b094-ebbf49430d73"
-        className="h-screen bg-muted overflow-hidden flex relative"
-      >
+      <div className="h-screen bg-muted overflow-hidden flex relative">
         {/* Left Sidebar - hidden in code mode (code-server has its own explorer) */}
         {!sidebarsHidden && !isCodeEditorMode && (
           <>
-            <div data-uniq-id="6d51b678-1b74-45c1-9612-769b13c121dd" style={{ width: leftSidebarWidth, flexShrink: 0 }}>
+            <div style={{ width: leftSidebarWidth, flexShrink: 0 }}>
               <LeftSidebar
                 onElementPosition={handleElementPosition}
                 onHoverElement={handleHoverElement}
@@ -973,10 +1032,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
         )}
 
         {/* Canvas Area */}
-        <div data-uniq-id="bf326e7f-4bb4-4243-b74f-dd07fedc06b3" className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           <div className="h-full relative">
             <div
-              data-uniq-id="5547cbf1-2eb8-426e-8e66-dfc07966f874"
               ref={canvasContainerRef}
               className="h-full overflow-auto"
               style={{
@@ -1014,7 +1072,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                     onDismiss={() => setConfigErrorDismissed(true)}
                     onOpenSettings={onOpenSettings}
                   />
-                ) : activeProject && (activeProject.status === 'running' || wasRunningRef.current) ? (
+                ) : activeProject && (runtime.status === 'running' || runtime.hasBeenRunning) ? (
                   availableComponents.isLoaded &&
                   availableComponents.atoms.length === 0 &&
                   availableComponents.composites.length === 0 ? (
@@ -1096,6 +1154,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                           onGatewayError={handleGatewayError}
                           onRuntimeError={setRuntimeError}
                           onErrorChange={handleIframeErrorChange}
+                          overrideSrc={runtime.previewUrl ?? undefined}
                         />
                         {/* Instance overlay container - inside transform to zoom with content (multi mode) */}
                         {canvasMode === 'multi' && (
@@ -1142,11 +1201,8 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       onDismiss={() => setPreviewSetup(null)}
                     />
                   ) : parseError ? (
-                    <div
-                      data-uniq-id="d548dedd-3433-477e-80b4-f89cf0e5c4c8"
-                      className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900"
-                    >
-                      <div data-uniq-id="b4549492-9d26-45de-9be0-b717b0564794" className="text-center max-w-md">
+                    <div className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+                      <div className="text-center max-w-md">
                         <div className="text-destructive text-4xl mb-4">⚠</div>
                         <p className="text-sm text-destructive font-medium mb-2">Failed to parse component</p>
                         <p className="text-xs text-muted-foreground mb-4 break-words">{parseError}</p>
@@ -1156,31 +1212,21 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <div
-                      data-uniq-id="cda23b91-1234-4567-89ab-cdef01234567"
-                      className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900"
-                    >
-                      <div data-uniq-id="def01234-5678-9abc-def0-123456789abc" className="text-center">
-                        <div
-                          data-uniq-id="8d81b7cf-1be3-4b11-80fa-3bc882e5446e"
-                          className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"
-                        />
-                        <p data-uniq-id="897d4992-52e1-40b3-b386-39746f9ade79" className="text-sm text-slate-400">
-                          Loading component...
-                        </p>
+                    <div className="h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+                        <p className="text-sm text-slate-400">Loading component...</p>
                       </div>
                     </div>
                   )
-                ) : activeProject?.status === 'error' ? (
+                ) : activeProject && (activeProject.status === 'error' || runtime.status === 'error') ? (
                   <div className="h-full flex flex-col bg-slate-100 dark:bg-slate-900">
                     <div className="flex-1 flex items-center justify-center">
                       <IframeFailed
-                        {...{
-                          activeProject,
-                          setIsStarting,
-                          setActiveProject,
-                          onOpenSettings,
-                        }}
+                        activeProject={activeProject}
+                        setIsStarting={setIsStarting}
+                        setActiveProject={setActiveProject}
+                        onOpenSettings={onOpenSettings}
                       />
                     </div>
                   </div>
@@ -1188,9 +1234,9 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                   <ProjectStartOverlay
                     project={activeProject}
                     isStarting={isStarting}
-                    onRestart={handleRestartProject}
-                    onStart={handleStartProject}
-                    pollStatus={pollStatus}
+                    onRestart={runtime.restart}
+                    onStart={runtime.start}
+                    pollStatus={runtime.pollStatus}
                   />
                 )}
               </div>
@@ -1198,7 +1244,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               {/* Only show panels in design/interact mode */}
               {!isCodeEditorMode && panelOpenForId && (
                 <ComponentNavigatorPanel
-                  data-uniq-id="fab03afe-f632-4d52-a2ca-ae53392f3ad2"
                   onClose={handleClosePanel}
                   elementY={elementY}
                   onComponentClick={handleComponentClick}
@@ -1208,7 +1253,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               )}
               {!isCodeEditorMode && showInsertPanel && selectedComponentType && (
                 <InsertInstancePanel
-                  data-uniq-id="f215f12f-f95e-47cc-b0ff-016046593f5f"
                   onClose={handleClosePanel}
                   elementY={elementY}
                   selectedComponentType={selectedComponentType}
@@ -1217,7 +1261,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               )}
               <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-[1000]">
                 <Toolbar
-                  data-uniq-id="d984a864-d10e-465b-8747-cc7bb9612f5e"
                   mode={isBoardModeActive ? 'board' : (mode ?? 'design')}
                   onModeChange={handleToolbarModeChange}
                   onResetZoom={resetZoomToTopLeftInstance}
@@ -1246,7 +1289,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               {/* Selection overlay container - for design/interact mode (NOT transformed) */}
               {/* Always render to keep ref stable, hide via CSS when not needed */}
               <div
-                data-uniq-id="ba167233-03de-464b-9242-b0f3a75dd646"
                 ref={overlayContainerRef}
                 className="fixed inset-0 pointer-events-none z-10"
                 style={{
@@ -1280,7 +1322,7 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               )}
 
               {/* Portal container for popups */}
-              <div data-uniq-id="619bbf5f-ff78-4979-a95d-1cfb079d3ac4" ref={portalContainerRef} />
+              <div ref={portalContainerRef} />
 
               {/* Comment stickers - design mode (including board), hide resolved */}
               {mode === 'design' && (
@@ -1307,7 +1349,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               {/* CondEditPopup - only in design/interact mode */}
               {!isCodeEditorMode && editingCondBoundary && portalContainerRef.current && (
                 <CondEditPopup
-                  data-uniq-id="d6f3df7f-c4f1-4c50-ae40-4d0b1b2aeaf0"
                   boundary={editingCondBoundary}
                   portalContainer={portalContainerRef.current}
                   onClose={() => setEditingCondBoundary(null)}
@@ -1318,7 +1359,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
               {/* MapEditPopup - only in design/interact mode */}
               {!isCodeEditorMode && editingMapBoundary && portalContainerRef.current && (
                 <MapEditPopup
-                  data-uniq-id="1559fcd2-4897-4673-9501-6a9f3bc320d4"
                   boundary={editingMapBoundary}
                   portalContainer={portalContainerRef.current}
                   onClose={() => setEditingMapBoundary(null)}
@@ -1335,7 +1375,6 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
               {/* InstanceEditPopup - for editing multi-instance sampleRenderers or props */}
               <InstanceEditPopup
-                data-uniq-id="9aef61b1-4f84-486e-9fef-2d62cdc3ef69"
                 isOpen={editPopupOpen}
                 onClose={() => setEditPopupOpen(false)}
                 instanceId={editingInstanceId}
@@ -1377,17 +1416,11 @@ export function CanvasEditor({ onOpenSettings }: Props) {
 
         {/* Right sidebar for design/interact mode - shows docked AI chat or RightSidebar */}
         {!isCodeEditorMode && !sidebarsHidden && (
-          <div
-            data-uniq-id="a84b6623-bbf3-4e3e-af79-e7b03056ad45"
-            className="flex-shrink-0"
-            style={{ width: rightSidebarWidth }}
-          >
+          <div className="flex-shrink-0" style={{ width: rightSidebarWidth }}>
             <div className="flex-1 flex flex-col h-full">
-              {isAIChatDocked && isAIChatOpen ? // Spacer content is empty — AI chat renders as fixed overlay
-              null : (
+              {isAIChatDocked && isAIChatOpen ? null : ( // Spacer content is empty — AI chat renders as fixed overlay
                 // Regular RightSidebar
                 <RightSidebar
-                  data-uniq-id="0ba37253-0ccd-4e90-be7c-6caf6ccacde2"
                   onOpenSettings={onOpenSettings}
                   viewport={viewport}
                   onZoomChange={setZoom}
@@ -1405,7 +1438,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                       return undefined;
                     }
                     // Multi mode: find first instance that has width and height defined
-                    const instanceWithSize = Object.values(instances).find((inst) => inst?.width && inst?.height);
+                    const instanceWithSize = Object.values(instances).find(
+                      (inst): inst is typeof inst & { width: number; height: number } =>
+                        !!(inst?.width && inst?.height),
+                    );
                     if (instanceWithSize) {
                       return {
                         width: instanceWithSize.width,

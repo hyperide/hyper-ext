@@ -1,13 +1,4 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Window } from 'happy-dom';
-
-// Set up global DOM APIs from happy-dom
-const win = new Window({ url: 'http://localhost' });
-globalThis.document = win.document as unknown as Document;
-globalThis.HTMLElement = win.HTMLElement as unknown as typeof HTMLElement;
-globalThis.HTMLDivElement = win.HTMLDivElement as unknown as typeof HTMLDivElement;
-globalThis.MouseEvent = win.MouseEvent as unknown as typeof MouseEvent;
-
 import { clearOverlays, renderOverlayRects, renderPlaceholderOverlays } from './overlay-renderer';
 import type { OverlayRect, PlaceholderRect } from './types';
 
@@ -129,6 +120,7 @@ describe('clearOverlays', () => {
     clearOverlays(elements);
 
     expect(elements.size).toBe(0);
+    expect(container.children.length).toBe(0);
   });
 });
 
@@ -262,5 +254,175 @@ describe('renderPlaceholderOverlays', () => {
     expect(tooltip).toBeTruthy();
     expect(tooltip.textContent).toBe('Insert element');
     expect(tooltip.style.opacity).toBe('0');
+  });
+});
+
+/** Collect all direct children with data-resize-handle attribute. */
+function getResizeHandles(overlay: HTMLDivElement): Array<{ axis: string; el: HTMLElement }> {
+  return Array.from(overlay.children)
+    .map((el) => {
+      const axis = (el as HTMLElement).getAttribute('data-resize-handle');
+      return axis ? { axis, el: el as HTMLElement } : null;
+    })
+    .filter(Boolean) as Array<{ axis: string; el: HTMLElement }>;
+}
+
+describe('renderOverlayRects — resize handles for explicit Tailwind sizes', () => {
+  let container: HTMLDivElement;
+  let elements: Map<string, HTMLDivElement>;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    elements = new Map();
+  });
+
+  it('renders width and height resize handle dots for w-12 h-12 selection rect', () => {
+    // Fixture class: "shrink-0 w-12 h-12 rounded-xl flex items-center justify-center bg-primary/20 text-primary"
+    // w-12 = 48px, h-12 = 48px — both axes have explicit Tailwind size, so both handles must render
+    const rect: OverlayRect = {
+      key: 'select-w12h12',
+      left: 10,
+      top: 20,
+      width: 48,
+      height: 48,
+      type: 'selection',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-w12h12');
+    const handles = getResizeHandles(overlay);
+    const axes = handles.map((h) => h.axis);
+
+    expect(axes).toContain('width');
+    expect(axes).toContain('height');
+  });
+
+  it('renders only width handle when only width is explicit', () => {
+    const rect: OverlayRect = {
+      key: 'select-w-only',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 80,
+      type: 'selection',
+      resizable: { width: true, height: false },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-w-only');
+    const axes = getResizeHandles(overlay).map((h) => h.axis);
+
+    expect(axes).toContain('width');
+    expect(axes).not.toContain('height');
+  });
+
+  it('does not render resize handles for hover rects even with resizable metadata', () => {
+    const rect: OverlayRect = {
+      key: 'hover-w12h12',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 48,
+      type: 'hover',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'hover-w12h12');
+    expect(getResizeHandles(overlay)).toHaveLength(0);
+  });
+
+  it('does not render resize handles for selection rect without explicit size', () => {
+    const rect: OverlayRect = {
+      key: 'select-no-size',
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 50,
+      type: 'selection',
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-no-size');
+    expect(getResizeHandles(overlay)).toHaveLength(0);
+  });
+
+  it('resize handle dots have pointer-events: auto so drag events are received', () => {
+    const rect: OverlayRect = {
+      key: 'select-ptr-events',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 48,
+      type: 'selection',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-ptr-events');
+    for (const { el } of getResizeHandles(overlay)) {
+      expect(el.style.pointerEvents).toBe('auto');
+    }
+  });
+
+  it('width handle has ew-resize cursor and height handle has ns-resize cursor', () => {
+    const rect: OverlayRect = {
+      key: 'select-cursor',
+      left: 0,
+      top: 0,
+      width: 48,
+      height: 48,
+      type: 'selection',
+      resizable: { width: true, height: true },
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-cursor');
+    const handles = getResizeHandles(overlay);
+    const widthHandle = handles.find((h) => h.axis === 'width')?.el;
+    const heightHandle = handles.find((h) => h.axis === 'height')?.el;
+
+    expect(widthHandle?.style.cursor).toBe('ew-resize');
+    expect(heightHandle?.style.cursor).toBe('ns-resize');
+  });
+
+  it('stores data-element-id on selection overlay div when rect.elementId is provided', () => {
+    const rect: OverlayRect = {
+      key: 'select-with-eid',
+      elementId: '/abs/path/src/Foo.tsx:10:5',
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 50,
+      type: 'selection',
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-with-eid');
+    expect(overlay.dataset.elementId).toBe('/abs/path/src/Foo.tsx:10:5');
+  });
+
+  it('does not set data-element-id when rect.elementId is absent', () => {
+    const rect: OverlayRect = {
+      key: 'select-no-eid',
+      left: 0,
+      top: 0,
+      width: 100,
+      height: 50,
+      type: 'selection',
+    };
+
+    renderOverlayRects(container, [rect], elements);
+
+    const overlay = getEl(elements, 'select-no-eid');
+    expect(overlay.dataset.elementId).toBeUndefined();
   });
 });

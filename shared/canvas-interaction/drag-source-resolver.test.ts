@@ -1,0 +1,448 @@
+/**
+ * @file Tests for drag source resolution (drag-source-resolver.ts)
+ *
+ * Accessed via: Internal module, not exposed
+ *
+ * Covers:
+ * - Direct element with source (happy path)
+ * - Decorative element (emoji, aria-hidden) → walk-up to ancestor
+ * - Cold source maps → _debugSource fallback (the bug this file fixes)
+ * - No source anywhere → null (drag blocked)
+ * - Multi-select badge: state.selectedIds.length exposed for badge rendering
+ * - Nested wrapper: aria-hidden child walks up to nearest source ancestor; non-decorative inner elements stay at their level
+ */
+
+import { describe, expect, it, mock } from 'bun:test';
+import type { Fiber } from '../element-tracing/fiber-internals';
+import type { SourceLocation } from '../element-tracing/types';
+import { resolveDragSource } from './drag-source-resolver';
+
+/* ─── Helpers ────────────────────────────────────────────────────── */
+
+function makeEl(
+  overrides: Partial<HTMLElement & { __reactFiber$test?: unknown }> = {},
+  attrs: Record<string, string> = {},
+): HTMLElement {
+  const el = {
+    tagName: 'SPAN',
+    parentElement: null,
+    children: [] as HTMLElement[],
+    getAttribute: (name: string) => attrs[name] ?? null,
+    ...overrides,
+  } as unknown as HTMLElement;
+  return el;
+}
+
+/**
+ * Link children to their parent and set up the children array on the parent.
+ * Call this after building all elements.
+ */
+function linkChildren(parent: HTMLElement, children: HTMLElement[]): void {
+  (parent as unknown as Record<string, unknown>).children = children;
+  for (const child of children) {
+    (child as unknown as Record<string, unknown>).parentElement = parent;
+  }
+}
+
+function makeFiber(overrides: Partial<Fiber> = {}): Fiber {
+  return {
+    tag: 5,
+    type: 'p',
+    stateNode: null,
+    return: null,
+    child: null,
+    sibling: null,
+    memoizedProps: {},
+    _debugSource: null,
+    _debugOwner: null,
+    ...overrides,
+  };
+}
+
+const SOURCE_P: SourceLocation = { fileName: '/src/App.tsx', line: 12, column: 4 };
+
+/* ─── Tests ──────────────────────────────────────────────────────── */
+
+describe('resolveDragSource', () => {
+  it('returns source for element that resolves directly', () => {
+    const target = makeEl();
+    const getSourceLocation = mock((el: HTMLElement) => (el === target ? SOURCE_P : null));
+
+    const result = resolveDragSource(target, getSourceLocation, '/src/App.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toEqual(SOURCE_P);
+    expect(result?.el).toBe(target);
+  });
+
+  it('walks up to parent when target is a decorative element (emoji, aria-hidden span)', () => {
+    const parent = makeEl({ tagName: 'P' });
+    const emojiSpan = makeEl({ tagName: 'SPAN', parentElement: parent });
+    // parent chain ends at document.body sentinel
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    // emoji span has no source; parent <p> does
+    const getSourceLocation = mock((el: HTMLElement) => {
+      if (el === parent) return SOURCE_P;
+      return null;
+    });
+
+    const result = resolveDragSource(emojiSpan, getSourceLocation, '/src/App.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toEqual(SOURCE_P);
+    expect(result?.el).toBe(parent); // drag el is the ancestor
+  });
+
+  /**
+   * BUG REGRESSION: aria-hidden span where source maps ARE warm (getSourceLocation
+   * returns the span's own source) should still delegate to the parent — not become
+   * the drag target itself. Previously, step 1 would resolve the span directly and
+   * return el=span, making a tiny emoji visually "drag" while the real intent was to
+   * move the parent container.
+   */
+  it('skips aria-hidden element even when getSourceLocation returns a source for it', () => {
+    const SOURCE_SPAN: SourceLocation = { fileName: '/src/Index.tsx', line: 307, column: 4 };
+    const SOURCE_DIV: SourceLocation = { fileName: '/src/Index.tsx', line: 293, column: 6 };
+
+    const parent = makeEl({ tagName: 'DIV' });
+    const emojiSpan = makeEl({ tagName: 'SPAN', parentElement: parent }, { 'aria-hidden': 'true' });
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    // Source maps are warm — both span and parent resolve, but span should be skipped
+    const getSourceLocation = mock((el: HTMLElement) => {
+      if (el === emojiSpan) return SOURCE_SPAN;
+      if (el === parent) return SOURCE_DIV;
+      return null;
+    });
+
+    const result = resolveDragSource(emojiSpan, getSourceLocation, '/src/Index.tsx');
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toEqual(SOURCE_DIV); // parent's source, not the span's
+    expect(result?.el).toBe(parent); // parent element dragged, not the emoji span
+  });
+
+  /**
+   * BUG REGRESSION: elements with React 18 _debugSource but cold/unavailable
+   * source maps should still be draggable. Previously, when getSourceLocation
+   * returned null (cold source maps) and walk-up also returned null (all
+   * ancestors cold), drag was silently aborted even though _debugSource was
+   * available directly on the fiber.
+   *
+   * After the fix, resolveDragSource falls back to findNearestSourceLocation
+   * which reads _debugSource directly without needing source maps.
+   */
+  it('falls back to _debugSource when source maps are cold (the bug scenario)', () => {
+    const fiber = makeFiber({
+      tag: 5,
+      type: 'p',
+      _debugSource: {
+        fileName: '/src/HabitsTracker.tsx',
+        lineNumber: 23,
+        columnNumber: 5,
+      },
+    });
+
+    // Attach fiber to element the same way getFiberFromDOM finds it
+    const target = makeEl({ tagName: 'P' });
+    // getFiberFromDOM walks __reactFiber$* keys — simulate it
+    (target as unknown as Record<string, unknown>).__reactFiber$xyz = fiber;
+    (target as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    // Source maps are cold: getSourceLocation returns null for all elements
+    const getSourceLocation = mock((_el: HTMLElement) => null as SourceLocation | null);
+
+    const result = resolveDragSource(target, getSourceLocation, '/src/HabitsTracker.tsx');
+
+    // Without the fallback, result would be null → drag never starts. This is the bug.
+    expect(result).not.toBeNull();
+    expect(result?.source.fileName).toBe('/src/HabitsTracker.tsx');
+    expect(result?.source.line).toBe(23);
+    // column is 0-based: columnNumber 5 → column 4
+    expect(result?.source.column).toBe(4);
+  });
+
+  /**
+   * STEP-ORDER REGRESSION: verifies that fiber _debugSource wins over the ancestor
+   * walk-up when source maps on the target are cold but the parent has warm source maps.
+   *
+   * With the OLD order (walk-up before fiber): the parent's source would be returned,
+   * causing the wrong element to be dragged (e.g. dragging an <img> moves its card).
+   * With the CORRECT order (fiber before walk-up): target resolves via _debugSource.
+   *
+   * The existing "cold source maps" test above does NOT catch a regression here because
+   * it sets parentElement to BODY, so the walk-up terminates immediately regardless of
+   * step order. This test uses a parent that actually has a source.
+   */
+  it('resolves via fiber _debugSource even when parent has warm source maps (step-order matters)', () => {
+    const fiber = makeFiber({
+      tag: 5,
+      type: 'img',
+      _debugSource: {
+        fileName: '/src/Gallery.tsx',
+        lineNumber: 42,
+        columnNumber: 4,
+      },
+    });
+
+    const parent = makeEl({ tagName: 'DIV' });
+    const target = makeEl({ tagName: 'IMG' });
+    (target as unknown as Record<string, unknown>).__reactFiber$xyz = fiber;
+    (target as unknown as Record<string, unknown>).parentElement = parent;
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    const SRC_PARENT: SourceLocation = { fileName: '/src/Gallery.tsx', line: 30, column: 2 };
+    // target: cold source maps; parent: warm source maps
+    const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => (el === parent ? SRC_PARENT : null));
+
+    const result = resolveDragSource(target, getSourceLocation, '/src/Gallery.tsx');
+
+    // Must resolve via fiber (step 2), NOT via parent walk-up (step 3).
+    // If steps were swapped, result would be { el: parent, source: SRC_PARENT }.
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(target);
+    expect(result?.source.line).toBe(42);
+    // columnNumber 4 → column 3 (0-based offset, same transform as existing tests)
+    expect(result?.source.column).toBe(3);
+  });
+
+  /**
+   * Step 2 path: decorative element whose parent has a React fiber with _debugSource.
+   * Source maps are cold (getSourceLocation returns null). The code should find
+   * the parent's fiber via Step 2 and return el=parent, not fall through to Step 3.
+   */
+  it('uses parent fiber _debugSource for decorative element when source maps are cold', () => {
+    const parentFiber = makeFiber({
+      tag: 5,
+      type: 'div',
+      _debugSource: {
+        fileName: '/src/Card.tsx',
+        lineNumber: 55,
+        columnNumber: 3,
+      },
+    });
+
+    const parent = makeEl({ tagName: 'DIV' });
+    (parent as unknown as Record<string, unknown>).__reactFiber$xyz = parentFiber;
+    (parent as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    const emojiSpan = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+    (emojiSpan as unknown as Record<string, unknown>).parentElement = parent;
+
+    // Source maps are cold — all getSourceLocation calls return null
+    const getSourceLocation = mock((_el: HTMLElement) => null as SourceLocation | null);
+
+    const result = resolveDragSource(emojiSpan, getSourceLocation, '/src/Card.tsx');
+
+    // Must resolve via parent's fiber (step 2), not via step 3 walk-up (same outcome but different path).
+    expect(result).not.toBeNull();
+    expect(result?.el).toBe(parent);
+    expect(result?.source.fileName).toBe('/src/Card.tsx');
+    expect(result?.source.line).toBe(55);
+    // columnNumber 3 → column 2 (0-based)
+    expect(result?.source.column).toBe(2);
+  });
+
+  /**
+   * Decorative element with null parentElement: Step 2 must be skipped entirely.
+   * Without the fix, the code would pass the decorative element itself to
+   * getFiberFromDOM, violating the invariant that decorative elements are never
+   * the drag target.
+   */
+  it('returns null for decorative element with null parentElement and no ancestor sources', () => {
+    const emojiSpan = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+    // No parentElement — isolated or at DOM root
+    (emojiSpan as unknown as Record<string, unknown>).parentElement = null;
+    // The decorative span itself has a fiber, but must not be used as drag target
+    const spanFiber = makeFiber({
+      _debugSource: { fileName: '/src/Bad.tsx', lineNumber: 1, columnNumber: 1 },
+    });
+    (emojiSpan as unknown as Record<string, unknown>).__reactFiber$xyz = spanFiber;
+
+    const getSourceLocation = mock((_el: HTMLElement) => null as SourceLocation | null);
+
+    const result = resolveDragSource(emojiSpan, getSourceLocation, '/src/Bad.tsx');
+
+    // No parent → no ancestor walk possible → null
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no source found anywhere (truly untraceable element)', () => {
+    const target = makeEl({ tagName: 'DIV' });
+    (target as unknown as Record<string, unknown>).parentElement = {
+      tagName: 'BODY',
+      parentElement: null,
+    };
+
+    // No _debugSource on fiber, no source maps
+    const fiber = makeFiber(); // _debugSource: null
+    (target as unknown as Record<string, unknown>).__reactFiber$xyz = fiber;
+
+    const getSourceLocation = mock((_el: HTMLElement) => null as SourceLocation | null);
+
+    const result = resolveDragSource(target, getSourceLocation, '/src/App.tsx');
+
+    expect(result).toBeNull();
+  });
+
+  it('prefers source-map result over _debugSource fallback when source maps are warm', () => {
+    const fiber = makeFiber({
+      _debugSource: {
+        fileName: '/src/Wrong.tsx',
+        lineNumber: 99,
+        columnNumber: 1,
+      },
+    });
+    const target = makeEl({ tagName: 'BUTTON' });
+    (target as unknown as Record<string, unknown>).__reactFiber$xyz = fiber;
+    (target as unknown as Record<string, unknown>).parentElement = null;
+
+    // Source maps are warm and return a different (correct) location
+    const getSourceLocation = mock((_el: HTMLElement) => SOURCE_P);
+
+    const result = resolveDragSource(target, getSourceLocation, '/src/App.tsx');
+
+    expect(result).not.toBeNull();
+    // Should prefer getSourceLocation result, not _debugSource fallback
+    expect(result?.source).toEqual(SOURCE_P);
+  });
+
+  /**
+   * B1/B4 BUG: Clicking an emoji span (aria-hidden) inside a card was resolving
+   * to the span itself (when source maps were warm) instead of the parent card.
+   *
+   * DOM structure (bulka-the-dog Index.tsx):
+   *   grid > outer-card > [emoji-span(aria-hidden), inner-div > text-div]
+   *          other-card  (sibling of outer-card)
+   *
+   * Fix: aria-hidden elements are unconditionally skipped in step 1; step 2's
+   * plain ancestor walk then finds the nearest ancestor with a source (outer-card).
+   * Non-decorative elements that have their own source are NOT walked up — the user
+   * dragging an inner-div expects that div to move, not its outer card.
+   */
+  describe('decorative-only walk-up (no over-walking)', () => {
+    // Build the DOM tree:
+    //   grid
+    //   ├── outer-card              source: Index.tsx:10
+    //   │   ├── emoji-span          source: null (aria-hidden)
+    //   │   └── inner-div           source: Index.tsx:15
+    //   │       └── text-div        source: Index.tsx:18
+    //   └── other-card              source: Index.tsx:20
+
+    const SRC_OUTER: SourceLocation = { fileName: 'Index.tsx', line: 10, column: 2 };
+    const SRC_INNER: SourceLocation = { fileName: 'Index.tsx', line: 15, column: 4 };
+    const SRC_TEXT: SourceLocation = { fileName: 'Index.tsx', line: 18, column: 6 };
+    const SRC_OTHER: SourceLocation = { fileName: 'Index.tsx', line: 20, column: 2 };
+
+    function buildTree() {
+      const grid = makeEl({ tagName: 'DIV' });
+      const outerCard = makeEl({ tagName: 'DIV' });
+      const emojiSpan = makeEl({ tagName: 'SPAN' }, { 'aria-hidden': 'true' });
+      const innerDiv = makeEl({ tagName: 'DIV' });
+      const textDiv = makeEl({ tagName: 'DIV' });
+      const otherCard = makeEl({ tagName: 'DIV' });
+
+      // Link tree: grid > [outerCard, otherCard]; outerCard > [emojiSpan, innerDiv]; innerDiv > [textDiv]
+      linkChildren(grid, [outerCard, otherCard]);
+      linkChildren(outerCard, [emojiSpan, innerDiv]);
+      linkChildren(innerDiv, [textDiv]);
+      linkChildren(textDiv, []);
+
+      // grid and document.body sentinel
+      const body = makeEl({ tagName: 'BODY' });
+      (grid as unknown as Record<string, unknown>).parentElement = body;
+      (body as unknown as Record<string, unknown>).parentElement = null;
+
+      return { grid, outerCard, emojiSpan, innerDiv, textDiv, otherCard };
+    }
+
+    function makeGetSourceLocation(
+      outerCard: HTMLElement,
+      innerDiv: HTMLElement,
+      textDiv: HTMLElement,
+      otherCard: HTMLElement,
+    ) {
+      return mock((el: HTMLElement): SourceLocation | null => {
+        if (el === outerCard) return SRC_OUTER;
+        if (el === innerDiv) return SRC_INNER;
+        if (el === textDiv) return SRC_TEXT;
+        if (el === otherCard) return SRC_OTHER;
+        return null;
+      });
+    }
+
+    it('resolves emoji-span (aria-hidden, no own source) to nearest source ancestor', () => {
+      const { outerCard, emojiSpan, innerDiv, textDiv, otherCard } = buildTree();
+      const getSourceLocation = makeGetSourceLocation(outerCard, innerDiv, textDiv, otherCard);
+
+      const result = resolveDragSource(emojiSpan, getSourceLocation, 'Index.tsx');
+
+      expect(result).not.toBeNull();
+      // Decorative span → walk up to its parent (outerCard is the nearest ancestor with a source).
+      // We do NOT over-walk to a "more meaningful draggable" — that decision belongs upstream.
+      expect(result?.el).toBe(outerCard);
+      expect(result?.source).toEqual(SRC_OUTER);
+    });
+
+    it('resolves text-div click (own source) to text-div itself — no over-walk', () => {
+      const { outerCard, innerDiv, textDiv, otherCard } = buildTree();
+      const getSourceLocation = makeGetSourceLocation(outerCard, innerDiv, textDiv, otherCard);
+
+      const result = resolveDragSource(textDiv, getSourceLocation, 'Index.tsx');
+
+      expect(result).not.toBeNull();
+      // text-div has a source — drag at text-div level. The user explicitly wants
+      // the element they grabbed to move, not its outer card.
+      expect(result?.el).toBe(textDiv);
+      expect(result?.source).toEqual(SRC_TEXT);
+    });
+
+    it('does NOT over-walk when element already at correct sibling level', () => {
+      // Flat list: grid > [card-a, card-b, card-c], all have sources
+      const grid = makeEl({ tagName: 'DIV' });
+      const cardA = makeEl({ tagName: 'DIV' });
+      const cardB = makeEl({ tagName: 'DIV' });
+      const cardC = makeEl({ tagName: 'DIV' });
+
+      linkChildren(grid, [cardA, cardB, cardC]);
+
+      const body = makeEl({ tagName: 'BODY' });
+      (grid as unknown as Record<string, unknown>).parentElement = body;
+      (body as unknown as Record<string, unknown>).parentElement = null;
+
+      const SRC_A: SourceLocation = { fileName: 'List.tsx', line: 5, column: 2 };
+      const SRC_B: SourceLocation = { fileName: 'List.tsx', line: 6, column: 2 };
+      const SRC_C: SourceLocation = { fileName: 'List.tsx', line: 7, column: 2 };
+
+      const getSourceLocation = mock((el: HTMLElement): SourceLocation | null => {
+        if (el === cardA) return SRC_A;
+        if (el === cardB) return SRC_B;
+        if (el === cardC) return SRC_C;
+        return null;
+      });
+
+      const result = resolveDragSource(cardA, getSourceLocation, 'List.tsx');
+
+      expect(result).not.toBeNull();
+      // card-a already has source-bearing siblings → should stay at card-a
+      expect(result?.el).toBe(cardA);
+      expect(result?.source).toEqual(SRC_A);
+    });
+  });
+});

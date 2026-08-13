@@ -26,6 +26,37 @@ export class LeftPanelProvider implements vscode.WebviewViewProvider {
     return this._view?.visible ?? false;
   }
 
+  /**
+   * Force the webview to reload its HTML, clearing all local React state.
+   * Returns a promise that resolves when the new React app has mounted and
+   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
+   *
+   * Primarily for E2E tests between specs — otherwise the tree expand/collapse
+   * state, selection, scroll position etc. persist across tests because the
+   * sidebar webview has retainContextWhenHidden semantics. Waiting for ready
+   * also prevents race conditions where the next test's clicks land on a
+   * still-reloading sidebar that can't respond.
+   */
+  public async reset(): Promise<void> {
+    if (!this._view) return;
+    const webview = this._view.webview;
+    const ready = new Promise<void>((resolve) => {
+      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
+        if (msg?.type === 'webview:ready') {
+          sub.dispose();
+          resolve();
+        }
+      });
+      // Safety timeout so a stuck webview can't wedge the fixture.
+      setTimeout(() => {
+        sub.dispose();
+        resolve();
+      }, 1_500);
+    });
+    webview.html = this._getHtml(webview);
+    await ready;
+  }
+
   onVisibilityChange(cb: (visible: boolean) => void): void {
     this._onVisibilityChange = cb;
   }

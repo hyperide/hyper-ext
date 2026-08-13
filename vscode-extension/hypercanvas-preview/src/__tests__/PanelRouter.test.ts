@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 // Leaf mocks — these don't have their own test files that would conflict
 mock.module('../services/AstService', () => ({
   AstService: class {
+    ensureInitialized = mock(() => Promise.resolve());
     updateStyles = mock(() => Promise.resolve({ success: true, className: 'c' }));
     updateProps = mock(() => Promise.resolve({ success: true }));
     insertElement = mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 }));
@@ -19,6 +20,9 @@ mock.module('../services/AstService', () => ({
     duplicateElement = mock(() => Promise.resolve({ success: true, newId: 'd' }));
     updateText = mock(() => Promise.resolve({ success: true }));
     wrapElement = mock(() => Promise.resolve({ success: true, wrapperId: 'w' }));
+    get nodeMapService() {
+      return { resolveNodeRef: () => null, resolveSourceLocation: () => null };
+    }
   },
 }));
 mock.module('../services/ComponentService', () => ({
@@ -35,15 +39,15 @@ mock.module('../services/ComponentService', () => ({
     getComponent = mock(() => Promise.resolve(null));
     parseStructure = mock(() => Promise.resolve(null));
   },
+  parseComponentSource: () => null,
 }));
-mock.module('../services/StyleReadService', () => ({
-  StyleReadService: class {
-    readElementClassName = mock(() => Promise.resolve({ className: 'test' }));
-  },
-}));
-// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService/StyleReadService
-// are mocked above, so VSCodeFileIO methods are never called. Mocking it with `class {}`
-// would poison VSCodeFileIO.test.ts (mock.module is global).
+// StyleReadService is NOT mocked — it's a leaf class with its own test file (StyleReadService.test.ts).
+// Mocking it here would poison that test file (bun mock.module is global).
+// AstService mock above provides nodeMapService returning null so StyleReadService
+// returns empty results without file I/O.
+// VSCodeFileIO is NOT mocked — its constructor is a no-op and AstService resolves
+// before VSCodeFileIO.readFile is reached. Mocking it with `class {}` would poison
+// VSCodeFileIO.test.ts (mock.module is global).
 mock.module('node:fs/promises', () => ({
   readFile: mock(() => Promise.resolve('file content')),
   mkdir: mock(() => Promise.resolve(undefined)),
@@ -70,6 +74,8 @@ function createMockStateHub() {
     unregister: mock(),
     onChange: mock(() => () => {}),
     sendInit: mock(),
+    broadcast: mock(),
+    broadcastTracingMessage: mock(),
     dispose: mock(),
   };
 }
@@ -109,6 +115,20 @@ describe('PanelRouter', () => {
     const handled = await router.routeMessage({ type: 'state:update', patch: { hoveredId: 'x' } }, wv as never);
     expect(handled).toBe(true);
     expect(stateHub.applyUpdate).toHaveBeenCalledWith({ hoveredId: 'x' });
+  });
+
+  it('broadcasts iframe:scrollToElement through stateHub instead of echoing to sender', async () => {
+    // Regression: prior implementation called webview.postMessage(message) which only
+    // echoed back to the sending panel (LeftPanel webview). The PreviewPanel webview
+    // — where the iframe lives — never received the scroll message. Fixed by routing
+    // through StateHub.broadcast which posts to every registered panel.
+    const wv = createMockWebview();
+    const message = { type: 'iframe:scrollToElement', elementId: '/src/App.tsx:42:8' };
+    const handled = await router.routeMessage(message, wv as never);
+    expect(handled).toBe(true);
+    expect(stateHub.broadcast).toHaveBeenCalledWith(message);
+    // Sender no longer receives a direct echo — the broadcast reaches it via StateHub.
+    expect(wv.messages).toHaveLength(0);
   });
 
   it('routes editor:* messages', async () => {
@@ -196,15 +216,99 @@ describe('PanelRouter', () => {
     );
   });
 
+  it('routes styles:fetchI18nKeys and returns keys response', async () => {
+    const wv = createMockWebview();
+    await router.routeMessage(
+      {
+        type: 'styles:fetchI18nKeys',
+        requestId: 'r-keys',
+        library: 'react-i18next',
+        namespace: undefined,
+        activeLocale: 'en',
+      },
+      wv as never,
+    );
+    expect(wv.messages[0]).toEqual(
+      expect.objectContaining({
+        type: 'styles:i18nKeysResponse',
+        requestId: 'r-keys',
+        success: true,
+        keys: [],
+      }),
+    );
+  });
+
   it('returns false for unknown message types', async () => {
     const wv = createMockWebview();
     const handled = await router.routeMessage({ type: 'unknown:stuff' }, wv as never);
     expect(handled).toBe(false);
   });
 
-  it('setAstResponseTarget delegates to AstBridge', () => {
-    const wv = createMockWebview();
-    router.setAstResponseTarget(wv as never);
-    // No crash — AstBridge.setWebview was called
+  it('setAstResponseTarget sets default webview for unsolicited AstBridge responses', async () => {
+    const target = createMockWebview();
+    router.setAstResponseTarget(target as never);
+    // Route directly through AstBridge without a target webview — response must go to the set target
+    await router.astBridge.handleMessage({
+      type: 'ast:updateStyles',
+      requestId: 'r-target',
+      filePath: 'f',
+      elementId: 'e',
+      styles: {},
+    });
+    expect(target.messages[0]).toEqual(expect.objectContaining({ type: 'ast:response', requestId: 'r-target' }));
+  });
+
+  describe('hypercanvas:resolveServerSourceMap (Approach B)', () => {
+    it('returns serverSourceMapResult with null when readFile returns invalid JSON', async () => {
+      // Default mock returns 'file content' which is not valid JSON → JSON.parse throws
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 50 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'serverSourceMapResult',
+          filePath: '/project/.next/server/hash.js',
+          line: 1,
+          col: 50,
+          result: null,
+        }),
+      );
+    });
+
+    it('returns serverSourceMapResult with resolved location when source map is valid', async () => {
+      // Minimal source map: genLine=1, genCol=0 → srcIdx=0, srcLine=4, srcCol=2
+      // VLQ encode: 0,0,4,2 → "AAIE" (A=VLQ(0), A=VLQ(0), I=VLQ(4), E=VLQ(2))
+      const sourceMap = JSON.stringify({ sources: ['src/Page.tsx'], mappings: 'AAIE' });
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockImplementationOnce(() => Promise.resolve(sourceMap));
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/hash.js', line: 1, col: 1 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(
+        expect.objectContaining({
+          type: 'serverSourceMapResult',
+          result: expect.objectContaining({ fileName: 'src/Page.tsx', line: 5, column: 2 }),
+        }),
+      );
+    });
+
+    it('returns serverSourceMapResult with null when file does not exist', async () => {
+      const { readFile } = await import('node:fs/promises');
+      (readFile as ReturnType<typeof mock>).mockImplementationOnce(() =>
+        Promise.reject(new Error('ENOENT: no such file')),
+      );
+
+      const wv = createMockWebview();
+      await router.routeMessage(
+        { type: 'hypercanvas:resolveServerSourceMap', filePath: '/project/.next/server/missing.js', line: 1, col: 1 },
+        wv as never,
+      );
+      expect(wv.messages[0]).toEqual(expect.objectContaining({ type: 'serverSourceMapResult', result: null }));
+    });
   });
 });

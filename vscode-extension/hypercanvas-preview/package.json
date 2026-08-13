@@ -2,7 +2,7 @@
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
   "description": "Visual editor for React components",
-  "version": "0.1.6",
+  "version": "0.1.46",
   "publisher": "hyperide",
   "license": "Elastic-2.0",
   "repository": {
@@ -105,6 +105,10 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "hypercanvas.closePreview",
+        "title": "Hyper: Close Preview"
+      },
+      {
         "command": "hypercanvas.goToVisual",
         "title": "Hyper: Go to Visual"
       },
@@ -127,6 +131,10 @@
       {
         "command": "hypercanvas.openLogs",
         "title": "Hyper: Open Logs"
+      },
+      {
+        "command": "hypercanvas.clearDiagnostics",
+        "title": "Hyper: Clear Diagnostics"
       },
       {
         "command": "hypercanvas.openAIChat",
@@ -161,6 +169,18 @@
         "title": "Hyper: Delete Selected Elements"
       },
       {
+        "command": "hypercanvas.canvasDuplicate",
+        "title": "Hyper: Duplicate Selected Element"
+      },
+      {
+        "command": "hypercanvas.canvasWrap",
+        "title": "Hyper: Wrap Selected Element"
+      },
+      {
+        "command": "hypercanvas.canvasInsertElement",
+        "title": "Hyper: Insert Element"
+      },
+      {
         "command": "hypercanvas.canvasSelectChildren",
         "title": "Hyper: Select Children"
       },
@@ -169,8 +189,28 @@
         "title": "Hyper: Select Parent"
       },
       {
+        "command": "hypercanvas.canvasSelectNextSibling",
+        "title": "Hyper: Select Next Sibling"
+      },
+      {
+        "command": "hypercanvas.canvasSelectPrevSibling",
+        "title": "Hyper: Select Previous Sibling"
+      },
+      {
         "command": "hypercanvas.canvasEscape",
         "title": "Hyper: Clear Selection"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "title": "Hyper: Go to Code"
+      },
+      {
+        "command": "hypercanvas.startDiagnosticCapture",
+        "title": "Hyper: Start Diagnostic Capture"
+      },
+      {
+        "command": "hypercanvas.stopDiagnosticCapture",
+        "title": "Hyper: Stop Diagnostic Capture"
       }
     ],
     "keybindings": [
@@ -193,31 +233,59 @@
         "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' || focusedView == 'hypercanvas.inspectorView' || focusedView == 'hypercanvas.explorerView'"
       },
       {
+        "command": "workbench.action.files.saveAll",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel'"
+      },
+      {
         "command": "hypercanvas.canvasDelete",
         "key": "backspace",
         "mac": "backspace",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasDelete",
         "key": "delete",
         "mac": "delete",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectChildren",
         "key": "enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasSelectParent",
         "key": "shift+enter",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasSelectNextSibling",
+        "key": "tab",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasSelectPrevSibling",
+        "key": "shift+tab",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       },
       {
         "command": "hypercanvas.canvasEscape",
         "key": "escape",
-        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus"
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasDuplicate",
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
+      },
+      {
+        "command": "hypercanvas.canvasGoToCode",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "activeWebviewPanelId == 'hypercanvas.previewPanel' && !inputFocus && !hypercanvas.rightPanelInputFocused"
       }
     ],
     "menus": {
@@ -295,6 +363,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically sync cursor position in code with element highlight in preview and vice versa"
+        },
+        "hypercanvas.preview.autoSampleGeneration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-generate a SampleDefault export in component files (for preview wrapping). Disable for E2E test harnesses that reset source files between runs — the export drop would trigger Vite 'export removed' errors and full reloads."
         }
       }
     }
@@ -305,6 +378,7 @@
     "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
     "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
     "compile": "tsc -p ./",
+    "test": "bun test src/__tests__/",
     "package": "npm run build && npx @vscode/vsce package"
   },
   "dependencies": {

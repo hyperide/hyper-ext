@@ -1,154 +1,255 @@
-import { describe, expect, it } from 'bun:test';
-import { buildElementSelector, findDirectChildIds, findParentWithUniqId, findSiblingId } from './keyboard-handler';
+import { describe, expect, it, mock } from 'bun:test';
+import type { NodeMapEntry } from '../element-tracing/types';
+import {
+  createDesignKeydownHandler,
+  findDirectChildNodeRefs,
+  findParentNodeRef,
+  findSiblingNodeRef,
+  type NodeMapLookup,
+} from './keyboard-handler';
 
-// Minimal DOM node mocks — no jsdom needed for these pure traversals
+// ============================================================================
+// NodeMap-based navigation tests
+// ============================================================================
 
-interface MockElement {
-  dataset: Record<string, string | undefined>;
-  parentElement: MockElement | null;
-  tagName?: string;
-  getAttribute?: (name: string) => string | null;
-  querySelectorAll?: (selector: string) => MockElement[];
+function makeEntry(overrides: Partial<NodeMapEntry> & { nodeRef: string }): NodeMapEntry {
+  return {
+    tag: 'div',
+    loc: { fileName: 'App.tsx', line: 1, column: 0 },
+    endLoc: { fileName: 'App.tsx', line: 1, column: 10 },
+    parentRef: null,
+    children: [],
+    isComponent: false,
+    fingerprint: 'abc',
+    ...overrides,
+  };
 }
 
-function createElement(uniqId?: string, parent?: MockElement | null, children?: MockElement[]): MockElement {
-  const el: MockElement = {
-    dataset: uniqId ? { uniqId } : {},
-    parentElement: parent ?? null,
+function createLookup(entries: NodeMapEntry[]): NodeMapLookup {
+  const map = new Map(entries.map((e) => [e.nodeRef, e]));
+  return {
+    getEntry: (ref) => map.get(ref) ?? null,
+    findDOMElement: () => null,
   };
-  el.querySelectorAll = (selector: string) => {
-    if (selector === ':scope > [data-uniq-id]') {
-      return (children ?? []).filter((c) => c.dataset.uniqId !== undefined);
-    }
-    return [];
-  };
-  return el;
 }
 
-describe('buildElementSelector', () => {
-  it('builds selector with data-uniq-id only', () => {
-    expect(buildElementSelector('abc123')).toBe('[data-uniq-id="abc123"]');
+describe('findParentNodeRef', () => {
+  it('returns parentRef from node map entry', () => {
+    const lookup = createLookup([
+      makeEntry({ nodeRef: 'App.tsx:0', children: ['App.tsx:1'] }),
+      makeEntry({ nodeRef: 'App.tsx:1', parentRef: 'App.tsx:0' }),
+    ]);
+
+    expect(findParentNodeRef('App.tsx:1', lookup)).toBe('App.tsx:0');
   });
 
-  it('builds selector with data-uniq-id + data-instance-id', () => {
-    expect(buildElementSelector('abc', 'inst-1')).toBe('[data-canvas-instance-id="inst-1"] [data-uniq-id="abc"]');
+  it('returns null when entry has no parent', () => {
+    const lookup = createLookup([makeEntry({ nodeRef: 'App.tsx:0' })]);
+
+    expect(findParentNodeRef('App.tsx:0', lookup)).toBeNull();
   });
 
-  it('does not include instance prefix when instanceId is null', () => {
-    expect(buildElementSelector('abc', null)).toBe('[data-uniq-id="abc"]');
-  });
-});
+  it('returns null when nodeRef not found in map', () => {
+    const lookup = createLookup([]);
 
-describe('findParentWithUniqId', () => {
-  it('finds nearest parent with data-uniq-id', () => {
-    const grandparent = createElement('gp-id');
-    const parent = createElement('parent-id', grandparent);
-    const child = createElement(undefined, parent);
-
-    const result = findParentWithUniqId(child as unknown as Element);
-    expect(result).not.toBeNull();
-    expect(result?.id).toBe('parent-id');
-  });
-
-  it('returns null when no parent has attribute', () => {
-    const parent = createElement(undefined, null);
-    const child = createElement(undefined, parent);
-
-    const result = findParentWithUniqId(child as unknown as Element);
-    expect(result).toBeNull();
-  });
-
-  it('skips elements without the attribute', () => {
-    const root = createElement('root-id');
-    const middle = createElement(undefined, root);
-    const child = createElement(undefined, middle);
-
-    const result = findParentWithUniqId(child as unknown as Element);
-    expect(result).not.toBeNull();
-    expect(result?.id).toBe('root-id');
+    expect(findParentNodeRef('nonexistent', lookup)).toBeNull();
   });
 });
 
-describe('findDirectChildIds', () => {
-  it('collects direct children with data-uniq-id', () => {
-    const c1 = createElement('c1');
-    const c2 = createElement('c2');
-    const parent = createElement('parent', null, [c1, c2]);
+describe('findDirectChildNodeRefs', () => {
+  it('returns children from node map entry', () => {
+    const lookup = createLookup([makeEntry({ nodeRef: 'App.tsx:0', children: ['App.tsx:1', 'App.tsx:2'] })]);
 
-    const ids = findDirectChildIds(parent as unknown as Element);
-    expect(ids).toEqual(['c1', 'c2']);
+    expect(findDirectChildNodeRefs('App.tsx:0', lookup)).toEqual(['App.tsx:1', 'App.tsx:2']);
   });
 
-  it('returns empty array when no children have id', () => {
-    const c1 = createElement(undefined);
-    const parent = createElement('parent', null, [c1]);
+  it('returns empty array when entry has no children', () => {
+    const lookup = createLookup([makeEntry({ nodeRef: 'App.tsx:0' })]);
 
-    const ids = findDirectChildIds(parent as unknown as Element);
-    expect(ids).toEqual([]);
+    expect(findDirectChildNodeRefs('App.tsx:0', lookup)).toEqual([]);
   });
 
-  it('only includes direct children (not nested)', () => {
-    // querySelectorAll(':scope > ...') already handles this
-    createElement('nested'); // exists but not a direct child
-    const c1 = createElement('c1');
-    const parent = createElement('parent', null, [c1]);
+  it('returns empty array when nodeRef not found', () => {
+    const lookup = createLookup([]);
 
-    const ids = findDirectChildIds(parent as unknown as Element);
-    expect(ids).toEqual(['c1']);
+    expect(findDirectChildNodeRefs('nonexistent', lookup)).toEqual([]);
   });
 });
 
-describe('findSiblingId', () => {
+describe('findSiblingNodeRef', () => {
+  const lookup = createLookup([
+    makeEntry({ nodeRef: 'App.tsx:0', children: ['App.tsx:1', 'App.tsx:2', 'App.tsx:3'] }),
+    makeEntry({ nodeRef: 'App.tsx:1', parentRef: 'App.tsx:0' }),
+    makeEntry({ nodeRef: 'App.tsx:2', parentRef: 'App.tsx:0' }),
+    makeEntry({ nodeRef: 'App.tsx:3', parentRef: 'App.tsx:0' }),
+  ]);
+
   it('finds next sibling', () => {
-    const c1 = createElement('c1');
-    const c2 = createElement('c2');
-    const c3 = createElement('c3');
-    const parent = createElement('parent', null, [c1, c2, c3]);
-    c1.parentElement = parent;
-    c2.parentElement = parent;
-    c3.parentElement = parent;
-
-    const result = findSiblingId(c1 as unknown as Element, 'next');
-    expect(result).toBe('c2');
+    expect(findSiblingNodeRef('App.tsx:1', 'next', lookup)).toBe('App.tsx:2');
   });
 
   it('finds previous sibling', () => {
-    const c1 = createElement('c1');
-    const c2 = createElement('c2');
-    const parent = createElement('parent', null, [c1, c2]);
-    c1.parentElement = parent;
-    c2.parentElement = parent;
-
-    const result = findSiblingId(c2 as unknown as Element, 'prev');
-    expect(result).toBe('c1');
+    expect(findSiblingNodeRef('App.tsx:3', 'prev', lookup)).toBe('App.tsx:2');
   });
 
-  it('wraps around: last → first', () => {
-    const c1 = createElement('c1');
-    const c2 = createElement('c2');
-    const parent = createElement('parent', null, [c1, c2]);
-    c1.parentElement = parent;
-    c2.parentElement = parent;
-
-    const result = findSiblingId(c2 as unknown as Element, 'next');
-    expect(result).toBe('c1');
+  it('wraps around: last to first', () => {
+    expect(findSiblingNodeRef('App.tsx:3', 'next', lookup)).toBe('App.tsx:1');
   });
 
-  it('wraps around: first → last', () => {
-    const c1 = createElement('c1');
-    const c2 = createElement('c2');
-    const parent = createElement('parent', null, [c1, c2]);
-    c1.parentElement = parent;
-    c2.parentElement = parent;
-
-    const result = findSiblingId(c1 as unknown as Element, 'prev');
-    expect(result).toBe('c2');
+  it('wraps around: first to last', () => {
+    expect(findSiblingNodeRef('App.tsx:1', 'prev', lookup)).toBe('App.tsx:3');
   });
 
-  it('returns null when no parent with uniq-id', () => {
-    const child = createElement('child', null);
+  it('returns null when entry has no parent', () => {
+    expect(findSiblingNodeRef('App.tsx:0', 'next', lookup)).toBeNull();
+  });
 
-    const result = findSiblingId(child as unknown as Element, 'next');
-    expect(result).toBeNull();
+  it('returns null when nodeRef not found', () => {
+    expect(findSiblingNodeRef('nonexistent', 'next', lookup)).toBeNull();
+  });
+
+  it('returns null when nodeRef not in parent children list', () => {
+    const brokenLookup = createLookup([
+      makeEntry({ nodeRef: 'App.tsx:0', children: ['App.tsx:2'] }),
+      makeEntry({ nodeRef: 'App.tsx:1', parentRef: 'App.tsx:0' }),
+    ]);
+
+    expect(findSiblingNodeRef('App.tsx:1', 'next', brokenLookup)).toBeNull();
+  });
+});
+
+// ============================================================================
+// createDesignKeydownHandler — Shift+Enter and Enter integration
+// ============================================================================
+
+function makeKeyEvent(key: string, opts: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+  return new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...opts,
+  });
+}
+
+describe('createDesignKeydownHandler — Shift+Enter (select parent)', () => {
+  const parentRef = 'App.tsx:1:0';
+  const childRef = 'App.tsx:5:4';
+
+  const lookup = createLookup([
+    makeEntry({ nodeRef: parentRef, loc: { fileName: 'App.tsx', line: 1, column: 0 }, children: [childRef] }),
+    makeEntry({ nodeRef: childRef, loc: { fileName: 'App.tsx', line: 5, column: 4 }, parentRef }),
+  ]);
+
+  it('calls onSelectElement with parentRef when Shift+Enter pressed on child', async () => {
+    const onSelectElement = mock(() => {});
+    const onClearSelection = mock(() => {});
+
+    const { handler, dispose } = createDesignKeydownHandler({
+      getState: () => ({ selectedIds: [childRef] }),
+      getDocument: () => document,
+      callbacks: {
+        onSelectElement,
+        onSelectMultiple: mock(() => {}),
+        onClearSelection,
+        onDeleteElements: mock(() => {}),
+      },
+      isDesignMode: () => true,
+      nodeMapLookup: lookup,
+    });
+
+    const consumed = handler(makeKeyEvent('Enter', { shiftKey: true }));
+    expect(consumed).toBe(true);
+
+    // wait for 150ms debounce
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(onSelectElement).toHaveBeenCalledWith(parentRef, undefined);
+    expect(onClearSelection).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('passes child itemIndex to onSelectElement when selectedItemIndices is in state', async () => {
+    const onSelectElement = mock(() => {});
+    const onClearSelection = mock(() => {});
+
+    const { handler, dispose } = createDesignKeydownHandler({
+      getState: () => ({ selectedIds: [childRef], selectedItemIndices: { [childRef]: 3 } }),
+      getDocument: () => document,
+      callbacks: {
+        onSelectElement,
+        onSelectMultiple: mock(() => {}),
+        onClearSelection,
+        onDeleteElements: mock(() => {}),
+      },
+      isDesignMode: () => true,
+      nodeMapLookup: lookup,
+    });
+
+    handler(makeKeyEvent('Enter', { shiftKey: true }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Parent must receive same row index (3) as the child — pins the rect to the correct instance
+    expect(onSelectElement).toHaveBeenCalledWith(parentRef, 3);
+    dispose();
+  });
+
+  it('calls onClearSelection when Shift+Enter pressed on element with no parent', async () => {
+    const onSelectElement = mock(() => {});
+    const onClearSelection = mock(() => {});
+
+    const { handler, dispose } = createDesignKeydownHandler({
+      getState: () => ({ selectedIds: [parentRef] }),
+      getDocument: () => document,
+      callbacks: {
+        onSelectElement,
+        onSelectMultiple: mock(() => {}),
+        onClearSelection,
+        onDeleteElements: mock(() => {}),
+      },
+      isDesignMode: () => true,
+      nodeMapLookup: lookup,
+    });
+
+    handler(makeKeyEvent('Enter', { shiftKey: true }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(onSelectElement).not.toHaveBeenCalled();
+    expect(onClearSelection).toHaveBeenCalled();
+    dispose();
+  });
+});
+
+describe('createDesignKeydownHandler — Enter (select children)', () => {
+  const parentRef = 'App.tsx:1:0';
+  const child1Ref = 'App.tsx:5:4';
+  const child2Ref = 'App.tsx:6:4';
+
+  const lookup = createLookup([
+    makeEntry({ nodeRef: parentRef, children: [child1Ref, child2Ref] }),
+    makeEntry({ nodeRef: child1Ref, parentRef }),
+    makeEntry({ nodeRef: child2Ref, parentRef }),
+  ]);
+
+  it('calls onSelectMultiple with children when Enter pressed', async () => {
+    const onSelectMultiple = mock(() => {});
+
+    const { handler, dispose } = createDesignKeydownHandler({
+      getState: () => ({ selectedIds: [parentRef] }),
+      getDocument: () => document,
+      callbacks: {
+        onSelectElement: mock(() => {}),
+        onSelectMultiple,
+        onClearSelection: mock(() => {}),
+        onDeleteElements: mock(() => {}),
+      },
+      isDesignMode: () => true,
+      nodeMapLookup: lookup,
+    });
+
+    handler(makeKeyEvent('Enter', { shiftKey: false }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(onSelectMultiple).toHaveBeenCalledWith([child1Ref, child2Ref]);
+    dispose();
   });
 });

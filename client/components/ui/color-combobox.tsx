@@ -203,6 +203,7 @@ export function ColorCombobox({
 
         <button
           type="button"
+          data-testid={inputTestId ? `${inputTestId}-link-toggle` : undefined}
           onClick={colorValue.handleUnlinkToggle}
           title={colorValue.isLinked ? `Unlink from ${tokenSystem} tokens` : `Link to nearest ${tokenSystem} token`}
           className={cn(
@@ -210,7 +211,7 @@ export function ColorCombobox({
             beforeUnlinkSlot ? 'rounded' : 'rounded-r',
             colorValue.isLinked
               ? 'bg-muted hover:bg-accent text-muted-foreground'
-              : 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/50 dark:hover:bg-amber-900 dark:text-amber-400',
+              : 'bg-accent hover:bg-accent/80 text-accent-foreground',
           )}
         >
           {colorValue.isLinked ? (

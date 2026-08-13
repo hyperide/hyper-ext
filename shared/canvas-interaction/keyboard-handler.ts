@@ -8,67 +8,57 @@
  * - Enter: select all direct children (150ms debounce)
  * - Shift+Enter: select parent element
  * - Escape: clear selection
+ *
+ * Uses NodeMap-based navigation (fiber tree structure).
  */
 
+import type { NodeMapEntry, SourceLocation } from '../element-tracing/types';
+
+/**
+ * Lookup interface for NodeMap-based keyboard navigation.
+ * Keyboard handler uses fiber tree structure for element navigation.
+ */
+export interface NodeMapLookup {
+  /** Get NodeMapEntry by nodeRef */
+  getEntry: (nodeRef: string) => NodeMapEntry | null;
+  /** Find DOM element by source location (for keyboard navigation focus) */
+  findDOMElement: (source: SourceLocation, itemIndex: number) => HTMLElement | null;
+}
+
 export interface KeyboardHandlerCallbacks {
-  onSelectElement: (id: string) => void;
+  onSelectElement: (id: string, itemIndex?: number | null) => void;
   onSelectMultiple: (ids: string[]) => void;
   onClearSelection: () => void;
   onDeleteElements: (ids: string[]) => void;
+  onDuplicateElement?: (id: string) => void;
 }
 
-/**
- * Build CSS selector for element with optional instance scope.
- * Mirrors dom-utils.ts buildElementSelector but works in any context.
- */
-export function buildElementSelector(id: string, instanceId?: string | null): string {
-  if (instanceId) {
-    return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${id}"]`;
-  }
-  return `[data-uniq-id="${id}"]`;
+// ============================================================================
+// NodeMap-based navigation (fiber tree structure)
+// ============================================================================
+
+/** Find parent nodeRef from the node map. */
+export function findParentNodeRef(nodeRef: string, lookup: NodeMapLookup): string | null {
+  const entry = lookup.getEntry(nodeRef);
+  return entry?.parentRef ?? null;
 }
 
-/**
- * Walk up the DOM tree to find the nearest ancestor with data-uniq-id.
- */
-export function findParentWithUniqId(element: Element): { id: string; element: Element } | null {
-  let parent = element.parentElement;
-  while (parent) {
-    const parentId = (parent as HTMLElement).dataset?.uniqId;
-    if (parentId) {
-      return { id: parentId, element: parent };
-    }
-    parent = parent.parentElement;
-  }
-  return null;
+/** Find direct child nodeRefs from the node map. */
+export function findDirectChildNodeRefs(nodeRef: string, lookup: NodeMapLookup): string[] {
+  const entry = lookup.getEntry(nodeRef);
+  return entry?.children ?? [];
 }
 
-/**
- * Get data-uniq-id values from direct children of an element.
- */
-export function findDirectChildIds(element: Element): string[] {
-  const children = element.querySelectorAll(':scope > [data-uniq-id]');
-  const ids: string[] = [];
-  for (let i = 0; i < children.length; i++) {
-    const id = (children[i] as HTMLElement).dataset?.uniqId;
-    if (id) ids.push(id);
-  }
-  return ids;
-}
+/** Find next/prev sibling nodeRef from parent's children, with wrapping. */
+export function findSiblingNodeRef(nodeRef: string, direction: 'next' | 'prev', lookup: NodeMapLookup): string | null {
+  const entry = lookup.getEntry(nodeRef);
+  if (!entry?.parentRef) return null;
 
-/**
- * Find the next or previous sibling with data-uniq-id, wrapping around.
- */
-export function findSiblingId(element: Element, direction: 'next' | 'prev'): string | null {
-  // Find parent with data-uniq-id
-  let parent = element.parentElement;
-  while (parent && !(parent as HTMLElement).dataset?.uniqId) {
-    parent = parent.parentElement;
-  }
+  const parent = lookup.getEntry(entry.parentRef);
   if (!parent) return null;
 
-  const siblings = Array.from(parent.querySelectorAll(':scope > [data-uniq-id]'));
-  const currentIndex = siblings.indexOf(element);
+  const siblings = parent.children;
+  const currentIndex = siblings.indexOf(nodeRef);
   if (currentIndex === -1) return null;
 
   let targetIndex: number;
@@ -78,18 +68,26 @@ export function findSiblingId(element: Element, direction: 'next' | 'prev'): str
     targetIndex = currentIndex === siblings.length - 1 ? 0 : currentIndex + 1;
   }
 
-  return (siblings[targetIndex] as HTMLElement).dataset?.uniqId ?? null;
+  return siblings[targetIndex] ?? null;
 }
+
+// ============================================================================
+// Handler configuration
+// ============================================================================
 
 interface DesignKeydownConfig {
   getState: () => {
     selectedIds: string[];
     activeInstanceId?: string | null;
+    /** itemIndex per selected nodeRef — used by Shift+Enter to pin parent to the correct .map() row */
+    selectedItemIndices?: Record<string, number | null>;
   };
   getDocument: () => Document | null;
   callbacks: KeyboardHandlerCallbacks;
   /** If provided, handler only fires when this returns true */
   isDesignMode?: () => boolean;
+  /** NodeMap lookup for fiber-based navigation */
+  nodeMapLookup: NodeMapLookup;
 }
 
 /**
@@ -102,7 +100,7 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
   handler: (e: KeyboardEvent) => boolean;
   dispose: () => void;
 } {
-  const { getState, getDocument, callbacks, isDesignMode } = config;
+  const { getState, getDocument, callbacks, isDesignMode, nodeMapLookup } = config;
 
   let deleteDebounceTime = 0;
   let enterDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,7 +115,7 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
     if (isDesignMode && !isDesignMode()) return false;
     if (isTypingTarget(e.target)) return false;
 
-    const { selectedIds, activeInstanceId } = getState();
+    const { selectedIds } = getState();
     const selectedId = selectedIds[0];
     if (!selectedId) {
       // Escape with no selection
@@ -142,14 +140,10 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
     if (e.key === 'Tab') {
       e.preventDefault();
 
-      const selector = buildElementSelector(selectedId, activeInstanceId);
-      const currentElement = doc.querySelector(selector);
-      if (!currentElement) return true;
-
       const direction = e.shiftKey ? 'prev' : 'next';
-      const targetId = findSiblingId(currentElement, direction);
-      if (targetId) {
-        callbacks.onSelectElement(targetId);
+      const targetRef = findSiblingNodeRef(selectedId, direction, nodeMapLookup);
+      if (targetRef) {
+        callbacks.onSelectElement(targetRef);
       }
       return true;
     }
@@ -179,35 +173,36 @@ export function createDesignKeydownHandler(config: DesignKeydownConfig): {
 
       const shiftKey = e.shiftKey;
       enterDebounceTimer = setTimeout(() => {
-        const freshDoc = getDocument();
-        if (!freshDoc) return;
-
-        const { selectedIds: freshIds, activeInstanceId: freshInstance } = getState();
+        const { selectedIds: freshIds, selectedItemIndices } = getState();
         const freshId = freshIds[0];
         if (!freshId) return;
 
-        const selector = buildElementSelector(freshId, freshInstance);
-        const currentElement = freshDoc.querySelector(selector);
-        if (!currentElement) return;
-
         if (shiftKey) {
-          // Shift+Enter: select parent
-          const parent = findParentWithUniqId(currentElement);
-          if (parent) {
-            callbacks.onSelectElement(parent.id);
+          const parentRef = findParentNodeRef(freshId, nodeMapLookup);
+          if (parentRef) {
+            const itemIndex = selectedItemIndices?.[freshId];
+            callbacks.onSelectElement(parentRef, itemIndex);
           } else {
             callbacks.onClearSelection();
           }
         } else {
-          // Enter: select direct children
-          const childIds = findDirectChildIds(currentElement);
-          if (childIds.length > 0) {
-            callbacks.onSelectMultiple(childIds);
+          const childRefs = findDirectChildNodeRefs(freshId, nodeMapLookup);
+          if (childRefs.length > 0) {
+            callbacks.onSelectMultiple(childRefs);
           }
         }
       }, 150);
 
       return true;
+    }
+
+    // === Cmd+D / Ctrl+D: duplicate selected element ===
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && !e.shiftKey) {
+      if (callbacks.onDuplicateElement) {
+        e.preventDefault();
+        callbacks.onDuplicateElement(selectedId);
+        return true;
+      }
     }
 
     return false;

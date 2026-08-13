@@ -17,7 +17,7 @@ import {
 } from '../../shared/types/annotations';
 import type { InstancePosition } from '../../shared/types/canvas';
 
-// biome-ignore lint/suspicious/noExplicitAny: excalidraw types for migration
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- excalidraw types for migration
 type ExcalidrawElement = any;
 
 /**

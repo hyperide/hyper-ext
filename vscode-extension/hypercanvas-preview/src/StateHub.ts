@@ -17,6 +17,7 @@ export class StateHub {
     astStructure: null,
     canvasMode: 'single',
     engineMode: 'design',
+    writeInProgress: null,
   };
 
   /** Registered panels by id */
@@ -89,6 +90,32 @@ export class StateHub {
     const webview = this._panels.get(panelId);
     if (webview) {
       webview.postMessage({ type: 'state:init', state: this._state });
+    }
+  }
+
+  /**
+   * Broadcast an element-tracing server message to all registered panels.
+   * Used by PostMessageTracingTransport to push NodeMapUpdate / ResolveElementResponse
+   * from the extension host to iframe webviews.
+   */
+  broadcastTracingMessage(innerType: string, payload: unknown): void {
+    const message = {
+      type: `element-tracing:${innerType}`,
+      payload,
+    };
+    for (const [, webview] of this._panels) {
+      webview.postMessage(message);
+    }
+  }
+
+  /**
+   * Broadcast an arbitrary message to every registered panel.
+   * Use for transient cross-panel signals that should not live in
+   * SharedEditorState (e.g. iframe coordination events from one panel to another).
+   */
+  broadcast(message: unknown): void {
+    for (const [, webview] of this._panels) {
+      webview.postMessage(message);
     }
   }
 

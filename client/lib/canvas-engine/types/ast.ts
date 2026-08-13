@@ -9,7 +9,7 @@
  * AST Node representing a React/JSX element
  */
 export interface ASTNode {
-  /** Unique identifier (data-uniq-id) */
+  /** Unique identifier for this AST node */
   id: string;
 
   /** Component type (div, Button, YStack, etc.) */

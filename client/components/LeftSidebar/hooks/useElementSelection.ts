@@ -6,13 +6,26 @@
 
 import { useCallback, useMemo } from 'react';
 import { useCanvasEngineOptional, useSelectedIdsOptional as useEngineSelectedIds } from '@/lib/canvas-engine';
+import { resolveIdsToUuids } from '@/lib/element-tracing/id-bridge';
 import { usePlatformCanvas } from '@/lib/platform';
 import {
   createSharedDispatch,
+  useCurrentComponent,
   useHoveredId as useSharedHoveredId,
   useSelectedIds as useSharedSelectedIds,
 } from '@/lib/platform/shared-editor-state';
 import type { TreeNode } from '../../ElementsTree';
+
+function findTreeNode(nodes: TreeNode[], id: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if (node.children) {
+      const found = findTreeNode(node.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
 interface UseElementSelectionResult {
   selectedIds: string[];
@@ -33,10 +46,61 @@ export function useElementSelection(
   const sharedSelectedIds = useSharedSelectedIds();
   const sharedHoveredId = useSharedHoveredId();
 
-  const selectedIds = engine ? engineSelectedIds : sharedSelectedIds;
-  const hoveredId = engine ? null : sharedHoveredId;
+  // Build nodeRef→UUID lookup from tree node locations (extension mode).
+  // Canvas sends nodeRef ("fileName:line:col"), tree uses UUID.
+  const nodeRefToUuid = useMemo(() => {
+    if (engine) return null; // SaaS uses id-bridge instead
+    const map = new Map<string, string>();
+    function walk(nodes: TreeNode[]) {
+      for (const node of nodes) {
+        if (node.loc) {
+          // nodeRef in extension iframe uses "fileName:line:col" format
+          // Match by line:col suffix (fileName varies between contexts)
+          map.set(`${node.loc.start.line}:${node.loc.start.column}`, node.id);
+        }
+        if (node.children) walk(node.children);
+      }
+    }
+    walk(elementsTree);
+    return map;
+  }, [engine, elementsTree]);
+
+  // Engine stores nodeRef (canvas clicks) or UUID (tree clicks).
+  // Tree nodes use UUID — resolve nodeRefs to UUIDs for matching.
+  const selectedIds = useMemo(() => {
+    if (engine) return resolveIdsToUuids(engineSelectedIds, engine);
+    if (!nodeRefToUuid || sharedSelectedIds.length === 0) return sharedSelectedIds;
+    // Extension: map nodeRef → UUID for tree highlighting
+    return sharedSelectedIds.map((id) => {
+      // Try parsing as "fileName:line:col" nodeRef
+      const parts = id.split(':');
+      if (parts.length >= 3) {
+        const col = Number(parts[parts.length - 1]);
+        const line = Number(parts[parts.length - 2]);
+        if (!Number.isNaN(line) && !Number.isNaN(col)) {
+          return nodeRefToUuid.get(`${line}:${col}`) ?? id;
+        }
+      }
+      return id;
+    });
+  }, [engine, engineSelectedIds, sharedSelectedIds, nodeRefToUuid]);
+
+  const hoveredId = useMemo(() => {
+    if (engine) return null;
+    if (!sharedHoveredId || !nodeRefToUuid) return sharedHoveredId;
+    const parts = sharedHoveredId.split(':');
+    if (parts.length >= 3) {
+      const col = Number(parts[parts.length - 1]);
+      const line = Number(parts[parts.length - 2]);
+      if (!Number.isNaN(line) && !Number.isNaN(col)) {
+        return nodeRefToUuid.get(`${line}:${col}`) ?? sharedHoveredId;
+      }
+    }
+    return sharedHoveredId;
+  }, [engine, sharedHoveredId, nodeRefToUuid]);
 
   const dispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
+  const currentComponent = useCurrentComponent();
 
   const handleSelect = useCallback(
     (elementId: string, event: React.MouseEvent | React.KeyboardEvent) => {
@@ -98,11 +162,34 @@ export function useElementSelection(
         // Normal click
         engine.select(elementId);
       } else {
-        // VS Code path: simple select via dispatch
-        dispatch?.({ selectedIds: [elementId] });
+        // VS Code path: dispatch to shared state.
+        // Canvas iframe expects nodeRef format ("fileName:line:col") for overlay rendering.
+        // Tree sends UUID — find matching nodeRef from tree node loc if available.
+        let dispatchId = elementId;
+        let syntheticRef: string | null = null;
+        const node = findTreeNode(elementsTree, elementId);
+        if (node?.loc && currentComponent?.path) {
+          // Build a syntheticRef that the iframe can use for overlay rendering.
+          // Format: "fileName:line:col" — matches iframe interaction script's source cache keys.
+          syntheticRef = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
+          dispatchId = syntheticRef;
+        }
+        dispatch?.({ selectedIds: [dispatchId], selectedItemIndices: {}, selectedElementRuntimeStyle: null });
+        // Tell the canvas iframe to scroll the element into view.
+        // Path: LeftPanel webview → extension host → StateHub.broadcast → PreviewPanel
+        //       webview → iframe (`hypercanvas:scrollToElement` postMessage).
+        // SaaS uses the engine.select branch above and never reaches this code path.
+        // Skip when we couldn't synthesize a nodeRef — the iframe's findElementsByRef
+        // parses only "file:line:col" and would silently no-op on a bare UUID.
+        if (syntheticRef !== null) {
+          canvas.sendEvent({ type: 'iframe:scrollToElement', elementId: syntheticRef });
+        }
+        // Notify preview panel to scroll canvas to this element.
+        // Custom DOM event stays local to the webview — no round-trip through extension host.
+        window.dispatchEvent(new CustomEvent('hypercanvas:treeSelect', { detail: { elementId: dispatchId } }));
       }
     },
-    [engine, dispatch, elementsTree],
+    [engine, dispatch, elementsTree, canvas, currentComponent],
   );
 
   const handleHover = useCallback(
@@ -111,11 +198,18 @@ export function useElementSelection(
         // SaaS: propagate via prop callback
         onHoverElement?.(id);
       } else {
-        // VS Code: dispatch to shared state
-        dispatch?.({ hoveredId: id });
+        // VS Code: resolve UUID → nodeRef so iframe can find the DOM element
+        let hoverId = id;
+        if (id !== null && nodeRefToUuid && currentComponent?.path) {
+          const node = findTreeNode(elementsTree, id);
+          if (node?.loc) {
+            hoverId = `${currentComponent.path}:${node.loc.start.line}:${node.loc.start.column}`;
+          }
+        }
+        dispatch?.({ hoveredId: hoverId });
       }
     },
-    [engine, dispatch, onHoverElement],
+    [engine, dispatch, onHoverElement, nodeRefToUuid, elementsTree, currentComponent],
   );
 
   return { selectedIds, hoveredId, handleSelect, handleHover };
