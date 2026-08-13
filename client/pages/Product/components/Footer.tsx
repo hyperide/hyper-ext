@@ -13,7 +13,12 @@ export default function Footer() {
 
           {/* Links */}
           <nav className="flex items-center gap-6">
-            <a href="/docs" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+            <a
+              href="https://docs.hyperi.de"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
               Documentation
             </a>
             <a
