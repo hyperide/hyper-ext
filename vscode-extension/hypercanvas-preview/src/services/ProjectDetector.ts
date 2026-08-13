@@ -2,7 +2,12 @@
  * Project Detector - detects project type and configuration
  *
  * Analyzes package.json and config files to determine
- * the framework (Vite, Next.js, CRA, Remix) and dev command.
+ * the framework (Vite, Next.js, CRA, Remix, Astro) and dev command.
+ *
+ * Accessed via: extension activation → detectProjectType() → bundler/CSS detection pipeline
+ * Past bugs:
+ *   HYP-382 — Astro projects mapped to 'unknown' bundler; astro dep + astro.config.* now → 'vite'
+ *   HYP-383 — @astrojs/tailwind and @tailwindcss/vite not detected as tailwind CSS system
  */
 
 import * as fs from 'node:fs/promises';
