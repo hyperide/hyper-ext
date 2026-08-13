@@ -7,7 +7,6 @@ import { useComponentMeta } from '@/contexts/ComponentMetaContext';
 import { useElementTracer } from '@/hooks/useElementTracer';
 import { useTracerSelectionSync } from '@/hooks/useTracerSelectionSync';
 import { useCanvasEngine } from '@/lib/canvas-engine';
-import { getActiveTracer as getActiveTracerInstance } from '@/lib/element-tracing/active-tracer';
 import { ElementTracer } from '@/lib/element-tracing/element-tracer';
 import { authFetch } from '@/utils/authFetch';
 import type { RuntimeError } from '../../shared/runtime-error';
@@ -1243,61 +1242,4 @@ export default function IframeCanvas({
       />
     </div>
   );
-}
-
-/**
- * Utility: Get element properties from iframe DOM
- */
-export function getElementFromIframe(
-  iframeRef: React.RefObject<HTMLIFrameElement>,
-  elementId: string,
-  _instanceId?: string | null,
-): HTMLElement | null {
-  const iframe = iframeRef.current;
-  if (!iframe) return null;
-
-  const doc = iframe.contentDocument;
-  if (!doc) return null;
-
-  // Use active tracer for fiber-based DOM element lookup
-  const tracer = getActiveTracerInstance();
-  if (tracer) {
-    return tracer.findDOMElementByNodeRef(elementId);
-  }
-  return null;
-}
-
-/**
- * Utility: Update element styles in iframe
- */
-export function updateElementStyles(
-  iframeRef: React.RefObject<HTMLIFrameElement>,
-  elementId: string,
-  styles: Partial<CSSStyleDeclaration>,
-  instanceId?: string | null,
-): void {
-  const element = getElementFromIframe(iframeRef, elementId, instanceId);
-  if (!element) return;
-
-  Object.assign(element.style, styles);
-}
-
-/**
- * Utility: Get computed styles from element in iframe
- */
-export function getComputedStylesFromIframe(
-  iframeRef: React.RefObject<HTMLIFrameElement>,
-  elementId: string,
-  instanceId?: string | null,
-): CSSStyleDeclaration | null {
-  const iframe = iframeRef.current;
-  if (!iframe) return null;
-
-  const element = getElementFromIframe(iframeRef, elementId, instanceId);
-  if (!element) return null;
-
-  const doc = iframe.contentDocument;
-  if (!doc || !doc.defaultView) return null;
-
-  return doc.defaultView.getComputedStyle(element);
 }

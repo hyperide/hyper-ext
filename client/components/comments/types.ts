@@ -1,4 +1,4 @@
-export interface CommentAuthor {
+interface CommentAuthor {
   id: string;
   name: string | null;
   email: string;
@@ -46,5 +46,3 @@ export interface CreateReplyParams {
   content: string;
   mentionedUserIds?: string[];
 }
-
-export type CommentPosition = { type: 'element'; elementId: string } | { type: 'free'; x: number; y: number };

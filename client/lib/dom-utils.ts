@@ -8,7 +8,7 @@ import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
  * ID of the preview iframe element.
  * Used to distinguish preview iframe from other iframes (e.g., IDE iframe).
  */
-export const PREVIEW_IFRAME_ID = 'preview-iframe';
+const PREVIEW_IFRAME_ID = 'preview-iframe';
 
 /**
  * Get preview iframe element by ID
@@ -60,19 +60,4 @@ export function getElementFromIframe(elementId: string, itemIndex?: number | nul
     return elements[0] ?? null;
   }
   return tracer.findDOMElementByNodeRef(elementId);
-}
-
-/**
- * Check if iframe is available and accessible
- * @returns true if iframe is accessible
- */
-export function isIframeAccessible(): boolean {
-  const iframe = getPreviewIframe();
-  if (!iframe) return false;
-
-  try {
-    return !!iframe.contentDocument;
-  } catch {
-    return false;
-  }
 }

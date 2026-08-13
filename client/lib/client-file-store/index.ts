@@ -11,7 +11,3 @@ export async function writeFile(projectId: string, path: string, content: string
 export async function seedFiles(projectId: string, files: Record<string, string>): Promise<void> {
   return opfsStore.seedFiles(projectId, files);
 }
-
-export async function clearProject(projectId: string): Promise<void> {
-  return opfsStore.clearProject(projectId);
-}

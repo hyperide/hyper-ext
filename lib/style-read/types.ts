@@ -24,12 +24,6 @@ export type CssSystemId =
 /** @public */
 export type CssSystemTopology = 'flat' | 'cascade';
 
-export interface CssSystemDescriptor {
-  id: CssSystemId;
-  topology: CssSystemTopology;
-  defaultSourceForm: SourceForm;
-}
-
 export type CssSyntaxId = 'css' | 'scss' | 'sass' | 'less' | 'stylus';
 
 /** @public */
@@ -576,20 +570,4 @@ export interface ComponentPropStyleWriteTarget {
 export interface ComponentPropMapperUnsupported {
   supported: false;
   reason: string;
-}
-
-export interface ComponentPropMapper {
-  readonly id: ComponentPropMapperId;
-  readonly cssSystem?: CssSystemId;
-  detect(input: {
-    componentFacts: ComponentFacts;
-    propSurface: ComponentPropSurfaceFacts;
-    projectCapabilities: ProjectStyleCapabilities;
-  }): ComponentPropMapperMatch;
-  mapStyleWrite(input: {
-    property: string;
-    value: unknown;
-    state: StylePseudoState;
-    targetValue: unknown;
-  }): ComponentPropStyleWriteTarget | ComponentPropMapperUnsupported;
 }

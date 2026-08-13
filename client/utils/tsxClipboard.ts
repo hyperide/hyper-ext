@@ -9,7 +9,7 @@ import { authFetch } from '@/utils/authFetch';
 /**
  * Copy element as TSX code to system clipboard
  */
-export async function copyElementAsTSX(elementId: string, filePath: string): Promise<boolean> {
+async function copyElementAsTSX(elementId: string, filePath: string): Promise<boolean> {
   try {
     const response = await authFetch('/api/copy-element-tsx', {
       method: 'POST',
@@ -132,77 +132,6 @@ export async function copyMultipleElementsAsTSX(elementIds: string[], filePath: 
       description: error instanceof Error ? error.message : 'Unknown error',
       variant: 'destructive',
     });
-    return false;
-  }
-}
-
-/**
- * Paste TSX code from system clipboard and insert into parent
- */
-export async function pasteElementFromTSX(parentId: string | null, filePath: string): Promise<string | null> {
-  try {
-    // Read TSX code from clipboard
-    const tsxCode = await navigator.clipboard.readText();
-
-    if (!tsxCode || tsxCode.trim().length === 0) {
-      console.warn('[TSX Clipboard] Clipboard is empty');
-      return null;
-    }
-
-    // Check if clipboard contains JSX-like code
-    if (!tsxCode.includes('<') || !tsxCode.includes('>')) {
-      console.warn('[TSX Clipboard] Clipboard does not contain valid TSX code');
-      return null;
-    }
-
-    console.log('[TSX Clipboard] Pasting TSX from clipboard:', `${tsxCode.substring(0, 100)}...`);
-
-    // Call API to paste element
-    const response = await authFetch('/api/paste-element', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parentId, filePath, tsxCode }),
-    });
-
-    const result = await response.json();
-
-    if (!result.success || !result.newId) {
-      console.error('[TSX Clipboard] Paste failed:', result.error);
-      toast({
-        title: 'Paste failed',
-        description: result.error || 'Could not paste element',
-        variant: 'destructive',
-      });
-      return null;
-    }
-
-    console.log('[TSX Clipboard] Successfully pasted, new ID:', result.newId);
-    toast({
-      title: 'Pasted',
-      description: 'Element pasted successfully',
-    });
-    return result.newId;
-  } catch (error) {
-    console.error('[TSX Clipboard] Paste error:', error);
-    toast({
-      title: 'Paste failed',
-      description: error instanceof Error ? error.message : 'Unknown error',
-      variant: 'destructive',
-    });
-    return null;
-  }
-}
-
-/**
- * Check if clipboard contains valid TSX code
- */
-export async function hasValidTSXInClipboard(): Promise<boolean> {
-  try {
-    const text = await navigator.clipboard.readText();
-    // Basic check: contains JSX-like syntax
-    return text.includes('<') && text.includes('>');
-  } catch (error) {
-    console.error('[TSX Clipboard] Failed to read clipboard:', error);
     return false;
   }
 }

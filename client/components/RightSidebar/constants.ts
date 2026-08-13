@@ -30,24 +30,4 @@ export const LAYOUT_OPTIONS: readonly LayoutOption[] = [
 
 export const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 200] as const;
 
-export const STATE_OPTIONS = [
-  { value: undefined, label: 'Base' },
-  { value: 'hover', label: 'Hover' },
-  { value: 'focus', label: 'Focus' },
-  { value: 'active', label: 'Active' },
-  { value: 'disabled', label: 'Disabled' },
-  { value: 'first', label: 'First' },
-  { value: 'last', label: 'Last' },
-  { value: 'odd', label: 'Odd' },
-  { value: 'even', label: 'Even' },
-] as const;
-
-export const POSITION_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: 'static', label: 'Static' },
-  { value: 'rel', label: 'Relative' },
-  { value: 'abs', label: 'Absolute' },
-  { value: 'fixed', label: 'Fixed' },
-  { value: 'sticky', label: 'Sticky' },
-] as const;
-
 export const STYLE_DEBOUNCE_MS = 300;

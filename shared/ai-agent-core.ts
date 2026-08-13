@@ -38,7 +38,7 @@ export type MessageParam = {
   content: string | ContentBlock[];
 };
 
-export type ContentBlock =
+type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string };
@@ -58,7 +58,7 @@ export type RawStreamEvent =
   | { type: 'error'; error: { type: string; message: string } };
 
 /** Provider that creates SSE streams to Anthropic API */
-export interface StreamProvider {
+interface StreamProvider {
   createStream(params: StreamParams): AsyncIterable<RawStreamEvent>;
 }
 

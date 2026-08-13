@@ -16,9 +16,9 @@ import {
   AnnotationUpdateOperation,
 } from '@/lib/canvas-engine';
 
-export type BoardTool = 'select' | 'arrow' | 'text';
+type BoardTool = 'select' | 'arrow' | 'text';
 
-export interface DrawingStyle {
+interface DrawingStyle {
   color: string;
   strokeWidth: number;
   fontSize: number;

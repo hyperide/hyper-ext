@@ -14,36 +14,11 @@ export interface ParsedFile {
 }
 
 /**
- * JSX Element with its path in the AST
- */
-export interface JSXElementWithPath {
-  node: t.JSXElement;
-  path: NodePath<t.JSXElement>;
-}
-
-/**
  * Result of finding an element
  */
 export interface FindElementResult {
   element: t.JSXElement;
   path: NodePath<t.JSXElement>;
-}
-
-/**
- * Options for parsing files
- */
-export interface ParseOptions {
-  sourceType?: 'module' | 'script';
-  plugins?: string[];
-}
-
-/**
- * Options for printing AST
- */
-export interface PrintOptions {
-  tabWidth?: number;
-  useTabs?: boolean;
-  quote?: 'single' | 'double';
 }
 
 // ============================================================================

@@ -9,5 +9,5 @@
  * with resolveServerAIConfig for provider resolution.
  */
 
-export { type CallAIOptions, type CallAIStreamOptions, callAI, callAIStream } from './client.js';
+export { callAI, callAIStream } from './client.js';
 export { type ResolvedAIConfig, resolveAIConfig } from './config.js';

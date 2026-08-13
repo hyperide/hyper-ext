@@ -6,9 +6,9 @@ import { createArrowAnnotation, createTextAnnotation, detectBinding } from '../.
 import { ArrowElement } from './ArrowElement';
 import { TextElement } from './TextElement';
 
-export type DrawingTool = 'select' | 'arrow' | 'text';
+type DrawingTool = 'select' | 'arrow' | 'text';
 
-export interface DrawingStyle {
+interface DrawingStyle {
   color: string;
   strokeWidth: number;
   fontSize: number;

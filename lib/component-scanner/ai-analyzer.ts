@@ -183,4 +183,4 @@ export async function analyzeWithAI(
 
 // Re-export from lib/ai-client for backward compatibility
 // Re-export callAI for consumers that import from component-scanner
-export { callAI, type ResolvedAIConfig, resolveAIConfig as resolveAnalyzerConfig } from '../ai-client/index.js';
+export { resolveAIConfig as resolveAnalyzerConfig } from '../ai-client/index.js';

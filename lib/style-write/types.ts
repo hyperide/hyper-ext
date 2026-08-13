@@ -20,7 +20,7 @@ import type {
 } from '@lib/style-read/types';
 
 // Re-export for consumers that need both read and write types
-export type { CssSystemId, CssSyntaxId, SourceForm, StyleCondition, StyleSourceOwner };
+export type { StyleSourceOwner };
 
 // --- Target Value ---
 

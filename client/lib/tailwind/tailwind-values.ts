@@ -301,80 +301,10 @@ export const TAILWIND_COLORS = {
 } as const;
 
 /**
- * Tailwind opacity scale values (0-100)
- * @see https://tailwindcss.com/docs/opacity
- */
-export const TAILWIND_OPACITY_VALUES = [
-  '0',
-  '5',
-  '10',
-  '20',
-  '25',
-  '30',
-  '40',
-  '50',
-  '60',
-  '70',
-  '75',
-  '80',
-  '90',
-  '95',
-  '100',
-] as const;
-
-/**
- * Tailwind box shadow presets
- * @see https://tailwindcss.com/docs/box-shadow
- */
-export const TAILWIND_SHADOW_PRESETS = {
-  none: {
-    name: 'None',
-    value: '0 0 #0000',
-  },
-  sm: {
-    name: 'Small',
-    value: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  },
-  base: {
-    name: 'Base',
-    value: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-  },
-  md: {
-    name: 'Medium',
-    value: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-  },
-  lg: {
-    name: 'Large',
-    value: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-  },
-  xl: {
-    name: 'Extra Large',
-    value: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-  },
-  '2xl': {
-    name: '2X Large',
-    value: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-  },
-  inner: {
-    name: 'Inner',
-    value: 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)',
-  },
-} as const;
-
-/**
  * Get all color names (excluding special colors like white, black, etc.)
  */
 export function getColorNames(): string[] {
   return Object.keys(TAILWIND_COLORS).filter((key) => !['white', 'black', 'transparent', 'current'].includes(key));
-}
-
-/**
- * Get all shades for a color
- */
-export function getColorShades(color: string): string[] {
-  const colorData = TAILWIND_COLORS[color as keyof typeof TAILWIND_COLORS];
-  if (typeof colorData === 'string') return [];
-  return Object.keys(colorData);
 }
 
 /**
@@ -399,19 +329,4 @@ export function getColorHex(colorClass: string): string | null {
   }
 
   return null;
-}
-
-/**
- * Parse Tailwind color class to { color, shade, hex }
- */
-export function parseColorClass(className: string): { color: string; shade: string; hex: string } | null {
-  const hex = getColorHex(className);
-  if (!hex) return null;
-
-  const parts = className.split('-');
-  if (parts.length < 2) {
-    return { color: className, shade: '', hex };
-  }
-
-  return { color: parts[0], shade: parts[1], hex };
 }

@@ -339,12 +339,12 @@ export interface ToolResult {
 /**
  * Message types for chat
  */
-export interface UserMessage {
+interface UserMessage {
   role: 'user';
   content: string;
 }
 
-export interface AssistantMessage {
+interface AssistantMessage {
   role: 'assistant';
   content: string | Array<{ type: 'text' | 'tool_use'; [key: string]: unknown }>;
 }
@@ -364,23 +364,6 @@ export interface AIAgentChatRequest {
   selectedElementIds?: string[]; // Currently selected elements' nodeRef values
   // conversationHistory is loaded from DB when chatId is provided
 }
-
-/**
- * Stream events from AI agent
- */
-export type AIAgentStreamEvent =
-  | { type: 'message_start' }
-  | { type: 'content_block_start'; content: string }
-  | { type: 'content_block_delta'; delta: string }
-  | { type: 'content_block_stop' }
-  | { type: 'tool_use_start'; toolName: ToolName; toolUseId: string; input: unknown }
-  | { type: 'tool_use_result'; toolUseId: string; result: ToolResult }
-  | { type: 'ask_user'; toolUseId: string; question: string; options?: string[] }
-  | { type: 'keepalive' }
-  | { type: 'message_stop' }
-  | { type: 'messages_to_save'; messages: ChatMessage[] }
-  | { type: 'chat_title_updated'; title: string }
-  | { type: 'error'; error: string };
 
 /**
  * User response to ask_user tool

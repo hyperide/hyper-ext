@@ -10,7 +10,7 @@
 
 import cn from 'clsx';
 
-export type LoadingSpinnerSize = 'sm' | 'md' | 'lg';
+type LoadingSpinnerSize = 'sm' | 'md' | 'lg';
 
 interface LoadingSpinnerProps {
   /** Text shown under the spinner (e.g. "Loading component..."). Omit for spinner only. */

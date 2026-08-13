@@ -23,7 +23,7 @@ import { FileProjectStructureStore } from './FileStructureStore';
 // Re-export shared types for convenience
 export type { ComponentInfo, ComponentTree, PropInfo };
 
-export type SetupReason = 'no-ai-config' | 'no-paths' | 'empty-scan';
+type SetupReason = 'no-ai-config' | 'no-paths' | 'empty-scan';
 
 export interface ScanResult {
   data: ComponentsData;
@@ -890,10 +890,6 @@ export class ComponentService {
 }
 
 // ============================================
-// Module-level helpers
-// ============================================
-
-export { parseComponentSource } from './componentSourceParser';
 
 /**
  * Extract the top-level return JSX from a function body.

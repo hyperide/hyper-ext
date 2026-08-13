@@ -98,8 +98,6 @@ export interface WidthPoint {
 
 import type { VectorNetwork } from './network/types';
 
-export type { VectorNetwork, VectorRegion, VectorSegment, VectorVertex } from './network/types';
-
 // -- Gradient Mesh --
 
 export interface MeshVertex {

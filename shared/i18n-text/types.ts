@@ -9,7 +9,7 @@
 export type I18nLibrary = 'react-i18next' | 'i18next' | 'next-intl' | 'react-intl' | 'lingui' | 'custom';
 
 /** Why a particular expression cannot be treated as an editable i18n binding. */
-export type I18nUnsupportedReason =
+type I18nUnsupportedReason =
   | 'dynamic-key'
   | 'non-string-id'
   | 'unknown-wrapper'
@@ -102,7 +102,7 @@ export interface PackageJsonDeps {
 }
 
 /** Why a locale resource could not be resolved. */
-export type I18nUnresolvedReason = 'missing-key' | 'missing-locale-file' | 'parse-error' | 'unsupported-format';
+type I18nUnresolvedReason = 'missing-key' | 'missing-locale-file' | 'parse-error' | 'unsupported-format';
 
 /** Result of resolveI18nResource. resolvedText is null when the key or locale file is missing. */
 export interface ResolveI18nResourceResult {

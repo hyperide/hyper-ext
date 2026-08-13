@@ -239,7 +239,7 @@ export function cloneElement(element: t.JSXElement): t.JSXElement {
 /**
  * Get element tag name
  */
-export function getTagName(element: t.JSXElement): string {
+function getTagName(element: t.JSXElement): string {
   const name = element.openingElement.name;
   if (t.isJSXIdentifier(name)) {
     return name.name;
@@ -258,13 +258,6 @@ export function getTagName(element: t.JSXElement): string {
     return parts.join('.');
   }
   return 'unknown';
-}
-
-/**
- * Check if element is self-closing
- */
-export function isSelfClosing(element: t.JSXElement): boolean {
-  return element.openingElement.selfClosing;
 }
 
 /**
@@ -296,7 +289,7 @@ export function makeNotSelfClosing(element: t.JSXElement): void {
  * Parse mixed content like "{hour.toString()}:00" into JSX children nodes.
  * Returns an array of t.JSXText and t.JSXExpressionContainer nodes.
  */
-export function parseMixedContent(text: string): (t.JSXText | t.JSXExpressionContainer)[] {
+function parseMixedContent(text: string): (t.JSXText | t.JSXExpressionContainer)[] {
   const children: (t.JSXText | t.JSXExpressionContainer)[] = [];
 
   const expressionRegex = /\{([^}]+)\}/g;
@@ -401,13 +394,4 @@ export function updateElementChildren(element: t.JSXElement, text: string): void
   }
 
   element.children = newChildren;
-}
-
-/**
- * Remove child from element
- */
-export function removeChild(element: t.JSXElement, index: number): void {
-  if (index >= 0 && index < element.children.length) {
-    element.children.splice(index, 1);
-  }
 }

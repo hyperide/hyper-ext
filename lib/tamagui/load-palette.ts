@@ -12,7 +12,7 @@ import type { FileIO } from '@lib/ast/file-io';
 import { parseTamaguiConfigColors, type TamaguiPalette } from './parse-config-colors';
 
 /** Conventional Tamagui config locations, checked in order (root + monorepo). */
-export const TAMAGUI_CONFIG_CANDIDATES = [
+const TAMAGUI_CONFIG_CANDIDATES = [
   'tamagui.config.ts',
   'tamagui.config.tsx',
   'src/tamagui.config.ts',

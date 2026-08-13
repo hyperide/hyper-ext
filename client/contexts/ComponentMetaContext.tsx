@@ -27,7 +27,7 @@ interface ComponentMetaContextType {
   setCurrentSampleName: (name: string | null) => void;
 }
 
-export const ComponentMetaContext = createContext<ComponentMetaContextType | undefined>(undefined);
+const ComponentMetaContext = createContext<ComponentMetaContextType | undefined>(undefined);
 
 export function ComponentMetaProvider({ children }: { children: ReactNode }) {
   const [meta, setMetaInternal] = useState<ComponentMeta | null>(null);

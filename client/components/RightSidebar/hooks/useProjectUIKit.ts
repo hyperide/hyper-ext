@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { authFetch } from '@/utils/authFetch';
 import type { UIKitType } from '../types';
 
-export interface ConfigError {
+interface ConfigError {
   error: string;
   projectId: string;
   projectName: string;

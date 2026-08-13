@@ -52,7 +52,7 @@ export interface HoverChangeEvent {
 /**
  * Mode events
  */
-export interface ModeChangeEvent {
+interface ModeChangeEvent {
   mode: 'design' | 'interact' | 'code';
   previousMode: 'design' | 'interact' | 'code';
 }

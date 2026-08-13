@@ -17,7 +17,7 @@
 import type { OverlayRect } from '@shared/canvas-interaction/types';
 
 /** Snapshot of a selection rect, replayed during the grace period. */
-export interface CachedSelectionRect {
+interface CachedSelectionRect {
   key: string;
   elementId: string;
   left: number;

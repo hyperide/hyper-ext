@@ -1,5 +1,4 @@
 export { AppearanceSection } from './AppearanceSection';
-export { CommentsSection } from './CommentsSection';
 export { CommentsSectionContainer } from './CommentsSectionContainer';
 export { EffectsSection } from './EffectsSection';
 export { FillSection } from './FillSection';

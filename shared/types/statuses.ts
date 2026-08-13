@@ -41,6 +41,3 @@ export type ContainerPhase =
   | 'ErrImagePull'
   | 'ImagePullBackOff'
   | (string & {});
-
-/** AI agent message role (matches `aiAgentMessages.role` varchar values) */
-export type AIMessageRole = 'user' | 'assistant';

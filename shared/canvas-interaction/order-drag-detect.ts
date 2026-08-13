@@ -28,7 +28,7 @@ import {
  * Keep the `name` list in sync with `RESPONSIVE_BP_CHAIN` in `order-class-utils.ts` —
  * both files enumerate the same Tailwind v3 default variants from independent constants.
  */
-export const TAILWIND_BREAKPOINTS: ReadonlyArray<{ readonly name: string; readonly px: number }> = [
+const TAILWIND_BREAKPOINTS: ReadonlyArray<{ readonly name: string; readonly px: number }> = [
   { name: 'sm', px: 640 },
   { name: 'md', px: 768 },
   { name: 'lg', px: 1024 },

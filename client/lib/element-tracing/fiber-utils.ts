@@ -15,14 +15,12 @@
 
 export type { DebugSource, Fiber } from '../../../shared/element-tracing/fiber-internals';
 export {
-  debugSourceToLocation,
   FiberTag,
   findNearestDebugSource,
   findNearestSourceLocation,
   getFiberFromDOM,
   getItemIndexFromFiber,
   parseDebugStack,
-  sameDebugSource,
 } from '../../../shared/element-tracing/fiber-internals';
 
 /* ─── Client-only imports ────────────────────────────────────────── */
@@ -76,21 +74,6 @@ export function findHostFiber(fiber: Fiber): Fiber | null {
 }
 
 /* ─── DFS walk ───────────────────────────────────────────────────── */
-
-/**
- * DFS traversal of the fiber tree starting from root.
- * Stack-based: pushes sibling before child so child is processed first.
- */
-export function walkFibers(root: Fiber, visitor: (fiber: Fiber) => void): void {
-  const stack: Fiber[] = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (current === undefined) break;
-    visitor(current);
-    if (current.sibling !== null) stack.push(current.sibling);
-    if (current.child !== null) stack.push(current.child);
-  }
-}
 
 /* ─── Display names ──────────────────────────────────────────────── */
 

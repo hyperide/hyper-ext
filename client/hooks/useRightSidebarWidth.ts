@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useEditorStore } from '@/stores/editorStore';
 
-export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 234;
+const DEFAULT_RIGHT_SIDEBAR_WIDTH = 234;
 
 /**
  * Computes the effective right sidebar width based on editor state.

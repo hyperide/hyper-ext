@@ -11,7 +11,7 @@ import type { ComponentInfo, PropInfo } from '@lib/types';
 
 const traverse = (_traverse as { default?: typeof _traverse }).default ?? _traverse;
 
-export const ALWAYS_OPTIONAL_PROP_NAMES = new Set(['className', 'children', 'ref', 'key', 'asChild']);
+const ALWAYS_OPTIONAL_PROP_NAMES = new Set(['className', 'children', 'ref', 'key', 'asChild']);
 
 /**
  * Convert a TypeScript AST type node to a human-readable type string.

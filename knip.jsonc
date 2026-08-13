@@ -19,7 +19,29 @@
   // repo genuinely has ~58 unused files / 491 unused exports. Silencing them would
   // require adding fake entry points that mask real dead code — out of scope here
   // (HYP-416 is config SETUP; the unused-code cleanup is follow-up work).
-  "ignore": ["templates/**", "server/docker/**"],
+  "ignore": [
+    "templates/**",
+    "server/docker/**",
+    // Runtime-loaded, not statically imported — knip can't see these refs:
+    // - iframe-console-capture.js: read via Bun.file('./shared/scripts/...') in
+    //   server/main.ts, served at /__hypercanvas/iframe-console-capture.js, and
+    //   bundled as an esbuild entryPoint in the extension (esbuild.js).
+    "shared/scripts/iframe-console-capture.js",
+    // DOUBTFUL — pending CTO decision (HYP-489 follow-up ticket). NOT confirmed
+    // dead; do not delete without a product call:
+    // - useNetworkAwarePolling: orphaned member of a still-live network-handling
+    //   feature (siblings useNetworkAwareFetch/useOnReconnect/networkStore/
+    //   NetworkStatusIndicator are all consumed). The concept (preserve data on
+    //   polling error) is useful — reconnect it or drop it, a roadmap call.
+    // - WorkspacePicker: a workspace-switcher UI component with no current
+    //   callsite; may be a not-yet-wired feature rather than dead scaffolding.
+    // - PushPopover/**: the component is unused, BUT git-push popover STATE
+    //   (isPushPopoverOpen/setIsPushPopoverOpen) is live in gitStore + SidebarHeader,
+    //   suggesting a half-wired feature, not dead code.
+    "client/hooks/useNetworkAwarePolling.ts",
+    "client/components/WorkspacePicker.tsx",
+    "client/components/PushPopover/**",
+  ],
   // -------------------------------------------------------------------------
   // HYP-432: silence three knip false-positive categories WITHOUT hiding real
   // dead code. (HYP-416's ~491 genuine dead exports remain out of scope.)
@@ -63,8 +85,34 @@
         "client/main.tsx",
         "server/index.ts",
         "scripts/*.{ts,cjs}",
+        // Self-declared public-API library barrels (each file's own header marks it
+        // a "Public API" / "@packageDocumentation" / "abstraction layer"). These are
+        // deliberate, consumed-cross-workspace surfaces — canvas-engine via the
+        // ../canvas-engine barrel (38 importers incl. the VS Code extension webviews),
+        // lib/platform via @/lib/platform (19 importers), lib/testing via ../lib/testing
+        // (server test-gen routes). Treating the barrel as an entry keeps the curated
+        // public surface intact instead of churning every re-export into a subpath
+        // import. Incidental (non-self-declared) barrels are NOT entried — their dead
+        // re-exports are trimmed instead. HYP-489.
+        "client/lib/canvas-engine/index.ts",
+        "client/lib/platform/index.ts",
+        "lib/testing/index.ts",
+        // CLI entry point, run directly: `bun run lib/testing/cli/generate-tests.ts`.
+        "lib/testing/cli/generate-tests.ts",
         "**/*.test.{ts,tsx}",
+        // `bun test --isolate` (package.json "test") also collects *.spec.{ts,tsx}
+        // (e.g. client/lib/utils.spec.ts). Without this glob knip flags the spec
+        // file as an unused file and its imports as dead — a config gap, not dead code.
+        "**/*.spec.{ts,tsx}",
         "**/__tests__/**/*.{ts,tsx}",
+        // shadcn/ui primitives live in client/components/ui/**. shadcn is a
+        // "copy the component source into your repo" library: the full primitive
+        // set is scaffolded up front and consumed incrementally. Unused primitives
+        // (and their paired @radix-ui/* devDeps) are intentional library surface to
+        // be wired into the UI later, NOT dead code — treat each as an entry so knip
+        // stops flagging the not-yet-used ones (and their deps) while still reporting
+        // genuinely-broken imports inside them. HYP-489 / matches HYP-418 judgment.
+        "client/components/ui/**/*.{ts,tsx}",
       ],
       "project": [
         "client/**/*.{ts,tsx}",
@@ -77,7 +125,22 @@
       // @playwright/mcp is loaded at runtime via a filesystem path
       // (server/services/playwright-mcp.ts resolves node_modules/@playwright/mcp/cli.js),
       // not a static import — knip can't see it.
-      "ignoreDependencies": ["@playwright/mcp"],
+      //
+      // @swc/core: not imported anywhere in source/build (build is Bun.build + esbuild,
+      //   lint oxlint, typecheck tsgo). It is deliberately listed in
+      //   package.json "trustedDependencies" so bun permits its postinstall — an
+      //   intentional allowlist entry, not a code import. Removing it is a separate
+      //   call (touches trustedDependencies) tracked for CTO; keep silenced here.
+      // @hookform/resolvers: the validation-adapter that pairs with react-hook-form,
+      //   used by the scaffolded shadcn form primitive (client/components/ui/form.tsx,
+      //   an entry). Intentional UI-library surface to wire up when a real form lands,
+      //   same status as the other shadcn-paired deps that the ui/** entry auto-resolves.
+      // bun-plugin-tailwind: referenced by name as a capability signal for USER projects
+      //   (lib/preview-generator/framework-routing.ts checks deps['bun-plugin-tailwind'])
+      //   and pulls in the `bun` npm peer that scripts/fix-bun-shim.ts repairs in
+      //   postinstall. Not a static module import in this repo, so knip can't see the
+      //   dependency — keep it declared and silenced.
+      "ignoreDependencies": ["@playwright/mcp", "@swc/core", "@hookform/resolvers", "bun-plugin-tailwind"],
       // The `playwright` binary (postinstall: `npx playwright install chromium`) is
       // provided transitively by @playwright/mcp, which pins a prerelease
       // (1.59.0-alpha-…). Declaring `playwright` directly would conflict with that pin,
@@ -107,6 +170,12 @@
         "src/webview-ai-chat/index.tsx",
         "src/services/scripts/iframe-interaction.ts",
         "src/services/scripts/iframe-error-detection.ts",
+        // src/stubs/** are build-time replacements wired up by esbuild's alias
+        // onResolve plugin (esbuild.js maps @/components/..., authFetch, monaco,
+        // etc. to these files). They are never statically imported, so knip's
+        // static analysis can't see the reference — declare them as entries so the
+        // build-invisible stubs aren't flagged as unused files/exports.
+        "src/stubs/**/*.{ts,tsx}",
         "src/__tests__/**/*.{ts,tsx}",
         "**/*.test.{ts,tsx}",
       ],

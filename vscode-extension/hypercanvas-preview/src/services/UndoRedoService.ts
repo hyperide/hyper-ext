@@ -13,7 +13,7 @@
 import path from 'node:path';
 import * as vscode from 'vscode';
 
-export interface FileEdit {
+interface FileEdit {
   filePath: string;
   contentBefore: string;
   contentAfter: string;

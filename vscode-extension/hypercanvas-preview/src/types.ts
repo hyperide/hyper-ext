@@ -116,13 +116,12 @@ export interface DevServerState {
 // Platform Messages (webview <-> extension)
 // ============================================
 
-// Editor operations (already exist in EditorBridge.ts)
-export type EditorMessage =
-  | { type: 'editor:openFile'; path: string; line?: number; column?: number }
-  | { type: 'editor:goToCode'; path: string; line: number; column: number }
-  | { type: 'editor:getActiveFile'; requestId: string };
-
-// AST operations (local)
+// AST operations (local). The rest of the legacy webview message protocol
+// (EditorMessage, ComponentMessage, the *Response/*Delta/*Tool interfaces, and
+// the PlatformMessage union) was removed in HYP-489: it was an orphaned parallel
+// definition superseded by @/lib/platform/types (PlatformMessage) and the
+// per-bridge message types (EditorBridge.ts's own EditorMessage). AstMessage /
+// AstResponse below remain because PanelRouter and AstBridge import them.
 export type AstMessage =
   | {
       type: 'ast:updateStyles';
@@ -229,123 +228,6 @@ export interface AstResponse {
   error?: string;
 }
 
-// Component operations (local)
-export type ComponentMessage =
-  | { type: 'component:list'; requestId: string }
-  | { type: 'component:listGroups'; requestId: string }
-  | { type: 'component:tests'; requestId: string; componentPath: string }
-  | { type: 'component:parse'; requestId: string; componentPath: string }
-  | { type: 'component:getDefinitions'; requestId: string; componentPath: string };
-
-export interface ComponentResponse {
-  type: 'component:response';
-  requestId: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-// File operations (local)
-export type FileMessage =
-  | { type: 'file:read'; requestId: string; filePath: string }
-  | { type: 'file:write'; requestId: string; filePath: string; content: string }
-  | { type: 'file:getTree'; requestId: string; directory?: string };
-
-export interface FileResponse {
-  type: 'file:response';
-  requestId: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-// VS Code command execution (webview -> extension)
-export type CommandMessage =
-  | { type: 'command:execute'; command: string; args?: string[] }
-  | { type: 'command:fixUnsupportedProject' };
-
-// Dev server operations
-export type DevServerMessage =
-  | { type: 'devServer:start'; requestId: string }
-  | { type: 'devServer:stop'; requestId: string }
-  | { type: 'devServer:status'; requestId: string };
-
-export interface DevServerResponse {
-  type: 'devServer:response';
-  requestId: string;
-  success: boolean;
-  status?: DevServerStatus;
-  port?: number;
-  url?: string;
-  error?: string;
-}
-
-// AI operations (local with user's API key)
-export type AIMessage =
-  | {
-      type: 'ai:chat';
-      requestId: string;
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-      chatId?: string;
-    }
-  | { type: 'ai:abort'; requestId: string }
-  | { type: 'ai:listChats'; requestId: string }
-  | { type: 'ai:getChat'; requestId: string; chatId: string }
-  | { type: 'ai:deleteChat'; requestId: string; chatId: string };
-
-export interface AIResponse {
-  type: 'ai:response';
-  requestId: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-export interface AIDelta {
-  type: 'ai:delta';
-  requestId: string;
-  text: string;
-}
-
-export interface AIToolUse {
-  type: 'ai:toolUse';
-  requestId: string;
-  toolName: string;
-  input: unknown;
-}
-
-export interface AIToolResult {
-  type: 'ai:toolResult';
-  requestId: string;
-  toolName: string;
-  result: unknown;
-}
-
-// Canvas Composition (local storage)
-export type CompositionMessage =
-  | { type: 'composition:get'; requestId: string; componentPath: string }
-  | {
-      type: 'composition:save';
-      requestId: string;
-      componentPath: string;
-      data: CanvasComposition;
-    }
-  | { type: 'composition:list'; requestId: string };
-
-export interface CompositionResponse {
-  type: 'composition:response';
-  requestId: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-}
-
-// Dev server logs (Logs & AI panel webview <-> extension)
-export type DevServerLogsMessage =
-  | { type: 'devserver:requestLogs' }
-  | { type: 'devserver:clearLogs' }
-  | { type: 'runtime:error'; error: DevServerRuntimeError | null };
-
 // Runtime error detected from iframe preview (via PreviewProxy script injection)
 export interface DevServerRuntimeError {
   framework: 'nextjs' | 'vite' | 'bun' | 'unknown';
@@ -357,110 +239,11 @@ export interface DevServerRuntimeError {
   fullText: string;
 }
 
-// Runtime error pushed from extension to Logs & AI panel webview
-export interface DevServerRuntimeErrorEvent {
-  type: 'devserver:runtimeError';
-  error: DevServerRuntimeError | null;
-}
-
-export interface DevServerLogsResponse {
-  type: 'devserver:logs';
-  logs: Array<{ line: string; timestamp: number; isError: boolean }>;
-  hasErrors: boolean;
-}
-
-export interface DevServerLogAppend {
-  type: 'devserver:logAppend';
-  entries: Array<{ line: string; timestamp: number; isError: boolean }>;
-  hasErrors: boolean;
-}
-
-// AI chat (Logs & AI panel webview -> extension)
-export type AIChatMessage =
-  | {
-      type: 'ai:chat';
-      requestId: string;
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-    }
-  | { type: 'ai:abort'; requestId: string };
-
-// AI stream events (extension -> Logs & AI panel webview)
-export interface AIChatDelta {
-  type: 'ai:delta';
-  requestId: string;
-  text: string;
-}
-
-export interface AIChatToolUse {
-  type: 'ai:toolUse';
-  requestId: string;
-  toolUseId: string;
-  toolName: string;
-  input: unknown;
-}
-
-export interface AIChatToolResult {
-  type: 'ai:toolResult';
-  requestId: string;
-  toolUseId: string;
-  result: { success: boolean; output?: string; error?: string };
-}
-
-export interface AIChatDone {
-  type: 'ai:done';
-  requestId: string;
-}
-
-export interface AIChatError {
-  type: 'ai:error';
-  requestId: string;
-  error: string;
-}
-
-// Style reading operations (right panel inspector)
-export type StylesMessage = {
-  type: 'styles:readClassName';
-  requestId: string;
-  elementId: string;
-  componentPath: string;
-  /** When set, resolve i18n text for this locale instead of the default. */
-  activeLocale?: string;
-  domTextContent?: string;
-};
-
-export interface StylesResponse {
-  type: 'styles:response';
-  requestId: string;
-  success: boolean;
-  className?: string;
-  childrenType?: 'text' | 'expression' | 'expression-complex' | 'jsx';
-  textContent?: string;
-  tagType?: string;
-  childrenLocation?: { line: number; column: number };
-  styleReadResult?: import('@lib/style-read/types').StyleReadResult;
-  i18nText?: import('@shared/i18n-text/types').I18nBindingResult;
-  error?: string;
-}
-
-// Combined platform message type
-export type PlatformMessage =
-  | EditorMessage
-  | AstMessage
-  | ComponentMessage
-  | FileMessage
-  | CommandMessage
-  | DevServerMessage
-  | AIMessage
-  | CompositionMessage
-  | DevServerLogsMessage
-  | AIChatMessage
-  | StylesMessage;
-
 // ============================================
 // Canvas Composition Storage
 // ============================================
 
-export interface CanvasInstance {
+interface CanvasInstance {
   id: string;
   name: string;
   props: Record<string, unknown>;
@@ -500,13 +283,4 @@ export interface Chat {
 // AST Types (re-exported from lib/types.ts)
 // ============================================
 
-export type {
-  FindElementResult,
-  JSXElementWithPath,
-  ParsedFile,
-  ParseOptions,
-  PrintOptions,
-  SharedEditorState,
-} from '@lib/types';
-
-export type { I18nBindingResult } from '@shared/i18n-text/types';
+export type { SharedEditorState } from '@lib/types';

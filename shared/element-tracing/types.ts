@@ -45,7 +45,7 @@ export interface NodeMapEntry {
  * Carries the project root the server used to normalize entry paths so the
  * client can configure its FiberSourceIndex with the same root.
  */
-export interface TracingConfig {
+interface TracingConfig {
   type: 'tracing-config';
   projectRoot: string;
 }
@@ -62,7 +62,7 @@ export interface NodeMapUpdate {
 }
 
 /** Server → Client: pushed when a file is deleted or renamed */
-export interface NodeMapInvalidate {
+interface NodeMapInvalidate {
   type: 'node-map-invalidate';
   filePath: string;
 }

@@ -43,12 +43,12 @@ export function lerp(a: number, b: number, t: number): number {
 
 /** Random number in range (seeded for reproducibility) */
 let seed = 42;
-export function random(min = 0, max = 1): number {
+function random(min = 0, max = 1): number {
   seed = (seed * 16807 + 0) % 2147483647;
   return min + (seed / 2147483647) * (max - min);
 }
 
-export function setSeed(s: number): void {
+function setSeed(s: number): void {
   seed = s;
 }
 

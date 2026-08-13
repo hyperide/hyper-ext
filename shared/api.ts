@@ -19,11 +19,3 @@ export interface NestedComponent {
   type: string;
   props: Record<string, unknown>;
 }
-
-/**
- * Children can be:
- * - string: plain text content
- * - NestedComponent: single component instance
- * - NestedComponent[]: array of component instances
- */
-export type ChildrenValue = string | NestedComponent | NestedComponent[];

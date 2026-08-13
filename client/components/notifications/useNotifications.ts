@@ -3,19 +3,19 @@ import { type SSEStatus, useReconnectingEventSource } from '@/hooks/useReconnect
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 
-export interface NotificationActor {
+interface NotificationActor {
   id: string;
   name: string | null;
   email: string;
   avatarUrl: string | null;
 }
 
-export interface NotificationProject {
+interface NotificationProject {
   id: string;
   name: string;
 }
 
-export interface NotificationComment {
+interface NotificationComment {
   id: string;
   content: string;
   componentPath: string | null;

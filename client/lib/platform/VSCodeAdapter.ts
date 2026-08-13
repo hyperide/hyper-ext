@@ -112,7 +112,7 @@ function attachMessageListener() {
 // VS Code Editor Adapter
 // ============================================================================
 
-export function createVSCodeEditorAdapter(): EditorAdapter {
+function createVSCodeEditorAdapter(): EditorAdapter {
   const vscode = getVSCodeApi();
 
   return {
@@ -188,7 +188,7 @@ export function createVSCodeEditorAdapter(): EditorAdapter {
 // VS Code Canvas Adapter
 // ============================================================================
 
-export function createVSCodeCanvasAdapter(): CanvasAdapter {
+function createVSCodeCanvasAdapter(): CanvasAdapter {
   const vscode = getVSCodeApi();
 
   return {
@@ -233,7 +233,7 @@ export function createVSCodeCanvasAdapter(): CanvasAdapter {
 // VS Code Theme Adapter
 // ============================================================================
 
-export function createVSCodeThemeAdapter(): ThemeAdapter {
+function createVSCodeThemeAdapter(): ThemeAdapter {
   return {
     getTheme(): 'light' | 'dark' {
       // VS Code sets theme classes on body
@@ -264,7 +264,7 @@ export function createVSCodeThemeAdapter(): ThemeAdapter {
 // VS Code SSE Adapter (proxied through extension)
 // ============================================================================
 
-export function createVSCodeSSEAdapter(): SSEAdapter {
+function createVSCodeSSEAdapter(): SSEAdapter {
   const vscode = getVSCodeApi();
 
   return {
@@ -314,7 +314,7 @@ export function createVSCodeSSEAdapter(): SSEAdapter {
 // VS Code API Adapter (proxied through extension for CORS)
 // ============================================================================
 
-export function createVSCodeApiAdapter(): ApiAdapter {
+function createVSCodeApiAdapter(): ApiAdapter {
   const vscode = getVSCodeApi();
 
   return {

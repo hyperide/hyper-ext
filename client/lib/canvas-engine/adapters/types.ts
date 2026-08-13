@@ -146,23 +146,3 @@ export interface ParsedStyles {
     >
   >;
 }
-
-export interface EffectItem {
-  id: string;
-  visible: boolean;
-  expanded: boolean;
-  type: 'drop-shadow' | 'inner-shadow' | 'blur';
-  preset?: string;
-  color: string;
-  opacity: string;
-  value: string;
-}
-
-export interface StrokeItem {
-  id: string;
-  visible: boolean;
-  expanded: boolean;
-  side: 'top' | 'right' | 'bottom' | 'left';
-  width: string;
-  color: string;
-}

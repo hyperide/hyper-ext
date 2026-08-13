@@ -64,18 +64,3 @@ export function isNetworkError(error: unknown): boolean {
 
   return false;
 }
-
-/**
- * Wraps fetch errors into NetworkError if applicable.
- *
- * Usage:
- * ```ts
- * const response = await fetch(url).catch(wrapNetworkError);
- * ```
- */
-export function wrapNetworkError(error: unknown): never {
-  if (isNetworkError(error)) {
-    throw new NetworkError('Network request failed', error);
-  }
-  throw error;
-}

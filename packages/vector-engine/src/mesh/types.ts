@@ -5,7 +5,7 @@
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Gradient Mesh
  */
 
-export type { MeshHandle, MeshValue, MeshVertex } from '../types';
+export type { MeshHandle, MeshVertex } from '../types';
 
 export interface TessellatedMesh {
   /** Flat position array: [x1, y1, x2, y2, ...] */

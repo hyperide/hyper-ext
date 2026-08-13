@@ -40,7 +40,7 @@ export function computeScrollCompensationPx(currentScrollY: number, baselineScro
   return -(currentScrollY - baselineScrollY) || 0;
 }
 
-export interface ContextMenuState {
+interface ContextMenuState {
   elementId: string;
   itemIndex: number | null;
   x: number;

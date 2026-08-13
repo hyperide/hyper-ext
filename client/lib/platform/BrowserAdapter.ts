@@ -28,7 +28,7 @@ const PLATFORM_EVENT = 'platform:message';
 // Browser Editor Adapter
 // ============================================================================
 
-export function createBrowserEditorAdapter(): EditorAdapter {
+function createBrowserEditorAdapter(): EditorAdapter {
   let activeFileChangeListeners: Array<(path: string | null) => void> = [];
   let isListening = false;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
@@ -114,7 +114,7 @@ export function createBrowserEditorAdapter(): EditorAdapter {
 // Browser Canvas Adapter
 // ============================================================================
 
-export function createBrowserCanvasAdapter(): CanvasAdapter {
+function createBrowserCanvasAdapter(): CanvasAdapter {
   return {
     sendEvent<T extends PlatformMessage>(message: T): void {
       window.dispatchEvent(new CustomEvent(PLATFORM_EVENT, { detail: message }));
@@ -150,7 +150,7 @@ export function createBrowserCanvasAdapter(): CanvasAdapter {
 // Browser Theme Adapter
 // ============================================================================
 
-export function createBrowserThemeAdapter(): ThemeAdapter {
+function createBrowserThemeAdapter(): ThemeAdapter {
   return {
     getTheme(): 'light' | 'dark' {
       // Check document class (set by ThemeProvider)
@@ -177,7 +177,7 @@ export function createBrowserThemeAdapter(): ThemeAdapter {
 // Browser SSE Adapter
 // ============================================================================
 
-export function createBrowserSSEAdapter(): SSEAdapter {
+function createBrowserSSEAdapter(): SSEAdapter {
   return {
     subscribe(
       url: string,
@@ -217,7 +217,7 @@ export function createBrowserSSEAdapter(): SSEAdapter {
 // Browser API Adapter
 // ============================================================================
 
-export function createBrowserApiAdapter(): ApiAdapter {
+function createBrowserApiAdapter(): ApiAdapter {
   return {
     async fetch(url: string, options?: RequestInit): Promise<Response> {
       // Use native fetch in browser (no CORS issues)

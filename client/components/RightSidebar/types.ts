@@ -3,7 +3,6 @@ import type { ComponentGroup } from '../../../lib/component-scanner/types';
 export type PositionType = 'static' | 'rel' | 'abs' | 'fixed' | 'sticky';
 export type LayoutType = 'layout' | 'col' | 'row' | 'grid';
 export type UIKitType = 'tailwind' | 'tamagui' | 'none';
-export type ChildrenType = 'text' | 'expression' | 'expression-complex' | 'jsx' | undefined;
 
 export interface RightSidebarProps {
   onOpenSettings?: () => void;
@@ -57,15 +56,6 @@ export interface EffectItem {
   color: string;
   opacity: string;
   preset?: string;
-}
-
-export interface TransitionItem {
-  id: string;
-  visible: boolean;
-  expanded: boolean;
-  property: 'all' | 'colors' | 'opacity' | 'transform';
-  duration: string;
-  timing: 'linear' | 'in' | 'out' | 'in-out';
 }
 
 export interface LayoutOption {

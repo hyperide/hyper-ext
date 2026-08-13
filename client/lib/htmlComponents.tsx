@@ -8,7 +8,7 @@ import type { ComponentDefinition } from './canvas-engine';
 /**
  * Div component
  */
-export const DivComponent: ComponentDefinition = {
+const DivComponent: ComponentDefinition = {
   type: 'div',
   label: 'Div',
   category: 'HTML',
@@ -28,7 +28,7 @@ export const DivComponent: ComponentDefinition = {
 /**
  * Button component
  */
-export const ButtonHTMLComponent: ComponentDefinition = {
+const ButtonHTMLComponent: ComponentDefinition = {
   type: 'button',
   label: 'Button (HTML)',
   category: 'HTML',
@@ -53,7 +53,7 @@ export const ButtonHTMLComponent: ComponentDefinition = {
 /**
  * Span component
  */
-export const SpanComponent: ComponentDefinition = {
+const SpanComponent: ComponentDefinition = {
   type: 'span',
   label: 'Span',
   category: 'HTML',
@@ -78,7 +78,7 @@ export const SpanComponent: ComponentDefinition = {
 /**
  * SVG component
  */
-export const SVGComponent: ComponentDefinition = {
+const SVGComponent: ComponentDefinition = {
   type: 'svg',
   label: 'SVG',
   category: 'HTML',
@@ -95,7 +95,7 @@ export const SVGComponent: ComponentDefinition = {
 /**
  * Rect component
  */
-export const RectComponent: ComponentDefinition = {
+const RectComponent: ComponentDefinition = {
   type: 'rect',
   label: 'Rect',
   category: 'HTML',
@@ -109,7 +109,7 @@ export const RectComponent: ComponentDefinition = {
 /**
  * Circle component
  */
-export const CircleComponent: ComponentDefinition = {
+const CircleComponent: ComponentDefinition = {
   type: 'circle',
   label: 'Circle',
   category: 'HTML',
@@ -123,7 +123,7 @@ export const CircleComponent: ComponentDefinition = {
 /**
  * Polyline component
  */
-export const PolylineComponent: ComponentDefinition = {
+const PolylineComponent: ComponentDefinition = {
   type: 'polyline',
   label: 'Polyline',
   category: 'HTML',
@@ -137,7 +137,7 @@ export const PolylineComponent: ComponentDefinition = {
 /**
  * Input component
  */
-export const InputHTMLComponent: ComponentDefinition = {
+const InputHTMLComponent: ComponentDefinition = {
   type: 'input',
   label: 'Input (HTML)',
   category: 'HTML',

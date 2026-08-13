@@ -14,6 +14,11 @@ export interface User {
   clientSideRuntime: boolean;
 }
 
+/**
+ * @public Consumed only by the doubtful WorkspacePicker (HYP-489 follow-up). Kept
+ * exported so that not-yet-resolved component compiles; un-tag once WorkspacePicker
+ * is wired up or removed.
+ */
 export interface Workspace {
   id: string;
   name: string;

@@ -30,11 +30,6 @@ export interface GitHubRepository {
   updated_at?: string;
 }
 
-export interface GitHubSettings {
-  lastSelectedOrg: string | null;
-  defaultCreateOrg: string | null;
-}
-
 export interface OrganizationsResponse {
   organizations: GitHubOrganization[];
   user: GitHubUser;

@@ -29,9 +29,9 @@ import IconButton from './icons/IconButton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 export type Tool = 'board' | 'interact' | 'design' | 'code';
-export type BoardTool = 'select' | 'arrow' | 'text';
+type BoardTool = 'select' | 'arrow' | 'text';
 
-export interface DrawingStyle {
+interface DrawingStyle {
   color: string;
   strokeWidth: number;
   fontSize: number;

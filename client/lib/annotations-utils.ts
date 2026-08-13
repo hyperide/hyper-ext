@@ -9,12 +9,7 @@ import type {
   ArrowAnnotation,
   TextAnnotation,
 } from '../../shared/types/annotations';
-import {
-  DEFAULT_ARROW_STYLE,
-  DEFAULT_TEXT_STYLE,
-  generateAnnotationId,
-  isArrowAnnotation,
-} from '../../shared/types/annotations';
+import { DEFAULT_ARROW_STYLE, DEFAULT_TEXT_STYLE, generateAnnotationId } from '../../shared/types/annotations';
 import type { InstancePosition } from '../../shared/types/canvas';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- excalidraw types for migration
@@ -91,85 +86,6 @@ export function needsMigration(annotations: unknown[]): boolean {
 }
 
 /**
- * Update arrow positions when an instance is moved
- * Shifts bound arrow endpoints by the same delta as the instance
- */
-export function updateArrowsForInstanceMove(
-  annotations: AnnotationElement[],
-  movedInstanceId: string,
-  deltaX: number,
-  deltaY: number,
-): AnnotationElement[] {
-  return annotations.map((ann) => {
-    if (!isArrowAnnotation(ann)) return ann;
-
-    const startBoundToMoved = ann.startBinding?.instanceId === movedInstanceId;
-    const endBoundToMoved = ann.endBinding?.instanceId === movedInstanceId;
-
-    // Skip if arrow is not bound to the moved instance
-    if (!startBoundToMoved && !endBoundToMoved) return ann;
-
-    let newStartX = ann.startX;
-    let newStartY = ann.startY;
-    let newEndX = ann.endX;
-    let newEndY = ann.endY;
-
-    if (startBoundToMoved && endBoundToMoved) {
-      // Both ends bound to same instance - move the whole arrow
-      newStartX += deltaX;
-      newStartY += deltaY;
-      newEndX += deltaX;
-      newEndY += deltaY;
-    } else if (startBoundToMoved) {
-      // Only start point moves
-      newStartX += deltaX;
-      newStartY += deltaY;
-    } else {
-      // Only end point moves
-      newEndX += deltaX;
-      newEndY += deltaY;
-    }
-
-    return {
-      ...ann,
-      startX: newStartX,
-      startY: newStartY,
-      endX: newEndX,
-      endY: newEndY,
-      version: ann.version + 1,
-    };
-  });
-}
-
-/**
- * Instance bounds for binding detection
- */
-interface InstanceBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/**
- * Get instance bounds from position data
- */
-export function getInstanceBounds(instances: Record<string, InstancePosition>): Record<string, InstanceBounds> {
-  const bounds: Record<string, InstanceBounds> = {};
-
-  for (const [instanceId, pos] of Object.entries(instances)) {
-    bounds[instanceId] = {
-      x: pos.x,
-      y: pos.y,
-      width: pos.width || 200,
-      height: pos.height || 200,
-    };
-  }
-
-  return bounds;
-}
-
-/**
  * Detect if a point is near an instance for binding
  * Returns the instance binding if within threshold, null otherwise
  */
@@ -196,72 +112,6 @@ export function detectBinding(
   }
 
   return null;
-}
-
-/**
- * Get the center point of an instance for arrow snapping
- */
-export function getInstanceCenter(
-  instanceId: string,
-  instances: Record<string, InstancePosition>,
-): { x: number; y: number } | null {
-  const pos = instances[instanceId];
-  if (!pos) return null;
-
-  const width = pos.width || 200;
-  const height = pos.height || 200;
-
-  return {
-    x: pos.x + width / 2,
-    y: pos.y + height / 2,
-  };
-}
-
-/**
- * Get the closest edge point of an instance to a given point
- * Used for snapping arrow endpoints to instance edges
- */
-export function getClosestEdgePoint(
-  pointX: number,
-  pointY: number,
-  instanceId: string,
-  instances: Record<string, InstancePosition>,
-): { x: number; y: number } | null {
-  const pos = instances[instanceId];
-  if (!pos) return null;
-
-  const width = pos.width || 200;
-  const height = pos.height || 200;
-
-  const centerX = pos.x + width / 2;
-  const centerY = pos.y + height / 2;
-
-  // Calculate angle from center to point
-  const angle = Math.atan2(pointY - centerY, pointX - centerX);
-
-  // Find intersection with rectangle edge
-  const halfWidth = width / 2;
-  const halfHeight = height / 2;
-
-  // Determine which edge the line intersects
-  const tanAngle = Math.tan(angle);
-  let edgeX: number;
-  let edgeY: number;
-
-  if (Math.abs(tanAngle) < halfHeight / halfWidth) {
-    // Intersects left or right edge
-    edgeX = Math.sign(Math.cos(angle)) * halfWidth;
-    edgeY = edgeX * tanAngle;
-  } else {
-    // Intersects top or bottom edge
-    edgeY = Math.sign(Math.sin(angle)) * halfHeight;
-    edgeX = edgeY / tanAngle;
-  }
-
-  return {
-    x: centerX + edgeX,
-    y: centerY + edgeY,
-  };
 }
 
 /**

@@ -15,7 +15,7 @@ import {
   getTamaguiColorNames,
   getTamaguiSemanticNames,
 } from '@lib/tamagui/values';
-import { colorDistance, hexToRgb } from '@shared/utils/color';
+import { colorDistance } from '@shared/utils/color';
 import twColors from 'tailwindcss/colors';
 import type { AstService } from '../../services/AstService';
 
@@ -23,7 +23,7 @@ import type { AstService } from '../../services/AstService';
 // Shared types
 // ---------------------------------------------------------------------------
 
-export interface ColorEntry {
+interface ColorEntry {
   token: string;
   hex: string;
 }
@@ -50,14 +50,6 @@ export interface StyleAdapter {
 
   resolveStyles(params: ResolveInput): ResolveResult;
 }
-
-export type { ResolveInput, ResolveResult };
-
-// ---------------------------------------------------------------------------
-// Shared helpers — hexToRgb and colorDistance from @shared/utils/color
-// ---------------------------------------------------------------------------
-
-export { colorDistance, hexToRgb };
 
 export function parseAnyColorToHex(value: string): string | null {
   const trimmed = value.trim().toLowerCase();

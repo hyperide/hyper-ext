@@ -103,7 +103,7 @@ export function findNearestDebugSource(fiber: Fiber | null): DebugSource | null 
  * Both values are 1-based (raw from React fiber) — no conversion needed
  * because we're comparing like with like, not against Babel AST positions.
  */
-export function sameDebugSource(a: DebugSource, b: DebugSource): boolean {
+function sameDebugSource(a: DebugSource, b: DebugSource): boolean {
   return a.fileName === b.fileName && a.lineNumber === b.lineNumber && a.columnNumber === b.columnNumber;
 }
 

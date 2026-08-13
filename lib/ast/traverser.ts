@@ -94,19 +94,6 @@ export function findElementAtPosition(ast: t.File, line: number, column: number)
 }
 
 /**
- * Get element location for "Go to Code" feature
- */
-export function getElementLocation(element: t.JSXElement): { line: number; column: number } | null {
-  const loc = element.loc;
-  if (!loc) return null;
-
-  return {
-    line: loc.start.line,
-    column: loc.start.column,
-  };
-}
-
-/**
  * Get location of the first meaningful child (text or expression).
  * Used for "Go to code" navigation to text/expression content.
  */
@@ -125,7 +112,7 @@ export function getChildrenLocation(element: t.JSXElement): { line: number; colu
   return null;
 }
 
-export type ChildrenType = 'text' | 'expression' | 'expression-complex' | 'jsx';
+type ChildrenType = 'text' | 'expression' | 'expression-complex' | 'jsx';
 
 export interface ChildrenAnalysis {
   childrenType: ChildrenType | undefined;

@@ -6,7 +6,7 @@ export { hexWithAlpha, parseHexWithAlpha } from '@shared/utils/color';
 /**
  * Convert hex color + opacity to rgba format
  */
-export function hexToRgba(hex: string, opacity: string): string {
+function hexToRgba(hex: string, opacity: string): string {
   const num = Number.parseInt(opacity, 10) || 100;
   if (num === 100) return hex;
   const r = Number.parseInt(hex.slice(1, 3), 16);
@@ -98,13 +98,6 @@ export function findNodeById(nodes: ASTNode[], id: string): ASTNode | null {
     }
   }
   return null;
-}
-
-/**
- * Generate unique ID for items (strokes, effects, transitions)
- */
-export function generateItemId(): string {
-  return Math.random().toString(36).substring(2, 9);
 }
 
 /**
