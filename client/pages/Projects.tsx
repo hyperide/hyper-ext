@@ -4,9 +4,7 @@ import {
   IconBrandGithub,
   IconDots,
   IconPlayerPlay,
-  IconPlus,
   IconRefresh,
-  IconSelector,
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
@@ -14,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GitHubAppConnect } from '@/components/github';
 import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
+import WorkspacePicker from '@/components/WorkspacePicker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
@@ -99,9 +98,7 @@ export default function Projects() {
   useDocumentTitle('Projects');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentWorkspace, workspaces, setCurrentWorkspace, accessToken, refreshAuth, connectionError } =
-    useAuthStore();
-  const [workspaceSelectorOpen, setWorkspaceSelectorOpen] = useState(false);
+  const { currentWorkspace, accessToken, refreshAuth, connectionError } = useAuthStore();
   // null = not loaded yet, [] = loaded with zero projects
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -593,48 +590,7 @@ export default function Projects() {
               <h1 className="text-4xl font-bold shrink-0">Projects</h1>
               {(pollingNetworkError || !isOnline) && <NetworkStatusIndicator variant="badge" isOffline={!isOnline} />}
               <span className="text-2xl text-muted-foreground shrink-0">/</span>
-              <Popover open={workspaceSelectorOpen} onOpenChange={setWorkspaceSelectorOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" className="text-2xl font-semibold h-auto py-1 px-2 max-w-[300px]">
-                    <span className="truncate">{currentWorkspace?.name || 'Select workspace'}</span>
-                    <IconSelector className="w-5 h-5 ml-1 shrink-0 text-muted-foreground" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[250px] p-0" align="start">
-                  <Command>
-                    <CommandList>
-                      <CommandEmpty>No workspaces found</CommandEmpty>
-                      <CommandGroup heading="Workspaces">
-                        {workspaces.map((ws) => (
-                          <CommandItem
-                            key={ws.id}
-                            value={ws.name}
-                            onSelect={() => {
-                              setCurrentWorkspace(ws);
-                              setWorkspaceSelectorOpen(false);
-                            }}
-                            className={ws.id === currentWorkspace?.id ? 'bg-accent' : ''}
-                          >
-                            {ws.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                      <CommandGroup>
-                        <CommandItem
-                          onSelect={() => {
-                            navigate('/workspaces/new');
-                            setWorkspaceSelectorOpen(false);
-                          }}
-                          className="text-primary"
-                        >
-                          <IconPlus className="w-4 h-4 mr-2" />
-                          Create new workspace
-                        </CommandItem>
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <WorkspacePicker className="text-2xl font-semibold h-auto py-1 px-2 max-w-[300px]" />
             </div>
             <p className="text-muted-foreground">Manage your React projects</p>
           </div>

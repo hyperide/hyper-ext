@@ -29,11 +29,9 @@
     "shared/scripts/iframe-console-capture.js",
     // DOUBTFUL — pending CTO decision (HYP-489 follow-up ticket). NOT confirmed
     // dead; do not delete without a product call:
-    // - WorkspacePicker: a workspace-switcher UI component with no current
-    //   callsite; may be a not-yet-wired feature rather than dead scaffolding.
     // (useNetworkAwarePolling was here — now consumed by useDiagnosticSync, HYP-518.)
     // (PushPopover/** was here — dropped, superseded by SourceControlSection, HYP-517.)
-    "client/components/WorkspacePicker.tsx",
+    // (WorkspacePicker was here — now wired into Projects.tsx, HYP-516.)
   ],
   // -------------------------------------------------------------------------
   // HYP-432: silence three knip false-positive categories WITHOUT hiding real

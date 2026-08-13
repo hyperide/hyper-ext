@@ -39,7 +39,7 @@ export default function WorkspacePicker({ className }: WorkspacePickerProps) {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className={className} testId="WorkspacePicker-trigger">
-          <span className="truncate max-w-[150px]">{currentWorkspace.name}</span>
+          <span className="truncate">{currentWorkspace.name}</span>
           <IconChevronDown className="w-4 h-4 ml-1 opacity-50" />
         </Button>
       </DropdownMenuTrigger>

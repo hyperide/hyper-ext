@@ -47,8 +47,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   };
 }
 
-// Mock localStorage
-const localStorageMock = (() => {
+// Mock Web Storage (localStorage + sessionStorage). sessionStorage is needed by the
+// zustand-persisted authStore (storage: createJSONStorage(() => sessionStorage)); without
+// it, any test that touches the store logs "[zustand persist middleware] Unable to update".
+const createStorageMock = (): Storage => {
   let store: Record<string, string> = {};
 
   return {
@@ -71,16 +73,21 @@ const localStorageMock = (() => {
       const keys = Object.keys(store);
       return keys[index] || null;
     },
-  };
-})();
+  } as Storage;
+};
+
+const localStorageMock = createStorageMock();
+const sessionStorageMock = createStorageMock();
 
 // Assign to globalThis so it's available in all test environments
-globalThis.localStorage = localStorageMock as Storage;
+globalThis.localStorage = localStorageMock;
+globalThis.sessionStorage = sessionStorageMock;
 
-// Clear localStorage before each test to ensure test isolation
+// Clear both stores before each test to ensure test isolation
 if (typeof beforeEach === 'function') {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 }
 
