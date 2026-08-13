@@ -8,6 +8,24 @@ All notable changes to HyperCanvas Preview are documented here.
 
 - **Non-compound UI primitives no longer dead-end on "No sample for this component"** — opening a `components/ui/*.tsx` file with no authored `SampleDefault` and no compound sibling exports (a plain `Card`/`Button`/`Badge`-style shadcn primitive) now renders via the existing deterministic per-prop generator instead of landing on the terminal "no sample" screen; registry inclusion only excludes a UI primitive when it BOTH lacks a renderable sample AND has unresolvable `declaredPropNames` (HYP-915) (`daeb50f9`, `94469cb7`, `7968c1bc`)
 
+## [0.1.68] — 2026-07-09
+
+Re-cut of the MCP fixes below, which were built for 0.1.67 but reached neither registry (see "Release plumbing").
+
+### Bug fixes
+
+- **Self-healing MCP startup** — the MCP server now starts on demand via `ensureStarted()` with retry + on-demand restart, fixing the "HyperCanvas MCP server is not running" error shown after "Setup AI agents" (HYP-954, #644).
+
+### Security
+
+- **Loopback MCP HTTP server is now authenticated** — closes a local (loopback-bound) unauthenticated command-execution hole on the MCP endpoint; not remotely reachable (HYP-956, #643).
+
+### Release plumbing
+
+- **Extension publish decoupled from the dead Marketplace token** — the publish workflow previously ran the expired-`VSCE_PAT` Marketplace step first with no `continue-on-error`, so it failed and fail-fast skipped the partner-critical Open VSX publish (Cursor and other forks install from Open VSX, not the MS Marketplace). Open VSX now publishes first and independently; a failed/absent `VSCE_PAT` no longer blocks it. This is why the 0.1.67 MCP fixes are re-cut here as 0.1.68 (HYP-958, #647).
+
+---
+
 ## [0.1.56] — 2026-06-01
 
 ### New features
