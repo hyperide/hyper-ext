@@ -2,6 +2,24 @@
 
 All notable changes to HyperCanvas Preview are documented here.
 
+## [0.1.49] — 2026-05-28
+
+### Features
+
+- **Bun bundler support** — extension detects Bun as a bundler type and includes it in `FULL_EDIT_BUNDLERS`; Bun chunk frames are extracted in `extractClientChunkFrames` for source map warmup (`472ba2b7`, `16a81f08`)
+- **ReadonlyStubScreen project type** — stub screen now displays the detected project type; log output strips ANSI escape codes before writing to the output channel; port correction is logged explicitly (`5fa1d1cf`)
+
+### Bug fixes
+
+- **HMR-safe createRoot** — standalone preview entry now uses `root.render()` on existing root instead of calling `createRoot` again after HMR; cross-bundler type declarations included (`b321d77f`)
+- **Isolated mode race** — pending isolated mode is stored before the proxy is created so it is not lost if proxy creation completes synchronously (`b289cc74`)
+
+### Internal
+
+- oxfmt scope narrowed — YAML, k8s, and ops dirs excluded from formatter; `.worktrees/` added to `.gitignore` (`49370dc5`, `d5beac0b`)
+
+---
+
 ## [0.1.46] — 2026-05-12
 
 ### Features
