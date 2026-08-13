@@ -12,10 +12,12 @@
  *     HYP-487 auto-wrapper trigger. Single source: host and webview must agree
  *     on what counts as a provider error.
  *
- * Past bugs: HYP-876 — conloca-app components with NO props crashed with
- *   "useWorkspace must be used inside <WorkspaceProvider>" and the overlay
- *   claimed "This component requires props to render" forever, hiding a live
- *   render behind a card no action on which could ever succeed.
+ * Past bugs: HYP-876 — a component with NO props crashed at runtime because a
+ *   hook it called threw for missing its React context provider (e.g. "useX
+ *   must be used inside <XProvider>"), yet the overlay still claimed "This
+ *   component requires props to render" forever, hiding a live render behind
+ *   a card no action on which could ever succeed. A provider-context crash is
+ *   a runtime problem, not a props one — no props form can fix it.
  */
 
 import type { SimplePropInfo } from './PropsForm';
@@ -31,18 +33,19 @@ import type { SimplePropInfo } from './PropsForm';
  * pattern lets the extension auto-generate the `.hyperide/preview.tsx`
  * wrapper (isolated mode) so the component renders inside its providers.
  *
- * Matches both real phrasings observed in conloca-app:
+ * Matches the common real-world phrasings, e.g.:
  *   "useAuth must be used inside <AuthProvider>"        (angle brackets)
  *   "useFeatureFlags must be used inside FeatureFlagsProvider"  (bare)
  * and the common "within (a) XProvider" variant. The `\w*Provider` anchor
  * keeps it from firing on generic "must be used" errors that don't name a
  * Provider (e.g. "useId must be used during render").
  *
- * DEFENSIVE BROADENING (HYP-487 follow-up — not observed in conloca-app):
- * the original regex matches ONLY the "must be used (inside|within) …Provider"
- * phrasing. Other libraries throw "missing provider" errors with different
- * wording; a component reaching one of those FIRST would slip the detector and
- * leave a silent blank preview with no guidance. We also recognise:
+ * DEFENSIVE BROADENING (HYP-487 follow-up — hardening, not tied to a
+ * confirmed repro): the original regex matches ONLY the "must be used
+ * (inside|within) …Provider" phrasing. Other libraries throw "missing
+ * provider" errors with different wording; a component reaching one of those
+ * FIRST would slip the detector and leave a silent blank preview with no
+ * guidance. We also recognise:
  *   - react-query: "No QueryClient set, use QueryClientProvider to set one"
  *   - react-redux: "could not find react-redux context value; … wrapped in a <Provider>"
  *   - generic:     "must be wrapped in <ThemeProvider>"

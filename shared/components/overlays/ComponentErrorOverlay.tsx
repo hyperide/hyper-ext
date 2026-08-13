@@ -96,8 +96,8 @@ function componentNameFromPath(componentPath: string): string {
 /**
  * Dispatcher: classify the caught render error and pick the card variant.
  *
- * HYP-876 — a provider-context crash ("useWorkspace must be used inside
- * <WorkspaceProvider>") or any crash of a component whose prop schema resolved
+ * HYP-876 — a provider-context crash (e.g. a hook thrown outside its React
+ * context provider) or any crash of a component whose prop schema resolved
  * EMPTY is NOT a props problem; showing the props card ("This component
  * requires props to render" + Create Empty Sample) for it is a lie no button
  * can make true. Those errors get the honest runtime-error card instead.

@@ -71,7 +71,7 @@ describe('ComponentErrorOverlay', () => {
   describe('runtime-error card (HYP-876)', () => {
     const providerErrorProps = {
       ...baseProps,
-      componentPath: 'src/app/account/AccountPage.tsx',
+      componentPath: 'src/App.tsx',
       error: 'useWorkspace must be used inside <WorkspaceProvider>',
     };
 
