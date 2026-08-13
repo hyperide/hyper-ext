@@ -7,6 +7,7 @@ import * as t from '@babel/types';
 import {
   cloneElement,
   getAttribute,
+  getAttributeClassSegments,
   getAttributeString,
   removeAttribute,
   setAttribute,
@@ -122,6 +123,84 @@ describe('removeAttribute', () => {
     expect(() => {
       removeAttribute(elements[0].element, 'className');
     }).not.toThrow();
+  });
+});
+
+describe('getAttributeClassSegments', () => {
+  it('marks a plain string-literal className as certain', () => {
+    const code = '<div className="px-4 flex">Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    const segments = getAttributeClassSegments(elements[0].element);
+
+    expect(segments).toEqual([{ value: 'px-4 flex', certain: true }]);
+  });
+
+  it('splits cn() literal args (certain) from logical-&& branch (conditional)', () => {
+    const code = '<div className={cn("px-4 flex", isActive && "bg-red-500")}>Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    const segments = getAttributeClassSegments(elements[0].element);
+
+    expect(segments).toEqual([
+      { value: 'px-4 flex', certain: true },
+      { value: 'bg-red-500', certain: false },
+    ]);
+  });
+
+  it('marks both ternary branches as conditional', () => {
+    const code = '<div className={cn("base", isActive ? "on" : "off")}>Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    const segments = getAttributeClassSegments(elements[0].element);
+
+    expect(segments).toEqual([
+      { value: 'base', certain: true },
+      { value: 'on', certain: false },
+      { value: 'off', certain: false },
+    ]);
+  });
+
+  it('returns null when there is no className attribute', () => {
+    const code = '<div>Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    expect(getAttributeClassSegments(elements[0].element)).toBeNull();
+  });
+
+  it('downgrades template quasi fragments glued to an interpolation, keeps whitespace-bounded tokens certain', () => {
+    // `text-${color}-500 px-4` → `text-` and `-500` are partial tokens split by the
+    // interpolation (no whitespace against `${color}`); only `px-4` is a complete token.
+    const code = '<div className={`text-${color}-500 px-4`}>Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    const segments = getAttributeClassSegments(elements[0].element);
+
+    // px-4 is whitespace-bounded → certain. text- / -500 touch the interpolation → not certain.
+    const pxFour = segments?.filter((s) => s.certain).flatMap((s) => s.value.split(/\s+/));
+    expect(pxFour).toEqual(['px-4']);
+
+    const partials = segments?.filter((s) => !s.certain).flatMap((s) => s.value.split(/\s+/));
+    expect(partials).toContain('text-');
+    expect(partials).toContain('-500');
+  });
+
+  it('keeps a whitespace-bounded quasi token certain even when adjacent to an interpolation', () => {
+    // `flex ${cond} px-4` → both `flex` and `px-4` are bounded by whitespace against the
+    // interpolation, so they stay certain.
+    const code = '<div className={`flex ${cond} px-4`}>Content</div>';
+    const ast = parseCode(code);
+    const elements = findAllJSXElements(ast);
+
+    const segments = getAttributeClassSegments(elements[0].element);
+    const certain = segments?.filter((s) => s.certain).flatMap((s) => s.value.split(/\s+/));
+
+    expect(certain).toEqual(['flex', 'px-4']);
   });
 });
 

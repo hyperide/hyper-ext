@@ -64,6 +64,110 @@ export function getAttributeStaticClassName(element: t.JSXElement): string | nul
   return null;
 }
 
+/** A static class fragment with its provenance: whether it is unconditionally present. */
+export interface ClassNameSegment {
+  /** The class string fragment (may itself contain multiple space-separated classes). */
+  value: string;
+  /**
+   * True when the fragment is unconditionally present — a direct string-literal argument
+   * to cn()/clsx() or a top-level template quasi. False when it lives inside a conditional
+   * branch (logical-`&&` right side, or a ternary consequent/alternate).
+   */
+  certain: boolean;
+}
+
+/**
+ * Extract static class fragments from a className attribute WITH provenance.
+ * Mirrors {@link getAttributeStaticClassName}'s traversal, but records which fragments are
+ * statically certain (top-level string literals / template quasis) vs conditional
+ * (inside `&&` or ternary branches). Returns null if there is no className attribute.
+ */
+export function getAttributeClassSegments(element: t.JSXElement): ClassNameSegment[] | null {
+  const value = getAttribute(element, 'className');
+  if (!value) return null;
+
+  if (t.isStringLiteral(value)) {
+    return [{ value: value.value, certain: true }];
+  }
+
+  if (t.isJSXExpressionContainer(value)) {
+    const expr = value.expression;
+    if (t.isJSXEmptyExpression(expr)) return null;
+    const segments: ClassNameSegment[] = [];
+    collectClassSegments(expr, true, segments);
+    return segments;
+  }
+
+  return null;
+}
+
+/** Recursively collect class fragments with provenance, threading `certain` through branches. */
+function collectClassSegments(expr: t.Expression | t.TSType, certain: boolean, out: ClassNameSegment[]): void {
+  if (t.isStringLiteral(expr)) {
+    if (expr.value) out.push({ value: expr.value, certain });
+    return;
+  }
+
+  // `px-4 ${cond ? 'a' : 'b'} py-2` → whitespace-bounded quasi tokens are unconditional
+  // (inherit caller's `certain`), interpolated expressions are conditional.
+  // A quasi token that is GLUED to an adjacent interpolation (no whitespace between the token
+  // and `${...}` on that side) is only a PARTIAL class fragment — e.g. `text-${color}-500` yields
+  // `text-` and `-500`, which are not real classes. Such partial tokens are downgraded to
+  // conditional so readers don't surface them as exact.
+  if (t.isTemplateLiteral(expr)) {
+    expr.quasis.forEach((q, i) => {
+      const text = q.value.cooked ?? q.value.raw;
+      const tokens = text.split(/\s+/).filter(Boolean);
+      if (tokens.length === 0) return;
+
+      // An interpolation precedes this quasi iff it is not the first; one follows iff it is
+      // not the tail quasi. The leading token is partial when there is a preceding
+      // interpolation AND the quasi text does not start with whitespace; the trailing token
+      // is partial when there is a following interpolation AND the text does not end with
+      // whitespace.
+      const gluedToLeftInterp = i > 0 && !/^\s/.test(text);
+      const gluedToRightInterp = i < expr.quasis.length - 1 && !/\s$/.test(text);
+
+      tokens.forEach((token, tokenIndex) => {
+        const isFirst = tokenIndex === 0;
+        const isLast = tokenIndex === tokens.length - 1;
+        const partial = (isFirst && gluedToLeftInterp) || (isLast && gluedToRightInterp);
+        out.push({ value: token, certain: certain && !partial });
+      });
+    });
+    for (const sub of expr.expressions) {
+      if (t.isExpression(sub)) collectClassSegments(sub, false, out);
+    }
+    return;
+  }
+
+  // cn("base", cond && "extra", ...) — each argument keeps the current `certain` level;
+  // conditional logic inside an argument downgrades it.
+  if (t.isCallExpression(expr)) {
+    for (const arg of expr.arguments) {
+      if (t.isStringLiteral(arg) || t.isTemplateLiteral(arg)) {
+        collectClassSegments(arg, certain, out);
+      } else if (t.isExpression(arg)) {
+        collectClassSegments(arg, certain, out);
+      }
+    }
+    return;
+  }
+
+  // condition ? "a" : "b" → both branches are conditional
+  if (t.isConditionalExpression(expr)) {
+    if (t.isExpression(expr.consequent)) collectClassSegments(expr.consequent, false, out);
+    if (t.isExpression(expr.alternate)) collectClassSegments(expr.alternate, false, out);
+    return;
+  }
+
+  // expr && "classes" → the right side is conditional
+  if (t.isLogicalExpression(expr)) {
+    collectClassSegments(expr.right, false, out);
+    return;
+  }
+}
+
 /** Recursively collect static string fragments from an expression. */
 function collectStaticStrings(expr: t.Expression | t.TSType): string | null {
   // "px-4 py-2"

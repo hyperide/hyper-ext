@@ -16,6 +16,12 @@ const SIMPLE_JSX = `const App = () => <div className="text-red"><span>hello</spa
 const DYNAMIC_JSX = `const App = ({ active }) => (
   <button className={\`px-4 py-2 \${active ? 'bg-blue' : 'bg-gray'}\`}>Click</button>
 );`;
+// Quasi fragments glued to the interpolation: \`text-\` (ends at \${color}, no trailing space)
+// and \`-500\` (starts right after \${color}) are PARTIAL tokens, not real classes. Only \`px-4\`
+// is whitespace-bounded and statically certain (HYP-553 review finding).
+const PARTIAL_QUASI_JSX = `const App = ({ color }) => (
+  <button className={\`text-\${color}-500 px-4\`}>Click</button>
+);`;
 const INLINE_STYLE_JSX = `const App = () => <div style={{ color: 'red', paddingLeft: 4 }}>hello</div>;`;
 const CSS_MODULE_JSX = `import styles from './Card.module.css';
 
@@ -169,10 +175,45 @@ describe('StyleReadService', () => {
     expect(result.className).toContain('px-4');
     expect(result.className).toContain('py-2');
     expect(result.tagType).toBe('button');
-    expect(result.styleReadResult?.sourceTabs[1]).toMatchObject({
+    // The confidence split collapses to ONE Tailwind identity (HYP-553): the full class join is
+    // surfaced on a single source tab, and the overall confidence stays 'exact' because the
+    // static quasis ('px-4 py-2') keep the join statically certain. The per-class split lives as
+    // `classConfidences` metadata on the identity and intentionally does NOT spawn a second
+    // ':conditional' tab (that produced two indistinguishable "Tailwind" buttons).
+    const tailwindTabs = (result.styleReadResult?.sourceTabs ?? []).filter((tab) => tab.cssSystem === 'tailwind-v4');
+    expect(tailwindTabs).toHaveLength(1);
+    expect(tailwindTabs[0]).toMatchObject({
       id: 'tailwind-v4:elementClass',
-      confidence: 'probable',
+      cssClass: 'px-4 py-2 bg-blue bg-gray',
+      confidence: 'exact',
     });
+  });
+
+  it('does not mark interpolation-glued template quasi fragments exact', async () => {
+    const nodeMap = new NodeMapService();
+
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(PARTIAL_QUASI_JSX, 'src/App.tsx');
+    const btnEntry = entries[0]; // button element
+
+    const syntheticRef = getSyntheticRef('src/App.tsx', btnEntry.loc.line, btnEntry.loc.column);
+
+    const fileIO = makeFileIO({ [FILE_PATH]: PARTIAL_QUASI_JSX });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const result = await service.readElementClassName('src/App.tsx', syntheticRef);
+
+    const tabs = result.styleReadResult?.sourceTabs ?? [];
+    const tailwindTabs = tabs.filter((tab) => tab.cssSystem === 'tailwind-v4');
+
+    // The interpolation-glued partial fragments `text-` / `-500` are NOT real classes, so they
+    // must not spawn their own exact source tab: there is exactly ONE Tailwind identity (HYP-553).
+    // `px-4` is the whitespace-bounded statically-certain class, which keeps the single tab's
+    // overall confidence 'exact'. (The per-class 'probable' marking of the partial fragments lives
+    // as `classConfidences` metadata on the identity — covered by the reader-level index.test.ts.)
+    expect(tailwindTabs).toHaveLength(1);
+    expect(tailwindTabs[0]).toMatchObject({ id: 'tailwind-v4:elementClass', confidence: 'exact' });
+    expect(tailwindTabs[0]?.cssClass).toContain('px-4');
   });
 
   it('returns shared inline style source tab when the element has a style prop', async () => {

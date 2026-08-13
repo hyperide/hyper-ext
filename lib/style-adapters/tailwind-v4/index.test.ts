@@ -60,6 +60,50 @@ describe('TailwindV4Adapter', () => {
     });
   });
 
+  it('reader emits ONE Tailwind identity and keeps per-class confidence as metadata (HYP-553)', async () => {
+    if (!tailwindV4Adapter.reader) throw new Error('reader is undefined');
+    // cn("px-4 flex", isActive && "bg-red-500")
+    const result = await tailwindV4Adapter.reader.read({
+      elementFacts: {
+        elementCssSystems: ['tailwind-v4'],
+        elementUiKits: [],
+        elementPropMappers: [],
+        sourceOwners: [],
+        classNameExpression: {
+          kind: 'call-expression',
+          staticClasses: ['px-4', 'flex', 'bg-red-500'],
+          dynamic: true,
+          staticLiteralClasses: ['px-4', 'flex'],
+          dynamicBranchClasses: ['bg-red-500'],
+        },
+      },
+      computedStyle: {},
+      runtimeThemeContext: {
+        ideThemePreference: 'light',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+    });
+
+    // The confidence split must NOT spawn a second source tab: exactly one Tailwind identity,
+    // one sourceTabId, so RightSidebar renders a single "Tailwind" button (not two identical ones).
+    expect(result.classIdentities).toHaveLength(1);
+    const identity = result.classIdentities[0];
+    expect(identity.sourceTabId).toBe('tailwind-v4:elementClass');
+    expect(identity.label).toBe('Tailwind');
+    expect(identity.cssClass).toBe('px-4 flex bg-red-500');
+    // Having a statically-certain branch keeps the join 'exact' (HYP-553: one dynamic branch
+    // no longer downgrades the whole identity).
+    expect(identity.confidence).toBe('exact');
+
+    // Per-class confidence is preserved as metadata on the single identity.
+    expect(identity.classConfidences).toEqual([
+      { cssClass: 'px-4', confidence: 'exact' },
+      { cssClass: 'flex', confidence: 'exact' },
+      { cssClass: 'bg-red-500', confidence: 'probable' },
+    ]);
+  });
+
   it('writer produces TailwindPlan', () => {
     if (!tailwindV4Adapter.writer) throw new Error('writer is undefined');
     const plan = tailwindV4Adapter.writer.createPlan({

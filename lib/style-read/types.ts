@@ -250,6 +250,18 @@ export interface SourceClassIdentity {
   };
   condition: StyleCondition;
   confidence: SourceConfidence;
+  /**
+   * Per-class confidence for a single class-string source. Statically certain classes are
+   * 'exact'; classes that appear only inside a conditional branch are 'probable'. This is
+   * METADATA on the one source identity — it intentionally does NOT split the identity into
+   * multiple source tabs, which would render as duplicate, indistinguishable tab buttons.
+   */
+  classConfidences?: ClassConfidence[];
+}
+
+export interface ClassConfidence {
+  cssClass: string;
+  confidence: SourceConfidence;
 }
 
 export interface CssModuleClassReference {
@@ -431,6 +443,17 @@ export interface ClassNameExpressionFacts {
   staticClasses: string[];
   dynamic: boolean;
   cssModuleReferences?: CssModuleClassReference[];
+  /**
+   * Classes that are unconditionally present in the expression: direct string-literal
+   * arguments to cn()/clsx() and top-level template quasis. Statically certain → 'exact'.
+   * Optional for back-compat; readers fall back to `staticClasses` when absent.
+   */
+  staticLiteralClasses?: string[];
+  /**
+   * Classes that appear only inside a conditional branch: a logical-`&&` right side or a
+   * ternary consequent/alternate. Their presence depends on runtime state → 'probable'.
+   */
+  dynamicBranchClasses?: string[];
 }
 
 export interface StyleAttributeFacts {

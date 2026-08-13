@@ -10,7 +10,12 @@
 import * as t from '@babel/types';
 import { getCssModuleClassReferences, getCssModuleImportBindings } from '@lib/ast/css-module-references';
 import type { FileIO } from '@lib/ast/file-io';
-import { getAttribute, getAttributeStaticClassName, getAttributeString } from '@lib/ast/mutator';
+import {
+  getAttribute,
+  getAttributeClassSegments,
+  getAttributeStaticClassName,
+  getAttributeString,
+} from '@lib/ast/mutator';
 import { parseCode } from '@lib/ast/parser';
 import { findElementByPosition } from '@lib/ast/position-finder';
 import { analyzeJSXChildren, getChildrenLocation, getJSXTagName } from '@lib/ast/traverser';
@@ -601,6 +606,18 @@ function getClassNameExpressionFacts(
   const staticClasses = staticClassName.split(/\s+/).filter(Boolean);
   const cssModuleReferenceFacts =
     cssModuleReferences && cssModuleReferences.length > 0 ? cssModuleReferences : undefined;
+
+  // Split static fragments into unconditionally-present (literal args / template quasis) vs
+  // conditional-branch classes so readers can surface per-class confidence.
+  const segments = getAttributeClassSegments(element) ?? [];
+  const splitClasses = (predicate: (segment: { certain: boolean }) => boolean): string[] =>
+    segments
+      .filter(predicate)
+      .flatMap((segment) => segment.value.split(/\s+/))
+      .filter(Boolean);
+  const staticLiteralClasses = splitClasses((segment) => segment.certain);
+  const dynamicBranchClasses = splitClasses((segment) => !segment.certain);
+
   if (t.isStringLiteral(value)) {
     return {
       kind: 'literal',
@@ -625,6 +642,8 @@ function getClassNameExpressionFacts(
       staticClasses,
       dynamic: true,
       cssModuleReferences: cssModuleReferenceFacts,
+      staticLiteralClasses,
+      dynamicBranchClasses,
     };
   }
 
@@ -634,6 +653,8 @@ function getClassNameExpressionFacts(
       staticClasses,
       dynamic: true,
       cssModuleReferences: cssModuleReferenceFacts,
+      staticLiteralClasses,
+      dynamicBranchClasses,
     };
   }
 
