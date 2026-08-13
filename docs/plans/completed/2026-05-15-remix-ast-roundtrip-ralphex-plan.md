@@ -69,46 +69,47 @@ and rerun. If it passes, H4 is confirmed.
 ### Task 1 — Instrument and isolate
 
 Add targeted console.log to identify which hypothesis is correct:
+
 - [x] In `openExplorerAndSelect`, before `treeItems.nth(idx).click()`, log `treeCount` and `idx`.
-  (Already implemented: `[ROUNDTRIP-DIAG]` block in setup-preview.ts:970-1010 logs treeCount,
-  hasInteractionScript, stateExists, scriptSrcs, rootInner, and __hyperCanvasState before click)
+      (Already implemented: `[ROUNDTRIP-DIAG]` block in setup-preview.ts:970-1010 logs treeCount,
+      hasInteractionScript, stateExists, scriptSrcs, rootInner, and \_\_hyperCanvasState before click)
 - [x] After the click, log selectedIds state in the iframe.
-  (Already implemented: `[ROUNDTRIP-DIAG-POST]` block in setup-preview.ts:1011-1038 logs
-  stateExists, state, hypercanvasStatus after the 8s timeout fires)
+      (Already implemented: `[ROUNDTRIP-DIAG-POST]` block in setup-preview.ts:1011-1038 logs
+      stateExists, state, hypercanvasStatus after the 8s timeout fires)
 - [x] Run targeted test to capture diagnostic output.
-  (Skipped — Docker E2E not runnable in this context. Root cause identified via code analysis.
-  Confirmed by ext-test-projects commit 4e0fbea which identifies and fixes the root cause.)
+      (Skipped — Docker E2E not runnable in this context. Root cause identified via code analysis.
+      Confirmed by ext-test-projects commit 4e0fbea which identifies and fixes the root cause.)
 - [x] Read the diagnostic output to identify root cause.
-  (Confirmed H1 + stale-route variant. Root cause: both remix-cssmodules-spotify and
-  remix-tw4-twitter had stale committed test-preview.tsx routes in old format (no
-  HyperCanvasScripts). Proxy intentionally skips script injection for Remix SSR to avoid
-  hydration mismatch — route must load iframe-interaction.js via /__hypercanvas/ endpoints
-  itself. For fast Spotify dev server (~2.5s startup), preview iframe loaded BEFORE extension
-  runtime _writeIfSafe update + 4s HMR wait completed, so HyperCanvasScripts never ran and
-  __hyperCanvasState was never set. waitForAnySelection(8000) timed out on every attempt.)
+      (Confirmed H1 + stale-route variant. Root cause: both remix-cssmodules-spotify and
+      remix-tw4-twitter had stale committed test-preview.tsx routes in old format (no
+      HyperCanvasScripts). Proxy intentionally skips script injection for Remix SSR to avoid
+      hydration mismatch — route must load iframe-interaction.js via /**hypercanvas/ endpoints
+      itself. For fast Spotify dev server (~2.5s startup), preview iframe loaded BEFORE extension
+      runtime \_writeIfSafe update + 4s HMR wait completed, so HyperCanvasScripts never ran and
+      **hyperCanvasState was never set. waitForAnySelection(8000) timed out on every attempt.)
 
 ### Task 2 — Fix based on H1/H4 (timing): commit Remix routes in current format
 
 Root cause was stale committed routes, not just a timeout issue. Fix: update both
 remix test-preview.tsx files to match what generateRouteFileContent(remix, ...) generates,
-so _writeIfSafe finds identical content and skips → no HMR race.
+so \_writeIfSafe finds identical content and skips → no HMR race.
 
 - [x] Update remix-cssmodules-spotify/app/routes/test-preview.tsx with HyperCanvasScripts component
 - [x] Update remix-tw4-twitter/app/routes/test-preview.tsx with HyperCanvasScripts component
-- [x] Verify _writeIfSafe skips the write (no HMR triggered) for fast-starting Spotify project
-  (Done: ext-test-projects commit 4e0fbea, 2026-05-16 08:13:19, confirmed both files updated)
+- [x] Verify \_writeIfSafe skips the write (no HMR triggered) for fast-starting Spotify project
+      (Done: ext-test-projects commit 4e0fbea, 2026-05-16 08:13:19, confirmed both files updated)
 
 ### Task 3 — Fix based on H2 (proxy inject missing): verify and fix proxy for Remix SSR
 
 - [x] Not needed. Proxy CORRECTLY skips script injection for Remix SSR (PreviewProxy.ts:294-306).
-  The route file handles script loading via HyperCanvasScripts (loaded via /__hypercanvas/ endpoints).
-  This is the intended design — proxy skip is to avoid SSR hydration mismatch.
+      The route file handles script loading via HyperCanvasScripts (loaded via /\_\_hypercanvas/ endpoints).
+      This is the intended design — proxy skip is to avoid SSR hydration mismatch.
 
 ### Task 4 — Fix based on H3 (tree count 0): verify component discovery
 
 - [x] Not the root cause. remix-cssmodules-spotify/app/components/ has PlayerBar.tsx, Sidebar.tsx,
-  SongTable.tsx — findRemixUserComponent() returns app/components/PlayerBar.tsx. Tree count > 0.
-  Error message was "selection round-trip failed" not "Elements tree should show items" (H3 ruled out).
+      SongTable.tsx — findRemixUserComponent() returns app/components/PlayerBar.tsx. Tree count > 0.
+      Error message was "selection round-trip failed" not "Elements tree should show items" (H3 ruled out).
 
 ## Acceptance criteria
 

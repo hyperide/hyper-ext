@@ -477,15 +477,15 @@ UI-фичи которые появятся в будущем (сейчас `NOT
 
 ### Fixes Applied (not in run #28, landed for run #29)
 
-| Commit     | Repo               | Fix                                                              |
-| ---------- | ------------------ | ---------------------------------------------------------------- |
-| `1522602`  | ext-test-projects  | Tamagui poll resilience + dirty tab 500ms→2000ms                 |
-| `b3bf206e` | hyperide | SSR mock adapter for Remix routes                                |
-| `804eea3`  | ext-test-projects  | Vite refresh fallback: HMR 60s → force refresh → 180s            |
-| `08ed413`  | ext-test-projects  | Editor.ts file picker: 3×1s retry → 6×3s (post-workspace-switch) |
-| `4f802bd`  | ext-test-projects  | docker --init + --memory-swap -1                                 |
-| `a1ac0698` | hyperide | ext v0.1.29 built                                                |
-| `6df6548`  | ext-test-projects  | undo-redo: redo-stack wait 8s→15s for Docker watcher lag         |
+| Commit     | Repo              | Fix                                                              |
+| ---------- | ----------------- | ---------------------------------------------------------------- |
+| `1522602`  | ext-test-projects | Tamagui poll resilience + dirty tab 500ms→2000ms                 |
+| `b3bf206e` | hyperide          | SSR mock adapter for Remix routes                                |
+| `804eea3`  | ext-test-projects | Vite refresh fallback: HMR 60s → force refresh → 180s            |
+| `08ed413`  | ext-test-projects | Editor.ts file picker: 3×1s retry → 6×3s (post-workspace-switch) |
+| `4f802bd`  | ext-test-projects | docker --init + --memory-swap -1                                 |
+| `a1ac0698` | hyperide          | ext v0.1.29 built                                                |
+| `6df6548`  | ext-test-projects | undo-redo: redo-stack wait 8s→15s for Docker watcher lag         |
 
 ---
 
