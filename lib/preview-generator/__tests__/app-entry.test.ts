@@ -30,6 +30,32 @@ const ROUTED_APP = `
     );
   }`;
 
+// HYP-45/HYP-16: the SAME routed App, but it is ALSO its own createRoot bootstrap (HyperIDE's
+// real client/App.tsx shape — router shell + `createRoot(...).render(<App/>)` in ONE file). The
+// preview iframe already runs this bootstrap, so rendering it raw in app-mode A double-mounts it
+// → nested <BrowserRouter> → `NotFoundError: removeChild … not a child`.
+const SELF_BOOTSTRAP_APP = `
+  import { createRoot } from 'react-dom/client';
+  import { BrowserRouter, Routes, Route } from 'react-router-dom';
+  function App() {
+    return (
+      <BrowserRouter>
+        <Routes><Route path="/" element={<Home />} /></Routes>
+      </BrowserRouter>
+    );
+  }
+  createRoot(document.getElementById('root')!).render(<App />);
+  export default App;`;
+
+// Provider-only self-bootstrap: createRoot mount + a provider shell, NO router. Self-mounting then
+// re-rendering raw would double-fire the provider's consumer hooks (HYP-45/HYP-16 provider sub-case).
+const SELF_BOOTSTRAP_PROVIDER_APP = `
+  import { createRoot } from 'react-dom/client';
+  import { AuthProvider } from './auth';
+  function App() { return <AuthProvider><Home /></AuthProvider>; }
+  createRoot(document.getElementById('root')!).render(<App />);
+  export default App;`;
+
 describe('buildEntry — app-mode opt-in', () => {
   it('rejects a routed/provider App root by default (the reported bug)', async () => {
     const entry = await buildEntry(root, ioWith(ROUTED_APP), undefined, 'client/App.tsx', '/project/client', {
@@ -60,6 +86,48 @@ ${ROUTED_APP}`;
       appEntryPaths: new Set(['client/App']),
     });
     expect(asApp).toBeNull();
+  });
+
+  it('excludes a router self-bootstrap root from app-entry candidacy even when opted in', async () => {
+    // HYP-45/HYP-16. A file that is its own createRoot bootstrap AND a router shell is dropped from
+    // app-mode A regardless of the appEntryPaths opt-in (the ordering bug froze appEntryPaths before
+    // the @hyperide-managed patch landed, so it slipped through to raw render → double-mount). It is
+    // dropped from the registry by the router-shell exclusion → app-mode B drives the already-mounted
+    // router instead, so no second <App/> mount occurs.
+    const entry = await buildEntry(root, ioWith(SELF_BOOTSTRAP_APP), undefined, 'client/App.tsx', '/project/client', {
+      entryRootPaths: new Set(['client/App']),
+      appEntryPaths: new Set(['client/App']),
+    });
+    expect(entry).toBeNull();
+  });
+
+  it('excludes a PROVIDER-only self-bootstrap root (createRoot + provider, no router) when opted in', async () => {
+    // HYP-45/HYP-16, provider-only sub-case: no router, so the router-shell exclusion does not fire;
+    // the provider-shell exclusion drops it (entryRootPaths must list the path). A provider-only
+    // shell self-mounting then re-rendered raw would double-fire its provider consumer hooks.
+    const entry = await buildEntry(
+      root,
+      ioWith(SELF_BOOTSTRAP_PROVIDER_APP),
+      undefined,
+      'client/App.tsx',
+      '/project/client',
+      {
+        entryRootPaths: new Set(['client/App']),
+        appEntryPaths: new Set(['client/App']),
+      },
+    );
+    expect(entry).toBeNull();
+  });
+
+  it('keeps a clean (non-self-bootstrap) routed App as an app entry — no regression of app-mode A', async () => {
+    // Contrast: ROUTED_APP has NO createRoot of its own (the mount lives in a separate main.tsx),
+    // so it is not a self-bootstrap and must keep going to app-mode A raw render.
+    const entry = await buildEntry(root, ioWith(ROUTED_APP), undefined, 'client/App.tsx', '/project/client', {
+      entryRootPaths: new Set(['client/App']),
+      appEntryPaths: new Set(['client/App']),
+    });
+    expect(entry).not.toBeNull();
+    expect(entry?.isAppEntry).toBe(true);
   });
 
   it('does not mark unrelated components as app entries', async () => {

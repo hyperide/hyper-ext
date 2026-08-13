@@ -4,6 +4,7 @@ import {
   detectExportStyle,
   detectProviderShell,
   detectRouterShell,
+  detectSelfBootstrapRoot,
   detectSSRHooks,
   extractComponentName,
   extractDeclaredPropNames,
@@ -115,11 +116,27 @@ export async function buildEntry(
     return null;
   }
 
+  // HYP-45/HYP-16: exclude a self-bootstrap root (its own createRoot mount + router/provider shell
+  // in one file) from app-entry candidacy — rendering it raw in app-mode A double-mounts it (see
+  // `detectSelfBootstrapRoot`). With `isAppEntry` forced false, `allowShell` stays off, so the
+  // router-shell exclusion (line ~172) OR the provider-shell exclusion (line ~157) below drops it
+  // from the registry; the generator then drives the already-mounted router (app-mode B). This is
+  // deterministic regardless of @hyperide-managed patch timing (the ordering bug behind this crash).
+  // Wrapped in try/catch: babel can throw on mid-edit source despite `errorRecovery`; an unparseable
+  // file is rejected by the parse-error guard below anyway, so default to "not a self-bootstrap".
+  let isSelfBootstrapRoot = false;
+  try {
+    isSelfBootstrapRoot = detectSelfBootstrapRoot(sourceCode);
+  } catch {
+    isSelfBootstrapRoot = false;
+  }
+
   // App-mode opt-in: the caller explicitly requested THIS entry root previewed as an app.
   // Bypass the provider/router-shell exclusions below and mark the entry so the generator
-  // renders it raw (own router + providers run) instead of prop-injecting it.
+  // renders it raw (own router + providers run) instead of prop-injecting it. A self-bootstrap
+  // root is excluded from this opt-in (see above) so it deterministically routes to app-mode B.
   const normalizedPath = componentPath.replace(/\.[jt]sx?$/, '');
-  const isAppEntry = options.appEntryPaths?.has(normalizedPath) ?? false;
+  const isAppEntry = !isSelfBootstrapRoot && (options.appEntryPaths?.has(normalizedPath) ?? false);
   const allowShell = options.allowRouterShell || isAppEntry;
 
   // HYP-546 — exclude SPA entry-root provider shells (the createRoot bootstrap

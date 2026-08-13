@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  containsReactRootMount,
   detectCompoundExports,
   detectExportStyle,
   detectProviderShell,
   detectPushStateRouterShell,
   detectRouterShell,
+  detectSelfBootstrapRoot,
   detectSSRHooks,
   escapeRegex,
   extractComponentName,
@@ -968,5 +970,139 @@ describe('detectPushStateRouterShell', () => {
       export const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
     `;
     expect(detectPushStateRouterShell(source)).toBe(false);
+  });
+});
+
+describe('containsReactRootMount', () => {
+  it('returns true for createRoot(...).render(<App/>) with a react-dom/client import', () => {
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import App from './App';
+      createRoot(document.getElementById('root')!).render(<App />);
+    `;
+    expect(containsReactRootMount(source)).toBe(true);
+  });
+
+  it('returns true for the two-statement const root = createRoot(...); root.render(...) shape', () => {
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      const root = createRoot(document.getElementById('root')!);
+      root.render(<App />);
+    `;
+    expect(containsReactRootMount(source)).toBe(true);
+  });
+
+  it('returns true for legacy ReactDOM.render(...) with a react-dom default import', () => {
+    const source = `
+      import ReactDOM from 'react-dom';
+      ReactDOM.render(<App />, document.getElementById('root'));
+    `;
+    expect(containsReactRootMount(source)).toBe(true);
+  });
+
+  it('returns FALSE for a .render() member call with NO react-dom import (not a root mount)', () => {
+    // A query/template builder that happens to call `.render(...)` must not be mistaken for a
+    // React-root bootstrap. The react-dom-import gate keeps the signal specific.
+    const source = `
+      import { template } from './engine';
+      export function go() { return template(x).render(data); }
+    `;
+    expect(containsReactRootMount(source)).toBe(false);
+  });
+
+  it('returns FALSE for a file that imports react-dom but never mounts', () => {
+    const source = `
+      import { flushSync } from 'react-dom';
+      export function commit(fn) { flushSync(fn); }
+    `;
+    expect(containsReactRootMount(source)).toBe(false);
+  });
+
+  it('returns FALSE for flushSync from react-dom/client + an unrelated obj.render() (specifier gate)', () => {
+    // The import gate is on the SPECIFIER, not just the module source: a non-mount react-dom/client
+    // import (flushSync) next to a query/template `.render(...)` must not be read as a root mount.
+    const source = `
+      import { flushSync } from 'react-dom/client';
+      import { template } from './engine';
+      export function go(x, data) { flushSync(() => {}); return template(x).render(data); }
+    `;
+    expect(containsReactRootMount(source)).toBe(false);
+  });
+});
+
+describe('detectSelfBootstrapRoot', () => {
+  // HYP-45/HYP-16: a file that is BOTH its own createRoot bootstrap AND a router/provider shell
+  // double-mounts when rendered raw in app-mode A → `NotFoundError: removeChild … not a child`.
+  // It must be recognised so it is forced to app-mode B instead.
+  it('returns true for the HyperIDE-style client/App.tsx (createRoot + BrowserRouter in one file)', () => {
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      function App() {
+        return <BrowserRouter><Routes><Route path="/" element={<Home />} /></Routes></BrowserRouter>;
+      }
+      createRoot(document.getElementById('root')!).render(<App />);
+    `;
+    expect(detectSelfBootstrapRoot(source)).toBe(true);
+  });
+
+  it('returns true for a self-mounting data-router shell (createBrowserRouter + RouterProvider + createRoot)', () => {
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+      const router = createBrowserRouter([{ path: '/', element: <Home /> }]);
+      createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);
+    `;
+    expect(detectSelfBootstrapRoot(source)).toBe(true);
+  });
+
+  it('returns true for a self-mounting PROVIDER shell (createRoot + AuthProvider, no router)', () => {
+    // A provider-only shell that mounts itself would also double-fire its provider consumer hooks.
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import { AuthProvider } from './auth';
+      function App() { return <AuthProvider><Home /></AuthProvider>; }
+      createRoot(document.getElementById('root')!).render(<App />);
+    `;
+    expect(detectSelfBootstrapRoot(source)).toBe(true);
+  });
+
+  it('returns FALSE for a CLEAN App.tsx whose createRoot lives in a SEPARATE main.tsx (normal app-mode A)', () => {
+    // This is the case the fix must NOT regress: a routed App with NO mount call of its own.
+    const source = `
+      import { BrowserRouter, Routes, Route } from 'react-router-dom';
+      import { AuthProvider } from './auth';
+      export default function App() {
+        return (
+          <AuthProvider>
+            <BrowserRouter><Routes><Route path="/" element={<Home />} /></Routes></BrowserRouter>
+          </AuthProvider>
+        );
+      }
+    `;
+    expect(containsReactRootMount(source)).toBe(false);
+    expect(detectSelfBootstrapRoot(source)).toBe(false);
+  });
+
+  it('returns FALSE for a bare main.tsx that mounts but is NOT itself a router/provider shell', () => {
+    // The createRoot bootstrap entry that only imports <App> (router lives in App.tsx). It mounts,
+    // but it is not a shell itself, so it is not the double-mount hazard — and main.tsx is excluded
+    // from the registry by other means anyway.
+    const source = `
+      import { createRoot } from 'react-dom/client';
+      import App from './App';
+      createRoot(document.getElementById('root')!).render(<App />);
+    `;
+    expect(containsReactRootMount(source)).toBe(true);
+    expect(detectSelfBootstrapRoot(source)).toBe(false);
+  });
+
+  it('returns FALSE for a routed leaf with a MemoryRouter sample but no createRoot mount', () => {
+    const source = `
+      import { MemoryRouter } from 'react-router-dom';
+      export default function Widget() { return <div />; }
+      export const SampleDefault = () => <MemoryRouter><Widget /></MemoryRouter>;
+    `;
+    expect(detectSelfBootstrapRoot(source)).toBe(false);
   });
 });

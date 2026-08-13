@@ -14,6 +14,8 @@ function parseSource(sourceCode: string) {
   });
 }
 
+type ParsedProgram = ReturnType<typeof parseSource>;
+
 const SAMPLE_RE = /^Sample[A-Z]/;
 
 /** Scan source code for all `export const/function Sample*` exports */
@@ -495,7 +497,11 @@ const REACT_NAVIGATION_SOURCES = new Set([
  * module failures in the preview registry when co-imported with the pages they wrap.
  */
 export function detectRouterShell(sourceCode: string): boolean {
-  const ast = parseSource(sourceCode);
+  return routerShellFromAst(parseSource(sourceCode));
+}
+
+/** AST-level body of `detectRouterShell`, so callers that already parsed reuse the AST. */
+function routerShellFromAst(ast: ParsedProgram): boolean {
   // The data-router signal needs BOTH a browser/hash builder and a RouterProvider in this file.
   let hasDataRouterBuilder = false;
   let hasRouterProvider = false;
@@ -572,7 +578,11 @@ export function detectPushStateRouterShell(sourceCode: string): boolean {
  * are ignored so `import type { FooProvider }` does not trip it.
  */
 export function detectProviderShell(sourceCode: string): boolean {
-  const ast = parseSource(sourceCode);
+  return providerShellFromAst(parseSource(sourceCode));
+}
+
+/** AST-level body of `detectProviderShell`, so callers that already parsed reuse the AST. */
+function providerShellFromAst(ast: ParsedProgram): boolean {
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
     if (node.importKind === 'type') continue;
@@ -665,6 +675,100 @@ function isRenderCall(node: Record<string, unknown>): boolean {
   const callee = node.callee as { type?: string; property?: { type?: string; name?: string } } | undefined;
   if (!callee || callee.type !== 'MemberExpression') return false;
   return callee.property?.type === 'Identifier' && callee.property.name === 'render';
+}
+
+// The react-dom mount-API names: a value import of one of these gates a `.render(...)` member
+// call as a real React-root mount (not an unrelated `obj.render()`). `ReactDOM` covers a
+// default/namespace import of `react-dom` for the legacy `ReactDOM.render(...)`.
+const REACT_DOM_MOUNT_IMPORTS: ReadonlySet<string> = new Set(['createRoot', 'hydrateRoot', 'ReactDOM']);
+const REACT_DOM_SOURCES: ReadonlySet<string> = new Set(['react-dom/client', 'react-dom']);
+
+/**
+ * Detect whether a file BOOTSTRAPS its own React root — it both imports a react-dom
+ * mount API (`createRoot`/`hydrateRoot` from `react-dom/client`, or a `react-dom`
+ * default/namespace for `ReactDOM.render`) AND executes a `…render(<tree/>)` mount
+ * call. This is the SPA entry file's own createRoot bootstrap.
+ *
+ * The import gate is on the SPECIFIER, not just the module source: `import { flushSync }
+ * from 'react-dom/client'` does not qualify, so an unrelated `obj.render()` member call in
+ * such a file is not mistaken for a root mount.
+ */
+export function containsReactRootMount(sourceCode: string): boolean {
+  return reactRootMountFromAst(parseSource(sourceCode));
+}
+
+function reactRootMountFromAst(ast: ParsedProgram): boolean {
+  // Require a VALUE import of createRoot/hydrateRoot/ReactDOM from a react-dom source — only then
+  // is a `.render(...)` member call a real React-root mount and not some unrelated `obj.render()`.
+  let importsMountApi = false;
+  for (const node of ast.program.body) {
+    if (node.type !== 'ImportDeclaration') continue;
+    if (node.importKind === 'type') continue;
+    if (!REACT_DOM_SOURCES.has(node.source.value as string)) continue;
+    for (const spec of node.specifiers) {
+      // `import ReactDOM from 'react-dom'` / `import * as ReactDOM` — default/namespace binding.
+      if (spec.type === 'ImportDefaultSpecifier' || spec.type === 'ImportNamespaceSpecifier') {
+        importsMountApi = true;
+        break;
+      }
+      // `import { createRoot, hydrateRoot } from 'react-dom/client'` — named binding.
+      if (spec.type === 'ImportSpecifier') {
+        if (spec.importKind === 'type') continue;
+        const name = spec.imported.type === 'Identifier' ? spec.imported.name : spec.local.name;
+        if (REACT_DOM_MOUNT_IMPORTS.has(name)) {
+          importsMountApi = true;
+          break;
+        }
+      }
+    }
+    if (importsMountApi) break;
+  }
+  if (!importsMountApi) return false;
+
+  let found = false;
+  const visit = (value: unknown): void => {
+    if (found || !value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const node = value as { type?: string } & Record<string, unknown>;
+    if (node.type === 'CallExpression' && isRenderCall(node)) {
+      found = true;
+      return;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'range') continue;
+      visit(node[key]);
+    }
+  };
+  visit(ast.program.body);
+  return found;
+}
+
+/**
+ * Detect whether a file is its OWN createRoot bootstrap AND a router/provider
+ * shell in one — the self-mounting application shell shape (HYP-45 / HYP-16).
+ *
+ * Such a file (e.g. a `client/App.tsx` that defines `<App>` with `<BrowserRouter>`
+ * inside AND calls `createRoot(...).render(<App/>)` at module top level) must NEVER
+ * be rendered raw as an app-mode-A entry: the preview iframe already mounts the file
+ * (its bootstrap runs), so rendering `<App/>` a SECOND time double-mounts it — a
+ * nested `<BrowserRouter>` whose teardown on the initial app-route navigation tears
+ * out lazy `<Suspense>` route subtrees another mount path touched, throwing
+ * `NotFoundError: removeChild … not a child`. It is routed to app-mode B instead
+ * (drive the already-mounted router), which is correct regardless of whether the
+ * `@hyperide-managed` patch has landed on disk yet.
+ *
+ * A CLEAN app shell whose `createRoot` lives in a SEPARATE `main.tsx` is NOT a
+ * self-bootstrap (it contains no mount call of its own), so it still app-modes A.
+ *
+ * Parses ONCE and reuses the AST across all three sub-checks.
+ */
+export function detectSelfBootstrapRoot(sourceCode: string): boolean {
+  const ast = parseSource(sourceCode);
+  if (!reactRootMountFromAst(ast)) return false;
+  return routerShellFromAst(ast) || providerShellFromAst(ast);
 }
 
 /** Collect local JSX element names present in `arg` that map to a relative import. */
