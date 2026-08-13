@@ -161,6 +161,7 @@ export function activate(context: vscode.ExtensionContext) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
+          // codeql[js/file-access-to-http] -- notifying the user's own HyperIDE server (fixed origin, bearer-authed) about their own saved file IS the code-editor sync feature
           body: JSON.stringify(payload),
         });
 
@@ -174,6 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${newToken}`,
               },
+              // codeql[js/file-access-to-http] -- same authorized code-editor sync retry after token refresh
               body: JSON.stringify(payload),
             });
           }

@@ -82,6 +82,7 @@ export function orphanRecordPath(projectPath: string, baseDir: string = tmpdir()
 export function recordOwnedDevServer(record: OwnedDevServerRecord, baseDir: string = tmpdir()): void {
   try {
     if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true });
+    // codeql[js/insecure-temporary-file] -- the registry deliberately lives at a PREDICTABLE per-project path in the os tmp dir so a FUTURE extension process can find and reap orphaned dev servers after a crash; mkdtemp would defeat the feature, and the record holds only non-sensitive pid/port/path data
     writeFileSync(orphanRecordPath(record.projectPath, baseDir), JSON.stringify(record), 'utf8');
   } catch {
     // Non-fatal: reaping the orphan on the next start is a best-effort safety net.

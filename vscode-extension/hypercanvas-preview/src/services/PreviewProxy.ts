@@ -283,6 +283,7 @@ export class PreviewProxy {
       ) {
         proxyRes.resume();
         const delay = 500 * (retryCount + 1);
+        // codeql[js/log-injection] -- extension-host console diagnostic; proxyPath is the user's own preview request path, no log-consumer trust boundary
         console.log(`[PreviewProxy] 504 on GET, retry ${retryCount + 1}/5 in ${delay}ms: ${proxyPath}`); // nosemgrep: unsafe-formatstring
         setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
         return;
@@ -426,6 +427,7 @@ export class PreviewProxy {
     });
 
     proxyReq.on('error', (err) => {
+      // codeql[js/log-injection] -- extension-host console diagnostic; local proxy socket error message, no log-consumer trust boundary
       console.error('[PreviewProxy] HTTP proxy error:', err.message);
       // Retry GET requests on socket errors (ECONNRESET, socket hang up, ECONNREFUSED).
       // Vite's keep-alive pool can drop a connection immediately after the initial HTML
@@ -434,6 +436,7 @@ export class PreviewProxy {
       // Only retrying GET because POST/PUT bodies are consumed after the first attempt.
       if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
         const retryDelay = 300 * (retryCount + 1);
+        // codeql[js/log-injection] -- extension-host console diagnostic; proxyPath is the user's own preview request path, no log-consumer trust boundary
         console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
         setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), retryDelay);
         return;

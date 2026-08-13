@@ -166,6 +166,7 @@ async function generatePreviewWrapper(workspaceRoot: string, context: vscode.Ext
 async function writePreviewWrapper(workspaceRoot: string, content: string): Promise<void> {
   const dir = path.join(workspaceRoot, '.hyperide');
   await fs.mkdir(dir, { recursive: true });
+  // codeql[js/http-to-file-access] -- writing the AI-generated preview wrapper into the user's own workspace (.hyperide/preview.tsx) IS the feature; the path is fixed, not attacker-chosen
   await fs.writeFile(path.join(dir, 'preview.tsx'), content, 'utf8');
 }
 

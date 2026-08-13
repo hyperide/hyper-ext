@@ -68,6 +68,7 @@ export function toPropTypeInfo(prop: SimplePropInfo): PropTypeInfo {
 function objectFieldsToSchema(fields: SimplePropInfo[]): Record<string, PropTypeInfo> {
   const schema: Record<string, PropTypeInfo> = {};
   for (const field of fields) {
+    // codeql[js/remote-property-injection] -- field name parsed from the user's own component source by the local props editor; fresh local record, no cross-user trust boundary
     schema[field.name] = toPropTypeInfo(field);
   }
   return schema;
@@ -88,6 +89,7 @@ function parseInlineObjectType(typeStr: string): Record<string, PropTypeInfo> | 
     const match = part.match(/^(\w+)(\?)?\s*:\s*(.+)$/);
     if (!match) continue;
     const [, fieldName, optional, fieldType] = match;
+    // codeql[js/remote-property-injection] -- fieldName is \w+-constrained and parsed from the user's own component type source; fresh local record, no cross-user trust boundary
     schema[fieldName] = toPropTypeInfo({
       name: fieldName,
       type: fieldType.trim(),

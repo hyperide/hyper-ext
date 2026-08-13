@@ -768,6 +768,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           const values = msg.values && typeof msg.values === 'object' ? (msg.values as Record<string, unknown>) : {};
           // Remember the latest payload per path so we can re-forward after an iframe
           // (re)load, when the iframe's message listener was not yet registered.
+          // codeql[js/remote-property-injection] -- comp is the user's own component path from our extension-host message; the ref holds a session-local cache keyed by that path, no cross-user trust boundary
           generatedPropsByPathRef.current[comp] = values;
           iframeElRef.current?.contentWindow?.postMessage(
             { type: 'hypercanvas:setGeneratedProps', componentPath: comp, values },

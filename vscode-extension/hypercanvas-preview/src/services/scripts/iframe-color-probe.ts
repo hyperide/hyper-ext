@@ -289,6 +289,7 @@ function applyCandidateAsRequested(
       return true;
     }
     case 'inline-style': {
+      // codeql[js/remote-property-injection] -- cssProp is a CSS property name from the extension's own color-probe request, written to a CSSStyleDeclaration (not a plain object); no prototype-pollution surface
       (clone.style as unknown as Record<string, string>)[cssProp] = requestedColor;
       return true;
     }

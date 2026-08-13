@@ -8,7 +8,7 @@
  *   (errors surface during iteration, handles released on early break) is exercised directly.
  */
 
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -35,9 +35,9 @@ const SAMPLE_ARTIFACT = {
 let root: string;
 
 function makeTmp(): string {
-  const dir = join(tmpdir(), `hyp709-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  // mkdtempSync creates a fresh 0700 dir — avoids predictable-path writes in the
+  // shared os tmp dir (CodeQL js/insecure-temporary-file).
+  return mkdtempSync(join(tmpdir(), 'hyp709-'));
 }
 
 function writeArtifact(dir: string, body: unknown): string {

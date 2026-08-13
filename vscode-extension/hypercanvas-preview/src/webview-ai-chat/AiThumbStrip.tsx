@@ -52,6 +52,7 @@ export function AiThumbStrip({ model }: AiThumbStripProps) {
 
   const sendVote = (score: 1 | 0) => {
     if (currentVote !== undefined) return; // one vote per response
+    // codeql[js/remote-property-injection] -- responseId comes from our own extension host message; spread with a computed key creates an own property only (cannot pollute a prototype)
     setVoted((prev) => ({ ...prev, [responseId]: score }));
     const props: Record<string, string | number> = { responseId, score };
     if (model) props.model = model;

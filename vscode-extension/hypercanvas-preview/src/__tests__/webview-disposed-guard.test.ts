@@ -19,7 +19,10 @@
  * stale reference so the next `createOrShow` / `resolveWebviewView` rebuilds a fresh one.
  */
 
-import { describe, expect, it, mock } from 'bun:test';
+import { afterAll, describe, expect, it, mock } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { isWebviewDisposedError, postToWebviewSafe, readWebviewSafe, WebviewViewRef } from '../webview-post';
 import { injectGeneratedSampleProps, watchSampleInFile } from '../preview-panel-sample';
@@ -628,10 +631,18 @@ type AIChatInternals = AIChatPanelProvider &
     _flushPendingPrompt: () => void;
   };
 
+// mkdtempSync (fresh 0700 dir) instead of a fixed '/tmp/...' literal: history I/O is
+// stubbed in createProvider, but the fixed path taints ChatHistoryService's write
+// sites in CodeQL's whole-program scan (js/insecure-temporary-file).
+const testGlobalStorageDir = mkdtempSync(join(tmpdir(), 'hypercanvas-test-'));
+afterAll(() => {
+  rmSync(testGlobalStorageDir, { recursive: true, force: true });
+});
+
 describe('AIChatPanelProvider reuse-after-dispose guard', () => {
   function createProvider() {
     const context = {
-      globalStorageUri: { fsPath: '/tmp/hypercanvas-test' },
+      globalStorageUri: { fsPath: testGlobalStorageDir },
       secrets: { get: mock(() => Promise.resolve(undefined)), onDidChange: mock(() => ({ dispose: mock() })) },
     } as unknown as vscode.ExtensionContext;
     const provider = new AIChatPanelProvider(vscode.Uri.file('/extension'), '/workspace', context, {

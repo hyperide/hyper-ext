@@ -620,6 +620,7 @@ function ObjectPropPopover({
                 typeInfo={fieldTypeInfo}
                 value={objValue[fieldName]}
                 onChange={(nestedName, nestedValue) => {
+                  // codeql[js/remote-property-injection] -- nestedName is a field name from the user's own component schema; spread with a computed key creates an own property only (cannot pollute a prototype)
                   onChange(name, { ...objValue, [nestedName]: nestedValue });
                 }}
                 depth={depth + 1}

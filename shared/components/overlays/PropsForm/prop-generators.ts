@@ -71,29 +71,42 @@ export function canGenerateSomeValue(fields: Array<{ name: string; typeInfo: Pro
   });
 }
 
+/**
+ * CodeQL js/remote-property-injection suppressions below: `name` is a prop name parsed
+ * from the user's OWN component source by the local props editor — there is no cross-user
+ * trust boundary, and `result` is a fresh local data record handed to React as props.
+ */
 export function generateObjectValues(fields: Array<{ name: string; typeInfo: PropTypeInfo }>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const { name, typeInfo } of fields) {
     if (typeInfo.type === 'boolean') {
       const gen = getNumberFieldGenerator(name);
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = gen ? gen() > 0.5 : Math.random() > 0.5;
     } else if (typeInfo.type === 'number') {
       const gen = getNumberFieldGenerator(name);
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = gen ? gen() : Math.floor(Math.random() * 1000);
     } else if (typeInfo.type === 'object' && typeInfo.objectSchema) {
       const nestedFields = Object.entries(typeInfo.objectSchema).map(([n, ti]) => ({ name: n, typeInfo: ti }));
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = generateObjectValues(nestedFields);
     } else if (typeInfo.type === 'enum' && typeInfo.enumValues?.length) {
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = typeInfo.enumValues[0];
     } else if (typeInfo.type === 'array') {
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = [];
     } else if (typeInfo.type === 'function') {
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = undefined;
     } else if (typeInfo.type === 'reactNode') {
       const gen = getStringFieldGenerator(name);
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = gen ? gen() : 'Sample content';
     } else if (typeInfo.type === 'string' || typeInfo.type === 'unknown') {
       const gen = getStringFieldGenerator(name);
+      // codeql[js/remote-property-injection] -- prop name from the user's own component source (see doc above)
       result[name] = gen ? gen() : undefined;
     }
   }
