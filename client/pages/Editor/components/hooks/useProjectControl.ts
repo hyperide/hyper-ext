@@ -16,14 +16,14 @@ export interface ProjectData {
   port?: number;
   framework?: string;
   devCommand?: string;
-  userRole?: 'editor' | 'viewer';
+  userRole?: 'owner' | 'editor' | 'viewer';
 }
 
 interface UseProjectControlProps {
   activeProject: ProjectData | null;
   setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
   setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
-  setProjectRole: (role: 'editor' | 'viewer') => void;
+  setProjectRole: (role: 'owner' | 'editor' | 'viewer') => void;
 }
 
 interface UseProjectControlReturn {

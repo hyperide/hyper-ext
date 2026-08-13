@@ -2,7 +2,6 @@ export const TID = {
   // Preview Panel
   preview: {
     iframe: 'hyper-preview-iframe',
-    surface: 'hyper-preview-surface',
     startServerButton: 'hyper-preview-start-server',
     unsupportedRoot: 'hyper-preview-unsupported',
     unsupportedFixButton: 'hyper-preview-unsupported-fix',
@@ -10,17 +9,6 @@ export const TID = {
     toolbarScope: 'hyper-preview-scope',
     contextMenu: 'hyper-preview-context-menu',
     contextMenuItem: (action: string) => `hyper-preview-context-${action}`,
-    componentErrorOverlay: 'hyper-preview-component-error',
-    componentErrorCreateSample: 'hyper-preview-component-error-create-sample',
-    componentErrorConfigureAI: 'hyper-preview-component-error-configure-ai',
-    loadingOverlay: 'hyper-preview-loading-overlay',
-    loadingTimeout: 'hyper-preview-loading-timeout',
-    loadingTimeoutRetry: 'hyper-preview-loading-timeout-retry',
-    loadingTimeoutOpenOutput: 'hyper-preview-loading-timeout-open-output',
-    loadingError: 'hyper-preview-loading-error',
-    loadingErrorRetry: 'hyper-preview-loading-error-retry',
-    loadingErrorOpenOutput: 'hyper-preview-loading-error-open-output',
-    loadingErrorMessage: 'hyper-preview-loading-error-message',
   },
 
   // Inspector (Right Sidebar)
@@ -106,7 +94,6 @@ export const TID = {
     toolCall: (index: number) => `hyper-aichat-tool-${index}`,
     toolResult: (index: number) => `hyper-aichat-tool-result-${index}`,
     newChatButton: 'hyper-aichat-new-chat',
-    chatDropdownTrigger: 'hyper-aichat-dropdown-trigger',
     chatHistoryItem: (index: number) => `hyper-aichat-history-${index}`,
     configureKeyButton: 'hyper-aichat-configure-key',
     providerSelect: 'hyper-aichat-provider-select',

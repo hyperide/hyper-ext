@@ -12,44 +12,20 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import {
-  getPreviewAssetContentType,
-  shouldRetryAssetResponse,
-  shouldReturnEmptyAssetResponse,
-  shouldSwallowStaleBundleResponse,
-} from './PreviewAssetResponses';
 
 // Read pre-built iframe scripts (built by esbuild as IIFE bundles)
 const interactionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-interaction.js'), 'utf-8');
 const errorDetectionScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-error-detection.js'), 'utf-8');
 const consoleCaptureScriptContent = fs.readFileSync(path.join(__dirname, 'iframe-console-capture.js'), 'utf-8');
-const chromeDetectionScriptContent = `
-(function() {
-  window.addEventListener('load', function() {
-    var hasChrome = document.querySelector('nav, header, aside') !== null;
-    if (hasChrome) {
-      window.parent.postMessage({ type: 'chrome-detected' }, '*');
-    }
-  }, { once: true });
-})();
-`;
-const INJECTED_SCRIPTS = `<script data-hyper-inject="interaction">${interactionScriptContent}</script><script data-hyper-inject="error-detection">${errorDetectionScriptContent}</script><script data-hyper-inject="console-capture">${consoleCaptureScriptContent}</script>`;
-const HYPERCANVAS_SCRIPT_RESPONSES = new Map([
-  ['/__hypercanvas/iframe-interaction.js', interactionScriptContent],
-  ['/__hypercanvas/iframe-error-detection.js', errorDetectionScriptContent],
-  ['/__hypercanvas/iframe-console-capture.js', consoleCaptureScriptContent],
-  ['/__hypercanvas/chrome-detection.js', chromeDetectionScriptContent],
-]);
+const INJECTED_SCRIPTS = `<script>${interactionScriptContent}</script><script>${errorDetectionScriptContent}</script><script>${consoleCaptureScriptContent}</script>`;
+
 export class PreviewProxy {
   private _server: http.Server | null = null;
   private _proxyPort: number | null = null;
   private _targetPort: number;
   private _isIsolatedMode = false;
-  private _isRemixProject = false;
   private _projectRoot: string | undefined;
   private _viteBase: string | undefined;
-  private _isStopping = false;
-  private _sockets = new Set<net.Socket>();
 
   get isIsolatedMode(): boolean {
     return this._isIsolatedMode;
@@ -86,29 +62,12 @@ export class PreviewProxy {
     }
   }
 
-  private async _detectRemixProject(): Promise<boolean> {
-    if (!this._projectRoot) return false;
-    try {
-      const packageJsonPath = path.join(this._projectRoot, 'package.json');
-      const packageJson = JSON.parse(await fs.promises.readFile(packageJsonPath, 'utf-8')) as {
-        dependencies?: Record<string, string>;
-        devDependencies?: Record<string, string>;
-      };
-      const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-      return Boolean(deps['@remix-run/react'] || deps['@remix-run/node']);
-    } catch {
-      return false;
-    }
-  }
-
   /**
    * Start the proxy server on a random available port
    */
   async start(): Promise<void> {
     if (this._server) return;
-    this._isStopping = false;
     this._viteBase = await this._readViteBase();
-    this._isRemixProject = await this._detectRemixProject();
 
     this._server = http.createServer((req, res) => {
       this._handleHttp(req, res);
@@ -130,10 +89,7 @@ export class PreviewProxy {
         }
         resolve();
       });
-      this._server?.on('error', (err) => {
-        this._server = null;
-        reject(err);
-      });
+      this._server?.on('error', reject);
     });
   }
 
@@ -141,12 +97,6 @@ export class PreviewProxy {
    * Stop the proxy server
    */
   stop(): void {
-    this._isStopping = true;
-    for (const socket of this._sockets) {
-      socket.destroy();
-    }
-    this._sockets.clear();
-
     if (this._server) {
       this._server.close();
       this._server = null;
@@ -159,29 +109,7 @@ export class PreviewProxy {
    * Retries up to 5 times for /test-preview 404/503 to handle dev server FSWatch lag.
    */
   private _handleHttp(clientReq: http.IncomingMessage, clientRes: http.ServerResponse, retryCount = 0): void {
-    if (this._isStopping) {
-      clientRes.writeHead(503);
-      clientRes.end();
-      return;
-    }
     const proxyPath = clientReq.url || '/';
-    const virtualScript = HYPERCANVAS_SCRIPT_RESPONSES.get(proxyPath);
-    if (virtualScript !== undefined) {
-      clientRes.writeHead(200, {
-        'content-type': 'application/javascript; charset=utf-8',
-        'cache-control': 'no-cache, no-store, must-revalidate',
-      });
-      clientRes.end(virtualScript);
-      return;
-    }
-
-    // Strip origin/referer before forwarding: Vite 5.4+ rejects requests with
-    // non-localhost origins (DNS-rebinding protection). The VS Code webview sends
-    // Origin: vscode-webview://... which Vite blocks with 403. The proxy is a
-    // localhost-to-localhost bridge so origin semantics don't apply here.
-    const forwardHeaders = { ...clientReq.headers };
-    delete forwardHeaders.origin;
-    delete forwardHeaders.referer;
 
     const options: http.RequestOptions = {
       hostname: 'localhost',
@@ -189,100 +117,27 @@ export class PreviewProxy {
       path: proxyPath,
       method: clientReq.method,
       headers: {
-        ...forwardHeaders,
-        // Use 'localhost' (not '127.0.0.1') to satisfy Vite's allowedHosts
-        // DNS-rebinding protection. Many vite.config.ts files declare
-        // `server.allowedHosts: ['localhost', ...]` (e.g. bulka-the-dog), and
-        // Vite matches the literal hostname — '127.0.0.1' doesn't satisfy
-        // 'localhost' and the request gets dropped (manifests as 504 in
-        // browser console for /client/main.tsx). Both forms are equivalent
-        // on the wire because /etc/hosts maps localhost → 127.0.0.1.
-        host: `localhost:${this._targetPort}`,
+        ...clientReq.headers,
+        host: `127.0.0.1:${this._targetPort}`,
         // Prevent compressed responses so we can inject script
         'accept-encoding': 'identity',
       },
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
-      // Retry GET requests that return 504 — Vite's on-demand transform timeout (10s
-      // default) fires when optimizeDeps hasn't run yet (cold Docker start). By the
-      // next retry the .vite/deps cache is warm and transforms complete instantly.
-      // Applies to all paths (module files, HTML, assets) to cover any cold-start 504.
+      // Retry for /test-preview 404/503 — handles dev server FSWatch lag after route file creation
       if (
-        proxyRes.statusCode === 504 &&
-        clientReq.method === 'GET' &&
-        retryCount < 5 &&
-        !clientRes.headersSent &&
-        !clientReq.destroyed
-      ) {
-        proxyRes.resume();
-        const delay = 500 * (retryCount + 1);
-        console.log(`[PreviewProxy] 504 on GET, retry ${retryCount + 1}/5 in ${delay}ms: ${proxyPath}`); // nosemgrep: unsafe-formatstring
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
-        return;
-      }
-
-      // Retry for /test-preview 404/403/503 — handles dev server FSWatch lag after
-      // route file creation AND webpack-dev-server's second-compile gap (after
-      // _patchEntryFile, webpack rebuilds while iframe requests; retry budget
-      // must cover full recompile, not just FS watch). Also covers Remix SSR route
-      // compilation: dev server reports "ready" quickly but returns 403 while SSR
-      // routes are still compiling (~90-155s cold start).
-      // Exponential backoff: 200ms × 1.7^N caps at 4000ms per retry.
-      // 90 retries ≈ 342s total budget: 16 geometric + 74 × 4s = 46 + 296s.
-      // Extended from 60 (222s) to cover webpack second-compile gap: after
-      // patchEntryFile() writes __canvas_preview__.tsx, webpack triggers a second
-      // full compile (20-40s under Docker load), during which /test-preview returns
-      // 404. The first "compiled successfully" already fired, so DevServerManager
-      // declared ready, but the proxy was still hitting the pre-patch bundle.
-      if (
-        (proxyRes.statusCode === 404 || proxyRes.statusCode === 403 || proxyRes.statusCode === 503) &&
+        (proxyRes.statusCode === 404 || proxyRes.statusCode === 503) &&
         proxyPath.startsWith('/test-preview') &&
-        clientReq.method === 'GET' &&
-        retryCount < 90
+        retryCount < 5
       ) {
         proxyRes.resume(); // drain response
-        if (!clientReq.destroyed && !clientRes.headersSent) {
-          const delay = Math.min(200 * 1.7 ** retryCount, 4000);
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), delay);
-        }
+        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
         return;
       }
 
-      const contentTypeHeader = proxyRes.headers['content-type'];
-      const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader.join(';') : (contentTypeHeader ?? '');
+      const contentType = proxyRes.headers['content-type'] || '';
       const isHtml = contentType.includes('text/html');
-      const assetContentType = getPreviewAssetContentType(proxyPath);
-      // 403 on assets: Vite not fully initialised — allow more retries (30 × 200ms = 6s).
-      // Other retry conditions (wrong content-type / 503): 5 retries is sufficient.
-      const assetRetryLimit = proxyRes.statusCode === 403 ? 30 : 5;
-      if (assetContentType && shouldRetryAssetResponse(proxyRes.statusCode, isHtml) && retryCount < assetRetryLimit) {
-        proxyRes.resume();
-        if (!clientReq.destroyed && !clientRes.headersSent) {
-          setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), 200);
-        }
-        return;
-      }
-
-      if (assetContentType && shouldReturnEmptyAssetResponse(proxyRes.statusCode, isHtml)) {
-        proxyRes.resume();
-        clientRes.writeHead(204, {
-          'content-type': assetContentType,
-          'cache-control': 'no-cache, no-store, must-revalidate',
-        });
-        clientRes.end();
-        return;
-      }
-
-      if (assetContentType && shouldSwallowStaleBundleResponse(proxyPath, proxyRes.statusCode)) {
-        proxyRes.resume();
-        clientRes.writeHead(204, {
-          'content-type': assetContentType,
-          'cache-control': 'no-cache, no-store, must-revalidate',
-        });
-        clientRes.end();
-        return;
-      }
 
       if (isHtml) {
         // Buffer HTML response to inject script
@@ -291,19 +146,14 @@ export class PreviewProxy {
         proxyRes.on('end', () => {
           let html = Buffer.concat(chunks).toString('utf-8');
 
-          if (!this._isRemixProject) {
-            // Inject interaction + error detection scripts after <head>.
-            // Remix hydrates the full document, so its generated route renders
-            // these scripts itself via /__hypercanvas/* endpoints to avoid
-            // proxy-added nodes causing hydration mismatch.
-            const injectedScripts = INJECTED_SCRIPTS;
-            const headIndex = html.indexOf('<head>');
-            if (headIndex !== -1) {
-              html = html.slice(0, headIndex + 6) + injectedScripts + html.slice(headIndex + 6);
-            } else {
-              // No <head> found, prepend scripts
-              html = injectedScripts + html;
-            }
+          // Inject interaction + error detection scripts after <head>
+          const injectedScripts = INJECTED_SCRIPTS;
+          const headIndex = html.indexOf('<head>');
+          if (headIndex !== -1) {
+            html = html.slice(0, headIndex + 6) + injectedScripts + html.slice(headIndex + 6);
+          } else {
+            // No <head> found, prepend scripts
+            html = injectedScripts + html;
           }
 
           // Tier 1 isolated mode: swap user entry script to standalone canvas preview entry
@@ -319,18 +169,25 @@ export class PreviewProxy {
               }
             }
             if (userScript) {
-              // Derive standalone path from the user script's directory (handles client/, src/, etc.)
-              const standalonePath = userScript.replace(/\/[^/]+\.[jt]sx?$/, '/__canvas_preview_standalone__.tsx');
-              html = html.replace(`src="${userScript}"`, `src="${standalonePath}"`);
-              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → ${standalonePath}`); // nosemgrep: unsafe-formatstring
+              html = html.replace(`src="${userScript}"`, 'src="/src/__canvas_preview_standalone__.tsx"');
+              console.log(`[PreviewProxy] Tier 1 script swap: ${userScript} → /src/__canvas_preview_standalone__.tsx`); // nosemgrep: unsafe-formatstring
             } else {
               console.warn('[PreviewProxy] Tier 1: could not find user entry script, falling back to App Shell');
             }
           }
 
           // Inject chrome-detection script for /test-preview requests (App Shell mode)
-          if (proxyPath.startsWith('/test-preview') && !this._isRemixProject) {
-            const chromeDetectScript = `<script>${chromeDetectionScriptContent}</script>`;
+          if (proxyPath.startsWith('/test-preview')) {
+            const chromeDetectScript = `<script>
+  (function() {
+    window.addEventListener('load', function() {
+      var hasChrome = document.querySelector('nav, header, aside') !== null;
+      if (hasChrome) {
+        window.parent.postMessage({ type: 'chrome-detected' }, '*');
+      }
+    }, { once: true });
+  })();
+</script>`;
             html = html.replace('</head>', `${chromeDetectScript}</head>`);
           }
 
@@ -352,41 +209,17 @@ export class PreviewProxy {
 
     proxyReq.on('error', (err) => {
       console.error('[PreviewProxy] HTTP proxy error:', err.message);
-      // Retry GET requests on socket errors (ECONNRESET, socket hang up, ECONNREFUSED).
-      // Vite's keep-alive pool can drop a connection immediately after the initial HTML
-      // response; subsequent @vite/client and module fetches hit the stale socket and
-      // get ECONNRESET. Without retry these requests return 502 and React never mounts.
-      // Only retrying GET because POST/PUT bodies are consumed after the first attempt.
-      if (clientReq.method === 'GET' && retryCount < 5 && !clientRes.headersSent && !clientReq.destroyed) {
-        const retryDelay = 300 * (retryCount + 1);
-        console.log(`[PreviewProxy] socket error on GET, retry ${retryCount + 1}/5 in ${retryDelay}ms: ${proxyPath}`);
-        setTimeout(() => this._handleHttp(clientReq, clientRes, retryCount + 1), retryDelay);
-        return;
-      }
-      if (!clientRes.headersSent) {
-        clientRes.writeHead(502);
-        clientRes.end('Proxy error');
-      }
+      clientRes.writeHead(502);
+      clientRes.end('Proxy error');
     });
 
-    // On retry, clientReq body stream is already consumed. For GET requests there is
-    // no body anyway — end the proxy request directly to trigger the upstream send.
-    if (retryCount > 0 && clientReq.method === 'GET') {
-      proxyReq.end();
-    } else {
-      clientReq.pipe(proxyReq);
-    }
+    clientReq.pipe(proxyReq);
   }
 
   /**
    * Handle WebSocket upgrade: bidirectional proxy to target
    */
   private _handleUpgrade(req: http.IncomingMessage, clientSocket: net.Socket, head: Buffer): void {
-    if (this._isStopping || !this._server) {
-      clientSocket.destroy();
-      return;
-    }
-
     const targetSocket = net.connect(this._targetPort, 'localhost', () => {
       // Forward the original HTTP upgrade request to target
       const requestLine = `${req.method} ${req.url} HTTP/1.1\r\n`;
@@ -407,25 +240,13 @@ export class PreviewProxy {
       clientSocket.pipe(targetSocket);
     });
 
-    this._trackSocket(clientSocket);
-    this._trackSocket(targetSocket);
-
     targetSocket.on('error', (err) => {
-      if (!this._isStopping) {
-        console.error('[PreviewProxy] WS proxy error:', err.message);
-      }
+      console.error('[PreviewProxy] WS proxy error:', err.message);
       clientSocket.destroy();
     });
 
     clientSocket.on('error', () => {
       targetSocket.destroy();
-    });
-  }
-
-  private _trackSocket(socket: net.Socket): void {
-    this._sockets.add(socket);
-    socket.once('close', () => {
-      this._sockets.delete(socket);
     });
   }
 }

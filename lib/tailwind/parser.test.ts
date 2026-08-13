@@ -3,12 +3,7 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import {
-  getConflictingPrefixes,
-  mapPropertiesToTailwindClasses,
-  parseTailwindClasses,
-  removeConflictingClasses,
-} from './parser';
+import { getConflictingPrefixes, parseTailwindClasses, removeConflictingClasses } from './parser';
 
 describe('parseTailwindClasses', () => {
   it('should parse position classes', () => {
@@ -44,12 +39,11 @@ describe('parseTailwindClasses', () => {
     expect(result.top).toBe('-2rem');
   });
 
-  it('should map text size classes separately from text colors', () => {
-    const result = mapPropertiesToTailwindClasses('text-[15px] text-[#fff] text-cyan-400');
+  it('should parse color classes', () => {
+    const result = parseTailwindClasses('bg-[#ff0000] border-[rgba(0,0,0,0.5)]');
 
-    expect(result.fontSize).toBe('text-[15px]');
-    expect(result.color).toBe('text-cyan-400');
-    expect(result['text-[#fff]']).toBeUndefined();
+    expect(result.backgroundColor).toBe('#ff0000');
+    expect(result.borderColor).toBe('rgba(0,0,0,0.5)');
   });
 
   it('should parse border radius', () => {
@@ -82,71 +76,6 @@ describe('parseTailwindClasses', () => {
     expect(result.position).toBe('absolute');
     expect(result.top).toBe('1rem');
     expect(result.left).toBe('2rem');
-  });
-
-  // PI-9-451 regression: real DOM className from react-vite-tw4-twitter
-  it('should parse real Tailwind DOM className and skip hover modifier (PI-9-451 regression)', () => {
-    const result = parseTailwindClasses(
-      'p-2 rounded-full hover:bg-twitter-hover transition-colors text-twitter-text',
-    );
-    expect(result.paddingTop).toBe('0.5rem');
-    expect(result.paddingRight).toBe('0.5rem');
-    expect(result.paddingBottom).toBe('0.5rem');
-    expect(result.paddingLeft).toBe('0.5rem');
-    expect(result.borderRadius).toBe('9999px');
-    expect(result.color).toBe('twitter-text');
-    // hover: modifier must not leak into base styles
-    expect(result.backgroundColor).toBeUndefined();
-  });
-
-  // PI-9-461: truly unknown className must still return {} so the guard fires correctly
-  it('should return {} for truly unknown className (PI-9-461 guard)', () => {
-    const result = parseTailwindClasses('nonexistent-xyz-class-xyzzy');
-    expect(result).toEqual({});
-  });
-
-  it('should skip all state modifier classes (hover, focus, dark)', () => {
-    const result = parseTailwindClasses('hover:bg-red-500 focus:text-blue-500 dark:border-white');
-    expect(result.backgroundColor).toBeUndefined();
-    expect(result.color).toBeUndefined();
-    expect(result.borderColor).toBeUndefined();
-  });
-
-  it('should parse padding shorthand classes', () => {
-    const result = parseTailwindClasses('p-4 px-8 py-2');
-    // py-2 wins for top/bottom (last applied), px-8 wins for left/right
-    expect(result.paddingLeft).toBe('2rem');
-    expect(result.paddingRight).toBe('2rem');
-    expect(result.paddingTop).toBe('0.5rem');
-    expect(result.paddingBottom).toBe('0.5rem');
-  });
-
-  it('should parse individual padding side classes', () => {
-    const result = parseTailwindClasses('pt-2 pr-4 pb-6 pl-8');
-    expect(result.paddingTop).toBe('0.5rem');
-    expect(result.paddingRight).toBe('1rem');
-    expect(result.paddingBottom).toBe('1.5rem');
-    expect(result.paddingLeft).toBe('2rem');
-  });
-
-  it('should parse rounded-full, rounded-2xl, rounded-3xl', () => {
-    expect(parseTailwindClasses('rounded-full').borderRadius).toBe('9999px');
-    expect(parseTailwindClasses('rounded-2xl').borderRadius).toBe('1rem');
-    expect(parseTailwindClasses('rounded-3xl').borderRadius).toBe('1.5rem');
-  });
-
-  it('should parse named bg color and text color classes', () => {
-    expect(parseTailwindClasses('bg-blue-500').backgroundColor).toBe('blue-500');
-    expect(parseTailwindClasses('text-gray-900').color).toBe('gray-900');
-  });
-
-  it('should not parse text-ellipsis or text-clip as text color', () => {
-    expect(parseTailwindClasses('text-ellipsis').color).toBeUndefined();
-    expect(parseTailwindClasses('text-clip').color).toBeUndefined();
-  });
-
-  it('should not parse bg-opacity-* as background color', () => {
-    expect(parseTailwindClasses('bg-opacity-50').backgroundColor).toBeUndefined();
   });
 });
 
@@ -279,14 +208,6 @@ describe('removeConflictingClasses', () => {
     expect(preserved).toContain('text-3xl');
     expect(removed).toContain('text-cyan-400');
     expect(preserved).toContain('font-mono');
-  });
-
-  it('should preserve text color classes when removing font size conflicts', () => {
-    const { preserved, removed } = removeConflictingClasses('text-[#fff] text-sm text-cyan-400', ['fontSize']);
-
-    expect(removed).toContain('text-sm');
-    expect(preserved).toContain('text-[#fff]');
-    expect(preserved).toContain('text-cyan-400');
   });
 
   it('should not remove text-align or text-wrap classes when removing color', () => {

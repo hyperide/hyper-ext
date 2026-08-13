@@ -13,7 +13,7 @@ import {
   valueToJSXAttribute,
 } from './mutator';
 import { parseCode, printAST } from './parser';
-import { findAllJSXElements } from './traverser';
+import { findAllJSXElements, findElementByUuid } from './traverser';
 
 describe('getAttribute', () => {
   it('should get string attribute', () => {
@@ -179,11 +179,10 @@ describe('valueToJSXAttribute', () => {
 
 describe('cloneElement', () => {
   it('should create deep copy of element', () => {
-    const code = '<div className="original"><span>Child</span></div>';
+    const code = '<div data-uniq-id="original"><span>Child</span></div>';
     const ast = parseCode(code);
 
-    const elements = findAllJSXElements(ast);
-    const original = elements[0];
+    const original = findElementByUuid(ast, 'original');
     if (!original) throw new Error('Element not found');
 
     const cloned = cloneElement(original.element);

@@ -4,7 +4,7 @@
 
 import { loadPersistedState, savePersistedState } from '../../storage';
 import { EventEmitter } from '../events/EventEmitter';
-import type { CanvasEngineEvents, CanvasEventName, TreeChangeEvent } from '../events/events';
+import type { CanvasEngineEvents, CanvasEventName } from '../events/events';
 import type {
   CanvasEngineConfig,
   ComponentDefinition,
@@ -509,7 +509,6 @@ export class CanvasEngine {
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
-      selectedSourceTabId?: string;
     },
   ): Promise<void> | undefined {
     const operation = new ASTStyleOperation(this.api, {
@@ -520,7 +519,6 @@ export class CanvasEngine {
       instanceProps: options?.instanceProps,
       instanceId: options?.instanceId,
       state: options?.state,
-      selectedSourceTabId: options?.selectedSourceTabId,
     });
 
     const result = operation.execute(this.tree);
@@ -880,8 +878,8 @@ export class CanvasEngine {
     for (const { eventName, payload } of events) {
       // For tree:change events, merge changedIds
       if (eventName === 'tree:change') {
-        const existing = uniqueEvents.get(eventName) as TreeChangeEvent | undefined;
-        const treePayload = payload as TreeChangeEvent;
+        const existing = uniqueEvents.get(eventName) as import('../events/events').TreeChangeEvent | undefined;
+        const treePayload = payload as import('../events/events').TreeChangeEvent;
         if (existing) {
           const mergedIds = new Set([...(existing.changedIds || []), ...(treePayload.changedIds || [])]);
           uniqueEvents.set(eventName, { changedIds: Array.from(mergedIds) });
@@ -1008,9 +1006,9 @@ export class CanvasEngine {
   /**
    * Emit event or batch it if in batch mode
    */
-  private emitEvent<K extends keyof CanvasEngineEvents>(
+  private emitEvent<K extends keyof import('../events/events').CanvasEngineEvents>(
     eventName: K,
-    payload: CanvasEngineEvents[K],
+    payload: import('../events/events').CanvasEngineEvents[K],
   ): void {
     if (this._isBatchMode) {
       this._batchedEvents.push({ eventName, payload });

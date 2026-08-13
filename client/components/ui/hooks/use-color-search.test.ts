@@ -1,3 +1,4 @@
+import '../../../../test/setup-dom';
 import { describe, expect, test } from 'bun:test';
 import { renderHook } from '@testing-library/react';
 import type { ColorOption } from '../color-utils';

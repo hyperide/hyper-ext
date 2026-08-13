@@ -130,8 +130,8 @@ export const ViewControlsSection = memo(function ViewControlsSection({
       {/* Only show zoom controls when viewport is provided (multi mode) */}
       {viewport && onZoomChange && (
         <div className="relative" data-zoom-dropdown>
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- click delegates focus to nested input */}
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- wrapper delegates focus to nested input */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: click delegates focus to nested input */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: wrapper delegates focus to nested input */}
           <div
             className="flex items-center gap-1 min-h-6 px-2 bg-muted rounded"
             onClick={() => zoomInputRef.current?.focus()}

@@ -57,13 +57,10 @@ export function CodeServerIDE({
   const handleSSEMessage = useCallback(
     (data: unknown) => {
       // Check for goToVisual event first
-      const message = data as {
-        type?: string;
-        element?: { nodeRef?: string; elementType: string; filePath: string; line: number; column: number };
-      };
+      const message = data as { type?: string; element?: { uniqId: string; elementType: string; filePath: string } };
       if (message.type === 'goToVisual' && message.element) {
         console.log('[IDE] Received goToVisual SSE event:', message.element);
-        onGoToVisual?.(message.element.nodeRef ?? '', message.element.elementType, message.element.filePath);
+        onGoToVisual?.(message.element.uniqId, message.element.elementType, message.element.filePath);
         return;
       }
 
@@ -105,7 +102,7 @@ export function CodeServerIDE({
   });
 
   // Start IDE
-  /* eslint-disable react-hooks/exhaustive-deps -- startPolling is stable (same deps as startIDE), accessToken not needed (authFetch handles auth) */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startPolling is stable (same deps as startIDE), accessToken not needed (authFetch handles auth)
   const startIDE = useCallback(async () => {
     if (!projectId || startRequestedRef.current) return;
     startRequestedRef.current = true;
@@ -139,7 +136,6 @@ export function CodeServerIDE({
       startRequestedRef.current = false;
     }
   }, [projectId, onError, resolvedTheme]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Polling fallback (in case SSE doesn't work)
   const startPolling = useCallback(() => {

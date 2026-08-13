@@ -12,17 +12,12 @@
  */
 
 import * as crypto from 'node:crypto';
-import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { buildSampleScaffold, normalizeSampleComponentName } from '../../../lib/preview-generator/sample-scaffold';
-import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
-import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
+import { handleEditorMessage, setupActiveFileListener } from './EditorBridge';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
 import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError, ProjectCapabilities, UnsupportedProjectError } from './types';
-
-export { normalizeSampleComponentName };
+import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -30,19 +25,11 @@ export class PreviewPanel {
 
   private _panel?: vscode.WebviewPanel;
   private _currentComponent?: string;
-  private _navigableComponent?: string;
-  private _requiresPreviewRegeneration = false;
   private _defaultComponent?: string;
   private _disposables: vscode.Disposable[] = [];
 
   // Runtime error callback
   private _onRuntimeErrorCallback: ((error: DevServerRuntimeError | null) => void) | null = null;
-
-  // Sample creation callback (extension host regenerates __canvas_preview__.tsx)
-  private _onSampleCreatedCallback: ((componentPath: string) => Promise<void> | void) | null = null;
-
-  // Component-missing callback (triggers self-healing ensureComponent in extension host)
-  private _onComponentMissingCallback: ((componentPath: string) => void) | null = null;
 
   // Console capture callback (from iframe console intercept)
   private _onConsoleCaptureCallback:
@@ -64,9 +51,6 @@ export class PreviewPanel {
   // Unsupported project error (React Native / Tamagui), sent to webview on ready
   private _projectError: UnsupportedProjectError | null = null;
 
-  // Project capabilities (readonly mode, CSS system) — cached so _pushFullStateToWebview can replay
-  private _capabilities: ProjectCapabilities | null = null;
-
   // Bidirectional code/preview position sync
   private _syncService?: SyncPositionService;
 
@@ -74,55 +58,17 @@ export class PreviewPanel {
   private _stateHub: StateHub;
   private _panelRouter: PanelRouter;
 
-  // Debounce timer for _reEmitSelectionAfterHmr — prevents multiple rapid
-  // style writes from queuing redundant re-emissions
-  private _reEmitTimer: ReturnType<typeof setTimeout> | null = null;
-
   private _onScopeChange?: (scope: 'full-app' | 'component-only') => Promise<void>;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private _workspaceRoot: string,
+    private readonly _workspaceRoot: string,
     stateHub: StateHub,
     panelRouter: PanelRouter,
     private readonly _context: vscode.ExtensionContext,
   ) {
     this._stateHub = stateHub;
     this._panelRouter = panelRouter;
-  }
-
-  /** Update path resolution after VS Code reuses the window for another workspace. */
-  public setWorkspaceRoot(workspaceRoot: string): void {
-    if (workspaceRoot === this._workspaceRoot) return;
-    this.clearSelection();
-    this._workspaceRoot = workspaceRoot;
-    this._currentComponent = undefined;
-    this._navigableComponent = undefined;
-    this._requiresPreviewRegeneration = false;
-    this._defaultComponent = undefined;
-    this._devServerRunning = false;
-    this._previewBaseUrl = 'http://localhost:3000';
-    // Clear shared StateHub state so _initializeComponent() re-derives from the
-    // active editor instead of picking up the previous workspace's component.
-    this._capabilities = null;
-    this._stateHub.applyUpdate({ currentComponent: null });
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities: null });
-    this.notifyUnsupportedProject(null);
-    this.notifyDevServerStopped();
-    this._sampleWatcher?.dispose();
-    this._sampleWatcher = undefined;
-    const shouldRestartSync = Boolean(this._syncService);
-    this._syncService?.dispose();
-    this._syncService = undefined;
-    if (this._panel) {
-      if (shouldRestartSync) this._startSyncService();
-      this._initializeComponent();
-    }
-  }
-
-  private _syncWorkspaceRootFromVSCode(): void {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (workspaceRoot) this.setWorkspaceRoot(workspaceRoot);
   }
 
   /** Register a callback invoked when the user toggles preview scope via the toolbar. */
@@ -137,24 +83,18 @@ export class PreviewPanel {
   }
 
   /**
-   * Create a new panel or reveal existing one.
-   * Always pins the panel so it cannot be accidentally closed.
+   * Create a new panel or reveal existing one
    */
   public createOrShow(column?: vscode.ViewColumn): void {
-    this._syncWorkspaceRootFromVSCode();
-    const activeEditor = this._resolveComponentEditor();
-
     if (this._panel) {
-      this._initializeComponent(activeEditor);
       this._panel.reveal(column);
-      this._pinPanel();
       return;
     }
 
     const panel = vscode.window.createWebviewPanel(
       PreviewPanel.viewType,
       'Hyper Canvas',
-      column || vscode.ViewColumn.Two,
+      column || vscode.ViewColumn.Beside,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -162,37 +102,7 @@ export class PreviewPanel {
       },
     );
 
-    this._setupPanel(panel, activeEditor);
-    this._pinPanel();
-  }
-
-  /**
-   * Pin the preview panel tab unless already pinned.
-   * Uses workbench.action.pinEditor which operates on the active editor,
-   * so the panel must be focused first. Skips if tab is already pinned
-   * to avoid an unnecessary focus steal.
-   */
-  private async _pinPanel(): Promise<void> {
-    if (!this._panel) return;
-    if (this._isAlreadyPinned()) return;
-    // reveal() makes the panel active; pinEditor pins the active editor
-    this._panel.reveal(undefined, false);
-    await vscode.commands.executeCommand('workbench.action.pinEditor');
-  }
-
-  private _isAlreadyPinned(): boolean {
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (
-          tab.input instanceof vscode.TabInputWebview &&
-          tab.input.viewType.includes(PreviewPanel.viewType) &&
-          tab.isPinned
-        ) {
-          return true;
-        }
-      }
-    }
-    return false;
+    this._setupPanel(panel);
   }
 
   /**
@@ -204,21 +114,14 @@ export class PreviewPanel {
     if (this._panel) {
       this._panel.dispose();
     }
-    this._setupPanel(panel, this._resolveComponentEditor());
-    this._pinPanel();
+    this._setupPanel(panel);
   }
 
   /**
    * Shared panel initialization
    */
-  private _setupPanel(panel: vscode.WebviewPanel, activeEditor?: vscode.TextEditor): void {
+  private _setupPanel(panel: vscode.WebviewPanel): void {
     this._panel = panel;
-
-    // Register callback so EditorBridge can move preview to the right
-    // when it needs to open a file in a left split.
-    setMovePreviewToRight(() => {
-      this._panel?.reveal(vscode.ViewColumn.Two, true);
-    });
 
     panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.png');
 
@@ -232,6 +135,9 @@ export class PreviewPanel {
     this._stateHub.register(PreviewPanel.PANEL_ID, panel.webview);
     this._panelRouter.setAstResponseTarget(panel.webview);
 
+    // Set HTML once — React app handles all UI state via messages
+    panel.webview.html = this._getHtmlForWebview();
+
     // Handle messages from webview
     panel.webview.onDidReceiveMessage(
       async (message) => {
@@ -240,11 +146,6 @@ export class PreviewPanel {
       undefined,
       this._disposables,
     );
-
-    // Set HTML once — React app handles all UI state via messages. The message
-    // handler must already be registered because the webview can post
-    // `webview:ready` during the initial HTML assignment.
-    panel.webview.html = this._getHtmlForWebview();
 
     // Listen for active editor changes
     this._disposables.push(
@@ -256,50 +157,20 @@ export class PreviewPanel {
     // Listen for active editor changes (for platform layer)
     this._disposables.push(setupActiveFileListener(panel.webview));
 
-    // Listen for component changes from other panels (e.g. Left Panel component list).
-    // Only track _currentComponent here — do NOT call _updatePreviewUrl().
-    // The iframe navigation must wait for ensureComponent/ensureSample to finish
-    // (extension.ts chain calls setComponentParam() when ready). Navigating eagerly
-    // caused black canvas: the iframe tried to render a component not yet registered
-    // in __canvas_preview__.tsx because HMR hadn't picked up the file change.
+    // Listen for component changes from other panels (e.g. Left Panel component list)
     const unsubState = this._stateHub.onChange((_state, patch) => {
       if (patch.currentComponent !== undefined) {
         const component = patch.currentComponent;
         if (component && this._currentComponent !== component.path) {
           this._currentComponent = component.path;
-          this._navigableComponent = undefined;
           console.log('[HyperIDE] Component changed via state:', component.path);
+          this._updatePreviewUrl();
         }
       }
     });
     this._disposables.push({ dispose: unsubState });
 
-    this._startSyncService();
-
-    // Cleanup on dispose
-    panel.onDidDispose(() => {
-      if (this._reEmitTimer) {
-        clearTimeout(this._reEmitTimer);
-        this._reEmitTimer = null;
-      }
-      this._navigableComponent = undefined;
-      this._requiresPreviewRegeneration = true;
-      for (const d of this._disposables) d.dispose();
-      this._disposables = [];
-      this._sampleWatcher?.dispose();
-      this._sampleWatcher = undefined;
-      this._syncService?.dispose();
-      this._stateHub.unregister(PreviewPanel.PANEL_ID);
-      this._syncService = undefined;
-      this._panel = undefined;
-      setMovePreviewToRight(null);
-    }, undefined);
-
-    // Initialize component
-    this._initializeComponent(activeEditor);
-  }
-
-  private _startSyncService(): void {
+    // Bidirectional code/preview position sync
     this._syncService = new SyncPositionService(
       this._panelRouter.astBridge.astService,
       this._stateHub,
@@ -308,8 +179,19 @@ export class PreviewPanel {
       () => this._currentComponent,
     );
     this._syncService.start();
-    // Not added to _disposables — disposed explicitly in onDidDispose and setWorkspaceRoot
-    // to avoid accumulating stale entries on workspace switches.
+    this._disposables.push(this._syncService);
+
+    // Cleanup on dispose
+    panel.onDidDispose(() => {
+      for (const d of this._disposables) d.dispose();
+      this._disposables = [];
+      this._stateHub.unregister(PreviewPanel.PANEL_ID);
+      this._syncService = undefined;
+      this._panel = undefined;
+    }, undefined);
+
+    // Initialize component
+    this._initializeComponent();
   }
 
   /**
@@ -326,10 +208,20 @@ export class PreviewPanel {
     if (msg.type === 'webview:ready') {
       // Send initial state
       this._stateHub.sendInit(PreviewPanel.PANEL_ID);
-      // Push consolidated extension-side state (devserver, project error, URL,
-      // current component) so a re-attached panel rehydrates without losing
-      // the component selection that survived dispose+createOrShow.
-      this._pushFullStateToWebview();
+      // Send current devserver status
+      webview.postMessage({
+        type: 'devserver:statusChanged',
+        running: this._devServerRunning,
+        url: this._devServerRunning ? this._previewBaseUrl : null,
+      });
+      // Send unsupported project error if already detected
+      if (this._projectError) {
+        webview.postMessage({ type: 'projectError', error: this._projectError });
+      }
+      // If dev server is running, send current preview URL
+      if (this._devServerRunning) {
+        this._updatePreviewUrl();
+      }
       return;
     }
 
@@ -367,13 +259,6 @@ export class PreviewPanel {
       this._onRuntimeErrorCallback?.(error);
       return;
     }
-    if (msg.type === 'hypercanvas:componentMissing') {
-      const componentPath = (msg as { componentPath?: string }).componentPath;
-      if (componentPath) {
-        this._onComponentMissingCallback?.(componentPath);
-      }
-      return;
-    }
     if (msg.type === 'diagnostic:console') {
       const entries = (
         msg as {
@@ -393,47 +278,44 @@ export class PreviewPanel {
       vscode.commands.executeCommand('hypercanvas.fixUnsupportedProject');
       return;
     }
-
-    // === ErrorBoundary actions (from iframe error UI) ===
-    if (msg.type === 'errorBoundary:createSample') {
-      await this._handleCreateSampleFromError(
-        msg.componentPath as string | undefined,
-        msg.propValues as Record<string, unknown> | undefined,
-        msg.sampleName as string | undefined,
-      );
-      return;
-    }
-    if (msg.type === 'errorBoundary:configureAIKey') {
-      vscode.commands.executeCommand('hypercanvas.configureAIKey');
-      return;
-    }
-    if (msg.type === 'errorBoundary:getPropsSchema') {
-      const componentPath = msg.componentPath as string | undefined;
-      if (componentPath) {
-        const props = await this._panelRouter.componentService.getComponentDefinitions(componentPath);
-        webview.postMessage({
-          type: 'errorBoundary:propsSchema',
-          componentPath,
-          propsSchema: props,
-        });
-      }
-      return;
-    }
-
     if (msg.type === 'previewError') {
       console.error('[HyperIDE] Preview error:', (msg as { error?: string }).error);
       return;
     }
 
     // === Canvas undo/redo (from iframe Cmd+Z / Shift+Cmd+Z) ===
-    // Delegates to the same undo()/redo() methods used by keybinding commands,
-    // ensuring consistent behavior between keyboard shortcuts and webview messages.
+    // Falls back to VS Code's native undo/redo when canvas stack is empty,
+    // so Cmd+Z always does something useful.
     if (msg.type === 'canvas:undo') {
-      await this.undo();
+      const panel = this._panel;
+      if (!panel) return;
+      const handled = await this._panelRouter.astBridge.undo(panel);
+      if (!handled) {
+        await vscode.commands.executeCommand('undo');
+        const editor = vscode.window.activeTextEditor;
+        if (editor?.document.isDirty) {
+          await editor.document.save();
+        }
+      }
+      if (handled) {
+        this._bumpStyleVersion();
+      }
       return;
     }
     if (msg.type === 'canvas:redo') {
-      await this.redo();
+      const panel = this._panel;
+      if (!panel) return;
+      const handled = await this._panelRouter.astBridge.redo(panel);
+      if (!handled) {
+        await vscode.commands.executeCommand('redo');
+        const editor = vscode.window.activeTextEditor;
+        if (editor?.document.isDirty) {
+          await editor.document.save();
+        }
+      }
+      if (handled) {
+        this._bumpStyleVersion();
+      }
       return;
     }
 
@@ -449,18 +331,6 @@ export class PreviewPanel {
         this._stateHub.applyUpdate({
           selectedIds: [],
         });
-      }
-      return;
-    }
-
-    // === Keyboard-driven duplicate (from iframe keyboard handler) ===
-    if (msg.type === 'keyboard:duplicate') {
-      const elementId = msg.elementId as string | undefined;
-      const componentPath = this._currentComponent;
-      if (!componentPath || !elementId) return;
-      const result = await this._panelRouter.astBridge.duplicateElement(componentPath, elementId);
-      if (result.success && result.newId) {
-        this._stateHub.applyUpdate({ selectedIds: [result.newId] });
       }
       return;
     }
@@ -519,225 +389,12 @@ export class PreviewPanel {
       return;
     }
 
-    // AST mutations (ast:updateStyles, ast:updateProps, ast:insertElement, etc.)
-    // trigger HMR — re-emit selection so the preview re-highlights the element
-    // after the fiber tree is rebuilt.
-    if (msg.type?.startsWith('ast:')) {
-      await this._panelRouter.routeMessage(msg, webview);
-      this._bumpStyleVersion();
-      this._reEmitSelectionAfterHmr();
-      return;
-    }
-
-    // When the user clicks an element (or empty area) on the canvas, the webview
-    // sends state:update with selectedIds.  Make the canvas tab visually active
-    // so keyboard events (Tab, Delete, etc.) go to the canvas instead of a sidebar.
-    // reveal(false) activates the tab but steals focus from the iframe, so we
-    // immediately post a message to refocus the iframe afterwards.
-    if (msg.type === 'state:update') {
-      const patch = (msg as { patch?: Record<string, unknown> }).patch;
-      if (patch && 'selectedIds' in patch) {
-        this._panel?.reveal(undefined, false);
-        // Refocus the iframe after reveal stole focus
-        webview.postMessage({ type: 'canvas:refocusIframe' });
-      }
-    }
-
     // Delegate shared platform messages to PanelRouter
     const handled = await this._panelRouter.routeMessage(msg, webview);
 
     if (!handled) {
       console.log('[HyperIDE] Unknown message type:', msg.type);
     }
-  }
-
-  // === ErrorBoundary handlers ===
-
-  /**
-   * Handle "Create Sample File" button from the ErrorBoundary UI.
-   * Creates a minimal SampleDefault scaffold in the component file and opens it in editor.
-   */
-  private async _handleCreateSampleFromError(
-    componentPath: string | undefined,
-    propValues?: Record<string, unknown>,
-    sampleName?: string,
-    options?: { componentName?: string; notifySampleCreated?: boolean; revealInEditor?: boolean },
-  ): Promise<boolean> {
-    if (!componentPath) return false;
-
-    const absPath = path.isAbsolute(componentPath) ? componentPath : path.join(this._workspaceRoot, componentPath);
-    const exportName = sampleName || 'SampleDefault';
-    const revealInEditor = options?.revealInEditor ?? true;
-    const notifySampleCreated = options?.notifySampleCreated ?? true;
-
-    // Read the file to check if this sample name already exists
-    let sourceCode: string;
-    try {
-      const fileUri = vscode.Uri.file(absPath);
-      const bytes = await vscode.workspace.fs.readFile(fileUri);
-      sourceCode = Buffer.from(bytes).toString('utf-8');
-    } catch {
-      void vscode.window.showErrorMessage(`Could not read component file: ${componentPath}`);
-      return false;
-    }
-
-    // Extract component name from the AST default export (e.g. `export default function Home` → 'Home').
-    // Falls back to filename PascalCase if the file has no named default export.
-    const fileName = path.basename(absPath, path.extname(absPath));
-    const componentName = options?.componentName ?? extractComponentName(sourceCode, fileName);
-
-    // Check if sample with this name already exists — update it in place
-    const existingRegex = new RegExp(`export\\s+const\\s+${escapeRegex(exportName)}\\s*=`);
-    if (existingRegex.test(sourceCode)) {
-      // Find and replace the existing sample block
-      const sampleStart = sourceCode.indexOf(`export const ${exportName}`);
-      // Find the end of the sample (next export or end of file)
-      const afterSample = sourceCode.slice(sampleStart);
-      const nextExportMatch = afterSample.match(/\n(export\s)/);
-      const sampleEnd = nextExportMatch
-        ? sampleStart + (nextExportMatch.index ?? afterSample.length)
-        : sourceCode.length;
-
-      // Build replacement
-      const propEntries = this._buildPropEntries(propValues);
-      const replacement = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
-
-      sourceCode = sourceCode.slice(0, sampleStart) + replacement.trimStart() + sourceCode.slice(sampleEnd);
-
-      try {
-        const fileUri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.writeFile(fileUri, Buffer.from(sourceCode, 'utf-8'));
-      } catch {
-        void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
-        return false;
-      }
-
-      if (notifySampleCreated) {
-        await this._onSampleCreatedCallback?.(componentPath);
-      }
-
-      if (!revealInEditor) {
-        return true;
-      }
-
-      const lineNumber = sourceCode.substring(0, sourceCode.indexOf(exportName)).split('\n').length;
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
-      await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-        preview: true,
-        selection: new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0),
-      });
-      return true;
-    }
-
-    // Generate a minimal sample scaffold — include user-provided prop values if available
-    const propEntries = this._buildPropEntries(propValues);
-    const scaffold = this._buildSampleScaffold(componentName, exportName, propEntries, sourceCode);
-
-    // Append to file
-    const updatedCode = `${sourceCode}\n${scaffold}\n`;
-    try {
-      const fileUri = vscode.Uri.file(absPath);
-      await vscode.workspace.fs.writeFile(fileUri, Buffer.from(updatedCode, 'utf-8'));
-    } catch {
-      void vscode.window.showErrorMessage(`Could not write to component file: ${componentPath}`);
-      return false;
-    }
-
-    if (revealInEditor) {
-      // Open the file and position cursor at the scaffold
-      const lines = updatedCode.split('\n');
-      const todoIdx = lines.findIndex((line) => line.includes('// TODO: Add required props'));
-      const sampleIdx = lines.findIndex((line) => line.includes(exportName));
-      const targetLine = todoIdx >= 0 ? todoIdx : Math.max(sampleIdx, 0);
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
-      await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-        preview: true,
-        selection: new vscode.Range(targetLine, 0, targetLine, 0),
-      });
-    }
-
-    console.log(`[HyperIDE] Created ${exportName} scaffold in ${componentPath}`);
-
-    // Watch file for sample deletion — notify webview to reset sampleCreated state
-    if (this._panel) {
-      this._watchSampleInFile(absPath, exportName, this._panel.webview);
-    }
-    if (notifySampleCreated) {
-      await this._onSampleCreatedCallback?.(componentPath);
-    }
-    return true;
-  }
-
-  /**
-   * Ensure a deterministic SampleDefault scaffold exists for a component with no props.
-   * Used as a silent fallback when AI sample generation is unavailable.
-   */
-  public async ensureDefaultSampleForNoProps(componentPath: string, componentName: string): Promise<boolean> {
-    return this._handleCreateSampleFromError(componentPath, undefined, 'SampleDefault', {
-      componentName,
-      notifySampleCreated: false,
-      revealInEditor: false,
-    });
-  }
-
-  private _sampleWatcher?: vscode.Disposable;
-
-  private _watchSampleInFile(absPath: string, exportName: string, webview: vscode.Webview): void {
-    // Dispose previous watcher
-    this._sampleWatcher?.dispose();
-
-    const fileUri = vscode.Uri.file(absPath);
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(fileUri, ''));
-
-    const checkSample = async () => {
-      try {
-        const bytes = await vscode.workspace.fs.readFile(fileUri);
-        const content = Buffer.from(bytes).toString('utf-8');
-        const exists = content.includes(`export const ${exportName}`);
-        if (!exists) {
-          webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-          this._sampleWatcher?.dispose();
-          this._sampleWatcher = undefined;
-        }
-      } catch {
-        // File deleted entirely
-        webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-        this._sampleWatcher?.dispose();
-        this._sampleWatcher = undefined;
-      }
-    };
-
-    watcher.onDidChange(checkSample);
-    watcher.onDidDelete(() => {
-      webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-      this._sampleWatcher?.dispose();
-      this._sampleWatcher = undefined;
-    });
-
-    this._sampleWatcher = watcher;
-  }
-
-  private _buildPropEntries(propValues?: Record<string, unknown>): Array<[string, unknown]> {
-    return propValues
-      ? Object.entries(propValues).filter(([, v]) => {
-          if (v == null) return false;
-          if (typeof v === 'string') return v.trim() !== '';
-          return true;
-        })
-      : [];
-  }
-
-  private _buildSampleScaffold(
-    componentName: string,
-    exportName: string,
-    propEntries: Array<[string, unknown]>,
-    sourceCode = '',
-  ): string {
-    return buildSampleScaffold({ sourceCode, componentName, exportName, propEntries });
   }
 
   // === Context menu handlers ===
@@ -774,8 +431,6 @@ export class PreviewPanel {
       this._stateHub.applyUpdate({
         selectedIds: [result.newId],
       });
-    } else if (!result.success) {
-      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
     }
   }
 
@@ -865,11 +520,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(
-      componentPath,
-      elementId,
-      elementId,
-    );
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, elementId);
 
     if (parentId) {
       this._stateHub.applyUpdate({
@@ -883,7 +534,7 @@ export class PreviewPanel {
     const componentPath = this._currentComponent;
     if (!componentPath || !elementId) return;
 
-    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(elementId);
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, elementId);
 
     if (childIds.length > 0) {
       this._stateHub.applyUpdate({
@@ -974,105 +625,37 @@ export class PreviewPanel {
   }
 
   /**
-   * Initialize component from active editor.
-   *
-   * If `_currentComponent` is already set (panel was disposed and re-created
-   * while the extension host kept its in-memory state — e.g. user closed the
-   * Hyper Canvas tab and reopened it via createOrShow), we do NOT re-derive
-   * from the editor. The editor's active document at that moment may not be
-   * the component the user was previewing, so re-deriving overwrites a valid
-   * selection. Instead we push the existing state into the webview and rely
-   * on the `webview:ready` handler to do the same when the React app loads.
-   *
-   * StateHub takes priority over the active editor. When createOrShow is called
-   * from the extension.ts onChange listener (while a component-selection patch
-   * is still being broadcast), StateHub already holds the user's intent.
-   * Deriving from activeEditor at that moment would emit a second applyUpdate
-   * for a different component, triggering a second showTextDocument call —
-   * the root cause of files opening twice (HYP-363).
+   * Initialize component from active editor
    */
-  private _initializeComponent(activeEditor = vscode.window.activeTextEditor): void {
-    if (this._currentComponent) {
+  private _initializeComponent(): void {
+    if (vscode.window.activeTextEditor) {
+      const component = this._extractComponentFromEditor(vscode.window.activeTextEditor);
+      if (component) {
+        this._currentComponent = component;
+        const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
+        this._stateHub.applyUpdate({
+          currentComponent: { name, path: component },
+        });
+      }
+    }
+
+    // Fallback: pick component from StateHub (e.g. opened via Explorer click)
+    if (!this._currentComponent) {
       const stateComponent = this._stateHub.state.currentComponent;
-      if (this._requiresPreviewRegeneration && stateComponent?.path === this._currentComponent) {
-        this._requiresPreviewRegeneration = false;
-        this._stateHub.applyUpdate({ currentComponent: stateComponent });
-        return;
+      if (stateComponent?.path) {
+        this._currentComponent = stateComponent.path;
       }
-      this._pushFullStateToWebview();
-      return;
     }
 
-    // StateHub already has a current component: respect that intent and do NOT
-    // call _setCurrentComponent (which would emit applyUpdate and re-trigger
-    // all onChange listeners). Just cache it locally so the webview gets it.
-    const stateComponent = this._stateHub.state.currentComponent;
-    if (stateComponent?.path) {
-      this._currentComponent = stateComponent.path;
-      if (this._navigableComponent !== stateComponent.path) {
-        this._navigableComponent = undefined;
-      }
-      if (this._requiresPreviewRegeneration) {
-        this._requiresPreviewRegeneration = false;
-        this._stateHub.applyUpdate({ currentComponent: stateComponent });
-      }
-      return;
-    }
-
-    // No component in StateHub yet — derive from the active editor (first open).
-    this._syncWorkspaceRootFromVSCode();
-    const component = this._resolveComponentPath(activeEditor);
-    if (component) {
-      this._setCurrentComponent(component);
-    }
-  }
-
-  /**
-   * Push consolidated extension-side state into the webview in one shot.
-   * Called from `webview:ready` (initial load) and `_initializeComponent`
-   * (re-attach after panel dispose) so the React app rehydrates devserver
-   * status, project error, iframe URL, and the current component without
-   * relying on incidental ordering of subsequent setX() calls.
-   *
-   * Idempotent — safe to call repeatedly. No-op if no panel is attached.
-   */
-  private _pushFullStateToWebview(): void {
-    const webview = this._panel?.webview;
-    if (!webview) return;
-
-    webview.postMessage({
-      type: 'devserver:statusChanged',
-      running: this._devServerRunning,
-      url: this._devServerRunning ? this._previewBaseUrl : null,
-    });
-
-    const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
-    webview.postMessage({ type: 'devserver:settings', autoStart });
-
-    webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
-
-    if (this._projectError) {
-      webview.postMessage({ type: 'projectError', error: this._projectError });
-    }
-
-    const canNavigateCurrentComponent = !this._currentComponent || this._navigableComponent === this._currentComponent;
-    if (this._currentComponent && canNavigateCurrentComponent) {
-      webview.postMessage({ type: 'setComponent', component: this._currentComponent });
-    }
-
-    if (this._devServerRunning) {
-      this._updatePreviewUrl();
-    }
+    this._updatePreviewUrl();
   }
 
   /**
    * Extract component path from editor (relative to workspace root)
    */
   private _extractComponentFromEditor(editor: vscode.TextEditor): string | undefined {
-    return this._extractComponentFromPath(editor.document.uri.fsPath);
-  }
+    const filePath = editor.document.uri.fsPath;
 
-  private _extractComponentFromPath(filePath: string): string | undefined {
     if (!/\.(tsx|jsx)$/.test(filePath)) {
       return undefined;
     }
@@ -1083,36 +666,6 @@ export class PreviewPanel {
     return undefined;
   }
 
-  private _resolveComponentPath(editor = vscode.window.activeTextEditor): string | undefined {
-    if (editor) {
-      const component = this._extractComponentFromEditor(editor);
-      if (component) return component;
-    }
-
-    for (const candidate of vscode.window.visibleTextEditors) {
-      const component = this._extractComponentFromEditor(candidate);
-      if (component) return component;
-    }
-
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (tab.input instanceof vscode.TabInputText) {
-          const component = this._extractComponentFromPath(tab.input.uri.fsPath);
-          if (component) return component;
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  private _resolveComponentEditor(editor = vscode.window.activeTextEditor): vscode.TextEditor | undefined {
-    if (editor && this._extractComponentFromEditor(editor)) {
-      return editor;
-    }
-    return vscode.window.visibleTextEditors.find((candidate) => Boolean(this._extractComponentFromEditor(candidate)));
-  }
-
   /**
    * Update component from editor
    */
@@ -1120,34 +673,20 @@ export class PreviewPanel {
     // Ignore focus loss (e.g. clicking on preview tab or output panel).
     // Keep the last selected component instead of resetting.
     if (!editor) return;
-    this._syncWorkspaceRootFromVSCode();
 
     const component = this._extractComponentFromEditor(editor);
-    if (
-      component &&
-      (this._currentComponent !== component || this._stateHub.state.currentComponent?.path !== component)
-    ) {
+    if (component && this._currentComponent !== component) {
+      this._currentComponent = component;
       console.log('[HyperIDE] Component from editor:', component);
-      this._setCurrentComponent(component);
-    }
-  }
 
-  private _setCurrentComponent(component: string): void {
-    if (this._currentComponent !== component) {
-      this._navigableComponent = undefined;
-    }
-    this._currentComponent = component;
-    const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
-    const current = this._stateHub.state.currentComponent;
+      // Dispatch to StateHub so Inspector and other panels sync
+      const name = component.replace(/^.*\//, '').replace(/\.\w+$/, '');
+      this._stateHub.applyUpdate({
+        currentComponent: { name, path: component },
+      });
 
-    if (current?.path === component && current.name === name) {
-      return;
+      this._updatePreviewUrl();
     }
-
-    // Dispatch to StateHub so Inspector and other panels sync.
-    this._stateHub.applyUpdate({
-      currentComponent: { name, path: component },
-    });
   }
 
   /**
@@ -1165,10 +704,6 @@ export class PreviewPanel {
     if (!component) {
       console.log('[HyperIDE] No component selected, showing hint');
       this._panel?.webview.postMessage({ type: 'showNoComponentHint' });
-      return;
-    }
-
-    if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
       return;
     }
 
@@ -1219,45 +754,10 @@ export class PreviewPanel {
   }
 
   /**
-   * Notify the webview about project capabilities (readonly mode, CSS system).
-   * Sent after CSS system detection completes during activation.
-   */
-  public notifyCapabilities(capabilities: ProjectCapabilities): void {
-    this._capabilities = capabilities;
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
-  }
-
-  /**
    * Refresh preview
    */
   public refresh(): void {
-    if (!this._panel) return;
-    // Re-push full state before reloading — guards against races where
-    // webview:ready fired before _pushFullStateToWebview had current state
-    // (e.g. openPreview called before devserver:statusChanged propagated).
-    this._pushFullStateToWebview();
-    if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
-      return;
-    }
-    this._panel.webview.postMessage({ type: 'refresh' });
-  }
-
-  /**
-   * Dispose the preview panel. This closes the webview tab and fires
-   * `onDidDispose`, which tears down all child services (dev server, state
-   * hub registration, source map warmers) and clears `_panel` so the next
-   * `createOrShow` builds a fresh webview with a clean iframe state.
-   *
-   * Primarily exposed for E2E tests that need to guarantee a fresh preview
-   * iframe between specs — the iframe accumulates module-level state (click
-   * handler listeners, source map caches, pendingClickElement) that leaks
-   * across tests and causes intermittent click-resolution failures.
-   */
-  public dispose(): void {
-    this.clearSelection();
-    this._navigableComponent = undefined;
-    this._requiresPreviewRegeneration = true;
-    this._panel?.dispose();
+    this._panel?.webview.postMessage({ type: 'refresh' });
   }
 
   /**
@@ -1265,16 +765,8 @@ export class PreviewPanel {
    * Triggers navigation to /test-preview?component=<componentPath>.
    */
   public setComponentParam(componentPath: string): void {
-    this._currentComponent = componentPath;
-    this._navigableComponent = componentPath;
-    this._requiresPreviewRegeneration = false;
     if (!this._panel) return;
-
-    if (this._devServerRunning) {
-      this._updatePreviewUrl();
-      return;
-    }
-
+    this._currentComponent = componentPath;
     this._panel.webview.postMessage({
       type: 'setComponent',
       component: componentPath,
@@ -1282,40 +774,10 @@ export class PreviewPanel {
   }
 
   /**
-   * Wait for selectedIds to become non-empty.
-   * Tree click sends state:update asynchronously via postMessage, so
-   * selectedIds may still be empty when a command fires immediately after.
-   * Returns current selectedIds if already populated, otherwise listens
-   * for the next StateHub change (up to 500ms).
-   */
-  private _waitForSelectedIds(): Promise<string[]> {
-    const current = this._stateHub.state.selectedIds;
-    if (current?.length) return Promise.resolve(current);
-
-    return new Promise<string[]>((resolve) => {
-      let settled = false;
-      const unsub = this._stateHub.onChange((state) => {
-        if (!settled && state.selectedIds?.length) {
-          settled = true;
-          unsub();
-          resolve(state.selectedIds);
-        }
-      });
-      setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          unsub();
-          resolve(this._stateHub.state.selectedIds ?? []);
-        }
-      }, 500);
-    });
-  }
-
-  /**
    * Delete selected elements (called from VS Code keybinding command).
    */
   public async deleteSelected(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
+    const selectedIds = this._stateHub.state.selectedIds;
     const componentPath = this._currentComponent;
     if (!componentPath || !selectedIds?.length) return;
 
@@ -1326,142 +788,48 @@ export class PreviewPanel {
   }
 
   /**
-   * Duplicate the first selected element (called from VS Code command).
-   */
-  public async duplicateSelected(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
-    const componentPath = this._currentComponent;
-    if (!componentPath || !selectedIds?.length) return;
-
-    const result = await this._panelRouter.astBridge.duplicateElement(componentPath, selectedIds[0]);
-    if (result.success && result.newId) {
-      this._stateHub.applyUpdate({ selectedIds: [result.newId] });
-    } else if (!result.success) {
-      void vscode.window.showErrorMessage(`HyperCanvas: Could not duplicate element. ${result.error ?? ''}`);
-    }
-  }
-
-  /**
-   * Go to code location of the first selected element (called from VS Code keybinding command).
-   * Mirrors _handleContextMenuGoToCode but driven by VS Code keyboard shortcut rather than
-   * the iframe context menu, so it works even when !inputFocus guard blocks iframe key events.
-   */
-  public async goToCodeSelected(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
-    const componentPath = this._currentComponent;
-    const panel = this._panel;
-    if (!componentPath || !selectedIds?.length || !panel) return;
-
-    const loc = await this._panelRouter.astBridge.astService.getElementLocation(componentPath, selectedIds[0]);
-    if (loc) {
-      await handleEditorMessage(
-        { type: 'editor:goToCode', path: componentPath, line: loc.line, column: loc.column + 1 },
-        panel.webview,
-      );
-    }
-  }
-
-  /**
-   * Wrap the first selected element in a new div container (called from VS Code command).
-   */
-  public async wrapSelected(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
-    const componentPath = this._currentComponent;
-    if (!componentPath || !selectedIds?.length) return;
-
-    const result = await this._panelRouter.astBridge.wrapElement(componentPath, selectedIds[0], 'div');
-    if (result.success && result.wrapperId) {
-      this._stateHub.applyUpdate({ selectedIds: [result.wrapperId] });
-    }
-  }
-
-  /**
-   * Open the insertion UI for the first selected element (called from VS Code command).
-   */
-  public async openInsertPanelForSelection(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
-    if (!selectedIds.length) return;
-
-    this._stateHub.applyUpdate({ selectedIds, insertTargetId: selectedIds[0] });
-  }
-
-  /**
    * Select children of selected element (called from VS Code keybinding command).
    */
   public async selectChildren(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
+    const selectedIds = this._stateHub.state.selectedIds;
     const componentPath = this._currentComponent;
-    if (componentPath && selectedIds.length > 0) {
-      const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(selectedIds[0]);
-      if (childIds.length > 0) {
-        this._stateHub.applyUpdate({ selectedIds: childIds });
-        return;
-      }
-    }
+    if (!componentPath || !selectedIds?.length) return;
 
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: false });
+    const childIds = await this._panelRouter.astBridge.astService.getChildElementIds(componentPath, selectedIds[0]);
+    if (childIds.length > 0) {
+      this._stateHub.applyUpdate({ selectedIds: childIds });
+    }
   }
 
   /**
    * Select parent of selected element (called from VS Code keybinding command).
    */
   public async selectParent(): Promise<void> {
-    const selectedIds = await this._waitForSelectedIds();
+    const selectedIds = this._stateHub.state.selectedIds;
     const componentPath = this._currentComponent;
-    if (componentPath && selectedIds.length > 0) {
-      const parentId = await this._panelRouter.astBridge.astService.getParentElementId(
-        componentPath,
-        selectedIds[0],
-        selectedIds[0],
-      );
-      if (parentId) {
-        const childItemIndex = this._stateHub.state.selectedItemIndices?.[selectedIds[0]] ?? null;
-        this._stateHub.applyUpdate({
-          selectedIds: [parentId],
-          selectedItemIndices: { [parentId]: childItemIndex },
-          hoveredId: null,
-          hoveredItemIndex: null,
-        });
-        return;
-      }
+    if (!componentPath || !selectedIds?.length) return;
+
+    const parentId = await this._panelRouter.astBridge.astService.getParentElementId(componentPath, selectedIds[0]);
+    if (parentId) {
+      this._stateHub.applyUpdate({ selectedIds: [parentId] });
+    } else {
+      this._stateHub.applyUpdate({ selectedIds: [] });
     }
-
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: true });
   }
 
   /**
-   * Select next sibling of selected element (called from VS Code keybinding command).
-   */
-  public selectNextSibling(): void {
-    // Forward to iframe where DOM-based keyboard handler resolves siblings via fiber tree.
-    // AST-based NodeMapService doesn't reliably track elements inside conditional JSX expressions.
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
-  }
-
-  /**
-   * Select previous sibling of selected element (called from VS Code keybinding command).
-   */
-  public selectPrevSibling(): void {
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
-  }
-
-  /**
-   * Programmatically select an element by its nodeRef.
+   * Programmatically select an element by its data-uniq-id.
    * Used by E2E tests and extension commands to establish full canvas selection state.
    */
   public selectElement(elementId: string): void {
-    this._stateHub.applyUpdate({
-      selectedIds: [elementId],
-      selectedItemIndices: {},
-      selectedElementRuntimeStyle: null,
-    });
+    this._stateHub.applyUpdate({ selectedIds: [elementId] });
   }
 
   /**
-   * Programmatically select multiple elements by their nodeRefs.
+   * Programmatically select multiple elements by their data-uniq-ids.
    */
   public selectElements(elementIds: string[]): void {
-    this._stateHub.applyUpdate({ selectedIds: elementIds, selectedItemIndices: {}, selectedElementRuntimeStyle: null });
+    this._stateHub.applyUpdate({ selectedIds: elementIds });
   }
 
   /**
@@ -1476,28 +844,22 @@ export class PreviewPanel {
    * Falls back to VS Code native undo when canvas stack is empty.
    */
   public async undo(): Promise<void> {
-    console.log('[PreviewPanel] undo() called (keybinding command)');
     const panel = this._panel;
     if (!panel) {
-      console.log('[PreviewPanel] undo: no panel, falling back to native undo');
       await vscode.commands.executeCommand('undo');
       return;
     }
     const handled = await this._panelRouter.astBridge.undo(panel);
-    console.log(`[PreviewPanel] undo: astBridge.undo returned ${handled}`);
     if (!handled) {
-      console.log('[PreviewPanel] undo: falling back to native VS Code undo');
-      await vscode.commands.executeCommand('undo');
+      await vscode.commands.executeCommand('default:undo');
       const editor = vscode.window.activeTextEditor;
       if (editor?.document.isDirty) {
         await editor.document.save();
       }
     }
-    // Always bump styleVersion to refresh inspector — both canvas stack and native undo paths
-    // revert the file on disk, but inspector caches styles and needs explicit invalidation
-    this._bumpStyleVersion();
-    // Re-emit selection after HMR settles so the new fiber tree picks it up
-    this._reEmitSelectionAfterHmr();
+    if (handled) {
+      this._bumpStyleVersion();
+    }
   }
 
   /**
@@ -1505,27 +867,27 @@ export class PreviewPanel {
    * Falls back to VS Code native redo when canvas stack is empty.
    */
   public async redo(): Promise<void> {
-    console.log('[PreviewPanel] redo() called (keybinding command)');
     const panel = this._panel;
     if (!panel) {
-      console.log('[PreviewPanel] redo: no panel, falling back to native redo');
-      await vscode.commands.executeCommand('redo');
+      await vscode.commands.executeCommand('default:redo');
       return;
     }
     const handled = await this._panelRouter.astBridge.redo(panel);
-    console.log(`[PreviewPanel] redo: astBridge.redo returned ${handled}`);
-    // No native redo fallback — applyEdit() syncs populate VS Code's native undo stack,
-    // causing spurious file writes when canRedo()=false. Canvas redo is self-contained.
-    // Always bump styleVersion to refresh inspector after redo
-    this._bumpStyleVersion();
-    // Re-emit selection after HMR settles so the new fiber tree picks it up
-    this._reEmitSelectionAfterHmr();
+    if (!handled) {
+      await vscode.commands.executeCommand('default:redo');
+      const editor = vscode.window.activeTextEditor;
+      if (editor?.document.isDirty) {
+        await editor.document.save();
+      }
+    }
+    if (handled) {
+      this._bumpStyleVersion();
+    }
   }
 
   /**
    * Increment styleVersion in shared state so the inspector re-reads styles.
-   * Called after any file-modifying operation (style writes, undo/redo) to
-   * sync the inspector with file changes.
+   * Called after undo/redo completes to sync the inspector with file changes.
    */
   private _bumpStyleVersion(): void {
     const current = this._stateHub.state.styleVersion ?? 0;
@@ -1533,62 +895,10 @@ export class PreviewPanel {
   }
 
   /**
-   * Re-emit current selectedIds after a delay so the preview webview can
-   * re-select the element once HMR has rebuilt the fiber tree.
-   *
-   * After undo/redo the file on disk changes, Vite HMR reloads the preview
-   * iframe, and the fiber tree is recreated with fresh DOM nodes.  The old
-   * selection (nodeRef format "src/App.tsx:13:8") is still valid because
-   * it's source-position-based, but the webview dropped it when HMR
-   * destroyed the previous React tree.  Re-emitting via applyUpdate
-   * broadcasts state:update with selectedIds to all panels so the preview
-   * can locate and highlight the element again.
-   */
-  private _reEmitSelectionAfterHmr(): void {
-    const selectedIds = this._stateHub.state.selectedIds;
-    if (!selectedIds?.length) return;
-
-    // Debounce: clear previous timer if multiple style writes happen rapidly
-    // (e.g. drag-resizing or multi-property updates). Only the last one fires.
-    if (this._reEmitTimer) clearTimeout(this._reEmitTimer);
-
-    // 2000ms delay: Vite HMR under Docker load takes 1-2s to rebuild the fiber
-    // tree. Re-emitting at 300ms (original) races the HMR settle — the selection
-    // update arrives before the iframe is ready, gets dropped, and the inspector
-    // loses element context (observed: inspector poll times out at 20s in run #23).
-    this._reEmitTimer = setTimeout(() => {
-      this._reEmitTimer = null;
-      // Re-read state — selection may have been cleared by user action
-      // during the delay window
-      const currentIds = this._stateHub.state.selectedIds;
-      if (!currentIds?.length) return;
-
-      console.log('[PreviewPanel] Re-emitting selection after HMR:', currentIds);
-      this._stateHub.applyUpdate({ selectedIds: currentIds });
-    }, 2000);
-  }
-
-  /**
    * Set callback for runtime errors from iframe preview
    */
   public onRuntimeError(callback: (error: DevServerRuntimeError | null) => void): void {
     this._onRuntimeErrorCallback = callback;
-  }
-
-  /**
-   * Set callback for component-missing signals from the preview iframe.
-   * Extension host wires this to PreviewFileManager.ensureComponent() with a retry guard.
-   */
-  public onComponentMissing(callback: (componentPath: string) => void): void {
-    this._onComponentMissingCallback = callback;
-  }
-
-  /**
-   * Set callback for sample creation from the preview overlay.
-   * Extension host uses this to regenerate the preview registry before reloading.
-   */
-  public onSampleCreated(callback: (componentPath: string) => Promise<void> | void): void {
-    this._onSampleCreatedCallback = callback;
   }
 
   /**
@@ -1610,12 +920,9 @@ export class PreviewPanel {
         type: 'goToVisual',
         elementId,
       });
-      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection.
-      // Clear stale .map() item snapshot so inspector shows correct colors for the new selection.
+      // Update StateHub so inspector (right panel) and explorer (left panel) receive selection
       this._stateHub.applyUpdate({
         selectedIds: [elementId],
-        selectedItemIndices: {},
-        selectedElementRuntimeStyle: null,
       });
     }
   }

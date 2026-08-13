@@ -179,7 +179,7 @@ export const ArrowElement = memo(function ArrowElement({
                 ref={inputRef}
                 type="text"
                 defaultValue={arrow.label || ''}
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional autofocus for annotation editing
+                // biome-ignore lint/a11y/noAutofocus: intentional autofocus for annotation editing
                 autoFocus
                 style={{
                   width: '100%',

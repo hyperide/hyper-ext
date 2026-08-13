@@ -47,7 +47,7 @@ export function useCanvasComments({
       }
 
       const iframeRect = iframe.getBoundingClientRect();
-      const scroll = iframeScrollRef.current ?? { x: 0, y: 0 };
+      const scroll = iframeScrollRef.current;
       const isSingleMode = canvasMode === 'single';
 
       // Update all comment stickers

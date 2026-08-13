@@ -6,16 +6,12 @@
  * Pattern follows StateHub: register panels, broadcast updates.
  */
 
-import { appendFileSync } from 'node:fs';
 import type * as vscode from 'vscode';
 import type { DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
 import { DIAGNOSTIC_LOG_LIMIT } from '../../../shared/diagnostic-types';
 import type { RuntimeError } from '../../../shared/runtime-error';
 import type { LogEntry } from './services/DevServerManager';
 import { DiagnosticPersistenceService } from './services/DiagnosticPersistenceService';
-
-// No module-level ERROR_SINK_PATH — read at call time so startDiagnosticCapture
-// can set the env var after module load and reach this path.
 
 /** Max server log entries included in AI diagnostic context */
 const SERVER_LOG_AI_CONTEXT_LIMIT = 50;
@@ -125,17 +121,6 @@ export class DiagnosticHub {
    */
   setRuntimeError(error: RuntimeError | null): void {
     this._runtimeError = error;
-    if (error) {
-      this._appendLogs([
-        {
-          line: `Runtime Error (${error.framework}): ${error.type}: ${error.message}`,
-          timestamp: Date.now(),
-          source: 'console',
-          isError: true,
-          level: 'error',
-        },
-      ]);
-    }
     this._broadcast({ type: 'diagnostic:runtimeError', error });
   }
 
@@ -162,7 +147,9 @@ export class DiagnosticHub {
     if (this._runtimeError) {
       const e = this._runtimeError;
       parts.push(
-        `Runtime Error (${e.framework}): ${e.type}: ${e.message}${e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : ''}${e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''}`,
+        `Runtime Error (${e.framework}): ${e.type}: ${e.message}` +
+          (e.file ? `\nFile: ${e.file}${e.line ? `:${e.line}` : ''}` : '') +
+          (e.codeframe ? `\n\`\`\`\n${e.codeframe}\n\`\`\`` : ''),
       );
     }
 
@@ -196,31 +183,6 @@ export class DiagnosticHub {
       this._logs = this._logs.slice(-DIAGNOSTIC_LOG_LIMIT);
     }
     this._persistence?.save(this._logs);
-
-    // Forward error-level entries to the optional E2E error sink so test
-    // harnesses see the same failures the user sees in the Hyper Logs panel.
-    // Read the env var at call time so startDiagnosticCapture (set after module load) works.
-    const sinkPath = process.env.HYPERIDE_DIAGNOSTIC_ERROR_SINK;
-    if (sinkPath) {
-      const errorEntries = entries.filter((e) => e.isError || e.level === 'error');
-      if (errorEntries.length > 0) {
-        const ndjson = errorEntries
-          .map((e) =>
-            JSON.stringify({
-              ts: e.timestamp,
-              kind: 'diagnosticEntry',
-              source: e.source ?? '',
-              line: (e.line ?? '').replace(/\n/g, ' '),
-            }),
-          )
-          .join('\n');
-        try {
-          appendFileSync(sinkPath, `${ndjson}\n`);
-        } catch {
-          // Best effort — never crash extension host on logging failure.
-        }
-      }
-    }
   }
 
   private _broadcast(message: Record<string, unknown>): void {

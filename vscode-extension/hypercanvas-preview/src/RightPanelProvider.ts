@@ -12,14 +12,10 @@ import * as vscode from 'vscode';
 import type { LeftPanelProvider } from './LeftPanelProvider';
 import type { PanelRouter } from './PanelRouter';
 import type { StateHub } from './StateHub';
-import type { ProjectCapabilities } from './types';
 import type { ScanResult } from './services/ComponentService';
 
 export class RightPanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'hypercanvas.inspectorView';
-
-  private _view?: vscode.WebviewView;
-  private _ready = false;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -29,68 +25,17 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     private readonly _getComponentGroups?: () => Promise<ScanResult>,
   ) {}
 
-  private _capabilities: ProjectCapabilities | null = null;
-
-  /**
-   * Notify the webview about project capabilities (readonly mode, CSS system).
-   * Pass null to clear capabilities on workspace switch.
-   * Caches capabilities so late-resolving webviews receive them on `webview:ready`.
-   */
-  public notifyCapabilities(capabilities: ProjectCapabilities | null): void {
-    this._capabilities = capabilities;
-    this._view?.webview.postMessage({ type: 'projectCapabilities', capabilities: capabilities ?? null });
-  }
-
-  /**
-   * Force the webview to reload its HTML, clearing all local React state.
-   * Returns a promise that resolves when the new React app has mounted and
-   * sent its `webview:ready` handshake (or after a 1.5s safety timeout).
-   */
-  public async reset(): Promise<void> {
-    if (!this._view) return;
-    const webview = this._view.webview;
-    this._ready = false;
-    // Webview reloads — old inputs lose focus without firing focusout, clear the guard
-    void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
-    const ready = new Promise<void>((resolve) => {
-      const sub = webview.onDidReceiveMessage((msg: { type?: string }) => {
-        if (msg?.type === 'webview:ready') {
-          sub.dispose();
-          resolve();
-        }
-      });
-      setTimeout(() => {
-        sub.dispose();
-        resolve();
-      }, 1_500);
-    });
-    webview.html = this._getHtml(webview);
-    await ready;
-  }
-
-  async focusAndEnsureReady(): Promise<void> {
-    await vscode.commands.executeCommand(`${RightPanelProvider.viewType}.focus`);
-    setTimeout(() => {
-      void this.resetIfNotReady();
-    }, 250);
-  }
-
-  async resetIfNotReady(): Promise<void> {
-    if (!this._view || this._ready) return;
-    await this.reset();
-  }
-
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
-    this._view = webviewView;
-    this._ready = false;
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'out')],
     };
+
+    webviewView.webview.html = this._getHtml(webviewView.webview);
 
     // Register with StateHub for cross-panel sync
     this._stateHub.register(RightPanelProvider.viewType, webviewView.webview);
@@ -105,12 +50,10 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
       const msg = message as { type?: string };
 
       if (msg.type === 'webview:ready') {
-        this._ready = true;
         this._stateHub.sendInit(RightPanelProvider.viewType);
-        // Send initial explorer visibility + component groups + capabilities
+        // Send initial explorer visibility + component groups
         this._sendExplorerState(webviewView.webview);
         this._sendComponentGroups(webviewView.webview);
-        webviewView.webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
         return;
       }
 
@@ -129,14 +72,8 @@ export class RightPanelProvider implements vscode.WebviewViewProvider {
     });
 
     webviewView.onDidDispose(() => {
-      this._view = undefined;
-      this._ready = false;
       this._stateHub.unregister(RightPanelProvider.viewType);
-      // Clear input-focus guard so canvas keybindings aren't permanently blocked
-      void vscode.commands.executeCommand('setContext', 'hypercanvas.rightPanelInputFocused', false);
     });
-
-    webviewView.webview.html = this._getHtml(webviewView.webview);
   }
 
   private _sendExplorerState(webview: vscode.Webview): void {

@@ -1,4 +1,3 @@
-// @ts-nocheck — stubbed via esbuild alias in the VS Code extension build; not type-checked there
 /**
  * Configure @monaco-editor/react to load Monaco from node_modules
  * instead of CDN (cdn.jsdelivr.net). This ensures the bundled version

@@ -192,7 +192,7 @@ describe('localStorage persistence', () => {
 
     const raw = localStorage.getItem('diagnostic-filter');
     expect(raw).toBeTruthy();
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test asserts truthy above
+    // biome-ignore lint/style/noNonNullAssertion: test asserts truthy above
     const parsed = JSON.parse(raw!);
     expect(parsed.sources.proxy).toBe(false);
     expect(parsed.searchQuery).toBe('test');

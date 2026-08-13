@@ -23,9 +23,9 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
 
   server.tool(
     'hyper_select_elements',
-    'Select elements in the canvas by their nodeRef. Pass an empty array to clear selection.',
+    'Select elements in the canvas by their data-uniq-id. Pass an empty array to clear selection.',
     {
-      elementIds: z.array(z.string()).describe('Array of nodeRef values to select'),
+      elementIds: z.array(z.string()).describe('Array of data-uniq-id values to select'),
     },
     async ({ elementIds }) => {
       services.stateHub.applyUpdate({ selectedIds: elementIds });
@@ -54,7 +54,7 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
         .string()
         .optional()
         .describe('Relative path to the component file (defaults to currently active component)'),
-      elementId: z.string().describe('nodeRef of the element to navigate to'),
+      elementId: z.string().describe('data-uniq-id of the element to navigate to'),
     },
     async ({ filePath, elementId }) => {
       const resolved = resolveFilePath(services.stateHub, filePath);
@@ -107,9 +107,9 @@ export function registerExtensionTools(server: McpServer, services: HyperMcpServ
 
   server.tool(
     'hyper_screenshot_element',
-    'Take a screenshot of a specific element in the preview by its nodeRef. By default returns the image inline. Pass saveTo to save to a file and return the path instead.',
+    'Take a screenshot of a specific element in the preview by its data-uniq-id. By default returns the image inline. Pass saveTo to save to a file and return the path instead.',
     {
-      elementId: z.string().describe('nodeRef of the element to screenshot'),
+      elementId: z.string().describe('data-uniq-id of the element to screenshot'),
       saveTo: z
         .string()
         .optional()

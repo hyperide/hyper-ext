@@ -117,13 +117,6 @@ export default function Projects() {
   const [showCreateSidebar, setShowCreateSidebar] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [continueProject, setContinueProject] = useState<Project | null>(null);
-  const [restoredCreationProject, setRestoredCreationProject] = useState<{
-    id: string;
-    path: string;
-    framework: string;
-    packageManager: string;
-    name: string;
-  } | null>(null);
   const [gitUrlPopoverOpen, setGitUrlPopoverOpen] = useState(false);
   const gitUrlInputRef = useRef<HTMLInputElement>(null);
 
@@ -145,20 +138,6 @@ export default function Projects() {
       setShowCreateSidebar(true);
     }
   }, [continueProject]);
-
-  // Restore in-progress AI project creation after page reload
-  useEffect(() => {
-    const stored = localStorage.getItem('projectCreationInProgress');
-    if (stored) {
-      try {
-        const p = JSON.parse(stored);
-        if (p?.id && p?.path) {
-          setRestoredCreationProject(p);
-          setShowCreateSidebar(true);
-        }
-      } catch {}
-    }
-  }, []);
 
   // GitHub App installation URL
   const { getInstallUrl } = useGitHubAppInstallations();
@@ -220,7 +199,7 @@ export default function Projects() {
     }
   }, [currentWorkspace]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- projects intentionally omitted — only used to check initial load, not as a trigger */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: projects intentionally omitted — only used to check initial load, not as a trigger
   useEffect(() => {
     if (currentWorkspace) {
       // Only show loading spinner on initial load, not on soft-refresh
@@ -230,7 +209,6 @@ export default function Projects() {
       loadProjects();
     }
   }, [currentWorkspace, loadProjects]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Reload projects when returning via browser back button (bfcache)
   useEffect(() => {
@@ -298,7 +276,7 @@ export default function Projects() {
   );
 
   // Subscribe to SSE for real-time status updates with polling fallback
-  /* eslint-disable react-hooks/exhaustive-deps -- refreshAuth is stable zustand action, adding it would needlessly recreate EventSource */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshAuth is stable zustand action, adding it would needlessly recreate EventSource
   useEffect(() => {
     if (!currentWorkspace || !accessToken || loading) return;
 
@@ -391,7 +369,6 @@ export default function Projects() {
       }
     };
   }, [currentWorkspace, accessToken, loading, usePolling]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Polling fallback (every 3 seconds)
   useEffect(() => {
@@ -573,8 +550,13 @@ export default function Projects() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-        <p className="text-lg text-muted-foreground">Loading projects...</p>
+      <div
+        data-uniq-id="8f224d0c-0e68-4dea-b45e-0ae269332b36"
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900"
+      >
+        <p data-uniq-id="68676c4b-77f5-421a-80b2-8815c7d9cda6" className="text-lg text-muted-foreground">
+          Loading projects...
+        </p>
       </div>
     );
   }
@@ -582,13 +564,16 @@ export default function Projects() {
   return (
     <div
       data-testid="ProjectsPage"
+      data-uniq-id="34183626-b607-43c2-b519-077308a2648a"
       className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-8"
     >
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
+      <div data-uniq-id="14dfd4ef-e4a6-403a-bbbf-a6a3e494a693" className="max-w-6xl mx-auto space-y-6">
+        <div data-uniq-id="0a04fa75-200e-4cdd-8570-79e0977f5dd4" className="flex items-center justify-between gap-4">
+          <div data-uniq-id="e528f01a-a8ad-441f-8ba3-b94926a4b43b" className="min-w-0">
             <div className="flex items-center gap-3 mb-2 flex-nowrap">
-              <h1 className="text-4xl font-bold shrink-0">Projects</h1>
+              <h1 data-uniq-id="c942a51a-4970-4e45-8271-da6482352117" className="text-4xl font-bold shrink-0">
+                Projects
+              </h1>
               {(pollingNetworkError || !isOnline) && <NetworkStatusIndicator variant="badge" isOffline={!isOnline} />}
               <span className="text-2xl text-muted-foreground shrink-0">/</span>
               <Popover open={workspaceSelectorOpen} onOpenChange={setWorkspaceSelectorOpen}>
@@ -634,20 +619,36 @@ export default function Projects() {
                 </PopoverContent>
               </Popover>
             </div>
-            <p className="text-muted-foreground">Manage your React projects</p>
+            <p data-uniq-id="69cc37b4-30e7-42ba-9420-b7b03f458255" className="text-muted-foreground">
+              Manage your React projects
+            </p>
           </div>
           {/* Desktop buttons - hidden below 1024px */}
-          <div className="hidden lg:flex gap-2">
-            <Button onClick={() => setShowCreateSidebar(true)} variant="default">
-              <IconSparkles className="w-4 h-4 mr-2" />
+          <div data-uniq-id="5efeb085-7b75-4622-8010-3af39523decf" className="hidden lg:flex gap-2">
+            <Button
+              data-uniq-id="3c091922-bfbb-485b-a159-98e15b15a2ff"
+              onClick={() => setShowCreateSidebar(true)}
+              variant="default"
+            >
+              <IconSparkles data-uniq-id="214285dd-c66c-49fd-b030-f119b4be51e3" className="w-4 h-4 mr-2" />
               Create New Project with AI
             </Button>
-            <Button onClick={() => setShowGitClone(!showGitClone)} variant="outline">
-              <IconBrandGit className="w-4 h-4 mr-2" />
+            <Button
+              data-uniq-id="6708687e-1797-4d8f-a979-054f5d9961ff"
+              onClick={() => setShowGitClone(!showGitClone)}
+              variant="outline"
+            >
+              <IconBrandGit data-uniq-id="e1bd25bf-fa97-4ff4-bf7f-47f5981b3b88" className="w-4 h-4 mr-2" />
               Clone from Git
             </Button>
-            <Button onClick={() => setShowGitHubModal(true)} variant="outline" size="icon" title="GitHub Settings">
-              <IconBrandGithub className="w-4 h-4" />
+            <Button
+              data-uniq-id="798b46ab-64c7-4710-a985-6f374e2fe1c4"
+              onClick={() => setShowGitHubModal(true)}
+              variant="outline"
+              size="icon"
+              title="GitHub Settings"
+            >
+              <IconBrandGithub data-uniq-id="5b042016-7f65-445d-9e54-f83b4114ce68" className="w-4 h-4" />
             </Button>
           </div>
 
@@ -678,20 +679,27 @@ export default function Projects() {
         </div>
 
         {showGitClone && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Clone Git Repository</CardTitle>
-              <CardDescription>
+          <Card data-uniq-id="50f0b38f-929a-46a7-93f4-0c840d2e116f">
+            <CardHeader data-uniq-id="47f95375-29fe-4c75-9d28-a955b5131ee2">
+              <CardTitle data-uniq-id="30b01508-af6c-48ef-a8f8-5edf2acb1373">Clone Git Repository</CardTitle>
+              <CardDescription data-uniq-id="d86b3845-6938-449b-93f8-81799f59b060">
                 Clone a repository via SSH or HTTPS URL. The project will be automatically detected and configured.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleCloneRepo} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="gitUrl">Git URL</Label>
-                  <div className="flex gap-2">
+            <CardContent data-uniq-id="bca5fb85-ea9b-4afb-8bc4-749666bb9054">
+              <form
+                data-uniq-id="fb40535b-97e8-4ae8-848d-a2d2664118e8"
+                onSubmit={handleCloneRepo}
+                className="space-y-4"
+              >
+                <div data-uniq-id="b3e0a7cd-b787-4343-8042-2141ff0edacc" className="space-y-2">
+                  <Label data-uniq-id="8a758382-a189-4f7d-ab15-ded707578fe3" htmlFor="gitUrl">
+                    Git URL
+                  </Label>
+                  <div data-uniq-id="31d6d7eb-2d80-4577-9b9d-5c8404bfbb89" className="flex gap-2">
                     <Input
                       ref={gitUrlInputRef}
+                      data-uniq-id="a8050444-16ae-41d4-b7b7-137af87eafa0"
                       id="gitUrl"
                       placeholder="git@github.com:user/repo.git or https://github.com/user/repo.git"
                       value={gitUrl}
@@ -701,24 +709,42 @@ export default function Projects() {
                       className="flex-1"
                     />
                     {githubRepos.length > 0 && (
-                      <Popover open={gitUrlPopoverOpen} onOpenChange={setGitUrlPopoverOpen} modal={false}>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" size="icon" title="Select from GitHub">
-                            <IconBrandGithub className="w-4 h-4" />
+                      <Popover
+                        data-uniq-id="ee2a509d-5380-4d7d-b7ac-3d57ead3e140"
+                        open={gitUrlPopoverOpen}
+                        onOpenChange={setGitUrlPopoverOpen}
+                        modal={false}
+                      >
+                        <PopoverTrigger data-uniq-id="4699134f-1727-403a-b405-974a08eef847" asChild>
+                          <Button
+                            data-uniq-id="b49585ea-5b7f-4573-8843-47b19571f65a"
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            title="Select from GitHub"
+                          >
+                            <IconBrandGithub data-uniq-id="47cb0ae5-8ee9-47b2-ad0b-98ce5416fb6f" className="w-4 h-4" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent
+                          data-uniq-id="0c0be607-d935-4b04-a81d-f6f6dcd0aec0"
                           className="w-[400px] p-0"
                           align="end"
                           onOpenAutoFocus={(e) => e.preventDefault()}
                           onInteractOutside={(e) => e.preventDefault()}
                         >
-                          <Command>
-                            <CommandList>
-                              <CommandEmpty>No repositories found</CommandEmpty>
-                              <CommandGroup heading="GitHub Repositories">
+                          <Command data-uniq-id="7d97e6de-951a-4071-bd42-49acb296f2fd">
+                            <CommandList data-uniq-id="9d1d672d-c290-4be7-9829-c1de1566cc52">
+                              <CommandEmpty data-uniq-id="5e502ee7-a8b4-4aad-ac65-7227f51366fc">
+                                No repositories found
+                              </CommandEmpty>
+                              <CommandGroup
+                                data-uniq-id="c58b1e48-b8eb-4e27-b10c-f6e44a2bed04"
+                                heading="GitHub Repositories"
+                              >
                                 {githubRepos.map((repo) => (
                                   <CommandItem
+                                    data-uniq-id="726a57f8-aec7-4033-99fa-cdd78d6879a2"
                                     key={repo.id}
                                     value={repo.full_name}
                                     onSelect={() => {
@@ -743,103 +769,150 @@ export default function Projects() {
                       </Popover>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Supports both SSH and HTTPS URLs</p>
-                    <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
-                      <p className="text-sm text-blue-900">
-                        <strong>Recommendation:</strong> Use SSH URLs (git@github.com:...) for full read/write access.
-                        HTTPS URLs provide read-only access unless you configure authentication tokens.
+                  <div data-uniq-id="3312984f-abc5-42e9-b0c4-e31333360abc" className="space-y-2">
+                    <p data-uniq-id="a1d607bf-1550-482c-90c2-345a0c2e4a28" className="text-sm text-muted-foreground">
+                      Supports both SSH and HTTPS URLs
+                    </p>
+                    <div
+                      data-uniq-id="f752efa4-d125-4cee-a14b-2ce3cbeeb40e"
+                      className="p-3 rounded-md bg-blue-50 border border-blue-200"
+                    >
+                      <p data-uniq-id="34dfa8b4-4eb6-4421-b0de-8537f683cbff" className="text-sm text-blue-900">
+                        <strong data-uniq-id="921f5f62-17a7-4a2f-82ec-13e83f9348b4">Recommendation:</strong> Use SSH
+                        URLs (git@github.com:...) for full read/write access. HTTPS URLs provide read-only access unless
+                        you configure authentication tokens.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="projectName">Project Name (optional)</Label>
+                <div data-uniq-id="fd81cf9d-b715-4fae-b137-a6518b7cfd24" className="space-y-2">
+                  <Label data-uniq-id="32a06509-0566-4841-8bf2-219bfe0ce2f1" htmlFor="projectName">
+                    Project Name (optional)
+                  </Label>
                   <Input
+                    data-uniq-id="f4a39f77-72f0-48a2-986b-3477ca41630c"
                     id="projectName"
                     placeholder="Auto-detected from package.json"
                     value={projectName}
                     onChange={(e) => setProjectName(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">Leave empty to use the name from package.json</p>
+                  <p data-uniq-id="e44e1f15-24dc-4e24-b22d-f4de93d9decc" className="text-xs text-muted-foreground">
+                    Leave empty to use the name from package.json
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="framework">Framework</Label>
+                <div data-uniq-id="64dd3cb4-d10e-403a-a4a6-a2379d17e7b6" className="space-y-2">
+                  <Label data-uniq-id="e713efcf-1c4c-48cb-b7b3-56431c09b7ba" htmlFor="framework">
+                    Framework
+                  </Label>
                   <select
+                    data-uniq-id="5bb3fb77-fd3c-4878-8507-8ad7291da255"
                     id="framework"
                     value={framework}
                     onChange={(e) => handleFrameworkChange(e.target.value as Framework)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="vite">Vite (React)</option>
-                    <option value="next">Next.js</option>
-                    <option value="remix">Remix</option>
-                    <option value="cra">Create React App</option>
+                    <option data-uniq-id="d9f184e9-d495-4002-a4bf-93245feec5aa" value="vite">
+                      Vite (React)
+                    </option>
+                    <option data-uniq-id="834bc08a-17a4-4ff5-bec9-e97778bbb435" value="next">
+                      Next.js
+                    </option>
+                    <option data-uniq-id="d5e30515-fe98-4ad9-9b56-560d7150b12d" value="remix">
+                      Remix
+                    </option>
+                    <option data-uniq-id="3f20125a-b7eb-4813-9846-b14188adbe2e" value="cra">
+                      Create React App
+                    </option>
                     <option value="bun">Bun</option>
                   </select>
-                  <p className="text-xs text-muted-foreground">Select your project's framework</p>
+                  <p data-uniq-id="1244e471-5623-47bb-9577-945109e9706d" className="text-xs text-muted-foreground">
+                    Select your project's framework
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="packageManager">Package Manager</Label>
+                <div data-uniq-id="0130fd0c-b936-48e2-9b31-d7b37d96cb24" className="space-y-2">
+                  <Label data-uniq-id="66143c3d-11a1-48bb-8d54-fbcd0e9248a6" htmlFor="packageManager">
+                    Package Manager
+                  </Label>
                   <select
+                    data-uniq-id="42eed9ac-87a8-489c-99d3-d6ed7a2a65f7"
                     id="packageManager"
                     value={packageManager}
                     onChange={(e) => handlePackageManagerChange(e.target.value as PackageManager)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="npm">npm</option>
-                    <option value="yarn">yarn</option>
-                    <option value="pnpm">pnpm</option>
+                    <option data-uniq-id="ac0103c4-fb5d-4616-ac63-aea9a310aaea" value="npm">
+                      npm
+                    </option>
+                    <option data-uniq-id="d6114f3e-3959-4b79-8d71-866385be0c5f" value="yarn">
+                      yarn
+                    </option>
+                    <option data-uniq-id="4e92fecd-671f-4c30-a958-6cfb835f03ee" value="pnpm">
+                      pnpm
+                    </option>
                     <option value="bun">bun</option>
                   </select>
-                  <p className="text-xs text-muted-foreground">Select package manager to use for dependencies</p>
+                  <p data-uniq-id="4ddf472d-2cfb-4847-8bbb-84e16fa05dd6" className="text-xs text-muted-foreground">
+                    Select package manager to use for dependencies
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="installCommand">Install Command</Label>
+                <div data-uniq-id="f68e5119-3ae6-42e9-a530-c59eac75cd56" className="space-y-2">
+                  <Label data-uniq-id="6fe7fd62-e2a4-4ffb-adec-39d6116ccbe8" htmlFor="installCommand">
+                    Install Command
+                  </Label>
                   <Input
+                    data-uniq-id="4c1260b5-68da-4e28-9273-42b56fe64110"
                     id="installCommand"
                     placeholder="npm install"
                     value={installCommand}
                     onChange={(e) => setInstallCommand(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p data-uniq-id="31c22312-f7cc-4651-ae04-bdf32fbdf8ed" className="text-xs text-muted-foreground">
                     Command to install dependencies (e.g., npm install --legacy-peer-deps)
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="devCommand">Dev Command</Label>
+                <div data-uniq-id="ac6bdeec-f27b-42bc-8bd4-556abd55fe8c" className="space-y-2">
+                  <Label data-uniq-id="b21fdc4b-8083-48e8-abab-223e62e3f55a" htmlFor="devCommand">
+                    Dev Command
+                  </Label>
                   <Input
+                    data-uniq-id="1346bf25-efaf-411f-91ba-09d69f71b295"
                     id="devCommand"
                     placeholder="npm run dev"
                     value={devCommand}
                     onChange={(e) => setDevCommand(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p data-uniq-id="6077055f-f5e4-4346-945c-2566c1a8c8ed" className="text-xs text-muted-foreground">
                     Command to start the dev server (auto-filled based on framework)
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="internalPort">Internal Port</Label>
+                <div data-uniq-id="e1ac4b34-f57b-4c40-9edf-c15182c6ca9f" className="space-y-2">
+                  <Label data-uniq-id="b3fa7ee6-c8d0-4e8e-a0a0-840a49fb62e6" htmlFor="internalPort">
+                    Internal Port
+                  </Label>
                   <Input
+                    data-uniq-id="03b6b72f-bf70-43f8-9b8d-fedf0bb12361"
                     id="internalPort"
                     type="number"
                     placeholder="5173"
                     value={internalPort}
                     onChange={(e) => setInternalPort(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p data-uniq-id="be61f8c0-9c60-4e18-88f7-6d053179f791" className="text-xs text-muted-foreground">
                     Port inside Docker container (auto-filled based on framework)
                   </p>
                 </div>
 
                 {error && (
-                  <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                  <div
+                    data-uniq-id="6c7e0bde-d75e-42d0-928c-ba096e592f7e"
+                    className="p-3 rounded-md bg-destructive/10 text-destructive text-sm"
+                  >
                     {error}
                     {errorCode === 'GITHUB_AUTH_REQUIRED' && (
                       <div className="mt-2">
@@ -850,16 +923,27 @@ export default function Projects() {
                 )}
 
                 {cloning && (
-                  <div className="p-3 rounded-md bg-amber-50 border border-amber-200">
-                    <p className="text-sm text-amber-900">Cloning repository... This usually takes 10-30 seconds.</p>
+                  <div
+                    data-uniq-id="95a26345-36f0-438a-a128-a86163f467d0"
+                    className="p-3 rounded-md bg-amber-50 border border-amber-200"
+                  >
+                    <p data-uniq-id="4b7fc228-b09c-4fef-b897-73688845f507" className="text-sm text-amber-900">
+                      Cloning repository... This usually takes 10-30 seconds.
+                    </p>
                   </div>
                 )}
 
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={cloning}>
+                <div data-uniq-id="9b2d3a6e-a0ab-49bd-adf2-697daee8a836" className="flex gap-2">
+                  <Button data-uniq-id="1a6b8437-a34f-4599-a11a-2086035645e0" type="submit" disabled={cloning}>
                     {cloning ? 'Cloning...' : 'Clone Repository'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowGitClone(false)} disabled={cloning}>
+                  <Button
+                    data-uniq-id="1f70e942-589a-46af-bb8c-1c32aece9aab"
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowGitClone(false)}
+                    disabled={cloning}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -868,26 +952,44 @@ export default function Projects() {
           </Card>
         )}
 
-        <div className="grid gap-4">
+        <div data-uniq-id="15921f9e-72fc-491b-9243-6c10f55ca65a" className="grid gap-4">
           {projects !== null && projects.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <p className="text-lg text-muted-foreground mb-4">No projects yet</p>
-                <Button onClick={() => setShowGitClone(true)}>
-                  <IconBrandGit className="w-4 h-4 mr-2" />
+            <Card data-uniq-id="f40f1f12-0709-4b4b-bcc2-ab6d8ceda337">
+              <CardContent
+                data-uniq-id="4bcd9370-7641-427c-9d37-5e1356f4fd6a"
+                className="flex flex-col items-center justify-center py-16"
+              >
+                <p data-uniq-id="7328d71b-757d-4805-ab9a-7452a2fa06e3" className="text-lg text-muted-foreground mb-4">
+                  No projects yet
+                </p>
+                <Button data-uniq-id="c0b69bc3-d6c2-4b42-82a1-b2428b6283dd" onClick={() => setShowGitClone(true)}>
+                  <IconBrandGit data-uniq-id="47abcc67-9970-41b7-ac31-e0cbd43c6a7b" className="w-4 h-4 mr-2" />
                   Clone your first project
                 </Button>
               </CardContent>
             </Card>
           ) : (
             projects?.map((project) => (
-              <Card key={project.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-6">
+              <Card
+                data-uniq-id="32a94575-5a3c-4910-97ff-f2531571a778"
+                key={project.id}
+                className="hover:shadow-lg transition-shadow"
+              >
+                <CardContent data-uniq-id="cda6f025-d83b-4ad6-9ae3-9a78c8eddab1" className="p-6">
                   {/* Header: name + status + buttons */}
-                  <div className="flex items-center justify-between gap-4">
+                  <div
+                    data-uniq-id="97d93c63-175a-464a-9420-3330193c1d42"
+                    className="flex items-center justify-between gap-4"
+                  >
                     <div className="flex items-center gap-3 min-w-0">
-                      <h3 className="text-xl font-semibold truncate">{project.name}</h3>
+                      <h3
+                        data-uniq-id="0189129f-04aa-4036-9137-71ef8b3f9938"
+                        className="text-xl font-semibold truncate"
+                      >
+                        {project.name}
+                      </h3>
                       <span
+                        data-uniq-id="52b4683c-a66b-4183-bbb2-a51298a62bff"
                         className={`text-xs px-2 py-1 rounded-full shrink-0 ${
                           project.status === 'running'
                             ? 'bg-green-100 text-green-700'
@@ -904,6 +1006,7 @@ export default function Projects() {
                         project.creationStatus !== 'idle' &&
                         project.creationStatus !== 'completed' && (
                           <span
+                            data-uniq-id="7361a9ab-1a1e-4e55-bad5-ff29104155ff"
                             className={`text-xs px-2 py-1 rounded-full shrink-0 ${
                               project.creationStatus === 'failed'
                                 ? 'bg-red-100 text-red-700'
@@ -916,27 +1019,56 @@ export default function Projects() {
                           </span>
                         )}
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div data-uniq-id="b64e2da5-74d6-481b-9b0f-80415d10ce1a" className="flex gap-2 shrink-0">
                       {project.status === 'running' || project.status === 'building' ? (
-                        <Button variant="outline" size="sm" onClick={() => handleRestartProject(project.id)}>
-                          <IconRefresh className="w-4 h-4 sm:mr-1" />
+                        <Button
+                          data-uniq-id="34cb810f-e970-4045-a77b-c1e1edf8678e"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestartProject(project.id)}
+                        >
+                          <IconRefresh
+                            data-uniq-id="ebb19187-5b25-4318-a4fc-3986e4ac7288"
+                            className="w-4 h-4 sm:mr-1"
+                          />
                           <span className="hidden sm:inline">Restart</span>
                         </Button>
                       ) : (
-                        <Button variant="outline" size="sm" onClick={() => handleStartProject(project.id)}>
-                          <IconPlayerPlay className="w-4 h-4 sm:mr-1" />
+                        <Button
+                          data-uniq-id="2735d31e-85d0-42e3-842b-c418a1a3f15c"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleStartProject(project.id)}
+                        >
+                          <IconPlayerPlay
+                            data-uniq-id="9296eb29-c2ca-4b56-baf2-e423ae03dbd4"
+                            className="w-4 h-4 sm:mr-1"
+                          />
                           <span className="hidden sm:inline">Start</span>
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${project.id}/settings`)}>
-                        <IconSettings className="w-4 h-4" />
+                      <Button
+                        data-uniq-id="2e199c82-7d6f-416d-8667-62c76a9f8972"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/projects/${project.id}/settings`)}
+                      >
+                        <IconSettings data-uniq-id="e9f70738-c2f6-4a4c-93fa-967ce75a9860" className="w-4 h-4" />
                       </Button>
                       {project.creationStatus === 'generating' ? (
-                        <Button size="sm" onClick={() => setContinueProject(project)}>
+                        <Button
+                          data-uniq-id="b82b64f7-34cf-445b-8557-864029e1844e"
+                          size="sm"
+                          onClick={() => setContinueProject(project)}
+                        >
                           Continue
                         </Button>
                       ) : (
-                        <Button size="sm" onClick={() => handleOpenProject(project.id)}>
+                        <Button
+                          data-uniq-id="b82b64f7-34cf-445b-8557-864029e1844e"
+                          size="sm"
+                          onClick={() => handleOpenProject(project.id)}
+                        >
                           Open
                         </Button>
                       )}
@@ -944,25 +1076,31 @@ export default function Projects() {
                   </div>
                   {/* Details: path, github, metadata */}
                   <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm text-muted-foreground">{project.path.split('/').pop()}</p>
+                    <div data-uniq-id="6da539d1-c798-48e1-885c-47479122c23f" className="min-w-0">
+                      <p data-uniq-id="de8dc493-1c82-4e99-9581-2d9110c1812e" className="text-sm text-muted-foreground">
+                        {project.path.split('/').pop()}
+                      </p>
                       {project.githubRepoUrl && (
                         <a
+                          data-uniq-id="c7f59c91-ccf4-421c-a8c1-d24809779d4c"
                           href={project.githubRepoUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
                         >
-                          <IconBrandGit className="w-4 h-4" />
+                          <IconBrandGit data-uniq-id="f172c074-41a4-4e78-a73c-ce3f48fd84c7" className="w-4 h-4" />
                           View on GitHub
                         </a>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground shrink-0">
-                      <span>Framework: {project.framework}</span>
-                      <span>Port: {project.internalPort}</span>
-                      <span>Dev: {project.devCommand}</span>
-                      <span>Install: {project.installCommand}</span>
+                    <div
+                      data-uniq-id="d75e7bc5-c85c-4539-83a1-5fe60e5d4a0e"
+                      className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground shrink-0"
+                    >
+                      <span data-uniq-id="b6b7a2c8-ed40-4df2-81cb-d90317eb7c78">Framework: {project.framework}</span>
+                      <span data-uniq-id="9cceff7e-1ed3-443d-862e-a3c1e8d3d993">Port: {project.internalPort}</span>
+                      <span data-uniq-id="cfd52ee6-518a-4116-924d-1a2f70da13c4">Dev: {project.devCommand}</span>
+                      <span data-uniq-id="f7f193b7-b1a7-4351-9b7e-d553cc3ad9c4">Install: {project.installCommand}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -973,12 +1111,15 @@ export default function Projects() {
       </div>
       {/* AI Project Creation Sidebar */}
       {showCreateSidebar && (
-        <div className="fixed top-0 right-0 h-screen w-full sm:w-[450px] z-50 shadow-2xl">
+        <div
+          data-uniq-id="7139c80e-a8d9-4a1f-a25c-77590de04489"
+          className="fixed top-0 right-0 h-screen w-[450px] z-50 shadow-2xl"
+        >
           <ProjectCreationAIChat
+            data-uniq-id="43a62e87-ec18-4482-b91b-47e14705b96c"
             onClose={() => {
               setShowCreateSidebar(false);
               setContinueProject(null);
-              setRestoredCreationProject(null);
             }}
             onProjectCreated={handleProjectCreated}
             existingProject={
@@ -990,13 +1131,14 @@ export default function Projects() {
                     packageManager: continueProject.packageManager,
                     name: continueProject.name,
                   }
-                : (restoredCreationProject ?? undefined)
+                : undefined
             }
           />
         </div>
       )}
       {/* GitHub Repository Selection Modal */}
       <GitHubRepoModal
+        data-uniq-id="13a95d19-f843-4235-a372-4c08984f41b6"
         open={showGitHubModal}
         onOpenChange={setShowGitHubModal}
         onSelect={handleGitHubRepoSelect}

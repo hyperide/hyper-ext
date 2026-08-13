@@ -69,6 +69,7 @@ async function main(): Promise<void> {
   if (hasBatchArgs || !isTTY) {
     // Batch mode
     let code = expression ?? '';
+    let stdinData: string | undefined;
 
     if (execFile) {
       code = readFileSync(execFile, 'utf-8');
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
     }
 
     try {
-      const output = runBatch({ expression: code, canvasWidth, canvasHeight });
+      const output = runBatch({ expression: code, canvasWidth, canvasHeight, stdinData });
 
       if (format === 'png' && output) {
         if (!isRsvgAvailable()) {

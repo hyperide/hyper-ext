@@ -261,7 +261,7 @@ function NestedComponentField({ label, value, onChange, depth = 0 }: NestedCompo
             {value.map((item, index) => {
               if (isNestedComponent(item)) {
                 return (
-                  // eslint-disable-next-line react/no-array-index-key -- nested components have no stable unique id
+                  // biome-ignore lint/suspicious/noArrayIndexKey: nested components have no stable unique id
                   <div key={index} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-600">
@@ -741,15 +741,11 @@ export function InsertInstancePanel({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {fieldDef.options.map((option) => {
-                          const val = typeof option === 'string' ? option : option.value;
-                          const label = typeof option === 'string' ? option : option.label;
-                          return (
-                            <SelectItem key={val} value={val} className="text-xs">
-                              {label}
-                            </SelectItem>
-                          );
-                        })}
+                        {fieldDef.options.map((option) => (
+                          <SelectItem key={option} value={option} className="text-xs">
+                            {option}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   ) : isBoolean ? (

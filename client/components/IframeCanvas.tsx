@@ -1,12 +1,9 @@
+import { getItemIndex } from '@shared/canvas-interaction/click-handler';
 import { injectDesignStyles } from '@shared/canvas-interaction/style-injector';
-import type { SourceLocation } from '@shared/element-tracing/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IPHONE_SIZES } from '@/components/RightSidebar/constants';
 import { useComponentMeta } from '@/contexts/ComponentMetaContext';
-import { useElementTracer } from '@/hooks/useElementTracer';
-import { useTracerSelectionSync } from '@/hooks/useTracerSelectionSync';
 import { useCanvasEngine } from '@/lib/canvas-engine';
-import { getActiveTracer as getActiveTracerInstance } from '@/lib/element-tracing/active-tracer';
 import { authFetch } from '@/utils/authFetch';
 import type { RuntimeError } from '../../shared/runtime-error';
 // Canvas composition loaded from server only (no localStorage cache)
@@ -20,19 +17,8 @@ interface IframeCanvasProps {
   instanceSizes?: Record<string, { width?: number; height?: number }>;
   editorMode?: 'design' | 'interact' | 'code';
   isAddingComment?: boolean;
-  onElementClick?: (
-    nodeRef: string | null,
-    element: HTMLElement,
-    event: MouseEvent,
-    itemIndex: number,
-    source: SourceLocation,
-  ) => void;
-  onElementHover?: (
-    nodeRef: string | null,
-    element: HTMLElement | null,
-    itemIndex: number | null,
-    source: SourceLocation | null,
-  ) => void;
+  onElementClick?: (element: HTMLElement | null, event?: MouseEvent, itemIndex?: number | null) => void;
+  onElementHover?: (element: HTMLElement | null, itemIndex?: number | null) => void;
   onLoadingChange?: (loading: boolean) => void;
   onCanvasModeChange?: (mode: CanvasMode) => void;
   onEmptyClick?: () => void;
@@ -47,8 +33,6 @@ interface IframeCanvasProps {
   onRuntimeError?: (error: RuntimeError | null) => void;
   // Error state change callback for rendering overlays outside pan&zoom
   onErrorChange?: (error: string | null, retryCount: number) => void;
-  /** When set, uses this URL as iframe src instead of the built /project-preview proxy URL */
-  overrideSrc?: string;
 }
 
 export default function IframeCanvas({
@@ -70,7 +54,6 @@ export default function IframeCanvas({
   onGatewayError,
   onRuntimeError,
   onErrorChange,
-  overrideSrc,
 }: IframeCanvasProps) {
   const { meta } = useComponentMeta();
   const engine = useCanvasEngine();
@@ -82,18 +65,6 @@ export default function IframeCanvas({
   const [canvasComposition, setCanvasComposition] = useState<CanvasComposition | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Fiber-based element tracing — keeps WS alive across mode switches, callers gate on design mode
-  const { tracer } = useElementTracer({
-    iframe: iframeRef.current,
-    projectId: meta?.projectId ?? '',
-    enabled: previewReady,
-    loadCounter: iframeLoadedCounter,
-    componentPath,
-  });
-
-  // Sync tracer async events (server-confirmed selections, refMapping remapping) with engine
-  const { setPendingSelection } = useTracerSelectionSync({ tracer, engine });
 
   // Show logs panel when error occurs
   useEffect(() => {
@@ -392,12 +363,6 @@ export default function IframeCanvas({
 
   // Recovery: reload iframe when server comes back online (serverOffline: true → false)
   const prevServerOfflineRef = useRef(serverOffline);
-
-  // Browser-internal errors that are harmless noise — don't surface to the user
-  const isIgnorableRuntimeError = (message: string) =>
-    message.includes('ResizeObserver loop completed with undelivered notifications') ||
-    message.includes('ResizeObserver loop limit exceeded');
-
   // Tracks whether current runtime error came from overlay polling or postMessage.
   // Must be a ref (not local variable) to survive useEffect re-runs on iframeLoadedCounter change.
   const errorSourceRef = useRef<'overlay' | 'postMessage' | null>(null);
@@ -444,7 +409,7 @@ export default function IframeCanvas({
   }, [previewReady, boardModeActive, editorMode, canvasMode]);
 
   // Apply instance sizes to DOM elements
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     if (!instanceSizes) return;
 
@@ -477,7 +442,6 @@ export default function IframeCanvas({
     const timeoutId = setTimeout(applyInstanceSizes, 100);
     return () => clearTimeout(timeoutId);
   }, [instanceSizes, iframeLoadedCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Setup event handlers - re-runs when boardModeActive or activeInstanceId changes
   useEffect(() => {
@@ -511,9 +475,8 @@ export default function IframeCanvas({
         e.stopPropagation();
 
         const target = e.target as HTMLElement;
-        // Use fiber-based resolution for comment target; fall back to null
-        const fiberResult = tracer?.resolveClickLocal(target);
-        const elementId = fiberResult?.nodeRef ?? null;
+        const element = target.closest('[data-uniq-id]') as HTMLElement;
+        const elementId = element?.dataset.uniqId || null;
 
         // Determine instanceId: from clicked element's instance, or activeInstanceId for empty space
         const instanceElement = target.closest('[data-canvas-instance-id]') as HTMLElement;
@@ -562,38 +525,38 @@ export default function IframeCanvas({
           e.stopPropagation();
         }
 
+        // Find closest element with data-uniq-id
+        const element = target.closest('[data-uniq-id]') as HTMLElement;
+
+        // Check if click was on empty space (no element with data-uniq-id)
+        if (!element) {
+          // Click on empty space - exit to board mode
+          if (onEmptyClick) {
+            onEmptyClick();
+          }
+          return;
+        }
+
         // In multi-instance mode: check if click is on different instance
         if (activeInstanceId) {
-          const instanceElement = target.closest('[data-canvas-instance-id]') as HTMLElement;
+          const instanceElement = element.closest('[data-canvas-instance-id]') as HTMLElement;
           const clickedInstanceId = instanceElement?.dataset.canvasInstanceId;
 
+          // Click on element in different instance - switch to that instance
           if (clickedInstanceId && clickedInstanceId !== activeInstanceId) {
-            onOtherInstanceClick?.(clickedInstanceId);
+            if (onOtherInstanceClick) {
+              onOtherInstanceClick(clickedInstanceId);
+            }
             return;
           }
         }
 
         // Normal element click handling (only in design mode)
         if (mode === 'design' && onElementClick) {
-          // Fiber-based resolution (primary path)
-          if (tracer) {
-            const result = tracer.resolveClickLocal(target);
-            if (result) {
-              onElementClick(result.nodeRef, target, e, result.itemIndex, result.source);
-              return;
-            }
-            // Fiber gave source but no cached nodeRef (server round-trip pending)
-            const source = tracer.getSourceLocation(target);
-            if (source) {
-              const itemIndex = tracer.getItemIndex(target);
-              setPendingSelection(source, itemIndex);
-              onElementClick(null, target, e, itemIndex, source);
-              return;
-            }
-          }
+          const uniqId = element.dataset.uniqId;
+          const itemIndex = uniqId ? getItemIndex(element, uniqId, doc, activeInstanceId) : null;
 
-          // No element identified — empty space click
-          onEmptyClick?.();
+          onElementClick(element, e, itemIndex);
         }
       }
       // If not in design or interact mode: let events pass through naturally
@@ -618,34 +581,32 @@ export default function IframeCanvas({
 
     const handleMouseOver = (e: MouseEvent) => {
       const mode = engine.getMode();
-      if (mode !== 'design') return;
 
-      const target = e.target as HTMLElement;
+      // Only apply hover effects in design mode
+      if (mode === 'design') {
+        const target = e.target as HTMLElement;
+        const element = target.closest('[data-uniq-id]') as HTMLElement;
 
-      if (tracer && onElementHover) {
-        const result = tracer.resolveClickLocal(target);
-        if (result) {
-          onElementHover(result.nodeRef, target, result.itemIndex, result.source);
-          return;
+        if (element && onElementHover) {
+          const uniqId = element.dataset.uniqId;
+          const itemIndex = uniqId ? getItemIndex(element, uniqId, doc, activeInstanceId) : null;
+          onElementHover(element, itemIndex);
         }
       }
-
-      // No fiber source — element is not traceable, skip hover
     };
 
     const handleMouseOut = (e: MouseEvent) => {
       const mode = engine.getMode();
-      if (mode !== 'design') return;
 
-      const relatedTarget = e.relatedTarget as HTMLElement | null;
+      // Only apply hover effects in design mode
+      if (mode === 'design') {
+        const target = e.target as HTMLElement;
+        const element = target.closest('[data-uniq-id]') as HTMLElement;
 
-      // If pointer moved to another traceable element, don't clear hover
-      if (tracer && relatedTarget) {
-        const source = tracer.getSourceLocation(relatedTarget);
-        if (source) return;
+        if (element && onElementHover) {
+          onElementHover(null, null);
+        }
       }
-
-      onElementHover?.(null, null, null, null);
     };
 
     // Forward keyboard events from iframe to parent window
@@ -810,8 +771,6 @@ export default function IframeCanvas({
     engine,
     iframeLoadedCounter,
     canvasMode,
-    tracer,
-    setPendingSelection,
   ]);
 
   // Update opacity of instances based on activeInstanceId
@@ -834,7 +793,7 @@ export default function IframeCanvas({
   }, [activeInstanceId, boardModeActive]);
 
   // Toggle design-mode class on iframe body based on editor mode
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentDocument) return;
@@ -848,12 +807,11 @@ export default function IframeCanvas({
       body.classList.remove('design-mode');
     }
   }, [editorMode, iframeLoadedCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Poll iframe for runtime errors (Next.js, Vite, Bun error overlays)
   // Also listens for postMessage-based errors from iframe-console-capture.js
   // (catches module SyntaxErrors that don't produce framework overlays)
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-check after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-check after iframe reload
   useEffect(() => {
     if (!onRuntimeError) return;
 
@@ -917,8 +875,6 @@ export default function IframeCanvas({
         // Extract error message
         const messageEl = shadowRoot.querySelector('.message-body');
         const errorMessage = messageEl?.textContent?.trim() || 'Unknown error';
-
-        if (isIgnorableRuntimeError(errorMessage)) return null;
 
         // Extract file info
         const fileEl = shadowRoot.querySelector('.file');
@@ -1014,7 +970,7 @@ export default function IframeCanvas({
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type !== 'hypercanvas:runtimeError') return;
       const error = event.data.error as RuntimeError;
-      if (error && !isIgnorableRuntimeError(error.message)) {
+      if (error) {
         errorSourceRef.current = 'postMessage';
         postMessageTimeRef.current = Date.now();
         onRuntimeError(error);
@@ -1065,7 +1021,6 @@ export default function IframeCanvas({
       window.removeEventListener('message', handleRuntimeMessage);
     };
   }, [onRuntimeError, iframeLoadedCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Calculate iframe size for multi mode: quantized to 10000, min padding 5000
   const iframeSize = useMemo(() => {
@@ -1126,7 +1081,7 @@ export default function IframeCanvas({
   }, [canvasMode, canvasComposition]);
 
   // Sync iframe body dimensions with iframe element size
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-apply after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-apply after iframe reload
   useEffect(() => {
     const body = iframeRef.current?.contentDocument?.body;
     if (!body) return;
@@ -1139,7 +1094,6 @@ export default function IframeCanvas({
       body.style.minHeight = '';
     }
   }, [iframeSize, iframeLoadedCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Require projectId - don't render iframe without it
   if (!meta?.projectId) {
@@ -1173,7 +1127,6 @@ export default function IframeCanvas({
         src={
           previewReady
             ? (() => {
-                if (overrideSrc) return overrideSrc;
                 const baseUrl = `/project-preview/${meta.projectId}/test-preview`;
                 const params = new URLSearchParams();
                 params.set('component', componentPath);
@@ -1188,7 +1141,8 @@ export default function IframeCanvas({
             : 'about:blank'
         }
         sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
-        allowTransparency
+        // @ts-expect-error allowtransparency is non-standard but needed for transparent background
+        allowtransparency="true"
         className={iframeSize ? 'border-0' : 'w-full h-full border-0'}
         style={{
           width: iframeSize?.width,
@@ -1210,7 +1164,7 @@ export default function IframeCanvas({
 export function getElementFromIframe(
   iframeRef: React.RefObject<HTMLIFrameElement>,
   elementId: string,
-  _instanceId?: string | null,
+  instanceId?: string | null,
 ): HTMLElement | null {
   const iframe = iframeRef.current;
   if (!iframe) return null;
@@ -1218,12 +1172,12 @@ export function getElementFromIframe(
   const doc = iframe.contentDocument;
   if (!doc) return null;
 
-  // Use active tracer for fiber-based DOM element lookup
-  const tracer = getActiveTracerInstance();
-  if (tracer) {
-    return tracer.findDOMElementByNodeRef(elementId);
-  }
-  return null;
+  // Build selector with optional instance scope
+  const selector = instanceId
+    ? `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`
+    : `[data-uniq-id="${elementId}"]`;
+
+  return doc.querySelector(selector);
 }
 
 /**

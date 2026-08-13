@@ -3,8 +3,8 @@ import { authFetch } from '@/utils/authFetch';
 
 type Props = {
   activeProject: ProjectData;
-  setIsStarting: React.Dispatch<React.SetStateAction<boolean>>;
-  setActiveProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
+  setIsStarting: (starting: boolean) => void;
+  setActiveProject: (project: ProjectData) => void;
   onOpenSettings: () => void;
 };
 
@@ -21,7 +21,7 @@ export function IframeFailed({ activeProject, setIsStarting, setActiveProject, o
               const res = await authFetch(`/api/docker/logs/${activeProject.id}?lines=50`);
               const data = await res.json();
               alert(`Docker Logs:\n\n${data.logs}`);
-            } catch {
+            } catch (_err) {
               alert('Failed to fetch logs');
             }
           }}

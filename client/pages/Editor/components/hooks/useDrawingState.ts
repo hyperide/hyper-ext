@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { type AnnotationElement, type ArrowAnnotation, isArrowAnnotation } from '@/../../shared/types/annotations';
+import { type AnnotationElement, isArrowAnnotation } from '@/../../shared/types/annotations';
 import type { AnnotationOperationCallbacks } from '@/components/annotations';
 import { type AnnotationStoreApi, createAnnotationStore, useAnnotationStoreSnapshot } from '@/lib/annotation-store';
 import type { CanvasEngine } from '@/lib/canvas-engine';
@@ -152,7 +152,7 @@ export function useDrawingState({ engine, projectId, componentPath }: UseDrawing
   const arrowBindingsSignature = useMemo(() => {
     return annotations
       .filter(
-        (a): a is ArrowAnnotation =>
+        (a): a is import('@/../../shared/types/annotations').ArrowAnnotation =>
           a?.type === 'arrow' && (a.startBinding !== null || a.endBinding !== null),
       )
       .map((a) => `${a.id}:${a.startBinding?.instanceId}:${a.endBinding?.instanceId}`)

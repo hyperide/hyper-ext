@@ -85,7 +85,7 @@ export const SVGComponent: ComponentDefinition = {
   fields: {},
   defaultProps: {},
   render: ({ props, children }) => (
-    // eslint-disable-next-line jsx-a11y/alt-text -- generic SVG container, user controls accessibility via props
+    // biome-ignore lint/a11y/noSvgWithoutTitle: generic SVG container, user controls accessibility via props
     <svg {...props}>{children}</svg>
   ),
   canHaveChildren: true,

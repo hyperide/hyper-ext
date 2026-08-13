@@ -1,8 +1,10 @@
 import { describe, expect, it, mock } from 'bun:test';
 
-// vscode is already mocked globally by test/mock-vscode.ts preload.
-// DO NOT call mock.module('vscode', ...) here — it replaces the global
-// mock for ALL subsequent test files and causes flaky failures.
+// Mock vscode (not used by the pure functions we test)
+mock.module('vscode', () => ({
+  workspace: { getConfiguration: () => ({ get: () => '' }) },
+  ExtensionContext: class {},
+}));
 
 // Mock @lib/ai-client
 mock.module('@lib/ai-client', () => ({

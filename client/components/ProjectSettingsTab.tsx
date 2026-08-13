@@ -96,11 +96,10 @@ export default function ProjectSettingsTab() {
     return JSON.stringify(original) !== JSON.stringify(formState);
   }, [project, formState]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- accessToken is an intentional trigger to re-fetch on auth change; loadProject is not memoized, adding it would cause infinite loop */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: accessToken is an intentional trigger to re-fetch on auth change; loadProject is not memoized, adding it would cause infinite loop
   useEffect(() => {
     loadProject();
   }, [accessToken]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadSubscriptionStatus = useCallback(async (projectId: string) => {
     try {

@@ -53,7 +53,6 @@ const App = () => (
                 <Routes>
                   {/* Public routes */}
                   <Route path="/login" element={<Login />} />
-                  <Route path="/v2/login" element={<Login />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/auth/error" element={<AuthError />} />
                   <Route path="/invite/:token" element={<InviteAccept />} />
@@ -123,7 +122,7 @@ const App = () => (
 );
 
 // Mount the app
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- root element is guaranteed by index.html
+// biome-ignore lint/style/noNonNullAssertion: root element is guaranteed by index.html
 createRoot(document.getElementById('root')!).render(<App />);
 
 export default App;

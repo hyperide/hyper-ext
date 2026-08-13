@@ -10,24 +10,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
-import type { ProjectCapabilities, UnsupportedProjectError } from '../types';
-import type { SimplePropInfo } from './PropsForm';
+import type { UnsupportedProjectError } from '../types';
 
 interface UsePreviewBridgeOptions {
   iframeEl: HTMLIFrameElement | null;
   canvas: CanvasAdapter;
   /** Forward state patches to canvas interaction (overlay rendering in iframe) */
   onStateUpdate: (patch: Record<string, unknown>) => void;
-}
-
-/** Error info from iframe ErrorBoundary — rendered in webview overlay, not inside iframe */
-export interface ComponentError {
-  componentPath: string;
-  error: string;
-  /** Monotonic counter — increments on each error event, even for same component */
-  errorSeq: number;
-  /** Prop schema from extension's ComponentService (populated asynchronously) */
-  propsSchema?: SimplePropInfo[] | null;
 }
 
 interface UsePreviewBridgeResult {
@@ -39,70 +28,8 @@ interface UsePreviewBridgeResult {
   showNoComponentHint: boolean;
   /** Set when extension detects an unsupported project type (e.g. React Native / Tamagui) */
   projectError: UnsupportedProjectError | null;
-  /** Detected project capabilities — CSS system, readonly mode, etc. */
-  projectCapabilities: ProjectCapabilities | null;
-  /** Set when iframe ErrorBoundary catches a component render error */
-  componentError: ComponentError | null;
-  /** Current value of hypercanvas.devServer.autoStart setting */
-  autoStart: boolean;
   handleStartDevServer: () => void;
   handleRefresh: () => void;
-  clearComponentError: () => void;
-  handleAutoStartChange: (value: boolean) => void;
-  handleOpenAutoStartSettings: () => void;
-}
-
-export function buildComponentPreviewUrl(devServerUrl: string, component: string): string {
-  return `${devServerUrl.replace(/\/$/, '')}/test-preview?component=${encodeURIComponent(component)}`;
-}
-
-export function hasNavigatedPreviewSource(src: string | null | undefined): src is string {
-  return Boolean(src && src !== 'about:blank');
-}
-
-export function getComponentFromPreviewUrl(src: string | null | undefined): string | null {
-  if (!src || src === 'about:blank') return null;
-  try {
-    return new URL(src).searchParams.get('component');
-  } catch {
-    return null;
-  }
-}
-
-export function shouldNavigateFrameToComponent(src: string | null | undefined, nextComponent: string): boolean {
-  const currentComponent = getComponentFromPreviewUrl(src);
-  return currentComponent !== nextComponent;
-}
-
-export function shouldNavigateFromSharedStateMessage(messageType: string): boolean {
-  return messageType !== 'state:init' && messageType !== 'state:update';
-}
-
-export function applyComponentRenderSucceeded(
-  prev: ComponentError | null,
-  componentPath: string,
-): ComponentError | null {
-  return prev?.componentPath === componentPath ? null : prev;
-}
-
-export function canUpdatePreviewComponentInPlace(
-  currentSrc: string | null | undefined,
-  nextSrc: string | null | undefined,
-): boolean {
-  if (!hasNavigatedPreviewSource(currentSrc) || !hasNavigatedPreviewSource(nextSrc)) return false;
-
-  try {
-    const currentUrl = new URL(currentSrc);
-    const nextUrl = new URL(nextSrc);
-    return (
-      currentUrl.origin === nextUrl.origin &&
-      currentUrl.pathname === nextUrl.pathname &&
-      currentUrl.searchParams.has('component') &&
-      nextUrl.searchParams.has('component')
-    );
-  } catch {
-    return false;
-  }
 }
 
 export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreviewBridgeOptions): UsePreviewBridgeResult {
@@ -111,9 +38,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showNoComponentHint, setShowNoComponentHint] = useState(false);
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
-  const [projectCapabilities, setProjectCapabilities] = useState<ProjectCapabilities | null>(null);
-  const [componentError, setComponentError] = useState<ComponentError | null>(null);
-  const [autoStart, setAutoStart] = useState(false);
   // Track whether we were previously connected (for reconnecting banner)
   const wasConnectedRef = useRef(false);
   const [disconnected, setDisconnected] = useState(false);
@@ -121,69 +45,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   // Keep onStateUpdate stable via ref to avoid re-subscribing
   const onStateUpdateRef = useRef(onStateUpdate);
   onStateUpdateRef.current = onStateUpdate;
-
-  // Track current component for re-sending after HMR full reload.
-  // When Vite triggers a full page reload inside the iframe, the React state
-  // in CanvasPreview is lost. history.replaceState keeps the URL in sync,
-  // but as a safety net we also re-send setComponent after each iframe load.
-  const currentComponentRef = useRef<string | null>(null);
-  const devServerUrlRef = useRef<string | null>(null);
-  const previewUrlRef = useRef<string | null>(null);
-  // Keep iframeEl in a ref so callbacks stay stable.
-  // Direct assignment during render is intentional — this is the standard React pattern
-  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
-  // between render and effect execution, which is worse than synchronous assignment.
-  const iframeElRef = useRef(iframeEl);
-  iframeElRef.current = iframeEl;
-  const setStoredPreviewUrl = useCallback((url: string | null) => {
-    previewUrlRef.current = url;
-    setPreviewUrl(url);
-  }, []);
-
-  const navigateToComponent = useCallback(
-    (component: string, baseUrl = devServerUrlRef.current): boolean => {
-      if (!baseUrl) return false;
-      setShowNoComponentHint(false);
-      setStoredPreviewUrl(buildComponentPreviewUrl(baseUrl, component));
-      return true;
-    },
-    [setStoredPreviewUrl],
-  );
-
-  const getFrameHref = useCallback((frame: HTMLIFrameElement): string => {
-    const frameSrc = frame.getAttribute('src') || frame.src;
-    try {
-      return frame.contentWindow?.location.href || frameSrc;
-    } catch {
-      return frameSrc;
-    }
-  }, []);
-
-  const syncComponentToFrame = useCallback(
-    (component: string, frame = iframeElRef.current): boolean => {
-      if (!frame || !hasNavigatedPreviewSource(frame.getAttribute('src') || frame.src)) {
-        return navigateToComponent(component);
-      }
-
-      const frameHref = getFrameHref(frame);
-      const baseUrl = devServerUrlRef.current;
-      const nextUrl = baseUrl ? buildComponentPreviewUrl(baseUrl, component) : null;
-      if (nextUrl && !canUpdatePreviewComponentInPlace(frameHref, nextUrl)) {
-        return navigateToComponent(component, baseUrl);
-      }
-
-      const currentComponent = getComponentFromPreviewUrl(frameHref);
-      if (!currentComponent) {
-        return navigateToComponent(component);
-      }
-
-      if (currentComponent !== component) {
-        frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
-      }
-      return true;
-    },
-    [getFrameHref, navigateToComponent],
-  );
 
   // === iframe -> extension message forwarding ===
   // Origin validation: event.source check ensures only messages from our iframe are processed.
@@ -223,37 +84,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             requestId: msg.requestId,
             dataUrl: msg.dataUrl,
           } as unknown as PlatformMessage);
-        } else if (msg.type === 'hypercanvas:resolveServerSourceMap') {
-          // Approach B: iframe requests server-side source map resolution from extension host.
-          // Forward to extension host which reads the .map file from the local filesystem.
-          canvas.sendEvent(msg as unknown as PlatformMessage);
-        } else if (msg.type === 'hypercanvas:componentError') {
-          // ErrorBoundary caught a render error — show overlay in webview layer.
-          // Always update (bump errorSeq) so overlay can detect re-fires and reset state.
-          setComponentError((prev) => {
-            const sameComponent = prev && prev.componentPath === msg.componentPath;
-            if (!sameComponent) {
-              canvas.sendEvent({
-                type: 'errorBoundary:getPropsSchema',
-                componentPath: msg.componentPath,
-              } as unknown as PlatformMessage);
-            }
-            return {
-              componentPath: msg.componentPath,
-              error: msg.error,
-              errorSeq: (prev?.errorSeq ?? 0) + 1,
-              // Keep existing schema if same component
-              propsSchema: sameComponent ? prev.propsSchema : undefined,
-            };
-          });
-        } else if (msg.type === 'hypercanvas:componentRenderSucceeded') {
-          setComponentError((prev) => applyComponentRenderSucceeded(prev, msg.componentPath));
-        } else if (msg.type === 'hypercanvas:componentMissing') {
-          // Component not in registry — forward to extension host to trigger self-healing.
-          canvas.sendEvent({
-            type: 'hypercanvas:componentMissing',
-            componentPath: msg.componentPath,
-          } as unknown as PlatformMessage);
         }
         return;
       }
@@ -285,79 +115,21 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     return () => window.removeEventListener('message', handleMessage);
   }, [canvas, iframeEl]);
 
-  // Tree → canvas scroll is now driven entirely by the `iframe:scrollToElement` message
-  // (LeftPanel → extension host → StateHub.broadcast → PreviewPanel webview, handled in
-  // the extension-message switch below). The earlier local `hypercanvas:treeSelect`
-  // CustomEvent path was deleted: VS Code webviews are isolated iframes, so a CustomEvent
-  // dispatched in the LeftPanel window never reached the listener in this PreviewPanel
-  // window. SaaS takes the engine.select branch in useElementSelection and never used it.
-
-  // === Tree selection → canvas scroll ===
-  // When the user clicks an element in the Elements Tree, useElementSelection dispatches
-  // a local CustomEvent. We forward it to the iframe as hypercanvas:goToVisual so the
-  // canvas scrolls to the element. This is local-only (no round-trip through extension host).
-  useEffect(() => {
-    function handleTreeSelect(event: Event) {
-      const e = event as CustomEvent<{ elementId: string }>;
-      const elementId = e.detail?.elementId;
-      if (!elementId) return;
-      // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-      iframeElRef.current?.contentWindow?.postMessage({ type: 'hypercanvas:goToVisual', elementId }, '*');
-    }
-    window.addEventListener('hypercanvas:treeSelect', handleTreeSelect);
-    return () => window.removeEventListener('hypercanvas:treeSelect', handleTreeSelect);
-  }, []);
-
-  // === Re-send current component after iframe (re)load ===
-  // When Vite HMR triggers a full page reload inside the iframe, the postMessage-based
-  // setComponent is lost (the old page is gone). After the new page loads, CanvasPreview
-  // reads componentPath from URL params. The history.replaceState fix in generator.ts
-  // keeps the URL in sync, but as a safety net we also re-send the component postMessage
-  // after each load event — guaranteeing that both the React state AND the
-  // iframe-interaction.ts renderedComponentPath are up to date.
-  useEffect(() => {
-    if (!iframeEl) return;
-    let initialLoad = true; // skip the very first load (initial navigation)
-    function handleLoad() {
-      const comp = currentComponentRef.current;
-      if (comp && iframeEl && shouldNavigateFrameToComponent(getFrameHref(iframeEl), comp)) {
-        syncComponentToFrame(comp, iframeEl);
-        return;
-      }
-      if (initialLoad) {
-        initialLoad = false;
-        return;
-      }
-      if (comp && iframeEl?.contentWindow) {
-        // Small delay: wait for iframe scripts to initialize their message listeners
-        setTimeout(() => {
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:setComponent', component: comp },
-            '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
-          );
-        }, 100);
-      }
-    }
-    iframeEl.addEventListener('load', handleLoad);
-    return () => iframeEl.removeEventListener('load', handleLoad);
-  }, [getFrameHref, iframeEl, syncComponentToFrame]);
+  // Keep iframeEl in a ref so doRefresh callback stays stable.
+  // Direct assignment during render is intentional — this is the standard React pattern
+  // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
+  // between render and effect execution, which is worse than synchronous assignment.
+  const iframeElRef = useRef(iframeEl);
+  iframeElRef.current = iframeEl;
 
   // === Refresh logic ===
   const doRefresh = useCallback(() => {
     const frame = iframeElRef.current;
     if (!frame) return;
-    // Prefer contentWindow.location.href — it reflects the current component
-    // after history.replaceState updates from setComponent (frame.src still
-    // holds the original first-load URL and is never updated to avoid reloads).
-    let url: string;
-    try {
-      url = frame.contentWindow?.location.href || frame.src;
-    } catch {
-      url = frame.src; // cross-origin fallback
-    }
+    const currentSrc = frame.src;
     frame.src = '';
     setTimeout(() => {
-      frame.src = url;
+      frame.src = currentSrc;
     }, 50);
   }, []);
 
@@ -396,55 +168,30 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             wasConnectedRef.current = true;
           }
           setDevServerRunning(msg.running);
-          devServerUrlRef.current = msg.url ?? null;
-          setDevServerUrl(devServerUrlRef.current);
-          if (!msg.running) {
-            // Drop the iframe session entirely. VS Code can reuse the same webview
-            // when the workspace changes; keeping the old component would navigate
-            // the next dev server to a stale path before the new component is ready.
-            currentComponentRef.current = null;
-            setComponentError(null);
-            setShowNoComponentHint(false);
-            setStoredPreviewUrl(null);
-          }
-          if (msg.running && devServerUrlRef.current && currentComponentRef.current && !previewUrlRef.current) {
-            navigateToComponent(currentComponentRef.current, devServerUrlRef.current);
-          }
-          break;
-
-        case 'devserver:settings':
-          if (typeof msg.autoStart === 'boolean') setAutoStart(msg.autoStart);
+          setDevServerUrl(msg.url ?? null);
           break;
 
         case 'updateUrl': {
           const url = typeof msg.url === 'string' ? msg.url : undefined;
           if (!url) break;
           setShowNoComponentHint(false);
-          // Only clear error when switching to a different component
-          try {
-            const comp = new URL(url).searchParams.get('component');
-            setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
-            if (comp) currentComponentRef.current = comp;
-          } catch {
-            /* ignore */
-          }
           const frame = iframeElRef.current;
-          const frameSrc = frame?.getAttribute('src') || frame?.src;
-          if (frame && hasNavigatedPreviewSource(frameSrc)) {
+          if (frame?.src) {
             // Iframe already loaded — extract component param and send via postMessage
             // to avoid iframe navigation flash
             try {
               const component = new URL(url).searchParams.get('component');
-              if (component && canUpdatePreviewComponentInPlace(getFrameHref(frame), url)) {
+              if (component) {
                 frame.contentWindow?.postMessage({ type: 'hypercanvas:setComponent', component }, '*'); // nosemgrep: wildcard-postmessage-configuration
-                canvas.sendEvent({ type: 'state:update', patch: { selectedElementRuntimeStyle: null } });
                 break;
               }
             } catch {
               /* invalid URL — fall through to full navigation */
             }
+            frame.src = url;
+          } else {
+            setPreviewUrl(url);
           }
-          setStoredPreviewUrl(url);
           break;
         }
 
@@ -457,24 +204,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           break;
 
         case 'setComponent': {
-          const comp = typeof msg.component === 'string' ? msg.component : null;
-          if (comp) currentComponentRef.current = comp;
-          // Only clear error when switching to a DIFFERENT component
-          setComponentError((prev) => (prev && prev.componentPath === comp ? prev : null));
-          // Clear stale runtime style from previous component (postMessage switch skips iframe reload)
-          canvas.sendEvent({ type: 'state:update', patch: { selectedElementRuntimeStyle: null } });
           const frame = iframeElRef.current;
-          const frameSrc = frame?.getAttribute('src') || frame?.src;
-          if (frame?.contentWindow && hasNavigatedPreviewSource(frameSrc)) {
-            const currentComponent = getComponentFromPreviewUrl(getFrameHref(frame));
-            if (currentComponent) {
-              // Send via postMessage — no iframe reload
-              frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
-            } else if (comp) {
-              navigateToComponent(comp);
-            }
-          } else if (comp) {
-            navigateToComponent(comp);
+          if (frame?.contentWindow) {
+            // Send via postMessage — no iframe reload
+            frame.contentWindow.postMessage({ type: 'hypercanvas:setComponent', component: msg.component }, '*'); // nosemgrep: wildcard-postmessage-configuration
           }
           break;
         }
@@ -493,59 +226,19 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
         case 'state:update':
           // Forward to canvas interaction (overlay rendering)
           if (msg.patch) {
-            const component = (msg.patch as { currentComponent?: { path?: unknown } | null }).currentComponent;
-            if (component === null) {
-              currentComponentRef.current = null;
-            }
-            if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
-              currentComponentRef.current = component.path;
-              syncComponentToFrame(component.path);
-            }
             onStateUpdateRef.current(msg.patch);
           }
-          // Forward to iframe (platform state sync).
-          // Iframe handler expects `hypercanvas:stateUpdate` with fields directly on the message
-          // (not nested under `patch`). Forwarding raw `state:update` was silently ignored.
-          if (msg.patch) {
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.patch }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          }
+          // Forward to iframe (platform state sync)
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'state:init':
           // Forward to canvas interaction (full state)
           if (msg.state) {
-            const component = (msg.state as { currentComponent?: { path?: unknown } | null }).currentComponent;
-            if (component === null) {
-              currentComponentRef.current = null;
-            }
-            if (typeof component?.path === 'string' && shouldNavigateFromSharedStateMessage(msg.type)) {
-              currentComponentRef.current = component.path;
-              syncComponentToFrame(component.path);
-            }
             onStateUpdateRef.current(msg.state);
-            // Forward to iframe as stateUpdate — same pattern as state:update above.
-            iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:stateUpdate', ...msg.state }, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           }
-          break;
-
-        case 'iframe:clearGraceCache':
-          // Drop stale selection-rect cache entry after i18n write; forces fresh DOM lookup
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:clearGraceCache', elementId: msg.elementId }, '*');
-          break;
-
-        case 'iframe:scrollToElement':
-          // Scroll canvas (iframe) to the specified element without changing selection
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:scrollToElement', elementId: msg.elementId }, '*');
-          break;
-
-        case 'iframe:writeI18nResource':
-          // Freeze the last-known selection overlay rect during an i18n write so the
-          // HMR re-render gap doesn't manifest as a visible deselect (Path B in
-          // docs/plans/2026-05-06-selection-survives-i18n-write.md).
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          iframeEl?.contentWindow?.postMessage({ type: 'hypercanvas:writeI18nResource', phase: msg.phase }, '*');
+          // Forward to iframe
+          iframeEl?.contentWindow?.postMessage(msg, '*'); // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
           break;
 
         case 'ast:response':
@@ -583,48 +276,12 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Extension detected an unsupported project type (e.g. React Native / Tamagui)
           setProjectError((msg.error as UnsupportedProjectError) ?? null);
           break;
-
-        case 'projectCapabilities':
-          // Extension detected CSS system and computed read/write capabilities
-          setProjectCapabilities(
-            (msg as { capabilities?: ProjectCapabilities }).capabilities ?? null,
-          );
-          break;
-
-        case 'errorBoundary:propsSchema':
-          // Extension responded with prop type schema — enrich existing componentError
-          setComponentError((prev) =>
-            prev && prev.componentPath === msg.componentPath
-              ? { ...prev, propsSchema: msg.propsSchema as SimplePropInfo[] }
-              : prev,
-          );
-          break;
-
-        case 'serverSourceMapResult':
-          // Approach B: extension host resolved a server-side (RSC) source map — forward to iframe.
-          // nosemgrep: wildcard-postmessage-configuration -- webview->iframe forwarding
-          // Spread msg first so our namespaced type wins over msg.type ('serverSourceMapResult')
-          iframeEl?.contentWindow?.postMessage({ ...msg, type: 'hypercanvas:serverSourceMapResult' }, '*');
-          break;
-
-        case 'canvas:refocusIframe':
-          // After reveal(false) steals focus from iframe, refocus it so keyboard events work
-          iframeEl?.focus();
-          break;
-
-        case 'canvas:keyboard':
-          // Forward keyboard command from VS Code keybinding into iframe
-          iframeEl?.contentWindow?.postMessage(
-            { type: 'hypercanvas:syntheticKeydown', key: msg.key, shiftKey: msg.shiftKey },
-            '*',
-          );
-          break;
       }
     }
 
     window.addEventListener('message', handleMessage); // nosemgrep: insufficient-postmessage-origin-validation -- VS Code webview, checks event.source against iframe
     return () => window.removeEventListener('message', handleMessage);
-  }, [canvas, doRefresh, getFrameHref, iframeEl, navigateToComponent, setStoredPreviewUrl, syncComponentToFrame]);
+  }, [iframeEl, doRefresh]);
 
   // === Signal webview ready to extension ===
   // 'webview:ready' is an internal extension event, not a PlatformMessage —
@@ -641,23 +298,6 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     canvas.sendEvent({ type: 'command:startDevServer' } as unknown as PlatformMessage);
   }, [canvas]);
 
-  const handleAutoStartChange = useCallback(
-    (value: boolean) => {
-      setAutoStart(value);
-      canvas.sendEvent({ type: 'panel:updateAutoStart', value } as unknown as PlatformMessage);
-    },
-    [canvas],
-  );
-
-  const handleOpenAutoStartSettings = useCallback(() => {
-    canvas.sendEvent({
-      type: 'panel:openSettings',
-      query: 'hypercanvas.devServer.autoStart',
-    } as unknown as PlatformMessage);
-  }, [canvas]);
-
-  const clearComponentError = useCallback(() => setComponentError(null), []);
-
   return {
     devServerRunning,
     devServerUrl,
@@ -665,13 +305,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     previewUrl,
     showNoComponentHint,
     projectError,
-    projectCapabilities,
-    componentError,
-    autoStart,
     handleStartDevServer,
     handleRefresh: doRefresh,
-    clearComponentError,
-    handleAutoStartChange,
-    handleOpenAutoStartSettings,
   };
 }

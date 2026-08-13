@@ -8,8 +8,101 @@ import _traverse, { type NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import type { FindElementResult } from '../types';
 
-const generate = (_generate as unknown as { default: typeof _generate }).default || _generate;
-const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
+const generate = _generate.default || _generate;
+
+// @ts-expect-error - babel/traverse has ESM/CJS issues
+const traverse = _traverse.default || _traverse;
+
+/**
+ * Extract string value from JSX attribute value
+ * Handles: StringLiteral, JSXExpressionContainer with StringLiteral,
+ * and JSXExpressionContainer with static TemplateLiteral (no expressions)
+ * @param value - JSX attribute value node
+ * @returns String value or null if not a static string
+ */
+function getStaticStringFromAttrValue(value: t.JSXAttribute['value']): string | null {
+  if (!value) return null;
+
+  // Case 1: data-uniq-id="value"
+  if (t.isStringLiteral(value)) {
+    return value.value;
+  }
+
+  // Case 2 & 3: data-uniq-id={"value"} or data-uniq-id={`value`}
+  if (t.isJSXExpressionContainer(value)) {
+    const expr = value.expression;
+
+    // data-uniq-id={"value"}
+    if (t.isStringLiteral(expr)) {
+      return expr.value;
+    }
+
+    // data-uniq-id={`value`} - only static templates (no ${} expressions)
+    if (t.isTemplateLiteral(expr) && expr.expressions.length === 0) {
+      // Join all quasis (template parts)
+      return expr.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find JSX element by data-uniq-id attribute
+ * @param ast - AST to search in
+ * @param uuid - UUID to find
+ * @returns Element and its path, or null if not found
+ */
+export function findElementByUuid(ast: t.File, uuid: string): FindElementResult | null {
+  let result: FindElementResult | null = null;
+
+  traverse(ast, {
+    JSXElement(path: NodePath<t.JSXElement>) {
+      if (result) return; // Already found
+
+      const openingElement = path.node.openingElement;
+
+      // Find data-uniq-id attribute
+      const dataUniqIdAttr = openingElement.attributes.find(
+        (attr: t.JSXAttribute | t.JSXSpreadAttribute) =>
+          t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
+      );
+
+      if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr)) {
+        const elementUuid = getStaticStringFromAttrValue(dataUniqIdAttr.value);
+
+        if (elementUuid === uuid) {
+          result = {
+            element: path.node,
+            path,
+          };
+          path.stop();
+        }
+      }
+    },
+  });
+
+  return result;
+}
+
+/**
+ * Get UUID from JSX element's data-uniq-id attribute
+ * @param element - JSX element to extract UUID from
+ * @returns UUID string or null if not found
+ */
+export function getUuidFromElement(element: t.JSXElement): string | null {
+  const openingElement = element.openingElement;
+
+  const dataUniqIdAttr = openingElement.attributes.find(
+    (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-uniq-id',
+  );
+
+  if (dataUniqIdAttr && t.isJSXAttribute(dataUniqIdAttr)) {
+    return getStaticStringFromAttrValue(dataUniqIdAttr.value);
+  }
+
+  return null;
+}
 
 /**
  * Find all JSX elements in AST
@@ -200,6 +293,52 @@ export function analyzeJSXChildren(element: t.JSXElement): ChildrenAnalysis {
  */
 export function getJSXTagName(element: t.JSXElement): string {
   return resolveJSXName(element.openingElement.name);
+}
+
+/**
+ * Find the most specific JSX element with a data-uniq-id at a given source position.
+ * Combines findElementAtPosition + getUuidFromElement + getJSXTagName.
+ * Fixes the member expression bug from AstService (returns 'Dialog.Portal' instead of 'unknown').
+ */
+export function findElementWithUuidAtPosition(
+  ast: t.File,
+  line: number,
+  column: number,
+): { uuid: string; tagName: string } | null {
+  let bestMatch: {
+    uuid: string;
+    tagName: string;
+    size: number;
+  } | null = null;
+
+  traverse(ast, {
+    JSXElement(path: NodePath<t.JSXElement>) {
+      const loc = path.node.loc;
+      if (!loc) return;
+
+      const isWithin =
+        (line > loc.start.line || (line === loc.start.line && column >= loc.start.column)) &&
+        (line < loc.end.line || (line === loc.end.line && column <= loc.end.column));
+
+      if (!isWithin) return;
+
+      const uuid = getUuidFromElement(path.node);
+      if (!uuid) return;
+
+      const size = (loc.end.line - loc.start.line) * 1000 + (loc.end.column - loc.start.column);
+
+      if (!bestMatch || size < bestMatch.size) {
+        bestMatch = { uuid, tagName: getJSXTagName(path.node), size };
+      }
+    },
+  });
+
+  if (bestMatch) {
+    const { uuid, tagName } = bestMatch;
+    return { uuid, tagName };
+  }
+
+  return null;
 }
 
 function resolveJSXName(name: t.JSXIdentifier | t.JSXMemberExpression | t.JSXNamespacedName): string {

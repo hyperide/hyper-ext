@@ -68,12 +68,16 @@ export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, p
 
   // Show stopped state with start button
   return (
-    <div data-testid="ProjectStartOverlay" className="h-full flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <p className="text-lg text-muted-foreground">
+    <div
+      data-testid="ProjectStartOverlay"
+      data-uniq-id="3ae5d415-2b23-4611-aa49-49f9be686100"
+      className="h-full flex items-center justify-center"
+    >
+      <div data-uniq-id="90c45f36-57af-487f-9a9b-4708dd7a2bfb" className="text-center space-y-4">
+        <p data-uniq-id="ad066f8c-0edc-46de-baf3-1ac5c9ef769f" className="text-lg text-muted-foreground">
           {project ? `Project "${project.name}" is stopped` : 'No active project'}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p data-uniq-id="6d7e53bb-eaaa-425d-ba75-b2703160c34c" className="text-sm text-muted-foreground">
           {project ? 'Click Start to run the project' : 'Add a project in settings to get started'}
         </p>
         {project && pollStatus.lastPoll && (
@@ -98,8 +102,14 @@ export function ProjectStartOverlay({ project, isStarting, onRestart, onStart, p
           </div>
         )}
         {project && (
-          <Button variant="outline" size="sm" onClick={onStart} className="mt-4">
-            <IconPlayerPlay className="w-4 h-4 mr-1" />
+          <Button
+            data-uniq-id="57c057c7-47d8-4f00-b9db-33e240c42de8"
+            variant="outline"
+            size="sm"
+            onClick={onStart}
+            className="mt-4"
+          >
+            <IconPlayerPlay data-uniq-id="13c1c0a2-2911-4a85-bc75-63f6cbedfa68" className="w-4 h-4 mr-1" />
             Start
           </Button>
         )}

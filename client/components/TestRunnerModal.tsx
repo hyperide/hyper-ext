@@ -207,13 +207,12 @@ export function TestRunnerModal({ isOpen, onClose, projectId, testPaths }: TestR
   }, [isOpen]);
 
   // Auto-scroll logs
-  /* eslint-disable react-hooks/exhaustive-deps -- logs change triggers scroll */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: logs change triggers scroll
   useEffect(() => {
     if (logsRef.current) {
       logsRef.current.scrollTop = logsRef.current.scrollHeight;
     }
   }, [logs]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   const handleCancel = () => {
     abortControllerRef.current?.abort();
@@ -448,9 +447,9 @@ After fixing, use the run_tests tool to verify the tests pass.`;
             >
               {logs.map((log, idx) => (
                 <div
-                  // eslint-disable-next-line react/no-array-index-key -- logs are append-only
+                  // biome-ignore lint/suspicious/noArrayIndexKey: logs are append-only
                   key={idx}
-                  // eslint-disable-next-line react/no-danger -- ANSI to HTML conversion
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: ANSI to HTML conversion
                   dangerouslySetInnerHTML={{ __html: ansiUp.ansi_to_html(log) }}
                 />
               ))}

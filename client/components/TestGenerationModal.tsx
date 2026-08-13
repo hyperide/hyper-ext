@@ -1,4 +1,3 @@
-// @ts-nocheck — stubbed via esbuild alias in the VS Code extension build; not type-checked there
 import cn from 'clsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useThemeOptional } from '@/components/ThemeProvider';
@@ -535,7 +534,7 @@ export function TestGenerationModal({
               className="text-xs font-mono bg-slate-900 text-slate-300 rounded-lg p-3 h-36 overflow-y-auto whitespace-pre-wrap"
             >
               {logs.map((log, index) => (
-                // eslint-disable-next-line react/no-array-index-key -- log lines are append-only with no stable unique ID
+                // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only with no stable unique ID
                 <div key={index}>{log}</div>
               ))}
             </div>

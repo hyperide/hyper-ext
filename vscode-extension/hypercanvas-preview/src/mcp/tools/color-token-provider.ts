@@ -248,12 +248,8 @@ function normalizeStylesInput(raw: Record<string, string>): Record<string, strin
 
     const valueTwMatch = value.match(TW_VALUE_PREFIX_RE);
     if (valueTwMatch) {
-      const cssKey = TW_PREFIX_TO_CSS[valueTwMatch[1]];
-      if (cssKey && Array.isArray(cssKey)) {
-        for (const k of cssKey) result[k] = valueTwMatch[2];
-      } else {
-        result[(cssKey as string) ?? key] = valueTwMatch[2];
-      }
+      const cssKey = TW_PREFIX_TO_CSS[valueTwMatch[1]] ?? key;
+      result[cssKey] = valueTwMatch[2];
       continue;
     }
 
@@ -281,12 +277,6 @@ class TailwindStyleAdapter implements StyleAdapter {
     const styles: Record<string, string> = {};
     for (const [k, v] of Object.entries(parsed)) {
       if (v !== undefined) styles[k] = String(v);
-    }
-    if (Object.keys(styles).length === 0) {
-      return {
-        success: false,
-        error: `No styles found for className: "${params.className}". Ensure it contains valid Tailwind classes (e.g. 'flex gap-4 bg-blue-500').`,
-      };
     }
     return { success: true, styles };
   }

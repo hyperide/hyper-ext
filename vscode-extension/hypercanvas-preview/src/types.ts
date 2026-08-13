@@ -3,9 +3,6 @@
  * Defines messages, project types, and shared interfaces
  */
 
-import type { StyleReadResult } from '@lib/style-read/types';
-import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
-
 // ============================================
 // Project Detection
 // ============================================
@@ -31,58 +28,6 @@ export interface UnsupportedProjectError {
   message: string;
   /** Button label for the fix action (e.g. "Fix: Add react-native-web") */
   fixLabel: string;
-}
-
-// ============================================
-// Project Capabilities (readonly mode)
-// ============================================
-
-/** Detected CSS system in the project */
-export type CssSystem =
-  | 'tailwind'
-  | 'cssmodules'
-  | 'styled-components'
-  | 'emotion'
-  | 'tamagui'
-  | 'vanilla-extract'
-  | 'pandacss'
-  | 'unocss'
-  | 'stylex'
-  | 'mui'
-  | 'antd'
-  | 'chakra'
-  | 'mantine'
-  | 'fluentui'
-  | 'nextui'
-  | 'daisyui'
-  | 'shadcn'
-  | 'sass'
-  | 'unknown';
-
-/** CSS systems where the extension can read AND write styles via AST */
-export const WRITABLE_CSS_SYSTEMS: CssSystem[] = [
-  'tailwind',
-  'cssmodules',
-  'styled-components',
-  'emotion',
-  'tamagui',
-  'shadcn', // built on Tailwind
-  'daisyui', // built on Tailwind
-  'sass', // className-based, same as plain CSS
-];
-
-/** What the extension can do with this project */
-export interface ProjectCapabilities {
-  /** Detected CSS framework */
-  cssSystem: CssSystem;
-  /** Detected UI kit ('tailwind' | 'tamagui' | 'none') — backward compat */
-  uiKit: 'tailwind' | 'tamagui' | 'none';
-  /** Whether the extension can write styles (AST mutations) */
-  canWriteStyles: boolean;
-  /** Whether the preview can render (Vite/webpack dev server works) */
-  canRender: boolean;
-  /** If true, show readonly badge instead of full editing UI */
-  readonly: boolean;
 }
 
 // ============================================
@@ -117,7 +62,6 @@ export type AstMessage =
       elementId: string;
       styles: Record<string, string>;
       state?: string; // hover, focus, etc.
-      selectedSourceTabId?: string;
     }
   | {
       type: 'ast:updateProps';
@@ -163,47 +107,6 @@ export type AstMessage =
       elementId: string;
       wrapperType: string;
       wrapperProps?: Record<string, unknown>;
-    }
-  | {
-      /**
-       * Move a JSX element from any place to any place.
-       * Source and target need NOT share a JSX parent — same-file, cross-file,
-       * cross-component, or leaf-target moves are all supported.
-       * See `AstService.moveElement` / `MoveResult` for the contract.
-       */
-      type: 'ast:moveElement';
-      requestId: string;
-      /** Hint for resolving sourceId — typically the source's file. */
-      filePath: string;
-      /** nodeRef of element to move */
-      sourceId: string;
-      /** nodeRef of element to move relative to (may live in a different file) */
-      targetId: string;
-      position: 'before' | 'after';
-    }
-  | {
-      /** Write a translated value for a given i18n key in the active locale resource file. */
-      type: 'ast:writeI18nResource';
-      requestId: string;
-      /** Ignored — extension uses its own workspace root */
-      projectRoot?: string;
-      library: I18nLibrary;
-      key: string;
-      namespace?: string;
-      activeLocale: string;
-      newText: string;
-      /**
-       * When the key itself changes (user picks a different key from the dropdown),
-       * provide the source file + element so the JSX child expression can be updated.
-       */
-      filePath?: string;
-      elementId?: string;
-      previousKey?: string;
-      /**
-       * When true, skip writing to the locale JSON file and only update the JSX expression.
-       * Used when switching to an existing key — we don't want to overwrite its translation.
-       */
-      skipResourceWrite?: boolean;
     };
 
 // AST response
@@ -244,11 +147,6 @@ export interface FileResponse {
   data?: unknown;
   error?: string;
 }
-
-// VS Code command execution (webview -> extension)
-export type CommandMessage =
-  | { type: 'command:execute'; command: string; args?: string[] }
-  | { type: 'command:fixUnsupportedProject' };
 
 // Dev server operations
 export type DevServerMessage =
@@ -409,9 +307,6 @@ export type StylesMessage = {
   requestId: string;
   elementId: string;
   componentPath: string;
-  /** When set, resolve i18n text for this locale instead of the default. */
-  activeLocale?: string;
-  domTextContent?: string;
 };
 
 export interface StylesResponse {
@@ -423,8 +318,6 @@ export interface StylesResponse {
   textContent?: string;
   tagType?: string;
   childrenLocation?: { line: number; column: number };
-  styleReadResult?: StyleReadResult;
-  i18nText?: I18nBindingResult;
   error?: string;
 }
 
@@ -434,7 +327,6 @@ export type PlatformMessage =
   | AstMessage
   | ComponentMessage
   | FileMessage
-  | CommandMessage
   | DevServerMessage
   | AIMessage
   | CompositionMessage
@@ -494,5 +386,3 @@ export type {
   PrintOptions,
   SharedEditorState,
 } from '@lib/types';
-
-export type { I18nBindingResult } from '@shared/i18n-text/types';

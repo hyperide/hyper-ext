@@ -74,14 +74,14 @@ direct editing (no AI needed there — cascade is explicit).
 | Panel    | Canvas   | Inspector | Panel    | Editor |
 |          |          |           |          |+scrub  |
 +----------+----------+-----------+----------+--------+
-|                    Platform Abstraction Layer                       |
-+--------------------------------------------------------------------+
-|  FastPatchService  |  Canvas Engine  |  AI Service   |  DS Core     |
-|  (CSS inject,      |  (AST ops,      |  (Claude SDK,  |  (design     |
-|   instant visual)  |   undo/redo,    |   Figma MCP,   |   system     |
-|                    |   history)      |   suggestions) |   linter)    |
-+--------------------+-----------------+---------------+--------------+
-|              Style Adapter Layer (composable)                       |
+|              Platform Abstraction Layer               |
++-----------------------------------------------------+
+|  FastPatchService  |  Canvas Engine  |  AI Service   |
+|  (CSS inject,      |  (AST ops,      |  (Claude SDK,  |
+|   instant visual)  |   undo/redo,    |   Figma MCP,   |
+|                    |   history)      |   suggestions) |
++--------------------+-----------------+---------------+
+|              Style Adapter Layer (composable)        |
 +----+----+--------+---------+--------+-------+-------+
 |TW3 |TW4 |Emotion |styled-  |CSS     |Plain  |Inline |
 |    |    |(+MUI   |compnts  |Modules |CSS    |Style  |
@@ -247,15 +247,6 @@ direct editing (no AI needed there — cascade is explicit).
 - Color picker inline
 - Size/spacing scrubbers
 - Custom overlay webview
-
-### Design System Intelligence (DS Core)
-
-Standalone design system linter with Kubernetes-style reconciliation.
-Declared desired state (tokens, rules) vs extracted actual state from code.
-ESLint/biome-style config with presets (Apple HIG, Material Design, Fluent, WCAG).
-AI-validated high-level rules with self-improving decision templates.
-
-Design spec: `docs/specs/2026-04-01-ds-core-design.md`
 
 ### Phase 6 — Beyond React
 

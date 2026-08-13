@@ -51,9 +51,9 @@ InputOTPSlot.displayName = 'InputOTPSlot';
 
 const InputOTPSeparator = React.forwardRef<React.ElementRef<'div'>, React.ComponentPropsWithoutRef<'div'>>(
   ({ ...props }, ref) => (
-    // eslint-disable-next-line jsx-a11y/interactive-supports-focus -- shadcn generated component
-    // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- shadcn generated component
-    // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- shadcn generated component
+    // biome-ignore lint/a11y/useFocusableInteractive: shadcn generated component
+    // biome-ignore lint/a11y/useSemanticElements: shadcn generated component
+    // biome-ignore lint/a11y/useAriaPropsForRole: shadcn generated component
     <div ref={ref} role="separator" {...props}>
       <IconPoint />
     </div>

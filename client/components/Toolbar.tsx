@@ -731,7 +731,7 @@ export default function Toolbar({
             {/* Style controls and AI Agent - only for editors */}
             {!isReadonly && (
               <>
-                {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- wrapper for hover popup */}
+                {/* biome-ignore lint/a11y/useSemanticElements: wrapper for hover popup */}
                 <div
                   className="relative"
                   role="group"
@@ -771,7 +771,7 @@ export default function Toolbar({
                   )}
                 </div>
 
-                {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- wrapper for hover popup */}
+                {/* biome-ignore lint/a11y/useSemanticElements: wrapper for hover popup */}
                 <div
                   className="relative"
                   role="group"
@@ -817,7 +817,7 @@ export default function Toolbar({
                   )}
                 </div>
 
-                {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- wrapper for hover popup */}
+                {/* biome-ignore lint/a11y/useSemanticElements: wrapper for hover popup */}
                 <div
                   className="relative"
                   role="group"

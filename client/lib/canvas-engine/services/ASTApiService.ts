@@ -64,7 +64,6 @@ export interface UpdateStylesParams {
   instanceProps?: Record<string, unknown>;
   instanceId?: string;
   state?: string;
-  selectedSourceTabId?: string;
 }
 
 export interface UpdateStylesResult {

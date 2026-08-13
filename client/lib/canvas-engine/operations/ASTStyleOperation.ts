@@ -18,7 +18,6 @@ interface ASTStyleOperationParams {
   instanceProps?: Record<string, unknown>;
   instanceId?: string;
   state?: string;
-  selectedSourceTabId?: string;
 }
 
 export class ASTStyleOperation extends BaseOperation {
@@ -75,7 +74,6 @@ export class ASTStyleOperation extends BaseOperation {
       instanceProps: this.params.instanceProps,
       instanceId: this.params.instanceId,
       state: this.params.state,
-      selectedSourceTabId: this.params.selectedSourceTabId,
     });
 
     if (!result.success) {

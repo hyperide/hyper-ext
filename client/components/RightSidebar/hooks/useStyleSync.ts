@@ -21,8 +21,6 @@ interface UseStyleSyncOptions {
   currentState?: string;
   /** Optional engine for DOM class reading (browser mode only) */
   engine?: CanvasEngine | null;
-  /** Selected non-computed style source tab for shared write routing */
-  selectedSourceTabId?: string;
   /** Called when style sync fails (e.g. to open AI chat as fallback) */
   onSyncError?: (styles: Record<string, string>, error: string) => void;
   /** Called when setIsStyleSyncing(true) */
@@ -53,7 +51,6 @@ export function useStyleSync({
   astOps,
   currentState,
   engine,
-  selectedSourceTabId,
   onSyncError,
   onSyncStart,
   onSyncEnd,
@@ -64,38 +61,14 @@ export function useStyleSync({
   const styleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFlushTimeRef = useRef<number>(0);
   const verificationCleanupRef = useRef<(() => void) | null>(null);
-  const selectedKey = selectedIds.join('\0');
-  const previousSyncScopeRef = useRef({ filePath, selectedKey });
 
-  const cancelPendingStyleSync = useCallback(() => {
-    styleQueueRef.current.clear();
-
-    if (styleTimerRef.current) {
-      clearTimeout(styleTimerRef.current);
-      styleTimerRef.current = null;
-    }
-
-    // Check before calling — verificationCleanupRef is set only after setIsStyleSyncing(true)
-    // in SaaS mode. Cancelling it without resetting the flag leaves the spinner stuck.
-    const hadActiveSync = verificationCleanupRef.current !== null;
-    verificationCleanupRef.current?.();
-    verificationCleanupRef.current = null;
-    if (hadActiveSync) {
-      setIsStyleSyncing(false);
-    }
+  // Cleanup verification on unmount
+  useEffect(() => {
+    return () => {
+      verificationCleanupRef.current?.();
+      if (styleTimerRef.current) clearTimeout(styleTimerRef.current);
+    };
   }, []);
-
-  useEffect(() => {
-    return cancelPendingStyleSync;
-  }, [cancelPendingStyleSync]);
-
-  useEffect(() => {
-    const previousSyncScope = previousSyncScopeRef.current;
-    if (previousSyncScope.filePath !== filePath || previousSyncScope.selectedKey !== selectedKey) {
-      cancelPendingStyleSync();
-      previousSyncScopeRef.current = { filePath, selectedKey };
-    }
-  }, [filePath, selectedKey, cancelPendingStyleSync]);
 
   const finishSync = useCallback(() => {
     setIsStyleSyncing(false);
@@ -127,7 +100,7 @@ export function useStyleSync({
     const skipVerification = !!currentState || cssProperties.length === 0;
 
     // Capture before-snapshot (before engine call)
-    const beforeSnapshot = !skipVerification ? captureComputedStyles(selectedId, cssProperties) : null;
+    const beforeSnapshot = !skipVerification ? captureComputedStyles(selectedId, cssProperties, selectedId) : null;
 
     setIsStyleSyncing(true);
     onSyncStart?.();
@@ -150,7 +123,6 @@ export function useStyleSync({
             instanceProps: {},
             instanceId: selectedId,
             state: currentState,
-            selectedSourceTabId,
           });
         }
 
@@ -166,6 +138,7 @@ export function useStyleSync({
             styles,
             cssProperties,
             beforeSnapshot,
+            instanceId: selectedId,
             backendPromise,
             onVerified: finishSync,
             onNotApplied: (ctx) => {
@@ -193,7 +166,6 @@ export function useStyleSync({
             filePath,
             styles,
             state: currentState,
-            selectedSourceTabId,
           });
         }
 
@@ -212,7 +184,6 @@ export function useStyleSync({
     astOps,
     currentState,
     engine,
-    selectedSourceTabId,
     onSyncError,
     onSyncStart,
     onStyleNotApplied,
@@ -243,7 +214,6 @@ export function useStyleSync({
       } else {
         // Trailing: schedule batch flush (dblclick-capable controls, or rapid changes)
         styleTimerRef.current = setTimeout(() => {
-          styleTimerRef.current = null;
           lastFlushTimeRef.current = Date.now();
           flushQueue();
         }, STYLE_DEBOUNCE_MS);

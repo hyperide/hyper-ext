@@ -12,14 +12,6 @@ Make HyperIDE's visual inspector work with **any CSS framework**, not just Tailw
 Deterministic per-framework adapters (not AI-based), composable for hybrid projects.
 AI used only for Plain CSS cascade distribution.
 
-### DS Core Integration
-
-The unified `StyleAdapter` interface from Phase 2 is consumed by DS Core
-(`docs/specs/2026-04-01-ds-core-design.md`) as a downstream dependency.
-DS Core wraps `StyleAdapter` into its `StyleReadAdapter` / `StyleWriteAdapter`
-DI interfaces for framework-agnostic design system validation.
-Phase 2 does not depend on DS Core — the dependency is one-directional.
-
 ## Subphases
 
 | Subphase | Scope | Deliverable |

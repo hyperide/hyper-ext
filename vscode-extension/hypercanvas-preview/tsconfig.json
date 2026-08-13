@@ -7,7 +7,6 @@
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
@@ -15,17 +14,14 @@
       "@/*": ["../../client/*"],
       "@shared/*": ["../../shared/*"],
       "@lib/*": ["../../lib/*"]
-    }
+    },
+    "baseUrl": "."
   },
   "include": ["src/**/*", "../../shared/**/*", "../../lib/**/*"],
   "exclude": [
     "node_modules",
     "../../lib/**/*.test.ts",
-    "../../lib/**/__tests__/**",
-    "../../lib/testing/**",
-    "../../shared/**/*.test.ts",
-    "../../shared/**/__tests__/**",
-    "../../shared/scripts/**",
+    "../../lib/testing/**/*",
     "src/**/*.test.ts",
     "src/**/__tests__/**"
   ]

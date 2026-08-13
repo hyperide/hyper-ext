@@ -6,15 +6,41 @@ import { describe, expect, it } from 'bun:test';
 import * as t from '@babel/types';
 import { buildJSXElement, calculateRealIndex, insertChildAtIndex } from './element-builder';
 import { parseCode } from './parser';
-import { findAllJSXElements } from './traverser';
+import { findElementByUuid } from './traverser';
 
 describe('buildJSXElement', () => {
   it('should create a self-closing element with no props and no children', () => {
-    const { element } = buildJSXElement({ componentType: 'div', props: {} });
+    const { element, uuid } = buildJSXElement({ componentType: 'div', props: {} });
 
     expect(element.type).toBe('JSXElement');
     expect(element.openingElement.selfClosing).toBe(true);
     expect(element.closingElement).toBeNull();
+    expect(uuid).toBeTruthy();
+
+    // Should have data-uniq-id attribute
+    const attrs = element.openingElement.attributes;
+    const uniqIdAttr = attrs.find(
+      (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'data-uniq-id',
+    );
+    expect(uniqIdAttr).toBeTruthy();
+  });
+
+  it('should use provided uuid instead of generating one', () => {
+    const { element, uuid } = buildJSXElement({
+      componentType: 'span',
+      props: {},
+      uuid: 'custom-uuid-123',
+    });
+
+    expect(uuid).toBe('custom-uuid-123');
+    const attrs = element.openingElement.attributes;
+    const uniqIdAttr = attrs.find(
+      (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name === 'data-uniq-id',
+    );
+    expect(uniqIdAttr).toBeTruthy();
+    if (uniqIdAttr && t.isJSXAttribute(uniqIdAttr) && t.isStringLiteral(uniqIdAttr.value)) {
+      expect(uniqIdAttr.value.value).toBe('custom-uuid-123');
+    }
   });
 
   it('should add string props as attributes', () => {
@@ -23,7 +49,9 @@ describe('buildJSXElement', () => {
       props: { className: 'text-red', id: 'main' },
     });
 
-    const attrs = element.openingElement.attributes;
+    const attrs = element.openingElement.attributes.filter(
+      (a) => t.isJSXAttribute(a) && t.isJSXIdentifier(a.name) && a.name.name !== 'data-uniq-id',
+    );
     expect(attrs.length).toBe(2);
   });
 
@@ -86,55 +114,52 @@ describe('calculateRealIndex', () => {
 describe('insertChildAtIndex', () => {
   it('should insert child at specific logical index', () => {
     const code = `
-      <div>
-        <span>A</span>
-        <span>B</span>
+      <div data-uniq-id="parent">
+        <span data-uniq-id="a">A</span>
+        <span data-uniq-id="b">B</span>
       </div>
     `;
     const ast = parseCode(code);
-    const elements = findAllJSXElements(ast);
-    const parent = elements[0]; // the outer div
-    expect(parent).not.toBeNull();
+    const result = findElementByUuid(ast, 'parent');
+    expect(result).not.toBeNull();
 
     const newChild = t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('p'), [], true), null, [], true);
 
-    const actualIndex = insertChildAtIndex(parent.element, newChild, 1);
+    const actualIndex = insertChildAtIndex(result?.element, newChild, 1);
     expect(actualIndex).toBe(1);
 
     // Count JSX elements in children
-    const jsxChildren = parent.element.children.filter((c) => t.isJSXElement(c));
+    const jsxChildren = result?.element.children.filter((c) => t.isJSXElement(c));
     expect(jsxChildren.length).toBe(3);
   });
 
   it('should append to end when no logicalIndex given', () => {
     const code = `
-      <div>
-        <span>A</span>
+      <div data-uniq-id="parent">
+        <span data-uniq-id="a">A</span>
       </div>
     `;
     const ast = parseCode(code);
-    const elements = findAllJSXElements(ast);
-    const parent = elements[0];
-    expect(parent).not.toBeNull();
+    const result = findElementByUuid(ast, 'parent');
+    expect(result).not.toBeNull();
 
     const newChild = t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('p'), [], true), null, [], true);
 
-    const actualIndex = insertChildAtIndex(parent.element, newChild);
+    const actualIndex = insertChildAtIndex(result?.element, newChild);
     expect(actualIndex).toBe(1); // appended after the 1 existing element
   });
 
   it('should make self-closing parent non-self-closing', () => {
-    const code = '<div />';
+    const code = '<div data-uniq-id="parent" />';
     const ast = parseCode(code);
-    const elements = findAllJSXElements(ast);
-    const parent = elements[0];
-    expect(parent).not.toBeNull();
+    const result = findElementByUuid(ast, 'parent');
+    expect(result).not.toBeNull();
 
     const newChild = t.jsxElement(t.jsxOpeningElement(t.jsxIdentifier('span'), [], true), null, [], true);
 
-    insertChildAtIndex(parent.element, newChild);
+    insertChildAtIndex(result?.element, newChild);
 
-    expect(parent.element.openingElement.selfClosing).toBe(false);
-    expect(parent.element.closingElement).not.toBeNull();
+    expect(result?.element.openingElement.selfClosing).toBe(false);
+    expect(result?.element.closingElement).not.toBeNull();
   });
 });

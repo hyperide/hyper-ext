@@ -17,7 +17,7 @@ import {
   usePlatformCanvas,
   usePlatformContext,
 } from '@/lib/platform';
-import { createSharedDispatch, useSharedEditorState } from '@/lib/platform/shared-editor-state';
+import { useSharedEditorState } from '@/lib/platform/shared-editor-state';
 import type { StyleNotAppliedContext } from '@/lib/style-change-detector';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -37,16 +37,13 @@ import {
   EffectsSection,
   FillSection,
   HeaderSection,
-  I18nTextInspector,
   LayoutSection,
   MarginSection,
   PositionSection,
   StateSelectorSection,
   StrokeSection,
-  StyleSourceTabsSection,
   ViewControlsSection,
 } from './sections';
-import { getExplicitStyleSourceTabId, resolveInspectorStyleSourceTabs } from './source-tabs';
 import type { EffectItem, LayoutType, PositionType, RightSidebarProps, StrokeItem } from './types';
 import { cssToPosition, findNodeById, mapShadowSizeToValues, parseHexWithAlpha, positionToCss } from './utils';
 
@@ -163,7 +160,6 @@ export default function RightSidebar({
   componentGroups,
   explorerVisible,
   onComponentClick,
-  readonly: readonlyProp = false,
 }: RightSidebarProps) {
   const engine = useCanvasEngineOptional();
   const canvas = usePlatformCanvas();
@@ -174,13 +170,11 @@ export default function RightSidebar({
   const componentPath = useComponentPathCompat(engine);
 
   const { openFile, showComments, setShowComments, isReadonly: editorStoreReadonly } = useEditorStore();
-  const isReadonly = isVSCode ? readonlyProp : editorStoreReadonly;
-  const inspectorUIKit = projectUIKit === 'none' && isVSCode ? 'tailwind' : projectUIKit;
-  const canInspectStyles = inspectorUIKit !== 'none';
+  const isReadonly = isVSCode ? false : editorStoreReadonly;
 
   // Elements tree for Inspector (VS Code only, when Explorer is hidden)
   const showTreeInInspector = isVSCode && explorerVisible !== true && !!componentPath;
-  const elementsTree = useElementsTree();
+  const elementsTree = useElementsTree(undefined);
   const elementSelection = useElementSelection(elementsTree);
   const handleFunctionNavigate = useFunctionNavigate(componentPath ?? undefined);
   const [elementsTreeCollapsed, setElementsTreeCollapsed] = useState(false);
@@ -197,32 +191,12 @@ export default function RightSidebar({
 
   // Current state modifier for Tailwind (hover, focus, etc.)
   const [currentState, setCurrentState] = useState<string | undefined>(undefined);
-  const [selectedSourceTabId, setSelectedSourceTabId] = useState('computed');
 
   // Read element style data (browser: engine+DOM, VS Code: RPC)
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
-  const sharedItemIndices = useSharedEditorState((s) => s.selectedItemIndices);
-  const selectedItemIndex =
-    selectedId && engine
-      ? (engine.getSelection().selectedItemIndices.get(selectedId) ?? null)
-      : selectedId
-        ? (sharedItemIndices?.[selectedId] ?? null)
-        : null;
   const [styleRefreshKey, setStyleRefreshKey] = useState(0);
-  // Tracks write failures: bindingId scopes the rollback to the exact binding that failed.
-  // Without bindingId, a failure on binding A would trigger rollback in the currently-visible binding B.
-  const [i18nRollbackSignal, setI18nRollbackSignal] = useState<{ bindingId: string; counter: number } | null>(null);
-  // Keeps keyBusy=true until i18nText.key confirms the new key after a write.
-  // Unlike pendingTextKeyRef (a ref used by debounced text-write), this is React state so it
-  // triggers re-renders and keeps the combobox disabled during the i18nText re-read window.
-  const [pendingKeyWrite, setPendingKeyWrite] = useState<{ key: string; elementId: string } | null>(null);
-  // Locale selected by the user in the i18n inspector. Resets when element/binding changes.
-  const [i18nActiveLocale, setI18nActiveLocale] = useState<string | undefined>(undefined);
   // External refresh trigger (e.g. undo/redo from extension host)
   const styleVersion = useSharedEditorState((s) => s.styleVersion) ?? 0;
-  const runtimeStyle = useSharedEditorState((s) => s.selectedElementRuntimeStyle);
-  const writeInProgress = useSharedEditorState((s) => s.writeInProgress);
-  const selectedElementDomText = useSharedEditorState((s) => s.selectedElementDomText);
   const {
     parsedStyles,
     childrenType,
@@ -230,9 +204,6 @@ export default function RightSidebar({
     tagType,
     loading,
     childrenLocation,
-    styleReadResult,
-    i18nText,
-    availableKeys: availableI18nKeys,
   } = useElementStyleData({
     elementId: selectedId,
     componentPath,
@@ -240,57 +211,8 @@ export default function RightSidebar({
     engine,
     styleAdapter,
     activeInstanceId,
-    itemIndex: selectedItemIndex,
     refreshKey: styleRefreshKey + styleVersion,
-    runtimeStyle,
-    domTextContent: selectedElementDomText ?? undefined,
-    activeLocale: i18nActiveLocale,
   });
-  const sourceTabs = useMemo(
-    () =>
-      resolveInspectorStyleSourceTabs({
-        inspectorUIKit,
-        componentPath,
-        canInspectStyles,
-        styleReadResult,
-      }),
-    [inspectorUIKit, componentPath, canInspectStyles, styleReadResult],
-  );
-  // Only show the tab row when there's more than one real CSS approach to choose from.
-  const visibleSourceTabs = useMemo(() => {
-    const nonComputed = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
-    return nonComputed.length <= 1 ? [] : sourceTabs;
-  }, [sourceTabs]);
-  const explicitSourceTabId = useMemo(() => {
-    if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
-      return undefined;
-    }
-    return getExplicitStyleSourceTabId(selectedSourceTabId);
-  }, [sourceTabs, selectedSourceTabId]);
-
-  useEffect(() => {
-    if (!sourceTabs.some((tab) => tab.id === selectedSourceTabId)) {
-      setSelectedSourceTabId('computed');
-      return;
-    }
-    // When the project has exactly one concrete CSS approach, auto-select it so the user
-    // doesn't have to manually switch away from "Computed" every time.
-    const nonComputedTabs = sourceTabs.filter((tab) => tab.confidence !== 'computed-only');
-    if (nonComputedTabs.length === 1 && selectedSourceTabId === 'computed') {
-      setSelectedSourceTabId(nonComputedTabs[0].id);
-    }
-  }, [sourceTabs, selectedSourceTabId]);
-
-  // Reset i18n locale selection and last-written key when the selected element changes.
-  // This prevents a stale locale or stale previousKey from carrying over to a different element.
-  // Note: pendingKeyWrite is NOT cleared here — HMR transiently sets selectedId to null, which
-  // would prematurely drop the pending guard. The pendingKeyWrite useEffect handles cleanup when
-  // selectedId is non-null and different from pendingKeyWrite.elementId.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on element change only
-  useEffect(() => {
-    setI18nActiveLocale(undefined);
-    lastWrittenI18nKeyRef.current = null;
-  }, [selectedId]);
 
   // Apply state filter to parsedStyles
   const effectiveParsed: Partial<ParsedStyles> = useMemo(() => {
@@ -377,7 +299,6 @@ export default function RightSidebar({
     astOps,
     currentState,
     engine,
-    selectedSourceTabId: explicitSourceTabId,
     onSyncError: handleSyncError,
     onSyncStart: handleSyncStart,
     onSyncEnd: handleSyncEnd,
@@ -426,7 +347,6 @@ export default function RightSidebar({
   // Color state
   const [backgroundColor, setBackgroundColor] = useState('');
   const [textColor, setTextColor] = useState('');
-  const [fontSize, setFontSize] = useState('');
   const [fillOpacity, setFillOpacity] = useState('');
   const [textOpacity, setTextOpacity] = useState('');
   const [opacity, setOpacity] = useState('');
@@ -446,23 +366,6 @@ export default function RightSidebar({
   const [textContent, setTextContent] = useState('');
   const [isTextFromProps, setIsTextFromProps] = useState(false);
   const debouncedTextSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedI18nWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Set to true on unmount so any in-flight i18n write callbacks bail out instead of
-  // dispatching selection / writeInProgress updates to a detached component.
-  const i18nWriteAbortedRef = useRef(false);
-  // Stores the last selectedId + componentPath when i18nText was valid. Used as fallback in
-  // handleI18nKeyChange: HMR transiently clears selectedIds, but we still need to send the
-  // second write to the correct element if the inspector panel is still showing (via ?? prev.i18nText).
-  const lastI18nElementRef = useRef<{ elementId: string; path: string | null } | null>(null);
-  // Tracks the last successfully written i18n key. Prevents stale previousKey when a second
-  // key change arrives before the useElementStyleData re-fetch returns the new i18nText.
-  const lastWrittenI18nKeyRef = useRef<string | null>(null);
-  // Tracks pending key after commitKey — stays set until i18nText.key catches up or element changes.
-  // Prevents handleI18nResolvedTextChange from writing to the stale key during the RPC round-trip.
-  const pendingTextKeyRef = useRef<{ key: string; elementId: string } | null>(null);
-  // Guard: prevent external data refresh from overriding text the user is actively typing
-  const isEditingTextRef = useRef(false);
-  const editingTextResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Root ref for wheel event handling
   const rootRef = useRef<HTMLDivElement>(null);
@@ -651,14 +554,6 @@ export default function RightSidebar({
       const value = e.target.value;
       setTextContent(value);
 
-      // Prevent external data refresh from overriding user input while typing
-      isEditingTextRef.current = true;
-      if (editingTextResetRef.current) clearTimeout(editingTextResetRef.current);
-      // Reset after 2s — covers debounce 300ms + sync roundtrip + file-watch latency
-      editingTextResetRef.current = setTimeout(() => {
-        isEditingTextRef.current = false;
-      }, 2000);
-
       if (debouncedTextSyncRef.current) {
         clearTimeout(debouncedTextSyncRef.current);
       }
@@ -752,215 +647,6 @@ export default function RightSidebar({
     goToCode(componentPath, childrenLocation.line, childrenLocation.column);
   }, [componentPath, childrenLocation, goToCode]);
 
-  const handleI18nLocaleChange = useCallback((locale: string) => {
-    setI18nActiveLocale(locale);
-    // Re-read is triggered automatically via activeLocale in useElementStyleData deps
-  }, []);
-
-  // Dispatcher to re-broadcast selection after AST mutations that trigger HMR reload.
-  // Without this, rewriting JSX (e.g. i18n key change) causes the iframe to lose
-  // selection because the React fiber tree is rebuilt and the previous data-uniq-id
-  // is no longer attached to the same DOM node.
-  const i18nDispatch = useMemo(() => (engine ? null : createSharedDispatch(canvas)), [engine, canvas]);
-
-  // Capture last-known element identity while i18nText is valid. HMR may transiently
-  // clear selectedIds after a write; this ref lets the second write still go through.
-  if (i18nText && selectedId) {
-    lastI18nElementRef.current = { elementId: selectedId, path: componentPath };
-  }
-  // Clear pendingTextKeyRef when element changes or when i18nText.key has caught up.
-  if (pendingTextKeyRef.current !== null) {
-    if (pendingTextKeyRef.current.elementId !== selectedId) {
-      pendingTextKeyRef.current = null;
-    } else if (i18nText?.kind === 'i18n' && i18nText.key === pendingTextKeyRef.current.key) {
-      pendingTextKeyRef.current = null;
-    }
-  }
-
-  // Clear pendingKeyWrite (React state) when i18nText.key confirms the written key or element changes.
-  // This is the state-based counterpart to pendingTextKeyRef: drives re-renders so keyBusy updates.
-  // Guard: only clear on genuine element switch (non-null selectedId), not on HMR-induced transient
-  // selectedId=null. A null selectedId during HMR would otherwise drop the pending guard early,
-  // letting the inspector show a stale realKey and causing commitKey to abort the second write.
-  useEffect(() => {
-    if (pendingKeyWrite === null) return;
-    if (selectedId != null && pendingKeyWrite.elementId !== selectedId) {
-      setPendingKeyWrite(null);
-      return;
-    }
-    if (i18nText?.kind === 'i18n' && i18nText.key === pendingKeyWrite.key) {
-      setPendingKeyWrite(null);
-    }
-  }, [i18nText, selectedId, pendingKeyWrite]);
-
-  const handleI18nKeyChange = useCallback(
-    (newKey: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n') return;
-      const effectiveSelectedId = selectedId ?? lastI18nElementRef.current?.elementId ?? null;
-      if (!effectiveSelectedId) return;
-      // Set before the async IIFE so debounced text writes use the new key
-      // during the RPC round-trip window (i18nText.key still stale until re-read).
-      pendingTextKeyRef.current = { key: newKey, elementId: effectiveSelectedId };
-      // Also set React state so keyBusy stays true until i18nText.key confirms the write.
-      // pendingTextKeyRef alone doesn't trigger re-renders — this state does.
-      setPendingKeyWrite({ key: newKey, elementId: effectiveSelectedId });
-      const previousSelectedId = effectiveSelectedId;
-      // If the user typed a key that doesn't yet exist in the locale, treat this
-      // as "create new key" — also write the JSON resource so the next re-read
-      // returns editable=true and the user can immediately type the translation.
-      // Otherwise (existing key) skip the JSON write and only retarget JSX.
-      const isNewKey = !(availableI18nKeys ?? []).includes(newKey);
-      // Diagnostic timeline: gated on window.__HC_DEBUG_SELECTION so it doesn't
-      // pollute prod consoles. Tracks the i18n-key-change flicker window
-      // (Task 1 of selection-survives-i18n-write).
-      const dbg = (label: string, extra?: unknown): void => {
-        const w = window as unknown as Record<string, unknown>;
-        if (!w.__HC_DEBUG_SELECTION) return;
-        // eslint-disable-next-line no-console
-        console.warn(`[HC i18n-key-change ${label}] t+${Math.round(performance.now() - t0)}ms`, extra ?? '');
-      };
-      const t0 = performance.now();
-      dbg('start', { previousSelectedId, newKey, isNewKey });
-      void (async () => {
-        const writeId = crypto.randomUUID();
-        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
-        // Path B: freeze selection rect during JSX rewrite — HMR gap would otherwise
-        // flicker the outline off until the new fiber settles.
-        canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'start' });
-        try {
-          const writeResult = await astOps.writeI18nResource({
-            library: i18nText.library,
-            key: newKey,
-            namespace: i18nText.namespace,
-            activeLocale: i18nText.activeLocale,
-            newText: i18nText.resolvedText ?? '',
-            // Use lastWrittenI18nKeyRef when available: i18nText.key may be stale if a
-            // second key change arrives before the useElementStyleData re-fetch completes.
-            previousKey: lastWrittenI18nKeyRef.current ?? i18nText.key,
-            filePath: i18nText.sourceLocation.filePath,
-            elementId: effectiveSelectedId,
-            skipResourceWrite: !isNewKey,
-          });
-          lastWrittenI18nKeyRef.current = newKey;
-          dbg('writeI18nResource resolved', writeResult);
-          // Path A: bridge returns post-write canonical ID, single dispatch re-attaches
-          // selection without timeout chains. Falls back to previousSelectedId.
-          if (i18nDispatch) {
-            const targetId = writeResult.newElementId ?? previousSelectedId;
-            i18nDispatch({ selectedIds: [targetId] });
-            dbg('dispatch sent', { selectedIds: [targetId] });
-          }
-        } catch {
-          // Restore selection on partial write (JSON wrote but JSX update failed).
-          if (i18nDispatch) {
-            i18nDispatch({ selectedIds: [previousSelectedId] });
-          }
-          pendingTextKeyRef.current = null;
-          // Roll back optimisticKey in the inspector — same signal used by text-write rollback.
-          // Without this, optimisticKey stays on the new (failed) key permanently because
-          // realKey doesn't change (file unchanged), so the safety-net useEffect never fires.
-          const bindingId = `${i18nText.library}|${i18nText.key}`;
-          setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
-        } finally {
-          // Always release the freeze, even on throw.
-          canvas.sendEvent({ type: 'iframe:writeI18nResource', phase: 'done' });
-          // Clear writeInProgress so keyBusy disabling is released.
-          if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
-            i18nDispatch({ writeInProgress: null });
-          }
-          // Release keyBusy on both success and failure — clearing here rather than only
-          // in catch avoids the case where newElementId === elementId (selectedId unchanged)
-          // which would otherwise keep keyBusy=true for the full NodeMapService rebuild (~20s).
-          setPendingKeyWrite(null);
-          setStyleRefreshKey((k) => k + 1);
-        }
-      })();
-    },
-    [i18nText, astOps, selectedId, i18nDispatch, availableI18nKeys, canvas],
-  );
-
-  const handleI18nResolvedTextChange = useCallback(
-    (newText: string) => {
-      if (!i18nText || i18nText.kind !== 'i18n' || !selectedId) return;
-      const previousSelectedId = selectedId;
-      if (debouncedI18nWriteRef.current) clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = setTimeout(() => {
-        const writeId = crypto.randomUUID();
-        if (i18nDispatch) i18nDispatch({ writeInProgress: { writeId, startedAt: Date.now() } });
-        void (async () => {
-          // Only track navigation in VS Code mode (where i18nDispatch is available and HMR fires).
-          let navigationAway = false;
-          let unsubscribeNavigation: (() => void) | undefined;
-          if (i18nDispatch) {
-            // Detect if user navigates to a different element during the write window.
-            // Fires on non-empty selection only (ignores HMR-induced transient selectedIds:[]).
-            unsubscribeNavigation = useSharedEditorState.subscribe((s) => {
-              if (i18nWriteAbortedRef.current) {
-                unsubscribeNavigation?.();
-                return;
-              }
-              if (s.selectedIds.length > 0 && s.selectedIds[0] !== previousSelectedId) {
-                navigationAway = true;
-                unsubscribeNavigation?.();
-              }
-            });
-          }
-          // Guard: only restore selection if user hasn't navigated away mid-write and
-          // the component is still mounted. Defined before try so catch can call it too
-          // (partial write may have triggered HMR even when writeI18nResource throws,
-          // e.g. JSON wrote → JSX update failed).
-          const restoreIfCurrent = () => {
-            if (!i18nDispatch || navigationAway || i18nWriteAbortedRef.current) return;
-            const cur = useSharedEditorState.getState().selectedIds;
-            if (cur.length === 0 || cur[0] === previousSelectedId) {
-              i18nDispatch({ selectedIds: [previousSelectedId] });
-            }
-          };
-          try {
-            await astOps.writeI18nResource({
-              library: i18nText.library,
-              key:
-                pendingTextKeyRef.current?.elementId === previousSelectedId
-                  ? pendingTextKeyRef.current.key
-                  : i18nText.key,
-              namespace: i18nText.namespace,
-              activeLocale: i18nText.activeLocale,
-              newText,
-            });
-            // Restore selection — locale JSON rewrite triggers HMR which rebuilds the
-            // fiber tree, dropping the iframe selection. Mirror key-change pattern.
-            if (i18nDispatch) {
-              restoreIfCurrent();
-              setTimeout(restoreIfCurrent, 250);
-              setTimeout(() => {
-                restoreIfCurrent();
-                unsubscribeNavigation?.();
-                if (useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
-                  i18nDispatch({ writeInProgress: null });
-                }
-              }, 800);
-            }
-          } catch {
-            // Restore selection in case the write partially succeeded (e.g., JSON wrote and
-            // triggered HMR, but something else then threw). Harmless if HMR never fired.
-            restoreIfCurrent();
-            unsubscribeNavigation?.();
-            if (i18nDispatch && useSharedEditorState.getState().writeInProgress?.writeId === writeId) {
-              i18nDispatch({ writeInProgress: null });
-            }
-            // write failed — rollback scoped to this binding so other visible bindings are not affected
-            const bindingId = `${i18nText.library}|${i18nText.key}`;
-            setI18nRollbackSignal((prev) => ({ bindingId, counter: (prev?.counter ?? 0) + 1 }));
-          } finally {
-            // always re-read to sync inspector with file state
-            setStyleRefreshKey((k) => k + 1);
-          }
-        })();
-      }, 300);
-    },
-    [i18nText, astOps, selectedId, i18nDispatch],
-  );
-
   // ========================================================================
   // Populate UI state from parsedStyles
   // ========================================================================
@@ -994,7 +680,6 @@ export default function RightSidebar({
       setGridRows('');
       setBackgroundColor('');
       setTextColor('');
-      setFontSize('');
       setTextOpacity('');
       setBorderRadius('');
       setOpacity('');
@@ -1065,8 +750,6 @@ export default function RightSidebar({
       setTextColor('');
       setTextOpacity('');
     }
-
-    setFontSize(ep.fontSize ?? '');
 
     // Update border radius
     setBorderRadius(ep.borderRadius || '');
@@ -1172,10 +855,8 @@ export default function RightSidebar({
     }
     setEffects(newEffects);
 
-    // Update text content — skip if user is actively typing to prevent cursor reset
-    if (!isEditingTextRef.current) {
-      setTextContent(dataTextContent);
-    }
+    // Update text content
+    setTextContent(dataTextContent);
     // In browser mode, text from DOM (no childrenType) is "from props"
     setIsTextFromProps(engine !== null && !childrenType && !!dataTextContent);
   }, [selectedId, parsedStyles, effectiveParsed, dataTextContent, childrenType, engine]);
@@ -1217,37 +898,8 @@ export default function RightSidebar({
       if (syncToastTimerRef.current) {
         clearTimeout(syncToastTimerRef.current);
       }
-      if (debouncedI18nWriteRef.current) {
-        clearTimeout(debouncedI18nWriteRef.current);
-      }
-      if (editingTextResetRef.current) {
-        clearTimeout(editingTextResetRef.current);
-      }
     };
   }, []);
-
-  // Clear writeInProgress if component unmounts while a write is in flight.
-  // Without this the iframe stays frozen and Zustand retains stale writeInProgress state.
-  // Also set the abort flag so any pending post-write callbacks (restoreIfCurrent,
-  // navigation subscriptions) bail out instead of dispatching to a detached component.
-  useEffect(() => {
-    return () => {
-      i18nWriteAbortedRef.current = true;
-      if (i18nDispatch && useSharedEditorState.getState().writeInProgress) {
-        i18nDispatch({ writeInProgress: null });
-      }
-    };
-  }, [i18nDispatch]);
-
-  // Cancel pending i18n text write when selection changes — prevents a stale write
-  // from element A firing (and setting writeInProgress) after user has moved to element B.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional cancel on element change only
-  useEffect(() => {
-    if (debouncedI18nWriteRef.current) {
-      clearTimeout(debouncedI18nWriteRef.current);
-      debouncedI18nWriteRef.current = null;
-    }
-  }, [selectedId]);
 
   // Get frame type for display
   const getFrameType = useCallback(() => {
@@ -1302,15 +954,22 @@ export default function RightSidebar({
   return (
     <div
       data-testid="RightSidebar"
+      data-uniq-id="442cbdd6-8543-4489-b0c5-a6de4aa5b92f"
       ref={rootRef}
       className="h-full w-full border-l border-border bg-background overflow-y-auto overflow-x-hidden relative z-20"
     >
       {/* SaaS-only sections */}
       {!isVSCode && (
-        <HeaderSection onOpenSettings={onOpenSettings} projectId={activeProjectId} projectName={activeProjectName} />
+        <HeaderSection
+          data-uniq-id="91a5165a-f357-45d0-aff9-9ac153b2a603"
+          onOpenSettings={onOpenSettings}
+          projectId={activeProjectId}
+          projectName={activeProjectName}
+        />
       )}
       {!isVSCode && (
         <ViewControlsSection
+          data-uniq-id="7c70db2f-ae92-4b8c-afb0-ae1ba75c8f21"
           viewport={canvasMode === 'multi' ? viewport : undefined}
           onZoomChange={canvasMode === 'multi' ? onZoomChange : undefined}
           onFitToContent={canvasMode === 'multi' ? onFitToContent : undefined}
@@ -1370,9 +1029,13 @@ export default function RightSidebar({
         )}
 
       {selectedIds.length > 1 && (
-        <div className="px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground mb-2">Multiple elements selected</p>
-          <p className="text-xs text-muted-foreground">Select a single element to edit its properties</p>
+        <div data-uniq-id="36ec40bb-5b54-4829-88b2-2f8bde3d8aa1" className="px-4 py-8 text-center">
+          <p data-uniq-id="745d80f1-b662-4a2b-a181-87a3f6bb70a0" className="text-sm text-muted-foreground mb-2">
+            Multiple elements selected
+          </p>
+          <p data-uniq-id="09788d85-8ba2-47bb-869d-b8300a576eb4" className="text-xs text-muted-foreground">
+            Select a single element to edit its properties
+          </p>
         </div>
       )}
 
@@ -1386,16 +1049,16 @@ export default function RightSidebar({
       {selectedIds.length === 1 && parsedStyles && (canvasMode !== 'multi' || activeInstanceId) && (
         <>
           {/* Frame type */}
-          <div className="w-full px-4 py-3 border-b border-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden">
             <span data-testid={TID.inspector.componentName} className="text-sm font-semibold text-foreground">
               {getFrameType()}
             </span>
           </div>
 
           {/* Text Content */}
-          {childrenType !== 'jsx' && i18nText?.kind !== 'i18n' && (
+          {childrenType !== 'jsx' && (
             <div
-              className={`w-full px-4 py-3 border-b border-border overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
+              className={`px-4 py-3 border-b border-border max-w-sidebar-section overflow-hidden ${isReadonly ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div className="flex items-center gap-1">
                 <div className="flex-1 min-w-0 min-h-6 px-2 bg-muted rounded flex items-center gap-1">
@@ -1447,42 +1110,6 @@ export default function RightSidebar({
             </div>
           )}
 
-          {/* i18n Text Inspector */}
-          {i18nText?.kind === 'i18n' &&
-            (() => {
-              // Key only changes on library/key identity change, NOT on locale change.
-              // Locale change triggers a re-read via useElementStyleData deps; the component
-              // stays mounted so localText is not reset.
-              const bindingKey = `${i18nText.library}|${i18nText.key}`;
-              return (
-                <I18nTextInspector
-                  key={bindingKey}
-                  i18nBinding={i18nText}
-                  onKeyChange={handleI18nKeyChange}
-                  onResolvedTextChange={handleI18nResolvedTextChange}
-                  onLocaleChange={handleI18nLocaleChange}
-                  localeEditable={i18nText.availableLocales.length > 1}
-                  rollbackKey={i18nRollbackSignal?.bindingId === bindingKey ? i18nRollbackSignal.counter : undefined}
-                  availableKeys={availableI18nKeys}
-                  keyEditable={availableI18nKeys !== undefined && availableI18nKeys.length > 0}
-                  canCreateKeys={i18nText.writable}
-                  keyBusy={
-                    loading ||
-                    (!!i18nDispatch && !!writeInProgress) ||
-                    (pendingKeyWrite !== null && pendingKeyWrite.elementId === selectedId)
-                  }
-                />
-              );
-            })()}
-          {/* Style Source Tabs */}
-          {canInspectStyles && (
-            <StyleSourceTabsSection
-              tabs={visibleSourceTabs}
-              selectedTabId={selectedSourceTabId}
-              onSourceTabChange={setSelectedSourceTabId}
-            />
-          )}
-
           {/* State Selector */}
           {projectUIKit === 'tailwind' && (
             <StateSelectorSection currentState={currentState} onStateChange={setCurrentState} />
@@ -1496,7 +1123,7 @@ export default function RightSidebar({
             )}
           >
             {/* Position Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <PositionSection
                 selectedPosition={selectedPosition}
                 posValues={{
@@ -1505,7 +1132,7 @@ export default function RightSidebar({
                   bottom: posBottom,
                   left: posLeft,
                 }}
-                projectUIKit={inspectorUIKit}
+                projectUIKit={projectUIKit}
                 onPositionChange={handlePositionChange}
                 onPositionValueChange={handlePositionValueChange}
                 onPositionKeyDown={handleNumericKeyDown}
@@ -1515,7 +1142,7 @@ export default function RightSidebar({
             {projectUIKit === 'none' && !isVSCode && <SetupTailwindButton onSetupClick={handleSetupTailwind} />}
 
             {/* Margin Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <MarginSection
                 marginTop={marginTop}
                 marginRight={marginRight}
@@ -1529,7 +1156,7 @@ export default function RightSidebar({
             )}
 
             {/* Layout Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <LayoutSection
                 selectedLayout={selectedLayout}
                 width={width}
@@ -1548,7 +1175,7 @@ export default function RightSidebar({
                 paddingBottom={paddingBottom}
                 paddingLeft={paddingLeft}
                 clipContent={clipContent}
-                projectUIKit={inspectorUIKit}
+                projectUIKit={projectUIKit}
                 isStyleSyncing={isStyleSyncing}
                 onLayoutChange={handleLayoutChange}
                 onWidthChange={handleWidthChange}
@@ -1572,7 +1199,7 @@ export default function RightSidebar({
             )}
 
             {/* Appearance Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <AppearanceSection
                 opacity={opacity}
                 borderRadius={borderRadius}
@@ -1584,25 +1211,22 @@ export default function RightSidebar({
             )}
 
             {/* Fill Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <FillSection
                 backgroundColor={backgroundColor}
                 fillOpacity={fillOpacity}
                 backgroundImage={backgroundImage}
                 textColor={textColor}
-                fontSize={fontSize}
                 fillMode={fillMode}
-                projectUIKit={inspectorUIKit}
+                projectUIKit={projectUIKit}
                 publicDirExists={publicDirExists}
                 activeProjectId={activeProjectId}
                 onBackgroundColorChange={setBackgroundColor}
                 onFillOpacityChange={setFillOpacity}
                 onBackgroundImageChange={setBackgroundImage}
                 onTextColorChange={setTextColor}
-                onFontSizeChange={setFontSize}
                 onFillModeChange={setFillMode}
                 syncStyleChange={syncStyleChange}
-                onNumericKeyDown={handleNumericKeyDown}
                 engine={engine}
                 componentPath={componentPath}
                 textOpacity={textOpacity}
@@ -1611,7 +1235,7 @@ export default function RightSidebar({
             )}
 
             {/* Stroke Section */}
-            {canInspectStyles && (
+            {projectUIKit !== 'none' && (
               <StrokeSection strokes={strokes} onStrokesChange={setStrokes} syncStyleChange={syncStyleChange} />
             )}
 

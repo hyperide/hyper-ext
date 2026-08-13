@@ -114,7 +114,7 @@ const Carousel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
           canScrollNext,
         }}
       >
-        {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- shadcn generated component, uses role="region" with aria-roledescription */}
+        {/* biome-ignore lint/a11y/useSemanticElements: shadcn generated component, uses role="region" with aria-roledescription */}
         <div
           ref={ref}
           onKeyDownCapture={handleKeyDown}
@@ -153,7 +153,7 @@ const CarouselItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLD
     const { orientation } = useCarousel();
 
     return (
-      // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- shadcn generated component, uses role="group" with aria-roledescription
+      // biome-ignore lint/a11y/useSemanticElements: shadcn generated component, uses role="group" with aria-roledescription
       <div
         ref={ref}
         role="group"

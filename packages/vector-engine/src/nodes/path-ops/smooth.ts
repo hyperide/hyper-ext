@@ -65,7 +65,7 @@ function buildSmoothedPath(
 
   // Pre-compute per-vertex outgoing tangent handle (direction + length)
   // handles[i] = outgoing handle offset from vertices[i]
-  const outHandle: Array<{ x: number; y: number }> = Array.from({ length: n });
+  const outHandle: Array<{ x: number; y: number }> = new Array(n);
 
   for (let i = 0; i < n; i++) {
     const prev = closed ? vertices[(i - 1 + n) % n] : i > 0 ? vertices[i - 1] : null;

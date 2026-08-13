@@ -27,7 +27,7 @@ export function createCopyKeyHandler(params: ColorCopyParams): (e: KeyboardEvent
     if (e.key === 'c' && isModifierPressed(e) && !copyModeRef.current) {
       const active = document.activeElement as HTMLInputElement | null;
       const tag = active?.tagName;
-      if ((tag === 'INPUT' || tag === 'TEXTAREA') && active?.selectionStart !== active?.selectionEnd) return false;
+      if ((tag === 'INPUT' || tag === 'TEXTAREA') && active.selectionStart !== active.selectionEnd) return false;
       e.preventDefault();
       e.stopPropagation();
       setCopyMode(true);

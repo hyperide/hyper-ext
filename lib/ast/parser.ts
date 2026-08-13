@@ -39,13 +39,13 @@ export function parseCode(sourceCode: string): t.File {
 
 /**
  * Print AST back to source code
- * Preserves original formatting for existing nodes; new string literals use single quotes
- * to match project style (biome quoteStyle: 'single').
+ * Preserves original formatting using recast (don't pass options!)
  * @param ast - AST to print
  * @returns Generated source code
  */
 export function printAST(ast: t.File): string {
-  return recastPrint(ast, { quote: 'single' }).code;
+  // Don't pass any options - recast will preserve original formatting
+  return recastPrint(ast).code;
 }
 
 /**
@@ -87,24 +87,6 @@ export function createFileParser(io: FileIO) {
       const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
       return io.readFile(absolutePath);
-    },
-
-    /**
-     * Drop any cached AST for `filePath`. Use after an external mutation
-     * (file watcher event, HMR rewrite) so the next `readAndParseFile` call
-     * re-reads from disk and re-parses. The content-equality check in
-     * `readAndParseFile` already self-heals when content differs, but
-     * explicit invalidation guarantees freshness regardless of cache
-     * implementation details.
-     */
-    invalidate(filePath: string): void {
-      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
-      astCache.delete(absolutePath);
-    },
-
-    /** Drop every cached AST. Use when a global state reset is needed. */
-    invalidateAll(): void {
-      astCache.clear();
     },
   };
 }

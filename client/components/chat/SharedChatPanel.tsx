@@ -10,15 +10,8 @@
 
 import { TID } from '@shared/data-testid-map';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatAdapter, ChatSession, ChatStreamEvent } from '../../../shared/ai-chat-display';
-import {
-  useAutoScroll,
-  useChatHistory,
-  useChatInput,
-  useChatStream,
-  useHandleStop,
-  useMessagesAppend,
-} from '../../hooks/chat';
+import type { ChatAdapter, ChatSession, ChatStreamEvent, DisplayMessage } from '../../../shared/ai-chat-display';
+import { useAutoScroll, useChatHistory, useChatInput, useChatStream } from '../../hooks/chat';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
 import { ChatMessages } from './ChatMessages';
@@ -78,24 +71,7 @@ export function SharedChatPanel({
   }>({ isOpen: false, toolName: '', content: '' });
 
   // --- Chat history ---
-  // Destructure all fields so exhaustive-deps can track stable callbacks/setters
-  // as primitives (member access on `history` would force the unstable parent
-  // object into deps and invalidate every render).
-  const {
-    chats,
-    currentChatId,
-    currentChat,
-    isLoadingChats,
-    isLoadingMessages,
-    messages,
-    setMessages,
-    createNewChat,
-    selectChat,
-    deleteChat,
-    setCurrentChatId,
-    updateChatTitle,
-    setIsStreaming,
-  } = useChatHistory({
+  const history = useChatHistory({
     chatAdapter,
     initialChatId,
     onChatCreated,
@@ -103,36 +79,24 @@ export function SharedChatPanel({
   });
 
   // --- Streaming ---
-  const onMessagesAppend = useMessagesAppend(setMessages);
+  const onMessagesAppend = useCallback(
+    (newMessages: DisplayMessage[]) => {
+      history.setMessages((prev) => [...prev, ...newMessages]);
+    },
+    [history.setMessages],
+  );
 
-  const {
-    isStreaming,
-    isStreamingRef,
-    currentAssistantMessage,
-    currentToolCalls,
-    pendingAskUser,
-    sendMessage,
-    stopStreaming,
-    respondToAskUser,
-  } = useChatStream({
+  const stream = useChatStream({
     chatAdapter,
     onMessagesAppend,
-    onChatTitleUpdate: updateChatTitle,
+    onChatTitleUpdate: history.updateChatTitle,
     onStreamEvent,
   });
 
-  // Detect auth errors in message history — hide input when key is invalid/expired
-  const hasAuthError = messages.some(
-    (m) =>
-      m.role === 'assistant' &&
-      m.content.startsWith('Error: ') &&
-      /401|403|authentication|Unauthorized|invalid_api_key/.test(m.content),
-  );
-
   // Keep history hook aware of streaming state
   useEffect(() => {
-    setIsStreaming(isStreaming);
-  }, [isStreaming, setIsStreaming]);
+    history.setIsStreaming(stream.isStreaming);
+  }, [stream.isStreaming, history.setIsStreaming]);
 
   // Ref to break circular dep: handleSendMessages -> input.flushQueue -> handleSendMessages
   const flushQueueRef = useRef<(() => string[]) | null>(null);
@@ -140,14 +104,11 @@ export function SharedChatPanel({
   // --- Input ---
   const handleSendMessages = useCallback(
     async (content: string[]) => {
-      let chatId = currentChatId;
+      let chatId = history.currentChatId;
       if (!chatId || forceNewChat) {
-        chatId = await createNewChat();
+        chatId = await history.createNewChat();
         if (!chatId) return;
       }
-
-      // Mark streaming BEFORE sendMessage to prevent loadChat useEffect race
-      setIsStreaming(true);
 
       // Add user messages to display
       for (const text of content) {
@@ -160,7 +121,7 @@ export function SharedChatPanel({
         ]);
       }
 
-      await sendMessage(chatId, content);
+      await stream.sendMessage(chatId, content);
 
       // After stream finishes, flush queue
       const queued = flushQueueRef.current?.() ?? [];
@@ -174,41 +135,33 @@ export function SharedChatPanel({
             },
           ]);
         }
-        await sendMessage(chatId, queued);
+        await stream.sendMessage(chatId, queued);
       }
     },
-    [currentChatId, forceNewChat, createNewChat, setIsStreaming, sendMessage, onMessagesAppend],
+    [history.currentChatId, forceNewChat, history.createNewChat, stream.sendMessage, onMessagesAppend],
   );
 
-  const {
-    inputValue,
-    setInputValue,
-    handleKeyDown,
-    handleSendMessage,
-    messageQueue,
-    cancelQueued,
-    flushQueue,
-    restoreQueueToInput,
-    placeholder,
-    resetInputState,
-  } = useChatInput({
-    messages,
-    isStreaming,
-    pendingAskUser,
+  const input = useChatInput({
+    messages: history.messages,
+    isStreaming: stream.isStreaming,
+    pendingAskUser: stream.pendingAskUser,
     onSendMessage: handleSendMessages,
-    onRespondToAskUser: respondToAskUser,
+    onRespondToAskUser: stream.respondToAskUser,
   });
-  flushQueueRef.current = flushQueue;
+  flushQueueRef.current = input.flushQueue;
 
   // --- Auto-scroll ---
-  const { scrollAreaRef, handleScroll, resetScrollFlag } = useAutoScroll(
-    messages,
-    currentAssistantMessage,
-    currentToolCalls,
-  );
+  const { scrollAreaRef, handleScroll, resetScrollFlag } = useAutoScroll([
+    history.messages,
+    stream.currentAssistantMessage,
+    stream.currentToolCalls,
+  ]);
 
   // --- Stop streaming ---
-  const handleStop = useHandleStop(stopStreaming, restoreQueueToInput);
+  const handleStop = useCallback(() => {
+    stream.stopStreaming();
+    input.restoreQueueToInput();
+  }, [stream.stopStreaming, input.restoreQueueToInput]);
 
   // --- Auto-send initial prompt ---
   const initialPromptSentRef = useRef(false);
@@ -219,44 +172,43 @@ export function SharedChatPanel({
     }
   }, [initialPrompt]);
 
-  // initialPromptSentRef guards against re-firing even when the stable deps churn.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleSendMessages is stable
   useEffect(() => {
-    if (initialPrompt && !isLoadingChats && !isStreamingRef.current && !initialPromptSentRef.current) {
+    if (initialPrompt && !history.isLoadingChats && !stream.isStreamingRef.current && !initialPromptSentRef.current) {
       initialPromptSentRef.current = true;
       resetScrollFlag();
       handleSendMessages([initialPrompt]);
       onPromptSent?.();
     }
-  }, [initialPrompt, isLoadingChats, isStreamingRef, resetScrollFlag, handleSendMessages, onPromptSent]);
+  }, [initialPrompt, history.isLoadingChats]);
 
   // --- Auto-save messages (for ext where server doesn't persist) ---
   const savedMessageCountRef = useRef(0);
   useEffect(() => {
-    if (!currentChatId || messages.length === 0) return;
-    if (messages.length <= savedMessageCountRef.current) return;
-    savedMessageCountRef.current = messages.length;
-    chatAdapter.saveMessages(currentChatId, messages);
-  }, [currentChatId, messages, chatAdapter]);
+    if (!history.currentChatId || history.messages.length === 0) return;
+    if (history.messages.length <= savedMessageCountRef.current) return;
+    savedMessageCountRef.current = history.messages.length;
+    chatAdapter.saveMessages(history.currentChatId, history.messages);
+  }, [history.currentChatId, history.messages, chatAdapter]);
 
-  // Reset saved count on chat switch — currentChatId is a sentinel trigger,
-  // not read in the body.
+  // Reset saved count on chat switch
   // biome-ignore lint/correctness/useExhaustiveDependencies: currentChatId triggers reset intentionally
   useEffect(() => {
     savedMessageCountRef.current = 0;
-    resetInputState();
-  }, [currentChatId, resetInputState]);
+    input.resetInputState();
+  }, [history.currentChatId, input.resetInputState]);
 
   // --- Auto-title from first user message ---
   useEffect(() => {
-    if (!currentChatId || messages.length === 0) return;
-    const firstUser = messages.find((m) => m.role === 'user');
+    if (!history.currentChatId || history.messages.length === 0) return;
+    const firstUser = history.messages.find((m) => m.role === 'user');
     if (!firstUser) return;
-    const chat = chats.find((c) => c.id === currentChatId);
+    const chat = history.chats.find((c) => c.id === history.currentChatId);
     if (!chat || chat.title !== 'New Chat') return;
     const title = firstUser.content.slice(0, 60) + (firstUser.content.length > 60 ? '...' : '');
-    chatAdapter.updateTitle(currentChatId, title);
-    updateChatTitle(currentChatId, title);
-  }, [currentChatId, messages, chats, chatAdapter, updateChatTitle]);
+    chatAdapter.updateTitle(history.currentChatId, title);
+    history.updateChatTitle(history.currentChatId, title);
+  }, [history.currentChatId, history.messages, history.chats, chatAdapter, history.updateChatTitle]);
 
   // --- Render ---
   const toolResultProps = {
@@ -267,18 +219,18 @@ export function SharedChatPanel({
   };
 
   const sidebarNode = renderSidebar?.({
-    chats,
-    currentChatId,
-    isLoadingChats,
-    isStreaming,
-    onSelectChat: selectChat,
+    chats: history.chats,
+    currentChatId: history.currentChatId,
+    isLoadingChats: history.isLoadingChats,
+    isStreaming: stream.isStreaming,
+    onSelectChat: history.selectChat,
     onNewChat: () => {
-      if (!isStreaming) {
-        setCurrentChatId(null);
-        setMessages([]);
+      if (!stream.isStreaming) {
+        history.setCurrentChatId(null);
+        history.setMessages([]);
       }
     },
-    onDeleteChat: deleteChat,
+    onDeleteChat: history.deleteChat,
   });
 
   return (
@@ -286,50 +238,49 @@ export function SharedChatPanel({
       {sidebarNode}
       <div className="flex flex-col flex-1 min-w-0">
         <ChatHeader
-          chats={chats}
-          currentChatId={currentChatId}
-          currentChatTitle={currentChat?.title}
-          onSelectChat={selectChat}
+          chats={history.chats}
+          currentChatId={history.currentChatId}
+          currentChatTitle={history.currentChat?.title}
+          onSelectChat={history.selectChat}
           onNewChat={() => {
-            if (!isStreaming) {
-              setCurrentChatId(null);
-              setMessages([]);
+            if (!stream.isStreaming) {
+              history.setCurrentChatId(null);
+              history.setMessages([]);
             }
           }}
-          onDeleteChat={deleteChat}
-          isStreaming={isStreaming}
+          onDeleteChat={history.deleteChat}
+          isStreaming={stream.isStreaming}
           extraControls={extraHeaderControls}
           hideChatSwitcher={!!sidebarNode}
         />
 
         <ChatMessages
-          messages={messages}
-          isStreaming={isStreaming}
-          isLoadingMessages={isLoadingMessages}
-          currentAssistantMessage={currentAssistantMessage}
-          currentToolCalls={currentToolCalls}
+          messages={history.messages}
+          isStreaming={stream.isStreaming}
+          isLoadingMessages={history.isLoadingMessages}
+          currentAssistantMessage={stream.currentAssistantMessage}
+          currentToolCalls={stream.currentToolCalls}
           scrollAreaRef={scrollAreaRef}
           onScroll={handleScroll}
           onViewToolResult={(name, content) => setToolResultModal({ isOpen: true, toolName: name, content })}
-          hasApiKey={hasAuthError ? false : hasApiKey}
+          hasApiKey={hasApiKey}
           onConfigureProvider={onConfigureProvider}
         />
 
-        {hasApiKey !== false && !hasAuthError && (
-          <ChatInput
-            inputValue={inputValue}
-            onInputChange={setInputValue}
-            onKeyDown={handleKeyDown}
-            onSend={() => handleSendMessage()}
-            onStop={handleStop}
-            isStreaming={isStreaming}
-            pendingAskUser={pendingAskUser}
-            onRespondToAskUser={respondToAskUser}
-            messageQueue={messageQueue}
-            onCancelQueued={cancelQueued}
-            placeholder={placeholder}
-          />
-        )}
+        <ChatInput
+          inputValue={input.inputValue}
+          onInputChange={input.setInputValue}
+          onKeyDown={input.handleKeyDown}
+          onSend={() => input.handleSendMessage()}
+          onStop={handleStop}
+          isStreaming={stream.isStreaming}
+          pendingAskUser={stream.pendingAskUser}
+          onRespondToAskUser={stream.respondToAskUser}
+          messageQueue={input.messageQueue}
+          onCancelQueued={input.cancelQueued}
+          placeholder={input.placeholder}
+          disabled={hasApiKey === false}
+        />
 
         {renderToolResult ? renderToolResult(toolResultProps) : <ToolResultModal {...toolResultProps} />}
       </div>

@@ -1,11 +1,18 @@
 /**
- * @file Empty container detection for overlay placeholders.
+ * Query empty containers in an iframe document.
  *
- * Accessed via: overlay-rects.ts (isContainerEmpty), overlay-renderer.ts (renderPlaceholderOverlays)
- * Assumptions: DOM elements have standard childNodes API
+ * Returns bounding rects for [data-uniq-id] elements that have no
+ * meaningful children (only whitespace text nodes). Used by the overlay
+ * system to render placeholder overlays outside the iframe.
+ *
+ * Enforces a minimum height on returned rects so that overlays remain
+ * visible and clickable even when the container collapses to 0px —
+ * without injecting any CSS that would alter the iframe layout.
  */
 
-import type { ComponentTreeNode, FrameworkAdapter, SourceLocation } from '../element-tracing/types';
+import type { PlaceholderRect } from './types';
+
+const CONTAINER_SELECTOR = '[data-uniq-id]';
 
 /** Minimum overlay height so collapsed containers remain visible/clickable. */
 export const MIN_PLACEHOLDER_HEIGHT = 28;
@@ -23,62 +30,33 @@ export function isContainerEmpty(el: Element): boolean {
   return true;
 }
 
-// ============================================================================
-// Fiber-based empty container detection
-// ============================================================================
-
-/** Placeholder rect with fiber-based nodeRef and source location instead of UUID. */
-export interface FiberPlaceholderRect {
-  nodeRef: string;
-  source: SourceLocation;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
 /**
- * Find empty containers using the framework adapter's component tree walk.
- * Each component tree node that renders an empty DOM element gets a placeholder.
- *
- * @param doc - iframe document
- * @param adapter - framework adapter for walking the fiber tree
- * @param nodeEntries - map from source key ("fileName:line:column") to node info
+ * Find all empty containers and return their bounding rects.
+ * Enforces MIN_PLACEHOLDER_HEIGHT so overlays stay visible on collapsed containers.
  */
-export function getEmptyContainerRectsFromFiber(
-  doc: Document,
-  adapter: Pick<FrameworkAdapter, 'walkComponentTree'>,
-  nodeEntries: Map<string, { nodeRef: string; source: SourceLocation }>,
-): FiberPlaceholderRect[] {
-  const root = doc.body?.firstElementChild;
-  if (!root) return [];
+export function getEmptyContainerRects(doc: Document): PlaceholderRect[] {
+  if (!doc.body) return [];
 
-  const tree = adapter.walkComponentTree(root as HTMLElement);
-  const rects: FiberPlaceholderRect[] = [];
+  const containers = doc.body.querySelectorAll(CONTAINER_SELECTOR);
+  const rects: PlaceholderRect[] = [];
 
-  function visit(nodes: ComponentTreeNode[]): void {
-    for (const node of nodes) {
-      if (node.domElement && isContainerEmpty(node.domElement) && node.source) {
-        const key = `${node.source.fileName}:${node.source.line}:${node.source.column}`;
-        const entry = nodeEntries.get(key);
-        if (entry) {
-          const rect = node.domElement.getBoundingClientRect();
-          const effectiveHeight = Math.max(rect.height, MIN_PLACEHOLDER_HEIGHT);
-          const topOffset = (effectiveHeight - rect.height) / 2;
-          rects.push({
-            nodeRef: entry.nodeRef,
-            source: entry.source,
-            left: rect.left,
-            top: rect.top - topOffset,
-            width: rect.width,
-            height: effectiveHeight,
-          });
-        }
-      }
-      visit(node.children);
-    }
+  for (const container of containers) {
+    if (!isContainerEmpty(container)) continue;
+
+    const elementId = container.getAttribute('data-uniq-id');
+    if (!elementId) continue;
+
+    const rect = container.getBoundingClientRect();
+    const effectiveHeight = Math.max(rect.height, MIN_PLACEHOLDER_HEIGHT);
+    const topOffset = (effectiveHeight - rect.height) / 2;
+    rects.push({
+      elementId,
+      left: rect.left,
+      top: rect.top - topOffset,
+      width: rect.width,
+      height: effectiveHeight,
+    });
   }
 
-  visit(tree);
   return rects;
 }

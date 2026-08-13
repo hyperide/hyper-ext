@@ -170,7 +170,7 @@ export class ASTPasteOperation extends BaseOperation {
     }
     try {
       return await this.pastePromise;
-    } catch {
+    } catch (_error) {
       return null;
     }
   }

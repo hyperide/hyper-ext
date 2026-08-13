@@ -52,8 +52,12 @@ export function getUniqueCSSProperties(styleKeys: string[]): string[] {
  * Capture a snapshot of computed styles for the given element in the preview iframe.
  * Returns null if element is not found in the DOM.
  */
-export function captureComputedStyles(elementId: string, cssProperties: string[]): Record<string, string> | null {
-  const computedStyle = getComputedStylesFromIframe(elementId);
+export function captureComputedStyles(
+  elementId: string,
+  cssProperties: string[],
+  instanceId?: string | null,
+): Record<string, string> | null {
+  const computedStyle = getComputedStylesFromIframe(elementId, instanceId);
   if (!computedStyle) return null;
 
   // CSSStyleDeclaration is live; snapshot eagerly into plain object
@@ -91,6 +95,7 @@ interface StyleVerificationParams {
   styles: Record<string, string>;
   cssProperties: string[];
   beforeSnapshot: Record<string, string> | null;
+  instanceId?: string | null;
   backendPromise?: Promise<void>;
   onVerified: () => void;
   onNotApplied: (ctx: StyleNotAppliedContext) => void;
@@ -110,6 +115,7 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     styles,
     cssProperties,
     beforeSnapshot,
+    instanceId,
     backendPromise,
     onVerified,
     onNotApplied,
@@ -141,19 +147,17 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
     }, POST_HMR_DELAY_MS);
     return finish;
   }
-  // Capture narrowed non-null value for closures below (tsc can't narrow closure-captured vars)
-  const validBeforeSnapshot = beforeSnapshot;
 
   function verifyStyles(): void {
     if (cancelled) return;
-    const afterSnapshot = captureComputedStyles(elementId, cssProperties);
+    const afterSnapshot = captureComputedStyles(elementId, cssProperties, instanceId);
     if (!afterSnapshot) {
       // Element gone — HMR removed it. Clear syncing.
       finish();
       onVerified();
       return;
     }
-    const unchanged = detectUnchangedProperties(validBeforeSnapshot, afterSnapshot);
+    const unchanged = detectUnchangedProperties(beforeSnapshot, afterSnapshot);
     if (unchanged.length === 0) {
       finish();
       onVerified();
@@ -176,13 +180,13 @@ export function startStyleVerification(params: StyleVerificationParams): () => v
       iframe.removeEventListener('load', handleLoad);
       addTimer(() => {
         if (cancelled) return;
-        const afterSnapshot = captureComputedStyles(elementId, cssProperties);
+        const afterSnapshot = captureComputedStyles(elementId, cssProperties, instanceId);
         if (!afterSnapshot) {
           finish();
           onVerified();
           return;
         }
-        const unchanged = detectUnchangedProperties(validBeforeSnapshot, afterSnapshot);
+        const unchanged = detectUnchangedProperties(beforeSnapshot, afterSnapshot);
         finish();
         if (unchanged.length === 0) {
           onVerified();

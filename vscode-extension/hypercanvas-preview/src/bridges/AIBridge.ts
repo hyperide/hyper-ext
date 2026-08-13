@@ -338,7 +338,7 @@ class LocalToolExecutor implements ToolExecutor {
     return { success: true, output: results.join('\n\n') };
   }
 
-  private _filterByLevel<T extends { isError: boolean; level?: string }>(logs: T[], levelFilter: string): T[] {
+  private _filterByLevel(logs: Array<{ isError: boolean; level?: string }>, levelFilter: string): typeof logs {
     if (levelFilter === 'all') return logs;
     if (levelFilter === 'error') return logs.filter((l) => l.isError || l.level === 'error');
     if (levelFilter === 'warn') return logs.filter((l) => l.isError || l.level === 'error' || l.level === 'warn');
@@ -391,7 +391,7 @@ class LocalToolExecutor implements ToolExecutor {
     if (!ALLOWED_COMMANDS.has(firstWord)) {
       return {
         success: false,
-        error: `Command '${firstWord}' is not allowed. Allowed: ${[...ALLOWED_COMMANDS].slice(0, 10).join(', ')}...`,
+        error: `Command '${firstWord}' is not allowed. Allowed: ${[...LocalToolExecutor.ALLOWED_BASH_COMMANDS].slice(0, 10).join(', ')}...`,
       };
     }
 
@@ -782,9 +782,9 @@ Be concise. Focus on fixing the actual error.`;
     if (state.selectedIds.length > 0) {
       const selectedInfo = this._describeSelectedElements(state.selectedIds, state.astStructure);
       parts.push(
-        `Selected element${state.selectedIds.length > 1 ? 's' : ''} (by nodeRef):\n${selectedInfo}\n` +
+        `Selected element${state.selectedIds.length > 1 ? 's' : ''} (by data-uniq-id):\n${selectedInfo}\n` +
           'When the user refers to "this element", "selected element", or "it", they mean these element(s). ' +
-          'Use the nodeRef (format: "fileName:line:column") to find corresponding JSX elements in the source code.',
+          'Use the data-uniq-id attribute to find corresponding JSX elements in the source code.',
       );
     }
 
@@ -812,7 +812,7 @@ Be concise. Focus on fixing the actual error.`;
     for (const id of selectedIds) {
       const node = this._findAstNode(id, astStructure as AstTreeNode[]);
       if (node) {
-        descriptions.push(`- ${node.label} [${node.type}] (nodeRef="${id}")`);
+        descriptions.push(`- ${node.label} [${node.type}] (data-uniq-id="${id}")`);
       } else {
         descriptions.push(`- ${id}`);
       }

@@ -49,7 +49,7 @@ function MapBoundaryOverlay({
       />
 
       {/* Label - clickable */}
-      {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- inline overlay label with absolute positioning */}
+      {/* biome-ignore lint/a11y/useSemanticElements: inline overlay label with absolute positioning */}
       <div
         className="absolute px-1 h-2.5 bg-purple-100 rounded-br shadow-[inset_-1px_-1px_4px_rgba(0,0,0,0.1),inset_1px_1px_4px_#fff] text-gray-900 text-[8px] leading-none flex items-center cursor-pointer hover:bg-purple-200 transition-colors pointer-events-auto"
         role="button"

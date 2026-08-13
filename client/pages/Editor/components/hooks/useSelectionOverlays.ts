@@ -1,5 +1,4 @@
 import { createOverlayRenderer } from '@shared/canvas-interaction/overlay-renderer';
-import type { OverlayElementResolver } from '@shared/canvas-interaction/types';
 import { useEffect } from 'react';
 import { getPreviewIframe } from '@/lib/dom-utils';
 
@@ -15,7 +14,6 @@ interface UseSelectionOverlaysOptions {
   iframeLoadedCounter: number;
   editorMode?: 'design' | 'interact' | 'code';
   onPlaceholderClick?: (elementId: string) => void;
-  elementResolver?: OverlayElementResolver;
 }
 
 /**
@@ -37,9 +35,8 @@ export function useSelectionOverlays({
   iframeLoadedCounter,
   editorMode,
   onPlaceholderClick,
-  elementResolver,
 }: UseSelectionOverlaysOptions) {
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-attach after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!enabled) {
       if (overlayContainerRef.current) {
@@ -69,7 +66,6 @@ export function useSelectionOverlays({
       viewportZoom,
       editorMode,
       onPlaceholderClick,
-      elementResolver,
     });
 
     renderer.update({
@@ -80,7 +76,6 @@ export function useSelectionOverlays({
       activeInstanceId: activeDesignInstanceId,
       viewportZoom,
       editorMode,
-      elementResolver,
     });
 
     return () => renderer.dispose();
@@ -96,7 +91,5 @@ export function useSelectionOverlays({
     iframeLoadedCounter,
     editorMode,
     onPlaceholderClick,
-    elementResolver,
   ]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 }

@@ -25,6 +25,7 @@ function getTailwindColorValue(
 ): string | undefined {
   try {
     const styles = twj(twClass);
+    console.log('[tw-to-css]', twClass, '->', styles);
     const colorValue = styles[property];
     if (colorValue?.startsWith('rgb')) {
       return rgbToHex(colorValue);
@@ -62,7 +63,6 @@ export interface ParsedTailwindStyles {
   };
   backgroundColor?: string;
   backgroundImage?: string;
-  fontSize?: string;
   textColor?: string;
   borderColor?: string;
   borderWidth?: string;
@@ -197,59 +197,6 @@ const SPACING_SCALE: Record<string, string> = {
 function extractArbitraryValue(className: string): string | null {
   const match = className.match(/\[([^\]]+)\]/);
   return match ? match[1] : null;
-}
-
-const TAILWIND_TEXT_SIZE_CLASSES = new Set([
-  'text-xs',
-  'text-sm',
-  'text-base',
-  'text-lg',
-  'text-xl',
-  'text-2xl',
-  'text-3xl',
-  'text-4xl',
-  'text-5xl',
-  'text-6xl',
-  'text-7xl',
-  'text-8xl',
-  'text-9xl',
-]);
-
-const TAILWIND_TEXT_OTHER_NON_COLOR_CLASSES = new Set([
-  'text-wrap',
-  'text-nowrap',
-  'text-balance',
-  'text-pretty',
-  'text-left',
-  'text-center',
-  'text-right',
-  'text-justify',
-  'text-start',
-  'text-end',
-]);
-
-function isArbitraryTextSizeValue(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return /^-?\d*\.?\d+(px|r?em|ex|ch|lh|rlh|vw|vh|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqmin|cqmax|%)$/.test(
-    normalized,
-  );
-}
-
-function isTailwindTextSizeClass(baseClass: string): boolean {
-  if (TAILWIND_TEXT_SIZE_CLASSES.has(baseClass)) return true;
-  const match = baseClass.match(/^text-\[(.+)\]$/);
-  if (!match) return false;
-  return isArbitraryTextSizeValue(match[1]);
-}
-
-function isTailwindTextOtherNonColorClass(baseClass: string): boolean {
-  return TAILWIND_TEXT_OTHER_NON_COLOR_CLASSES.has(baseClass);
-}
-
-function isTailwindTextColorClass(baseClass: string): boolean {
-  return (
-    baseClass.startsWith('text-') && !isTailwindTextSizeClass(baseClass) && !isTailwindTextOtherNonColorClass(baseClass)
-  );
 }
 
 /**
@@ -477,11 +424,8 @@ function parseMargin(classes: string[]): {
 // Parse colors using tw-to-css for accurate Tailwind color resolution
 function parseColors(
   classes: string[],
-): Pick<ParsedTailwindStyles, 'backgroundColor' | 'backgroundImage' | 'fontSize' | 'textColor' | 'borderColor'> {
-  const result: Pick<
-    ParsedTailwindStyles,
-    'backgroundColor' | 'backgroundImage' | 'fontSize' | 'textColor' | 'borderColor'
-  > = {};
+): Pick<ParsedTailwindStyles, 'backgroundColor' | 'backgroundImage' | 'textColor' | 'borderColor'> {
+  const result: Pick<ParsedTailwindStyles, 'backgroundColor' | 'backgroundImage' | 'textColor' | 'borderColor'> = {};
 
   for (const cls of classes) {
     // Background image: bg-\[url('/path/to/image.png')\]
@@ -500,42 +444,12 @@ function parseColors(
         const color = getTailwindColorValue(cls, 'backgroundColor');
         if (color) result.backgroundColor = color;
       }
-    } else if (isTailwindTextSizeClass(cls)) {
-      const arbValue = extractArbitraryValue(cls);
-      if (arbValue && isArbitraryTextSizeValue(arbValue)) {
-        result.fontSize = arbValue;
-      } else if (cls === 'text-xs') {
-        result.fontSize = '0.75rem';
-      } else if (cls === 'text-sm') {
-        result.fontSize = '0.875rem';
-      } else if (cls === 'text-base') {
-        result.fontSize = '1rem';
-      } else if (cls === 'text-lg') {
-        result.fontSize = '1.125rem';
-      } else if (cls === 'text-xl') {
-        result.fontSize = '1.25rem';
-      } else if (cls === 'text-2xl') {
-        result.fontSize = '1.5rem';
-      } else if (cls === 'text-3xl') {
-        result.fontSize = '1.875rem';
-      } else if (cls === 'text-4xl') {
-        result.fontSize = '2.25rem';
-      } else if (cls === 'text-5xl') {
-        result.fontSize = '3rem';
-      } else if (cls === 'text-6xl') {
-        result.fontSize = '3.75rem';
-      } else if (cls === 'text-7xl') {
-        result.fontSize = '4.5rem';
-      } else if (cls === 'text-8xl') {
-        result.fontSize = '6rem';
-      } else if (cls === 'text-9xl') {
-        result.fontSize = '8rem';
-      }
-    } else if (isTailwindTextColorClass(cls)) {
+    } else if (cls.startsWith('text-')) {
       const arbValue = extractArbitraryValue(cls);
       if (arbValue) {
         result.textColor = arbValue;
       } else {
+        // Use tw-to-css - it returns undefined for non-color text classes (like text-lg)
         const color = getTailwindColorValue(cls, 'color');
         if (color) result.textColor = color;
       }
@@ -1275,13 +1189,8 @@ export function mapPropertiesToTailwindClasses(domClasses: string): Record<strin
       result[`${prefix}backgroundColor`] = cls;
     }
 
-    // Text size
-    else if (isTailwindTextSizeClass(baseClass)) {
-      result[`${prefix}fontSize`] = cls;
-    }
-
     // Text color
-    else if (isTailwindTextColorClass(baseClass) && !baseClass.includes('/')) {
+    else if (baseClass.startsWith('text-') && !baseClass.includes('/')) {
       result[`${prefix}color`] = cls;
     }
 

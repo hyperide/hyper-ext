@@ -89,7 +89,6 @@ export interface ParsedStyles {
   transitionTiming?: string;
 
   // Text
-  fontSize?: string;
   color?: string;
 
   // Transform

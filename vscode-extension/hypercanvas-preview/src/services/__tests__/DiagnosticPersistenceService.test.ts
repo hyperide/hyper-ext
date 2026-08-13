@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
-import * as fs from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { DiagnosticLogEntry } from '../../../../../shared/diagnostic-types';
-import { DiagnosticPersistenceService } from '../DiagnosticPersistenceService';
 
-// Mutable state shared between spy implementations and test assertions
+// Shared state via object ref — mock.module captures the ref, not the value
 const state = {
   fileContent: null as string | null,
   writtenPath: null as string | null,
@@ -11,6 +9,25 @@ const state = {
   unlinkCalled: false,
   mkdirCalled: false,
 };
+
+mock.module('node:fs/promises', () => ({
+  readFile: async (filePath: string) => {
+    if (state.fileContent === null) throw new Error(`ENOENT: ${filePath}`);
+    return state.fileContent;
+  },
+  writeFile: async (filePath: string, content: string) => {
+    state.writtenPath = filePath;
+    state.writtenContent = content;
+  },
+  unlink: async () => {
+    state.unlinkCalled = true;
+  },
+  mkdir: async () => {
+    state.mkdirCalled = true;
+  },
+}));
+
+const { DiagnosticPersistenceService } = await import('../DiagnosticPersistenceService');
 
 function makeEntry(line: string, source = 'server'): DiagnosticLogEntry {
   return {
@@ -23,10 +40,6 @@ function makeEntry(line: string, source = 'server'): DiagnosticLogEntry {
 
 describe('DiagnosticPersistenceService', () => {
   let service: InstanceType<typeof DiagnosticPersistenceService>;
-  let readFileSpy: ReturnType<typeof spyOn>;
-  let writeFileSpy: ReturnType<typeof spyOn>;
-  let unlinkSpy: ReturnType<typeof spyOn>;
-  let mkdirSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
     state.fileContent = null;
@@ -34,32 +47,11 @@ describe('DiagnosticPersistenceService', () => {
     state.writtenContent = null;
     state.unlinkCalled = false;
     state.mkdirCalled = false;
-
-    readFileSpy = spyOn(fs, 'readFile').mockImplementation(async (filePath: unknown) => {
-      if (state.fileContent === null) throw new Error(`ENOENT: ${filePath}`);
-      return state.fileContent as unknown as Buffer;
-    });
-    writeFileSpy = spyOn(fs, 'writeFile').mockImplementation(async (filePath: unknown, content: unknown) => {
-      state.writtenPath = filePath as string;
-      state.writtenContent = content as string;
-    });
-    unlinkSpy = spyOn(fs, 'unlink').mockImplementation(async () => {
-      state.unlinkCalled = true;
-    });
-    mkdirSpy = spyOn(fs, 'mkdir').mockImplementation(async () => {
-      state.mkdirCalled = true;
-      return undefined;
-    });
-
     service = new DiagnosticPersistenceService('/fake/global/storage');
   });
 
   afterEach(() => {
     service.dispose();
-    readFileSpy?.mockRestore();
-    writeFileSpy?.mockRestore();
-    unlinkSpy?.mockRestore();
-    mkdirSpy?.mockRestore();
   });
 
   describe('load', () => {

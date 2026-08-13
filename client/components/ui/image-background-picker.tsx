@@ -38,13 +38,12 @@ export function ImageBackgroundPicker({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load images when popover opens
-  /* eslint-disable react-hooks/exhaustive-deps -- loadImages is defined below, effect triggers on open/projectId only */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadImages is defined below, effect triggers on open/projectId only
   useEffect(() => {
     if (open && projectId) {
       loadImages();
     }
   }, [open, projectId]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   const loadImages = async () => {
     setLoading(true);
@@ -180,8 +179,8 @@ export function ImageBackgroundPicker({
         <PopoverContent className="w-[280px] p-0" align="start">
           <div className="p-2 space-y-2">
             {/* Upload drop zone */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- drag-and-drop zone with click-to-upload, keyboard handled by hidden file input */}
-            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- drag-and-drop zone with click-to-upload */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: drag-and-drop zone with click-to-upload, keyboard handled by hidden file input */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop zone with click-to-upload */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}

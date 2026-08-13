@@ -6,16 +6,12 @@ import type { ProjectStructurePaths, ProjectStructureStore } from './types';
 
 const TMP_DIR = path.join(import.meta.dir, '__test_fixtures__');
 
-function createMockStore(
-  data: ProjectStructurePaths | null,
-): ProjectStructureStore & { saved: boolean; savedPaths: ProjectStructurePaths | null } {
+function createMockStore(data: ProjectStructurePaths | null): ProjectStructureStore & { saved: boolean } {
   return {
     saved: false,
-    savedPaths: null,
     load: async () => data,
-    save: async function (_projectRoot: string, paths: ProjectStructurePaths) {
+    save: async function () {
       this.saved = true;
-      this.savedPaths = paths;
     },
     flush: async () => false,
   };
@@ -237,40 +233,6 @@ describe('ComponentScanner.getComponentsData', () => {
     expect(names).toContain('button.tsx');
     expect(names).toContain('card.tsx');
   });
-
-  it('should remap cached absolute paths from a different project root', async () => {
-    const foreignRoot = path.join('/workspace', path.basename(projectRoot));
-    const store = createMockStore({
-      atomComponentsPaths: [path.join(foreignRoot, 'src', 'components', 'ui')],
-      compositeComponentsPaths: [],
-      pagesPaths: [],
-    });
-
-    const scanner = new ComponentScanner(store);
-    const result = await scanner.getComponentsData(projectRoot);
-
-    expect(result.atomGroups).toHaveLength(1);
-    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
-    const names = result.atomGroups[0].components.map((c) => c.name);
-    expect(names).toContain('button.tsx');
-    expect(names).toContain('card.tsx');
-  });
-
-  it('should re-analyze when cached paths point outside the current project', async () => {
-    const store = createMockStore({
-      atomComponentsPaths: [path.join('/missing-cache-root', 'configured-components')],
-      compositeComponentsPaths: [],
-      pagesPaths: [],
-    });
-
-    const scanner = new ComponentScanner(store);
-    const result = await scanner.getComponentsData(projectRoot);
-
-    expect(result.atomGroups).toHaveLength(1);
-    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
-    expect(store.saved).toBe(true);
-    expect(store.savedPaths?.atomComponentsPaths).toEqual(['src/components/ui']);
-  });
 });
 
 describe('ComponentScanner.detectProjectStructure', () => {
@@ -417,20 +379,5 @@ describe('ComponentScanner.detectProjectStructure', () => {
 
     // No components/ dir → nothing to detect
     expect(structure.compositeComponentsPaths).toHaveLength(0);
-  });
-
-  it('should detect client/components/ as composites (bulka-the-dog pattern)', () => {
-    const root = createProject('client-root', ['client/components'], {
-      'package.json': '{"dependencies":{"react":"18","vite":"5"}}',
-      'client/main.tsx': 'import App from "./App"; render(<App/>);',
-      'client/App.tsx': 'export function App() { return <div/>; }',
-      'client/components/Gallery.tsx': 'export function Gallery() { return <div/>; }',
-      'client/components/Header.tsx': 'export function Header() { return <header/>; }',
-    });
-
-    const scanner = new ComponentScanner(createMockStore(null));
-    const structure = scanner.detectProjectStructure(root);
-
-    expect(structure.compositeComponentsPaths).toContain(path.join(root, 'client', 'components'));
   });
 });

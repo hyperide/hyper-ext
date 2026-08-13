@@ -14,10 +14,10 @@ import { type ComponentNode, type ParseContext, parseJSXElement } from '@lib/ser
 import { convertComponentNodesToTreeNodes } from '@lib/services/tree-adapter';
 import type { ComponentInfo, ComponentTree, PropInfo, TreeNode } from '@lib/types';
 import * as vscode from 'vscode';
+import { analyzeWithAI, resolveAnalyzerConfig } from '../../../../lib/component-scanner/ai-analyzer';
 import { getDirectoryTree } from '../../../../lib/component-scanner/directory-tree';
 import { ComponentScanner } from '../../../../lib/component-scanner/scanner';
 import type { ComponentsData, TestGroup, TestInfo } from '../../../../lib/component-scanner/types';
-import { extractPropsFromDestructuring, isForwardRefCall } from './componentSourceParser';
 import { FileProjectStructureStore } from './FileStructureStore';
 
 // Re-export shared types for convenience
@@ -115,7 +115,6 @@ export class ComponentService {
       const backend = config.get<string>('backend');
 
       if (apiKey && model) {
-        const { analyzeWithAI, resolveAnalyzerConfig } = await import('../../../../lib/component-scanner/ai-analyzer');
         const resolved = resolveAnalyzerConfig({
           provider: provider as string,
           apiKey,
@@ -268,7 +267,7 @@ export class ComponentService {
     try {
       const content = await vscode.workspace.fs.readFile(uri);
       const sourceCode = new TextDecoder().decode(content);
-      return await this._parseComponent(componentPath, sourceCode);
+      return this._parseComponent(componentPath, sourceCode);
     } catch (error) {
       console.error(`[ComponentService] Error reading ${componentPath}:`, error); // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
       return null;
@@ -300,7 +299,7 @@ export class ComponentService {
       const returnJSX = this._findComponentReturnJSX(ast);
       if (!returnJSX) return [];
 
-      const parseContext: ParseContext = { fileAST: ast };
+      const parseContext: ParseContext = { fileAST: ast, seenIds: new Set() };
       const componentNodes = this._parseRootJSX(returnJSX, parseContext);
       return convertComponentNodesToTreeNodes(componentNodes);
     } catch (error) {
@@ -343,7 +342,7 @@ export class ComponentService {
       // Get relative path
       const relativePath = path.relative(this._workspaceRoot, uri.fsPath);
 
-      return await this._parseComponent(relativePath, sourceCode);
+      return this._parseComponent(relativePath, sourceCode);
     } catch (error) {
       console.error(
         // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
@@ -357,19 +356,14 @@ export class ComponentService {
   /**
    * Parse component source code
    */
-  private async _parseComponent(componentPath: string, sourceCode: string): Promise<ComponentInfo | null> {
+  private _parseComponent(componentPath: string, sourceCode: string): ComponentInfo | null {
     try {
       const ast = parseCode(sourceCode);
-
-      // Pre-pass: collect local type declarations and import mappings for type resolution
-      const localTypes = this._collectLocalTypes(ast);
-      const importMap = this._collectImportMap(ast);
 
       let componentName: string | null = null;
       let hasDefaultExport = false;
       let hasSampleRender = false;
       const props: PropInfo[] = [];
-      const exportedVarNames: string[] = [];
 
       // Look for component declarations and exports
       traverse(ast, {
@@ -389,12 +383,10 @@ export class ComponentService {
         ExportNamedDeclaration(nodePath: NodePath<t.ExportNamedDeclaration>) {
           const declaration = nodePath.node.declaration;
 
+          // Check for sampleRender export
           if (t.isFunctionDeclaration(declaration) && declaration.id) {
             if (declaration.id.name === 'sampleRender') {
               hasSampleRender = true;
-            }
-            if (/^[A-Z]/.test(declaration.id.name)) {
-              exportedVarNames.push(declaration.id.name);
             }
           }
 
@@ -403,9 +395,6 @@ export class ComponentService {
               if (t.isIdentifier(decl.id)) {
                 if (decl.id.name === 'sampleRender') {
                   hasSampleRender = true;
-                }
-                if (/^[A-Z]/.test(decl.id.name)) {
-                  exportedVarNames.push(decl.id.name);
                 }
               }
             }
@@ -418,45 +407,51 @@ export class ComponentService {
             if (!componentName) {
               componentName = nodePath.node.id.name;
             }
+
+            // Extract props from first parameter
             const firstParam = nodePath.node.params[0];
             if (t.isObjectPattern(firstParam)) {
-              props.push(...extractPropsFromDestructuring(firstParam));
+              for (const prop of firstParam.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  props.push({
+                    name: prop.key.name,
+                    type: 'unknown',
+                    required: true,
+                  });
+                }
+              }
             }
           }
         },
 
-        // Variable declarations (sampleRender and arrow/forwardRef function components)
+        // Variable declarations (sampleRender and arrow function components)
         VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
           const id = nodePath.node.id;
           const init = nodePath.node.init;
 
           if (t.isIdentifier(id)) {
+            // Check for sampleRender
             if (id.name === 'sampleRender') {
               hasSampleRender = true;
             }
 
-            const isArrowOrFn = t.isArrowFunctionExpression(init) || t.isFunctionExpression(init);
-            const isForwardRef = isForwardRefCall(init);
-
-            if (/^[A-Z]/.test(id.name) && (isArrowOrFn || isForwardRef)) {
+            // Check for arrow function components (PascalCase)
+            if (/^[A-Z]/.test(id.name) && t.isArrowFunctionExpression(init)) {
               if (!componentName) {
                 componentName = id.name;
               }
 
-              let renderFn: t.ArrowFunctionExpression | t.FunctionExpression | null = null;
-              if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
-                renderFn = init;
-              } else if (isForwardRef) {
-                const firstArg = (init as t.CallExpression).arguments[0];
-                if (t.isArrowFunctionExpression(firstArg) || t.isFunctionExpression(firstArg)) {
-                  renderFn = firstArg;
-                }
-              }
-
-              if (renderFn) {
-                const firstParam = renderFn.params[0];
-                if (t.isObjectPattern(firstParam)) {
-                  props.push(...extractPropsFromDestructuring(firstParam));
+              // Extract props from first parameter
+              const firstParam = init.params[0];
+              if (t.isObjectPattern(firstParam)) {
+                for (const prop of firstParam.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    props.push({
+                      name: prop.key.name,
+                      type: 'unknown',
+                      required: true,
+                    });
+                  }
                 }
               }
             }
@@ -472,11 +467,9 @@ export class ComponentService {
                 const propName = member.key.name;
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
-                let objectFields: PropInfo[] | undefined;
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
                 // Check if already exists
@@ -484,13 +477,11 @@ export class ComponentService {
                 if (existing) {
                   existing.type = propType;
                   existing.required = !member.optional;
-                  existing.objectFields = objectFields;
                 } else {
                   props.push({
                     name: propName,
                     type: propType,
                     required: !member.optional,
-                    objectFields,
                   });
                 }
               }
@@ -507,11 +498,9 @@ export class ComponentService {
                 const propName = member.key.name;
                 const typeAnnotation = member.typeAnnotation;
                 let propType = 'unknown';
-                let objectFields: PropInfo[] | undefined;
 
                 if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
                   propType = this._getTypeString(typeAnnotation.typeAnnotation);
-                  objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, 0, localTypes);
                 }
 
                 // Check if already exists
@@ -519,13 +508,11 @@ export class ComponentService {
                 if (existing) {
                   existing.type = propType;
                   existing.required = !member.optional;
-                  existing.objectFields = objectFields;
                 } else {
                   props.push({
                     name: propName,
                     type: propType,
                     required: !member.optional,
-                    objectFields,
                   });
                 }
               }
@@ -533,17 +520,6 @@ export class ComponentService {
           }
         },
       });
-
-      // Post-traverse: resolve imported type references that weren't found locally
-      await this._resolveImportedTypeReferences(props, importMap, componentPath, localTypes);
-
-      // Prefer exported name matching file basename (case-insensitive), then first exported name.
-      // Only when there's no default export (which already set componentName reliably).
-      if (!hasDefaultExport && exportedVarNames.length > 0) {
-        const fileBasenameLC = path.basename(componentPath, path.extname(componentPath)).toLowerCase();
-        const basenameMatch = exportedVarNames.find((n) => n.toLowerCase() === fileBasenameLC);
-        componentName = basenameMatch ?? exportedVarNames[0];
-      }
 
       // Skip if no component found
       if (!componentName) {
@@ -686,248 +662,14 @@ export class ComponentService {
     if (t.isTSFunctionType(node)) {
       return 'Function';
     }
-    if (t.isTSTypeLiteral(node)) {
-      // Produce readable inline object type: { user: string; count: number }
-      const parts: string[] = [];
-      for (const member of node.members) {
-        if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-          const opt = member.optional ? '?' : '';
-          const memberType =
-            member.typeAnnotation && t.isTSTypeAnnotation(member.typeAnnotation)
-              ? this._getTypeString(member.typeAnnotation.typeAnnotation)
-              : 'unknown';
-          parts.push(`${member.key.name}${opt}: ${memberType}`);
-        }
-      }
-      return parts.length > 0 ? `{ ${parts.join('; ')} }` : 'object';
-    }
 
     return 'unknown';
-  }
-
-  /**
-   * Extract nested object fields from a TSTypeLiteral or resolved TSTypeReference.
-   * Returns PropInfo[] for object-like types, undefined otherwise.
-   * When localTypes map is provided, TSTypeReference nodes are resolved via local declarations.
-   */
-  private _extractObjectFields(
-    node: t.TSType,
-    depth = 0,
-    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
-  ): PropInfo[] | undefined {
-    if (depth > 5) return undefined;
-
-    // Resolve named type references via local declarations
-    if (t.isTSTypeReference(node) && t.isIdentifier(node.typeName) && localTypes) {
-      const resolved = localTypes.get(node.typeName.name);
-      if (resolved) {
-        return this._extractFieldsFromTypeBody(resolved, depth, localTypes);
-      }
-      // Not found locally — will be resolved in the async post-traverse phase
-      return undefined;
-    }
-
-    if (!t.isTSTypeLiteral(node)) return undefined;
-
-    return this._extractFieldsFromMembers(node.members, depth, localTypes);
-  }
-
-  /**
-   * Extract fields from a resolved type body (TSInterfaceBody or TSTypeLiteral).
-   */
-  private _extractFieldsFromTypeBody(
-    body: t.TSInterfaceBody | t.TSTypeLiteral,
-    depth: number,
-    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
-  ): PropInfo[] | undefined {
-    const members = t.isTSInterfaceBody(body) ? body.body : body.members;
-    return this._extractFieldsFromMembers(members, depth, localTypes);
-  }
-
-  /**
-   * Extract PropInfo[] from a list of TS type members.
-   */
-  private _extractFieldsFromMembers(
-    members: t.TSTypeElement[],
-    depth: number,
-    localTypes?: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
-  ): PropInfo[] | undefined {
-    const fields: PropInfo[] = [];
-    for (const member of members) {
-      if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-        const typeAnnotation = member.typeAnnotation;
-        let fieldType = 'unknown';
-        let objectFields: PropInfo[] | undefined;
-
-        if (typeAnnotation && t.isTSTypeAnnotation(typeAnnotation)) {
-          fieldType = this._getTypeString(typeAnnotation.typeAnnotation);
-          objectFields = this._extractObjectFields(typeAnnotation.typeAnnotation, depth + 1, localTypes);
-        }
-
-        fields.push({
-          name: member.key.name,
-          type: fieldType,
-          required: !member.optional,
-          objectFields,
-        });
-      }
-    }
-
-    return fields.length > 0 ? fields : undefined;
-  }
-
-  /**
-   * Collect all local type/interface declarations from the AST.
-   * Returns a map from type name to its body (TSInterfaceBody or TSTypeLiteral).
-   */
-  private _collectLocalTypes(ast: t.File): Map<string, t.TSInterfaceBody | t.TSTypeLiteral> {
-    const types = new Map<string, t.TSInterfaceBody | t.TSTypeLiteral>();
-
-    traverse(ast, {
-      TSInterfaceDeclaration(nodePath: NodePath<t.TSInterfaceDeclaration>) {
-        types.set(nodePath.node.id.name, nodePath.node.body);
-      },
-      TSTypeAliasDeclaration(nodePath: NodePath<t.TSTypeAliasDeclaration>) {
-        if (t.isTSTypeLiteral(nodePath.node.typeAnnotation)) {
-          types.set(nodePath.node.id.name, nodePath.node.typeAnnotation);
-        }
-      },
-    });
-
-    return types;
-  }
-
-  /**
-   * Collect import mappings: local name → { source, importedName }.
-   * Handles `import { Foo } from './bar'` and `import { Foo as Bar } from './bar'`.
-   */
-  private _collectImportMap(ast: t.File): Map<string, { source: string; importedName: string }> {
-    const imports = new Map<string, { source: string; importedName: string }>();
-
-    traverse(ast, {
-      ImportDeclaration(nodePath: NodePath<t.ImportDeclaration>) {
-        const source = nodePath.node.source.value;
-        for (const specifier of nodePath.node.specifiers) {
-          if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported)) {
-            imports.set(specifier.local.name, {
-              source,
-              importedName: specifier.imported.name,
-            });
-          } else if (t.isImportDefaultSpecifier(specifier)) {
-            imports.set(specifier.local.name, {
-              source,
-              importedName: 'default',
-            });
-          }
-        }
-      },
-    });
-
-    return imports;
-  }
-
-  /**
-   * Post-traverse: resolve props whose type is a named reference not found locally.
-   * Follows imports to source files and extracts objectFields from the resolved type.
-   */
-  private async _resolveImportedTypeReferences(
-    props: PropInfo[],
-    importMap: Map<string, { source: string; importedName: string }>,
-    componentPath: string,
-    localTypes: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
-  ): Promise<void> {
-    for (const prop of props) {
-      // Skip if already has objectFields or type is a primitive/inline
-      if (prop.objectFields || !prop.type || prop.type === 'unknown') continue;
-
-      // Check if the type name is a named reference that was not resolved locally
-      const typeName = prop.type;
-      if (localTypes.has(typeName)) continue; // Already resolved in _extractObjectFields
-      const importInfo = importMap.get(typeName);
-      if (!importInfo) continue; // Not an imported type
-
-      try {
-        const resolved = await this._resolveTypeFromImport(typeName, importInfo, componentPath, localTypes);
-        if (resolved) {
-          prop.objectFields = resolved;
-        }
-      } catch (error) {
-        // nosemgrep: unsafe-formatstring -- JS template literal, not a format string
-        console.warn(`[ComponentService] Failed to resolve imported type "${typeName}":`, error);
-      }
-    }
-  }
-
-  /**
-   * Read an imported file, parse it, and extract objectFields for a named type.
-   */
-  private async _resolveTypeFromImport(
-    _typeName: string,
-    importInfo: { source: string; importedName: string },
-    componentPath: string,
-    parentLocalTypes: Map<string, t.TSInterfaceBody | t.TSTypeLiteral>,
-  ): Promise<PropInfo[] | undefined> {
-    // Resolve the import path relative to the component file
-    const componentDir = path.dirname(path.join(this._workspaceRoot, componentPath));
-    const extensions = ['.ts', '.tsx', '.d.ts', '.js', '.jsx'];
-
-    let resolvedPath: string | null = null;
-    const importSource = importInfo.source;
-
-    // Only handle relative imports (not node_modules)
-    if (!importSource.startsWith('.')) return undefined;
-
-    const basePath = path.resolve(componentDir, importSource);
-
-    // Try with extensions if no extension present
-    if (path.extname(basePath)) {
-      if (await fileExists(basePath)) {
-        resolvedPath = basePath;
-      }
-    } else {
-      for (const ext of extensions) {
-        const candidate = basePath + ext;
-        if (await fileExists(candidate)) {
-          resolvedPath = candidate;
-          break;
-        }
-      }
-      // Try index files
-      if (!resolvedPath) {
-        for (const ext of extensions) {
-          const candidate = path.join(basePath, `index${ext}`);
-          if (await fileExists(candidate)) {
-            resolvedPath = candidate;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!resolvedPath) return undefined;
-
-    const sourceCode = await fs.readFile(resolvedPath, 'utf-8');
-    const ast = parseCode(sourceCode);
-
-    // Collect types from the imported file
-    const importedTypes = this._collectLocalTypes(ast);
-
-    // Merge parent local types so nested references can still resolve
-    const mergedTypes = new Map([...parentLocalTypes, ...importedTypes]);
-
-    // Find the exported type by its original name
-    const typeBody = importedTypes.get(importInfo.importedName);
-    if (!typeBody) return undefined;
-
-    return this._extractFieldsFromTypeBody(typeBody, 0, mergedTypes);
   }
 }
 
 // ============================================
 // Module-level helpers
 // ============================================
-
-export { parseComponentSource } from './componentSourceParser';
 
 /**
  * Extract the top-level return JSX from a function body.

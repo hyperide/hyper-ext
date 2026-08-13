@@ -51,8 +51,6 @@ export type ToolName =
   // Web tools
   | 'brave_web_search'
   | 'url_fetch'
-  // Package management
-  | 'add_dependency'
   // Extension-only tools
   | 'check_build_status';
 
@@ -154,7 +152,7 @@ export interface AIAgentChatRequest {
   projectPath: string;
   chatId?: string;
   componentPath?: string; // Current component being developed (for browser tools)
-  selectedElementIds?: string[]; // Currently selected elements' nodeRef values
+  selectedElementIds?: string[]; // Currently selected elements' data-uniq-id values
   // conversationHistory is loaded from DB when chatId is provided
 }
 

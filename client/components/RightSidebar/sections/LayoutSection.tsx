@@ -269,8 +269,8 @@ export const LayoutSection = memo(function LayoutSection({
     (value: string) => {
       onPaddingChange('paddingLeft', value);
       onPaddingChange('paddingRight', value);
-      syncStyleChange('paddingLeft', value, DB);
-      syncStyleChange('paddingRight', value, DB);
+      syncStyleChange('paddingLeft', value);
+      syncStyleChange('paddingRight', value);
     },
     [onPaddingChange, syncStyleChange],
   );
@@ -279,8 +279,8 @@ export const LayoutSection = memo(function LayoutSection({
     (value: string) => {
       onPaddingChange('paddingTop', value);
       onPaddingChange('paddingBottom', value);
-      syncStyleChange('paddingTop', value, DB);
-      syncStyleChange('paddingBottom', value, DB);
+      syncStyleChange('paddingTop', value);
+      syncStyleChange('paddingBottom', value);
     },
     [onPaddingChange, syncStyleChange],
   );
@@ -294,7 +294,7 @@ export const LayoutSection = memo(function LayoutSection({
   return (
     <div
       data-testid={TID.inspector.sectionHeader('layout')}
-      className="w-full px-4 py-3 border-t border-border overflow-hidden"
+      className="px-4 py-3 border-t border-border max-w-sidebar-section overflow-hidden"
     >
       <div className="mb-3">
         <span className="text-xs font-semibold text-foreground">
@@ -303,14 +303,14 @@ export const LayoutSection = memo(function LayoutSection({
       </div>
 
       {/* Layout type buttons */}
-      <div className="toggle-container flex items-center mb-3">
+      <div className="flex items-center mb-3">
         <button
           type="button"
           data-testid={TID.inspector.layoutDisplaySelect}
           onClick={() => onLayoutChange('layout')}
           className={cn(
             'flex-1 h-6 px-1 rounded-l flex items-center justify-center',
-            selectedLayout === 'layout' && 'toggle-active',
+            selectedLayout === 'layout' ? 'border border-border bg-background' : 'bg-muted',
           )}
         >
           <IconLayout className="w-4 h-4" stroke={1.5} />
@@ -321,7 +321,7 @@ export const LayoutSection = memo(function LayoutSection({
           onClick={() => onLayoutChange('col')}
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
-            selectedLayout === 'col' && 'toggle-active',
+            selectedLayout === 'col' ? 'border border-border bg-background' : 'bg-muted',
           )}
         >
           <IconSortDescending2 className="w-5 h-5" stroke={1.5} />
@@ -333,7 +333,7 @@ export const LayoutSection = memo(function LayoutSection({
           className={cn(
             'flex-1 h-6 px-1 flex items-center justify-center',
             projectUIKit === 'tamagui' ? 'rounded-r' : '',
-            selectedLayout === 'row' && 'toggle-active',
+            selectedLayout === 'row' ? 'border border-border bg-background' : 'bg-muted',
           )}
         >
           <IconFlexRow className="w-5 h-5" />
@@ -345,7 +345,7 @@ export const LayoutSection = memo(function LayoutSection({
             onClick={() => onLayoutChange('grid')}
             className={cn(
               'flex-1 h-6 px-1 rounded-r flex items-center justify-center',
-              selectedLayout === 'grid' && 'toggle-active',
+              selectedLayout === 'grid' ? 'border border-border bg-background' : 'bg-muted',
             )}
           >
             <IconLayoutGrid className="w-5 h-5" stroke={1.5} />
@@ -618,14 +618,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
             >
-              <IconBorderSides className="w-4 h-4" stroke={1.5} />
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
             </button>
           </div>
         </>
@@ -1045,14 +1045,14 @@ export const LayoutSection = memo(function LayoutSection({
               type="button"
               data-testid={TID.inspector.spacingLink('padding')}
               onClick={() => setPaddingExpanded(!paddingExpanded)}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-                paddingExpanded
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+                paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}
             >
-              <IconBorderSides className="w-4 h-4" stroke={1.5} />
+              <IconBorderSides
+                className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+                stroke={1.5}
+              />
             </button>
           </div>
         </>
@@ -1179,14 +1179,14 @@ export const LayoutSection = memo(function LayoutSection({
             type="button"
             data-testid={TID.inspector.spacingLink('padding')}
             onClick={() => setPaddingExpanded(!paddingExpanded)}
-            className={cn(
-              'w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-colors',
-              paddingExpanded
-                ? 'bg-accent text-accent-foreground'
-                : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
+            className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${
+              paddingExpanded ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-transparent'
+            }`}
           >
-            <IconBorderSides className="w-4 h-4" stroke={1.5} />
+            <IconBorderSides
+              className={`w-4 h-4 ${paddingExpanded ? 'text-[#3479DE]' : 'text-foreground'}`}
+              stroke={1.5}
+            />
           </button>
         </div>
       )}

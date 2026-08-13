@@ -223,7 +223,7 @@ export function PropsFormField({ name, propInfo, value, onChange, depth = 0, tam
         </Label>
         <div className="space-y-2 pl-3 border-l-2 border-gray-200">
           {arrValue.map((item, index) => (
-            // eslint-disable-next-line react/no-array-index-key -- array items have no stable unique id
+            // biome-ignore lint/suspicious/noArrayIndexKey: array items have no stable unique id
             <div key={index} className="flex items-start gap-2">
               <div className="flex-1">
                 {propInfo.arrayItemType ? (

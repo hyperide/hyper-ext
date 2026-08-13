@@ -12,7 +12,6 @@ import type {
   CanvasTestInteraction,
   InstanceConfig,
   InstanceTestConfig,
-  SerializableValue,
 } from '../../../shared/types/canvas';
 import { toInstanceConfig } from '../../../shared/types/canvas';
 import type { ComponentAnalysis, CvaVariantInfo, PropDefinition, TestInteraction, TestVariant } from '../types';
@@ -423,7 +422,7 @@ export function addVariantsToCanvas(
     newInstances[variant.id] = {
       x: variant.x,
       y: variant.y,
-      props: variant.props as Record<string, SerializableValue>,
+      props: variant.props as Record<string, import('../../../shared/types/canvas').SerializableValue>,
       label: variant.label,
       description: variant.description,
       testConfig: variant.testConfig,

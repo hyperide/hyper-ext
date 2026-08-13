@@ -26,8 +26,6 @@ export interface RightSidebarProps {
   explorerVisible?: boolean;
   /** Called when user clicks a component in the empty state list */
   onComponentClick?: (name: string, path: string) => void;
-  /** When true, all style-editing inputs are disabled (CSS system not writable) */
-  readonly?: boolean;
 }
 
 export interface StrokeItem {

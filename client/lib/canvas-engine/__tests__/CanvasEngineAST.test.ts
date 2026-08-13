@@ -216,7 +216,7 @@ describe('CanvasEngine AST Integration', () => {
 
       expect(mockApi.getCallCount('deleteElements')).toBe(1);
       const call = mockApi.getLastCall('deleteElements');
-      expect((call!.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
+      expect((call?.args[0] as Record<string, unknown>).elementIds).toEqual(['pasted-1', 'pasted-2']);
     });
   });
 
@@ -230,24 +230,6 @@ describe('CanvasEngine AST Integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockApi.getCallCount('updateStyles')).toBe(1);
-    });
-
-    it('passes selected source tab id to the AST API', async () => {
-      engine.updateASTStyles(
-        'elem-1',
-        '/test/file.tsx',
-        { padding: '16px' },
-        {
-          state: 'hover',
-          selectedSourceTabId: 'css-modules:card',
-        },
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      const call = mockApi.getLastCall('updateStyles');
-      const params = call!.args[0] as { selectedSourceTabId?: string };
-      expect(params.selectedSourceTabId).toBe('css-modules:card');
     });
 
     it('should restore snapshot on undo', async () => {
@@ -265,7 +247,7 @@ describe('CanvasEngine AST Integration', () => {
 
       expect(mockApi.getCallCount('restoreFileSnapshot')).toBe(1);
       const call = mockApi.getLastCall('restoreFileSnapshot');
-      expect(call!.args[0]).toBe(42);
+      expect(call?.args[0]).toBe(42);
     });
   });
 
@@ -307,8 +289,8 @@ describe('CanvasEngine AST Integration', () => {
       expect(mockApi.getCallCount('editCondition')).toBe(1);
       const call = mockApi.getLastCall('editCondition');
       // On undo, expressions are swapped
-      expect((call!.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
-      expect((call!.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
+      expect((call?.args[0] as Record<string, unknown>).newExpression).toBe('isVisible');
+      expect((call?.args[0] as Record<string, unknown>).oldExpression).toBe('isVisible && isActive');
     });
   });
 

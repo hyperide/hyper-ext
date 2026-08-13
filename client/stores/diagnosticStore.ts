@@ -99,7 +99,9 @@ export const useDiagnosticStore = create<DiagnosticStore>()((set, get) => ({
 
     if (runtimeError) {
       parts.push(
-        `Runtime Error (${runtimeError.framework}): ${runtimeError.type}: ${runtimeError.message}${runtimeError.file ? `\nFile: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}` : ''}${runtimeError.codeframe ? `\n\`\`\`\n${runtimeError.codeframe}\n\`\`\`` : ''}`,
+        `Runtime Error (${runtimeError.framework}): ${runtimeError.type}: ${runtimeError.message}` +
+          (runtimeError.file ? `\nFile: ${runtimeError.file}${runtimeError.line ? `:${runtimeError.line}` : ''}` : '') +
+          (runtimeError.codeframe ? `\n\`\`\`\n${runtimeError.codeframe}\n\`\`\`` : ''),
       );
     }
 

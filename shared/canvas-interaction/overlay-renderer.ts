@@ -8,61 +8,11 @@
  */
 
 import { buildSquareRotatedPlusSvg } from '../icons/square-rotated-plus';
-import { computeOverlayRects as computeSharedRects } from './overlay-rects';
-import type {
-  OverlayElementResolver,
-  OverlayRect,
-  OverlayRendererOptions,
-  OverlayState,
-  PlaceholderRect,
-} from './types';
+import { getEmptyContainerRects } from './empty-container-placeholders';
+import type { OverlayRect, OverlayRendererOptions, OverlayState, PlaceholderRect } from './types';
 
 const HOVER_BORDER = '2px solid rgba(59, 130, 246, 0.5)';
 const SELECTION_BORDER = '2px solid rgb(59, 130, 246)';
-
-const HANDLE_SIZE = 8;
-
-function createResizeHandleDot(axis: 'width' | 'height'): HTMLDivElement {
-  const dot = document.createElement('div');
-  dot.setAttribute('data-resize-handle', axis);
-  dot.style.position = 'absolute';
-  dot.style.width = `${HANDLE_SIZE}px`;
-  dot.style.height = `${HANDLE_SIZE}px`;
-  dot.style.borderRadius = '50%';
-  dot.style.background = 'rgb(59, 130, 246)';
-  dot.style.border = '2px solid white';
-  dot.style.boxSizing = 'border-box';
-  dot.style.pointerEvents = 'auto';
-  dot.style.cursor = axis === 'width' ? 'ew-resize' : 'ns-resize';
-  if (axis === 'width') {
-    dot.style.right = `${-HANDLE_SIZE / 2}px`;
-    dot.style.top = '50%';
-    dot.style.transform = 'translateY(-50%)';
-  } else {
-    dot.style.bottom = `${-HANDLE_SIZE / 2}px`;
-    dot.style.left = '50%';
-    dot.style.transform = 'translateX(-50%)';
-  }
-  return dot;
-}
-
-function syncResizeHandles(overlay: HTMLDivElement, rect: OverlayRect, enable: boolean): void {
-  const wantWidth = enable && rect.type === 'selection' && !!rect.resizable?.width;
-  const wantHeight = enable && rect.type === 'selection' && !!rect.resizable?.height;
-  let hasWidth = false;
-  let hasHeight = false;
-  for (const child of overlay.children) {
-    const axis = (child as HTMLElement).getAttribute('data-resize-handle');
-    if (axis === 'width') hasWidth = true;
-    else if (axis === 'height') hasHeight = true;
-  }
-  if (hasWidth === wantWidth && hasHeight === wantHeight) return;
-  for (const child of Array.from(overlay.children)) {
-    if ((child as HTMLElement).hasAttribute('data-resize-handle')) child.remove();
-  }
-  if (wantWidth) overlay.appendChild(createResizeHandleDot('width'));
-  if (wantHeight) overlay.appendChild(createResizeHandleDot('height'));
-}
 
 // ============================================================================
 // Low-level: render pre-computed rects as overlay divs
@@ -76,9 +26,7 @@ export function renderOverlayRects(
   container: HTMLElement,
   rects: OverlayRect[],
   overlayElements: Map<string, HTMLDivElement>,
-  options?: { enableResizeHandles?: boolean },
 ): void {
-  const enableHandles = options?.enableResizeHandles ?? true;
   const currentKeys = new Set<string>();
 
   for (const rect of rects) {
@@ -95,23 +43,10 @@ export function renderOverlayRects(
       overlayElements.set(rect.key, element);
     }
 
-    if (rect.elementId) {
-      element.dataset.elementId = rect.elementId;
-    } else {
-      delete element.dataset.elementId;
-    }
-
-    if (rect.resizable?.hasSizeClass) {
-      element.dataset.hasSizeClass = 'true';
-    } else {
-      delete element.dataset.hasSizeClass;
-    }
-
     element.style.left = `${rect.left}px`;
     element.style.top = `${rect.top}px`;
     element.style.width = `${rect.width}px`;
     element.style.height = `${rect.height}px`;
-    syncResizeHandles(element, rect, enableHandles);
   }
 
   // Remove unused overlays
@@ -254,36 +189,112 @@ export function renderPlaceholderOverlays(
 // High-level: RAF loop with direct iframe DOM access (SaaS)
 // ============================================================================
 
-/** Apply iframe→container offset and zoom to raw viewport-relative rects. */
-function transformRects<T extends { left: number; top: number; width: number; height: number }>(
-  rects: T[],
-  offsetX: number,
-  offsetY: number,
-  zoom: number,
-): T[] {
-  return rects.map((r) => ({
-    ...r,
-    left: offsetX + r.left * zoom,
-    top: offsetY + r.top * zoom,
-    width: r.width * zoom,
-    height: r.height * zoom,
-  }));
+/**
+ * Compute overlay rects by querying iframe DOM.
+ * Returns OverlayRect[] ready for renderOverlayRects().
+ */
+function computeOverlayRects(iframe: HTMLIFrameElement, container: HTMLElement, state: OverlayState): OverlayRect[] {
+  const doc = iframe.contentDocument;
+  if (!doc) return [];
+
+  const containerRect = container.getBoundingClientRect();
+  const iframeRect = iframe.getBoundingClientRect();
+  const offsetX = iframeRect.left - containerRect.left;
+  const offsetY = iframeRect.top - containerRect.top;
+  const zoom = state.viewportZoom ?? 1;
+
+  const { selectedIds, hoveredId, hoveredItemIndex = null, selectedItemIndices, activeInstanceId = null } = state;
+
+  const rects: OverlayRect[] = [];
+
+  // Hover rect (skip if exact same item is selected)
+  if (hoveredId) {
+    const isExactItemSelected =
+      selectedIds.includes(hoveredId) && selectedItemIndices?.get(hoveredId) === hoveredItemIndex;
+
+    if (!isExactItemSelected) {
+      let hoverSelector = `[data-uniq-id="${hoveredId}"]`;
+      if (activeInstanceId) {
+        hoverSelector = `[data-canvas-instance-id="${activeInstanceId}"] ${hoverSelector}`;
+      }
+
+      const allHoverElements = doc.querySelectorAll(hoverSelector);
+      let hoverElement: Element | null = null;
+      if (hoveredItemIndex !== null && allHoverElements[hoveredItemIndex]) {
+        hoverElement = allHoverElements[hoveredItemIndex];
+      } else if (allHoverElements.length > 0) {
+        hoverElement = allHoverElements[0];
+      }
+
+      if (hoverElement) {
+        const elemRect = hoverElement.getBoundingClientRect();
+        const key = hoveredItemIndex !== null ? `hover-${hoveredId}-${hoveredItemIndex}` : `hover-${hoveredId}`;
+
+        rects.push({
+          key,
+          left: offsetX + elemRect.left * zoom,
+          top: offsetY + elemRect.top * zoom,
+          width: elemRect.width * zoom,
+          height: elemRect.height * zoom,
+          type: 'hover',
+        });
+      }
+    }
+  }
+
+  // Selection rects
+  for (const selectedId of selectedIds) {
+    const itemIndex = selectedItemIndices?.get(selectedId) ?? null;
+
+    let baseSelector = `[data-uniq-id="${selectedId}"]`;
+    if (activeInstanceId) {
+      baseSelector = `[data-canvas-instance-id="${activeInstanceId}"] ${baseSelector}`;
+    }
+
+    const allElements = doc.querySelectorAll(baseSelector);
+    const elementsToHighlight: Element[] = [];
+
+    if (itemIndex !== null && itemIndex !== undefined && allElements[itemIndex]) {
+      elementsToHighlight.push(allElements[itemIndex]);
+    } else {
+      elementsToHighlight.push(...Array.from(allElements));
+    }
+
+    elementsToHighlight.forEach((selectedElement, idx) => {
+      const elemRect = selectedElement.getBoundingClientRect();
+      const key =
+        itemIndex !== null && itemIndex !== undefined
+          ? `select-${selectedId}-${itemIndex}`
+          : `select-${selectedId}-${idx}`;
+
+      rects.push({
+        key,
+        left: offsetX + elemRect.left * zoom,
+        top: offsetY + elemRect.top * zoom,
+        width: elemRect.width * zoom,
+        height: elemRect.height * zoom,
+        type: 'selection',
+      });
+    });
+  }
+
+  return rects;
 }
 
 /**
  * Create an overlay renderer with RAF loop for direct iframe DOM access.
- * Uses OverlayElementResolver for platform-agnostic element lookup.
+ * Used in SaaS where the iframe is same-origin.
  *
  * @param iframe - The preview iframe element
  * @param container - The overlay container (position: absolute, covers iframe)
- * @param options - viewportZoom, elementResolver, and callbacks
+ * @param options - viewportZoom for pan & zoom support
  */
 export function createOverlayRenderer(
   iframe: HTMLIFrameElement,
   container: HTMLElement,
   options?: OverlayRendererOptions,
 ): {
-  update: (state: Partial<OverlayState> & { editorMode?: string; elementResolver?: OverlayElementResolver }) => void;
+  update: (state: Partial<OverlayState> & { editorMode?: string }) => void;
   dispose: () => void;
 } {
   const state: OverlayState = {
@@ -295,44 +306,39 @@ export function createOverlayRenderer(
   const placeholderElements = new Map<string, HTMLDivElement>();
   let editorMode: string = options?.editorMode ?? 'design';
   const onPlaceholderClick = options?.onPlaceholderClick;
-  let elementResolver: OverlayElementResolver | undefined = options?.elementResolver;
   let rafId = 0;
   let disposed = false;
 
   function tick() {
     if (disposed) return;
 
-    if (elementResolver) {
+    const rects = computeOverlayRects(iframe, container, state);
+    renderOverlayRects(container, rects, overlayElements);
+
+    // Placeholder overlays for empty containers
+    const doc = iframe.contentDocument;
+    if (doc && onPlaceholderClick && editorMode !== 'interact') {
       const containerRect = container.getBoundingClientRect();
       const iframeRect = iframe.getBoundingClientRect();
       const offsetX = iframeRect.left - containerRect.left;
       const offsetY = iframeRect.top - containerRect.top;
       const zoom = state.viewportZoom ?? 1;
 
-      const result = computeSharedRects(
-        {
-          selectedIds: state.selectedIds,
-          hoveredId: state.hoveredId,
-          hoveredItemIndex: state.hoveredItemIndex,
-          selectedItemIndices: state.selectedItemIndices,
-          engineMode: editorMode,
-        },
-        elementResolver,
-      );
+      const rawRects = getEmptyContainerRects(doc);
+      const transformedRects: PlaceholderRect[] = rawRects.map((r) => ({
+        elementId: r.elementId,
+        left: offsetX + r.left * zoom,
+        top: offsetY + r.top * zoom,
+        width: r.width * zoom,
+        height: r.height * zoom,
+      }));
 
-      const transformedOverlay = transformRects(result.overlayRects, offsetX, offsetY, zoom);
-      renderOverlayRects(container, transformedOverlay, overlayElements, { enableResizeHandles: false });
-
-      if (onPlaceholderClick && editorMode !== 'interact') {
-        const transformedPlaceholders = transformRects(result.placeholderRects, offsetX, offsetY, zoom);
-        renderPlaceholderOverlays(container, transformedPlaceholders, placeholderElements, onPlaceholderClick);
-      } else if (placeholderElements.size > 0) {
+      renderPlaceholderOverlays(container, transformedRects, placeholderElements, onPlaceholderClick);
+    } else {
+      // Clear placeholders when in interact mode or no callback
+      if (placeholderElements.size > 0) {
         clearOverlays(placeholderElements);
       }
-    } else {
-      // No resolver — clear all overlays
-      if (overlayElements.size > 0) clearOverlays(overlayElements);
-      if (placeholderElements.size > 0) clearOverlays(placeholderElements);
     }
 
     rafId = requestAnimationFrame(tick);
@@ -341,12 +347,9 @@ export function createOverlayRenderer(
   rafId = requestAnimationFrame(tick);
 
   return {
-    update(newState: Partial<OverlayState> & { editorMode?: string; elementResolver?: OverlayElementResolver }) {
+    update(newState: Partial<OverlayState> & { editorMode?: string }) {
       if (newState.editorMode !== undefined) {
         editorMode = newState.editorMode;
-      }
-      if (newState.elementResolver !== undefined) {
-        elementResolver = newState.elementResolver;
       }
       Object.assign(state, newState);
     },

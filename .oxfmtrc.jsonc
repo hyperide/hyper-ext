@@ -1,8 +1,0 @@
-{
-  // Mirrors biome.jsonc formatter settings.
-  "printWidth": 120,
-  "tabWidth": 2,
-  "useTabs": false,
-  "singleQuote": true,
-  "trailingComma": "all"
-}

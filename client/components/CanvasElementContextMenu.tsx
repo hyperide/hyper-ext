@@ -1,13 +1,12 @@
 import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
-import { type CSSProperties, forwardRef, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { toast } from '@/hooks/use-toast';
 import { useCanvasEngineOptional } from '@/lib/canvas-engine';
-import { getElementFromIframe, getPreviewIframe } from '@/lib/dom-utils';
-import { getActiveTracer } from '@/lib/element-tracing/active-tracer';
+import { buildElementSelector, getPreviewIframe } from '@/lib/dom-utils';
 import { usePlatformCanvas } from '@/lib/platform';
 import { useEditorStore } from '@/stores/editorStore';
 import { authFetch } from '@/utils/authFetch';
@@ -26,7 +25,7 @@ interface ContextMenuTarget {
 }
 
 interface CanvasElementContextMenuProps {
-  children?: ReactNode;
+  children?: React.ReactNode;
   selectedIds: string[];
   iframeLoadCounter?: number;
   boardModeActive?: boolean;
@@ -52,6 +51,7 @@ export function CanvasElementContextMenu({
   selectedIds,
   iframeLoadCounter = 0,
   boardModeActive = false,
+  activeDesignInstanceId = null,
   projectId,
   onInstanceEdit,
   onInstanceCopy,
@@ -88,7 +88,7 @@ export function CanvasElementContextMenu({
   // ========================================================================
   // Setup iframe context menu handler (SaaS only — needs engine)
   // ========================================================================
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadCounter triggers re-attach after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadCounter triggers re-attach after iframe reload
   useEffect(() => {
     if (!engine) return;
 
@@ -142,7 +142,6 @@ export function CanvasElementContextMenu({
       window.removeEventListener('component-loaded', handleComponentLoaded);
     };
   }, [engine, iframeLoadCounter]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   // ========================================================================
   // Setup instance overlay context menu handler (SaaS board mode only)
@@ -211,14 +210,14 @@ export function CanvasElementContextMenu({
   const handleCopy = useCallback(async () => {
     if (selectedIds.length === 0) return;
     if (engine && meta?.filePath) {
-      await copyMultipleElementsAsTSX(selectedIds, meta.filePath);
+      await copyMultipleElementsAsTSX(selectedIds, meta.filePath, activeDesignInstanceId);
     } else {
       canvas.sendEvent({
         type: 'contextMenu:copy',
         elementIds: selectedIds,
       } as never);
     }
-  }, [selectedIds, meta, engine, canvas]);
+  }, [selectedIds, meta, activeDesignInstanceId, engine, canvas]);
 
   const handlePaste = useCallback(async () => {
     if (engine && meta?.filePath) {
@@ -284,7 +283,7 @@ export function CanvasElementContextMenu({
   const handleCut = useCallback(async () => {
     if (selectedIds.length === 0) return;
     if (engine && meta?.filePath) {
-      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, meta.filePath);
+      const copySuccess = await copyMultipleElementsAsTSX(selectedIds, meta.filePath, activeDesignInstanceId);
       if (copySuccess) {
         engine.deleteASTElements(selectedIds, meta.filePath);
       }
@@ -294,7 +293,7 @@ export function CanvasElementContextMenu({
         elementIds: selectedIds,
       } as never);
     }
-  }, [selectedIds, meta, engine, canvas]);
+  }, [selectedIds, meta, engine, activeDesignInstanceId, canvas]);
 
   const handleDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -314,7 +313,12 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: DOM-based parent lookup
-      const currentElement = getElementFromIframe(selectedId);
+      const iframe = getPreviewIframe();
+      if (!iframe?.contentDocument) return;
+      const doc = iframe.contentDocument;
+
+      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
+      const currentElement = doc.querySelector(selector);
       if (!currentElement) return;
 
       let parent = currentElement.parentElement;
@@ -337,19 +341,28 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, engine, canvas]);
+  }, [selectedIds, engine, activeDesignInstanceId, canvas]);
 
   const handleSelectChild = useCallback(() => {
     if (selectedIds.length === 0) return;
     const selectedId = selectedIds[0];
 
     if (engine) {
-      // Use NodeMap for child lookup — no DOM queries needed
-      const tracer = getActiveTracer();
-      const nodeMap = tracer?.getNodeMap(selectedId.split(':').slice(0, -1).join(':'));
-      const entry = nodeMap?.find((e) => e.nodeRef === selectedId);
-      if (entry && entry.children.length > 0) {
-        engine.selectMultiple(entry.children);
+      // SaaS: DOM-based child lookup
+      const iframe = getPreviewIframe();
+      if (!iframe?.contentDocument) return;
+      const doc = iframe.contentDocument;
+
+      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
+      const currentElement = doc.querySelector(selector);
+      if (!currentElement) return;
+
+      const directChildren = Array.from(currentElement.querySelectorAll(':scope > [data-uniq-id]')) as HTMLElement[];
+      if (directChildren.length > 0) {
+        const childIds = directChildren.map((child) => child.dataset.uniqId).filter((id): id is string => !!id);
+        if (childIds.length > 0) {
+          engine.selectMultiple(childIds);
+        }
       }
     } else {
       canvas.sendEvent({
@@ -357,7 +370,7 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, engine, canvas]);
+  }, [selectedIds, engine, activeDesignInstanceId, canvas]);
 
   const handleCopyText = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -365,9 +378,14 @@ export function CanvasElementContextMenu({
 
     if (engine) {
       // SaaS: direct iframe DOM access
-      const element = getElementFromIframe(selectedId);
+      const iframe = getPreviewIframe();
+      if (!iframe?.contentDocument) return;
+      const doc = iframe.contentDocument;
+
+      const selector = buildElementSelector(selectedId, activeDesignInstanceId);
+      const element = doc.querySelector(selector);
       if (element) {
-        const text = element.innerText || element.textContent || '';
+        const text = (element as HTMLElement).innerText || (element as HTMLElement).textContent || '';
         await navigator.clipboard.writeText(text);
       }
     } else {
@@ -376,16 +394,21 @@ export function CanvasElementContextMenu({
         elementId: selectedId,
       } as never);
     }
-  }, [selectedIds, engine, canvas]);
+  }, [selectedIds, activeDesignInstanceId, engine, canvas]);
 
   const handleCopyAsHTML = useCallback(async () => {
     if (selectedIds.length === 0) return;
 
     if (engine) {
       // SaaS: direct iframe DOM access
+      const iframe = getPreviewIframe();
+      if (!iframe?.contentDocument) return;
+      const doc = iframe.contentDocument;
+
       const htmlCodes: string[] = [];
       for (const selectedId of selectedIds) {
-        const element = getElementFromIframe(selectedId);
+        const selector = buildElementSelector(selectedId, activeDesignInstanceId);
+        const element = doc.querySelector(selector);
         if (element) {
           htmlCodes.push(element.outerHTML);
         }
@@ -400,7 +423,7 @@ export function CanvasElementContextMenu({
         elementId: selectedIds[0],
       } as never);
     }
-  }, [selectedIds, engine, canvas]);
+  }, [selectedIds, activeDesignInstanceId, engine, canvas]);
 
   const handleWrapInDiv = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -793,48 +816,50 @@ export function CanvasElementContextMenu({
 // Menu shell with viewport boundary handling
 // ============================================================================
 
-const Menu = forwardRef<HTMLDivElement, { children: ReactNode; style?: CSSProperties }>(({ children, style }, ref) => {
-  const internalRef = useRef<HTMLDivElement | null>(null);
-  const [adjustedStyle, setAdjustedStyle] = useState(style);
+const Menu = React.forwardRef<HTMLDivElement, { children: React.ReactNode; style?: React.CSSProperties }>(
+  ({ children, style }, ref) => {
+    const internalRef = useRef<HTMLDivElement | null>(null);
+    const [adjustedStyle, setAdjustedStyle] = useState(style);
 
-  useEffect(() => {
-    if (!internalRef.current || !style) return;
+    useEffect(() => {
+      if (!internalRef.current || !style) return;
 
-    const menu = internalRef.current;
-    const rect = menu.getBoundingClientRect();
-    const padding = 8;
+      const menu = internalRef.current;
+      const rect = menu.getBoundingClientRect();
+      const padding = 8;
 
-    let { left, top } = style as { left: number; top: number };
+      let { left, top } = style as { left: number; top: number };
 
-    if (left + rect.width > window.innerWidth - padding) {
-      left = window.innerWidth - rect.width - padding;
-    }
-    if (top + rect.height > window.innerHeight - padding) {
-      top = window.innerHeight - rect.height - padding;
-    }
-    left = Math.max(padding, left);
-    top = Math.max(padding, top);
+      if (left + rect.width > window.innerWidth - padding) {
+        left = window.innerWidth - rect.width - padding;
+      }
+      if (top + rect.height > window.innerHeight - padding) {
+        top = window.innerHeight - rect.height - padding;
+      }
+      left = Math.max(padding, left);
+      top = Math.max(padding, top);
 
-    setAdjustedStyle({ left, top });
-  }, [style]);
+      setAdjustedStyle({ left, top });
+    }, [style]);
 
-  return (
-    <div
-      ref={(node) => {
-        internalRef.current = node;
-        if (typeof ref === 'function') ref(node);
-        else if (ref) ref.current = node;
-      }}
-      role="menu"
-      data-role="context-menu"
-      data-testid={TID.preview.contextMenu}
-      className="fixed z-[1100] min-w-[256px] rounded-md border border-border bg-popover p-1 shadow-md"
-      style={adjustedStyle}
-    >
-      {children}
-    </div>
-  );
-});
+    return (
+      <div
+        ref={(node) => {
+          internalRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
+        role="menu"
+        data-role="context-menu"
+        data-testid={TID.preview.contextMenu}
+        className="fixed z-[1100] min-w-[256px] rounded-md border border-border bg-popover p-1 shadow-md"
+        style={adjustedStyle}
+      >
+        {children}
+      </div>
+    );
+  },
+);
 Menu.displayName = 'Menu';
 
 function MenuSeparator() {
@@ -847,7 +872,7 @@ function MenuItem({
   disabled = false,
   'data-testid': testId,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   'data-testid'?: string;

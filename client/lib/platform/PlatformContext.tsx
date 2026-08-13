@@ -314,7 +314,6 @@ function createBrowserAstOperations(): AstOperations {
           instanceProps: params.instanceProps,
           instanceId: params.instanceId,
           state: params.state,
-          selectedSourceTabId: params.selectedSourceTabId,
         }),
       });
       if (!response.ok) {
@@ -340,7 +339,7 @@ function createBrowserAstOperations(): AstOperations {
       const response = await authFetch('/api/delete-elements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeRefs: params.elementIds, filePath: params.filePath }),
+        body: JSON.stringify(params),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -408,21 +407,6 @@ function createBrowserAstOperations(): AstOperations {
         throw new Error(error.error || response.statusText);
       }
     },
-
-    async writeI18nResource(params) {
-      const response = await authFetch('/api/write-i18n-resource', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || response.statusText);
-      }
-      // SaaS route doesn't rewrite JSX (only locale JSON), so it has no new ID
-      // to surface. Return an empty object so callers can uniformly destructure.
-      return {};
-    },
   };
 }
 
@@ -442,7 +426,6 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
           instanceProps: params.instanceProps,
           instanceId: params.instanceId,
           state: params.state,
-          selectedSourceTabId: params.selectedSourceTabId,
         },
         'ast:response',
       );
@@ -555,33 +538,6 @@ function createVSCodeAstOperations(canvas: CanvasAdapter): AstOperations {
       if (!result.success) {
         throw new Error(result.error || 'Failed to update text');
       }
-    },
-
-    async writeI18nResource(params) {
-      const result = await canvasRPC(
-        canvas,
-        {
-          type: 'ast:writeI18nResource',
-          requestId: crypto.randomUUID(),
-          library: params.library,
-          key: params.key,
-          namespace: params.namespace,
-          activeLocale: params.activeLocale,
-          newText: params.newText,
-          previousKey: params.previousKey,
-          filePath: params.filePath,
-          elementId: params.elementId,
-          skipResourceWrite: params.skipResourceWrite,
-        },
-        'ast:response',
-      );
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to write i18n resource');
-      }
-      // AstBridge surfaces `data.newElementId` when the JSX rewrite was performed.
-      // Cast through a typed shape: `data` is declared as `unknown` on the wire.
-      const data = (result as { data?: { newElementId?: string } }).data;
-      return { newElementId: data?.newElementId };
     },
   };
 }

@@ -6,11 +6,8 @@
  * 2. VS Code Extension - with native VS Code editor via webview
  */
 
-import type { StyleReadResult } from '../../../lib/style-read/types';
 import type { SharedEditorState } from '../../../lib/types';
 import type { ConsoleLevel, DiagnosticLogEntry, DiagnosticState } from '../../../shared/diagnostic-types';
-import type { I18nBindingResult, I18nLibrary } from '../../../shared/i18n-text/types';
-import type { RuntimeError } from '../../../shared/runtime-error';
 
 // ============================================================================
 // Message Types (Discriminated Union)
@@ -83,7 +80,6 @@ export type PlatformMessage =
       instanceProps?: Record<string, unknown>;
       instanceId?: string;
       state?: string;
-      selectedSourceTabId?: string;
     }
   | {
       type: 'ast:insertElement';
@@ -138,34 +134,6 @@ export type PlatformMessage =
       text: string;
     }
   | {
-      /**
-       * Move a JSX element from any place to any place. Source and target need
-       * NOT share a JSX parent — same-file, cross-file, cross-component, and
-       * leaf-target moves are all supported by the extension's
-       * `AstService.moveElement`. SaaS has no handler yet (Task 7 wires the
-       * extension only); type lives here for `CanvasAdapter.sendEvent` typing.
-       */
-      type: 'ast:moveElement';
-      requestId: string;
-      filePath: string;
-      sourceId: string;
-      targetId: string;
-      position: 'before' | 'after';
-    }
-  | {
-      type: 'ast:writeI18nResource';
-      requestId: string;
-      library: I18nLibrary;
-      key: string;
-      namespace?: string;
-      activeLocale: string;
-      newText: string;
-      previousKey?: string;
-      filePath?: string;
-      elementId?: string;
-      skipResourceWrite?: boolean;
-    }
-  | {
       type: 'ast:response';
       requestId: string;
       success: boolean;
@@ -179,7 +147,6 @@ export type PlatformMessage =
       requestId: string;
       elementId: string;
       componentPath: string;
-      domTextContent?: string;
     }
   | {
       type: 'styles:response';
@@ -190,22 +157,6 @@ export type PlatformMessage =
       textContent?: string;
       tagType?: string;
       childrenLocation?: { line: number; column: number };
-      styleReadResult?: StyleReadResult;
-      i18nText?: I18nBindingResult;
-      error?: string;
-    }
-  | {
-      type: 'styles:fetchI18nKeys';
-      requestId: string;
-      library?: I18nLibrary;
-      namespace?: string;
-      activeLocale: string;
-    }
-  | {
-      type: 'styles:i18nKeysResponse';
-      requestId: string;
-      success: boolean;
-      keys: string[];
       error?: string;
     }
 
@@ -238,7 +189,6 @@ export type PlatformMessage =
 
   // Keyboard operations (visual editor → extension host)
   | { type: 'keyboard:delete'; elementIds: string[] }
-  | { type: 'keyboard:duplicate'; elementId: string }
   | { type: 'canvas:undo' }
   | { type: 'canvas:redo' }
 
@@ -249,7 +199,7 @@ export type PlatformMessage =
 
   // Diagnostics (cross-webview sync in ext, local in SaaS)
   | { type: 'diagnostic:log'; entries: DiagnosticLogEntry[] }
-  | { type: 'diagnostic:runtimeError'; error: RuntimeError | null }
+  | { type: 'diagnostic:runtimeError'; error: import('../../../shared/runtime-error').RuntimeError | null }
   | { type: 'diagnostic:buildStatus'; status: DiagnosticState['buildStatus'] }
   | { type: 'diagnostic:clear' }
   | { type: 'diagnostic:state'; state: DiagnosticState }
@@ -259,22 +209,7 @@ export type PlatformMessage =
   | { type: 'webview:ready' }
 
   // VS Code commands triggered from preview webview
-  | { type: 'command:fixUnsupportedProject' }
-  | { type: 'command:execute'; command: string; args?: string[] }
-
-  // Scroll iframe to element (tree click → canvas scroll, no selection change)
-  | { type: 'iframe:scrollToElement'; elementId: string }
-
-  // Selection-freeze coordination during i18n writes
-  // Sidebar dispatches `start` before the JSX rewrite and `done` in `finally`
-  // so the preview iframe can retain the last-known selection rect during the
-  // HMR window — see docs/plans/2026-05-06-selection-survives-i18n-write.md.
-  | { type: 'iframe:writeI18nResource'; phase: 'start' | 'done' }
-
-  // Right panel input focus guard (sidebar webview → extension host)
-  // Used to set `hypercanvas.rightPanelInputFocused` context variable so
-  // canvas keybindings don't fire while the user types in inspector fields.
-  | { type: 'panel:inputFocus'; active: boolean };
+  | { type: 'command:fixUnsupportedProject' };
 
 // Helper type to extract message by type
 export type MessageOfType<T extends PlatformMessage['type']> = Extract<PlatformMessage, { type: T }>;
@@ -374,7 +309,6 @@ export interface AstOperations {
     instanceProps?: Record<string, unknown>;
     instanceId?: string;
     state?: string;
-    selectedSourceTabId?: string;
   }): Promise<void>;
 
   /** Insert a new JSX element */
@@ -405,30 +339,6 @@ export interface AstOperations {
 
   /** Update text/expression children of a JSX element */
   updateText(params: { elementId: string; filePath: string; text: string }): Promise<void>;
-
-  /**
-   * Write a translated value for an i18n key in the active locale JSON file.
-   * When `previousKey` triggers a JSX rewrite, the implementation may return
-   * `newElementId` — the canonical `${fileName}:${line}:${column}` ID of the
-   * rewritten JSX element after the write. Callers (e.g. handleI18nKeyChange)
-   * use it to re-broadcast selection in a single dispatch without timeout-spam
-   * kostyls. Browser/SaaS path doesn't rewrite JSX → returns undefined.
-   */
-  writeI18nResource(params: {
-    library: I18nLibrary;
-    key: string;
-    namespace?: string;
-    activeLocale: string;
-    newText: string;
-    /** Previous key when the user switches to a different key from the combobox. */
-    previousKey?: string;
-    /** Source file of the element — required when previousKey is provided for JSX update. */
-    filePath?: string;
-    /** Element nodeRef — required when previousKey is provided for JSX update. */
-    elementId?: string;
-    /** Skip writing to the locale dictionary; only update the JSX expression. */
-    skipResourceWrite?: boolean;
-  }): Promise<{ newElementId?: string }>;
 }
 
 // ============================================================================

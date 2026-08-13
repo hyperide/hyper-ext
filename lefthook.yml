@@ -2,17 +2,9 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      glob: '*.{ts,tsx,js,jsx}'
-      run: npx oxlint --config .oxlintrc.json --no-error-on-unmatched-pattern {staged_files}
-    format:
-      glob: '*.{ts,tsx,js,jsx,json,jsonc,css,md,yaml,yml}'
-      run: npx oxfmt --write --no-error-on-unmatched-pattern {staged_files}
+      glob: "*.{ts,tsx,js,jsx,json,css}"
+      run: npx biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
       stage_fixed: true
     typecheck:
-      glob: '*.{ts,tsx}'
-      # TODO: re-enable `&& npx tsgo --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json`
-      # once pre-existing TS6059 rootDir errors (and missing @types/vscode in worktree) are resolved.
-      run: npx tsgo --noEmit
-    react-hooks-import:
-      glob: '*.{tsx,ts}'
-      run: node scripts/check-react-hooks-import.cjs {staged_files}
+      glob: "*.{ts,tsx}"
+      run: npx tsc --noEmit

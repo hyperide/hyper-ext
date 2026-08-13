@@ -171,27 +171,6 @@ export class TamaguiAdapter implements StyleAdapter {
     });
   }
 
-  /**
-   * Convert CSS styles to React Native props for AST writing.
-   */
-  convertToProps(styles: Partial<ParsedStyles>): Record<string, unknown> {
-    const rnProps: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(styles)) {
-      if (value === undefined) continue;
-      if (key === 'borderStyle') continue;
-      if (key === 'margin' && typeof value === 'object' && value !== null) {
-        const m = value as Record<string, string>;
-        if ('top' in m) rnProps.marginTop = this.cssToRNValue('marginTop', m.top);
-        if ('right' in m) rnProps.marginRight = this.cssToRNValue('marginRight', m.right);
-        if ('bottom' in m) rnProps.marginBottom = this.cssToRNValue('marginBottom', m.bottom);
-        if ('left' in m) rnProps.marginLeft = this.cssToRNValue('marginLeft', m.left);
-      } else if (typeof value === 'string') {
-        rnProps[this.cssToRNKey(key)] = this.cssToRNValue(key, value);
-      }
-    }
-    return rnProps;
-  }
-
   // Helper methods
 
   private parsePosition(value: unknown): ParsedStyles['position'] {
@@ -262,44 +241,6 @@ export class TamaguiAdapter implements StyleAdapter {
     }
 
     return cssValue;
-  }
-
-  /**
-   * Write the `order` style for a Tamagui element.
-   *
-   * Base breakpoint only — Tamagui responsive variants (`$md`, `$gtSm`, etc.) are
-   * not yet wired through the StyleAdapter, so non-base breakpoints return
-   * `order-not-supported` and Task 4's drag dispatcher must fall back to the
-   * AST path.
-   *
-   * `value === null` removes the prop by writing `undefined`, which `setAttribute`
-   * collapses to attribute removal in the JSX.
-   */
-  async writeOrder(
-    elementId: string,
-    value: number | null,
-    opts: {
-      filePath: string;
-      breakpoint?: string;
-      currentClassName?: string;
-    },
-  ): Promise<{ success: boolean; error?: string }> {
-    if (opts.breakpoint) {
-      return { success: false, error: 'order-not-supported' };
-    }
-    if (!opts.filePath) {
-      return { success: false, error: 'filePath required' };
-    }
-    try {
-      await this.astOps.updateProps({
-        elementId,
-        filePath: opts.filePath,
-        props: { order: value === null ? undefined : value },
-      });
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'updateProps failed' };
-    }
   }
 
   /**

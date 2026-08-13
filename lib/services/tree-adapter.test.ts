@@ -1,5 +1,3 @@
-import type { JSXElement, ReturnStatement } from '@babel/types';
-import type { NodePath } from '@babel/traverse';
 import { describe, expect, it } from 'bun:test';
 import { parseCode } from '../ast/parser';
 import type { ComponentNode, ParseContext } from './component-parser';
@@ -276,25 +274,25 @@ describe('tree-adapter', () => {
           const renderItem = (item) => <li>{item.name}</li>;
 
           return (
-            <div>
-              <header>
-                <h1>Welcome</h1>
+            <div data-uniq-id="root">
+              <header data-uniq-id="hdr">
+                <h1 data-uniq-id="title">Welcome</h1>
               </header>
-              <nav>
-                <Button>Click me</Button>
+              <nav data-uniq-id="nav-main">
+                <Button data-uniq-id="btn1">Click me</Button>
               </nav>
-              <main>
+              <main data-uniq-id="content">
                 {items.map((item) => (
-                  <article key={item.id}>
-                    <span>{item.name}</span>
+                  <article data-uniq-id="card" key={item.id}>
+                    <span data-uniq-id="name">{item.name}</span>
                   </article>
                 ))}
-                {isVisible && <aside>Info</aside>}
+                {isVisible && <aside data-uniq-id="sidebar">Info</aside>}
                 {renderItem(item)}
               </main>
-              <input placeholder="Search..." />
-              <footer>
-                <svg><path d="M0 0" /></svg>
+              <input data-uniq-id="search" placeholder="Search..." />
+              <footer data-uniq-id="ftr">
+                <svg data-uniq-id="icon"><path d="M0 0" /></svg>
               </footer>
             </div>
           );
@@ -304,12 +302,12 @@ describe('tree-adapter', () => {
       const ast = parseCode(source);
 
       // Find the JSXElement in the return statement
-      let rootJSX: JSXElement | null = null;
+      let rootJSX: import('@babel/types').JSXElement | null = null;
       const t = require('@babel/types');
       const _traverse = require('@babel/traverse');
       const traverse = _traverse.default ?? _traverse;
       traverse(ast, {
-        ReturnStatement(path: NodePath<ReturnStatement>) {
+        ReturnStatement(path: import('@babel/traverse').NodePath<import('@babel/types').ReturnStatement>) {
           if (t.isJSXElement(path.node.argument)) {
             rootJSX = path.node.argument;
             path.stop();
@@ -319,7 +317,7 @@ describe('tree-adapter', () => {
 
       if (!rootJSX) throw new Error('rootJSX not found');
 
-      const parseContext: ParseContext = { fileAST: ast };
+      const parseContext: ParseContext = { fileAST: ast, seenIds: new Set() };
       const componentNode = parseJSXElement(rootJSX, undefined, undefined, undefined, parseContext);
       if (!componentNode) throw new Error('componentNode is null');
 
@@ -327,29 +325,34 @@ describe('tree-adapter', () => {
 
       // Root div → frame
       expect(tree.type).toBe('frame');
-
-      // Find children by label patterns (IDs are generated UUIDs)
-      const children = tree.children ?? [];
+      expect(tree.id).toBe('root');
 
       // header → frame
-      const header = children.find((c) => c.type === 'frame' && c.label === 'header');
+      const header = tree.children?.find((c) => c.id === 'hdr');
       expect(header).toBeDefined();
+      expect(header?.type).toBe('frame');
 
       // h1 inside header → element
-      const title = header?.children?.find((c) => c.type === 'element' && c.label === 'h1 "Welcome"');
+      const title = header?.children?.find((c) => c.id === 'title');
       expect(title).toBeDefined();
+      expect(title?.type).toBe('element');
+      expect(title?.label).toBe('h1 "Welcome"');
 
       // nav → frame
-      const nav = children.find((c) => c.type === 'frame' && c.label === 'nav');
+      const nav = tree.children?.find((c) => c.id === 'nav-main');
       expect(nav).toBeDefined();
+      expect(nav?.type).toBe('frame');
 
       // Button → component
-      const btn = nav?.children?.find((c) => c.type === 'component' && c.label === 'Button "Click me"');
+      const btn = nav?.children?.find((c) => c.id === 'btn1');
       expect(btn).toBeDefined();
+      expect(btn?.type).toBe('component');
+      expect(btn?.label).toBe('Button "Click me"');
 
       // main → frame, contains map wrapper + conditional + function
-      const main = children.find((c) => c.type === 'frame' && c.label === 'main');
+      const main = tree.children?.find((c) => c.id === 'content');
       expect(main).toBeDefined();
+      expect(main?.type).toBe('frame');
 
       // map wrapper should exist (articles grouped)
       const mapNode = main?.children?.find((c) => c.type === 'map');
@@ -357,8 +360,9 @@ describe('tree-adapter', () => {
       expect(mapNode?.label).toContain('.map()');
 
       // Conditional aside should exist somewhere in main children
-      const aside = main?.children?.find((c) => c.type === 'frame' && c.label === 'aside "Info"');
+      const aside = main?.children?.find((c) => c.id === 'sidebar');
       expect(aside).toBeDefined();
+      expect(aside?.type).toBe('frame');
 
       // Function expansion: renderItem call should produce fn: node
       const fnNode = main?.children?.find((c) => c.type === 'function');
@@ -366,15 +370,17 @@ describe('tree-adapter', () => {
       expect(fnNode?.label).toBe('renderItem()');
 
       // input with placeholder
-      const input = children.find((c) => c.label === 'input "Search..."');
+      const input = tree.children?.find((c) => c.id === 'search');
       expect(input).toBeDefined();
+      expect(input?.label).toBe('input "Search..."');
 
       // footer → frame
-      const footer = children.find((c) => c.type === 'frame' && c.label === 'footer');
+      const footer = tree.children?.find((c) => c.id === 'ftr');
       expect(footer).toBeDefined();
+      expect(footer?.type).toBe('frame');
 
       // SVG children should be pruned
-      const svgNode = footer?.children?.find((c) => c.label === 'svg');
+      const svgNode = footer?.children?.find((c) => c.id === 'icon');
       expect(svgNode).toBeDefined();
       expect(svgNode?.children).toEqual([]);
     });

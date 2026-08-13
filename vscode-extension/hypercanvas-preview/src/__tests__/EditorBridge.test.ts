@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
-import { goToCode, handleEditorMessage, isBundleArtifactPath, setMovePreviewToRight } from '../EditorBridge';
+import { goToCode, handleEditorMessage } from '../EditorBridge';
 
 function createMockWebview() {
   const messages: unknown[] = [];
@@ -34,7 +34,6 @@ describe('EditorBridge', () => {
 
   beforeEach(() => {
     mockEditor = resetMocks();
-    setMovePreviewToRight(null);
   });
 
   describe('handleEditorMessage', () => {
@@ -113,45 +112,6 @@ describe('EditorBridge', () => {
       expect(uri.fsPath).toBe('/abs/path/File.tsx');
     });
 
-    it('restores leading slash for Turbopack-stripped absolute paths (HYP-268)', async () => {
-      // Turbopack source maps normalize 'file:///abs/path' → 'abs/path' (strips leading '/').
-      // resolveFilePath must detect this and restore the slash rather than prepending workspaceRoot.
-      // Workspace root is '/test-workspace', so first component is 'test-workspace'.
-      // A path 'test-workspace/app/page.tsx' should become '/test-workspace/app/page.tsx'.
-      await goToCode('test-workspace/app/page.tsx', 5, 3);
-      const call = (vscode.workspace.openTextDocument as ReturnType<typeof mock>).mock.calls[0];
-      const uri = call[0] as { fsPath: string };
-      expect(uri.fsPath).toBe('/test-workspace/app/page.tsx');
-    });
-
-    it('skips bundle artifact paths without opening or erroring', async () => {
-      // Bun's hashed _bun/client/<hash>.js rotates on every rebuild — opening
-      // it produces "cannot open file:///.../_bun/client/index-<hash>.js"
-      // because the file is gone by the time the click resolves. Skip silently.
-      const origLog = console.log;
-      console.log = mock();
-      try {
-        await goToCode('/workspace/proj/_bun/client/index-abc123.js', 10, 5);
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
-      } finally {
-        console.log = origLog;
-      }
-    });
-
-    it('skips Next.js static chunks and node_modules paths', async () => {
-      const origLog = console.log;
-      console.log = mock();
-      try {
-        await goToCode('/proj/_next/static/chunks/main-abc.js', 1, 1);
-        await goToCode('node_modules/react-dom/cjs/react-dom.development.js', 1, 1);
-        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
-      } finally {
-        console.log = origLog;
-      }
-    });
-
     it('shows error message on failure', async () => {
       // Suppress console.error — goToCode logs the caught error, and bun test
       // runner treats Error objects in console.error as uncaught errors in full suite
@@ -166,82 +126,6 @@ describe('EditorBridge', () => {
       } finally {
         console.error = origError;
       }
-    });
-  });
-
-  describe('isBundleArtifactPath', () => {
-    it('detects bun, Next.js, and node_modules bundle paths', () => {
-      expect(isBundleArtifactPath('/workspace/proj/_bun/client/index-abc.js')).toBe(true);
-      expect(isBundleArtifactPath('_bun/client/index-abc.js')).toBe(true);
-      expect(isBundleArtifactPath('/proj/_next/static/chunks/main.js')).toBe(true);
-      expect(isBundleArtifactPath('node_modules/react/index.js')).toBe(true);
-      expect(isBundleArtifactPath('/abs/node_modules/react/index.js')).toBe(true);
-    });
-
-    it('does not flag user source files', () => {
-      expect(isBundleArtifactPath('src/App.tsx')).toBe(false);
-      expect(isBundleArtifactPath('/abs/path/Button.tsx')).toBe(false);
-      expect(isBundleArtifactPath('app/page.tsx')).toBe(false);
-      // Files that *contain* the string "_bun" but not as the segment are user code.
-      expect(isBundleArtifactPath('src/my_bundle.ts')).toBe(false);
-    });
-  });
-
-  describe('getNonPreviewColumn (via goToCode)', () => {
-    it('opens file in the group without preview', async () => {
-      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
-        all: [
-          { viewColumn: 1, tabs: [{ input: {} }] },
-          {
-            viewColumn: 2,
-            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
-          },
-        ],
-      };
-
-      await goToCode('/src/App.tsx', 1, 1);
-      const call = (vscode.window.showTextDocument as ReturnType<typeof mock>).mock.calls[0];
-      const options = call[1] as { viewColumn: number };
-      expect(options.viewColumn).toBe(1);
-    });
-
-    it('calls movePreviewToRight and returns column One when all groups have preview', async () => {
-      const moveCallback = mock();
-      setMovePreviewToRight(moveCallback);
-
-      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
-        all: [
-          {
-            viewColumn: 1,
-            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
-          },
-        ],
-      };
-
-      await goToCode('/src/App.tsx', 1, 1);
-
-      expect(moveCallback).toHaveBeenCalledTimes(1);
-      const call = (vscode.window.showTextDocument as ReturnType<typeof mock>).mock.calls[0];
-      const options = call[1] as { viewColumn: number };
-      expect(options.viewColumn).toBe(1);
-    });
-
-    it('does not call movePreviewToRight when a code-only group exists', async () => {
-      const moveCallback = mock();
-      setMovePreviewToRight(moveCallback);
-
-      (vscode.window as { tabGroups: { all: unknown[] } }).tabGroups = {
-        all: [
-          { viewColumn: 1, tabs: [{ input: {} }] },
-          {
-            viewColumn: 2,
-            tabs: [{ input: new vscode.TabInputWebview('hypercanvas.previewPanel') }],
-          },
-        ],
-      };
-
-      await goToCode('/src/App.tsx', 1, 1);
-      expect(moveCallback).not.toHaveBeenCalled();
     });
   });
 });

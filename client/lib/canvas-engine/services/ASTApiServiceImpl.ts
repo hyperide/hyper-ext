@@ -48,7 +48,7 @@ export class ASTApiServiceImpl implements ASTApiService {
     const response = await authFetch('/api/delete-elements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeRefs: params.elementIds, filePath: params.filePath }),
+      body: JSON.stringify(params),
     });
     return response.json();
   }

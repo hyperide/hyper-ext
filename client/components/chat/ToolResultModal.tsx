@@ -13,11 +13,11 @@ export function ToolResultModal({ isOpen, toolName, content, onClose }: ToolResu
   if (!isOpen) return null;
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- modal backdrop dismiss
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal backdrop
+    // biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop dismiss
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- stop propagation only */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal content wrapper */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: stop propagation only */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: modal content wrapper */}
       <div
         className="bg-background border border-border rounded-lg w-[90%] max-h-[80%] overflow-auto p-4"
         onClick={(e) => e.stopPropagation()}

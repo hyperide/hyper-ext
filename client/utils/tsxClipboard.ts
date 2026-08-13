@@ -3,7 +3,7 @@
  */
 
 import { toast } from '@/hooks/use-toast';
-import { getElementFromIframe, getPreviewIframe } from '@/lib/dom-utils';
+import { getPreviewIframe } from '@/lib/dom-utils';
 import { authFetch } from '@/utils/authFetch';
 
 /**
@@ -49,10 +49,24 @@ export async function copyElementAsTSX(elementId: string, filePath: string): Pro
 }
 
 /**
+ * Build CSS selector for element with optional instance scope
+ */
+function buildElementSelector(elementId: string, instanceId?: string | null): string {
+  if (instanceId) {
+    return `[data-canvas-instance-id="${instanceId}"] [data-uniq-id="${elementId}"]`;
+  }
+  return `[data-uniq-id="${elementId}"]`;
+}
+
+/**
  * Copy multiple elements as TSX code to system clipboard
  * If multiple elements, wraps them in React Fragment <>...</>
  */
-export async function copyMultipleElementsAsTSX(elementIds: string[], filePath: string): Promise<boolean> {
+export async function copyMultipleElementsAsTSX(
+  elementIds: string[],
+  filePath: string,
+  instanceId?: string | null,
+): Promise<boolean> {
   try {
     if (elementIds.length === 0) {
       console.warn('[TSX Clipboard] No elements to copy');
@@ -65,12 +79,16 @@ export async function copyMultipleElementsAsTSX(elementIds: string[], filePath: 
     }
 
     // Sort elements by DOM order (not selection order)
+    const iframe = getPreviewIframe();
     let sortedIds = elementIds;
 
-    if (getPreviewIframe()?.contentDocument) {
+    if (iframe?.contentDocument) {
+      const doc = iframe.contentDocument;
       sortedIds = elementIds.slice().sort((a, b) => {
-        const elA = getElementFromIframe(a);
-        const elB = getElementFromIframe(b);
+        const selectorA = buildElementSelector(a, instanceId);
+        const selectorB = buildElementSelector(b, instanceId);
+        const elA = doc.querySelector(selectorA);
+        const elB = doc.querySelector(selectorB);
         if (!elA || !elB) return 0;
 
         const position = elA.compareDocumentPosition(elB);

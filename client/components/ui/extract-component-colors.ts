@@ -2,7 +2,7 @@
  * @file Extracts color values from component preview for color strip
  *
  * Accessed via: Internal module, used by useComponentColors hook
- * Assumptions: preview iframe accessible via same-origin
+ * Assumptions: preview iframe accessible via same-origin, elements have data-uniq-id
  *
  * Two extraction strategies:
  * 1. Preview DOM (primary): reads computed styles from rendered preview iframe elements
@@ -75,21 +75,21 @@ function buildLineMap(nodes: ASTNode[], map: Map<string, number> = new Map()): M
 
 /**
  * Extract colors from the preview iframe's rendered DOM (primary strategy).
- * Reads computed backgroundColor and color from all elements in the preview.
+ * Reads computed backgroundColor and color from elements with data-uniq-id.
  */
 export function extractColorsFromPreview(tokenSystem: TokenSystem, astNodes?: ASTNode[]): ColorEntry[] {
   const iframe = document.getElementById('preview-iframe') as HTMLIFrameElement | null;
   const doc = iframe?.contentDocument;
-  if (!doc?.body) return [];
+  if (!doc) return [];
 
-  const elements = doc.body.querySelectorAll('*');
+  const elements = doc.querySelectorAll('[data-uniq-id]');
   if (elements.length === 0) return [];
 
   const lineMap = astNodes ? buildLineMap(astNodes) : new Map<string, number>();
   const accumulator = new Map<string, ColorEntry>();
 
   for (const el of elements) {
-    const nodeId = el.id || undefined;
+    const nodeId = el.getAttribute('data-uniq-id') || undefined;
     const style = getComputedStyle(el);
 
     const candidates: Array<{ rgb: string; source: string }> = [];

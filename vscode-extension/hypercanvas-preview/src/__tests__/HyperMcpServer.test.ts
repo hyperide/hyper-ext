@@ -11,6 +11,7 @@ function createMockServices(): HyperMcpServices {
       updateProps: mock(() => Promise.resolve({ success: true })),
       duplicateElement: mock(() => Promise.resolve({ success: true, newId: 'dup-uuid' })),
       wrapElement: mock(() => Promise.resolve({ success: true, wrapperId: 'wrap-uuid' })),
+      injectUniqueIds: mock(() => Promise.resolve({ addedCount: 3 })),
       getElementLocation: mock(() => Promise.resolve({ line: 10, column: 5 })),
     } as unknown as HyperMcpServices['astService'],
     componentService: {
@@ -122,7 +123,7 @@ describe('HyperMcpServer', () => {
     expect(response.status).toBe(200);
     const text = await response.text();
 
-    // Verify all 19 tools are registered
+    // Verify all 20 tools are registered
     const toolNames = [
       'hyper_insert_element',
       'hyper_delete_elements',
@@ -132,6 +133,7 @@ describe('HyperMcpServer', () => {
       'hyper_wrap_element',
       'hyper_get_component_tree',
       'hyper_get_component_props',
+      'hyper_inject_element_ids',
       'hyper_get_element_styles',
       'hyper_suggest_color_token',
       'hyper_list_color_tokens',

@@ -41,9 +41,6 @@ export function useChatStream({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
   const currentToolCallsRef = useRef<Map<string, DisplayToolCall>>(new Map());
-  // Ref to avoid stale closure in sendMessage callback
-  const onMessagesAppendRef = useRef(onMessagesAppend);
-  onMessagesAppendRef.current = onMessagesAppend;
 
   const sendMessage = useCallback(
     async (chatId: string, messagesToSend: string[]): Promise<void> => {
@@ -62,7 +59,7 @@ export function useChatStream({
 
       const saveAccumulatedText = () => {
         if (assistantContent.trim()) {
-          onMessagesAppendRef.current([
+          onMessagesAppend([
             {
               id: generateMessageId(),
               role: 'assistant',
@@ -114,7 +111,7 @@ export function useChatStream({
               const toolCall = currentToolCallsRef.current.get(event.toolUseId);
               if (toolCall) {
                 toolCall.result = event.result;
-                onMessagesAppendRef.current([
+                onMessagesAppend([
                   {
                     id: generateMessageId(),
                     role: 'assistant',
@@ -123,16 +120,6 @@ export function useChatStream({
                   },
                 ]);
                 currentToolCallsRef.current.delete(event.toolUseId);
-                setCurrentToolCalls(new Map(currentToolCallsRef.current));
-              }
-            }
-            break;
-
-          case 'tool_progress':
-            {
-              const toolCall = currentToolCallsRef.current.get(event.toolUseId);
-              if (toolCall) {
-                toolCall.liveOutput = (toolCall.liveOutput ?? '') + event.output;
                 setCurrentToolCalls(new Map(currentToolCallsRef.current));
               }
             }
@@ -151,7 +138,7 @@ export function useChatStream({
             break;
 
           case 'error':
-            onMessagesAppendRef.current([
+            onMessagesAppend([
               {
                 id: generateMessageId(),
                 role: 'assistant',
@@ -212,7 +199,7 @@ export function useChatStream({
               ? lastError.message
               : 'Unknown error';
 
-          onMessagesAppendRef.current([
+          onMessagesAppend([
             {
               id: generateMessageId(),
               role: 'assistant',
@@ -230,7 +217,7 @@ export function useChatStream({
         abortControllerRef.current = null;
       }
     },
-    [chatAdapter, onChatTitleUpdate, onStreamEvent],
+    [chatAdapter, onMessagesAppend, onChatTitleUpdate, onStreamEvent],
   );
 
   const stopStreaming = useCallback(() => {

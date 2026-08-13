@@ -4,10 +4,7 @@
  * Routes ast:* messages to AstService and sends responses back.
  */
 
-import * as fsSync from 'node:fs';
 import path from 'node:path';
-import { discoverLayout } from '@shared/i18n-text/resolve-i18n-resource';
-import { writeI18nResource } from '@shared/i18n-text/write-i18n-resource';
 import type * as vscode from 'vscode';
 import type {
   AstOperationResult,
@@ -20,28 +17,15 @@ import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
 
-// File sink only when explicitly requested or in CI — never in normal production use
-const _BRIDGE_DEBUG_LOG: string | null =
-  process.env.HYPERIDE_AST_DEBUG_LOG ?? (process.env.CI === 'true' ? '/artifacts/ast-debug.log' : null);
-function _dbgBridge(msg: string) {
-  if (!_BRIDGE_DEBUG_LOG) return;
-  console.log(msg);
-  try {
-    fsSync.appendFileSync(_BRIDGE_DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`);
-  } catch {}
-}
-
 export class AstBridge {
   private _astService: AstService;
-  private _fileIO: VSCodeFileIO;
   private _undoRedoService: UndoRedoService;
   private _workspaceRoot: string;
   private _webview: vscode.Webview | null = null;
 
   constructor(workspaceRoot: string) {
     this._workspaceRoot = workspaceRoot;
-    this._fileIO = new VSCodeFileIO();
-    this._astService = new AstService(workspaceRoot, this._fileIO);
+    this._astService = new AstService(workspaceRoot, new VSCodeFileIO());
     this._undoRedoService = new UndoRedoService(workspaceRoot);
   }
 
@@ -62,7 +46,7 @@ export class AstBridge {
    * instead of the default one (fixes cross-panel response routing).
    */
   async handleMessage(message: AstMessage, targetWebview?: vscode.Webview): Promise<void> {
-    _dbgBridge(`[AstBridge.handleMessage] type=${message.type}`);
+    console.log('[AstBridge] Received message:', message.type);
 
     let response: AstResponse;
 
@@ -96,14 +80,6 @@ export class AstBridge {
           response = await this._handleWrapElement(message);
           break;
 
-        case 'ast:moveElement':
-          response = await this._handleMoveElement(message);
-          break;
-
-        case 'ast:writeI18nResource':
-          response = await this._handleWriteI18nResource(message);
-          break;
-
         default:
           response = {
             type: 'ast:response',
@@ -135,134 +111,26 @@ export class AstBridge {
     filePath: string,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const absolutePath = this._resolvePath(filePath);
-    // Clear redo stack before ANY write — even when readFile fails.
-    // If beginTracking() were called only after a successful readFile(), a
-    // readFile() error (e.g. VS Code in-flight document update) would skip it,
-    // leaving the redo stack non-empty. CMD_REDO would then replay a stale
-    // entry from before the new edit. beginTracking() must always run first.
-    this._undoRedoService.beginTracking();
-    try {
-      let contentBefore: string;
-      try {
-        contentBefore = await this._fileIO.readFile(absolutePath);
-      } catch {
-        // File doesn't exist yet — run operation without undo tracking.
-        // Redo was already cleared by beginTracking() above.
-        console.warn(`[AstBridge] _withUndoTracking: cannot read file for undo tracking: ${absolutePath}`);
-        return await operation();
-      }
-      const result = await operation();
-      if (result.success) {
-        // For cross-file writes (e.g. twitter: requested App.tsx but wrote to Feed.tsx),
-        // the operation returns resolvedPath pointing to the actual mutated file.
-        const actualPath = result.resolvedPath ?? absolutePath;
-        const needsSnapshot = actualPath !== absolutePath;
-
-        // For cross-file writes the operation captures contentBeforeWrite before the mutation.
-        // For same-file writes contentBefore (read above) is authoritative.
-        const contentBeforeActual = needsSnapshot ? result.contentBeforeWrite : contentBefore;
-        if (contentBeforeActual === undefined) {
-          // contentBeforeWrite read failed in AstService — skip undo snapshot rather
-          // than recording an empty string which would erase the file on undo.
-          console.warn(
-            `[AstBridge] _withUndoTracking: contentBeforeWrite unavailable for cross-file write to ${path.basename(actualPath)}, skipping undo snapshot`,
-          );
-          return result;
-        }
-
-        let contentAfter: string;
-        try {
-          // Use readFileFromDisk to bypass document cache — doc.save() may not have synced yet
-          contentAfter = await this._fileIO.readFileFromDisk(actualPath);
-        } catch {
-          try {
-            contentAfter = await this._fileIO.readFile(actualPath);
-          } catch {
-            contentAfter = contentBeforeActual;
-          }
-        }
-        if (contentBeforeActual !== contentAfter) {
-          this._undoRedoService.recordEdit(actualPath, contentBeforeActual, contentAfter);
-        } else {
-          console.warn(
-            `[AstBridge] _withUndoTracking: content unchanged after operation — NO undo entry recorded for ${path.basename(actualPath)}`,
-          );
-        }
-      }
-      return result;
-    } finally {
-      this._undoRedoService.endTracking();
+    const result = await operation();
+    if (result.success) {
+      this._undoRedoService.recordEdit(this._resolvePath(filePath));
     }
+    return result;
   }
 
   // === Public mutation methods (with undo tracking, for PreviewPanel direct calls) ===
 
   async deleteElements(filePath: string, elementIds: string[]): Promise<AstOperationResult> {
-    const absolutePath = this._resolvePath(filePath);
-    // Clear redo stack before ANY write — even when readFile fails (same invariant as _withUndoTracking).
-    this._undoRedoService.beginTracking();
-    try {
-      // contentBefore: dirty buffer (preserves unsaved edits for undo snapshot).
-      // diskContentBefore: disk-only read used for change-detection to avoid treating
-      // a dirty buffer as a "modification" when the delete touched a different file.
-      let contentBefore: string;
-      let diskContentBefore: string;
-      try {
-        contentBefore = await this._fileIO.readFile(absolutePath);
-        diskContentBefore = await this._fileIO.readFileFromDisk(absolutePath);
-      } catch {
-        return this._astService.deleteElements(filePath, elementIds);
+    const result = await this._astService.deleteElements(filePath, elementIds);
+    if (result.success) {
+      // deleteElements writes once per element — record matching undo entries
+      const count = (result.data as { deletedCount?: number })?.deletedCount ?? 1;
+      const resolved = this._resolvePath(filePath);
+      for (let i = 0; i < count; i++) {
+        this._undoRedoService.recordEdit(resolved);
       }
-      const result = await this._astService.deleteElements(filePath, elementIds);
-      if (result.success) {
-        // Collect all file modifications into a single atomic undo entry so that
-        // one Cmd+Z restores every file that was changed by this delete operation.
-        const batchEdits: Array<{ filePath: string; contentBefore: string; contentAfter: string }> = [];
-
-        let mainAfter: string;
-        try {
-          mainAfter = await this._fileIO.readFileFromDisk(absolutePath);
-        } catch {
-          try {
-            mainAfter = await this._fileIO.readFile(absolutePath);
-          } catch {
-            mainAfter = contentBefore;
-          }
-        }
-        // Compare disk-to-disk to detect actual modification by the delete operation.
-        // Using contentBefore (dirty buffer) vs mainAfter (disk) would produce false
-        // positives when the file has unsaved edits but was not touched by this delete.
-        if (diskContentBefore !== mainAfter) {
-          batchEdits.push({ filePath: absolutePath, contentBefore, contentAfter: mainAfter });
-        }
-
-        for (const { resolvedPath: xPath, contentBefore: xBefore } of result.allCrossFileSnapshots ?? []) {
-          let xAfter: string;
-          try {
-            // Disk-first to match the main-file path and avoid stale dirty-buffer reads
-            // when the applyEdit sync in writeFile fails or lags behind the disk write.
-            xAfter = await this._fileIO.readFileFromDisk(xPath);
-          } catch {
-            try {
-              xAfter = await this._fileIO.readFile(xPath);
-            } catch {
-              xAfter = xBefore;
-            }
-          }
-          if (xBefore !== xAfter) {
-            batchEdits.push({ filePath: xPath, contentBefore: xBefore, contentAfter: xAfter });
-          }
-        }
-
-        if (batchEdits.length > 0) {
-          this._undoRedoService.recordBatchEdit(batchEdits);
-        }
-      }
-      return result;
-    } finally {
-      this._undoRedoService.endTracking();
     }
+    return result;
   }
 
   async duplicateElement(filePath: string, elementId: string): Promise<DuplicateElementResult> {
@@ -291,20 +159,8 @@ export class AstBridge {
    * Handle updateStyles message
    */
   private async _handleUpdateStyles(message: Extract<AstMessage, { type: 'ast:updateStyles' }>): Promise<AstResponse> {
-    _dbgBridge(
-      `[AstBridge._handleUpdateStyles] filePath=${message.filePath} elementId=${message.elementId} styles=${JSON.stringify(message.styles)}`,
-    );
-    // elementId from the client is in nodeRef format ("fileName:line:col") — pass as nodeRef for element resolution
-    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
-      this._astService.updateStyles(
-        message.filePath,
-        message.elementId,
-        message.styles,
-        message.state,
-        nodeRef,
-        message.selectedSourceTabId,
-      ),
+      this._astService.updateStyles(message.filePath, message.elementId, message.styles, message.state),
     );
 
     return {
@@ -320,12 +176,8 @@ export class AstBridge {
    * Handle updateProps message
    */
   private async _handleUpdateProps(message: Extract<AstMessage, { type: 'ast:updateProps' }>): Promise<AstResponse> {
-    _dbgBridge(
-      `[AstBridge._handleUpdateProps] filePath=${message.filePath} elementId=${message.elementId} props=${JSON.stringify(message.props)}`,
-    );
-    const nodeRef = message.elementId?.includes(':') ? message.elementId : undefined;
     const result = await this._withUndoTracking(message.filePath, () =>
-      this._astService.updateProps(message.filePath, message.elementId, message.props, nodeRef),
+      this._astService.updateProps(message.filePath, message.elementId, message.props),
     );
 
     return {
@@ -385,7 +237,16 @@ export class AstBridge {
   private async _handleDeleteElements(
     message: Extract<AstMessage, { type: 'ast:deleteElements' }>,
   ): Promise<AstResponse> {
-    const result = await this.deleteElements(message.filePath, message.elementIds);
+    const result = await this._astService.deleteElements(message.filePath, message.elementIds);
+    if (result.success) {
+      // deleteElements writes once per element — record matching undo entries
+      const count = (result.data as { deletedCount?: number })?.deletedCount ?? 1;
+      const resolved = this._resolvePath(message.filePath);
+      for (let i = 0; i < count; i++) {
+        this._undoRedoService.recordEdit(resolved);
+      }
+    }
+
     return {
       type: 'ast:response',
       requestId: message.requestId,
@@ -428,256 +289,6 @@ export class AstBridge {
       success: result.success,
       data: result.success ? { wrapperId: result.wrapperId } : undefined,
       error: result.error,
-    };
-  }
-
-  /**
-   * Handle moveElement message — moves any JSX element to any place.
-   * Source and target need NOT share a direct JSX parent: same-parent,
-   * cross-parent, cross-component, and cross-file moves are all supported.
-   * Cross-file moves return `allCrossFileSnapshots`
-   * covering BOTH the source and target file pre-write contents, so undo
-   * needs the same batch-edit treatment as `deleteElements`.
-   *
-   * Internal failures (file I/O, parse errors, unresolvable nodeRefs) throw
-   * out of `AstService.moveElement` per its contract — caught here and
-   * surfaced as `success: false` to the iframe via the standard ast:response
-   * envelope. From the iframe's standpoint moveElement otherwise always
-   * succeeds.
-   */
-  private async _handleMoveElement(message: Extract<AstMessage, { type: 'ast:moveElement' }>): Promise<AstResponse> {
-    const absolutePath = this._resolvePath(message.filePath);
-    this._undoRedoService.beginTracking();
-    try {
-      // Snapshot the source file BEFORE the move so single-file moves can
-      // record the standard contentBefore→contentAfter edit. For cross-file
-      // moves the source-file snapshot also lives in `allCrossFileSnapshots`
-      // (captured by AstService at write time) so we don't double-count below.
-      let contentBefore: string;
-      let diskContentBefore: string;
-      try {
-        contentBefore = await this._fileIO.readFile(absolutePath);
-        diskContentBefore = await this._fileIO.readFileFromDisk(absolutePath);
-      } catch {
-        // File doesn't exist locally — run the operation untracked.
-        const r = await this._astService.moveElement(
-          message.filePath,
-          message.sourceId,
-          message.targetId,
-          message.position,
-        );
-        return {
-          type: 'ast:response',
-          requestId: message.requestId,
-          success: r.success,
-          data: r.adjustments ? { adjustments: r.adjustments } : undefined,
-        };
-      }
-
-      let result: Awaited<ReturnType<AstService['moveElement']>>;
-      try {
-        result = await this._astService.moveElement(
-          message.filePath,
-          message.sourceId,
-          message.targetId,
-          message.position,
-        );
-      } catch (error) {
-        return {
-          type: 'ast:response',
-          requestId: message.requestId,
-          success: false,
-          error: error instanceof Error ? error.message : 'moveElement failed',
-        };
-      }
-
-      // Cross-file moves carry their own per-file snapshots. Record those
-      // (source AND target). Same-file moves carry no snapshots, so fall back
-      // to the disk-vs-disk comparison on `absolutePath`.
-      const batchEdits: Array<{ filePath: string; contentBefore: string; contentAfter: string }> = [];
-      const snapshots = result.allCrossFileSnapshots;
-      if (snapshots && snapshots.length > 0) {
-        for (const { resolvedPath: xPath, contentBefore: xBefore } of snapshots) {
-          let xAfter: string;
-          try {
-            xAfter = await this._fileIO.readFileFromDisk(xPath);
-          } catch {
-            try {
-              xAfter = await this._fileIO.readFile(xPath);
-            } catch {
-              xAfter = xBefore;
-            }
-          }
-          if (xBefore !== xAfter) {
-            batchEdits.push({ filePath: xPath, contentBefore: xBefore, contentAfter: xAfter });
-          }
-        }
-      } else {
-        // Same-file move — diff `absolutePath` (or `result.resolvedPath` if it
-        // diverged, mirroring `_withUndoTracking`).
-        const actualPath = result.resolvedPath ?? absolutePath;
-        let mainAfter: string;
-        try {
-          mainAfter = await this._fileIO.readFileFromDisk(actualPath);
-        } catch {
-          try {
-            mainAfter = await this._fileIO.readFile(actualPath);
-          } catch {
-            mainAfter = contentBefore;
-          }
-        }
-        // Use disk-vs-disk on the original absolutePath only when the operation
-        // resolved to that same file. Cross-file resolution (different file)
-        // would have produced an `allCrossFileSnapshots` entry above already.
-        const sameFile = actualPath === absolutePath;
-        const beforeForDiff = sameFile ? diskContentBefore : (result.contentBeforeWrite ?? contentBefore);
-        const beforeForUndo = sameFile ? contentBefore : (result.contentBeforeWrite ?? contentBefore);
-        if (beforeForDiff !== mainAfter) {
-          batchEdits.push({ filePath: actualPath, contentBefore: beforeForUndo, contentAfter: mainAfter });
-        }
-      }
-
-      if (batchEdits.length > 0) {
-        this._undoRedoService.recordBatchEdit(batchEdits);
-      }
-
-      return {
-        type: 'ast:response',
-        requestId: message.requestId,
-        success: true,
-        data: result.adjustments ? { adjustments: result.adjustments } : undefined,
-      };
-    } finally {
-      this._undoRedoService.endTracking();
-    }
-  }
-
-  /**
-   * Handle writeI18nResource message.
-   * Writes a translated value for the given key in the active locale dictionary.
-   * If the key itself changes (previousKey provided), also updates the JSX child expression.
-   */
-  private async _handleWriteI18nResource(
-    message: Extract<AstMessage, { type: 'ast:writeI18nResource' }>,
-  ): Promise<AstResponse> {
-    // Library whitelist mirrors the SaaS HTTP route. The webview message channel
-    // does not enforce the I18nLibrary union at runtime, so a spoofed message
-    // could pass any string here — guard before forwarding to writeI18nResource.
-    const VALID_LIBRARIES = new Set<string>([
-      'react-i18next',
-      'i18next',
-      'next-intl',
-      'react-intl',
-      'lingui',
-      'custom',
-    ]);
-    if (!VALID_LIBRARIES.has(message.library)) {
-      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid library' };
-    }
-    if (typeof message.newText !== 'string' || message.newText.length > 10_000) {
-      return {
-        type: 'ast:response',
-        requestId: message.requestId,
-        success: false,
-        error: 'newText exceeds maximum length of 10000 characters',
-      };
-    }
-    // Reject path traversal via locale/namespace — same guard as the SaaS HTTP route.
-    // Key validation prevents JSX injection when key is interpolated into {t("...")} expressions.
-    const SAFE_SEGMENT = /^[\w-]{1,64}$/;
-    if (!SAFE_SEGMENT.test(message.activeLocale)) {
-      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid activeLocale' };
-    }
-    if (message.namespace !== undefined && !SAFE_SEGMENT.test(message.namespace)) {
-      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid namespace' };
-    }
-    // Reject control chars (would break JSON parsing) and JSX-structural chars
-    // ({, }, <, >). Curly braces in particular corrupt the source: the JSX-rewrite
-    // path below builds `{t("KEY")}` and routes through parseMixedContent's
-    // regex `/\{([^}]+)\}/g`, which is naïve about string literals — a `}` inside
-    // the key prematurely closes the expression and the rest leaks into JSXText.
-    const keyLen = message.key.length;
-    if (keyLen === 0 || keyLen > 256 || /[\n\r{}<>]/.test(message.key) || message.key.includes('\0')) {
-      return { type: 'ast:response', requestId: message.requestId, success: false, error: 'Invalid key' };
-    }
-
-    const localeLayout = await discoverLayout(
-      this._workspaceRoot,
-      message.namespace,
-      message.activeLocale,
-      this._fileIO,
-    ).catch(() => null);
-    const localeFilePath = localeLayout?.getLocaleFilePath(message.activeLocale) ?? null;
-
-    // When skipResourceWrite is set, skip the locale dictionary write — only update JSX below.
-    // Used when the user switches to an existing key from the dropdown: we don't want to
-    // overwrite the existing translation under the new key.
-    let writeResult: AstOperationResult & { filePath: string | null };
-    if (message.skipResourceWrite) {
-      writeResult = { success: true, filePath: null };
-    } else {
-      const doWrite = async (): Promise<AstOperationResult & { filePath: string | null }> => {
-        const r = await writeI18nResource({
-          projectRoot: this._workspaceRoot,
-          library: message.library,
-          key: message.key,
-          namespace: message.namespace,
-          activeLocale: message.activeLocale,
-          newText: message.newText,
-          fileIO: this._fileIO,
-        });
-        return { success: r.success, error: r.error, filePath: r.filePath };
-      };
-      writeResult = localeFilePath ? await this._withUndoTracking(localeFilePath, doWrite) : await doWrite();
-    }
-
-    if (!writeResult.success) {
-      return {
-        type: 'ast:response',
-        requestId: message.requestId,
-        success: false,
-        error: writeResult.error,
-      };
-    }
-
-    // Always attempt to update the key literal in JSX when a previousKey is provided,
-    // even if previousKey === message.key. The client can hold stale state (HMR clears
-    // selectedIds briefly; ?? prev.i18nText preserves the pre-write key), so the file
-    // may have a different key than what the client reports. updateI18nKey's fallback
-    // handles this: when previousKey is not found, it replaces the first StringLiteral.
-    const { filePath: i18nFilePath, elementId: i18nElementId } = message;
-    const previousKey = message.previousKey;
-    let newElementId: string | undefined;
-    _dbgBridge(`[writeI18nResource] key=${message.key} previousKey=${previousKey} filePath=${i18nFilePath} elementId=${i18nElementId} skipResourceWrite=${message.skipResourceWrite}`);
-    if (i18nFilePath && i18nElementId && previousKey) {
-      try {
-        const preContent = await this._fileIO.readFile(i18nFilePath);
-        const lines = preContent.split('\n');
-        const snippet = lines.slice(109, 145).map((l, i) => `L${i + 110}:${l}`).join(' | ').substring(0, 2000);
-        _dbgBridge(`[pre-updateI18nKey] lines 110-145: ${snippet}`);
-      } catch {}
-      const updateResult = await this._withUndoTracking(i18nFilePath, () =>
-        this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
-      );
-      _dbgBridge(`[updateI18nKey] result=${JSON.stringify({ success: updateResult.success, error: (updateResult as { error?: string }).error })}`);
-      if (!updateResult.success) {
-        return {
-          type: 'ast:response',
-          requestId: message.requestId,
-          success: false,
-          error: updateResult.error,
-        };
-      }
-      // JSX element opening tag position is invariant under key-only rewrites.
-      // Return i18nElementId as canonical post-write ID for Path A selection re-attach.
-      newElementId = i18nElementId;
-    }
-
-    return {
-      type: 'ast:response',
-      requestId: message.requestId,
-      success: true,
-      data: { filePath: writeResult.filePath, newElementId },
     };
   }
 

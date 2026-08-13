@@ -246,7 +246,7 @@ function RepoList({ repositories, existingProjectIds, loading, hasMore, onSelect
     return (
       <div className="space-y-2">
         {[...Array(5)].map((_, i) => (
-          // eslint-disable-next-line react/no-array-index-key -- static skeleton placeholders, no data
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders, no data
           <div key={i} className="flex items-center gap-3 p-3 rounded-md border">
             <Skeleton className="w-8 h-8 rounded-full" />
             <div className="flex-1 space-y-2">
@@ -422,7 +422,7 @@ function CreateRepoForm({
         // Handle GitHub App not installed error
         if (errorData?.code === 'GITHUB_APP_NOT_INSTALLED') {
           setShowInstallPrompt(true);
-          setInstallUrl(errorData.installUrl ?? null);
+          setInstallUrl(errorData.installUrl);
           setError(null);
           return;
         }

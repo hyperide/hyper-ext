@@ -10,7 +10,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import type { ASTNode } from '@/lib/canvas-engine/types/ast';
 import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
 import type { TokenSystem } from '../color-utils';
 import { type ColorEntry, extractColorsFromPreview, extractComponentColors } from '../extract-component-colors';
@@ -32,12 +31,12 @@ export function useComponentColors(
     };
   }, [engine]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- treeVersion triggers recalculation on tree:change */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: treeVersion triggers recalculation on tree:change
   return useMemo(() => {
     if (!engine || !componentPath) return [];
 
     const root = engine.getRoot();
-    const astStructure = root?.metadata?.astStructure as ASTNode[] | undefined;
+    const astStructure = root?.metadata?.astStructure as import('@/lib/canvas-engine/types/ast').ASTNode[] | undefined;
 
     // Primary: extract from rendered preview iframe (pass AST for line numbers)
     const previewColors = extractColorsFromPreview(tokenSystem, astStructure);
@@ -47,5 +46,4 @@ export function useComponentColors(
     if (!astStructure) return [];
     return extractComponentColors(astStructure, tokenSystem);
   }, [engine, componentPath, tokenSystem, treeVersion]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 }

@@ -48,21 +48,22 @@ import React from 'react';
 
 export function App() {
   return (
-    <div>
-      <p>Hello</p>
+    <div data-uniq-id="root-1">
+      <p data-uniq-id="p-1">Hello</p>
     </div>
   );
 }
 `;
 
-    // Insert at root (parentId without nodeRef resolves to root insert)
-    const result = await service.insertElement('src/App.tsx', null, 'span', { className: 'text-red' });
+    const result = await service.insertElement('src/App.tsx', 'root-1', 'span', { className: 'text-red' });
 
     expect(result.success).toBe(true);
+    expect(result.newId).toBeTruthy();
 
     const output = files['/workspace/src/App.tsx'];
     expect(output).toContain('<span');
     expect(output).toContain('className="text-red"');
+    expect(output).toContain(`data-uniq-id="${result.newId}"`);
   });
 
   it('does not add import for lowercase (native) elements', async () => {
@@ -70,7 +71,7 @@ export function App() {
 import React from 'react';
 
 export function App() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 
@@ -86,7 +87,7 @@ export function App() {
 import React from 'react';
 
 export function App() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 
@@ -111,7 +112,7 @@ import React from 'react';
 import { Card } from './components/Card';
 
 export function App() {
-  return <div><Card /></div>;
+  return <div data-uniq-id="root-1"><Card data-uniq-id="c-1" /></div>;
 }
 `;
 
@@ -127,7 +128,7 @@ export function App() {
 import React from 'react';
 
 export function Dashboard() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 
@@ -151,7 +152,7 @@ import React from 'react';
 import { Button } from './ui/Button';
 
 export function App() {
-  return <div><Button>Click</Button></div>;
+  return <div data-uniq-id="root-1"><Button data-uniq-id="b-1">Click</Button></div>;
 }
 `;
 
@@ -167,7 +168,7 @@ import React from 'react';
 import { useState } from 'react';
 
 export function App() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 
@@ -192,21 +193,19 @@ export function App() {
     expect(myCompIdx).toBe(Math.max(...importIndices));
   });
 
-  it('inserts at root when no parentNodeRef provided', async () => {
+  it('returns error when parent element not found', async () => {
     files['/workspace/src/App.tsx'] = `
 import React from 'react';
 
 export function App() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 
-    // Without parentNodeRef, insert goes to root level regardless of parentId
     const result = await service.insertElement('src/App.tsx', 'nonexistent', 'span', {});
 
-    expect(result.success).toBe(true);
-    const output = files['/workspace/src/App.tsx'];
-    expect(output).toContain('<span');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
   });
 
   it('strips file extension from import path', async () => {
@@ -214,7 +213,7 @@ export function App() {
 import React from 'react';
 
 export function App() {
-  return <div></div>;
+  return <div data-uniq-id="root-1"></div>;
 }
 `;
 

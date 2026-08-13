@@ -47,7 +47,6 @@ export function ChatHeader({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              data-testid={TID.aiChat.chatDropdownTrigger}
               className="flex items-center gap-1 text-xs font-medium text-foreground hover:bg-accent rounded px-2 py-1 min-w-0 flex-1 text-left"
             >
               <span className="truncate">{currentChatTitle || 'New Chat'}</span>

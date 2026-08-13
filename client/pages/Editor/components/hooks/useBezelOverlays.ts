@@ -20,7 +20,7 @@ interface UseBezelOverlaysProps {
  * Renders iPhone bezel images as overlays for instances with matching dimensions
  */
 export function useBezelOverlays({ overlayContainerRef, iframeLoadedCounter, instanceSizes }: UseBezelOverlaysProps) {
-  /* eslint-disable react-hooks/exhaustive-deps -- iframeLoadedCounter triggers re-attach after iframe reload */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: iframeLoadedCounter triggers re-attach after iframe reload
   useEffect(() => {
     const container = overlayContainerRef.current;
     if (!container) return;
@@ -209,5 +209,4 @@ export function useBezelOverlays({ overlayContainerRef, iframeLoadedCounter, ins
       statusbarElements.clear();
     };
   }, [overlayContainerRef, iframeLoadedCounter, instanceSizes]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 }

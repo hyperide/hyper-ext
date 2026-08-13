@@ -112,7 +112,7 @@ export function useComponentAutoLoad({
         composites,
         currentComponentName,
         mode,
-        persistedOpenedComponent: persistedState.openedComponent ?? undefined,
+        persistedOpenedComponent: persistedState.openedComponent,
       });
 
       if (selectedPath) {
