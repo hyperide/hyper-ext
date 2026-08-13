@@ -525,7 +525,9 @@ attachClickHandler(
         if (effectiveRef) {
           logSelsurvSelectedIdsAssign('click:single', state.selectedIds, [effectiveRef]);
           state.selectedIds = [effectiveRef];
-          if (itemIndex != null) state.selectedItemIndices = { [effectiveRef]: itemIndex };
+          // Always reset selectedItemIndices so stale map-item indices from a previous
+          // selection don't linger and cause the resolver to look up the wrong instance.
+          state.selectedItemIndices = itemIndex != null ? { [effectiveRef]: itemIndex } : {};
 
           needsOverlayUpdate = true;
           scheduleOverlayLoopIfNeeded();

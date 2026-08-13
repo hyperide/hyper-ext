@@ -421,6 +421,54 @@ describe('computeOverlayRects', () => {
     expect(result.overlayRects[0].type).toBe('hover');
     expect(result.overlayRects[0].resizable).toBeUndefined();
   });
+
+  /* ─── Stale-itemIndex fallback (HMR list-shrink scenario) ────────────── */
+
+  it('falls back to all instances when selectedItemIndices carries an out-of-range itemIndex', () => {
+    // Reproduces the "overlay disappears after HMR shrinks a mapped list" bug.
+    //
+    // Before the fix: resolver.findElements('ref', 2) returns [] because the list
+    // shrank from 3 items to 1 after HMR, but selectedItemIndices still says index=2.
+    // computeOverlayRects treats [] as "element not found" and draws no rect — the
+    // Canvas loses its selection frame while the Inspector still shows the element selected.
+    //
+    // After the fix: falls back to resolver.findElements('ref', null) which returns
+    // all live instances, so the overlay remains visible.
+    const el = mockElement({ left: 10, top: 20, width: 100, height: 50 });
+    // Resolver has only 1 instance of 'ref.tsx:10:5' (list shrank; only index 0 exists)
+    const resolver = createResolver(new Map([['ref.tsx:10:5', [el]]]));
+
+    const result = computeOverlayRects(
+      {
+        selectedIds: ['ref.tsx:10:5'],
+        hoveredId: null,
+        selectedItemIndices: { 'ref.tsx:10:5': 2 }, // stale: was index-2 of a 3-item list
+      },
+      resolver,
+    );
+
+    // Element IS in the DOM — overlay must still appear even with a stale itemIndex.
+    expect(result.overlayRects).toHaveLength(1);
+    expect(result.overlayRects[0].type).toBe('selection');
+    expect(result.overlayRects[0].elementId).toBe('ref.tsx:10:5');
+  });
+
+  it('still returns zero rects when stale itemIndex AND element is not in the DOM', () => {
+    // When the resolver can't find the element even with itemIndex=null, the overlay
+    // should remain empty — the fallback must not invent a ghost rect.
+    const resolver = createResolver(new Map()); // element entirely missing
+
+    const result = computeOverlayRects(
+      {
+        selectedIds: ['ref.tsx:10:5'],
+        hoveredId: null,
+        selectedItemIndices: { 'ref.tsx:10:5': 2 },
+      },
+      resolver,
+    );
+
+    expect(result.overlayRects).toHaveLength(0);
+  });
 });
 
 describe('detectTailwindExplicitSize', () => {

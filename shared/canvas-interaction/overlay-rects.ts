@@ -154,7 +154,19 @@ export function computeOverlayRects(
   // Selection rects
   for (const id of state.selectedIds) {
     const itemIndex = getItemIndex(state.selectedItemIndices, id);
-    const elements = resolver.findElements(id, itemIndex);
+    let elements = resolver.findElements(id, itemIndex);
+    // effectiveItemIndex drives key generation: null means "use loop index i" so that
+    // multiple fallback instances each get a unique key.
+    let effectiveItemIndex = itemIndex;
+
+    // Stale-index fallback: selectedItemIndices may carry an out-of-range itemIndex
+    // (e.g. a .map() list shrank after HMR while the stored index wasn't reset).
+    // Rather than silently dropping the overlay, retry with itemIndex=null to surface
+    // all currently-live instances so the Canvas selection frame stays visible.
+    if (elements.length === 0 && itemIndex !== null) {
+      elements = resolver.findElements(id, null);
+      effectiveItemIndex = null;
+    }
 
     // Silent-death point: a selected id resolving to zero elements means no selection
     // overlay is drawn at all. Once-per-key — this runs inside the RAF loop.
@@ -167,7 +179,7 @@ export function computeOverlayRects(
 
     for (let i = 0; i < elements.length; i++) {
       const rect = elements[i].getBoundingClientRect();
-      const key = itemIndex !== null ? `select-${id}-${itemIndex}` : `select-${id}-${i}`;
+      const key = effectiveItemIndex !== null ? `select-${id}-${effectiveItemIndex}` : `select-${id}-${i}`;
       const overlayRect: OverlayRect = {
         key,
         elementId: id,
