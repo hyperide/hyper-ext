@@ -67,6 +67,13 @@ describe('detectFramework — primary via package.json', () => {
     expect(result.routesDir).toBe('app/routes');
   });
 
+  it('detects Remix via "@remix-run/react" dep with src/routes/, returns routesDir: "src/routes"', async () => {
+    const io = makeIO({ dependencies: { '@remix-run/react': '^2.0.0' } }, [`${root}/src/routes/home.tsx`]);
+    const result = await detectFramework(root, io);
+    expect(result.framework).toBe('remix');
+    expect(result.routesDir).toBe('src/routes');
+  });
+
   it('detects Vite SPA (file-based) via app/routes/, returns routesDir: "app/routes"', async () => {
     const io = makeIO({ dependencies: { vite: '^5.0.0' } }, [`${root}/app/routes/home.tsx`]);
     const result = await detectFramework(root, io);

@@ -1484,6 +1484,31 @@ describe('PreviewFileManager.ensurePreviewFiles', () => {
     const result = await manager.ensurePreviewFiles();
     expect(result).toBe('needs-patch');
   });
+
+  it('generates Remix route with HyperCanvasScripts and is idempotent', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/package.json', JSON.stringify({ dependencies: { '@remix-run/react': '^2.0.0' } }));
+    io.files.set(
+      '/project/src/__canvas_preview__.tsx',
+      '// @hyperide-managed\nexport default function CanvasPreview() {}',
+    );
+
+    const manager = new PreviewFileManager({ projectRoot: '/project', io });
+    const result = await manager.ensurePreviewFiles();
+    expect(result).toBe('ok-files-written');
+
+    const routeFile = io.files.get('/project/app/routes/test-preview.tsx');
+    expect(routeFile).toBeDefined();
+    expect(routeFile).toContain('@hyperide-managed');
+    expect(routeFile).toContain('HyperCanvasScripts');
+    expect(routeFile).toContain('/__hypercanvas/iframe-interaction.js');
+    expect(routeFile).toContain('useSearchParams');
+    expect(routeFile).toContain('id="root"');
+
+    // Idempotent — same content already committed, no rewrite → 'ok' (no HMR triggered)
+    const result2 = await manager.ensurePreviewFiles();
+    expect(result2).toBe('ok');
+  });
 });
 
 describe('PreviewFileManager.ensureComponent — git exclude side-effect', () => {

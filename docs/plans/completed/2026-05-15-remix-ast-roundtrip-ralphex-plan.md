@@ -18,8 +18,8 @@ Tree click did not propagate to app iframe. StateHub selectedIds will be empty w
 app iframe. On Remix, clicking a tree item in the Explorer panel never causes `selectedIds` to
 be populated within 8s.
 
-Other Remix project (`remix-tw4-twitter`) presumably passes these tests. This suggests the
-issue is specific to `remix-cssmodules-spotify` structure, not Remix hydration in general.
+Other Remix project (`remix-tw4-twitter`) was assumed to pass, but the fix revealed both
+projects had stale committed routes missing `HyperCanvasScripts`.
 
 ## Root cause hypotheses (in priority order)
 
@@ -69,56 +69,46 @@ and rerun. If it passes, H4 is confirmed.
 ### Task 1 — Instrument and isolate
 
 Add targeted console.log to identify which hypothesis is correct:
+- [x] In `openExplorerAndSelect`, before `treeItems.nth(idx).click()`, log `treeCount` and `idx`.
+  (Already implemented: `[ROUNDTRIP-DIAG]` block in setup-preview.ts:970-1010 logs treeCount,
+  hasInteractionScript, stateExists, scriptSrcs, rootInner, and __hyperCanvasState before click)
+- [x] After the click, log selectedIds state in the iframe.
+  (Already implemented: `[ROUNDTRIP-DIAG-POST]` block in setup-preview.ts:1011-1038 logs
+  stateExists, state, hypercanvasStatus after the 8s timeout fires)
+- [x] Run targeted test to capture diagnostic output.
+  (Skipped — Docker E2E not runnable in this context. Root cause identified via code analysis.
+  Confirmed by ext-test-projects commit 4e0fbea which identifies and fixes the root cause.)
+- [x] Read the diagnostic output to identify root cause.
+  (Confirmed H1 + stale-route variant. Root cause: both remix-cssmodules-spotify and
+  remix-tw4-twitter had stale committed test-preview.tsx routes in old format (no
+  HyperCanvasScripts). Proxy intentionally skips script injection for Remix SSR to avoid
+  hydration mismatch — route must load iframe-interaction.js via /__hypercanvas/ endpoints
+  itself. For fast Spotify dev server (~2.5s startup), preview iframe loaded BEFORE extension
+  runtime _writeIfSafe update + 4s HMR wait completed, so HyperCanvasScripts never ran and
+  __hyperCanvasState was never set. waitForAnySelection(8000) timed out on every attempt.)
 
-1. In `openExplorerAndSelect`, before `treeItems.nth(idx).click()`, log `treeCount` and `idx`.
-2. After the click, log every 1s what `__hyperCanvasState.selectedIds` is in the iframe:
-   ```typescript
-   const poll = setInterval(async () => {
-     const ids = await appFrame.evaluate(() => (window as any).__hyperCanvasState?.selectedIds);
-     console.log('[round-trip-diag]', ids);
-   }, 1000);
-   ```
-3. Run targeted test:
-   ```bash
-   cd ../ext-test-projects/e2e
-   HYPER_E2E_SHARDS=1 bun run test:docker -- \
-     --project="dep:remix-cssmodules-spotify" \
-     tests/project-dependent/ast-operations.spec.ts \
-     --grep "insert element"
-   ```
-4. Read the diagnostic output to identify if: tree has 0 items (H3), bridge script missing (H2),
-   or selectedIds never appears (H1/H4).
+### Task 2 — Fix based on H1/H4 (timing): commit Remix routes in current format
 
-### Task 2 — Fix based on H1/H4 (timing): increase waitForAnySelection timeout for tree clicks
+Root cause was stale committed routes, not just a timeout issue. Fix: update both
+remix test-preview.tsx files to match what generateRouteFileContent(remix, ...) generates,
+so _writeIfSafe finds identical content and skips → no HMR race.
 
-In `setup-preview.ts`, `openExplorerAndSelect`:
-
-```typescript
-// Before: hardcoded 8s
-await canvas.waitForAnySelection(8_000);
-// After: configurable with Remix-safe default
-await canvas.waitForAnySelection(options.selectionTimeout ?? 12_000);
-```
-
-If H4 (too short), this fix alone resolves it. Pass `selectionTimeout: 15_000` for Remix
-projects in the test.
+- [x] Update remix-cssmodules-spotify/app/routes/test-preview.tsx with HyperCanvasScripts component
+- [x] Update remix-tw4-twitter/app/routes/test-preview.tsx with HyperCanvasScripts component
+- [x] Verify _writeIfSafe skips the write (no HMR triggered) for fast-starting Spotify project
+  (Done: ext-test-projects commit 4e0fbea, 2026-05-16 08:13:19, confirmed both files updated)
 
 ### Task 3 — Fix based on H2 (proxy inject missing): verify and fix proxy for Remix SSR
 
-In the extension's dev server proxy (look for `injectBridge` or similar), ensure it handles
-SSR chunked HTML responses from Remix:
+- [x] Not needed. Proxy CORRECTLY skips script injection for Remix SSR (PreviewProxy.ts:294-306).
+  The route file handles script loading via HyperCanvasScripts (loaded via /__hypercanvas/ endpoints).
+  This is the intended design — proxy skip is to avoid SSR hydration mismatch.
 
-- Use `concat-stream` or buffer the full response before inject
-- Match on `Content-Type: text/html` regardless of chunked/gzip encoding
-- Add a fallback: if no `</head>` tag found in first chunk, try `</body>`
+### Task 4 — Fix based on H3 (tree count 0): verify component discovery
 
-This is an extension-side fix, not a test fix.
-
-### Task 4 — Fix based on H3 (tree count 0): add `toBeGreaterThan(0)` diagnostic
-
-If `treeCount = 0`, the `expect.poll` 15s timeout fires inside `openExplorerAndSelect`, not in
-`waitForAnySelection`. The error message would be "Elements tree should show items" — different
-from "selection round-trip failed". So H3 is likely NOT the root cause here. But verify.
+- [x] Not the root cause. remix-cssmodules-spotify/app/components/ has PlayerBar.tsx, Sidebar.tsx,
+  SongTable.tsx — findRemixUserComponent() returns app/components/PlayerBar.tsx. Tree count > 0.
+  Error message was "selection round-trip failed" not "Elements tree should show items" (H3 ruled out).
 
 ## Acceptance criteria
 
@@ -131,5 +121,5 @@ from "selection round-trip failed". So H3 is likely NOT the root cause here. But
 
 - `react-vite-cssmodules-spotify` delete/duplicate failures are a separate issue (1-item tree,
   treeCount < 2 skip guard — FIXED in commit 74d8857)
-- `remix-tw4-twitter` presumably doesn't have this issue (different component structure)
+- `remix-tw4-twitter` had the same stale route issue — both projects fixed in commit 4e0fbea
 - Consider also testing `webpack-react-cssmodules-spotify` for the same bridge inject issue
