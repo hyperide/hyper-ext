@@ -611,6 +611,58 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
     expect(waitIdx).toBeGreaterThan(firstWriteIdx);
   });
 
+  it('waits on the route-update barrier (not the webpack gate) after writing Next.js app-router route files', async () => {
+    // GitHub #81 — Next (Turbopack) has no post-write compile marker, so the gate
+    // deadlocked navigation. See the file-routed case comment in preview-mode-manager.ts
+    // for the full rationale. This pins: gate NOT armed, barrier runs after the write.
+    const calls: string[] = [];
+    const files: Record<string, string> = {
+      [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^16' } }),
+      [`${root}/app/layout.tsx`]: '',
+    };
+    const io: FileIO = {
+      async readFile(p: string) {
+        if (p in files) return files[p];
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async writeFile(p: string, c: string) {
+        calls.push(`write:${p}`);
+        files[p] = c;
+      },
+      async access(p: string) {
+        if (p in files) return;
+        const hasChild = Object.keys(files).some((k) => k.startsWith(`${p}/`));
+        if (hasChild) return;
+        throw new Error(`ENOENT: ${p}`);
+      },
+      async deleteFile() {},
+      async mkdir() {},
+    };
+    const onBeforeWebpackEntryPatch = mock(() => {
+      calls.push('arm-gate');
+    });
+    const waitForPreviewRouteUpdate = mock(() => {
+      calls.push('wait-route-update');
+    });
+    const m = new PreviewModeManager({
+      projectRoot: root,
+      io,
+      watcherFactory: noopWatcher,
+      onBeforeWebpackEntryPatch,
+      waitForPreviewRouteUpdate,
+    });
+
+    await m.onComponentSelected();
+
+    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
+    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
+    // Barrier must run AFTER the route file write so the iframe doesn't race the route.
+    const firstWriteIdx = calls.findIndex((c) => c.startsWith('write:'));
+    const waitIdx = calls.indexOf('wait-route-update');
+    expect(firstWriteIdx).toBeGreaterThanOrEqual(0);
+    expect(waitIdx).toBeGreaterThan(firstWriteIdx);
+  });
+
   it('patches a Bun HTML module entry without arming the webpack recompile gate', async () => {
     const calls: string[] = [];
     const files: Record<string, string> = {
@@ -665,22 +717,28 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
     expect(calls.indexOf(`write:${root}/src/frontend.tsx`)).toBeLessThan(calls.indexOf('wait-route-update'));
   });
 
-  it('fires on Next.js when route files are freshly written', async () => {
+  it('uses the route-update barrier (not the gate) for Next.js PAGES router too', async () => {
+    // Same #81 root cause covers nextjs-pages-router — it shares the file-routed
+    // case body and the same Turbopack-no-compile-marker behavior. (App-router is
+    // covered by the dedicated barrier test above; this pins the pages-router path.)
     const onBeforeWebpackEntryPatch = mock(() => {});
+    const waitForPreviewRouteUpdate = mock(() => {});
     const io = makeIO({
       [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
-      [`${root}/app/layout.tsx`]: '',
-      // No test-preview route — will be freshly created
+      // pages/_app.tsx → detectFramework resolves nextjs-pages-router
+      [`${root}/pages/_app.tsx`]: '',
+      // No pages/test-preview.tsx — will be freshly created
     });
     const m = new PreviewModeManager({
       projectRoot: root,
       io,
       watcherFactory: noopWatcher,
       onBeforeWebpackEntryPatch,
+      waitForPreviewRouteUpdate,
     });
     await m.onComponentSelected();
-    // Files were written → HMR fires → gate must be armed so awaitRecompile can wait
-    expect(onBeforeWebpackEntryPatch).toHaveBeenCalledTimes(1);
+    expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
+    expect(waitForPreviewRouteUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('waits without arming the webpack recompile gate after writing Remix route files', async () => {
@@ -730,9 +788,11 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
     expect(waitIdx).toBeGreaterThan(firstWriteIdx);
   });
 
-  it('does NOT fire on Next.js when route files already exist (idempotent)', async () => {
+  it('does NOT wait or arm the gate on Next.js when route files already exist (idempotent)', async () => {
     const onBeforeWebpackEntryPatch = mock(() => {});
-    // Simulate fully patched Next.js project — route file already exists with managed marker
+    // Inject a mock barrier: without it the manager falls back to the real 4s
+    // setTimeout default, taxing the suite ~4s on the first (file-writing) call.
+    const waitForPreviewRouteUpdate = mock(() => {});
     const io = makeIO({
       [`${root}/package.json`]: JSON.stringify({ dependencies: { next: '^14' } }),
       [`${root}/app/layout.tsx`]: '',
@@ -742,12 +802,16 @@ describe('PreviewModeManager — onBeforeWebpackEntryPatch (HYP-363)', () => {
       io,
       watcherFactory: noopWatcher,
       onBeforeWebpackEntryPatch,
+      waitForPreviewRouteUpdate,
     });
-    // First call writes files
+    // First call writes files → barrier runs once, gate never armed.
     await m.onComponentSelected();
     onBeforeWebpackEntryPatch.mockClear();
-    // Second call — files already exist with same content — no write, no gate
+    waitForPreviewRouteUpdate.mockClear();
+    // Second call — files already exist with same content — no write → neither
+    // the barrier nor the gate runs.
     await m.onComponentSelected();
     expect(onBeforeWebpackEntryPatch).not.toHaveBeenCalled();
+    expect(waitForPreviewRouteUpdate).not.toHaveBeenCalled();
   });
 });

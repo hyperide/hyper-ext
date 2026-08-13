@@ -163,22 +163,26 @@ export class PreviewModeManager {
       case 'astro':
       case 'vite-spa-file-based': {
         // ensurePreviewFiles() is idempotent — returns 'ok-files-written' only when
-        // route files are freshly created or updated. Remix and Vite file-based
-        // routes use the short route-update barrier because their dev-server
-        // stdout markers are not reliable enough for the long webpack gate.
-        // Next.js still uses the recompile gate because it emits stable compile
-        // markers after file-based route creation.
-        // On 2nd+ tests the same files already exist (content identical) — _writeIfSafe
-        // skips writing → 'ok' returned → no gate armed → awaitRecompile is a no-op.
+        // route files are freshly created or updated. ALL of these file-routed
+        // frameworks use the short route-update barrier (not the webpack recompile
+        // gate) because none emits a reliable webpack-style "compiled successfully"
+        // stdout marker after a route file is written: Vite/Remix/Astro apply route
+        // changes via HMR with no stable marker, and Next (15+) defaults to Turbopack,
+        // which compiles routes lazily (on first request) and writes NO compile marker
+        // on the route-file write — only a per-request access log ("GET /test-preview
+        // 200 in Nms"). Arming the recompile gate for Next made the extension's
+        // awaitRecompile() block until its full timeout, so navigation to /test-preview
+        // never fired and the preview never materialized (GitHub #81, nextjs-tw-sample:
+        // hasPreviewAppFrame=false through every recovery cycle). The route itself
+        // serves 200 on first hit, so the barrier + the proxy's /test-preview retry
+        // budget is the correct wait. The decision is intentionally version-agnostic:
+        // older webpack-era Next merely gets a slightly shorter wait than it strictly
+        // needs, which is harmless.
+        // On 2nd+ selections the same files already exist (content identical) →
+        // _writeIfSafe skips writing → 'ok' returned → barrier is a no-op.
         const fileResult = await this._fileManager.ensurePreviewFiles();
         if (fileResult === 'ok-files-written') {
-          if (framework === 'vite-spa-file-based' || framework === 'remix' || framework === 'astro') {
-            // Astro's dev server is Vite-powered — same short HMR barrier as Vite/Remix
-            // (no reliable webpack-style "compiled successfully" stdout marker).
-            await this._waitForPreviewRouteUpdate();
-          } else {
-            this._onBeforeWebpackEntryPatch?.();
-          }
+          await this._waitForPreviewRouteUpdate();
         }
         return fileResult === 'ok-files-written' ? 'ok' : fileResult;
       }
