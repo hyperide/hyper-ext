@@ -111,10 +111,74 @@ describe('DiagnosticPersistenceService', () => {
     });
   });
 
+  describe('saveNow (HYP-943)', () => {
+    it('writes immediately, superseding a pending debounced save', async () => {
+      service.save([makeEntry('debounced')]);
+      await service.saveNow([makeEntry('immediate')]);
+
+      expect(state.writtenContent).toBeTruthy();
+      // biome-ignore lint/style/noNonNullAssertion: test asserts truthy above
+      expect(JSON.parse(state.writtenContent!)[0].line).toBe('immediate');
+
+      // The superseded debounced save never fires later with stale content.
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      // biome-ignore lint/style/noNonNullAssertion: still truthy
+      expect(JSON.parse(state.writtenContent!)[0].line).toBe('immediate');
+    });
+
+    it('serializes writes: a slow in-flight write cannot commit after a newer saveNow', async () => {
+      // First write blocks inside fs.writeFile until released — simulating an
+      // already-fired debounced write still in flight when saveNow lands.
+      let releaseFirst: () => void = () => {};
+      const firstBlocked = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let call = 0;
+      writeFileSpy.mockImplementation(async (_filePath: unknown, content: unknown) => {
+        call += 1;
+        if (call === 1) await firstBlocked;
+        state.writtenContent = content as string;
+      });
+
+      const first = service.saveNow([makeEntry('stale')]);
+      const second = service.saveNow([makeEntry('fresh')]);
+      releaseFirst();
+      await first;
+      await second;
+
+      // FIFO chain: stale committed first, fresh committed last — disk ends fresh.
+      // biome-ignore lint/style/noNonNullAssertion: both writes completed
+      expect(JSON.parse(state.writtenContent!)[0].line).toBe('fresh');
+    });
+  });
+
   describe('clear', () => {
     it('should call unlink', async () => {
       await service.clear();
       expect(state.unlinkCalled).toBe(true);
+    });
+
+    it('unlinks AFTER a slow in-flight write, so cleared logs cannot resurrect', async () => {
+      const ops: string[] = [];
+      let releaseWrite: () => void = () => {};
+      const writeBlocked = new Promise<void>((resolve) => {
+        releaseWrite = resolve;
+      });
+      writeFileSpy.mockImplementation(async () => {
+        await writeBlocked;
+        ops.push('write');
+      });
+      unlinkSpy.mockImplementation(async () => {
+        ops.push('unlink');
+      });
+
+      const write = service.saveNow([makeEntry('in-flight')]);
+      const cleared = service.clear();
+      releaseWrite();
+      await write;
+      await cleared;
+
+      expect(ops).toEqual(['write', 'unlink']);
     });
   });
 

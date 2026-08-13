@@ -307,6 +307,11 @@ export function activate(context: vscode.ExtensionContext) {
             if (entry.kind === 'unhandledRejection') rejections++;
             else if (entry.kind === 'uncaughtException') exceptions++;
             else if (entry.kind === 'diagnosticEntry') diagnosticEntries++;
+            // HYP-943: an entry later proven to be the expected-transient /test-preview
+            // router 404 (retracted from Hyper Logs on preview:renderSucceeded). The sink
+            // is append-only, so the retraction is a compensating record — subtract it to
+            // keep the reported total in step with what the user actually sees.
+            else if (entry.kind === 'diagnosticRetraction') diagnosticEntries = Math.max(0, diagnosticEntries - 1);
           } catch {
             // skip malformed lines
           }
@@ -1083,6 +1088,11 @@ export function activate(context: vscode.ExtensionContext) {
     // Telemetry: preview render succeeded → emit preview.renderSucceeded and the
     // one-shot funnel.firstPreview (componentKind is a coarse bucket, never a path).
     previewPanel.onRenderSucceeded((componentPath) => {
+      // HYP-943: a successful render proves the /test-preview router-patch race resolved —
+      // retract the expected-transient React Router 404 noise from Hyper Logs (and open the
+      // grace window for the iframe's batched console flush). Kept OUTSIDE the telemetry
+      // try/catch below: it is user-facing log hygiene, not telemetry.
+      diagnosticHub?.notePreviewRenderSucceeded();
       try {
         const componentKind = componentPath ? (isUiPrimitive(componentPath) ? 'primitive' : 'component') : 'unknown';
         session?.onPreviewRenderSucceeded({ componentKind });
