@@ -135,19 +135,34 @@ export class ComponentScanner {
   }
 
   private normalizePathList(paths: string[], projectRoot: string): string[] {
-    return paths.map((rawPath) => this.normalizeProjectPath(rawPath, projectRoot));
+    return paths
+      .map((rawPath) => this.normalizeProjectPath(rawPath, projectRoot))
+      .filter((p): p is string => p !== null);
   }
 
-  private normalizeProjectPath(rawPath: string, projectRoot: string): string {
-    if (!path.isAbsolute(rawPath)) return rawPath;
-
-    const relativeToRoot = path.relative(projectRoot, rawPath);
-    if (relativeToRoot && !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)) {
-      return relativeToRoot;
+  /**
+   * Normalize a cached component path to a project-relative form. Cached paths are
+   * workspace-controlled, so any path that escapes the project root and cannot be
+   * remapped back into it is DROPPED (returns null) rather than preserved as a raw
+   * absolute path — preserving it would let buildGroups enumerate files outside the
+   * project (HYP-637). A dropped path leaves the path list empty/contained, which
+   * forces re-analysis in getComponentsData.
+   */
+  private normalizeProjectPath(rawPath: string, projectRoot: string): string | null {
+    if (!path.isAbsolute(rawPath)) {
+      // A relative cache entry must still resolve within the project root.
+      return this.pathEscapesRoot(projectRoot, rawPath) ? null : rawPath;
     }
 
-    const remapped = this.remapForeignAbsolutePath(rawPath, projectRoot);
-    return remapped ?? rawPath;
+    // Foreign/escaping absolute path: remap into the project when possible, otherwise drop.
+    if (this.pathEscapesRoot(projectRoot, rawPath)) {
+      return this.remapForeignAbsolutePath(rawPath, projectRoot);
+    }
+
+    // Absolute path inside the project root → project-relative form. An empty
+    // result means the path IS the project root, which buildGroups scans as '.'.
+    const relativeToRoot = path.relative(projectRoot, rawPath);
+    return relativeToRoot === '' ? '.' : relativeToRoot;
   }
 
   private remapForeignAbsolutePath(rawPath: string, projectRoot: string): string | null {
@@ -156,17 +171,43 @@ export class ComponentScanner {
     const projectIndex = parts.lastIndexOf(projectName);
 
     if (projectIndex !== -1 && projectIndex < parts.length - 1) {
-      const relative = parts.slice(projectIndex + 1).join(path.sep);
-      if (this.projectPathExists(projectRoot, relative)) return relative;
+      const remapped = this.containedRemapCandidate(projectRoot, parts.slice(projectIndex + 1).join(path.sep));
+      if (remapped !== null) return remapped;
     }
 
-    const sourceRootIndex = parts.findIndex((part) => part === 'src' || part === 'app');
-    if (sourceRootIndex !== -1) {
-      const relative = parts.slice(sourceRootIndex).join(path.sep);
-      if (this.projectPathExists(projectRoot, relative)) return relative;
+    // Try every source-root anchor, outermost first. A `client` (or `src`/`app`)
+    // segment may appear as an ancestor before the real source root
+    // (e.g. /workspace/client/old-checkout/src/components), so a first-match
+    // anchor would build a non-existent candidate and miss the later one.
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] !== 'src' && parts[i] !== 'app' && parts[i] !== 'client') continue;
+      const remapped = this.containedRemapCandidate(projectRoot, parts.slice(i).join(path.sep));
+      if (remapped !== null) return remapped;
     }
 
     return null;
+  }
+
+  /**
+   * Accept a remap candidate only when it resolves to an existing path INSIDE the
+   * project root. `..` segments surviving the anchor split (e.g.
+   * `/x/client/../../outside`) must not let the scanner enumerate files outside the
+   * project (HYP-637). Returns the normalized project-relative path, or null.
+   */
+  private containedRemapCandidate(projectRoot: string, candidate: string): string | null {
+    if (this.pathEscapesRoot(projectRoot, candidate)) return null;
+    const relative = path.relative(projectRoot, path.resolve(projectRoot, candidate));
+    return this.projectPathExists(projectRoot, relative) ? relative : null;
+  }
+
+  /**
+   * True when `candidate` (resolved against projectRoot) lands outside the project
+   * root. An empty relative result means the candidate IS the project root, which is
+   * contained — only `..`-prefixed or absolute results escape.
+   */
+  private pathEscapesRoot(projectRoot: string, candidate: string): boolean {
+    const relative = path.relative(projectRoot, path.resolve(projectRoot, candidate));
+    return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
   }
 
   private projectPathExists(projectRoot: string, relativePath: string): boolean {

@@ -584,6 +584,42 @@ export function App() {
     expect(fileIO.content(appPath)).toContain("paddingLeft: '16px'");
   });
 
+  it('does not classify a DOM element with a matching attribute as Tamagui (HYP-637)', async () => {
+    // <img width> is an HTML dimension attribute, not a Tamagui style prop. A width
+    // style write must NOT route to the Tamagui prop writer just because the
+    // requested style key collides with an existing DOM attribute name.
+    const appPath = '/project/src/App.tsx';
+    const fileIO = new InMemoryFileIO({
+      [appPath]: `export function App() {
+  return (
+    <img src='/hero.png' width='200' />
+  );
+}
+`,
+    });
+    const { ast, element } = await parseElement(fileIO, appPath, 3, 4);
+
+    const result = await executeStyleWriteRequest({
+      ast,
+      sourceFilePath: appPath,
+      element,
+      styles: { width: '300' },
+      runtimeThemeContext: {
+        ideThemePreference: 'system',
+        resolvedColorScheme: 'light',
+        source: 'test-fixture',
+      },
+      fileIO,
+      projectRoot: '/project',
+    });
+
+    expect(result.success).toBe(true);
+    const written = fileIO.content(appPath);
+    // Routed to the inline-style fallback — the HTML width attribute is untouched.
+    expect(written).toContain("width: '300px'");
+    expect(written).toContain("width='200'");
+  });
+
   it('rejects unsupported explicit source tabs instead of falling back to Tailwind mutation', async () => {
     const appPath = '/project/src/App.tsx';
     const original = `export function App() {

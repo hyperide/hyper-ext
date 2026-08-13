@@ -567,8 +567,14 @@ function getElementCssSystems(
   }
 
   // Detect Tamagui/RN-style elements: style properties written as direct JSX props
-  // (e.g. <YStack backgroundColor={...}> uses backgroundColor as a prop, not className/style)
-  if (requestedStyleKeys.some((key) => getAttribute(element, key) !== null)) {
+  // (e.g. <YStack backgroundColor={...}> uses backgroundColor as a prop, not className/style).
+  // Only applies to user-defined components (uppercase or member-expression tag names) —
+  // DOM elements like <img width='200'> must not be classified as Tamagui (HYP-637).
+  const tagNameNode = element.openingElement.name;
+  const isUserDefinedTag =
+    (tagNameNode.type === 'JSXIdentifier' && /^[A-Z]/.test(tagNameNode.name)) ||
+    tagNameNode.type === 'JSXMemberExpression';
+  if (isUserDefinedTag && requestedStyleKeys.some((key) => getAttribute(element, key) !== null)) {
     systems.push('tamagui');
   }
 

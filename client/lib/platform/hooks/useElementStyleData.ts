@@ -166,8 +166,9 @@ export function mergeRuntimeStyle(
   itemIndex?: number | null,
 ): ParsedStyles {
   if (!runtime || !elementId || runtime.elementId !== elementId) return base;
-  // For .map()-rendered elements, discard a snapshot from a different item index.
-  if (runtime.itemIndex != null && itemIndex != null && runtime.itemIndex !== itemIndex) return base;
+  // Discard a snapshot from a different item index (normalize undefined/null to
+  // null so a .map()-item snapshot never leaks onto an index-less selection).
+  if ((runtime.itemIndex ?? null) !== (itemIndex ?? null)) return base;
 
   const cs = runtime.computedStyle;
   const merged: ParsedStyles = { ...base };

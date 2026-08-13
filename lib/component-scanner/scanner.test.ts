@@ -256,6 +256,109 @@ describe('ComponentScanner.getComponentsData', () => {
     expect(names).toContain('card.tsx');
   });
 
+  it('should remap foreign absolute paths rooted at client/ (HYP-637)', async () => {
+    // Project keeps its source under client/ (no src/ or app/); the cached config
+    // came from a checkout at a different root with a different basename, so only
+    // the client/ source-root segment can anchor the remap. 'widgets' is not a
+    // heuristic dir name — losing the remap would also lose the user's
+    // atom categorization to re-analysis.
+    const clientRoot = path.join(TMP_DIR, 'client-project');
+    fs.mkdirSync(path.join(clientRoot, 'client', 'widgets'), { recursive: true });
+    fs.writeFileSync(
+      path.join(clientRoot, 'client', 'widgets', 'Widget.tsx'),
+      'export function Widget() { return <div/>; }',
+    );
+
+    const store = createMockStore({
+      atomComponentsPaths: [path.join('/workspace', 'old-checkout', 'client', 'widgets')],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(clientRoot);
+
+    expect(result.atomGroups).toHaveLength(1);
+    expect(result.atomGroups[0].dirPath).toBe('client/widgets');
+    expect(result.atomGroups[0].components.map((c) => c.name)).toContain('Widget.tsx');
+
+    fs.rmSync(clientRoot, { recursive: true, force: true });
+  });
+
+  it('remaps a foreign path whose real source root follows a client/ ancestor (HYP-637)', async () => {
+    // The cache came from a checkout nested under .../client/old-checkout/, so a
+    // 'client' segment appears as an ANCESTOR before the actual 'src' source root.
+    // A first-match anchor would build client/old-checkout/src/components/ui (absent)
+    // and drop the group; every anchor must be tried so 'src/components/ui' wins.
+    const store = createMockStore({
+      atomComponentsPaths: [path.join('/workspace', 'client', 'old-checkout', 'src', 'components', 'ui')],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(projectRoot);
+
+    expect(result.atomGroups).toHaveLength(1);
+    expect(result.atomGroups[0].dirPath).toBe('src/components/ui');
+    expect(result.atomGroups[0].components.map((c) => c.name)).toContain('button.tsx');
+  });
+
+  it('preserves a cached path that is the project root itself (HYP-637)', async () => {
+    // A repo with root-level components: the analyzer/cache may store the project
+    // root (path.join(projectRoot, '.') === projectRoot). It must NOT be dropped —
+    // root-level App.tsx would disappear in projects without src/app/client.
+    const rootProject = path.join(TMP_DIR, 'root-level-project');
+    fs.mkdirSync(rootProject, { recursive: true });
+    fs.writeFileSync(path.join(rootProject, 'App.tsx'), 'export function App() { return <div/>; }');
+
+    const store = createMockStore({
+      atomComponentsPaths: [],
+      compositeComponentsPaths: [rootProject],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(rootProject);
+
+    expect(result.compositeGroups.flatMap((g) => g.components.map((c) => c.name))).toContain('App.tsx');
+
+    fs.rmSync(rootProject, { recursive: true, force: true });
+  });
+
+  it('should not scan cached paths that escape the project root via .. segments (HYP-637)', async () => {
+    // A workspace-controlled cache entry rooted at the project but escaping it via
+    // .. (e.g. ${projectRoot}/client/../../outside) resolves to an EXISTING sibling
+    // directory. It must never be enumerated: drop it and force re-analysis instead
+    // of falling back to the raw escaped absolute path.
+    const trapRoot = path.join(TMP_DIR, 'trap-project');
+    const outsideDir = path.join(TMP_DIR, 'outside');
+    fs.mkdirSync(path.join(trapRoot, 'client'), { recursive: true });
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, 'Leak.tsx'), 'export function Leak() { return <div/>; }');
+
+    const store = createMockStore({
+      // Raw string on purpose — path.join would normalize the .. segments away.
+      // Resolves to TMP_DIR/outside, an existing sibling of the project root.
+      atomComponentsPaths: [`${trapRoot}/client/../../outside`],
+      compositeComponentsPaths: [],
+      pagesPaths: [],
+    });
+
+    const scanner = new ComponentScanner(store);
+    const result = await scanner.getComponentsData(trapRoot);
+
+    // The outside directory (and its Leak.tsx) must never appear.
+    const allComponents = [...result.atomGroups, ...result.compositeGroups, ...result.pageGroups].flatMap(
+      (g) => g.components,
+    );
+    expect(allComponents.map((c) => c.name)).not.toContain('Leak.tsx');
+    expect(allComponents.some((c) => c.path.includes('..') || c.path.includes('outside'))).toBe(false);
+
+    fs.rmSync(trapRoot, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  });
+
   it('should re-analyze when cached paths point outside the current project', async () => {
     const store = createMockStore({
       atomComponentsPaths: [path.join('/missing-cache-root', 'configured-components')],

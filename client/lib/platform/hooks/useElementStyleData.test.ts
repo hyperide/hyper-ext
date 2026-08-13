@@ -74,6 +74,36 @@ describe('mergeRuntimeStyle', () => {
     expect(merged.backgroundColor).toBeDefined();
   });
 
+  test('runtime style captured for a .map() item is not applied to a selection without itemIndex (HYP-637)', () => {
+    const base = classNameToStyles('bg-primary/15');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      itemIndex: 0,
+      seq: 1,
+      computedStyle: { backgroundColor: 'rgba(255, 0, 0, 1)' },
+    };
+
+    // Snapshot belongs to .map() item 0; the current selection carries no item index,
+    // so the snapshot cannot be assumed to describe it.
+    const merged = mergeRuntimeStyle(base, runtime, elementId);
+    expect(merged.backgroundColor).toBeUndefined();
+  });
+
+  test('runtime style without itemIndex is not applied to a .map() item selection (HYP-637)', () => {
+    const base = classNameToStyles('bg-primary/15');
+    const runtime: SelectedElementRuntimeStyle = {
+      componentPath: 'client/components/FAQ.tsx',
+      elementId,
+      seq: 1,
+      computedStyle: { backgroundColor: 'rgba(255, 0, 0, 1)' },
+    };
+
+    // Snapshot has no item index but the selection is item 1 of a .map() — mismatch.
+    const merged = mergeRuntimeStyle(base, runtime, elementId, 1);
+    expect(merged.backgroundColor).toBeUndefined();
+  });
+
   test('stale runtime style (different elementId) is ignored', () => {
     const base = classNameToStyles('bg-primary/15');
     const runtime: SelectedElementRuntimeStyle = {
