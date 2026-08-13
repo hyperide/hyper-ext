@@ -79,6 +79,17 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
     return { framework: 'remix', routesDir };
   }
 
+  // 3a. Astro — Vite-powered; no React Router, treat as plain Vite SPA entry
+  const isAstro =
+    Boolean(deps.astro) ||
+    (await exists(io, join(projectRoot, 'astro.config.ts'))) ||
+    (await exists(io, join(projectRoot, 'astro.config.mjs'))) ||
+    (await exists(io, join(projectRoot, 'astro.config.js'))) ||
+    (await exists(io, join(projectRoot, 'astro.config.cjs')));
+  if (isAstro) {
+    return { framework: 'vite-spa-jsx-router' };
+  }
+
   // 4. Vite — sub-classify via filesystem, preserve actual routes dir
   if (deps.vite) {
     if (await exists(io, join(projectRoot, 'app/routes'))) {

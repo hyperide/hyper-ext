@@ -95,6 +95,31 @@ describe('detectFramework — primary via package.json', () => {
     expect((await detectFramework(root, io)).framework).toBe('webpack');
   });
 
+  it('detects Astro via "astro" dep as vite-spa-jsx-router', async () => {
+    const io = makeIO({ devDependencies: { astro: '^4.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('detects Astro via astro.config.mjs when no deps (monorepo sub-package)', async () => {
+    const io = makeIO({}, [`${root}/astro.config.mjs`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('detects Astro via astro.config.ts', async () => {
+    const io = makeIO({}, [`${root}/astro.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('detects Astro via astro.config.cjs', async () => {
+    const io = makeIO({}, [`${root}/astro.config.cjs`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
+  it('Astro takes precedence over bare vite dep', async () => {
+    const io = makeIO({ devDependencies: { astro: '^4.0.0', vite: '^5.0.0' } });
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
   it('detects Parcel via "parcel" dep', async () => {
     const io = makeIO({ devDependencies: { parcel: '^2.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('parcel');

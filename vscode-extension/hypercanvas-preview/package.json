@@ -1,7 +1,7 @@
 {
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
-  "version": "0.1.53",
+  "version": "0.1.52",
   "description": "Visual editor for React components",
   "categories": [
     "Other",
@@ -425,6 +425,6 @@
   ],
   "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.99.0"
+    "vscode": "^1.106.0"
   }
 }

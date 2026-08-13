@@ -107,6 +107,41 @@ describe('detectProjectType', () => {
     expect(await detectProjectType('/proj')).toBe('nextjs');
   });
 
+  // ── Astro detection ──
+  it('detects astro dep (devDependencies) as vite', async () => {
+    setPackageJson('/proj', { devDependencies: { astro: '^4.0.0' } });
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
+  it('detects astro dep (dependencies) as vite', async () => {
+    setPackageJson('/proj', { dependencies: { astro: '^4.0.0' } });
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
+  it('detects astro.config.mjs as vite when no deps', async () => {
+    setPackageJson('/proj', {});
+    setFileExists('/proj/astro.config.mjs');
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
+  it('detects astro.config.ts as vite when no deps', async () => {
+    setPackageJson('/proj', {});
+    setFileExists('/proj/astro.config.ts');
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
+  it('detects astro.config.js as vite when no deps', async () => {
+    setPackageJson('/proj', {});
+    setFileExists('/proj/astro.config.js');
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
+  it('detects astro.config.cjs as vite when no deps', async () => {
+    setPackageJson('/proj', {});
+    setFileExists('/proj/astro.config.cjs');
+    expect(await detectProjectType('/proj')).toBe('vite');
+  });
+
   it('returns unknown when nothing matches', async () => {
     setPackageJson('/proj', { dependencies: {} });
     expect(await detectProjectType('/proj')).toBe('unknown');
