@@ -21,6 +21,7 @@ import {
   _dragCleanup,
   _dragPointerDown,
   _dragPointerMove,
+  _dragPointerUp,
   _normalizeEventTarget,
   type DragHandlerContext,
 } from '../iframe-drag-handlers';
@@ -168,21 +169,204 @@ describe('_dragPointerMove drop-target normalization (review finding #2)', () =>
       _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // > DRAG_THRESHOLD_PX → dragging
 
       // Move with e.target = the Text node inside the drop element. Normalization
-      // must coerce it to `drop` so the drop resolves and a postMessage fires.
+      // must coerce it to `drop` so the drop resolves — but the write is DEFERRED to drop:
+      // no moveElement may be posted yet (per-move posting raced dozens of file rewrites).
       expect(() => _dragPointerMove(ctx, makePointerEvent(dropLabel, 200, 200))).not.toThrow();
 
-      const moveMsg = posted.find(
-        (m): m is { type: string; targetId: string } =>
-          typeof m === 'object' &&
-          m !== null &&
-          'type' in m &&
-          (m as { type?: string }).type === 'hypercanvas:moveElement',
-      );
+      const findMove = () =>
+        posted.find(
+          (m): m is { type: string; targetId: string } =>
+            typeof m === 'object' &&
+            m !== null &&
+            'type' in m &&
+            (m as { type?: string }).type === 'hypercanvas:moveElement',
+        );
+      // Nothing written during the move — the write fires only on pointerup.
+      expect(findMove()).toBeUndefined();
+
+      // Drop: fires EXACTLY ONE moveElement against the last-hovered, Text-normalized target.
+      _dragPointerUp(ctx, makePointerEvent(source, 200, 200));
+      const moveMsg = findMove();
       expect(moveMsg).toBeDefined();
       // Drop resolved to the drop element's source, not bailed on the Text node.
       expect(moveMsg?.targetId).toBe('/src/App.tsx:9:2');
     } finally {
       (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      source.remove();
+      drop.remove();
+    }
+  });
+
+  // Core #31 fix: during an active drag, setPointerCapture redirects every
+  // pointermove to the captured SOURCE element, so e.target is the dragged element,
+  // never the element under the cursor. The drop target must come from a hit-test at
+  // the cursor coordinates (document.elementFromPoint), not e.target — otherwise
+  // targetId === sourceId and moveElement never fires (the headless ZERO-moveElement
+  // bug). happy-dom returns null from elementFromPoint (no layout), so we stub it to
+  // emulate a real browser's hit-test.
+  test('resolves the drop target via elementFromPoint when e.target is the captured source', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const drop = document.createElement('div');
+    drop.textContent = 'drop';
+    document.body.append(source, drop);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const DROP: SourceLocation = { fileName: '/src/App.tsx', line: 9, column: 2 };
+    const ctx = makeContext(
+      new Map<HTMLElement, SourceLocation>([
+        [source, SRC],
+        [drop, DROP],
+      ]),
+    );
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    // Emulate a real browser hit-test: the cursor is over `drop`.
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      drop;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+
+      // Pointer capture makes e.target = source even though the cursor is over drop.
+      // The handler must resolve the drop via elementFromPoint, not e.target.
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200));
+
+      const findMove = () =>
+        posted.find(
+          (m): m is { type: string; targetId: string; sourceId: string } =>
+            typeof m === 'object' &&
+            m !== null &&
+            'type' in m &&
+            (m as { type?: string }).type === 'hypercanvas:moveElement',
+        );
+      // Deferred: hit-test resolved the drop during move, but no write fires until drop.
+      expect(findMove()).toBeUndefined();
+
+      _dragPointerUp(ctx, makePointerEvent(source, 200, 200));
+      const moveMsg = findMove();
+      expect(moveMsg).toBeDefined();
+      // The move fired against the hit-tested drop element, NOT the captured source.
+      expect(moveMsg?.targetId).toBe('/src/App.tsx:9:2');
+      expect(moveMsg?.sourceId).toBe('/src/App.tsx:5:2');
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      drop.remove();
+    }
+  });
+
+  // Dropping onto the SOURCE itself (targetId === sourceId) is a no-op: each move
+  // recomputes the pending write and the source-hover resolve CLEARS it, so pointerup
+  // writes nothing. Guards against a stale pending drop from an earlier valid-target move.
+  test('drop over the source itself posts no moveElement (pending cleared)', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const drop = document.createElement('div');
+    drop.textContent = 'drop';
+    document.body.append(source, drop);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const DROP: SourceLocation = { fileName: '/src/App.tsx', line: 9, column: 2 };
+    const ctx = makeContext(
+      new Map<HTMLElement, SourceLocation>([
+        [source, SRC],
+        [drop, DROP],
+      ]),
+    );
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    // First the cursor hovers `drop` (valid target → pending set), then returns over
+    // `source` (targetId === sourceId → pending must be CLEARED).
+    let hit: HTMLElement = drop;
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      hit;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200)); // over drop → pending set
+      hit = source;
+      _dragPointerMove(ctx, makePointerEvent(source, 12, 12)); // back over source → pending cleared
+
+      _dragPointerUp(ctx, makePointerEvent(source, 12, 12));
+
+      const moveMsg = posted.find(
+        (m): m is { type: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      expect(moveMsg).toBeUndefined();
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
+      source.remove();
+      drop.remove();
+    }
+  });
+
+  // Escape / cancel mid-drag must write NOTHING even with a pending drop queued.
+  test('Escape (_dragCleanup) mid-drag fires no write', () => {
+    const source = document.createElement('div');
+    source.textContent = 'source';
+    const drop = document.createElement('div');
+    drop.textContent = 'drop';
+    document.body.append(source, drop);
+
+    const SRC: SourceLocation = { fileName: '/src/App.tsx', line: 5, column: 2 };
+    const DROP: SourceLocation = { fileName: '/src/App.tsx', line: 9, column: 2 };
+    const ctx = makeContext(
+      new Map<HTMLElement, SourceLocation>([
+        [source, SRC],
+        [drop, DROP],
+      ]),
+    );
+
+    const posted: unknown[] = [];
+    const realPostMessage = window.parent.postMessage;
+    (window.parent as unknown as { postMessage: (m: unknown) => void }).postMessage = (m: unknown) => {
+      posted.push(m);
+    };
+    const realElementFromPoint = document.elementFromPoint;
+    (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = () =>
+      drop;
+
+    try {
+      _dragPointerDown(ctx, makePointerEvent(source, 10, 10));
+      _dragPointerMove(ctx, makePointerEvent(source, 40, 40)); // enter dragging
+      _dragPointerMove(ctx, makePointerEvent(source, 200, 200)); // over drop → pending set
+
+      // Cancel path (Escape calls _dragCleanup): pending must be dropped, no post.
+      _dragCleanup();
+
+      const moveMsg = posted.find(
+        (m): m is { type: string } =>
+          typeof m === 'object' &&
+          m !== null &&
+          'type' in m &&
+          (m as { type?: string }).type === 'hypercanvas:moveElement',
+      );
+      expect(moveMsg).toBeUndefined();
+    } finally {
+      (window.parent as unknown as { postMessage: typeof realPostMessage }).postMessage = realPostMessage;
+      (document as unknown as { elementFromPoint: typeof realElementFromPoint }).elementFromPoint =
+        realElementFromPoint;
       source.remove();
       drop.remove();
     }

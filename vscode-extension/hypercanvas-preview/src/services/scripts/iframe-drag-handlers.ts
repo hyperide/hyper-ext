@@ -2,6 +2,7 @@ import { resolveDragSource } from '@shared/canvas-interaction/drag-source-resolv
 import { isHorizontalLayout as _isHorizontalLayoutShared } from '@shared/canvas-interaction/drop-indicator-orientation';
 import { normalizeEventTarget } from '@shared/canvas-interaction/normalize-event-target';
 import { resolveOrderWritePlan } from './iframe-drag-order';
+import type { OrderWritePlan } from '@shared/canvas-interaction/order-drag-detect';
 import type { TracingResolver } from '@shared/canvas-interaction/types';
 
 export interface DragHandlerContext {
@@ -25,6 +26,40 @@ function _isHorizontalLayout(el: HTMLElement): boolean {
  */
 export const _normalizeEventTarget = normalizeEventTarget;
 
+/**
+ * Resolve the element under the cursor during a drag.
+ *
+ * Reading `e.target` is WRONG during an active drag: pointer capture
+ * (`setPointerCapture` on pointerdown) redirects every `pointermove`/`pointerup`
+ * to the captured source element, so `e.target` is always the dragged element and
+ * a synthetic `document.dispatchEvent` reports `document`. Either way the drop
+ * target can never resolve. `document.elementFromPoint(clientX, clientY)` does a
+ * real hit-test at the cursor — independent of capture and synthetic dispatch —
+ * and ignores `pointer-events:none` nodes, so the drag ghost/indicator/badge and
+ * the (dimmed, `pointer-events:none`) source element are skipped automatically.
+ *
+ * Falls back to `_normalizeEventTarget(e.target)` when `elementFromPoint` is
+ * unavailable or yields nothing (e.g. happy-dom under the unit-test runner, where
+ * hit-testing isn't implemented), keeping the existing over-text coercion for it —
+ * BUT never falls back to the captured source element. Under active pointer capture
+ * `e.target` IS the dragged source; `elementFromPoint` returning null then usually
+ * means the cursor left the iframe viewport (a normal drag-to-edge). Resolving the
+ * captured source as the "drop target" there would either no-op (targetId===sourceId)
+ * or, if the source's source-map resolved differently mid-drag, commit a wrong move.
+ * Returning null instead leaves the last valid drop indicator in place and writes
+ * nothing until the cursor is back over a real element.
+ */
+function _resolveDropTarget(e: PointerEvent): HTMLElement | null {
+  const fromPoint =
+    typeof document !== 'undefined' && typeof document.elementFromPoint === 'function'
+      ? (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)
+      : null;
+  if (fromPoint) return _normalizeEventTarget(fromPoint);
+  const fallback = _normalizeEventTarget(e.target);
+  if (fallback && fallback === _dragSourceEl) return null;
+  return fallback;
+}
+
 let _dragState: 'idle' | 'pending' | 'dragging' = 'idle';
 let _dragSourceId: string | null = null;
 let _dragSourceFilePath: string | null = null;
@@ -42,6 +77,29 @@ let _dragCapturedTarget: HTMLElement | null = null;
 let _dragPrevBodyUserSelect: string | null = null;
 let _dragPrevBodyWebkitUserSelect: string | null = null;
 let _dragEscapeHandler: ((e: KeyboardEvent) => void) | null = null;
+
+/**
+ * The AST write a drop will commit, recomputed on every `_dragPointerMove` so the
+ * LAST hovered target wins. It is deliberately NOT posted during move: the parent
+ * forwards `moveElement` fire-and-forget (unserialized) to `ast:moveElement`, which
+ * rewrites the whole source file — posting per-move fires dozens of concurrent racing
+ * file writes for one gesture (23 rewrites observed for a single drop). `_dragPointerUp`
+ * fires EXACTLY ONE write from this snapshot; a move over no valid target clears it so
+ * dropping there writes nothing; `_dragCleanup` (Escape/cancel) clears it without writing.
+ */
+type PendingDrop =
+  | {
+      kind: 'moveElement';
+      sourceId: string;
+      targetId: string;
+      sourceFilePath: string;
+      position: 'before' | 'after';
+      /** Drop-target file, for the cross-file grace-cache invalidation paired with the write. */
+      dropFileName: string;
+    }
+  | { kind: 'writeOrders'; sourceId: string; orderPlan: OrderWritePlan };
+
+let _dragPendingDrop: PendingDrop | null = null;
 
 export function _dragPointerDown(ctx: DragHandlerContext, e: PointerEvent): void {
   if (ctx.state.engineMode !== 'design' || e.button !== 0) return;
@@ -197,24 +255,52 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
     _dragBadgeEl.style.top = `${e.clientY - 12}px`;
   }
 
-  // Normalize the drop target the same way as pointerdown: over visible text
-  // e.target is a Text node, which resolveDragSource rejects — coercing up to the
-  // owning Element keeps the drop indicator resolving over text-heavy targets.
-  const target = _normalizeEventTarget(e.target);
-  if (!target) return;
+  // Resolve the drop target by HIT-TESTING the cursor coordinates rather than
+  // reading e.target. While the drag is active dragEl.setPointerCapture() redirects
+  // every pointermove/pointerup to the captured SOURCE element, so e.target is the
+  // dragged element — never the element under the cursor — and the drop target could
+  // never resolve to a different node. elementFromPoint does a real geometric hit-test
+  // at (clientX, clientY), independent of capture, and skips the drag overlays + source
+  // (all pointer-events:none) to return the true drop element. Fall back to e.target
+  // normalization only where elementFromPoint is unavailable (e.g. happy-dom unit tests),
+  // preserving the over-text coercion for that path.
+  const drop = _resolveDrop(ctx, e);
+  // Recompute the pending write every move so the LAST hovered target wins. A move
+  // over no valid target (null resolve, or targetId === sourceId) CLEARS it, so a drop
+  // there writes nothing. The write itself is deferred to `_dragPointerUp`.
+  _dragPendingDrop = drop?.pending ?? null;
+
+  if (drop) _updateDropIndicator(drop.dropEl, drop.position);
+}
+
+interface ResolvedDrop {
+  dropEl: HTMLElement;
+  position: 'before' | 'after';
+  pending: PendingDrop;
+}
+
+/**
+ * Hit-test the cursor, resolve the drop target, and build the pending write +
+ * indicator geometry inputs. Returns `null` when there is no valid drop (no source,
+ * unresolved target, or targetId === sourceId — a drop onto the source itself).
+ * Does NOT post any message: the write fires once on pointerup.
+ */
+function _resolveDrop(ctx: DragHandlerContext, e: PointerEvent): ResolvedDrop | null {
+  const target = _resolveDropTarget(e);
+  if (!target) return null;
   const resolved = resolveDragSource(
     target,
     (el) => ctx.iframeResolver.getSourceLocation(el),
     ctx.renderedComponentPath,
   );
-  if (!resolved || !_dragSourceEl) return;
+  if (!resolved || !_dragSourceEl) return null;
 
   const dropEl = resolved.el;
   const dropSrc = resolved.source;
-  if (!dropEl || !dropSrc) return;
+  if (!dropEl || !dropSrc) return null;
   const sourceId = _dragSourceId;
   const sourceFilePath = _dragSourceFilePath;
-  if (!sourceId || !sourceFilePath) return;
+  if (!sourceId || !sourceFilePath) return null;
 
   const rect = dropEl.getBoundingClientRect();
   const position: 'before' | 'after' = _isHorizontalLayout(dropEl)
@@ -226,20 +312,64 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
       : 'after';
 
   const targetId = `${dropSrc.fileName}:${dropSrc.line}:${dropSrc.column}`;
-  if (targetId === sourceId) return;
+  if (targetId === sourceId) return null;
 
   const orderPlan = resolveOrderWritePlan(_dragSourceEl, dropEl, e.clientX, e.clientY, {
     getSourceLocation: (el) => ctx.iframeResolver.getSourceLocation(el),
     isHorizontalLayout: _isHorizontalLayout,
   });
-  if (orderPlan) {
+  const pending: PendingDrop = orderPlan
+    ? { kind: 'writeOrders', sourceId, orderPlan }
+    : {
+        kind: 'moveElement',
+        sourceId,
+        targetId,
+        sourceFilePath,
+        position,
+        dropFileName: dropSrc.fileName,
+      };
+  return { dropEl, position, pending };
+}
+
+/** Update the live drop-indicator line geometry + orientation for the hovered target. */
+function _updateDropIndicator(dropEl: HTMLElement, position: 'before' | 'after'): void {
+  if (!_dragIndicatorEl) return;
+  const dropRect = dropEl.getBoundingClientRect();
+  const isHorizontal = _isHorizontalLayout(dropEl);
+  // data-dir drives the indicator-line styling in style-injector.ts CSS: a HORIZONTAL
+  // layout (side-by-side items) gets a VERTICAL drop line ("v"); a VERTICAL layout
+  // (stacked items) gets a HORIZONTAL drop line ("h"). Production never set this before,
+  // so the orientation styles never applied.
+  _dragIndicatorEl.setAttribute('data-dir', isHorizontal ? 'v' : 'h');
+  _dragIndicatorEl.style.width = isHorizontal ? '3px' : `${dropRect.width}px`;
+  _dragIndicatorEl.style.height = isHorizontal ? `${dropRect.height}px` : '3px';
+  _dragIndicatorEl.style.left = isHorizontal
+    ? position === 'before'
+      ? `${dropRect.left}px`
+      : `${dropRect.right - 3}px`
+    : `${dropRect.left}px`;
+  _dragIndicatorEl.style.top = isHorizontal
+    ? `${dropRect.top}px`
+    : position === 'before'
+      ? `${dropRect.top}px`
+      : `${dropRect.bottom - 3}px`;
+}
+
+/**
+ * Fire the single deferred drop write (moveElement OR writeOrders) plus the paired
+ * grace-cache invalidation. Reads `ctx` for the cache; safe to call with no pending
+ * write (no-op). The state-update selection seed is handled parent-side, so it is not
+ * re-emitted here.
+ */
+function _emitPendingDrop(ctx: DragHandlerContext, pending: PendingDrop): void {
+  if (pending.kind === 'writeOrders') {
     // nosemgrep: wildcard-postmessage-configuration -- iframe->parent communication within VS Code webview
     window.parent.postMessage(
       {
         type: 'hypercanvas:writeOrders',
-        sourceId,
-        breakpoint: orderPlan.breakpoint,
-        entries: orderPlan.entries,
+        sourceId: pending.sourceId,
+        breakpoint: pending.orderPlan.breakpoint,
+        entries: pending.orderPlan.entries,
       },
       '*',
     );
@@ -250,39 +380,17 @@ export function _dragPointerMove(ctx: DragHandlerContext, e: PointerEvent): void
   window.parent.postMessage(
     {
       type: 'hypercanvas:moveElement',
-      sourceId,
-      targetId,
-      filePath: sourceFilePath,
-      position,
+      sourceId: pending.sourceId,
+      targetId: pending.targetId,
+      filePath: pending.sourceFilePath,
+      position: pending.position,
     },
     '*',
   );
 
-  ctx.selectionGraceCache.invalidateForFile(sourceFilePath);
-  if (dropSrc.fileName && dropSrc.fileName !== sourceFilePath) {
-    ctx.selectionGraceCache.invalidateForFile(dropSrc.fileName);
-  }
-
-  if (_dragIndicatorEl) {
-    const dropRect = dropEl.getBoundingClientRect();
-    const isHorizontal = _isHorizontalLayout(dropEl);
-    // data-dir drives the indicator-line styling in style-injector.ts CSS: a HORIZONTAL
-    // layout (side-by-side items) gets a VERTICAL drop line ("v"); a VERTICAL layout
-    // (stacked items) gets a HORIZONTAL drop line ("h"). Production never set this before,
-    // so the orientation styles never applied.
-    _dragIndicatorEl.setAttribute('data-dir', isHorizontal ? 'v' : 'h');
-    _dragIndicatorEl.style.width = isHorizontal ? '3px' : `${dropRect.width}px`;
-    _dragIndicatorEl.style.height = isHorizontal ? `${dropRect.height}px` : '3px';
-    _dragIndicatorEl.style.left = isHorizontal
-      ? position === 'before'
-        ? `${dropRect.left}px`
-        : `${dropRect.right - 3}px`
-      : `${dropRect.left}px`;
-    _dragIndicatorEl.style.top = isHorizontal
-      ? `${dropRect.top}px`
-      : position === 'before'
-        ? `${dropRect.top}px`
-        : `${dropRect.bottom - 3}px`;
+  ctx.selectionGraceCache.invalidateForFile(pending.sourceFilePath);
+  if (pending.dropFileName && pending.dropFileName !== pending.sourceFilePath) {
+    ctx.selectionGraceCache.invalidateForFile(pending.dropFileName);
   }
 }
 
@@ -328,15 +436,22 @@ export function _dragCleanup(): void {
   _dragSourceId = null;
   _dragSourceFilePath = null;
   _dragSourceEl = null;
+  // Clear any deferred drop so Escape/cancel writes NOTHING. The write only ever fires
+  // from `_dragPointerUp`, which snapshots this before calling cleanup.
+  _dragPendingDrop = null;
   _dragSuppressNextClick = true;
   setTimeout(() => {
     _dragSuppressNextClick = false;
   }, 50);
 }
 
-export function _dragPointerUp(_ctx: DragHandlerContext, e: PointerEvent): void {
+export function _dragPointerUp(ctx: DragHandlerContext, e: PointerEvent): void {
   if (_dragCapturedPointerId !== null && e.pointerId !== _dragCapturedPointerId) return;
+  // Snapshot the deferred drop BEFORE cleanup (cleanup resets module state). The whole
+  // gesture commits EXACTLY ONE write here — never per-move — to avoid racing source rewrites.
+  const pending = _dragPendingDrop;
   _dragCleanup();
+  if (pending) _emitPendingDrop(ctx, pending);
 }
 
 export function _dragClickSuppressor(e: MouseEvent): void {
