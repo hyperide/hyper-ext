@@ -83,7 +83,7 @@ import { useCanvasComments } from './components/hooks/useCanvasComments';
 import { useCanvasComposition } from './components/hooks/useCanvasComposition';
 import { useCanvasResizeHandlers } from './components/hooks/useCanvasResizeHandlers';
 import { useCommentHandlers } from './components/hooks/useCommentHandlers';
-import { useComponentAutoLoad } from './components/hooks/useComponentAutoLoad';
+import { hasNoRenderableComponents, useComponentAutoLoad } from './components/hooks/useComponentAutoLoad';
 import { useCondMapSave } from './components/hooks/useCondMapSave';
 import { useDrawingState } from './components/hooks/useDrawingState';
 import { useElementInteraction } from './components/hooks/useElementInteraction';
@@ -745,9 +745,10 @@ export function CanvasEditor({ onOpenSettings }: Props) {
                     onOpenSettings={onOpenSettings}
                   />
                 ) : activeProject && (runtime.status === 'running' || runtime.hasBeenRunning) ? (
-                  availableComponents.isLoaded &&
-                  availableComponents.atoms.length === 0 &&
-                  availableComponents.composites.length === 0 ? (
+                  // HYP-680: only show the overlay when there is genuinely nothing to
+                  // render — no atoms, no composites, AND no pages. A page-only project
+                  // (e.g. just App.tsx) renders the page instead of the overlay.
+                  availableComponents.isLoaded && hasNoRenderableComponents(availableComponents) ? (
                     <NoComponentOverlay variant="no-components" />
                   ) : meta?.relativeFilePath && iframeReady ? (
                     <>

@@ -7,9 +7,10 @@ export interface ComponentInfo {
   path: string;
 }
 
-interface AvailableComponents {
+export interface AvailableComponents {
   atoms: ComponentInfo[];
   composites: ComponentInfo[];
+  pages: ComponentInfo[];
   isLoaded: boolean;
 }
 
@@ -29,30 +30,54 @@ export function isEntryPoint(name: string): boolean {
   return ENTRY_POINT_NAMES.includes(baseName);
 }
 
-/** Flatten grouped API response into flat arrays. Returns null on server error. */
+/**
+ * Flatten grouped API response into flat arrays. Returns null on server error.
+ * HYP-680: pages are a renderable category. The preview-generator renders ANY exported
+ * component by its file path — atom / composite / page is a navigation grouping the scanner
+ * assigns, not a distinct render mode — so a page file is rendered as a component just like
+ * any other. Pages are therefore flattened alongside atoms/composites, not dropped.
+ */
 export function flattenComponentGroups(
   data: ComponentsAPIResponse,
-): { atoms: ComponentInfo[]; composites: ComponentInfo[] } | null {
+): { atoms: ComponentInfo[]; composites: ComponentInfo[]; pages: ComponentInfo[] } | null {
   if (!data.success) return null;
+  // Monorepo: the scanner mirrors sub-project atom/composite groups into the flat
+  // atomGroups/compositeGroups, but deliberately leaves the flat pageGroups empty
+  // (PagesSection renders per-sub-project, so populating it would double-render).
+  // For the flat renderable set the overlay gate reads, fold sub-project pageGroups
+  // in here — otherwise a page-only monorepo app still shows NoComponentOverlay
+  // (Codex P2). Sub-project pages are NOT in flat pageGroups, so there is no dup.
+  const subProjectPages = data.subProjects?.flatMap((sp) => sp.pageGroups.flatMap((g) => g.components)) ?? [];
   return {
     atoms: data.atomGroups?.flatMap((g) => g.components) || [],
     composites: data.compositeGroups?.flatMap((g) => g.components) || [],
+    pages: [...(data.pageGroups?.flatMap((g) => g.components) || []), ...subProjectPages],
   };
+}
+
+/**
+ * Whether the project has nothing renderable. Drives the NoComponentOverlay gate.
+ * HYP-680: a page-only project (only pageGroups) IS renderable — the overlay must
+ * not show; the page must render.
+ */
+export function hasNoRenderableComponents(available: AvailableComponents): boolean {
+  return available.atoms.length === 0 && available.composites.length === 0 && available.pages.length === 0;
 }
 
 /** Determine which component to auto-load. Returns path or null. */
 export function selectComponentToLoad(opts: {
   atoms: ComponentInfo[];
   composites: ComponentInfo[];
+  pages: ComponentInfo[];
   currentComponentName: string | undefined;
   mode: 'design' | 'interact' | 'code';
   persistedOpenedComponent: string | undefined;
 }): string | null {
-  const { atoms, composites, currentComponentName, mode, persistedOpenedComponent } = opts;
+  const { atoms, composites, pages, currentComponentName, mode, persistedOpenedComponent } = opts;
 
-  // Try to restore previously opened component
+  // Try to restore previously opened component (a page counts too — HYP-680)
   if (persistedOpenedComponent && !currentComponentName) {
-    const all = [...atoms, ...composites];
+    const all = [...atoms, ...composites, ...pages];
     const found = all.find((c) => c.path === persistedOpenedComponent);
     if (found) return found.path;
   }
@@ -63,7 +88,10 @@ export function selectComponentToLoad(opts: {
   const currentIsEntryPoint = currentComponentName && isEntryPoint(currentComponentName);
   if (currentComponentName && !currentIsEntryPoint) return null;
 
-  return composites[0]?.path ?? atoms[0]?.path ?? null;
+  // Prefer composites, then atoms, then pages. A page-only project (e.g. just
+  // App.tsx) falls through to the page so the canvas renders it instead of the
+  // NoComponentOverlay (HYP-680).
+  return composites[0]?.path ?? atoms[0]?.path ?? pages[0]?.path ?? null;
 }
 
 /**
@@ -80,6 +108,7 @@ export function useComponentAutoLoad({
   const [availableComponents, setAvailableComponents] = useState<AvailableComponents>({
     atoms: [],
     composites: [],
+    pages: [],
     isLoaded: false,
   });
 
@@ -95,21 +124,22 @@ export function useComponentAutoLoad({
         const isHttpError = typeof data.error === 'string' && data.error.startsWith('HTTP ');
         if (isHttpError) {
           console.log('[useComponentAutoLoad] Failed to load components:', data.error);
-          setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
+          setAvailableComponents({ atoms: [], composites: [], pages: [], isLoaded: true });
         } else {
           console.warn('[useComponentAutoLoad] Server error:', data.error);
         }
         return;
       }
 
-      const { atoms, composites } = flattened;
+      const { atoms, composites, pages } = flattened;
       console.log('[useComponentAutoLoad] Available components:', data);
-      setAvailableComponents({ atoms, composites, isLoaded: true });
+      setAvailableComponents({ atoms, composites, pages, isLoaded: true });
 
       const persistedState = loadPersistedState();
       const selectedPath = selectComponentToLoad({
         atoms,
         composites,
+        pages,
         currentComponentName,
         mode,
         persistedOpenedComponent: persistedState.openedComponent ?? undefined,
@@ -122,7 +152,7 @@ export function useComponentAutoLoad({
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to load components:', err);
-      setAvailableComponents({ atoms: [], composites: [], isLoaded: true });
+      setAvailableComponents({ atoms: [], composites: [], pages: [], isLoaded: true });
     }
   }, [currentComponentName, mode, loadComponent]);
 
@@ -138,7 +168,8 @@ export function useComponentAutoLoad({
   useEffect(() => {
     if (!activeProjectId || activeProjectStatus !== 'running') return;
     if (!availableComponents.isLoaded) return;
-    if (availableComponents.atoms.length > 0 || availableComponents.composites.length > 0) return;
+    // A page-only project is NOT empty — pages count as renderable (HYP-680).
+    if (!hasNoRenderableComponents(availableComponents)) return;
 
     const handleRetry = () => {
       console.log('[useComponentAutoLoad] Retrying after components_updated (previous result was empty)');

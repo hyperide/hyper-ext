@@ -249,6 +249,29 @@ describe('PreviewFileManager', () => {
       await expect(manager.ensureComponent(['src/components/NoExist.tsx'])).rejects.toThrow(PreviewGenerationError);
     });
 
+    // HYP-680: a page-only project (just a page like src/App.tsx, no src/components/)
+    // must produce a valid, renderable preview entry for the page.
+    it('renders a page-only project (App.tsx with no components dir)', async () => {
+      const io = new InMemoryFileIO();
+      io.files.set(
+        '/project/src/App.tsx',
+        `import React from 'react';
+export default function App() {
+  return <h1>Hello from the page</h1>;
+}
+`,
+      );
+      const manager = createManager(io);
+
+      const content = await manager.ensureComponent(['src/App.tsx']);
+
+      // The page is registered and renderable
+      expect(content).toContain("import App from './App';");
+      expect(content).toContain("'src/App.tsx': toPreviewComponent(App)");
+      // And the generated preview is valid TypeScript (would have thrown otherwise)
+      expect(await isValidTypeScript(content)).toBe(true);
+    });
+
     it('should use scoped package name from package.json for monorepo imports', async () => {
       const io = new InMemoryFileIO();
       io.files.set('/project/packages/ui/package.json', '{"name": "@acme/ui"}');
