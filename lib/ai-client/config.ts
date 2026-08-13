@@ -14,6 +14,8 @@ export interface ResolvedAIConfig {
   baseURL?: string;
   /** Which API protocol to use */
   provider: 'anthropic' | 'openai';
+  /** Anthropic-protocol auth: undefined = `x-api-key` header, 'bearer' = `Authorization: Bearer` */
+  authMethod?: 'bearer';
 }
 
 /** OpenAI Chat Completions-compatible base URLs by backend name */
@@ -52,6 +54,15 @@ export function resolveAIConfig(opts: {
         model,
         baseURL: baseURL || AI_PROVIDER_DEFAULTS.glm.baseURL || undefined,
         provider: 'anthropic',
+      };
+
+    case 'firepass':
+      return {
+        apiKey,
+        model,
+        baseURL: baseURL || AI_PROVIDER_DEFAULTS.firepass.baseURL || undefined,
+        provider: 'anthropic',
+        authMethod: AI_PROVIDER_DEFAULTS.firepass.auth,
       };
 
     case 'openai':

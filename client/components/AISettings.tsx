@@ -9,7 +9,7 @@ import { useNetworkAwareFetch } from '@/hooks/useNetworkAwareFetch';
 import { useAuthStore } from '@/stores/authStore';
 import { authFetch } from '@/utils/authFetch';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../shared/ai-provider-defaults';
-import { GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
+import { FIREPASS_INFO, GLM_RECOMMENDATION, PROVIDER_LABELS } from '../../shared/ai-provider-info';
 
 interface AIConfig {
   id: number;
@@ -347,6 +347,10 @@ export default function AISettings() {
         newConfig.baseURL = AI_PROVIDER_DEFAULTS.glm.baseURL;
         newConfig.model = AI_PROVIDER_DEFAULTS.glm.model;
         break;
+      case 'firepass':
+        newConfig.baseURL = AI_PROVIDER_DEFAULTS.firepass.baseURL;
+        newConfig.model = AI_PROVIDER_DEFAULTS.firepass.model;
+        break;
       case 'claude':
         newConfig.baseURL = AI_PROVIDER_DEFAULTS.claude.baseURL;
         newConfig.model = AI_PROVIDER_DEFAULTS.claude.model;
@@ -528,6 +532,7 @@ export default function AISettings() {
               onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
             >
               <option value="glm">{PROVIDER_LABELS.glm}</option>
+              <option value="firepass">{PROVIDER_LABELS.firepass}</option>
               <option value="claude">{PROVIDER_LABELS.claude}</option>
               <option value="openai">{PROVIDER_LABELS.openai}</option>
               <option value="proxy">{PROVIDER_LABELS.proxy}</option>
@@ -691,6 +696,74 @@ export default function AISettings() {
                   value={config.baseURL || ''}
                   onChange={(e) => setConfig({ ...config, baseURL: e.target.value || null })}
                   placeholder={AI_PROVIDER_DEFAULTS.glm.baseURL ?? ''}
+                />
+              </div>
+            </>
+          ) : config.provider === 'firepass' ? (
+            <>
+              {/* Fire Pass info */}
+              <div className="rounded-md border border-border bg-muted/50 p-3 space-y-1.5">
+                <p className="text-sm font-medium">{FIREPASS_INFO.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {FIREPASS_INFO.plans.map((p) => `${p.name} ${p.price} — ${p.note}`).join(' · ')}
+                </p>
+                <a
+                  href={FIREPASS_INFO.subscribeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs underline hover:text-foreground"
+                >
+                  Learn more at Fireworks AI
+                </a>
+              </div>
+
+              {/* Fire Pass provider UI */}
+              <div className="space-y-2">
+                <Label htmlFor="model">Model</Label>
+                <Input
+                  id="model"
+                  value={config.model}
+                  onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                  placeholder={AI_PROVIDER_DEFAULTS.firepass.model}
+                  required
+                />
+                <p className="text-sm text-muted-foreground">
+                  Examples: accounts/fireworks/routers/kimi-k2p6-turbo (Fire Pass flat-rate),
+                  accounts/fireworks/models/glm-5p1, accounts/fireworks/models/minimax-m2p5 (per-token)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key</Label>
+                <Input
+                  id="apiKey"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={config.apiKey ? `Current: ${config.apiKey}` : 'fw-...'}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {config.apiKey
+                    ? 'Enter a new key to update it, or leave blank to keep current.'
+                    : 'Your API key will be stored securely.'}{' '}
+                  <a
+                    href={FIREPASS_INFO.getKeyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    Create &amp; Manage API key — Fireworks AI
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="baseURL">Base URL</Label>
+                <Input
+                  id="baseURL"
+                  value={config.baseURL || ''}
+                  onChange={(e) => setConfig({ ...config, baseURL: e.target.value || null })}
+                  placeholder={AI_PROVIDER_DEFAULTS.firepass.baseURL ?? ''}
                 />
               </div>
             </>

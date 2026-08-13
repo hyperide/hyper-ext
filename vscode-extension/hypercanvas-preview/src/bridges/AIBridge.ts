@@ -493,6 +493,7 @@ export class AIBridge {
           apiKey,
           freshModel,
           baseURL ?? undefined,
+          freshDefaults.auth,
           messages,
           abortController.signal,
           callback,
@@ -567,11 +568,12 @@ export class AIBridge {
     apiKey: string,
     model: string,
     baseUrl: string | undefined,
+    auth: 'bearer' | undefined,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     signal: AbortSignal,
     callback: StreamCallback,
   ): Promise<void> {
-    const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl });
+    const streamProvider = new FetchAnthropicProvider({ apiKey, baseUrl, auth });
     const localExecutor = new LocalToolExecutor(this._workspaceRoot, this._devServerManager, this._diagnosticHub);
 
     // Wrap executor to intercept ask_user tool

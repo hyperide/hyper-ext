@@ -10,12 +10,6 @@ import { callAI, type ResolvedAIConfig } from '../ai-client/index.js';
 import { filterChildPaths } from './directory-tree.js';
 import type { ProjectStructure } from './types.js';
 
-export interface AIAnalyzerOptions {
-  model: string;
-  baseURL?: string;
-  provider?: 'anthropic' | 'openai';
-}
-
 const AI_PROMPT = `You are analyzing a React/TypeScript project structure to find component directories.
 
 Project structure:
@@ -145,17 +139,10 @@ Return ONLY a JSON object (no markdown, no backticks, no explanation):
 export async function analyzeWithAI(
   projectPath: string,
   tree: string,
-  apiKey: string,
-  options: AIAnalyzerOptions,
+  config: ResolvedAIConfig,
 ): Promise<ProjectStructure> {
   const prompt = AI_PROMPT.replace('{TREE}', tree);
-  const resolvedConfig: ResolvedAIConfig = {
-    apiKey,
-    model: options.model,
-    baseURL: options.baseURL,
-    provider: options.provider ?? 'anthropic',
-  };
-  const text = await callAI(resolvedConfig, prompt);
+  const text = await callAI(config, prompt);
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

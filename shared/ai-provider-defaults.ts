@@ -11,22 +11,29 @@
  * |----------|---------------|------------------------------|----------------|
  * | claude   | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
  * | glm      | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
+ * | firepass | Yes           | Yes (Anthropic SDK)          | Yes (tools)    |
  * | openai   | Yes           | Yes (OpenAI function calling) | Text-only      |
  * | proxy    | Yes           | Yes (litellm + Anthropic)    | Text-only      |
  * | opencode | Yes (via SDK) | Yes (MCP bridge + SSE)       | Text-only      |
  *
  * Tool support per provider:
- * - claude/glm/proxy: Anthropic Messages API with native tool_use
+ * - claude/glm/firepass/proxy: Anthropic Messages API with native tool_use
  * - openai: OpenAI Chat Completions with function calling (chatWithOpenAITools)
  * - opencode: Tools via SaaS MCP server (/api/mcp), streaming via promptAsync + event.subscribe
  */
-export type AIProvider = 'claude' | 'openai' | 'glm' | 'proxy' | 'opencode';
+export type AIProvider = 'claude' | 'openai' | 'glm' | 'firepass' | 'proxy' | 'opencode';
 
 export interface AIProviderDefaults {
   baseURL: string | null;
   model: string;
   /** 'anthropic' = Anthropic Messages API, 'openai' = OpenAI Chat Completions */
   protocol: 'anthropic' | 'openai';
+  /**
+   * How the API key is sent on the Anthropic protocol. Default (undefined) is the
+   * `x-api-key` header; 'bearer' sends `Authorization: Bearer` instead (Fireworks
+   * accepts only bearer tokens on its Anthropic-compatible endpoint).
+   */
+  auth?: 'bearer';
 }
 
 export const AI_PROVIDER_DEFAULTS: Record<AIProvider, AIProviderDefaults> = {
@@ -39,6 +46,12 @@ export const AI_PROVIDER_DEFAULTS: Record<AIProvider, AIProviderDefaults> = {
     baseURL: 'https://api.z.ai/api/anthropic',
     model: 'glm-4.7',
     protocol: 'anthropic',
+  },
+  firepass: {
+    baseURL: 'https://api.fireworks.ai/inference',
+    model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
+    protocol: 'anthropic',
+    auth: 'bearer',
   },
   openai: {
     baseURL: 'https://api.openai.com/v1',

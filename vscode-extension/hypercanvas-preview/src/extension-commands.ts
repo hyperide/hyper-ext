@@ -3,7 +3,12 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import * as vscode from 'vscode';
 import { AI_PROVIDER_DEFAULTS, type AIProvider } from '../../../shared/ai-provider-defaults';
-import { GLM_RECOMMENDATION, PROVIDER_KEY_URLS, PROVIDER_LABELS } from '../../../shared/ai-provider-info';
+import {
+  FIREPASS_INFO,
+  GLM_RECOMMENDATION,
+  PROVIDER_KEY_URLS,
+  PROVIDER_LABELS,
+} from '../../../shared/ai-provider-info';
 import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import { LeftPanelProvider } from './LeftPanelProvider';
@@ -728,6 +733,12 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
           detail: `${GLM_RECOMMENDATION.description} ${plansLine}`,
           description: currentProvider === 'glm' ? 'current' : '',
           providerId: 'glm',
+        },
+        {
+          label: PROVIDER_LABELS.firepass,
+          detail: `${FIREPASS_INFO.description} ${FIREPASS_INFO.plans[0].price}`,
+          description: currentProvider === 'firepass' ? 'current' : '',
+          providerId: 'firepass',
         },
         {
           label: PROVIDER_LABELS.claude,

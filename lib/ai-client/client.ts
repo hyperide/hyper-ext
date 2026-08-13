@@ -15,8 +15,8 @@ import type { ResolvedAIConfig } from './config.js';
 const MAX_ANTHROPIC_CLIENTS = 8;
 const anthropicClientCache = new Map<string, Anthropic>();
 
-function getAnthropicClient(apiKey: string, baseURL?: string): Anthropic {
-  const cacheKey = `${apiKey}::${baseURL ?? ''}`;
+function getAnthropicClient(apiKey: string, baseURL?: string, authMethod?: 'bearer'): Anthropic {
+  const cacheKey = `${apiKey}::${baseURL ?? ''}::${authMethod ?? ''}`;
   let client = anthropicClientCache.get(cacheKey);
   if (!client) {
     // Evict oldest entry if cache is full
@@ -24,7 +24,11 @@ function getAnthropicClient(apiKey: string, baseURL?: string): Anthropic {
       const oldestKey = anthropicClientCache.keys().next().value;
       if (oldestKey !== undefined) anthropicClientCache.delete(oldestKey);
     }
-    client = new Anthropic({ apiKey, baseURL: baseURL || undefined });
+    // 'bearer' sends `Authorization: Bearer` via the SDK's authToken option (e.g. Fireworks)
+    client =
+      authMethod === 'bearer'
+        ? new Anthropic({ apiKey: null, authToken: apiKey, baseURL: baseURL || undefined })
+        : new Anthropic({ apiKey, baseURL: baseURL || undefined });
     anthropicClientCache.set(cacheKey, client);
   }
   return client;
@@ -64,7 +68,7 @@ export async function callAI(config: ResolvedAIConfig, prompt: string, options?:
   }
 
   // Anthropic SDK path
-  const anthropic = getAnthropicClient(config.apiKey, config.baseURL);
+  const anthropic = getAnthropicClient(config.apiKey, config.baseURL, config.authMethod);
 
   const response = await anthropic.messages.create({
     model: config.model,
@@ -102,7 +106,7 @@ export async function* callAIStream(
   }
 
   // Anthropic SDK streaming path
-  const anthropic = getAnthropicClient(config.apiKey, config.baseURL);
+  const anthropic = getAnthropicClient(config.apiKey, config.baseURL, config.authMethod);
 
   if (options?.abortSignal?.aborted) return;
 

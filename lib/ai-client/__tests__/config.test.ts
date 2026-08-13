@@ -42,6 +42,37 @@ describe('resolveAIConfig', () => {
     expect(result?.baseURL).toBeDefined();
   });
 
+  it('should resolve firepass provider with default baseURL and bearer auth', () => {
+    const result = resolveAIConfig({
+      provider: 'firepass',
+      apiKey: 'fw-key',
+      model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
+    });
+    expect(result).toEqual({
+      apiKey: 'fw-key',
+      model: 'accounts/fireworks/routers/kimi-k2p6-turbo',
+      baseURL: 'https://api.fireworks.ai/inference',
+      provider: 'anthropic',
+      authMethod: 'bearer',
+    });
+  });
+
+  it('should prefer explicit baseURL over default for firepass', () => {
+    const result = resolveAIConfig({
+      provider: 'firepass',
+      apiKey: 'fw-key',
+      model: 'accounts/fireworks/models/glm-5p1',
+      baseURL: 'https://custom.fireworks.proxy',
+    });
+    expect(result).toEqual({
+      apiKey: 'fw-key',
+      model: 'accounts/fireworks/models/glm-5p1',
+      baseURL: 'https://custom.fireworks.proxy',
+      provider: 'anthropic',
+      authMethod: 'bearer',
+    });
+  });
+
   it('should resolve openai provider', () => {
     const result = resolveAIConfig({
       provider: 'openai',

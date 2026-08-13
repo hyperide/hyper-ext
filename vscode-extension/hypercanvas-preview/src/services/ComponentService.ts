@@ -131,11 +131,7 @@ export class ComponentService {
             console.log(
               `[ComponentService] AI analysis: provider=${provider}, model=${model}, sdk=${resolved.provider}`,
             );
-            const result = await analyzeWithAI(root, tree, resolved.apiKey, {
-              model: resolved.model,
-              baseURL: resolved.baseURL,
-              provider: resolved.provider,
-            });
+            const result = await analyzeWithAI(root, tree, resolved);
             const n =
               (result.atomComponentsPaths?.length ?? 0) +
               (result.compositeComponentsPaths?.length ?? 0) +

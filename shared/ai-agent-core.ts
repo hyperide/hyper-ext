@@ -272,6 +272,8 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<ChatEven
 export interface FetchAnthropicProviderOptions {
   apiKey: string;
   baseUrl?: string;
+  /** undefined = `x-api-key` header, 'bearer' = `Authorization: Bearer` (e.g. Fireworks) */
+  auth?: 'bearer';
 }
 
 /**
@@ -281,10 +283,12 @@ export interface FetchAnthropicProviderOptions {
 export class FetchAnthropicProvider implements StreamProvider {
   private _apiKey: string;
   private _baseUrl: string;
+  private _auth?: 'bearer';
 
   constructor(options: FetchAnthropicProviderOptions) {
     this._apiKey = options.apiKey;
     this._baseUrl = options.baseUrl || 'https://api.anthropic.com';
+    this._auth = options.auth;
   }
 
   async *createStream(params: StreamParams): AsyncGenerator<RawStreamEvent> {
@@ -301,11 +305,14 @@ export class FetchAnthropicProvider implements StreamProvider {
       stream: true,
     };
 
+    const authHeaders: Record<string, string> =
+      this._auth === 'bearer' ? { Authorization: `Bearer ${this._apiKey}` } : { 'x-api-key': this._apiKey };
+
     const response = await fetch(`${this._baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': this._apiKey,
+        ...authHeaders,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
