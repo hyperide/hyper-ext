@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 2.1, 3.3, 7.3). Retained for history; do not follow for new work.
+
 # Style Source Owner
 
 **Date:** 2026-04-14

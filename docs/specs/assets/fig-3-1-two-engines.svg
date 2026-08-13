@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4b5563"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowFunnel" markerWidth="12" markerHeight="12" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="#1f2937"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="980" height="660" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="40" y="44" font-size="24" font-weight="700" fill="#111827">Two engines today</text>
+  <text x="40" y="68" font-size="13" fill="#6b7280">Style read/write splits across two systems with their own canonical shapes — A funnels into B, and the converter pair is duplicated.</text>
+
+  <!-- ===================== SYSTEM A ===================== -->
+  <rect x="40" y="100" width="400" height="430" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="132" font-size="17" font-weight="700" fill="#0f172a">System A — Client style pipeline</text>
+  <text x="60" y="152" font-size="12" fill="#64748b">classNameToStyles → useElementStyleData</text>
+
+  <!-- Canonical shape A: ParsedStyles (rounded "value map" card) -->
+  <text x="60" y="188" font-size="12" font-weight="600" fill="#475569">canonical shape</text>
+  <rect x="60" y="198" width="360" height="120" rx="14" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="80" y="224" font-size="15" font-weight="700" fill="#3730a3">ParsedStyles</text>
+  <text x="80" y="244" font-size="11" fill="#4338ca">flat property → value map (resolved)</text>
+  <!-- key/value rows to visually distinguish the shape -->
+  <g font-size="11" fill="#312e81">
+    <rect x="80" y="256" width="150" height="20" rx="4" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="88" y="270">color</text>
+    <text x="190" y="270" fill="#6366f1">: #111</text>
+    <rect x="80" y="282" width="150" height="20" rx="4" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="88" y="296">padding</text>
+    <text x="190" y="296" fill="#6366f1">: 8px</text>
+    <rect x="245" y="256" width="155" height="20" rx="4" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="253" y="270">fontSize</text>
+    <text x="360" y="270" fill="#6366f1">: 14</text>
+    <rect x="245" y="282" width="155" height="20" rx="4" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="253" y="296">display</text>
+    <text x="360" y="296" fill="#6366f1">: flex</text>
+  </g>
+
+  <!-- Converter A (duplicated, debt) -->
+  <rect x="100" y="378" width="280" height="56" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="240" y="402" font-size="13" font-weight="700" fill="#b91c1c" text-anchor="middle">classNameToStyles</text>
+  <text x="240" y="421" font-size="11" fill="#dc2626" text-anchor="middle">converter #1 — useElementStyleData.ts:113</text>
+
+  <!-- A flow arrows -->
+  <line x1="240" y1="318" x2="240" y2="376" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="250" y="352" font-size="11" fill="#6b7280">value-merge</text>
+
+  <!-- ===================== SYSTEM B ===================== -->
+  <rect x="540" y="100" width="400" height="430" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="560" y="132" font-size="17" font-weight="700" fill="#0f172a">System B — Style engine</text>
+  <text x="560" y="152" font-size="12" fill="#64748b">StyleReadManager / StyleWriteManager</text>
+
+  <!-- Canonical shape B: StyleReadResult + StyleWritePlan (tabbed/structured) -->
+  <text x="560" y="188" font-size="12" font-weight="600" fill="#475569">canonical shapes</text>
+
+  <!-- StyleReadResult: tabbed/structured panel -->
+  <rect x="560" y="198" width="360" height="92" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="580" y="222" font-size="15" font-weight="700" fill="#065f46">StyleReadResult</text>
+  <text x="580" y="240" font-size="11" fill="#047857">properties[] EMPTY on main (D2) — drives tabs/surface only</text>
+  <g font-size="10.5" fill="#065f46">
+    <rect x="580" y="252" width="78" height="24" rx="4" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="590" y="268">Tailwind</text>
+    <rect x="664" y="252" width="78" height="24" rx="4" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="674" y="268">inline</text>
+    <rect x="748" y="252" width="78" height="24" rx="4" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="758" y="268">CSS var</text>
+    <rect x="832" y="252" width="78" height="24" rx="4" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="842" y="268">theme</text>
+  </g>
+
+  <!-- StyleWritePlan: ordered op list -->
+  <rect x="560" y="306" width="360" height="100" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="580" y="330" font-size="15" font-weight="700" fill="#065f46">StyleWritePlan</text>
+  <text x="580" y="348" font-size="11" fill="#047857">ordered AST edit ops (one undo step)</text>
+  <g font-size="10.5" fill="#065f46">
+    <rect x="580" y="360" width="330" height="18" rx="3" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="588" y="373">1 · setProp(color, #111)</text>
+    <rect x="580" y="382" width="330" height="18" rx="3" fill="#ffffff" stroke="#a7f3d0"/>
+    <text x="588" y="395">2 · addClass(p-2) · removeClass(p-1)</text>
+  </g>
+
+  <!-- Converter B (duplicated, debt) -->
+  <rect x="600" y="448" width="280" height="56" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="740" y="472" font-size="13" font-weight="700" fill="#b91c1c" text-anchor="middle">TailwindV4Reader</text>
+  <text x="740" y="491" font-size="11" fill="#dc2626" text-anchor="middle">converter #2 — lib/style-adapters/tailwind-v4</text>
+
+  <!-- B internal arrow -->
+  <line x1="740" y1="406" x2="740" y2="446" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== FUNNEL POINT A -> B ===================== -->
+  <!-- one funnel point: A dispatches into B -->
+  <path d="M440 258 C 490 258, 490 244, 540 244" fill="none" stroke="#1f2937" stroke-width="2.5" marker-end="url(#arrowFunnel)"/>
+  <circle cx="490" cy="251" r="9" fill="#1f2937"/>
+  <text x="490" y="255" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+  <text x="490" y="220" font-size="12" font-weight="700" fill="#1f2937" text-anchor="middle">funnel point</text>
+  <text x="490" y="290" font-size="11" fill="#374151" text-anchor="middle">A dispatches</text>
+  <text x="490" y="305" font-size="11" fill="#374151" text-anchor="middle">into B</text>
+
+  <!-- ===================== DUPLICATED CONVERTER LINK (debt) ===================== -->
+  <path d="M380 406 C 460 470, 520 510, 600 490" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#arrowRed)"/>
+  <text x="490" y="536" font-size="12" font-weight="700" fill="#b91c1c" text-anchor="middle">duplicated converter pair = consolidation debt (D23)</text>
+  <text x="490" y="554" font-size="11" fill="#6b7280" text-anchor="middle">parser layer beneath: D37, 95 vs 2 tests</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g transform="translate(40,580)">
+    <rect x="0" y="0" width="900" height="56" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+    <text x="16" y="22" font-size="12" font-weight="700" fill="#374151">Legend</text>
+
+    <rect x="16" y="32" width="16" height="12" rx="3" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+    <text x="40" y="42" font-size="11.5" fill="#374151">System A canonical shape (ParsedStyles)</text>
+
+    <rect x="300" y="32" width="16" height="12" rx="3" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+    <text x="324" y="42" font-size="11.5" fill="#374151">System B canonical shapes (Read/Write)</text>
+
+    <rect x="600" y="32" width="16" height="12" rx="3" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="624" y="42" font-size="11.5" fill="#374151">duplicated converter — debt (red)</text>
+
+    <circle cx="824" cy="38" r="7" fill="#1f2937"/>
+    <text x="824" y="42" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="836" y="42" font-size="11.5" fill="#374151">funnel</text>
+  </g>
+</svg>

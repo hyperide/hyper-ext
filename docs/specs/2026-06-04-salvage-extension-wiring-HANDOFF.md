@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # HANDOFF — wiring the SaaS-only salvage features into the VS Code extension
 
 **For a fresh session.** Consolidates everything learned about #258 (NudgeHUD), #270

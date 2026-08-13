@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # Feature F — AST Drag Reorder/Swap — Rebuild Spec
 
 **Date:** 2026-06-02

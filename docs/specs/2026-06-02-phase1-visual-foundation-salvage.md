@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # Phase 1 Visual Foundation — Salvage Analysis
 
 **Date:** 2026-06-02  

@@ -1,3 +1,9 @@
+> **Companion to the master styles spec** (./2026-06-12-styles-system-master-spec.md). Still authoritative for the ColorCombobox component decomposition (HYP-349); cross-reference Part 12.5.
+>
+> **Consolidation update (HYP-722, D30 follow-up):** the component-level interaction test for the
+> decomposed ColorCombobox is still **a single test** — the coverage gap D30 tracks. Treat broadening
+> that interaction coverage as the open follow-up; see master §12.5.
+
 # HYP-349: Decompose ColorCombobox
 
 ## Problem

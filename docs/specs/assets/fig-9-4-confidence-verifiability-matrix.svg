@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 720" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- ===================================================================
+       Fig 9.4 — Confidence × Verifiability disposition matrix
+       3 rows (confidence: exact / probable / none)
+       x 4 cols (verdict: landed / not-landed / ambiguous / unverifiable)
+       Cells match the §9.4 decide() pseudocode EXACTLY (no-write / commit /
+       offer-b2 / rollback / report-keep / report-demote).
+       =================================================================== -->
+  <defs>
+    <style>
+      .title   { font-size: 24px; font-weight: 700; fill: #1f2933; }
+      .subtitle{ font-size: 13px; fill: #616e7c; }
+      .axislbl { font-size: 13px; font-weight: 700; fill: #3e4c59; letter-spacing: .04em; }
+      .colhead { font-size: 14px; font-weight: 700; fill: #1f2933; }
+      .colsub  { font-size: 11px; fill: #7b8794; }
+      .rowhead { font-size: 15px; font-weight: 700; fill: #1f2933; }
+      .rowsub  { font-size: 10.5px; fill: #7b8794; }
+      .disp    { font-size: 15px; font-weight: 700; }
+      .dispnote{ font-size: 10.5px; fill: #52606d; }
+      .legtxt  { font-size: 11px; fill: #3e4c59; }
+      .legttl  { font-size: 12px; font-weight: 700; fill: #1f2933; }
+    </style>
+    <filter id="cellshadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#1f2933" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="720" fill="#ffffff"/>
+
+  <text x="48" y="46" class="title">Fig 9.4 — Confidence × Verifiability disposition matrix</text>
+  <text x="48" y="68" class="subtitle">Keep-or-rollback as a function of pre-write CONFIDENCE (rows) × B1 VERDICT (cols). Cells match the §9.4 decide() pseudocode exactly.</text>
+
+  <text x="620" y="108" text-anchor="middle" class="axislbl">VERIFIABILITY (B1 VERDICT)  →</text>
+
+  <text x="327" y="134" text-anchor="middle" class="colhead">landed</text>
+  <text x="327" y="150" text-anchor="middle" class="colsub">computed == intended, owner-proven</text>
+  <text x="522" y="134" text-anchor="middle" class="colhead">not-landed</text>
+  <text x="522" y="150" text-anchor="middle" class="colsub">real settle edge, value &#8776; before</text>
+  <text x="717" y="134" text-anchor="middle" class="colhead">ambiguous</text>
+  <text x="717" y="150" text-anchor="middle" class="colsub">present but transformed / clamped</text>
+  <text x="912" y="134" text-anchor="middle" class="colhead">unverifiable</text>
+  <text x="912" y="150" text-anchor="middle" class="colsub">could not read post-write at all</text>
+
+  <text x="36" y="378" text-anchor="middle" class="axislbl" transform="rotate(-90 36 378)">CONFIDENCE (pre-write)  ↓</text>
+
+  <text x="62" y="232" class="rowhead">exact</text>
+  <text x="62" y="250" class="rowsub">recognized owner /</text>
+  <text x="62" y="263" class="rowsub">probe-positive</text>
+  <text x="62" y="382" class="rowhead">probable</text>
+  <text x="62" y="400" class="rowsub">heuristic forward,</text>
+  <text x="62" y="413" class="rowsub">admitted iff B1 verifies</text>
+  <text x="62" y="532" class="rowhead">none</text>
+  <text x="62" y="550" class="rowsub">no writable</text>
+  <text x="62" y="563" class="rowsub">target</text>
+
+  <!-- ===== ROW 1 : exact ===== -->
+  <!-- exact × landed = commit -->
+  <g filter="url(#cellshadow)"><rect x="232" y="165" width="190" height="150" rx="10" fill="#e6f4ea" stroke="#2f855a" stroke-width="2"/></g>
+  <text x="327" y="232" text-anchor="middle" class="disp" fill="#2f855a">commit</text>
+  <text x="327" y="258" text-anchor="middle" class="dispnote">verified-landed —</text>
+  <text x="327" y="273" text-anchor="middle" class="dispnote">keep the change</text>
+
+  <!-- exact × not-landed = B2-offer (hold; rollback on decline/TTL) -->
+  <g filter="url(#cellshadow)"><rect x="427" y="165" width="190" height="150" rx="10" fill="#fdf3e0" stroke="#b7791f" stroke-width="2"/></g>
+  <text x="522" y="232" text-anchor="middle" class="disp" fill="#b7791f">B2-offer</text>
+  <text x="522" y="252" text-anchor="middle" class="dispnote">HOLD pending under writeId;</text>
+  <text x="522" y="267" text-anchor="middle" class="dispnote">offer repair, else ROLLBACK</text>
+  <text x="522" y="282" text-anchor="middle" class="dispnote">(OD-11)</text>
+
+  <!-- exact × ambiguous = report-keep (value-transformed) -->
+  <g filter="url(#cellshadow)"><rect x="622" y="165" width="190" height="150" rx="10" fill="#e8f1fb" stroke="#2b6cb0" stroke-width="2"/></g>
+  <text x="717" y="232" text-anchor="middle" class="disp" fill="#2b6cb0">report-keep</text>
+  <text x="717" y="258" text-anchor="middle" class="dispnote">value-transformed —</text>
+  <text x="717" y="273" text-anchor="middle" class="dispnote">keep, surface report</text>
+
+  <!-- exact × unverifiable = report-keep -->
+  <g filter="url(#cellshadow)"><rect x="817" y="165" width="190" height="150" rx="10" fill="#e8f1fb" stroke="#2b6cb0" stroke-width="2"/></g>
+  <text x="912" y="232" text-anchor="middle" class="disp" fill="#2b6cb0">report-keep</text>
+  <text x="912" y="252" text-anchor="middle" class="dispnote">trusted pre-write —</text>
+  <text x="912" y="267" text-anchor="middle" class="dispnote">keep + surfaced report</text>
+  <text x="912" y="282" text-anchor="middle" class="dispnote">(only unverifiable that survives)</text>
+
+  <!-- ===== ROW 2 : probable ===== -->
+  <!-- probable × landed = commit -->
+  <g filter="url(#cellshadow)"><rect x="232" y="315" width="190" height="150" rx="10" fill="#e6f4ea" stroke="#2f855a" stroke-width="2"/></g>
+  <text x="327" y="382" text-anchor="middle" class="disp" fill="#2f855a">commit</text>
+  <text x="327" y="408" text-anchor="middle" class="dispnote">verified-landed —</text>
+  <text x="327" y="423" text-anchor="middle" class="dispnote">keep the change</text>
+
+  <!-- probable × not-landed = rollback -->
+  <g filter="url(#cellshadow)"><rect x="427" y="315" width="190" height="150" rx="10" fill="#fdecec" stroke="#c53030" stroke-width="2.5"/></g>
+  <text x="522" y="382" text-anchor="middle" class="disp" fill="#c53030">rollback</text>
+  <text x="522" y="408" text-anchor="middle" class="dispnote">probable, didn't land —</text>
+  <text x="522" y="423" text-anchor="middle" class="dispnote">revert our hunk</text>
+
+  <!-- probable × ambiguous = report-demote -->
+  <g filter="url(#cellshadow)"><rect x="622" y="315" width="190" height="150" rx="10" fill="#eef2f7" stroke="#5a6b82" stroke-width="2"/></g>
+  <text x="717" y="382" text-anchor="middle" class="disp" fill="#5a6b82">report-demote</text>
+  <text x="717" y="408" text-anchor="middle" class="dispnote">landed below preference —</text>
+  <text x="717" y="423" text-anchor="middle" class="dispnote">downgrade badge (8.4)</text>
+
+  <!-- probable × unverifiable = rollback -->
+  <g filter="url(#cellshadow)"><rect x="817" y="315" width="190" height="150" rx="10" fill="#fdecec" stroke="#c53030" stroke-width="2.5"/></g>
+  <text x="912" y="382" text-anchor="middle" class="disp" fill="#c53030">rollback</text>
+  <text x="912" y="402" text-anchor="middle" class="dispnote">precondition for "probable"</text>
+  <text x="912" y="417" text-anchor="middle" class="dispnote">unmet — ROLLBACK;</text>
+  <text x="912" y="432" text-anchor="middle" class="dispnote">NEVER silently keep</text>
+
+  <!-- ===== ROW 3 : none — ALL FOUR = no-write ===== -->
+  <g filter="url(#cellshadow)"><rect x="232" y="465" width="190" height="150" rx="10" fill="#f4f1ee" stroke="#8a7c6b" stroke-width="2" stroke-dasharray="7 4"/></g>
+  <text x="327" y="528" text-anchor="middle" class="disp" fill="#7a6a55">no-write</text>
+  <text x="327" y="552" text-anchor="middle" class="dispnote">NO_WRITABLE_TARGET</text>
+  <text x="327" y="567" text-anchor="middle" class="dispnote">early-return, nothing written</text>
+
+  <g filter="url(#cellshadow)"><rect x="427" y="465" width="190" height="150" rx="10" fill="#f4f1ee" stroke="#8a7c6b" stroke-width="2" stroke-dasharray="7 4"/></g>
+  <text x="522" y="528" text-anchor="middle" class="disp" fill="#7a6a55">no-write</text>
+  <text x="522" y="552" text-anchor="middle" class="dispnote">NO_WRITABLE_TARGET</text>
+  <text x="522" y="567" text-anchor="middle" class="dispnote">the load-bearing ?? false root</text>
+
+  <g filter="url(#cellshadow)"><rect x="622" y="465" width="190" height="150" rx="10" fill="#f4f1ee" stroke="#8a7c6b" stroke-width="2" stroke-dasharray="7 4"/></g>
+  <text x="717" y="528" text-anchor="middle" class="disp" fill="#7a6a55">no-write</text>
+  <text x="717" y="552" text-anchor="middle" class="dispnote">NO_WRITABLE_TARGET</text>
+  <text x="717" y="567" text-anchor="middle" class="dispnote">no candidate to write to</text>
+
+  <g filter="url(#cellshadow)"><rect x="817" y="465" width="190" height="150" rx="10" fill="#f4f1ee" stroke="#8a7c6b" stroke-width="2" stroke-dasharray="7 4"/></g>
+  <text x="912" y="528" text-anchor="middle" class="disp" fill="#7a6a55">no-write</text>
+  <text x="912" y="552" text-anchor="middle" class="dispnote">NO_WRITABLE_TARGET</text>
+  <text x="912" y="567" text-anchor="middle" class="dispnote">the whole row returns early</text>
+
+  <!-- ===== LEGEND ===== -->
+  <line x1="48" y1="640" x2="1032" y2="640" stroke="#e4e7eb" stroke-width="1"/>
+  <text x="48" y="664" class="legttl">Disposition key</text>
+
+  <rect x="142" y="653" width="16" height="16" rx="3" fill="#e6f4ea" stroke="#2f855a" stroke-width="2"/>
+  <text x="164" y="665" class="legtxt"><tspan font-weight="700" fill="#2f855a">commit</tspan> keep</text>
+
+  <rect x="252" y="653" width="16" height="16" rx="3" fill="#fdecec" stroke="#c53030" stroke-width="2.5"/>
+  <text x="274" y="665" class="legtxt"><tspan font-weight="700" fill="#c53030">rollback</tspan> revert hunk</text>
+
+  <rect x="398" y="653" width="16" height="16" rx="3" fill="#e8f1fb" stroke="#2b6cb0" stroke-width="2"/>
+  <text x="420" y="665" class="legtxt"><tspan font-weight="700" fill="#2b6cb0">report-keep</tspan> keep + report</text>
+
+  <rect x="572" y="653" width="16" height="16" rx="3" fill="#eef2f7" stroke="#5a6b82" stroke-width="2"/>
+  <text x="594" y="665" class="legtxt"><tspan font-weight="700" fill="#5a6b82">report-demote</tspan> badge</text>
+
+  <rect x="722" y="653" width="16" height="16" rx="3" fill="#fdf3e0" stroke="#b7791f" stroke-width="2"/>
+  <text x="744" y="665" class="legtxt" font-size="10.5"><tspan font-weight="700" fill="#b7791f">B2-offer</tspan> hold/roll</text>
+
+  <rect x="852" y="653" width="16" height="16" rx="3" fill="#f4f1ee" stroke="#8a7c6b" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="874" y="665" class="legtxt" font-size="10"><tspan font-weight="700" fill="#7a6a55">no-write</tspan> = NO_WRITABLE_TARGET</text>
+
+  <rect x="1" y="1" width="1078" height="718" fill="none" stroke="#cbd2d9" stroke-width="1"/>
+</svg>

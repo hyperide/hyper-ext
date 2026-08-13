@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 3.3, 4.2). Retained for history; do not follow for new work.
+
 # Phase 2 — All CSS Frameworks: Design Specification
 
 **Date:** 2026-03-11

@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # Salvage Adapter-First Rework — C / D / G / E
 
 **Date:** 2026-06-02

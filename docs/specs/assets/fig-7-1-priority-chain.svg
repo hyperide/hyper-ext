@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 1120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#5b6675"/>
+    </marker>
+    <marker id="arrowBranch" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8a94a6"/>
+    </marker>
+    <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f4d2e"/>
+      <stop offset="1" stop-color="#0a3a22"/>
+    </linearGradient>
+    <linearGradient id="gateGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a2330"/>
+      <stop offset="1" stop-color="#47202b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="780" height="1120" fill="#f7f8fa"/>
+
+  <!-- title -->
+  <text x="40" y="46" font-size="22" font-weight="700" fill="#1b2330">Figure 7.1 — The Write-Target Priority Chain</text>
+  <text x="40" y="70" font-size="13" fill="#5b6675">WHERE to write (Part 7.1). First WRITABLE target wins — descending preference, not read-precedence.</text>
+  <text x="40" y="88" font-size="13" fill="#5b6675">Resolved independently per property and per state/breakpoint; each rung is one VTSWR transaction candidate.</text>
+
+  <!-- legend — own row, right-anchored on the title band so it never overlaps the y=88 subtitle -->
+  <g font-size="11.5" fill="#3a4452">
+    <rect x="510" y="36" width="13" height="13" rx="2" fill="#7a2e3c"/>
+    <text x="529" y="47">pre-write gate</text>
+    <rect x="640" y="36" width="13" height="13" rx="2" fill="#0f4d2e"/>
+    <text x="659" y="47">verified floor</text>
+  </g>
+
+  <!-- column anchors: main step box x=160 w=320 ; branch box x=520 w=220 -->
+
+  <!-- STEP 1 : stale gate (pre-write) -->
+  <g>
+    <rect x="160" y="110" width="320" height="62" rx="10" fill="url(#gateGrad)" stroke="#7a2e3c" stroke-width="1.5"/>
+    <circle cx="186" cy="141" r="13" fill="#7a2e3c"/>
+    <text x="186" y="145" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="210" y="136" font-size="15" font-weight="700" fill="#ffffff">Stale gate (pre-write stop)</text>
+    <text x="210" y="156" font-size="12" fill="#f0d6dc">DOM↔source unsafe → re-resolve once, else banner; never fall through</text>
+  </g>
+  <line x1="480" y1="141" x2="518" y2="141" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="118" width="220" height="46" rx="8" fill="#f3e7ea" stroke="#d9b9c1" stroke-width="1"/>
+    <text x="532" y="138" font-size="11.5" font-weight="600" fill="#5a2330">per (element, property)</text>
+    <text x="532" y="154" font-size="11" fill="#8a5d68">identity must be trusted first</text>
+  </g>
+
+  <line x1="320" y1="172" x2="320" y2="204" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 2 : trusted incumbent owner -->
+  <g>
+    <rect x="160" y="206" width="320" height="62" rx="10" fill="#ffffff" stroke="#cfd5de" stroke-width="1.5"/>
+    <circle cx="186" cy="237" r="13" fill="#3a4452"/>
+    <text x="186" y="241" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="210" y="232" font-size="15" font-weight="700" fill="#1b2330">Incumbent owner (gated edit-in-place)</text>
+    <text x="210" y="252" font-size="12" fill="#5b6675">edit local+mutable owner in place; broad/global → confirm</text>
+  </g>
+  <line x1="480" y1="237" x2="518" y2="237" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="214" width="220" height="46" rx="8" fill="#eef1f5" stroke="#d4dae3" stroke-width="1"/>
+    <text x="532" y="234" font-size="11.5" font-weight="600" fill="#2a3340">per-property</text>
+    <text x="532" y="250" font-size="11" fill="#5b6675">resolved independently per prop</text>
+  </g>
+
+  <line x1="320" y1="268" x2="320" y2="300" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 3 : design-system token-snap (intent transform, dashed = not a write target) -->
+  <g>
+    <rect x="160" y="302" width="320" height="62" rx="10" fill="#ffffff" stroke="#9aa3b1" stroke-width="1.5" stroke-dasharray="6 3"/>
+    <circle cx="186" cy="333" r="13" fill="#ffffff" stroke="#9aa3b1" stroke-width="1.5" stroke-dasharray="3 2"/>
+    <text x="186" y="337" font-size="13" font-weight="700" fill="#5b6675" text-anchor="middle">3</text>
+    <text x="210" y="328" font-size="15" font-weight="700" fill="#2a3340">Token-snap (intent transform)</text>
+    <text x="210" y="348" font-size="12" fill="#5b6675">17→16 (spacing-4) ghost chip — a VALUE transform, not a target</text>
+  </g>
+  <line x1="480" y1="333" x2="518" y2="333" stroke="#9aa3b1" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="310" width="220" height="46" rx="8" fill="#ffffff" stroke="#cdd3dc" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="532" y="330" font-size="11.5" font-weight="600" fill="#5b6675">pre-write, dismissible</text>
+    <text x="532" y="346" font-size="11" fill="#8a94a6">applies within the chosen target</text>
+  </g>
+
+  <line x1="320" y1="364" x2="320" y2="396" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 4 : design-system prop / variant (L0) -->
+  <g>
+    <rect x="160" y="398" width="320" height="62" rx="10" fill="#ffffff" stroke="#cfd5de" stroke-width="1.5"/>
+    <circle cx="186" cy="429" r="13" fill="#3a4452"/>
+    <text x="186" y="433" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+    <text x="210" y="424" font-size="15" font-weight="700" fill="#1b2330">Design-system prop / variant (L0)</text>
+    <text x="210" y="444" font-size="12" fill="#5b6675">&lt;Button textColor="red"&gt; / buttonVariants.primary.background</text>
+  </g>
+  <line x1="480" y1="429" x2="518" y2="429" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="406" width="220" height="46" rx="8" fill="#eef1f5" stroke="#d4dae3" stroke-width="1"/>
+    <text x="532" y="426" font-size="11.5" font-weight="600" fill="#2a3340">per-property</text>
+    <text x="532" y="442" font-size="11" fill="#5b6675">if the component exposes it</text>
+  </g>
+
+  <line x1="320" y1="460" x2="320" y2="492" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 5 : Tailwind utility -->
+  <g>
+    <rect x="160" y="494" width="320" height="62" rx="10" fill="#ffffff" stroke="#cfd5de" stroke-width="1.5"/>
+    <circle cx="186" cy="525" r="13" fill="#3a4452"/>
+    <text x="186" y="529" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+    <text x="210" y="520" font-size="15" font-weight="700" fill="#1b2330">Tailwind utility (incl. arbitrary)</text>
+    <text x="210" y="540" font-size="12" fill="#5b6675">append/replace class; p-[13.5px] when no token matches</text>
+  </g>
+  <line x1="480" y1="525" x2="518" y2="525" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="502" width="220" height="46" rx="8" fill="#eef1f5" stroke="#d4dae3" stroke-width="1"/>
+    <text x="532" y="522" font-size="11.5" font-weight="600" fill="#2a3340">per-property</text>
+    <text x="532" y="538" font-size="11" fill="#5b6675">format-preserving (§3.8)</text>
+  </g>
+
+  <line x1="320" y1="556" x2="320" y2="588" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 6 : CSS module -->
+  <g>
+    <rect x="160" y="590" width="320" height="62" rx="10" fill="#ffffff" stroke="#cfd5de" stroke-width="1.5"/>
+    <circle cx="186" cy="621" r="13" fill="#3a4452"/>
+    <text x="186" y="625" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
+    <text x="210" y="616" font-size="15" font-weight="700" fill="#1b2330">CSS module</text>
+    <text x="210" y="636" font-size="12" fill="#5b6675">write/amend the rule in the element's *.module.css owner</text>
+  </g>
+  <line x1="480" y1="621" x2="518" y2="621" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="598" width="220" height="46" rx="8" fill="#eef1f5" stroke="#d4dae3" stroke-width="1"/>
+    <text x="532" y="618" font-size="11.5" font-weight="600" fill="#2a3340">per-property · per-state</text>
+    <text x="532" y="634" font-size="11" fill="#5b6675">selector can carry :hover/@media</text>
+  </g>
+
+  <line x1="320" y1="652" x2="320" y2="684" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- STEP 7 : scoped / plain CSS -->
+  <g>
+    <rect x="160" y="686" width="320" height="62" rx="10" fill="#ffffff" stroke="#cfd5de" stroke-width="1.5"/>
+    <circle cx="186" cy="717" r="13" fill="#3a4452"/>
+    <text x="186" y="721" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">7</text>
+    <text x="210" y="712" font-size="15" font-weight="700" fill="#1b2330">Scoped / plain CSS</text>
+    <text x="210" y="732" font-size="12" fill="#5b6675">lowest stylesheet-capable target the project offers</text>
+  </g>
+  <line x1="480" y1="717" x2="518" y2="717" stroke="#8a94a6" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrowBranch)"/>
+  <g>
+    <rect x="520" y="694" width="220" height="46" rx="8" fill="#eef1f5" stroke="#d4dae3" stroke-width="1"/>
+    <text x="532" y="714" font-size="11.5" font-weight="600" fill="#2a3340">per-property · per-state</text>
+    <text x="532" y="730" font-size="11" fill="#5b6675">non-base states land here, not inline</text>
+  </g>
+
+  <line x1="320" y1="748" x2="320" y2="784" stroke="#5b6675" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ====================== STEP 8 : VERIFIED INLINE FLOOR ====================== -->
+  <g>
+    <rect x="120" y="786" width="540" height="86" rx="12" fill="url(#floorGrad)" stroke="#0a3a22" stroke-width="1.5"/>
+    <circle cx="150" cy="812" r="13" fill="#0a3a22" stroke="#1d6b45" stroke-width="1.5"/>
+    <text x="150" y="816" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">8</text>
+    <line x1="120" y1="872" x2="660" y2="872" stroke="#0a2c19" stroke-width="3"/>
+    <g stroke="#1d6b45" stroke-width="2">
+      <line x1="140" y1="872" x2="124" y2="886"/>
+      <line x1="180" y1="872" x2="164" y2="886"/>
+      <line x1="220" y1="872" x2="204" y2="886"/>
+      <line x1="260" y1="872" x2="244" y2="886"/>
+      <line x1="300" y1="872" x2="284" y2="886"/>
+      <line x1="340" y1="872" x2="324" y2="886"/>
+      <line x1="380" y1="872" x2="364" y2="886"/>
+      <line x1="420" y1="872" x2="404" y2="886"/>
+      <line x1="460" y1="872" x2="444" y2="886"/>
+      <line x1="500" y1="872" x2="484" y2="886"/>
+      <line x1="540" y1="872" x2="524" y2="886"/>
+      <line x1="580" y1="872" x2="564" y2="886"/>
+      <line x1="620" y1="872" x2="604" y2="886"/>
+    </g>
+    <text x="390" y="818" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Verified inline floor — last resort</text>
+    <text x="390" y="840" font-size="12.5" fill="#cfe9da" text-anchor="middle">base-state CSS only · taken ONLY with landing-verification + rollback (Part 8.1)</text>
+    <text x="390" y="858" font-size="12.5" fill="#cfe9da" text-anchor="middle">:hover / @media / pseudo-elements bottom out at step 6/7 or banner — NOT here</text>
+  </g>
+
+  <!-- caption / direction key -->
+  <g font-size="11.5" fill="#5b6675">
+    <text x="40" y="920">Read direction: top → bottom. The planner takes the FIRST writable target a candidate produces; a "miss → next</text>
+    <text x="40" y="938">candidate" is a pre-authorized plan step. Inline appears ONCE, at the bottom, as the verified floor (no</text>
+    <text x="40" y="956">"highest precedence" framing — this is a write-target chain, not a read cascade).</text>
+  </g>
+
+  <!-- preference rail on the left -->
+  <g>
+    <line x1="92" y1="110" x2="92" y2="872" stroke="#c2c9d3" stroke-width="2"/>
+    <polygon points="92,110 88,122 96,122" fill="#c2c9d3"/>
+    <text x="78" y="491" font-size="12" font-weight="600" fill="#7b8492" text-anchor="middle" transform="rotate(-90 78 491)">descending write preference</text>
+  </g>
+</svg>

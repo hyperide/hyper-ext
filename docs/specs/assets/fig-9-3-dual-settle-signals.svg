@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3a3f47"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f7d4f"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="980" height="620" fill="#fbfbfc"/>
+
+  <!-- title -->
+  <text x="40" y="42" font-size="22" font-weight="700" fill="#1f2329">Fig 9.3 — Dual settle signals</text>
+  <text x="40" y="66" font-size="13.5" fill="#5b6068">Two edit kinds settle on different signals. A CSS-file edit must NOT wait for a TSX render echo — none ever arrives.</text>
+
+  <!-- ===================== LANE 1: className / inline edit ===================== -->
+  <g>
+    <rect x="40" y="92" width="900" height="210" rx="10" fill="#ffffff" stroke="#dfe2e7" stroke-width="1.4"/>
+    <text x="64" y="124" font-size="16" font-weight="700" fill="#1f2329">className / inline edit</text>
+    <text x="64" y="144" font-size="12.5" fill="#6a7079">settles on <tspan font-weight="600" fill="#2f7d4f">writeId render-echo</tspan> — the component re-renders and reports its own writeId</text>
+
+    <!-- WRITE node -->
+    <g>
+      <rect x="116" y="196" width="150" height="64" rx="7" fill="#eef2f8" stroke="#9bb0cf" stroke-width="1.4"/>
+      <text x="191" y="218" text-anchor="middle" font-size="13.5" font-weight="700" fill="#22324a">write</text>
+      <text x="191" y="236" text-anchor="middle" font-size="11.5" fill="#3c4a5e">patch className / style</text>
+      <text x="191" y="252" text-anchor="middle" font-size="11" fill="#6a7079">tag with writeId = W</text>
+    </g>
+
+    <!-- TSX render-echo node -->
+    <g>
+      <rect x="380" y="196" width="180" height="64" rx="7" fill="#eafaf0" stroke="#2f7d4f" stroke-width="1.6"/>
+      <text x="470" y="218" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1d5e38">TSX render-echo</text>
+      <text x="470" y="236" text-anchor="middle" font-size="11.5" fill="#256b41">component re-renders,</text>
+      <text x="470" y="252" text-anchor="middle" font-size="11.5" fill="#256b41">emits seen writeId = W</text>
+    </g>
+
+    <!-- READ node -->
+    <g>
+      <rect x="690" y="196" width="170" height="64" rx="7" fill="#f2f3f5" stroke="#8a909a" stroke-width="1.4"/>
+      <text x="775" y="218" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2b3038">read</text>
+      <text x="775" y="236" text-anchor="middle" font-size="11.5" fill="#4a505a">re-read computed style</text>
+      <text x="775" y="252" text-anchor="middle" font-size="11" fill="#6a7079">settled at echo W</text>
+    </g>
+
+    <!-- arrows lane 1 (box to box) -->
+    <line x1="266" y1="228" x2="378" y2="228" stroke="#3a3f47" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="560" y1="228" x2="688" y2="228" stroke="#2f7d4f" stroke-width="2.2" marker-end="url(#arrowGreen)"/>
+
+    <!-- settle gate label -->
+    <text x="623" y="182" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2f7d4f">wait for echo, then read</text>
+    <path d="M560 196 C 600 162, 646 162, 688 196" fill="none" stroke="#2f7d4f" stroke-width="1.1" stroke-dasharray="3 3"/>
+
+    <!-- timeline axis (below the nodes) -->
+    <line x1="100" y1="284" x2="880" y2="284" stroke="#c4c9d0" stroke-width="2"/>
+    <polygon points="880,284 872,280 872,288" fill="#c4c9d0"/>
+    <text x="884" y="288" font-size="11" fill="#9aa0a8">t</text>
+    <!-- node ticks onto the axis -->
+    <line x1="191" y1="260" x2="191" y2="284" stroke="#22324a" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="191" cy="284" r="4" fill="#22324a"/>
+    <line x1="470" y1="260" x2="470" y2="284" stroke="#2f7d4f" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="470" cy="284" r="4" fill="#2f7d4f"/>
+    <line x1="775" y1="260" x2="775" y2="284" stroke="#2b3038" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="775" cy="284" r="4" fill="#2b3038"/>
+  </g>
+
+  <!-- ===================== LANE 2: CSS-file edit ===================== -->
+  <g>
+    <rect x="40" y="330" width="900" height="240" rx="10" fill="#ffffff" stroke="#dfe2e7" stroke-width="1.4"/>
+    <text x="64" y="362" font-size="16" font-weight="700" fill="#1f2329">CSS-file edit</text>
+    <text x="64" y="382" font-size="12.5" fill="#6a7079">settles on <tspan font-weight="600" fill="#2f7d4f">stylesheet-epoch bump</tspan> — the file reloads; React never re-renders the node</text>
+
+    <!-- WRITE node -->
+    <g>
+      <rect x="116" y="430" width="150" height="64" rx="7" fill="#eef2f8" stroke="#9bb0cf" stroke-width="1.4"/>
+      <text x="191" y="452" text-anchor="middle" font-size="13.5" font-weight="700" fill="#22324a">write</text>
+      <text x="191" y="470" text-anchor="middle" font-size="11.5" fill="#3c4a5e">edit .css rule</text>
+      <text x="191" y="486" text-anchor="middle" font-size="11" fill="#6a7079">no writeId on a node</text>
+    </g>
+
+    <!-- stylesheet-epoch bump node -->
+    <g>
+      <rect x="380" y="430" width="180" height="64" rx="7" fill="#eafaf0" stroke="#2f7d4f" stroke-width="1.6"/>
+      <text x="470" y="452" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1d5e38">stylesheet-epoch bump</text>
+      <text x="470" y="470" text-anchor="middle" font-size="11.5" fill="#256b41">HMR reloads sheet,</text>
+      <text x="470" y="486" text-anchor="middle" font-size="11.5" fill="#256b41">epoch E → E+1</text>
+    </g>
+
+    <!-- READ node -->
+    <g>
+      <rect x="690" y="430" width="170" height="64" rx="7" fill="#f2f3f5" stroke="#8a909a" stroke-width="1.4"/>
+      <text x="775" y="452" text-anchor="middle" font-size="13.5" font-weight="700" fill="#2b3038">read</text>
+      <text x="775" y="470" text-anchor="middle" font-size="11.5" fill="#4a505a">re-read computed style</text>
+      <text x="775" y="486" text-anchor="middle" font-size="11" fill="#6a7079">settled at epoch E+1</text>
+    </g>
+
+    <!-- arrows lane 2 (box to box) -->
+    <line x1="266" y1="462" x2="378" y2="462" stroke="#3a3f47" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="560" y1="462" x2="688" y2="462" stroke="#2f7d4f" stroke-width="2.2" marker-end="url(#arrowGreen)"/>
+
+    <!-- settle gate label -->
+    <text x="623" y="416" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2f7d4f">wait for epoch bump, then read</text>
+    <path d="M560 430 C 600 396, 646 396, 688 430" fill="none" stroke="#2f7d4f" stroke-width="1.1" stroke-dasharray="3 3"/>
+
+    <!-- timeline axis (below the nodes) -->
+    <line x1="100" y1="514" x2="880" y2="514" stroke="#c4c9d0" stroke-width="2"/>
+    <polygon points="880,514 872,510 872,518" fill="#c4c9d0"/>
+    <text x="884" y="518" font-size="11" fill="#9aa0a8">t</text>
+    <line x1="191" y1="494" x2="191" y2="514" stroke="#22324a" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="191" cy="514" r="4" fill="#22324a"/>
+    <line x1="470" y1="494" x2="470" y2="514" stroke="#2f7d4f" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="470" cy="514" r="4" fill="#2f7d4f"/>
+    <line x1="775" y1="494" x2="775" y2="514" stroke="#2b3038" stroke-width="1" stroke-dasharray="2 2"/>
+    <circle cx="775" cy="514" r="4" fill="#2b3038"/>
+
+    <!-- THE DEBT / WRONG PATH: waiting for a render echo -->
+    <g>
+      <rect x="610" y="528" width="250" height="34" rx="7" fill="#fdecea" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <text x="735" y="544" text-anchor="middle" font-size="11.5" font-weight="700" fill="#a02c20">TSX render-echo never fires</text>
+      <text x="735" y="557" text-anchor="middle" font-size="10.5" fill="#a02c20">for a CSS edit — if read waits here it hangs</text>
+    </g>
+    <!-- crossed wrong-wait arrow from read box down to the debt node -->
+    <path d="M775 494 C 760 516, 745 522, 735 526" fill="none" stroke="#c0392b" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrowRed)"/>
+    <!-- big red cross over the wrong-wait node -->
+    <line x1="618" y1="532" x2="852" y2="558" stroke="#c0392b" stroke-width="1.2" opacity="0.5"/>
+    <line x1="852" y1="532" x2="618" y2="558" stroke="#c0392b" stroke-width="1.2" opacity="0.5"/>
+  </g>
+
+  <!-- legend -->
+  <g transform="translate(40,588)">
+    <rect x="0" y="-12" width="14" height="14" rx="3" fill="#eafaf0" stroke="#2f7d4f" stroke-width="1.4"/>
+    <text x="22" y="0" font-size="11.5" fill="#454b54">settle signal (implemented)</text>
+
+    <rect x="230" y="-12" width="14" height="14" rx="3" fill="#fdecea" stroke="#c0392b" stroke-width="1.4" stroke-dasharray="4 2"/>
+    <text x="252" y="0" font-size="11.5" fill="#454b54">debt / wrong wait — never arrives</text>
+
+    <rect x="520" y="-12" width="14" height="14" rx="3" fill="#f2f3f5" stroke="#8a909a" stroke-width="1.4"/>
+    <text x="542" y="0" font-size="11.5" fill="#454b54">read step</text>
+
+    <rect x="630" y="-12" width="14" height="14" rx="3" fill="#eef2f8" stroke="#9bb0cf" stroke-width="1.4"/>
+    <text x="652" y="0" font-size="11.5" fill="#454b54">write step</text>
+  </g>
+</svg>

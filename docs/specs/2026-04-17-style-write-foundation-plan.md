@@ -1,3 +1,10 @@
+> **Companion to the master styles spec** (./2026-06-12-styles-system-master-spec.md). Still authoritative for the System-B write-foundation build checklist (the HOW); cross-reference Part 7–9.
+>
+> **Consolidation update (HYP-722):** the design CONTEXT moved to master §7–9; this remains the build
+> checklist. Status as of consolidation: the executor / planner / writers SHIPPED (AS-IS §3 — WORKS);
+> the verified-pipeline tasks (B0 transaction, B1 landing-verify) are OVERTAKEN by master §9 and are
+> the authoritative source for that layer — follow §9, not the pre-verify tasks here.
+
 <!-- markdownlint-disable MD013 -->
 
 # Style Write Foundation — Implementation Plan

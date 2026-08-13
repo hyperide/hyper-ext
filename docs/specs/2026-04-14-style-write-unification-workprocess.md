@@ -1,3 +1,5 @@
+> **Companion to the master styles spec** (./2026-06-12-styles-system-master-spec.md) — a FROZEN workprocess/archive log with no doctrinal authority. The design it journals is folded into the master; cross-reference Part 5.3, 7.
+
 # Style Write Unification Workprocess
 
 ## Archives

@@ -1,3 +1,10 @@
+> **Companion to the master styles spec** (./2026-06-12-styles-system-master-spec.md). Still authoritative for the Phase 3–4 adapter implementation plan; cross-reference Part 3.3.
+>
+> **Consolidation update (HYP-722, D5 status-mark):** of the 12 typed `CssSystemId`s, four adapters
+> are BUILT — `tailwind-v4`, `css-modules`, `inline`, `tamagui` (WORKS); the other eight are PLANNED
+> (HYP-606/607/608/600). The master §3.3 owns the taxonomy + status; this plan stays the build tracker
+> for the unbuilt remainder.
+
 <!-- markdownlint-disable MD013 -->
 
 # Style Adapters Phase 3+4 — Implementation Plan

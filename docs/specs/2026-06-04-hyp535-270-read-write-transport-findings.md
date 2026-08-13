@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 3.4, 6.1). Retained for history; do not follow for new work.
+
 # #270 multi-select READ/WRITE transport — deep-study findings (pre-build gate)
 
 **Ticket:** HYP-535. **Supersedes the unverified parts of** `2026-06-04-crossrealm-webview-bridge.md` §3b.

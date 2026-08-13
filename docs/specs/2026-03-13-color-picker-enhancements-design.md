@@ -1,3 +1,12 @@
+> **Companion to the master styles spec** (./2026-06-12-styles-system-master-spec.md). Still authoritative for the color-picker UI/UX implementation detail; cross-reference Part 12.5.
+>
+> **Consolidation update (HYP-722, D16):** the `COLOR_SEARCH_DISTANCE_THRESHOLD = 80` proposed in this
+> spec is **RETIRED**. D16 is already RESOLVED on `main`: both call sites
+> (`color-search-results.tsx:14`, `use-color-search.tsx:13`) read **40**, so the canonical value is
+> **40**, not 80 — do NOT follow the 80 in this draft. See master §12.5 / D16 for the resolution, master
+> §12 for the round-trip context, and §12.5 / D30 for the thin-coverage gap (component-level color-picker
+> interaction coverage is still one test).
+
 # Color Picker Enhancements Design
 
 **Date**: 2026-03-13

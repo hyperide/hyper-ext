@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 880" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- ============ defs ============ -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowAI" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowRepair" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b45309"/>
+    </marker>
+    <marker id="arrowTransport" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0d9488"/>
+    </marker>
+    <marker id="arrowAst" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .stage      { fill:#ffffff; stroke:#16a34a; stroke-width:2; rx:8; }
+      .stageTitle { font-size:15px; font-weight:700; fill:#0f172a; }
+      .stageSub   { font-size:11.5px; fill:#475569; }
+      .stageNum   { font-size:11px; font-weight:700; fill:#16a34a; }
+      .edge       { stroke:#475569; stroke-width:2; fill:none; }
+      .edgeLbl    { font-size:11px; fill:#334155; }
+      .axisLbl    { font-size:11px; font-weight:700; fill:#64748b; letter-spacing:.5px; }
+    </style>
+  </defs>
+
+  <!-- ============ background ============ -->
+  <rect x="0" y="0" width="1360" height="880" fill="#f8fafc"/>
+
+  <!-- ============ title ============ -->
+  <text x="40" y="46" font-size="25" font-weight="800" fill="#0f172a">Unified styles pipeline — one engine, three realms</text>
+  <text x="40" y="70" font-size="13.5" fill="#475569">Fig 1.4 · HyperIDE styles master spec — selection drives one read, one planned write, one verify; server-backed SaaS, VS Code ext &amp; serverless SaaS (NodePod/OPFS) transports share a single <tspan font-family="ui-monospace,Menlo,monospace" fill="#0f172a">lib/</tspan> core.</text>
+
+  <!-- ===================================================================== -->
+  <!-- TRANSPORT COLUMNS (left) -> shared lib/ core                          -->
+  <!-- ===================================================================== -->
+  <text x="40" y="108" class="axisLbl">TRANSPORTS (three realms)</text>
+
+  <!-- Server-backed SaaS transport column -->
+  <rect x="40" y="120" width="180" height="76" rx="10" fill="#ecfeff" stroke="#0d9488" stroke-width="2"/>
+  <text x="130" y="146" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Server-backed SaaS</text>
+  <text x="130" y="164" text-anchor="middle" font-size="11" fill="#475569">browser realm · server FS</text>
+  <text x="130" y="180" text-anchor="middle" font-size="11" fill="#475569">iframe · server-side LS</text>
+
+  <!-- VS Code transport column -->
+  <rect x="40" y="212" width="180" height="76" rx="10" fill="#eef2ff" stroke="#0d9488" stroke-width="2"/>
+  <text x="130" y="238" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">VS Code ext</text>
+  <text x="130" y="256" text-anchor="middle" font-size="11" fill="#475569">no-DOM host · preview panel</text>
+  <text x="130" y="272" text-anchor="middle" font-size="11" fill="#475569">vscode-file-io · VS Code LS</text>
+
+  <!-- Serverless SaaS transport column -->
+  <rect x="40" y="304" width="180" height="76" rx="10" fill="#fef3c7" stroke="#0d9488" stroke-width="2"/>
+  <text x="130" y="330" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Serverless SaaS</text>
+  <text x="130" y="348" text-anchor="middle" font-size="11" fill="#475569">NodePod / OPFS · in-pod</text>
+  <text x="130" y="364" text-anchor="middle" font-size="11" fill="#475569">iframe · in-pod tsserver</text>
+
+  <!-- shared lib/ core slab -->
+  <rect x="290" y="120" width="120" height="260" rx="12" fill="#0f172a" stroke="#0f172a"/>
+  <text x="350" y="234" text-anchor="middle" font-size="20" font-weight="800" fill="#ffffff" font-family="ui-monospace,Menlo,monospace">lib/</text>
+  <text x="350" y="258" text-anchor="middle" font-size="11.5" fill="#cbd5e1">SHARED</text>
+  <text x="350" y="274" text-anchor="middle" font-size="11.5" fill="#cbd5e1">CORE</text>
+  <text x="350" y="298" text-anchor="middle" font-size="10.5" fill="#94a3b8">one engine,</text>
+  <text x="350" y="312" text-anchor="middle" font-size="10.5" fill="#94a3b8">three realms</text>
+
+  <!-- transport -> core arrows -->
+  <path class="edge" style="stroke:#0d9488" marker-end="url(#arrowTransport)" d="M220 158 C 255 158, 262 205, 288 222"/>
+  <path class="edge" style="stroke:#0d9488" marker-end="url(#arrowTransport)" d="M220 250 C 256 250, 262 250, 288 250"/>
+  <path class="edge" style="stroke:#0d9488" marker-end="url(#arrowTransport)" d="M220 342 C 255 342, 262 295, 288 278"/>
+  <text x="248" y="232" font-size="10.5" font-style="italic" fill="#0d9488" text-anchor="middle">same core</text>
+
+  <!-- core -> pipeline arrow -->
+  <path class="edge" stroke="#475569" marker-end="url(#arrow)" d="M410 248 C 460 248, 470 300, 510 320"/>
+
+  <!-- ===================================================================== -->
+  <!-- B0 TRANSACTION WRAPPER around the pipeline                            -->
+  <!-- ===================================================================== -->
+  <rect x="470" y="150" width="850" height="470" rx="16" fill="#ffffff" stroke="#1e293b" stroke-width="2.5" stroke-dasharray="2 0"/>
+  <rect x="470" y="150" width="216" height="30" rx="8" fill="#1e293b"/>
+  <text x="486" y="170" font-size="13.5" font-weight="800" fill="#ffffff">B0 transaction (atomic)</text>
+  <text x="700" y="171" font-size="11.5" fill="#64748b" font-style="italic">one undo step · recordBatchEdit · all-or-nothing</text>
+
+  <!-- ===================================================================== -->
+  <!-- PIPELINE STAGES inside B0                                             -->
+  <!-- 1 selection 2 read 3 inspector 4 edit / 5 planner 6 write 7 verify 8 classify  -->
+  <!-- ===================================================================== -->
+
+  <!-- Row 1 (left->right): 1 selection, 2 read, 3 inspector, 4 edit -->
+  <!-- 1 selection -->
+  <rect x="510" y="200" width="170" height="80" rx="8" class="stage"/>
+  <text x="522" y="220" class="stageNum">1</text>
+  <text x="540" y="221" class="stageTitle">selection</text>
+  <text x="522" y="240" class="stageSub">element(s) picked —</text>
+  <text x="522" y="256" class="stageSub">click or tree-select,</text>
+  <text x="522" y="272" class="stageSub">N ≥ 1 elementRefs</text>
+
+  <!-- 2 read -->
+  <rect x="710" y="200" width="180" height="80" rx="8" class="stage"/>
+  <text x="722" y="220" class="stageNum">2</text>
+  <text x="740" y="221" class="stageTitle">SelectionStyleRead</text>
+  <text x="722" y="240" class="stageSub">ONE read for N elems</text>
+  <text x="722" y="256" class="stageSub">value-merge + tab-union</text>
+  <text x="722" y="272" class="stageSub">multi-select = generalize</text>
+
+  <!-- 3 inspector -->
+  <rect x="920" y="200" width="170" height="80" rx="8" class="stage"/>
+  <text x="932" y="220" class="stageNum">3</text>
+  <text x="950" y="221" class="stageTitle">inspector</text>
+  <text x="932" y="240" class="stageSub">resolved styles shown</text>
+  <text x="932" y="256" class="stageSub">tabs · per-property</text>
+  <text x="932" y="272" class="stageSub">mixed-value markers</text>
+
+  <!-- 4 edit -->
+  <rect x="1120" y="200" width="170" height="80" rx="8" class="stage"/>
+  <text x="1132" y="220" class="stageNum">4</text>
+  <text x="1150" y="221" class="stageTitle">edit</text>
+  <text x="1132" y="240" class="stageSub">user changes a value</text>
+  <text x="1132" y="256" class="stageSub">→ intended style delta</text>
+  <text x="1132" y="272" class="stageSub">(what, not where)</text>
+
+  <!-- Row 1 arrows -->
+  <path class="edge" marker-end="url(#arrow)" d="M680 240 L 708 240"/>
+  <text x="694" y="232" class="edgeLbl" text-anchor="middle">N≥1</text>
+  <path class="edge" marker-end="url(#arrow)" d="M890 240 L 918 240"/>
+  <path class="edge" marker-end="url(#arrow)" d="M1090 240 L 1118 240"/>
+
+  <!-- edit -> planner (down + back) -->
+  <path class="edge" marker-end="url(#arrow)" d="M1205 280 L 1205 330 L 1092 330"/>
+  <text x="1150" y="320" class="edgeLbl" text-anchor="middle">delta</text>
+
+  <!-- Row 2 (right->left): 5 planner, 6 write, 7 verify, 8 classify -->
+  <!-- 5 planner (WHERE) -->
+  <rect x="920" y="350" width="170" height="92" rx="8" class="stage" stroke="#16a34a"/>
+  <text x="932" y="370" class="stageNum">5</text>
+  <text x="950" y="371" class="stageTitle">planner</text>
+  <text x="1078" y="371" font-size="11" font-weight="700" fill="#7c3aed" text-anchor="end">router</text>
+  <text x="932" y="388" class="stageSub" font-weight="700">WHERE to write</text>
+  <text x="932" y="404" class="stageSub">className vs style vs</text>
+  <text x="932" y="420" class="stageSub">token · per-elem target</text>
+  <text x="932" y="436" class="stageSub">reads DOM + AST first</text>
+
+  <!-- ===================================================================== -->
+  <!-- PLANNER FACTS-IN: planner READS the live DOM and the source AST        -->
+  <!-- before it can decide WHERE the value should be written                -->
+  <!-- ===================================================================== -->
+  <text x="1009" y="467" class="axisLbl" text-anchor="middle">PLANNER READS — facts in</text>
+
+  <!-- DOM-read fact source -->
+  <rect x="912" y="476" width="92" height="86" rx="8" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="958" y="496" text-anchor="middle" font-size="12.5" font-weight="800" fill="#0f766e">DOM read</text>
+  <text x="958" y="514" text-anchor="middle" font-size="10" fill="#475569">computed style,</text>
+  <text x="958" y="528" text-anchor="middle" font-size="10" fill="#475569">matched rules,</text>
+  <text x="958" y="542" text-anchor="middle" font-size="10" fill="#475569">cascade winner</text>
+  <text x="958" y="556" text-anchor="middle" font-size="9.5" font-style="italic" fill="#0d9488">what renders now</text>
+
+  <!-- AST-read fact source -->
+  <rect x="1014" y="476" width="92" height="86" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="1060" y="496" text-anchor="middle" font-size="12.5" font-weight="800" fill="#1d4ed8">AST read</text>
+  <text x="1060" y="514" text-anchor="middle" font-size="10" fill="#475569">where value lives</text>
+  <text x="1060" y="528" text-anchor="middle" font-size="10" fill="#475569">in source: className,</text>
+  <text x="1060" y="542" text-anchor="middle" font-size="10" fill="#475569">style prop, token ref</text>
+  <text x="1060" y="556" text-anchor="middle" font-size="9.5" font-style="italic" fill="#2563eb">what source says</text>
+
+  <!-- DOM read -> planner (arrow up into planner bottom) -->
+  <path class="edge" style="stroke:#0d9488" marker-end="url(#arrowTransport)" d="M958 476 L 958 444"/>
+  <!-- AST read -> planner (arrow up into planner bottom) -->
+  <path class="edge" style="stroke:#2563eb" marker-end="url(#arrowAst)" d="M1060 476 C 1060 458, 1040 450, 1018 444"/>
+
+  <!-- 6 write -->
+  <rect x="710" y="350" width="180" height="92" rx="8" class="stage"/>
+  <text x="722" y="370" class="stageNum">6</text>
+  <text x="740" y="371" class="stageTitle">write</text>
+  <text x="722" y="390" class="stageSub">StyleWriteManager</text>
+  <text x="722" y="406" class="stageSub">AST edit, format-</text>
+  <text x="722" y="422" class="stageSub">preserving, per-</text>
+  <text x="722" y="438" class="stageSub">elementRef</text>
+
+  <!-- 7 verify -->
+  <rect x="510" y="350" width="170" height="92" rx="8" class="stage"/>
+  <text x="522" y="370" class="stageNum">7</text>
+  <text x="540" y="371" class="stageTitle">verify</text>
+  <text x="522" y="390" class="stageSub" font-weight="700">DID it land?</text>
+  <text x="522" y="406" class="stageSub">re-read computed</text>
+  <text x="522" y="422" class="stageSub">style; compare to</text>
+  <text x="522" y="438" class="stageSub">intended delta</text>
+
+  <!-- 8 classify -->
+  <rect x="510" y="476" width="170" height="86" rx="8" class="stage"/>
+  <text x="522" y="496" class="stageNum">8</text>
+  <text x="540" y="497" class="stageTitle">classify</text>
+  <text x="522" y="516" class="stageSub">landed ✓ → commit B0</text>
+  <text x="522" y="532" class="stageSub">drifted / lost →</text>
+  <text x="522" y="548" class="stageSub">route to repair tier</text>
+
+  <!-- Row 2 arrows (right -> left) -->
+  <path class="edge" marker-end="url(#arrow)" d="M918 396 L 892 396"/>
+  <text x="905" y="388" class="edgeLbl" text-anchor="middle">plan</text>
+  <path class="edge" marker-end="url(#arrow)" d="M708 396 L 682 396"/>
+  <text x="695" y="388" class="edgeLbl" text-anchor="middle">applied</text>
+  <!-- write/verify -> classify -->
+  <path class="edge" marker-end="url(#arrow)" d="M595 442 L 595 474"/>
+  <text x="610" y="462" class="edgeLbl">result</text>
+
+  <!-- ===================================================================== -->
+  <!-- optional REPAIR (debt / red highlight)                                -->
+  <!-- ===================================================================== -->
+  <rect x="710" y="476" width="180" height="86" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="722" y="496" font-size="11" font-weight="700" fill="#dc2626">optional</text>
+  <text x="800" y="497" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">repair</text>
+  <text x="722" y="516" font-size="11.5" fill="#7f1d1d">re-plan to a stronger</text>
+  <text x="722" y="532" font-size="11.5" fill="#7f1d1d">target (specificity /</text>
+  <text x="722" y="548" font-size="11.5" fill="#7f1d1d">!important / token) —</text>
+  <text x="800" y="572" font-size="10.5" font-style="italic" fill="#dc2626" text-anchor="middle">last resort · flagged as debt</text>
+
+  <!-- classify -> repair (only on failure) -->
+  <path class="edge" style="stroke:#dc2626" marker-end="url(#arrowRepair)" d="M680 519 L 708 519"/>
+  <text x="694" y="511" font-size="10.5" fill="#dc2626" text-anchor="middle">fail</text>
+  <!-- repair loops back into planner (re-plan WHERE) -->
+  <path class="edge" style="stroke:#b45309" stroke-dasharray="6 4" marker-end="url(#arrowRepair)" d="M890 492 C 905 470, 905 455, 918 444"/>
+  <text x="884" y="462" font-size="10.5" font-style="italic" fill="#b45309" text-anchor="middle">re-plan</text>
+
+  <!-- ===================================================================== -->
+  <!-- AI side input (planner router + repair tier ONLY)                     -->
+  <!-- ===================================================================== -->
+  <rect x="1130" y="380" width="180" height="150" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="1220" y="408" text-anchor="middle" font-size="15" font-weight="800" fill="#5b21b6">AI</text>
+  <text x="1220" y="428" text-anchor="middle" font-size="11" fill="#6d28d9">side input only</text>
+  <line x1="1146" y1="438" x2="1294" y2="438" stroke="#ddd6fe" stroke-width="1.5"/>
+  <text x="1146" y="458" font-size="11.5" fill="#5b21b6">→ planner (router):</text>
+  <text x="1146" y="474" font-size="11" fill="#6d28d9">  suggests WHERE</text>
+  <text x="1146" y="490" font-size="11" fill="#6d28d9">  on ambiguous target</text>
+  <text x="1146" y="510" font-size="11.5" fill="#5b21b6">→ repair tier:</text>
+  <text x="1146" y="526" font-size="11" fill="#6d28d9">  proposes a fix</text>
+
+  <!-- AI -> planner -->
+  <path class="edge" style="stroke:#7c3aed" stroke-dasharray="5 4" marker-end="url(#arrowAI)" d="M1130 420 C 1110 420, 1095 400, 1092 390"/>
+  <!-- AI -> repair (routed BELOW the planner-reads boxes to avoid crossing them) -->
+  <path class="edge" style="stroke:#7c3aed" stroke-dasharray="5 4" marker-end="url(#arrowAI)" d="M1135 525 C 1120 600, 1000 600, 892 552"/>
+  <text x="990" y="612" font-size="10.5" font-style="italic" fill="#7c3aed" text-anchor="middle">advisory, never on the happy path</text>
+
+  <!-- ===================================================================== -->
+  <!-- LEGEND                                                                -->
+  <!-- ===================================================================== -->
+  <rect x="40" y="690" width="1280" height="150" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="60" y="718" font-size="13.5" font-weight="800" fill="#0f172a">Legend</text>
+
+  <!-- implemented -->
+  <rect x="60" y="732" width="26" height="18" rx="4" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+  <text x="96" y="746" font-size="12.5" fill="#334155">implemented happy-path stage (green outline)</text>
+
+  <!-- shared core -->
+  <rect x="60" y="762" width="26" height="18" rx="4" fill="#0f172a"/>
+  <text x="96" y="776" font-size="12.5" fill="#334155">shared <tspan font-family="ui-monospace,Menlo,monospace">lib/</tspan> core — one engine for all three realms</text>
+
+  <!-- B0 -->
+  <rect x="60" y="792" width="26" height="18" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="2"/>
+  <text x="96" y="806" font-size="12.5" fill="#334155">B0 transaction wrapper — atomic, one undo step</text>
+
+  <!-- transport -->
+  <rect x="480" y="732" width="26" height="18" rx="4" fill="#ecfeff" stroke="#0d9488" stroke-width="2"/>
+  <text x="516" y="746" font-size="12.5" fill="#334155">transport realm (3: SaaS · ext · serverless) — feeds same core</text>
+
+  <!-- repair / debt -->
+  <rect x="480" y="762" width="26" height="18" rx="4" fill="#fef2f2" stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="516" y="776" font-size="12.5" fill="#334155">optional repair — failure-only, flagged as debt (red)</text>
+
+  <!-- AI -->
+  <rect x="480" y="792" width="26" height="18" rx="4" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="516" y="806" font-size="12.5" fill="#334155">AI — side input to planner (router) &amp; repair tier ONLY</text>
+
+  <!-- arrow keys -->
+  <line x1="940" y1="741" x2="985" y2="741" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="995" y="746" font-size="12.5" fill="#334155">data / control flow (happy path)</text>
+  <line x1="940" y1="771" x2="985" y2="771" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrowAI)"/>
+  <text x="995" y="776" font-size="12.5" fill="#334155">AI advisory (dashed)</text>
+  <line x1="940" y1="801" x2="985" y2="801" stroke="#b45309" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowRepair)"/>
+  <text x="995" y="806" font-size="12.5" fill="#334155">repair re-plan loop (dashed)</text>
+
+  <!-- planner-reads legend -->
+  <rect x="60" y="819" width="26" height="14" rx="3" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <rect x="92" y="819" width="26" height="14" rx="3" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="128" y="830" font-size="12.5" fill="#334155">planner READS DOM (computed) + AST (source) to decide WHERE to write</text>
+</svg>

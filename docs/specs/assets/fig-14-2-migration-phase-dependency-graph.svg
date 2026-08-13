@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Fig 14.2 — Migration Phase Dependency Graph</title>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8.5" refY="3.2" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,3.2 L0,6.4 Z" fill="#5b6470"/>
+    </marker>
+    <marker id="arrowGate" markerWidth="11" markerHeight="11" refX="9" refY="3.4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,3.4 L0,6.8 Z" fill="#b3261e"/>
+    </marker>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#0b1220" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1180" height="760" fill="#fbfbfc"/>
+
+  <!-- title block -->
+  <text x="40" y="46" font-size="22" font-weight="700" fill="#1d2733">Fig 14.2 — Migration Phase Dependency Graph</text>
+  <text x="40" y="70" font-size="13" fill="#5b6470">Styles master spec · §14 rollout plan — phases, gating dependencies, shadow-diff &amp; feature-flag controls</text>
+  <line x1="40" y1="84" x2="1140" y2="84" stroke="#e1e4e8" stroke-width="1"/>
+
+  <!-- =========================  GATING FOUNDATION BAND  ========================= -->
+  <rect x="40" y="108" width="1100" height="118" rx="10" fill="#fdecec" stroke="#e9b9b6" stroke-width="1.2"/>
+  <text x="58" y="132" font-size="12.5" font-weight="700" fill="#b3261e" letter-spacing="0.4">GATING FOUNDATION — blocks every downstream phase (safety tax / red)</text>
+
+  <!-- B0 node -->
+  <g filter="url(#softShadow)">
+    <rect x="120" y="146" width="290" height="62" rx="9" fill="#ffffff" stroke="#b3261e" stroke-width="2"/>
+  </g>
+  <text x="135" y="172" font-size="15" font-weight="700" fill="#7a1812">B0 · Journaled-saga transaction</text>
+  <text x="135" y="192" font-size="11.5" fill="#6b5350">writeId + snapshot-all-touched + one-undo rollback</text>
+
+  <!-- B1 node -->
+  <g filter="url(#softShadow)">
+    <rect x="770" y="146" width="290" height="62" rx="9" fill="#ffffff" stroke="#b3261e" stroke-width="2"/>
+  </g>
+  <text x="785" y="172" font-size="15" font-weight="700" fill="#7a1812">B1 · Verify-everywhere</text>
+  <text x="785" y="192" font-size="11.5" fill="#6b5350">dual settle + fail-closed conf×verify matrix</text>
+
+  <!-- AND-gate junction between B0/B1 and downstream -->
+  <line x1="265" y1="208" x2="265" y2="252" stroke="#b3261e" stroke-width="1.6"/>
+  <line x1="915" y1="208" x2="915" y2="252" stroke="#b3261e" stroke-width="1.6"/>
+  <line x1="265" y1="252" x2="915" y2="252" stroke="#b3261e" stroke-width="1.6"/>
+  <circle cx="590" cy="252" r="5" fill="#b3261e"/>
+  <text x="600" y="248" font-size="11.5" font-weight="700" fill="#b3261e">B0 ∧ B1 gate</text>
+  <!-- gating drop into Phase 0..5 spine -->
+  <path d="M590,257 L590,300" fill="none" stroke="#b3261e" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrowGate)"/>
+  <text x="600" y="285" font-size="10.5" fill="#b3261e">gates all phases ↓</text>
+
+  <!-- =========================  PHASE SPINE  ========================= -->
+  <!-- horizontal guide -->
+  <text x="40" y="312" font-size="12.5" font-weight="700" fill="#5b6470" letter-spacing="0.4">MIGRATION PHASES (sequential dependency chain)</text>
+
+  <!-- Phase node coordinates: y top = 348, height 98 -->
+  <!-- P0 -->
+  <g filter="url(#softShadow)">
+    <rect x="48" y="348" width="160" height="98" rx="9" fill="#eef1f4" stroke="#aab3bd" stroke-width="1.4"/>
+  </g>
+  <text x="62" y="372" font-size="14" font-weight="700" fill="#2b3744">Phase 0</text>
+  <text x="62" y="391" font-size="11" fill="#46505b">Hygiene &amp;</text>
+  <text x="62" y="406" font-size="11" fill="#46505b">taxonomy</text>
+  <text x="62" y="436" font-size="10" font-style="italic" fill="#7b8794">scope · no behavior</text>
+
+  <!-- P1 -->
+  <g filter="url(#softShadow)">
+    <rect x="248" y="348" width="160" height="98" rx="9" fill="#e7f0e9" stroke="#7fae8b" stroke-width="1.4"/>
+  </g>
+  <text x="262" y="372" font-size="14" font-weight="700" fill="#1f5130">Phase 1</text>
+  <text x="262" y="391" font-size="11" fill="#2f5e40">Safety net +</text>
+  <text x="262" y="406" font-size="11" fill="#2f5e40">unified read</text>
+  <text x="262" y="421" font-size="10" fill="#4c7a5b">B0 txn · SelectionStyleRead</text>
+  <text x="262" y="438" font-size="10" font-style="italic" fill="#4c7a5b">shadow-diff rollout</text>
+
+  <!-- P2 -->
+  <g filter="url(#softShadow)">
+    <rect x="448" y="348" width="160" height="98" rx="9" fill="#e7f0e9" stroke="#7fae8b" stroke-width="1.4"/>
+  </g>
+  <text x="462" y="372" font-size="14" font-weight="700" fill="#1f5130">Phase 2</text>
+  <text x="462" y="391" font-size="11" fill="#2f5e40">Verify + fallback</text>
+  <text x="462" y="406" font-size="11" fill="#2f5e40">doctrine</text>
+  <text x="462" y="421" font-size="10" fill="#4c7a5b">B1 verify · VTSWR</text>
+  <text x="462" y="438" font-size="10" font-style="italic" fill="#4c7a5b">+ HYP-706 inline floor</text>
+
+  <!-- P3 -->
+  <g filter="url(#softShadow)">
+    <rect x="648" y="348" width="160" height="98" rx="9" fill="#e7f0e9" stroke="#7fae8b" stroke-width="1.4"/>
+  </g>
+  <text x="662" y="372" font-size="14" font-weight="700" fill="#1f5130">Phase 3</text>
+  <text x="662" y="391" font-size="11" fill="#2f5e40">AI ladder + Tier-2</text>
+  <text x="662" y="406" font-size="11" fill="#2f5e40">source + color UI</text>
+  <text x="662" y="421" font-size="10" fill="#4c7a5b">A1 forward-detector</text>
+  <text x="662" y="438" font-size="10" font-style="italic" fill="#4c7a5b">probe is the gate</text>
+
+  <!-- P4 -->
+  <g filter="url(#softShadow)">
+    <rect x="848" y="348" width="160" height="98" rx="9" fill="#eef1f4" stroke="#aab3bd" stroke-width="1.4"/>
+  </g>
+  <text x="862" y="372" font-size="14" font-weight="700" fill="#2b3744">Phase 4</text>
+  <text x="862" y="391" font-size="11" fill="#46505b">Multi-select</text>
+  <text x="862" y="406" font-size="11" fill="#46505b">generalize</text>
+  <text x="862" y="421" font-size="10" fill="#5b6470">+ journal undo</text>
+  <text x="862" y="438" font-size="10" font-style="italic" fill="#7b8794">N≥1 = N=1 path</text>
+
+  <!-- P5 -->
+  <g filter="url(#softShadow)">
+    <rect x="1008" y="348" width="124" height="98" rx="9" fill="#eaf0fa" stroke="#7d9cd0" stroke-width="1.6"/>
+  </g>
+  <text x="1022" y="372" font-size="14" font-weight="700" fill="#22416f">Phase 5</text>
+  <text x="1022" y="391" font-size="10.5" fill="#2f527f">Wrapper</text>
+  <text x="1022" y="406" font-size="10.5" fill="#2f527f">promotion</text>
+  <text x="1022" y="421" font-size="10" fill="#4a6aa0">B2/B3 vis-reg</text>
+  <text x="1022" y="438" font-size="10" font-style="italic" fill="#4a6aa0">opt-in · flagged</text>
+
+  <!-- sequential edges P0->P1->...->P5 -->
+  <line x1="208" y1="397" x2="246" y2="397" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="408" y1="397" x2="446" y2="397" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="608" y1="397" x2="646" y2="397" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="808" y1="397" x2="846" y2="397" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="1008" y1="397" x2="1006" y2="397" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- dependency: Phase 4 (multi-select + journal undo) depends on A1 (Phase 3) + B0 — NOT Phase 2 write-batch -->
+  <path d="M728,446 C728,492 728,492 728,492 L928,492 C928,492 928,458 928,448" fill="none" stroke="#8a93a0" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+  <text x="600" y="487" font-size="10.5" fill="#6b7480">Phase 4 depends on A1 (Phase 3) + B0 — frozen-BatchPlan contract sourced to A1/B0</text>
+
+  <!-- gating fan-out: dashed red ticks dropping onto each phase from the B0∧B1 spine line -->
+  <line x1="128" y1="332" x2="1070" y2="332" stroke="#b3261e" stroke-width="1.2" stroke-dasharray="2 5" opacity="0.55"/>
+  <g stroke="#b3261e" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.7">
+    <line x1="128" y1="332" x2="128" y2="346"/>
+    <line x1="328" y1="332" x2="328" y2="346"/>
+    <line x1="528" y1="332" x2="528" y2="346"/>
+    <line x1="728" y1="332" x2="728" y2="346"/>
+    <line x1="928" y1="332" x2="928" y2="346"/>
+    <line x1="1070" y1="332" x2="1070" y2="346"/>
+  </g>
+
+  <!-- =========================  SHADOW-DIFF CALLOUT (Phase 1)  ========================= -->
+  <g filter="url(#softShadow)">
+    <rect x="248" y="528" width="270" height="118" rx="9" fill="#ffffff" stroke="#7fae8b" stroke-width="1.6"/>
+  </g>
+  <rect x="248" y="528" width="270" height="26" rx="9" fill="#e7f0e9"/>
+  <rect x="248" y="545" width="270" height="9" fill="#e7f0e9"/>
+  <text x="262" y="546" font-size="12" font-weight="700" fill="#1f5130">⟂ Shadow-diff rollout · Phase 1</text>
+  <text x="262" y="576" font-size="11" fill="#33503e">New read runs in parallel with the</text>
+  <text x="262" y="591" font-size="11" fill="#33503e">legacy reader; outputs are diffed</text>
+  <text x="262" y="606" font-size="11" fill="#33503e">per field (no user-visible change).</text>
+  <text x="262" y="626" font-size="11" font-weight="600" fill="#1f5130">Flip single-select only when drift = 0</text>
+  <text x="262" y="641" font-size="11" font-weight="600" fill="#1f5130">or fully explained → unblocks Phase 2.</text>
+  <!-- connector from Phase 1 to callout -->
+  <path d="M328,446 L328,526" fill="none" stroke="#7fae8b" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+
+  <!-- =========================  FEATURE-FLAG CALLOUT (Phase 5)  ========================= -->
+  <g filter="url(#softShadow)">
+    <rect x="838" y="528" width="294" height="118" rx="9" fill="#ffffff" stroke="#7d9cd0" stroke-width="1.6"/>
+  </g>
+  <rect x="838" y="528" width="294" height="26" rx="9" fill="#eaf0fa"/>
+  <rect x="838" y="545" width="294" height="9" fill="#eaf0fa"/>
+  <text x="852" y="546" font-size="12" font-weight="700" fill="#22416f">⚑ Feature flags · Phase 5 (B2/B3, flagged)</text>
+  <!-- flag chips -->
+  <g font-size="10.5" font-weight="600">
+    <rect x="852" y="566" width="172" height="20" rx="5" fill="#eef3fb" stroke="#9db4dc"/>
+    <text x="861" y="580" fill="#2f527f">styles.wrapperPromotion = off</text>
+    <rect x="852" y="592" width="172" height="20" rx="5" fill="#eef3fb" stroke="#9db4dc"/>
+    <text x="861" y="606" fill="#2f527f">styles.visualRegressionB3 = off</text>
+    <rect x="852" y="618" width="172" height="20" rx="5" fill="#eef3fb" stroke="#9db4dc"/>
+    <text x="861" y="632" fill="#2f527f">styles.multiSelectWrite = on</text>
+  </g>
+  <text x="1034" y="582" font-size="10.5" fill="#46505b">Staged %</text>
+  <text x="1034" y="596" font-size="10.5" fill="#46505b">ramp; instant</text>
+  <text x="1034" y="610" font-size="10.5" fill="#46505b">kill-switch</text>
+  <text x="1034" y="624" font-size="10.5" fill="#46505b">rollback per</text>
+  <text x="1034" y="638" font-size="10.5" fill="#46505b">flag.</text>
+  <!-- connector from Phase 5 to callout -->
+  <path d="M1070,446 L1070,508 L985,508 L985,526" fill="none" stroke="#7d9cd0" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+
+  <!-- =========================  LEGEND  ========================= -->
+  <g>
+    <rect x="48" y="528" width="180" height="118" rx="9" fill="#ffffff" stroke="#d6dade" stroke-width="1.1"/>
+    <text x="62" y="548" font-size="12" font-weight="700" fill="#2b3744">Legend</text>
+
+    <rect x="62" y="560" width="16" height="12" rx="3" fill="#e7f0e9" stroke="#7fae8b"/>
+    <text x="86" y="570" font-size="10.5" fill="#46505b">core / safety-gated</text>
+
+    <rect x="62" y="580" width="16" height="12" rx="3" fill="#eef1f4" stroke="#aab3bd"/>
+    <text x="86" y="590" font-size="10.5" fill="#46505b">prep / feature work</text>
+
+    <rect x="62" y="600" width="16" height="12" rx="3" fill="#ffffff" stroke="#b3261e" stroke-width="1.6"/>
+    <text x="86" y="610" font-size="10.5" fill="#46505b">gating foundation (red)</text>
+
+    <line x1="62" y1="626" x2="80" y2="626" stroke="#b3261e" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text x="86" y="630" font-size="10.5" fill="#46505b">gating dependency</text>
+
+    <line x1="62" y1="640" x2="80" y2="640" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+    <text x="86" y="644" font-size="10.5" fill="#46505b">phase ordering</text>
+  </g>
+</svg>

@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 5.2, 9). Retained for history; do not follow for new work.
+
 # Style-write: verified write-target resolution + landing verification
 
 **Status:** design (umbrella) · **Continues:** HYP-544 · **Date:** 2026-06-11

@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 636" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- ===================== fig-3-3 CssSystemId taxonomy ===================== -->
+  <rect x="0" y="0" width="920" height="636" fill="#ffffff"/>
+
+  <!-- Title block -->
+  <text x="40" y="46" font-size="24" font-weight="700" fill="#1f2933">CssSystemId taxonomy</text>
+  <text x="40" y="72" font-size="14" fill="#6b7280">Implemented adapters vs. typed-only members of the <tspan font-family="ui-monospace, 'SF Mono', Menlo, monospace" fill="#374151">CssSystemId</tspan> union</text>
+
+  <!-- Legend -->
+  <g transform="translate(40, 92)">
+    <!-- implemented swatch -->
+    <rect x="0" y="0" width="18" height="18" rx="3" fill="#e6f4ea" stroke="#2f9e57" stroke-width="2"/>
+    <text x="26" y="14" font-size="13" fill="#374151">implemented (4)</text>
+
+    <!-- typed-only swatch -->
+    <rect x="170" y="0" width="18" height="18" rx="3" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="196" y="14" font-size="13" fill="#374151">typed-only (8)</text>
+
+    <!-- ticket marker -->
+    <rect x="338" y="2" width="56" height="15" rx="7.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="366" y="13.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-###</text>
+    <text x="402" y="14" font-size="13" fill="#374151">build ticket</text>
+  </g>
+
+  <!-- Column band labels -->
+  <g transform="translate(40, 150)">
+    <text x="0" y="0" font-size="13" font-weight="700" fill="#2f9e57" letter-spacing="0.5">IMPLEMENTED — has StyleAdapter</text>
+    <text x="640" y="0" font-size="13" font-weight="700" fill="#6b7280" letter-spacing="0.5" text-anchor="end">TYPED-ONLY — union member, no adapter</text>
+  </g>
+
+  <!-- ============ GRID ============ -->
+  <!-- 12 cells: 3 columns x 4 rows. Cell metrics -->
+  <!-- cellW=276 cellH=92 gapX=14 gapY=14 origin x=40 y=166 -->
+
+  <!-- ===== Implemented (green, solid) ===== -->
+  <!-- tailwind-v4 -->
+  <g transform="translate(40, 168)">
+    <rect width="276" height="92" rx="10" fill="#e6f4ea" stroke="#2f9e57" stroke-width="2"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#15623a">tailwind-v4</text>
+    <text x="18" y="58" font-size="12.5" fill="#3a6b4f">utility classes · Tailwind 4 engine</text>
+    <text x="18" y="80" font-size="11.5" font-weight="600" fill="#2f9e57">✓ default adapter</text>
+  </g>
+
+  <!-- css-modules -->
+  <g transform="translate(330, 168)">
+    <rect width="276" height="92" rx="10" fill="#e6f4ea" stroke="#2f9e57" stroke-width="2"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#15623a">css-modules</text>
+    <text x="18" y="58" font-size="12.5" fill="#3a6b4f">scoped *.module.css classes</text>
+    <text x="18" y="80" font-size="11.5" font-weight="600" fill="#2f9e57">✓ adapter shipped</text>
+  </g>
+
+  <!-- inline-style -->
+  <g transform="translate(620, 168)">
+    <rect width="276" height="92" rx="10" fill="#e6f4ea" stroke="#2f9e57" stroke-width="2"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#15623a">inline-style</text>
+    <text x="18" y="58" font-size="12.5" fill="#3a6b4f">style={{…}} object props</text>
+    <text x="18" y="80" font-size="11.5" font-weight="600" fill="#2f9e57">✓ adapter shipped</text>
+  </g>
+
+  <!-- tamagui (implemented) + 3 typed-only on row 2 -->
+  <!-- tamagui -->
+  <g transform="translate(40, 274)">
+    <rect width="276" height="92" rx="10" fill="#e6f4ea" stroke="#2f9e57" stroke-width="2"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#15623a">tamagui</text>
+    <text x="18" y="58" font-size="12.5" fill="#3a6b4f">styled() + tokens compiler</text>
+    <text x="18" y="80" font-size="11.5" font-weight="600" fill="#2f9e57">✓ adapter shipped</text>
+  </g>
+
+  <!-- ===== Typed-only (grey, dashed) ===== -->
+  <!-- helper: each has a build ticket pill at bottom-right -->
+
+  <!-- tailwind-v3 -->
+  <g transform="translate(330, 274)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">tailwind-v3</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">legacy JIT utility classes</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-600</text>
+  </g>
+
+  <!-- plain-css -->
+  <g transform="translate(620, 274)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">plain-css</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">global stylesheet selectors</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-600</text>
+  </g>
+
+  <!-- emotion -->
+  <g transform="translate(40, 380)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">emotion</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">css`` / styled CSS-in-JS</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-600</text>
+  </g>
+
+  <!-- styled-components -->
+  <g transform="translate(330, 380)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">styled-components</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">styled.div`` template literals</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-600</text>
+  </g>
+
+  <!-- mui-system -->
+  <g transform="translate(620, 380)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">mui-system</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">sx prop + MUI theme</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-600</text>
+  </g>
+
+  <!-- chakra-ui -->
+  <g transform="translate(40, 486)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">chakra-ui</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">style props + theme tokens</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-606</text>
+  </g>
+
+  <!-- mantine -->
+  <g transform="translate(330, 486)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">mantine</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">createStyles + theme</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-607</text>
+  </g>
+
+  <!-- vanilla-extract -->
+  <g transform="translate(620, 486)">
+    <rect width="276" height="92" rx="10" fill="#f7f8f9" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="18" y="34" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="17" font-weight="700" fill="#52606d">vanilla-extract</text>
+    <text x="18" y="58" font-size="12.5" fill="#7b8794">*.css.ts zero-runtime styles</text>
+    <rect x="166" y="66" width="92" height="17" rx="8.5" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="212" y="78.5" font-size="10.5" font-weight="600" fill="#4f46e5" text-anchor="middle">HYP-608</text>
+  </g>
+
+  <!-- Footer caption -->
+  <text x="40" y="600" font-size="11.5" fill="#9ca3af">All 12 ids are members of the <tspan font-family="ui-monospace, 'SF Mono', Menlo, monospace" fill="#6b7280">CssSystemId</tspan> union; only the 4 green ids resolve to a runtime StyleAdapter today.</text>
+  <text x="40" y="616" font-size="11.5" fill="#9ca3af">8 typed-only cells are tracked under the <tspan font-weight="700" fill="#4f46e5">HYP-600</tspan> umbrella; only HYP-606/607/608 are named per-cell (the rest carry the umbrella id, not invented numbers).</text>
+</svg>

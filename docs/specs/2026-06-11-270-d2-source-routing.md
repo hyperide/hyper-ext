@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 7.2, 11). Retained for history; do not follow for new work.
+
 # #270 D2 — multi-select source-tab routing & write-target semantics (build-ready)
 
 **Ticket:** HYP-581 (impl) / HYP-271 (PR #270) / HYP-535 (transport gate).

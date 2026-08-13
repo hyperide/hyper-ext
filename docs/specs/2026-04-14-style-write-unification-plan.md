@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 3.7, 5.3, 7, 8). Retained for history; do not follow for new work.
+
 # Style Write Unification Plan
 
 **Date:** 2026-04-14

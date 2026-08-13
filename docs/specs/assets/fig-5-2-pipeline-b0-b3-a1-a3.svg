@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- ===================== fig-5-2-pipeline-b0-b3-a1-a3 ===================== -->
+  <!-- Pipeline stages B0-B3 + A1-A3: the Q3 write-verify-repair state machine -->
+
+  <defs>
+    <!-- arrowheads -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#15803d"/>
+    </marker>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0f172a" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1180" height="760" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="36" y="42" font-size="22" font-weight="700" fill="#0f172a">Fig 5.2 — Write &amp; Verify Pipeline: stages B0–B3 + A1–A3</text>
+  <text x="36" y="64" font-size="13" fill="#64748b">Q3 state machine: open txn → forward-detect → resolve → write → verify → branch (landed / ambiguous / unverifiable / not-landed) → repair → guard.</text>
+
+  <!-- ============ Legend ============ -->
+  <g font-size="12" fill="#334155">
+    <rect x="708" y="86" width="436" height="40" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+    <!-- B stages -->
+    <rect x="722" y="99" width="20" height="14" rx="3" fill="#e0edff" stroke="#3b82f6"/>
+    <text x="748" y="110">B-stage (boundary)</text>
+    <!-- A stages -->
+    <rect x="876" y="99" width="20" height="14" rx="3" fill="#e8eef2" stroke="#64748b"/>
+    <text x="902" y="110">A-stage (write)</text>
+    <!-- implemented -->
+    <rect x="1000" y="99" width="20" height="14" rx="3" fill="#dcfce7" stroke="#15803d"/>
+    <text x="1026" y="110">landed</text>
+    <!-- debt -->
+    <line x1="1080" y1="106" x2="1100" y2="106" stroke="#b91c1c" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="1106" y="110" fill="#b91c1c">debt</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- MAIN PIPELINE (vertical spine of A-stages between B0 and B1)  -->
+  <!-- ============================================================= -->
+
+  <!-- B0: open transaction -->
+  <g filter="url(#soft)">
+    <rect x="60" y="120" width="200" height="62" rx="10" fill="#e0edff" stroke="#3b82f6" stroke-width="1.5"/>
+  </g>
+  <text x="160" y="146" font-size="15" font-weight="700" fill="#1e3a8a" text-anchor="middle">B0 · Open transaction</text>
+  <text x="160" y="166" font-size="11.5" fill="#475569" text-anchor="middle">snapshot files, begin edit txn</text>
+
+  <!-- A1: forward-detect -->
+  <g filter="url(#soft)">
+    <rect x="60" y="218" width="200" height="62" rx="10" fill="#e8eef2" stroke="#64748b" stroke-width="1.5"/>
+  </g>
+  <text x="160" y="244" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">A1 · Forward-detect</text>
+  <text x="160" y="264" font-size="11.5" fill="#475569" text-anchor="middle">find target nodes ahead of write</text>
+
+  <!-- A2: resolve-where -->
+  <g filter="url(#soft)">
+    <rect x="60" y="316" width="200" height="62" rx="10" fill="#e8eef2" stroke="#64748b" stroke-width="1.5"/>
+  </g>
+  <text x="160" y="342" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">A2 · Resolve-where</text>
+  <text x="160" y="362" font-size="11.5" fill="#475569" text-anchor="middle">pick exact loc / className seam</text>
+
+  <!-- A3: write -->
+  <g filter="url(#soft)">
+    <rect x="60" y="414" width="200" height="62" rx="10" fill="#e8eef2" stroke="#64748b" stroke-width="1.5"/>
+  </g>
+  <text x="160" y="440" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">A3 · Write</text>
+  <text x="160" y="460" font-size="11.5" fill="#475569" text-anchor="middle">apply AST edit to source</text>
+
+  <!-- B1: verify -->
+  <g filter="url(#soft)">
+    <rect x="60" y="512" width="200" height="62" rx="10" fill="#e0edff" stroke="#3b82f6" stroke-width="1.5"/>
+  </g>
+  <text x="160" y="538" font-size="15" font-weight="700" fill="#1e3a8a" text-anchor="middle">B1 · Verify</text>
+  <text x="160" y="558" font-size="11.5" fill="#475569" text-anchor="middle">re-read; did the edit land?</text>
+
+  <!-- vertical spine arrows -->
+  <line x1="160" y1="182" x2="160" y2="216" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="280" x2="160" y2="314" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="378" x2="160" y2="412" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="160" y1="476" x2="160" y2="510" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================= -->
+  <!-- B1 BRANCH on verify outcome -> 4 results                       -->
+  <!-- ============================================================= -->
+
+  <!-- branch bus from B1 right edge -->
+  <line x1="260" y1="543" x2="312" y2="543" stroke="#475569" stroke-width="2"/>
+  <line x1="312" y1="318" x2="312" y2="657" stroke="#475569" stroke-width="2"/>
+
+  <!-- 4 outcome chips -->
+  <!-- landed (green / success -> commit) -->
+  <g>
+    <line x1="312" y1="330" x2="356" y2="330" stroke="#15803d" stroke-width="2" marker-end="url(#arrowGreen)"/>
+    <rect x="356" y="312" width="186" height="36" rx="8" fill="#dcfce7" stroke="#15803d" stroke-width="1.4"/>
+    <text x="449" y="335" font-size="12.5" font-weight="600" fill="#14532d" text-anchor="middle">landed → commit txn</text>
+  </g>
+  <!-- ambiguous -->
+  <g>
+    <line x1="312" y1="402" x2="356" y2="402" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="356" y="384" width="186" height="36" rx="8" fill="#fff7ed" stroke="#d97706" stroke-width="1.4"/>
+    <text x="449" y="407" font-size="12.5" font-weight="600" fill="#7c2d12" text-anchor="middle">ambiguous</text>
+  </g>
+  <!-- unverifiable -->
+  <g>
+    <line x1="312" y1="474" x2="356" y2="474" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="356" y="456" width="186" height="36" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="1.4"/>
+    <text x="449" y="479" font-size="12.5" font-weight="600" fill="#334155" text-anchor="middle">unverifiable</text>
+  </g>
+  <!-- not-landed (red / debt path) -->
+  <g>
+    <line x1="312" y1="546" x2="356" y2="546" stroke="#b91c1c" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrowRed)"/>
+    <rect x="356" y="528" width="186" height="36" rx="8" fill="#fee2e2" stroke="#b91c1c" stroke-width="1.4"/>
+    <text x="449" y="551" font-size="12.5" font-weight="600" fill="#7f1d1d" text-anchor="middle">not-landed (debt)</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- B2 repair-offer  (collects ambiguous / unverifiable / not-landed) -->
+  <!-- ============================================================= -->
+
+  <!-- collector bus on the right of the 3 non-success chips -->
+  <line x1="542" y1="402" x2="588" y2="402" stroke="#475569" stroke-width="2"/>
+  <line x1="542" y1="474" x2="588" y2="474" stroke="#475569" stroke-width="2"/>
+  <line x1="542" y1="546" x2="588" y2="546" stroke="#b91c1c" stroke-width="2" stroke-dasharray="4 3"/>
+  <line x1="588" y1="402" x2="588" y2="546" stroke="#475569" stroke-width="2"/>
+  <line x1="588" y1="474" x2="624" y2="474" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g filter="url(#soft)">
+    <rect x="624" y="440" width="206" height="68" rx="10" fill="#e0edff" stroke="#3b82f6" stroke-width="1.5"/>
+  </g>
+  <text x="727" y="466" font-size="15" font-weight="700" fill="#1e3a8a" text-anchor="middle">B2 · Repair-offer</text>
+  <text x="727" y="485" font-size="11.5" fill="#475569" text-anchor="middle">surface candidate edits;</text>
+  <text x="727" y="500" font-size="11.5" fill="#475569" text-anchor="middle">retry A2/A3 or ask user</text>
+
+  <!-- B2 retry loop back to A2 (top-band return: up from B2, across clear band over the pipeline, down the left margin into A2 left edge) -->
+  <path d="M 727 440 L 727 198 L 30 198 L 30 347 L 58 347"
+        fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="300" y="190" font-size="11" fill="#64748b">retry → A2 / A3</text>
+
+  <!-- ============================================================= -->
+  <!-- B3 visual-regression guard (after landed/commit AND after repair) -->
+  <!-- ============================================================= -->
+  <g filter="url(#soft)">
+    <rect x="624" y="600" width="206" height="68" rx="10" fill="#e0edff" stroke="#3b82f6" stroke-width="1.5"/>
+  </g>
+  <text x="727" y="626" font-size="15" font-weight="700" fill="#1e3a8a" text-anchor="middle">B3 · Visual-regression guard</text>
+  <text x="727" y="645" font-size="11.5" fill="#475569" text-anchor="middle">re-render; diff vs baseline;</text>
+  <text x="727" y="660" font-size="11.5" fill="#475569" text-anchor="middle">block on unexpected pixel drift</text>
+
+  <!-- landed/commit -> B3 -->
+  <path d="M 542 330 L 906 330 L 906 600"
+        fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="700" y="322" font-size="11" fill="#15803d">committed → guard</text>
+
+  <!-- B2 repaired -> B3 -->
+  <line x1="727" y1="508" x2="727" y2="598" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="737" y="556" font-size="11" fill="#64748b">repaired</text>
+
+  <!-- ============================================================= -->
+  <!-- INSET: confidence × verifiability matrix                       -->
+  <!-- ============================================================= -->
+  <g>
+    <rect x="868" y="430" width="276" height="238" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="882" y="452" font-size="13" font-weight="700" fill="#0f172a">Inset · confidence × verifiability (§9.4)</text>
+
+    <!-- axis labels -->
+    <text x="1006" y="476" font-size="11" font-weight="600" fill="#475569" text-anchor="middle">verifiability →</text>
+    <text x="884" y="582" font-size="11" font-weight="600" fill="#475569" text-anchor="middle" transform="rotate(-90 884 582)">confidence ↓</text>
+
+    <!-- column heads -->
+    <text x="1006" y="498" font-size="10.5" fill="#64748b" text-anchor="middle">verified</text>
+    <text x="1096" y="498" font-size="10.5" fill="#64748b" text-anchor="middle">unverifiable</text>
+    <!-- row heads -->
+    <text x="918" y="528" font-size="10.5" fill="#64748b" text-anchor="end">exact</text>
+    <text x="918" y="588" font-size="10.5" fill="#64748b" text-anchor="end">probable</text>
+
+    <!-- 2x2 grid cells -->
+    <!-- exact / verified -> keep -->
+    <rect x="962" y="505" width="90" height="60" fill="#dcfce7" stroke="#15803d" stroke-width="1.2"/>
+    <text x="1007" y="531" font-size="11" font-weight="700" fill="#14532d" text-anchor="middle">keep</text>
+    <text x="1007" y="547" font-size="9.5" fill="#15803d" text-anchor="middle">→ commit + B3</text>
+    <!-- exact / unverifiable -> keep + report -->
+    <rect x="1052" y="505" width="90" height="60" fill="#e8f1fb" stroke="#2b6cb0" stroke-width="1.2"/>
+    <text x="1097" y="528" font-size="11" font-weight="700" fill="#1d4570" text-anchor="middle">keep</text>
+    <text x="1097" y="543" font-size="9.5" fill="#2b6cb0" text-anchor="middle">+ report</text>
+    <text x="1097" y="556" font-size="9" fill="#2b6cb0" text-anchor="middle">(trusted pre-write)</text>
+    <!-- probable / verified -> keep-if-match else rollback -->
+    <rect x="962" y="565" width="90" height="60" fill="#fff7ed" stroke="#d97706" stroke-width="1.2"/>
+    <text x="1007" y="586" font-size="10" font-weight="700" fill="#7c2d12" text-anchor="middle">keep if match</text>
+    <text x="1007" y="600" font-size="9.5" fill="#b45309" text-anchor="middle">else rollback</text>
+    <!-- probable / unverifiable -> rollback (never silently keep; ask is NOT representable, §9.4) -->
+    <rect x="1052" y="565" width="90" height="60" fill="#fee2e2" stroke="#b91c1c" stroke-width="1.4"/>
+    <text x="1097" y="588" font-size="11" font-weight="700" fill="#7f1d1d" text-anchor="middle">rollback</text>
+    <text x="1097" y="602" font-size="8.5" fill="#b91c1c" text-anchor="middle">NEVER silently keep</text>
+
+    <text x="882" y="652" font-size="10" fill="#94a3b8">Pre-write confidence × verify verdict → keep/rollback (the full 3×4 grid is fig 9.4).</text>
+  </g>
+
+</svg>

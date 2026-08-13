@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 800" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#15803d"/>
+    </marker>
+    <marker id="arrowGrey" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1180" height="800" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#0f172a">Fig 3.5 — Read pipeline today, both realms</text>
+  <text x="40" y="66" font-size="13" fill="#64748b">Two realm branches converge on ParsedStyles. StyleReadResult is a side-channel (properties[] is empty) that only drives source tabs / surface.</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g transform="translate(820,28)">
+    <rect x="0" y="0" width="320" height="92" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="12" y="20" font-size="12" font-weight="700" fill="#334155">Legend</text>
+
+    <rect x="12" y="30" width="16" height="11" rx="2" fill="#dcfce7" stroke="#15803d"/>
+    <text x="34" y="40" font-size="11" fill="#334155">implemented / live data</text>
+
+    <rect x="12" y="48" width="16" height="11" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="3 2"/>
+    <text x="34" y="58" font-size="11" fill="#334155">typed-only / empty payload</text>
+
+    <rect x="178" y="30" width="16" height="11" rx="2" fill="#fee2e2" stroke="#dc2626"/>
+    <text x="200" y="40" font-size="11" fill="#334155">debt / red</text>
+
+    <line x1="178" y1="54" x2="194" y2="54" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="200" y="58" font-size="11" fill="#334155">side-channel (no props)</text>
+
+    <line x1="12" y1="76" x2="28" y2="76" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="34" y="80" font-size="11" fill="#334155">data flow (read)</text>
+  </g>
+
+  <!-- ===================== SaaS branch ===================== -->
+  <g transform="translate(40,110)">
+    <rect x="0" y="0" width="360" height="318" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <rect x="0" y="0" width="360" height="34" rx="10" fill="#e0f2fe"/>
+    <rect x="0" y="20" width="360" height="14" fill="#e0f2fe"/>
+    <text x="16" y="23" font-size="14" font-weight="700" fill="#075985">SaaS realm — sync branch</text>
+    <text x="16" y="52" font-size="11" fill="#64748b">browser preview, full DOM / window present</text>
+
+    <!-- nodes -->
+    <g transform="translate(70,64)">
+      <rect x="0" y="0" width="220" height="40" rx="6" fill="#dcfce7" stroke="#15803d"/>
+      <text x="110" y="18" font-size="12" font-weight="600" fill="#14532d" text-anchor="middle">Preview iframe DOM</text>
+      <text x="110" y="33" font-size="10" fill="#166534" text-anchor="middle">selected element</text>
+    </g>
+
+    <line x1="180" y1="104" x2="180" y2="126" stroke="#15803d" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+    <g transform="translate(70,126)">
+      <rect x="0" y="0" width="220" height="44" rx="6" fill="#dcfce7" stroke="#15803d"/>
+      <text x="110" y="19" font-size="12" font-weight="600" fill="#14532d" text-anchor="middle">getComputedStyle(el)</text>
+      <text x="110" y="35" font-size="10" fill="#166534" text-anchor="middle">computed-style AVAILABLE</text>
+    </g>
+
+    <line x1="180" y1="170" x2="180" y2="192" stroke="#15803d" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+    <g transform="translate(70,192)">
+      <rect x="0" y="0" width="220" height="40" rx="6" fill="#f1f5f9" stroke="#64748b"/>
+      <text x="110" y="18" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">classNameToStyles()</text>
+      <text x="110" y="33" font-size="10" fill="#64748b" text-anchor="middle">parse class list → values</text>
+    </g>
+
+    <line x1="180" y1="232" x2="180" y2="254" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(70,254)">
+      <rect x="0" y="0" width="220" height="44" rx="6" fill="#f1f5f9" stroke="#64748b"/>
+      <text x="110" y="19" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">sync StyleReadResult</text>
+      <text x="110" y="35" font-size="10" fill="#64748b" text-anchor="middle">tabs + surface metadata</text>
+    </g>
+  </g>
+
+  <!-- ===================== VS Code branch ===================== -->
+  <g transform="translate(440,110)">
+    <rect x="0" y="0" width="360" height="318" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <rect x="0" y="0" width="360" height="34" rx="10" fill="#ede9fe"/>
+    <rect x="0" y="20" width="360" height="14" fill="#ede9fe"/>
+    <text x="16" y="23" font-size="14" font-weight="700" fill="#5b21b6">VS Code realm — RPC branch</text>
+    <text x="16" y="52" font-size="11" fill="#64748b">extension host has no DOM — preview iframe does</text>
+
+    <g transform="translate(70,64)">
+      <rect x="0" y="0" width="220" height="40" rx="6" fill="#f1f5f9" stroke="#64748b"/>
+      <text x="110" y="18" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">elementRef (RPC request)</text>
+      <text x="110" y="33" font-size="10" fill="#64748b" text-anchor="middle">webview → ext host</text>
+    </g>
+
+    <line x1="180" y1="104" x2="180" y2="126" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(70,126)">
+      <rect x="0" y="0" width="220" height="44" rx="6" fill="#fef9c3" stroke="#ca8a04"/>
+      <text x="110" y="19" font-size="12" font-weight="600" fill="#854d0e" text-anchor="middle">computed-style via iframe RPC</text>
+      <text x="110" y="35" font-size="10" fill="#a16207" text-anchor="middle">available, not fed to read mgr (debt)</text>
+    </g>
+
+    <line x1="180" y1="170" x2="180" y2="192" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(70,192)">
+      <rect x="0" y="0" width="220" height="40" rx="6" fill="#f1f5f9" stroke="#64748b"/>
+      <text x="110" y="18" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">AST className read</text>
+      <text x="110" y="33" font-size="10" fill="#64748b" text-anchor="middle">classNameToStyles()</text>
+    </g>
+
+    <line x1="180" y1="232" x2="180" y2="254" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <g transform="translate(70,254)">
+      <rect x="0" y="0" width="220" height="44" rx="6" fill="#f1f5f9" stroke="#64748b"/>
+      <text x="110" y="19" font-size="12" font-weight="600" fill="#334155" text-anchor="middle">RPC StyleReadResult</text>
+      <text x="110" y="35" font-size="10" fill="#64748b" text-anchor="middle">tabs + surface metadata</text>
+    </g>
+  </g>
+
+  <!-- ===================== Converge on ParsedStyles ===================== -->
+  <!-- SaaS classNameToStyles -> ParsedStyles -->
+  <path d="M250,415 C250,470 430,470 430,500" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <!-- VS Code AST read -> ParsedStyles -->
+  <path d="M650,415 C650,470 590,470 590,500" fill="none" stroke="#475569" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g transform="translate(370,500)">
+    <rect x="0" y="0" width="280" height="62" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="2"/>
+    <text x="140" y="26" font-size="15" font-weight="700" fill="#14532d" text-anchor="middle">ParsedStyles</text>
+    <text x="140" y="46" font-size="11" fill="#166534" text-anchor="middle">the real editable values both realms read</text>
+  </g>
+  <text x="510" y="585" font-size="11.5" fill="#475569" text-anchor="middle" font-style="italic">both branches converge here — this is the source of editable style values</text>
+
+  <!-- ===================== StyleReadResult side-channel ===================== -->
+  <!-- arrows from each StyleReadResult node down to side-channel -->
+  <path d="M180,408 C180,640 760,615 800,640" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrowGrey)"/>
+  <path d="M620,408 C620,560 840,600 850,640" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrowGrey)"/>
+
+  <g transform="translate(760,610)">
+    <rect x="0" y="30" width="380" height="118" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <rect x="14" y="14" width="220" height="26" rx="6" fill="#fef9c3" stroke="#ca8a04"/>
+    <text x="124" y="31" font-size="12" font-weight="700" fill="#854d0e" text-anchor="middle">StyleReadResult — side-channel</text>
+
+    <text x="20" y="62" font-size="11.5" fill="#334155">• drives source tabs (which CSS approach)</text>
+    <text x="20" y="82" font-size="11.5" fill="#334155">• drives surface metadata (where edits land)</text>
+
+    <g transform="translate(18,94)">
+      <rect x="0" y="0" width="344" height="44" rx="6" fill="#fee2e2" stroke="#dc2626"/>
+      <text x="172" y="19" font-size="12" font-weight="700" fill="#7f1d1d" text-anchor="middle">properties[] is EMPTY</text>
+      <text x="172" y="35" font-size="10.5" fill="#b91c1c" text-anchor="middle">carries no actual values — not the value source (debt)</text>
+    </g>
+  </g>
+
+  <!-- ===================== Realm matrix ===================== -->
+  <g transform="translate(40,610)">
+    <text x="0" y="14" font-size="13" font-weight="700" fill="#334155">Realm capability matrix</text>
+
+    <!-- header row -->
+    <g transform="translate(0,24)">
+      <rect x="0" y="0" width="260" height="30" fill="#e2e8f0" stroke="#cbd5e1"/>
+      <rect x="260" y="0" width="200" height="30" fill="#e0f2fe" stroke="#cbd5e1"/>
+      <rect x="460" y="0" width="220" height="30" fill="#ede9fe" stroke="#cbd5e1"/>
+      <text x="12" y="20" font-size="12" font-weight="700" fill="#334155">capability</text>
+      <text x="360" y="20" font-size="12" font-weight="700" fill="#075985" text-anchor="middle">SaaS (browser)</text>
+      <text x="570" y="20" font-size="12" font-weight="700" fill="#5b21b6" text-anchor="middle">VS Code (ext realm)</text>
+    </g>
+
+    <!-- row 1: computed style -->
+    <g transform="translate(0,54)">
+      <rect x="0" y="0" width="260" height="30" fill="#ffffff" stroke="#cbd5e1"/>
+      <rect x="260" y="0" width="200" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <rect x="460" y="0" width="220" height="30" fill="#fef9c3" stroke="#cbd5e1"/>
+      <text x="12" y="20" font-size="11.5" fill="#334155">getComputedStyle()</text>
+      <text x="360" y="20" font-size="11.5" font-weight="700" fill="#15803d" text-anchor="middle">available ✓</text>
+      <text x="570" y="20" font-size="11.5" font-weight="700" fill="#854d0e" text-anchor="middle">iframe RPC ✓ · host ✗</text>
+    </g>
+
+    <!-- row 2: live DOM -->
+    <g transform="translate(0,84)">
+      <rect x="0" y="0" width="260" height="30" fill="#ffffff" stroke="#cbd5e1"/>
+      <rect x="260" y="0" width="200" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <rect x="460" y="0" width="220" height="30" fill="#fef9c3" stroke="#cbd5e1"/>
+      <text x="12" y="20" font-size="11.5" fill="#334155">live DOM / window</text>
+      <text x="360" y="20" font-size="11.5" font-weight="700" fill="#15803d" text-anchor="middle">present ✓</text>
+      <text x="570" y="20" font-size="11.5" font-weight="700" fill="#854d0e" text-anchor="middle">iframe ✓ · host ✗</text>
+    </g>
+
+    <!-- row 3: AST className read -->
+    <g transform="translate(0,114)">
+      <rect x="0" y="0" width="260" height="30" fill="#ffffff" stroke="#cbd5e1"/>
+      <rect x="260" y="0" width="200" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <rect x="460" y="0" width="220" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <text x="12" y="20" font-size="11.5" fill="#334155">AST className read</text>
+      <text x="360" y="20" font-size="11.5" font-weight="700" fill="#15803d" text-anchor="middle">yes ✓</text>
+      <text x="570" y="20" font-size="11.5" font-weight="700" fill="#15803d" text-anchor="middle">yes ✓</text>
+    </g>
+
+    <!-- row 4: value source -->
+    <g transform="translate(0,144)">
+      <rect x="0" y="0" width="260" height="30" fill="#ffffff" stroke="#cbd5e1"/>
+      <rect x="260" y="0" width="200" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <rect x="460" y="0" width="220" height="30" fill="#dcfce7" stroke="#cbd5e1"/>
+      <text x="12" y="20" font-size="11.5" fill="#334155">value source</text>
+      <text x="360" y="20" font-size="11" font-weight="600" fill="#166534" text-anchor="middle">ParsedStyles</text>
+      <text x="570" y="20" font-size="11" font-weight="600" fill="#166534" text-anchor="middle">ParsedStyles</text>
+    </g>
+  </g>
+</svg>

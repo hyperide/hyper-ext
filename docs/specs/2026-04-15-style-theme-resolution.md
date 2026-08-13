@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 7, 8). Retained for history; do not follow for new work.
+
 # Style Theme Resolution and Write Routing
 
 **Date:** 2026-04-15

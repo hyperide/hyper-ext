@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 800" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <!-- arrow markers, one per handling color -->
+    <marker id="ar-reres" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#2f6f4f"/></marker>
+    <marker id="ar-sheet" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#7a6a3a"/></marker>
+    <marker id="ar-roll"  markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#9a3a3a"/></marker>
+    <marker id="ar-b2"    markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#1f7a6f"/></marker>
+    <marker id="ar-ban"   markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#3a5b8a"/></marker>
+    <marker id="ar-floor" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#5a4a7a"/></marker>
+    <marker id="ar-excl"  markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#9a2a1d"/></marker>
+    <marker id="ar-sec"   markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#3a5b8a" opacity="0.55"/></marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1180" height="800" fill="#fbfbfc"/>
+
+  <!-- title -->
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#1c2024">Fig 14.4 — Error &amp; Edge-Case State Map</text>
+  <text x="40" y="68" font-size="13.5" fill="#5b636b">Each style error condition routes to its TO-BE handling (§14.4 matrix). Dashed secondary arrows show a companion banner / else-branch.</text>
+
+  <!-- column headers -->
+  <text x="180" y="108" font-size="13" font-weight="700" fill="#3a4148" text-anchor="middle" letter-spacing="0.5">ERROR CONDITION</text>
+  <text x="560" y="108" font-size="13" font-weight="700" fill="#3a4148" text-anchor="middle" letter-spacing="0.5">TRIGGER / ROOT CAUSE</text>
+  <text x="980" y="108" font-size="13" font-weight="700" fill="#3a4148" text-anchor="middle" letter-spacing="0.5">TO-BE HANDLING</text>
+  <line x1="40" y1="120" x2="1140" y2="120" stroke="#e2e5e9" stroke-width="1.5"/>
+
+  <!-- ===================== HANDLING TARGET NODES (right column) ===================== -->
+  <!-- re-resolve -->
+  <g>
+    <rect x="868" y="140" width="224" height="46" rx="9" fill="#eaf4ee" stroke="#2f6f4f" stroke-width="1.8"/>
+    <text x="980" y="162" font-size="14" font-weight="700" fill="#235639" text-anchor="middle">re-resolve → sync-banner</text>
+    <text x="980" y="178" font-size="10.5" fill="#3c6b52" text-anchor="middle">retry once; else blocking sync-banner</text>
+  </g>
+  <!-- route-to-stylesheet -->
+  <g>
+    <rect x="868" y="216" width="224" height="46" rx="9" fill="#f6f1e2" stroke="#7a6a3a" stroke-width="1.8"/>
+    <text x="980" y="238" font-size="14" font-weight="700" fill="#5e521f" text-anchor="middle">route to stylesheet target</text>
+    <text x="980" y="254" font-size="10.5" fill="#6e6230" text-anchor="middle">lowest stylesheet-capable; else banner</text>
+  </g>
+  <!-- A1 pre-write exclusion -->
+  <g>
+    <rect x="868" y="292" width="224" height="46" rx="9" fill="#fdeeec" stroke="#9a2a1d" stroke-width="1.8"/>
+    <text x="980" y="314" font-size="14" font-weight="700" fill="#7a2018" text-anchor="middle">A1 pre-write exclusion</text>
+    <text x="980" y="330" font-size="10.5" fill="#9a3a30" text-anchor="middle">high-conf NEGATIVE → never attempt</text>
+  </g>
+  <!-- B2 offer / held-pending -->
+  <g>
+    <rect x="868" y="368" width="224" height="46" rx="9" fill="#e6f4f1" stroke="#1f7a6f" stroke-width="1.8"/>
+    <text x="980" y="390" font-size="14" font-weight="700" fill="#155e55" text-anchor="middle">B2 offer · held-pending</text>
+    <text x="980" y="406" font-size="10.5" fill="#1f7a6f" text-anchor="middle">held under writeId (OD-11, provisional)</text>
+  </g>
+  <!-- rollback -->
+  <g>
+    <rect x="868" y="444" width="224" height="46" rx="9" fill="#f7e9e9" stroke="#9a3a3a" stroke-width="1.8"/>
+    <text x="980" y="466" font-size="14" font-weight="700" fill="#7a2c2c" text-anchor="middle">rollback</text>
+    <text x="980" y="482" font-size="10.5" fill="#8a3535" text-anchor="middle">revert edit, restore last-landed state</text>
+  </g>
+  <!-- banner -->
+  <g>
+    <rect x="868" y="520" width="224" height="46" rx="9" fill="#e9f0f8" stroke="#3a5b8a" stroke-width="1.8"/>
+    <text x="980" y="542" font-size="14" font-weight="700" fill="#2c466b" text-anchor="middle">banner</text>
+    <text x="980" y="558" font-size="10.5" fill="#36567f" text-anchor="middle">surface notice to user — never silent</text>
+  </g>
+  <!-- inline-floor -->
+  <g>
+    <rect x="868" y="596" width="224" height="46" rx="9" fill="#f0ebf6" stroke="#5a4a7a" stroke-width="1.8"/>
+    <text x="980" y="618" font-size="14" font-weight="700" fill="#46396a" text-anchor="middle">gated inline-floor</text>
+    <text x="980" y="634" font-size="10.5" fill="#53447a" text-anchor="middle">gate on A1-fwd OR B1-verify (HYP-706)</text>
+  </g>
+
+  <!-- ===================== CONDITION + TRIGGER ROWS ===================== -->
+  <!-- Row geometry: condition box x=48 w=264 h=44 ; trigger box x=380 w=360 h=44 -->
+
+  <!-- 1 stale -> re-resolve -->
+  <g>
+    <rect x="48" y="140" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="162" font-size="14" font-weight="700" fill="#1c2024">stale</text>
+    <text x="68" y="178" font-size="10.5" fill="#7b828a">DOM↔source identity no longer trusted</text>
+    <rect x="380" y="140" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="167" font-size="12.5" fill="#3a4148">read points at the wrong node after a newer write</text>
+  </g>
+  <!-- 2 inexpressible -> route to stylesheet (primary), banner (else) -->
+  <g>
+    <rect x="48" y="208" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="230" font-size="14" font-weight="700" fill="#1c2024">inexpressible</text>
+    <text x="68" y="246" font-size="10.5" fill="#7b828a">:hover via inline, theme edit — no inline form</text>
+    <rect x="380" y="208" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="229" font-size="12" fill="#3a4148">route to lowest stylesheet-capable target</text>
+    <text x="396" y="245" font-size="10.5" fill="#7b828a">else can't-style banner naming the cause</text>
+  </g>
+  <!-- 3 swallowed-prop -> A1 pre-write exclusion (primary), banner (secondary) -->
+  <g>
+    <rect x="48" y="284" width="264" height="44" rx="8" fill="#fdf2f2" stroke="#c0392b" stroke-width="1.8"/>
+    <text x="68" y="306" font-size="14" font-weight="700" fill="#9a2a1d">swallowed-prop</text>
+    <text x="68" y="322" font-size="10.5" fill="#b15045">component forwards neither className nor style</text>
+    <rect x="380" y="284" width="360" height="44" rx="8" fill="#fdf2f2" stroke="#e3b4ad" stroke-width="1.2"/>
+    <text x="396" y="305" font-size="12" fill="#7a352a">A1 high-confidence NEGATIVE → excluded before write</text>
+    <text x="396" y="321" font-size="10.5" fill="#b15045">never attempt; banner if no other target (never silent)</text>
+  </g>
+  <!-- 4 unlanded -> B2 offer/held-pending (exact) | rollback (probable) -->
+  <g>
+    <rect x="48" y="360" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="382" font-size="14" font-weight="700" fill="#1c2024">unlanded</text>
+    <text x="68" y="398" font-size="10.5" fill="#7b828a">landed in source, ≈ before in DOM</text>
+    <rect x="380" y="360" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="381" font-size="12" fill="#3a4148">B1 not-landed → B2 offer</text>
+    <text x="396" y="397" font-size="10.5" fill="#7b828a">exact: held-pending — probable: rollback (§9.4 / OD-11)</text>
+  </g>
+  <!-- 5 unverifiable -> confidence-gated rollback(probable)/report-keep(exact) + banner -->
+  <g>
+    <rect x="48" y="514" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="536" font-size="14" font-weight="700" fill="#1c2024">unverifiable</text>
+    <text x="68" y="552" font-size="10.5" fill="#7b828a">timeout / no-edge / realm can't read</text>
+    <rect x="380" y="514" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="535" font-size="12" fill="#3a4148">NEVER promote to landed (rafVerified ?? false)</text>
+    <text x="396" y="551" font-size="10.5" fill="#7b828a">probable → rollback; exact → keep + report; + banner</text>
+  </g>
+  <!-- 6 findRule-miss -> gated inline floor -->
+  <g>
+    <rect x="48" y="590" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="612" font-size="14" font-weight="700" fill="#1c2024">findRule-miss</text>
+    <text x="68" y="628" font-size="10.5" fill="#7b828a">no matching CSS rule located</text>
+    <rect x="380" y="590" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="611" font-size="12" fill="#3a4148">gated inline floor, reported</text>
+    <text x="396" y="627" font-size="10.5" fill="#7b828a">gate: A1-forward OR B1-verify — HYP-706, not a dead click</text>
+  </g>
+  <!-- 7 HMR-timeout -> treat-as-unverifiable, banner -->
+  <g>
+    <rect x="48" y="438" width="264" height="44" rx="8" fill="#ffffff" stroke="#c8ccd2" stroke-width="1.5"/>
+    <text x="68" y="460" font-size="14" font-weight="700" fill="#1c2024">HMR-timeout</text>
+    <text x="68" y="476" font-size="10.5" fill="#7b828a">settle TTL expired (no edge seen)</text>
+    <rect x="380" y="438" width="360" height="44" rx="8" fill="#f4f5f7" stroke="#dadde2" stroke-width="1.2"/>
+    <text x="396" y="459" font-size="12" fill="#3a4148">timeout ⇒ unverifiable (NEVER repair a slow build)</text>
+    <text x="396" y="475" font-size="10.5" fill="#7b828a">treat-as-unverifiable, banner</text>
+  </g>
+  <!-- 8 source-map-miss -> baseline WORKS -->
+  <g>
+    <rect x="48" y="666" width="264" height="44" rx="8" fill="#eaf4ee" stroke="#2f6f4f" stroke-width="1.6"/>
+    <text x="68" y="688" font-size="14" font-weight="700" fill="#235639">source-map-miss</text>
+    <text x="68" y="704" font-size="10.5" fill="#3c6b52">WORKS today — not a failure</text>
+    <rect x="380" y="666" width="360" height="44" rx="8" fill="#eef7f1" stroke="#bcdcc8" stroke-width="1.2"/>
+    <text x="396" y="687" font-size="12" fill="#235639">baseline — suffix-match + elementLoc (HYP-594)</text>
+    <text x="396" y="703" font-size="10.5" fill="#3c6b52">works today, unchanged through the migration</text>
+  </g>
+
+  <!-- ===================== ROUTING ARROWS (trigger right edge x=740 → handling left edge x=868) ===================== -->
+  <!-- stale -> re-resolve -->
+  <path d="M740,162 C800,162 808,163 866,163" fill="none" stroke="#2f6f4f" stroke-width="2" marker-end="url(#ar-reres)"/>
+  <!-- inexpressible -> route-to-stylesheet (primary) -->
+  <path d="M740,230 C800,230 808,237 866,239" fill="none" stroke="#7a6a3a" stroke-width="2" marker-end="url(#ar-sheet)"/>
+  <!-- inexpressible -> banner (else-branch, dashed secondary) -->
+  <path d="M740,236 C800,360 808,530 866,540" fill="none" stroke="#3a5b8a" stroke-width="1.4" stroke-dasharray="5 4" opacity="0.6" marker-end="url(#ar-sec)"/>
+  <!-- swallowed-prop -> A1 pre-write exclusion (primary) -->
+  <path d="M740,306 C800,306 808,313 866,315" fill="none" stroke="#9a2a1d" stroke-width="2.2" marker-end="url(#ar-excl)"/>
+  <!-- swallowed-prop -> banner (secondary, dashed; never silent) -->
+  <path d="M740,312 C806,400 812,532 866,544" fill="none" stroke="#3a5b8a" stroke-width="1.4" stroke-dasharray="5 4" opacity="0.6" marker-end="url(#ar-sec)"/>
+  <!-- unlanded -> B2 offer/held-pending (exact, primary) -->
+  <path d="M740,382 C800,382 808,389 866,391" fill="none" stroke="#1f7a6f" stroke-width="2.2" marker-end="url(#ar-b2)"/>
+  <!-- unlanded -> rollback (probable, secondary) -->
+  <path d="M740,388 C800,420 808,462 866,467" fill="none" stroke="#9a3a3a" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.7" marker-end="url(#ar-roll)"/>
+  <!-- HMR-timeout -> banner (primary; treat-as-unverifiable, never re-resolve a slow build) -->
+  <path d="M740,460 C796,490 804,535 866,542" fill="none" stroke="#3a5b8a" stroke-width="2" marker-end="url(#ar-ban)"/>
+  <!-- unverifiable -> rollback (probable, primary) + banner (secondary) -->
+  <path d="M740,536 C800,510 808,478 866,470" fill="none" stroke="#9a3a3a" stroke-width="2" marker-end="url(#ar-roll)"/>
+  <path d="M740,540 C806,540 812,541 866,543" fill="none" stroke="#3a5b8a" stroke-width="1.4" stroke-dasharray="5 4" opacity="0.6" marker-end="url(#ar-sec)"/>
+  <!-- findRule-miss -> gated inline-floor -->
+  <path d="M740,612 C806,612 812,617 866,619" fill="none" stroke="#5a4a7a" stroke-width="2" marker-end="url(#ar-floor)"/>
+
+  <!-- source-map-miss is a WORKS baseline — no failure routing. -->
+  <text x="744" y="660" font-size="11" font-weight="600" fill="#2f6f4f">✓ works today — no handler needed</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g>
+    <rect x="48" y="726" width="1044" height="54" rx="8" fill="#ffffff" stroke="#e2e5e9" stroke-width="1.2"/>
+    <text x="64" y="748" font-size="11.5" font-weight="700" fill="#3a4148">LEGEND</text>
+
+    <line x1="120" y1="751" x2="150" y2="751" stroke="#1f7a6f" stroke-width="2.4"/>
+    <text x="156" y="755" font-size="11.5" fill="#3a4148">primary route → handling</text>
+
+    <line x1="330" y1="751" x2="360" y2="751" stroke="#9a3a3a" stroke-width="1.8" stroke-dasharray="5 4" opacity="0.7"/>
+    <text x="366" y="755" font-size="11.5" fill="#3a4148">secondary / confidence-fork branch</text>
+
+    <rect x="600" y="743" width="16" height="16" rx="3" fill="#fdf2f2" stroke="#c0392b" stroke-width="1.8"/>
+    <text x="622" y="755" font-size="11.5" fill="#3a4148">red = swallowed-prop / debt (silent today)</text>
+
+    <text x="64" y="772" font-size="11.5" fill="#7b828a">7 handling targets: re-resolve · route-to-stylesheet · A1 pre-write exclusion · B2 held-pending · rollback · banner · inline-floor</text>
+  </g>
+</svg>

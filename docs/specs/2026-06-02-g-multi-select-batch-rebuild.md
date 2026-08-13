@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # Feature G — Multi-Select Batch Style Editing — Rebuild Spec
 
 **Date:** 2026-06-02

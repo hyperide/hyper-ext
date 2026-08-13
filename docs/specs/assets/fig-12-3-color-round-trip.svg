@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title>Figure 12.3 — Color round-trip: inspector hex to source to DOM and back to the inspector</title>
+
+  <defs>
+    <!-- arrowheads -->
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowBack" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#0e7490"/>
+    </marker>
+    <marker id="arrowTier1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#15803d"/>
+    </marker>
+    <style>
+      .node       { fill:#ffffff; stroke:#cbd5e1; stroke-width:1.5; rx:10; }
+      .node-accent{ fill:#eff6ff; stroke:#3b82f6; stroke-width:1.75; rx:10; }
+      .node-render{ fill:#fefce8; stroke:#ca8a04; stroke-width:1.75; rx:10; }
+      .lbl        { font-size:14px; font-weight:600; fill:#0f172a; }
+      .sub        { font-size:11.5px; fill:#475569; }
+      .mono       { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace; font-size:11.5px; fill:#334155; }
+      .edge       { fill:none; stroke:#475569; stroke-width:2; }
+      .edge-back  { fill:none; stroke:#0e7490; stroke-width:2; stroke-dasharray:1 0; }
+      .edge-lbl   { font-size:11.5px; fill:#475569; }
+      .edge-lbl-b { font-size:11.5px; fill:#0e7490; }
+      .title      { font-size:20px; font-weight:700; fill:#0f172a; }
+      .caption    { font-size:12px; fill:#64748b; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="960" height="720" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="40" y="44" class="title">Figure 12.3 — Color round-trip</text>
+  <text x="40" y="66" class="caption">inspector hex &#8594; generator &#8594; source &#8594; DOM render &#8594; getComputedStyle &#8594; rgbToHex &#8594; nearest-token match &#8594; inspector</text>
+
+  <!-- ===================== NODES ===================== -->
+
+  <!-- 1. Inspector hex (top center) -->
+  <g>
+    <rect class="node-accent" x="375" y="92" width="210" height="62"/>
+    <text x="480" y="118" text-anchor="middle" class="lbl">Inspector</text>
+    <text x="480" y="138" text-anchor="middle" class="mono">color: #2563EB</text>
+  </g>
+
+  <!-- 2. Generator (right upper) -->
+  <g>
+    <rect class="node" x="700" y="190" width="210" height="66"/>
+    <text x="805" y="216" text-anchor="middle" class="lbl">Generator</text>
+    <text x="805" y="236" text-anchor="middle" class="sub">StyleAdapter &#8594; source edit</text>
+  </g>
+
+  <!-- 3. Source (right lower) -->
+  <g>
+    <rect class="node" x="690" y="332" width="230" height="96"/>
+    <text x="805" y="356" text-anchor="middle" class="lbl">Source</text>
+    <text x="805" y="378" text-anchor="middle" class="mono">class="text-blue-600"</text>
+    <text x="805" y="396" text-anchor="middle" class="mono">color: $brand-600</text>
+    <text x="805" y="414" text-anchor="middle" class="mono">style={{ color:'#2563EB' }}</text>
+  </g>
+
+  <!-- 4. DOM render (bottom center) -->
+  <g>
+    <rect class="node-render" x="375" y="500" width="210" height="66"/>
+    <text x="480" y="526" text-anchor="middle" class="lbl">DOM render</text>
+    <text x="480" y="546" text-anchor="middle" class="sub">preview iframe paints element</text>
+  </g>
+
+  <!-- 5. getComputedStyle (left lower) -->
+  <g>
+    <rect class="node" x="40" y="332" width="230" height="66"/>
+    <text x="155" y="358" text-anchor="middle" class="lbl">getComputedStyle</text>
+    <text x="155" y="378" text-anchor="middle" class="mono">rgb(37, 99, 235)</text>
+  </g>
+
+  <!-- 6. rgbToHex (left middle) -->
+  <g>
+    <rect class="node" x="50" y="232" width="210" height="62"/>
+    <text x="155" y="258" text-anchor="middle" class="lbl">rgbToHex</text>
+    <text x="155" y="278" text-anchor="middle" class="mono">#2563EB</text>
+  </g>
+
+  <!-- 7. nearest-token match (left upper) -->
+  <g>
+    <rect class="node" x="50" y="120" width="210" height="74"/>
+    <text x="155" y="146" text-anchor="middle" class="lbl">nearest-token</text>
+    <text x="155" y="164" text-anchor="middle" class="sub">snap rgb &#8594; design token</text>
+    <text x="155" y="182" text-anchor="middle" class="mono">$brand-600</text>
+  </g>
+
+  <!-- ===================== EDGES ===================== -->
+
+  <!-- inspector -> generator -->
+  <path class="edge" d="M585,128 C660,140 700,165 760,188" marker-end="url(#arrow)"/>
+  <text x="665" y="178" class="edge-lbl">hex value</text>
+
+  <!-- generator -> source -->
+  <path class="edge" d="M805,256 L805,328" marker-end="url(#arrow)"/>
+  <text x="816" y="296" class="edge-lbl">emit TW / $token / inline</text>
+
+  <!-- ===== source -> DOM render: THE ANNOTATED EDGE (routed left of the annotation boxes) ===== -->
+  <path class="edge" d="M690,420 C610,432 470,438 442,470 C432,484 440,500 470,500" marker-end="url(#arrow)"/>
+  <!-- Tier-1: what drives (implemented = green) -->
+  <g>
+    <rect x="468" y="430" width="232" height="30" rx="7" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <circle cx="486" cy="445" r="5" fill="#16a34a"/>
+    <text x="498" y="449" class="edge-lbl" fill="#15803d"><tspan font-weight="700">Tier-1</tspan>  "what drives" &#8212; built</text>
+  </g>
+  <!-- Tier-2: where in source (typed-only / unbuilt = grey dashed) -->
+  <g>
+    <rect x="468" y="466" width="232" height="30" rx="7" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <circle cx="486" cy="481" r="5" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="498" y="485" class="edge-lbl" fill="#64748b"><tspan font-weight="700">Tier-2</tspan>  "where in source" &#8212; unbuilt</text>
+  </g>
+
+  <!-- DOM render -> getComputedStyle -->
+  <path class="edge-back" d="M375,540 C260,548 200,470 175,400" marker-end="url(#arrowBack)"/>
+  <text x="210" y="470" class="edge-lbl-b">read painted color</text>
+
+  <!-- getComputedStyle -> rgbToHex -->
+  <path class="edge-back" d="M155,332 L155,296" marker-end="url(#arrowBack)"/>
+
+  <!-- rgbToHex -> nearest-token -->
+  <path class="edge-back" d="M155,232 L155,196" marker-end="url(#arrowBack)"/>
+
+  <!-- nearest-token -> inspector (close the loop) -->
+  <path class="edge-back" d="M260,150 C320,135 340,128 372,125" marker-end="url(#arrowBack)"/>
+  <text x="280" y="120" class="edge-lbl-b">surface token + hex</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g>
+    <rect x="40" y="620" width="640" height="74" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="56" y="642" class="lbl" font-size="12.5">Legend</text>
+
+    <!-- forward path -->
+    <line x1="56" y1="660" x2="92" y2="660" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="100" y="664" class="sub">write path (inspector &#8594; source &#8594; DOM)</text>
+
+    <!-- read-back path -->
+    <line x1="380" y1="660" x2="416" y2="660" stroke="#0e7490" stroke-width="2" marker-end="url(#arrowBack)"/>
+    <text x="424" y="664" class="sub">read-back path (DOM &#8594; inspector)</text>
+
+    <!-- Tier-1 swatch -->
+    <rect x="56" y="676" width="14" height="12" rx="3" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="78" y="686" class="sub">Tier-1 implemented</text>
+
+    <!-- Tier-2 swatch -->
+    <rect x="210" y="676" width="14" height="12" rx="3" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="232" y="686" class="sub">Tier-2 typed-only / unbuilt</text>
+
+    <!-- accent node swatch -->
+    <rect x="420" y="676" width="14" height="12" rx="3" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="442" y="686" class="sub">inspector</text>
+
+    <rect x="520" y="676" width="14" height="12" rx="3" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+    <text x="542" y="686" class="sub">DOM render</text>
+  </g>
+</svg>

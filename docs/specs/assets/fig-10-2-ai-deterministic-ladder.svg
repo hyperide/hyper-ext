@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#15803d"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="920" height="760" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="40" y="46" font-size="22" font-weight="700" fill="#0f172a">Fig 10.2 — The AI / deterministic ladder</text>
+  <text x="40" y="70" font-size="13" fill="#64748b">AI may route, break ties, and repair — but every write is gated by a deterministic probe.</text>
+
+  <!-- ===================== TIER 1 ===================== -->
+  <text x="40" y="116" font-size="14" font-weight="700" fill="#334155">TIER 1 — Entry behavior</text>
+  <line x1="40" y1="126" x2="880" y2="126" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- left panel: no-AI -->
+  <rect x="40" y="142" width="390" height="150" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="170" font-size="14" font-weight="700" fill="#0f172a">No AI configured</text>
+  <text x="60" y="194" font-size="12.5" fill="#334155">Deterministic default path only.</text>
+  <text x="60" y="216" font-size="12.5" fill="#334155">• Editor reads &amp; writes styles directly.</text>
+  <text x="60" y="236" font-size="12.5" fill="#334155">• No router, no repair — fully predictable.</text>
+  <text x="60" y="256" font-size="12.5" fill="#334155">• Ambiguity surfaces to the user as-is.</text>
+  <rect x="60" y="268" width="118" height="20" rx="10" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="119" y="282" font-size="11" font-weight="600" fill="#15803d" text-anchor="middle">always available</text>
+
+  <!-- right panel: AI-configured -->
+  <rect x="490" y="142" width="390" height="150" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="510" y="170" font-size="14" font-weight="700" fill="#0f172a">AI configured</text>
+  <text x="510" y="194" font-size="12.5" fill="#334155">AI assists, but never decides the write.</text>
+  <text x="510" y="216" font-size="12.5" fill="#334155">• AI proposes; deterministic core disposes.</text>
+  <text x="510" y="236" font-size="12.5" fill="#334155">• Same default path remains the fallback.</text>
+  <text x="510" y="256" font-size="12.5" fill="#334155">• AI output is advisory until probed.</text>
+  <rect x="510" y="268" width="150" height="20" rx="10" fill="#e0e7ff" stroke="#a5b4fc" stroke-width="1"/>
+  <text x="585" y="282" font-size="11" font-weight="600" fill="#4338ca" text-anchor="middle">advisory, not authoritative</text>
+
+  <!-- side-by-side divider hint -->
+  <text x="460" y="222" font-size="11" font-weight="700" fill="#94a3b8" text-anchor="middle">vs</text>
+
+  <!-- rungs down from both panels into the gate -->
+  <line x1="235" y1="292" x2="235" y2="330" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="685" y1="292" x2="685" y2="330" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="235" y1="330" x2="460" y2="330" stroke="#475569" stroke-width="2"/>
+  <line x1="685" y1="330" x2="460" y2="330" stroke="#475569" stroke-width="2"/>
+  <line x1="460" y1="330" x2="460" y2="356" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ===================== TIER 2 ===================== -->
+  <text x="40" y="392" font-size="14" font-weight="700" fill="#334155">TIER 2 — Probe gate</text>
+  <line x1="40" y1="402" x2="880" y2="402" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- highlighted probe gate (the only path to a write) -->
+  <rect x="250" y="418" width="420" height="118" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="2.5"/>
+  <rect x="250" y="418" width="420" height="28" rx="12" fill="#d97706"/>
+  <rect x="250" y="432" width="420" height="14" fill="#d97706"/>
+  <text x="460" y="438" font-size="13.5" font-weight="700" fill="#ffffff" text-anchor="middle">DETERMINISTIC PROBE GATE</text>
+  <text x="460" y="470" font-size="12.5" fill="#334155" text-anchor="middle">The single, mandatory checkpoint between any proposal and any write.</text>
+  <text x="460" y="492" font-size="12.5" fill="#334155" text-anchor="middle">Probe = read back actual styles, verify the proposed change resolves exactly.</text>
+  <rect x="300" y="504" width="320" height="22" rx="11" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="460" y="519" font-size="11.5" font-weight="700" fill="#b45309" text-anchor="middle">ONLY PATH TO A WRITE · pass → write · fail → no write</text>
+
+  <!-- gate to write -->
+  <line x1="460" y1="536" x2="460" y2="572" stroke="#15803d" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <rect x="372" y="574" width="176" height="40" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.8"/>
+  <text x="460" y="599" font-size="13" font-weight="700" fill="#15803d" text-anchor="middle">Deterministic write ✓</text>
+
+  <!-- ===================== AI ROLES ===================== -->
+  <text x="40" y="652" font-size="14" font-weight="700" fill="#334155">AI's three legitimate roles</text>
+  <text x="240" y="652" font-size="11.5" fill="#94a3b8">(feed the gate — never bypass it)</text>
+  <line x1="40" y1="662" x2="880" y2="662" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- role 1: router -->
+  <rect x="40" y="678" width="270" height="62" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="60" y="702" font-size="13" font-weight="700" fill="#1d4ed8">1 · Router</text>
+  <text x="60" y="722" font-size="11.5" fill="#334155">Pick which deterministic path to try.</text>
+
+  <!-- role 2: tie-break -->
+  <rect x="325" y="678" width="270" height="62" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="345" y="702" font-size="13" font-weight="700" fill="#1d4ed8">2 · Tie-break</text>
+  <text x="345" y="722" font-size="11.5" fill="#334155">Choose among equally valid candidates.</text>
+
+  <!-- role 3: repair -->
+  <rect x="610" y="678" width="270" height="62" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="630" y="702" font-size="13" font-weight="700" fill="#1d4ed8">3 · Repair</text>
+  <text x="630" y="722" font-size="11.5" fill="#334155">Re-propose after a probe failure.</text>
+
+  <!-- connectors: roles feed the gate (dashed, advisory) -->
+  <path d="M175 678 C 175 620, 300 600, 300 536" fill="none" stroke="#3b82f6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow)" opacity="0.7"/>
+  <path d="M460 678 C 460 640, 460 620, 460 540" fill="none" stroke="#3b82f6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow)" opacity="0.7"/>
+  <path d="M745 678 C 745 620, 620 600, 620 536" fill="none" stroke="#3b82f6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow)" opacity="0.7"/>
+</svg>

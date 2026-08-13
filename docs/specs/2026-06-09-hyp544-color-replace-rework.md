@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 3.8, 3.12, 12.3–12.4). Retained for history; do not follow for new work.
+
 # HYP-544 — Color-replace rework: binding-kind classifier, not blanket twMerge
 
 **Status:** Phase 1 IMPLEMENTED + Phase 2 IMPLEMENTED + Phase 3 Tier 1 IMPLEMENTED (`HYP-544-color-dom-anchor`, rebased onto main + HYP-575); probe Tiers 2/3 design only. Supersedes the same-file-const branch of PR #381.

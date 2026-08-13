@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Fig 11.2 — Stylability ladder: one 'color: red' edit resolves to three channels, one batch plan</title>
+
+  <!-- ===== palette =====
+       neutral greys + green (implemented) + amber (typed-only) + red (debt/needs-wrapper)
+       accent blue for the unifying edit/plan -->
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#5b6470"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2f8f4e"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#b5840f"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#c0392b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="980" height="620" fill="#fbfcfd"/>
+
+  <!-- ===== header ===== -->
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#1f2733">Fig 11.2 — Stylability ladder</text>
+  <text x="40" y="68" font-size="13.5" fill="#5b6470">One <tspan font-weight="700" fill="#c0392b">color: red</tspan> edit, three elements at different ladder rungs, resolving to three channels — folded into one batch plan.</text>
+
+  <!-- ===== the unifying edit (top, blue) ===== -->
+  <g>
+    <rect x="370" y="92" width="240" height="46" rx="9" fill="#eaf1fb" stroke="#3a6fb0" stroke-width="1.6"/>
+    <text x="490" y="115" font-size="13.5" font-weight="700" fill="#234a78" text-anchor="middle">User edit</text>
+    <text x="490" y="131" font-size="13" fill="#2c5a92" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace">color: red</text>
+  </g>
+
+  <!-- column headers row markers (rungs) -->
+  <text x="120"  y="175" font-size="11.5" font-weight="700" fill="#2f8f4e" text-anchor="middle" letter-spacing="0.5">L0 · STYLABLE PROP</text>
+  <text x="490"  y="175" font-size="11.5" font-weight="700" fill="#b5840f" text-anchor="middle" letter-spacing="0.5">L2 · PARTIAL (FILL-ONLY)</text>
+  <text x="860"  y="175" font-size="11.5" font-weight="700" fill="#c0392b" text-anchor="middle" letter-spacing="0.5">L3 · NEEDS WRAPPER</text>
+
+  <!-- fan-out connectors from edit to three elements -->
+  <path d="M430,138 C300,160 180,165 120,200"  fill="none" stroke="#2f8f4e" stroke-width="1.8" marker-end="url(#arrowGreen)"/>
+  <path d="M490,140 L490,200"                    fill="none" stroke="#b5840f" stroke-width="1.8" marker-end="url(#arrowAmber)"/>
+  <path d="M550,138 C700,160 800,165 860,200"   fill="none" stroke="#c0392b" stroke-width="1.8" marker-end="url(#arrowRed)"/>
+
+  <!-- ============ ELEMENT 1 : button → L0 prop (green/implemented) ============ -->
+  <g>
+    <rect x="30" y="206" width="180" height="118" rx="10" fill="#ffffff" stroke="#2f8f4e" stroke-width="1.8"/>
+    <text x="120" y="232" font-size="14" font-weight="700" fill="#1f2733" text-anchor="middle">&lt;Button&gt;</text>
+    <text x="120" y="252" font-size="11.5" fill="#5b6470" text-anchor="middle">design-system primitive</text>
+    <line x1="48" y1="264" x2="192" y2="264" stroke="#e1e6ec" stroke-width="1"/>
+    <text x="120" y="284" font-size="11.5" fill="#2f8f4e" text-anchor="middle" font-weight="600">exposes</text>
+    <text x="120" y="302" font-size="11.5" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">color?: string</text>
+    <text x="120" y="318" font-size="10.5" fill="#7a8390" text-anchor="middle">direct, typed prop</text>
+  </g>
+
+  <!-- ============ ELEMENT 2 : SVG icon → L2 fill-only (amber/partial) ============ -->
+  <g>
+    <rect x="400" y="206" width="180" height="118" rx="10" fill="#ffffff" stroke="#b5840f" stroke-width="1.8"/>
+    <text x="490" y="232" font-size="14" font-weight="700" fill="#1f2733" text-anchor="middle">&lt;svg&gt; icon</text>
+    <text x="490" y="252" font-size="11.5" fill="#5b6470" text-anchor="middle">inline vector glyph</text>
+    <line x1="418" y1="264" x2="562" y2="264" stroke="#e1e6ec" stroke-width="1"/>
+    <text x="490" y="284" font-size="11.5" fill="#b5840f" text-anchor="middle" font-weight="600">fill-only surface</text>
+    <text x="490" y="302" font-size="11.5" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">fill="currentColor"</text>
+    <text x="490" y="318" font-size="10.5" fill="#7a8390" text-anchor="middle">no text/border channel</text>
+  </g>
+
+  <!-- ============ ELEMENT 3 : legacy component → L3 needs-wrapper (red/debt) ============ -->
+  <g>
+    <rect x="770" y="206" width="180" height="118" rx="10" fill="#fdeceb" stroke="#c0392b" stroke-width="1.8" stroke-dasharray="6 4"/>
+    <text x="860" y="232" font-size="14" font-weight="700" fill="#1f2733" text-anchor="middle">&lt;LegacyCard&gt;</text>
+    <text x="860" y="252" font-size="11.5" fill="#5b6470" text-anchor="middle">opaque 3rd-party comp.</text>
+    <line x1="788" y1="264" x2="932" y2="264" stroke="#f0c9c5" stroke-width="1"/>
+    <text x="860" y="284" font-size="11.5" fill="#c0392b" text-anchor="middle" font-weight="600">no style entry point</text>
+    <text x="860" y="302" font-size="11.5" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">props: any (untyped)</text>
+    <text x="860" y="318" font-size="10.5" fill="#a85248" text-anchor="middle">DEBT · wrapper required</text>
+  </g>
+
+  <!-- arrows: element -> channel -->
+  <path d="M120,324 L120,372" fill="none" stroke="#2f8f4e" stroke-width="1.8" marker-end="url(#arrowGreen)"/>
+  <path d="M490,324 L490,372" fill="none" stroke="#b5840f" stroke-width="1.8" marker-end="url(#arrowAmber)"/>
+  <path d="M860,324 L860,372" fill="none" stroke="#c0392b" stroke-width="1.8" marker-end="url(#arrowRed)"/>
+
+  <!-- ============ CHANNELS ROW ============ -->
+  <text x="490" y="358" font-size="11.5" font-weight="700" fill="#5b6470" text-anchor="middle" letter-spacing="0.5">RESOLVED CHANNEL</text>
+
+  <!-- channel 1: prop write -->
+  <g>
+    <rect x="30" y="378" width="180" height="86" rx="10" fill="#eef8f1" stroke="#2f8f4e" stroke-width="1.6"/>
+    <text x="120" y="402" font-size="12.5" font-weight="700" fill="#246a3c" text-anchor="middle">Prop channel</text>
+    <text x="120" y="422" font-size="11" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">set color="red"</text>
+    <text x="120" y="441" font-size="10.5" fill="#5b6470" text-anchor="middle">edit JSX attribute</text>
+    <text x="120" y="457" font-size="10.5" fill="#2f8f4e" text-anchor="middle" font-weight="600">implemented</text>
+  </g>
+
+  <!-- channel 2: fill attribute -->
+  <g>
+    <rect x="400" y="378" width="180" height="86" rx="10" fill="#fbf4e3" stroke="#b5840f" stroke-width="1.6"/>
+    <text x="490" y="402" font-size="12.5" font-weight="700" fill="#8a6409" text-anchor="middle">Fill channel</text>
+    <text x="490" y="422" font-size="11" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">set fill="red"</text>
+    <text x="490" y="441" font-size="10.5" fill="#5b6470" text-anchor="middle">color → fill mapping</text>
+    <text x="490" y="457" font-size="10.5" fill="#b5840f" text-anchor="middle" font-weight="600">partial · fill axis only</text>
+  </g>
+
+  <!-- channel 3: wrapper injection -->
+  <g>
+    <rect x="770" y="378" width="180" height="86" rx="10" fill="#fdeceb" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <text x="860" y="402" font-size="12.5" font-weight="700" fill="#a3271c" text-anchor="middle">Wrapper channel</text>
+    <text x="860" y="422" font-size="11" fill="#3a4350" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">wrap + className</text>
+    <text x="860" y="441" font-size="10.5" fill="#5b6470" text-anchor="middle">inject styled boundary</text>
+    <text x="860" y="457" font-size="10.5" fill="#c0392b" text-anchor="middle" font-weight="600">debt · synthesized</text>
+  </g>
+
+  <!-- converging arrows into batch plan -->
+  <path d="M120,464 C120,510 360,512 430,524" fill="none" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <path d="M490,464 L490,520"                  fill="none" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <path d="M860,464 C860,510 620,512 550,524"  fill="none" stroke="#5b6470" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- ============ ONE BATCH PLAN ============ -->
+  <g>
+    <rect x="300" y="528" width="380" height="64" rx="11" fill="#eaf1fb" stroke="#3a6fb0" stroke-width="1.8"/>
+    <text x="490" y="552" font-size="14" font-weight="700" fill="#234a78" text-anchor="middle">One batch plan — 3 edits, single undo step</text>
+    <text x="490" y="574" font-size="11.5" fill="#2c5a92" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">[propWrite, fillWrite, wrapperInject]</text>
+  </g>
+
+  <!-- ===== legend ===== -->
+  <g font-size="10.5" fill="#5b6470">
+    <rect x="40" y="600" width="14" height="10" rx="2" fill="#ffffff" stroke="#2f8f4e" stroke-width="1.6"/>
+    <text x="60" y="609">implemented</text>
+    <rect x="160" y="600" width="14" height="10" rx="2" fill="#ffffff" stroke="#b5840f" stroke-width="1.6"/>
+    <text x="180" y="609">partial / typed-only axis</text>
+    <rect x="330" y="600" width="14" height="10" rx="2" fill="#fdeceb" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <text x="350" y="609">debt · needs wrapper</text>
+    <rect x="500" y="600" width="14" height="10" rx="2" fill="#eaf1fb" stroke="#3a6fb0" stroke-width="1.6"/>
+    <text x="520" y="609">unifying edit / plan</text>
+  </g>
+</svg>

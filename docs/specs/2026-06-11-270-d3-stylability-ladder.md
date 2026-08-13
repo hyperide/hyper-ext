@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** by the [2026-06-12 Styles System Master Spec](./2026-06-12-styles-system-master-spec.md) (see Part/§ 8.4, 11.2–11.3). Retained for history; do not follow for new work.
+
 # #270 D3 — stylability ladder & honest partial-batch skip-banner (build-ready)
 
 **Ticket:** HYP-581 (impl) / HYP-271 (PR #270) / HYP-535 (transport gate).

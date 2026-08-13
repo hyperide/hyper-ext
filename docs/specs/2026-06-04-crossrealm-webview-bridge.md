@@ -1,3 +1,5 @@
+> **ARCHIVED** — historical build plan, superseded by the master styles spec + its migration (Part 14).
+
 # Cross-realm webview bridge — wiring SaaS-only features into the VS Code extension
 
 **Ticket:** HYP-535. **Covers:** #258 NudgeHUD, #270 multi-select batch, #260 FastPatch.
