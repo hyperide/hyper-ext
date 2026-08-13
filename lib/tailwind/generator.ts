@@ -303,7 +303,11 @@ function toColorClass(type: 'bg' | 'text' | 'border' | 'shadow', value: string |
     if (twClassFromRgb) {
       const alpha = rgbMatch[4] ? Number.parseFloat(rgbMatch[4]) : 1;
       if (alpha < 1) {
-        const opacityPercent = Math.round(alpha <= 1 ? alpha * 100 : alpha);
+        // CSS rgb()/rgba() alpha is a 0..1 fraction (the regex never captures a `%`
+        // suffix), so the opacity percent is always `alpha * 100`. The previous
+        // `alpha <= 1 ? alpha * 100 : alpha` ternary had a dead `: alpha` branch:
+        // inside the `alpha < 1` guard `alpha <= 1` is always true.
+        const opacityPercent = Math.round(alpha * 100);
         return `${type}-${twClassFromRgb}/${opacityPercent}`;
       }
       return `${type}-${twClassFromRgb}`;

@@ -654,6 +654,9 @@ export function activate(context: vscode.ExtensionContext) {
     modeManager.startWatching();
     void setupEntryFileWatcher(activeWorkspaceRoot, modeManager);
 
+    // Not awaited here on purpose: the promise is returned to the caller, which
+    // decides whether to await it (eager dev-server start) or fire-and-forget.
+    // (CodeQL flags this as a missing await; it is a false positive.)
     return devServerManager?.setProjectPath(activeWorkspaceRoot) ?? Promise.resolve();
   };
 

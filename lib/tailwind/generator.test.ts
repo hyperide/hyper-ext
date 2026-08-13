@@ -98,6 +98,18 @@ describe('generateTailwindClasses', () => {
     expect(result).toContain('border-black/50');
   });
 
+  it('maps fractional rgba alpha to a 0..100 opacity percent (regression: dead alpha branch)', () => {
+    // CodeQL HYP-656 A1: the rgba opacity percent must come from `alpha * 100`
+    // for any 0..1 alpha, not from the removed always-true `alpha <= 1 ? ... : alpha`
+    // ternary whose `: alpha` branch was unreachable inside the `alpha < 1` guard.
+    expect(generateTailwindClasses({ borderColor: 'rgba(0,0,0,0.33)' })).toContain('border-black/33');
+    expect(generateTailwindClasses({ borderColor: 'rgba(0,0,0,0.05)' })).toContain('border-black/5');
+    expect(generateTailwindClasses({ borderColor: 'rgba(0,0,0,0.999)' })).toContain('border-black/100');
+    // alpha === 1 (or omitted) takes the full-opacity path — no `/NN` modifier.
+    expect(generateTailwindClasses({ borderColor: 'rgb(0,0,0)' })).toContain('border-black');
+    expect(generateTailwindClasses({ borderColor: 'rgb(0,0,0)' })).not.toContain('border-black/');
+  });
+
   it('should generate common color classes', () => {
     const result = generateTailwindClasses({
       backgroundColor: '#ffffff',

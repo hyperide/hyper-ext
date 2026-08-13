@@ -38,6 +38,9 @@ export interface WriteI18nResourceResult {
 const FORBIDDEN_KEY_PARTS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function setKey(data: unknown, key: string, value: string): boolean {
+  // `typeof null === 'object'` in JS, so the explicit `=== null` check is required —
+  // null would otherwise pass the typeof guard and crash the property writes below.
+  // (CodeQL flags this as a redundant comparison; it is a false positive.)
   if (typeof data !== 'object' || data === null) return false;
 
   // Reject keys that could pollute Object.prototype or Function.prototype
