@@ -504,8 +504,9 @@ describe('ComponentScanner.detectProjectStructure — monorepo', () => {
     const scanner = new ComponentScanner(createMockStore(null));
     const structure = scanner.detectProjectStructure(root);
 
-    // LoginScreen.tsx at sub-package src/ root → pages
-    expect(structure.pagesPaths).toContain(path.join(root, 'targets', 'web', 'src'));
+    // LoginScreen.tsx at sub-package src/ root → individual file path in pages
+    expect(structure.pagesPaths).toContain(path.join(root, 'targets', 'web', 'src', 'LoginScreen.tsx'));
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'targets', 'web', 'src'));
     // Button.tsx in components/ → composites
     expect(
       structure.compositeComponentsPaths.some((p) => p.includes(path.join('targets', 'web', 'src', 'components'))),
@@ -720,5 +721,89 @@ describe('ComponentScanner.getComponentsData — sub-project grouping (HYP-391)'
 
     expect(result.isMonorepo).toBeFalsy();
     expect(!result.subProjects || result.subProjects.length === 0).toBe(true);
+  });
+});
+
+// ─── HYP-397: pages fallback — individual files, not whole src/ directory ─────
+
+describe('ComponentScanner — pages fallback adds individual files, not src/ dir (HYP-397)', () => {
+  const HYP397_DIR = path.join(TMP_DIR, 'hyp397');
+
+  afterAll(() => {
+    fs.rmSync(HYP397_DIR, { recursive: true, force: true });
+  });
+
+  function createHyp397Project(name: string, files: Record<string, string>): string {
+    const root = path.join(HYP397_DIR, name);
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = path.join(root, filePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
+    return root;
+  }
+
+  it('detectProjectStructure: fallback adds individual file paths, not src/ dir', () => {
+    const root = createHyp397Project('detect-fallback', {
+      'package.json': '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',
+      'src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // Individual file path, not the src/ directory
+    expect(structure.pagesPaths).toContain(path.join(root, 'src', 'LoginScreen.tsx'));
+    expect(structure.pagesPaths).not.toContain(path.join(root, 'src'));
+    // ConlocaCard is in src/components/ — should NOT appear in pagesPaths
+    expect(structure.pagesPaths.join(',')).not.toContain('ConlocaCard');
+  });
+
+  it('getComponentsData: LoginScreen in pageGroups, ConlocaCard NOT in pageGroups', async () => {
+    const root = createHyp397Project('get-components-fallback', {
+      'package.json': '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',
+      'src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    const pageNames = result.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    const compositeNames = result.compositeGroups.flatMap((g) => g.components.map((c) => c.name));
+
+    // LoginScreen directly in src/ → pageGroups
+    expect(pageNames.some((n) => n.includes('LoginScreen'))).toBe(true);
+
+    // ConlocaCard in src/components/ → compositeGroups, NOT pageGroups
+    expect(compositeNames.some((n) => n.includes('ConlocaCard'))).toBe(true);
+    expect(pageNames.join(',')).not.toContain('ConlocaCard');
+  });
+
+  it('getComponentsData: multiple direct src/ files → all in pageGroups', async () => {
+    const root = createHyp397Project('multi-pages-fallback', {
+      'package.json': '{"dependencies":{"react":"19"},"devDependencies":{"vite":"6"}}',
+      'src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'src/SignupScreen.tsx': 'export function SignupScreen() { return <div/>; }',
+      'src/components/ConlocaCard.tsx': 'export function ConlocaCard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    const pageNames = result.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+
+    // Both direct files → pageGroups, under a single src/ group
+    expect(pageNames.some((n) => n.includes('LoginScreen'))).toBe(true);
+    expect(pageNames.some((n) => n.includes('SignupScreen'))).toBe(true);
+
+    // Should be in the same group (dirPath = 'src')
+    const srcGroup = result.pageGroups.find((g) => g.dirPath === 'src');
+    expect(srcGroup).toBeDefined();
+    expect(srcGroup!.components).toHaveLength(2);
+
+    // ConlocaCard must not leak into pages
+    expect(pageNames.join(',')).not.toContain('ConlocaCard');
   });
 });

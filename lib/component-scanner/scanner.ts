@@ -342,11 +342,19 @@ export class ComponentScanner {
         !sourceRoot.endsWith(path.join(projectRoot, 'app')) &&
         !sourceRoot.endsWith(path.join(projectRoot, 'client'));
       if (dirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPackageSrc)) {
-        const hasTsxAtRoot = entries.some(
-          (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
-        );
-        if (hasTsxAtRoot) {
-          pages.push(sourceRoot);
+        // Add individual files — fallback is non-recursive (only direct src/ children)
+        for (const e of entries) {
+          if (
+            e.isFile() &&
+            (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) &&
+            !e.name.endsWith('.test.tsx') &&
+            !e.name.endsWith('.spec.tsx') &&
+            !e.name.endsWith('.test.jsx') &&
+            !e.name.endsWith('.spec.jsx') &&
+            /^[A-Z]/.test(e.name)
+          ) {
+            pages.push(path.join(sourceRoot, e.name));
+          }
         }
       }
     }
@@ -548,12 +556,7 @@ export class ComponentScanner {
   /**
    * Scan a directory for page files with Next.js special file filtering.
    */
-  private scanPagesDirectory(
-    dirPath: string,
-    categoryRoot: string,
-    projectRoot: string,
-    skipDirs?: Set<string>,
-  ): ComponentListItem[] {
+  private scanPagesDirectory(dirPath: string, categoryRoot: string, projectRoot: string): ComponentListItem[] {
     const components: ComponentListItem[] = [];
     if (!fs.existsSync(dirPath)) return components;
 
@@ -563,8 +566,7 @@ export class ComponentScanner {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        if (skipDirs?.has(entry.name)) continue;
-        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot, skipDirs));
+        components.push(...this.scanPagesDirectory(fullPath, categoryRoot, projectRoot));
       } else if (entry.isFile()) {
         const baseName = entry.name.replace(/\.(tsx?|jsx?)$/, '');
         if (
@@ -662,16 +664,13 @@ export class ComponentScanner {
       structure.atomComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
     );
     const atomGroups = this.buildGroups(structure.atomComponentsPaths, projectRoot, 'component');
-    const compositeDirPaths = new Set(
-      structure.compositeComponentsPaths.map((p) => (path.isAbsolute(p) ? p : path.join(projectRoot, p))),
-    );
     const compositeGroups = this.buildGroups(
       structure.compositeComponentsPaths,
       projectRoot,
       'component',
       atomDirPaths,
     );
-    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page', compositeDirPaths);
+    const pageGroups = this.buildGroups(structure.pagesPaths, projectRoot, 'page');
 
     return { name, path: relativePath, supported: true, atomGroups, compositeGroups, pageGroups };
   }
@@ -749,13 +748,22 @@ export class ComponentScanner {
         }
       }
 
-      // Fallback: PascalCase .tsx at src/ root → pages
+      // Fallback: PascalCase .tsx at src/ root → pages (individual files, not the directory)
       const isSubPkgSrc = !srcPath.endsWith(path.join(workspaceRoot, 'src'));
       if (srcDirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPkgSrc)) {
-        const hasTsxAtRoot = entries.some(
-          (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
-        );
-        if (hasTsxAtRoot) pages.push(srcPath);
+        for (const e of entries) {
+          if (
+            e.isFile() &&
+            (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) &&
+            !e.name.endsWith('.test.tsx') &&
+            !e.name.endsWith('.spec.tsx') &&
+            !e.name.endsWith('.test.jsx') &&
+            !e.name.endsWith('.spec.jsx') &&
+            /^[A-Z]/.test(e.name)
+          ) {
+            pages.push(path.join(srcPath, e.name));
+          }
+        }
       }
     }
 
@@ -801,19 +809,32 @@ export class ComponentScanner {
 
       const stat = fs.statSync(categoryPath);
 
-      // File path is a marker — scan its parent directory instead
+      // File path case
       if (stat.isFile()) {
-        const dir = path.dirname(categoryPath);
-        if (fs.existsSync(dir)) {
-          const components =
-            kind === 'page'
-              ? this.scanPagesDirectory(dir, dir, projectRoot)
-              : this.scanComponentDirectory(dir, dir, projectRoot, skipDirNames);
-          if (components.length > 0) {
-            groups.push({
-              dirPath: path.relative(projectRoot, dir),
-              components,
-            });
+        if (kind === 'page') {
+          // Individual page file — group by parent directory, add single component entry
+          const dirPath = path.relative(projectRoot, path.dirname(categoryPath));
+          const item: ComponentListItem = {
+            name: path.basename(categoryPath),
+            path: path.relative(projectRoot, categoryPath),
+          };
+          const existing = groups.find((g) => g.dirPath === dirPath);
+          if (existing) {
+            existing.components.push(item);
+          } else {
+            groups.push({ dirPath, components: [item] });
+          }
+        } else {
+          // For components: scan parent directory (existing behavior)
+          const dir = path.dirname(categoryPath);
+          if (fs.existsSync(dir)) {
+            const components = this.scanComponentDirectory(dir, dir, projectRoot, skipDirNames);
+            if (components.length > 0) {
+              groups.push({
+                dirPath: path.relative(projectRoot, dir),
+                components,
+              });
+            }
           }
         }
         continue;
@@ -834,12 +855,7 @@ export class ComponentScanner {
 
       const components =
         kind === 'page'
-          ? this.scanPagesDirectory(
-              categoryPath,
-              categoryPath,
-              projectRoot,
-              applicableSkips.size > 0 ? applicableSkips : undefined,
-            )
+          ? this.scanPagesDirectory(categoryPath, categoryPath, projectRoot)
           : this.scanComponentDirectory(
               categoryPath,
               categoryPath,
