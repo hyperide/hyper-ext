@@ -123,6 +123,7 @@ export { type PointAtOffsetResult, pathArea, pathLength, pointAtOffset } from '.
 export { pointInPath, pointOnStroke } from './path/hit-test';
 export { mergePaths } from './path/merge';
 export { type NearestResult, nearestPointOnPath } from './path/nearest';
+export { transformPathCommands } from './path/transform-path';
 // Persistence
 export { AutoSave } from './persistence/auto-save';
 // Kiwi codec (deferred SDK)

@@ -7,7 +7,24 @@
  */
 
 import type { BooleanOp, PathOpsBackend } from 'vector-wasm';
-import type { NodeTypeDefinition, NodeValue, PathValue } from '../../types';
+import { transformPathCommands } from '../../path/transform-path';
+import type { NodeTypeDefinition, NodeValue, PathValue, TransformMatrix } from '../../types';
+
+/**
+ * Bake an operand's accumulated scene transform into its path before the op.
+ * The transform rides on a separate `transform` port (translate/rotate/scale
+ * nodes leave the path commands raw); without this, the op combines the operand
+ * at its untransformed position (HYP-519). Identity transform is a no-op.
+ */
+function bakeOperand(pathInput: NodeValue, transformInput: NodeValue | undefined): PathValue {
+  const path = pathInput.value as PathValue;
+  if (!transformInput || transformInput.type !== 'transform') return path;
+  const matrix = transformInput.value as TransformMatrix;
+  const commands = transformPathCommands(path.commands, matrix);
+  if (commands === path.commands) return path;
+  // bounds is stale once geometry moves — drop it.
+  return { commands, closed: path.closed };
+}
 
 const BOOLEAN_OPS: Array<{ op: BooleanOp; type: string; label: string }> = [
   { op: 'union', type: 'boolean-union', label: 'Union' },
@@ -24,6 +41,9 @@ export function createBooleanNodes(backend: PathOpsBackend): NodeTypeDefinition[
     inputs: [
       { name: 'a', type: 'path' as const },
       { name: 'b', type: 'path' as const },
+      // Each operand's accumulated transform, baked into its path before the op.
+      { name: 'aTransform', type: 'transform' as const },
+      { name: 'bTransform', type: 'transform' as const },
     ],
     outputs: [{ name: 'path', type: 'path' as const }],
     params: [],
@@ -33,8 +53,8 @@ export function createBooleanNodes(backend: PathOpsBackend): NodeTypeDefinition[
       if (!aInput || !bInput) {
         return { path: { type: 'path', value: { commands: new Float64Array(0), closed: false } } };
       }
-      const a = aInput.value as PathValue;
-      const b = bInput.value as PathValue;
+      const a = bakeOperand(aInput, inputs.aTransform as NodeValue | undefined);
+      const b = bakeOperand(bInput, inputs.bTransform as NodeValue | undefined);
       const result = backend.boolean(op, a, b);
       return { path: { type: 'path', value: result } };
     },

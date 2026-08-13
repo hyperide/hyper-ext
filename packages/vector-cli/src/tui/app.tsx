@@ -11,14 +11,17 @@
 import { Box, Text, useApp, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { useState } from 'react';
+import type { PathOpsBackend } from 'vector-wasm';
 import { evaluateExpression } from './evaluate';
 
 export interface AppProps {
   canvasWidth?: number;
   canvasHeight?: number;
+  /** Real PathOps backend; omit for the MockPathOps no-op stub. */
+  pathOps?: PathOpsBackend;
 }
 
-export function App({ canvasWidth, canvasHeight }: AppProps): JSX.Element {
+export function App({ canvasWidth, canvasHeight, pathOps }: AppProps): JSX.Element {
   const { exit } = useApp();
   const [value, setValue] = useState('');
   const [svg, setSvg] = useState('');
@@ -32,7 +35,7 @@ export function App({ canvasWidth, canvasHeight }: AppProps): JSX.Element {
   });
 
   const handleSubmit = (expr: string): void => {
-    const result = evaluateExpression(expr, { canvasWidth, canvasHeight });
+    const result = evaluateExpression(expr, { canvasWidth, canvasHeight, pathOps });
     setSvg(result.svg);
     setError(result.error);
     // Clear the prompt so the next command starts fresh — otherwise the controlled

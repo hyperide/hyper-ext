@@ -8,7 +8,8 @@
  * Architecture: docs/specs/2026-03-13-vector-engine-design.md §Path Ops
  */
 
-import type { NodeTypeDefinition, NodeValue } from '../../types';
+import { transformPathCommands } from '../../path/transform-path';
+import type { NodeTypeDefinition, NodeValue, PathValue, TransformMatrix } from '../../types';
 
 export const clipNode: NodeTypeDefinition = {
   type: 'clip',
@@ -19,6 +20,8 @@ export const clipNode: NodeTypeDefinition = {
     { name: 'clip', type: 'path' },
     { name: 'style', type: 'style' },
     { name: 'transform', type: 'transform' },
+    // The clip mask's own accumulated transform, baked into clipPath (HYP-519).
+    { name: 'clipTransform', type: 'transform' },
   ],
   outputs: [
     { name: 'path', type: 'path' },
@@ -31,7 +34,22 @@ export const clipNode: NodeTypeDefinition = {
     const result: Record<string, NodeValue> = {};
     if (inputs.path) result.path = inputs.path as NodeValue;
     if (inputs.style) result.style = inputs.style as NodeValue;
-    if (inputs.clip) result.clipPath = inputs.clip as NodeValue;
+    if (inputs.clip) {
+      // Bake the mask's transform so the clip region sits at its scene position,
+      // not its raw (untransformed) position. The content's transform flows
+      // through `transform` to the scene item and is applied at render.
+      const clipInput = inputs.clip as NodeValue;
+      const clipPath = clipInput.value as PathValue;
+      const clipTransform = inputs.clipTransform as NodeValue | undefined;
+      if (clipTransform && clipTransform.type === 'transform') {
+        const matrix = clipTransform.value as TransformMatrix;
+        const commands = transformPathCommands(clipPath.commands, matrix);
+        result.clipPath =
+          commands === clipPath.commands ? clipInput : { type: 'path', value: { commands, closed: clipPath.closed } };
+      } else {
+        result.clipPath = clipInput;
+      }
+    }
     if (inputs.transform) result.transform = inputs.transform as NodeValue;
     return result;
   },

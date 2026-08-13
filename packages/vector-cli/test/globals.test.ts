@@ -45,7 +45,9 @@ describe('global functions', () => {
     const u = g.union(a, b);
     expect(u).toBeInstanceOf(ChainableNode);
     expect(ctx.graph.nodeCount).toBe(3);
-    expect(ctx.graph.edgeCount).toBe(2);
+    // 2 path edges (a, b) + 2 transform edges (aTransform, bTransform) — the
+    // latter forward each operand's accumulated transform for baking (HYP-519).
+    expect(ctx.graph.edgeCount).toBe(4);
   });
 
   it('should do all boolean ops', () => {

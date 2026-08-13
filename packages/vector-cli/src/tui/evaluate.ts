@@ -7,11 +7,14 @@
  * ink render loop — the TUI must keep running and show the error in its pane.
  */
 
+import type { PathOpsBackend } from 'vector-wasm';
 import { runBatch } from '../batch';
 
 export interface EvaluateOptions {
   canvasWidth?: number;
   canvasHeight?: number;
+  /** Real PathOps backend; omit for the MockPathOps no-op stub. */
+  pathOps?: PathOpsBackend;
 }
 
 export interface EvaluateResult {
@@ -34,6 +37,7 @@ export function evaluateExpression(expression: string, opts: EvaluateOptions = {
       expression: code,
       canvasWidth: opts.canvasWidth,
       canvasHeight: opts.canvasHeight,
+      pathOps: opts.pathOps,
     });
     return { svg };
   } catch (err) {

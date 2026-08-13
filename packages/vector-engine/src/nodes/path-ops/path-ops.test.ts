@@ -32,9 +32,12 @@ describe('Boolean operation nodes', () => {
     expect(nodes.map((n) => n.type)).toEqual(['boolean-union', 'boolean-subtract', 'boolean-intersect', 'boolean-xor']);
   });
 
-  it('should accept 2 path inputs and produce 1 path output', () => {
+  it('should accept 2 path operands (+ per-operand transforms) and produce 1 path output', () => {
     for (const node of nodes) {
-      expect(node.inputs).toHaveLength(2);
+      const pathInputs = node.inputs.filter((i) => i.type === 'path');
+      expect(pathInputs.map((i) => i.name)).toEqual(['a', 'b']);
+      // Each operand also carries its accumulated transform (baked before the op).
+      expect(node.inputs.map((i) => i.name)).toEqual(['a', 'b', 'aTransform', 'bTransform']);
       expect(node.outputs).toHaveLength(1);
       expect(node.outputs[0].type).toBe('path');
     }

@@ -4,6 +4,7 @@
  * Accessed via: vecli 'expression', vecli -e file.js, pipe
  */
 
+import type { PathOpsBackend } from 'vector-wasm';
 import { createContext, executeAndRender } from './context';
 import { runInSandbox } from './sandbox';
 
@@ -13,10 +14,12 @@ export interface BatchOptions {
   canvasWidth?: number;
   canvasHeight?: number;
   stdinData?: string;
+  /** Real PathOps backend; omit for the MockPathOps no-op stub. */
+  pathOps?: PathOpsBackend;
 }
 
 export function runBatch(opts: BatchOptions): string {
-  const ctx = createContext(opts.canvasWidth, opts.canvasHeight);
+  const ctx = createContext(opts.canvasWidth, opts.canvasHeight, opts.pathOps);
   if (opts.stdinData !== undefined) {
     ctx.stdinData = opts.stdinData;
   }

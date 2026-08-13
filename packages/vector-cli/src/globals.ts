@@ -66,6 +66,11 @@ function booleanOp(ctx: EvalContext, type: string, a: ChainableNode, b: Chainabl
   const nodeId = ctx.graph.addNode({ type, params: {} });
   ctx.graph.addEdge(a.nodeId, 'path', nodeId, 'a');
   ctx.graph.addEdge(b.nodeId, 'path', nodeId, 'b');
+  // Forward each operand's accumulated transform so the node can bake it into the
+  // path before the op (HYP-519). Operands with no transform output (e.g. a bare
+  // generator) resolve to undefined → identity bake, a no-op.
+  ctx.graph.addEdge(a.nodeId, 'transform', nodeId, 'aTransform');
+  ctx.graph.addEdge(b.nodeId, 'transform', nodeId, 'bTransform');
   return ChainableNode.fromExisting(ctx, nodeId);
 }
 
@@ -87,6 +92,11 @@ function createMultiNodeOps(ctx: EvalContext) {
       const nodeId = ctx.graph.addNode({ type: 'clip', params: {} });
       ctx.graph.addEdge(content.nodeId, 'path', nodeId, 'path');
       ctx.graph.addEdge(mask.nodeId, 'path', nodeId, 'clip');
+      // Content's transform flows through to the scene item; the mask's transform
+      // is baked into clipPath (HYP-519). Wiring both explicitly also disambiguates
+      // which upstream transform reaches the `transform` passthrough.
+      ctx.graph.addEdge(content.nodeId, 'transform', nodeId, 'transform');
+      ctx.graph.addEdge(mask.nodeId, 'transform', nodeId, 'clipTransform');
       return ChainableNode.fromExisting(ctx, nodeId);
     },
     group(...nodes: ChainableNode[]) {

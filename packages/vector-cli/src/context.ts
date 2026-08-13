@@ -15,6 +15,7 @@ import {
   sceneToSvg,
   VectorGraphModel,
 } from 'vector-engine';
+import type { PathOpsBackend } from 'vector-wasm';
 
 export interface TextAnnotation {
   text: string;
@@ -43,11 +44,20 @@ export interface EvalContext {
   textAnnotations: TextAnnotation[];
 }
 
-export function createContext(width?: number, height?: number): EvalContext {
+/**
+ * Build a fresh CLI session.
+ *
+ * @param pathOps - PathOps backend for boolean/offset/dash/strokeToPath/simplify
+ *   nodes. Omit (the default) to get the MockPathOps no-op stub used by unit
+ *   tests. The CLI entrypoint passes a real CanvasKit+Clipper backend it has
+ *   already awaited (initCanvasKit is async; createContext stays synchronous so
+ *   the chainable DSL and ~100 sync test callsites are unaffected).
+ */
+export function createContext(width?: number, height?: number, pathOps?: PathOpsBackend): EvalContext {
   const explicit = width !== undefined && height !== undefined;
   const w = width ?? 100;
   const h = height ?? 100;
-  const registry = createDefaultRegistry();
+  const registry = createDefaultRegistry(pathOps);
   const graph = VectorGraphModel.create(crypto.randomUUID(), 'untitled', w, h);
   return {
     graph,

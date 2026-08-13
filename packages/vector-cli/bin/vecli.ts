@@ -6,6 +6,8 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import type { PathOpsBackend } from 'vector-wasm';
+import { createPathOpsBackend } from '../src/backend';
 import { runBatch } from '../src/batch';
 import { getHelp } from '../src/help';
 import { svgToPng } from '../src/png';
@@ -74,6 +76,21 @@ const isTTY = process.stdin.isTTY && process.stdout.isTTY;
 const hasBatchArgs = expression || execFile;
 
 async function main(): Promise<void> {
+  // Load the real CanvasKit+Clipper PathOps backend once. initCanvasKit() is async;
+  // createContext stays synchronous, so this is the single async boundary. If WASM
+  // fails to load we abort with a clear error instead of silently degrading to the
+  // MockPathOps no-op (which would make boolean/offset/dash/strokeToPath/simplify
+  // return wrong geometry with no signal — the GAP-1 bug this fixes).
+  let pathOps: PathOpsBackend;
+  try {
+    pathOps = await createPathOpsBackend();
+  } catch (err) {
+    process.stderr.write(
+      `Error: failed to initialize PathOps WASM backend: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exit(1);
+  }
+
   if (hasBatchArgs || !isTTY) {
     // Batch mode
     let code = expression ?? '';
@@ -95,7 +112,7 @@ async function main(): Promise<void> {
     }
 
     try {
-      const output = runBatch({ expression: code, canvasWidth, canvasHeight });
+      const output = runBatch({ expression: code, canvasWidth, canvasHeight, pathOps });
 
       if (format === 'png' && output) {
         const pngBuf = svgToPng(output);
@@ -118,7 +135,7 @@ async function main(): Promise<void> {
   } else {
     // Interactive TUI mode. Dynamic import keeps ink/react off the batch hot path.
     const { startTui } = await import('../src/tui/index');
-    await startTui({ canvasWidth, canvasHeight });
+    await startTui({ canvasWidth, canvasHeight, pathOps });
   }
 }
 
