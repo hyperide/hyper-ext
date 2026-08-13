@@ -144,14 +144,22 @@ export async function detectFramework(projectRoot: string, io: FileIO): Promise<
   // Detect Vite by config-file presence too, not just deps.vite: in monorepos
   // vite is commonly hoisted to the workspace root, so a sub-package's own
   // package.json lists no `vite` dependency even though `vite dev` runs there.
-  const isVite =
-    Boolean(deps.vite) ||
+  //
+  // BUT config-file presence is only a FALLBACK signal — it must never override an
+  // EXPLICIT bundler dependency. A CRA / webpack / Parcel app commonly carries a
+  // `vite.config.ts` purely for vitest unit tests; treating that as a Vite SPA would
+  // silently reclassify (and mis-preview) the app. So config-only detection is gated
+  // on the absence of an explicit react-scripts/webpack/parcel dep. An explicit
+  // `deps.vite` is a strong signal and still wins unconditionally (HYP-470).
+  const hasExplicitOtherBundler = Boolean(deps['react-scripts'] || deps.webpack || deps.parcel);
+  const hasViteConfig =
     (await exists(io, join(projectRoot, 'vite.config.ts'))) ||
     (await exists(io, join(projectRoot, 'vite.config.js'))) ||
     (await exists(io, join(projectRoot, 'vite.config.mjs'))) ||
     (await exists(io, join(projectRoot, 'vite.config.mts'))) ||
     (await exists(io, join(projectRoot, 'vite.config.cts'))) ||
     (await exists(io, join(projectRoot, 'vite.config.cjs')));
+  const isVite = Boolean(deps.vite) || (hasViteConfig && !hasExplicitOtherBundler);
   if (isVite) {
     if (await exists(io, join(projectRoot, 'app/routes'))) {
       return { framework: 'vite-spa-file-based', routesDir: 'app/routes' };

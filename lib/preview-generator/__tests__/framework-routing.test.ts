@@ -196,6 +196,31 @@ describe('detectFramework — primary via package.json', () => {
     );
   });
 
+  // HYP-470 adversarial: a vite.config.* present for TESTING (vitest) must not override
+  // an explicit bundler dependency. The module contract is "package.json is the primary
+  // signal for all frameworks" — a config file beating an explicit react-scripts/webpack/
+  // parcel dep is a regression that silently reclassifies the app's previewable framework.
+  it('CRA (react-scripts) with a vitest vite.config.ts stays webpack, not vite', async () => {
+    const io = makeIO({ dependencies: { 'react-scripts': '^5.0.0' } }, [`${root}/vite.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('webpack');
+  });
+
+  it('plain webpack project with a vitest vite.config.ts stays webpack, not vite', async () => {
+    const io = makeIO({ devDependencies: { webpack: '^5.0.0' } }, [`${root}/vite.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('webpack');
+  });
+
+  it('Parcel project with a vitest vite.config.ts stays parcel, not vite', async () => {
+    const io = makeIO({ devDependencies: { parcel: '^2.0.0' } }, [`${root}/vite.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('parcel');
+  });
+
+  it('keeps the monorepo hoisted-vite intent: react-only dep + vite.config.ts is still vite', async () => {
+    // This is the HYP-470 case the fix must NOT break — no explicit bundler dep present.
+    const io = makeIO({ dependencies: { react: '^19.0.0' } }, [`${root}/vite.config.ts`]);
+    expect((await detectFramework(root, io)).framework).toBe('vite-spa-jsx-router');
+  });
+
   it('returns unknown when no known deps and no config files', async () => {
     const io = makeIO({ dependencies: { react: '^18.0.0' } });
     expect((await detectFramework(root, io)).framework).toBe('unknown');
