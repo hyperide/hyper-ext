@@ -14,7 +14,12 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { ensureSample, buildSampleScaffold, normalizeSampleComponentName } from '@lib/preview-generator';
+import {
+  ensureSample,
+  buildSampleScaffold,
+  generateSamplePropValues,
+  normalizeSampleComponentName,
+} from '@lib/preview-generator';
 import { escapeRegex, extractComponentName } from '../../../lib/preview-generator/scanner';
 import { handleEditorMessage, setMovePreviewToRight, setupActiveFileListener } from './EditorBridge';
 import { createExtensionSampleGenerator } from './services/SampleAIGenerator';
@@ -25,6 +30,30 @@ import { SyncPositionService } from './services/SyncPositionService';
 import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 
 export { normalizeSampleComponentName };
+
+/**
+ * Recursively drop function values from a generated sample-prop tree so the result
+ * is structured-clone safe for `webview.postMessage`. Functions can appear at any
+ * depth (generateSamplePropValues recurses into objectFields), and structured clone
+ * throws on the whole payload if any survive. Object keys whose value is a function
+ * are omitted entirely; arrays drop function items. Non-plain objects (Date, etc.)
+ * are passed through — structured clone handles them. Feature #210.
+ */
+function stripFunctions(value: unknown): unknown {
+  if (typeof value === 'function') return undefined;
+  if (Array.isArray(value)) {
+    return value.map(stripFunctions).filter((v) => v !== undefined);
+  }
+  if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = stripFunctions(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
 
 export class PreviewPanel {
   public static readonly viewType = 'hypercanvas.previewPanel';
@@ -415,10 +444,16 @@ export class PreviewPanel {
       const componentPath = msg.componentPath as string | undefined;
       if (componentPath) {
         const props = await this._panelRouter.componentService.getComponentDefinitions(componentPath);
+        // Feature #210 — alongside the schema, tell the overlay WHICH required
+        // props the deterministic generator couldn't satisfy. The overlay shows
+        // only after a failed auto-render, so these are the props most likely to
+        // need the user's attention.
+        const unsatisfiedProps = props && props.length > 0 ? generateSamplePropValues(props).unsatisfied : [];
         webview.postMessage({
           type: 'errorBoundary:propsSchema',
           componentPath,
           propsSchema: props,
+          unsatisfiedProps,
         });
       }
       return;
@@ -735,15 +770,53 @@ export class PreviewPanel {
   }
 
   /**
-   * Ensure a deterministic SampleDefault scaffold exists for a component with no props.
-   * Used as a silent fallback when AI sample generation is unavailable.
+   * Feature #210 — "try first, then ask", IN MEMORY ONLY.
+   *
+   * Before falling back to the "requires props" overlay, auto-generate best-effort
+   * sample VALUES for ALL of the component's props from their TS types and inject
+   * them at render time via the preview bridge. The values are posted to the webview
+   * (`setGeneratedProps`), which forwards them into the cross-origin preview iframe
+   * via postMessage; the generated `__canvas_preview__.tsx` holds them in React state
+   * and spreads them when rendering. The component then gets a real render attempt
+   * (the iframe ErrorBoundary is the probe). Only if that still fails does the
+   * overlay show.
+   *
+   * The component source file is NEVER mutated and no synthetic file is written to
+   * disk — the generated values live only in memory and are recomputed per select.
+   * (Previously this scaffolded a `SampleDefault` into the source, which the CTO
+   * rejected: the source must stay pristine.)
+   *
+   * @param componentPath path used to parse the prop schema (relative or absolute).
+   * @param previewKey path the iframe keys props by — MUST equal the `?component=`
+   *   URL value / preview-registry key (the project-relative path), or the iframe
+   *   lookup misses and the component renders without the generated props.
+   *
+   * Returns true when non-empty values were posted, false when there is no panel
+   * (an empty payload is still posted as a readiness signal — see below).
    */
-  public async ensureDefaultSampleForNoProps(componentPath: string, componentName: string): Promise<boolean> {
-    return this._handleCreateSampleFromError(componentPath, undefined, 'SampleDefault', {
-      componentName,
-      notifySampleCreated: false,
-      revealInEditor: false,
+  public async injectGeneratedSampleProps(componentPath: string, previewKey: string): Promise<boolean> {
+    if (!this._panel) return false;
+
+    const propDefs = await this._panelRouter.componentService?.getComponentDefinitions(componentPath).catch(() => null);
+    const rawValues = propDefs && propDefs.length > 0 ? generateSamplePropValues(propDefs).values : {};
+
+    // Deep-strip function values: webview postMessage uses structured clone, which
+    // throws on functions — including nested ones (e.g. `{ actions: { onSave: fn } }`,
+    // which generateSamplePropValues can produce by recursing into objectFields).
+    // Callbacks are already covered by `callbackStubs` spread via `previewFallbackProps`
+    // in the generated preview, so dropping them here loses nothing and keeps the
+    // payload structured-clone safe.
+    const values = stripFunctions(rawValues) as Record<string, unknown>;
+
+    // Always post — even an empty object — so the iframe records a readiness entry
+    // for this path (the ErrorBoundary resets on the first arrival) and never reuses
+    // a stale payload from a previous selection.
+    this._panel.webview.postMessage({
+      type: 'setGeneratedProps',
+      componentPath: previewKey,
+      values,
     });
+    return Object.keys(values).length > 0;
   }
 
   private _sampleWatcher?: vscode.Disposable;

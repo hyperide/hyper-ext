@@ -255,6 +255,7 @@ function PreviewContent() {
           errorSeq={componentError.errorSeq}
           error={componentError.error}
           propsSchema={componentError.propsSchema}
+          unsatisfiedProps={componentError.unsatisfiedProps}
           onCreateSample={(sampleName: string, propValues?: Record<string, unknown>) => {
             canvas.sendEvent({
               type: 'errorBoundary:createSample',
@@ -533,6 +534,11 @@ interface ComponentErrorOverlayProps {
   errorSeq?: number;
   error: string;
   propsSchema?: import('./PropsForm').SimplePropInfo[] | null;
+  /**
+   * Required props the auto-sample generator could not satisfy (feature #210).
+   * Highlighted in the overlay as "needs attention".
+   */
+  unsatisfiedProps?: string[];
   onCreateSample: (sampleName: string, propValues?: Record<string, unknown>) => void;
   onConfigureAIKey: () => void;
   onClose: () => void;
@@ -568,6 +574,7 @@ function ComponentErrorOverlay({
   componentPath,
   error,
   propsSchema,
+  unsatisfiedProps,
   onCreateSample,
   onConfigureAIKey,
   onClose,
@@ -579,6 +586,13 @@ function ComponentErrorOverlay({
       ?.replace(/\.tsx?$/, '') ?? componentPath;
 
   const extractedProps = useMemo(() => extractPropsFromError(error), [error]);
+  // Feature #210 — props that need the user's attention: the union of props the
+  // auto-sample generator couldn't satisfy and prop names parsed out of the
+  // actual render error. Auto-generation already ran and failed; these are why.
+  const attentionProps = useMemo(
+    () => [...new Set([...(unsatisfiedProps ?? []), ...extractedProps])],
+    [unsatisfiedProps, extractedProps],
+  );
   const cachedValues = useMemo(() => propsCache.get(componentPath), [componentPath]);
   const propValuesRef = useRef<Record<string, unknown>>(cachedValues ?? {});
   const [allRequiredFilled, setAllRequiredFilled] = useState(false);
@@ -659,7 +673,23 @@ function ComponentErrorOverlay({
             </button>
           )}
         </div>
-        <p style={errorOverlaySubtitleStyle}>This component requires props to render.</p>
+        <p style={errorOverlaySubtitleStyle}>
+          {attentionProps.length > 0
+            ? 'Auto-generated sample props were not enough to render this component.'
+            : 'This component requires props to render.'}
+        </p>
+
+        {attentionProps.length > 0 && (
+          <p data-testid={TID.preview.componentErrorAttentionProps} style={errorOverlayAttentionStyle}>
+            Needs attention:{' '}
+            {attentionProps.map((name, i) => (
+              <span key={name}>
+                {i > 0 ? ', ' : ''}
+                <code style={errorOverlayAttentionCodeStyle}>{name}</code>
+              </span>
+            ))}
+          </p>
+        )}
 
         {hasProps && (
           <>
@@ -1050,6 +1080,20 @@ const errorOverlayHintStyle: CSSProperties = {
   fontSize: 11,
   margin: '0 0 12px',
   lineHeight: 1.5,
+};
+
+const errorOverlayAttentionStyle: CSSProperties = {
+  color: 'var(--vscode-editorWarning-foreground, #cca700)',
+  fontSize: 12,
+  margin: '0 0 12px',
+  lineHeight: 1.5,
+};
+
+const errorOverlayAttentionCodeStyle: CSSProperties = {
+  fontFamily: 'var(--vscode-editor-font-family, monospace)',
+  background: 'var(--vscode-textCodeBlock-background, rgba(255,255,255,0.06))',
+  padding: '1px 5px',
+  borderRadius: 3,
 };
 
 const errorOverlayLinkButtonStyle: CSSProperties = {

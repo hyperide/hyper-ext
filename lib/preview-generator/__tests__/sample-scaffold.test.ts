@@ -74,6 +74,49 @@ describe('buildSampleScaffold', () => {
     expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
   });
 
+  it('serializes nested object prop values as parseable JSX (feature #210 auto-sample)', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: ALERT_SOURCE,
+      componentName: 'Tweet',
+      exportName: 'SampleDefault',
+      propEntries: [['tweet', { likes: 1, user: { name: 'Sample name', verified: false } }]],
+    });
+
+    expect(scaffold).toContain('tweet={');
+    expect(scaffold).toContain('"likes":1');
+    expect(scaffold).toContain('"name":"Sample name"');
+    expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+  });
+
+  it('serializes function prop values as a real arrow function, not a string', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: ALERT_SOURCE,
+      componentName: 'Button',
+      exportName: 'SampleDefault',
+      propEntries: [['onClick', () => undefined]],
+    });
+
+    // Must be an executable expression, not "() => undefined" as a string literal.
+    expect(scaffold).toContain('onClick={() => {}}');
+    expect(scaffold).not.toContain('"() =>');
+    expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+  });
+
+  it('preserves nested function fields inside object prop values', () => {
+    const scaffold = buildSampleScaffold({
+      sourceCode: ALERT_SOURCE,
+      componentName: 'Toolbar',
+      exportName: 'SampleDefault',
+      propEntries: [['actions', { onSave: () => undefined, label: 'Save' }]],
+    });
+
+    // The nested function must survive as an executable arrow, not be dropped by JSON.stringify.
+    expect(scaffold).toContain('"onSave":() => {}');
+    expect(scaffold).toContain('"label":"Save"');
+    expect(scaffold).not.toContain('actions={{}}');
+    expect(() => parse(scaffold, { sourceType: 'module', plugins: ['jsx', 'typescript'] })).not.toThrow();
+  });
+
   it('uses object spread for prop names that cannot be JSX attributes', () => {
     const scaffold = buildSampleScaffold({
       sourceCode: ALERT_SOURCE,

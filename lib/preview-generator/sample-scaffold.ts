@@ -143,7 +143,19 @@ function serializePropLine(key: string, value: unknown): string {
 function serializePropValue(value: unknown): string {
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'number') return String(value);
-  if (typeof value === 'object') return JSON.stringify(value);
+  // Function-typed sample values (e.g. onClick) must emit an executable no-op
+  // arrow, not a stringified function body — otherwise the prop is a string and
+  // calling it throws at runtime.
+  if (typeof value === 'function') return '() => {}';
+  if (value === null) return 'null';
+  // Recurse manually instead of JSON.stringify so nested functions survive as
+  // real arrows (JSON.stringify drops them, producing actions={{}} that crashes
+  // on actions.onSave()).
+  if (Array.isArray(value)) return `[${value.map(serializePropValue).join(',')}]`;
+  if (typeof value === 'object') {
+    const entries = Object.entries(value).map(([k, v]) => `${JSON.stringify(k)}:${serializePropValue(v)}`);
+    return `{${entries.join(',')}}`;
+  }
   return JSON.stringify(String(value));
 }
 

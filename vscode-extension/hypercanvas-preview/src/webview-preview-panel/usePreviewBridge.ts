@@ -29,6 +29,12 @@ export interface ComponentError {
   errorSeq: number;
   /** Prop schema from extension's ComponentService (populated asynchronously) */
   propsSchema?: SimplePropInfo[] | null;
+  /**
+   * Required props the deterministic auto-sample generator could not satisfy
+   * (feature #210). Populated asynchronously alongside propsSchema. The overlay
+   * highlights these as "needs attention".
+   */
+  unsatisfiedProps?: string[];
 }
 
 interface UsePreviewBridgeResult {
@@ -130,6 +136,10 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const currentComponentRef = useRef<string | null>(null);
   const devServerUrlRef = useRef<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  // Feature #210 — latest in-memory generated sample props per component path.
+  // Cached so we can re-forward them into the iframe after a (re)load, when the
+  // iframe's message listener was not yet registered the first time around.
+  const generatedPropsByPathRef = useRef<Record<string, Record<string, unknown>>>({});
   // Keep iframeEl in a ref so callbacks stay stable.
   // Direct assignment during render is intentional — this is the standard React pattern
   // for syncing refs with props. Wrapping in useEffect would create a stale-ref window
@@ -320,6 +330,20 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     let initialLoad = true; // skip the very first load (initial navigation)
     function handleLoad() {
       const comp = currentComponentRef.current;
+      // Feature #210 — re-forward cached generated props after each iframe (re)load.
+      // The iframe's message listener is fresh on every load, so any props posted
+      // before this load were lost; replay them (small delay to let listeners mount).
+      if (comp && iframeEl?.contentWindow) {
+        const cachedProps = generatedPropsByPathRef.current[comp];
+        if (cachedProps) {
+          setTimeout(() => {
+            iframeEl?.contentWindow?.postMessage(
+              { type: 'hypercanvas:setGeneratedProps', componentPath: comp, values: cachedProps },
+              '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+            );
+          }, 100);
+        }
+      }
       if (comp && iframeEl && shouldNavigateFrameToComponent(getFrameHref(iframeEl), comp)) {
         syncComponentToFrame(comp, iframeEl);
         return;
@@ -476,6 +500,29 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           break;
         }
 
+        case 'setGeneratedProps': {
+          // Feature #210 — in-memory generated sample props. The extension host
+          // computed best-effort values for ALL of a component's props and sends
+          // them here BEFORE the navigation/setComponent that triggers the render.
+          // The preview iframe is cross-origin to this webview, so we CANNOT stash
+          // them on a shared window global (a parent-window read would throw
+          // SecurityError) — we forward them into the iframe via postMessage, where
+          // the generated __canvas_preview__.tsx holds them in React state and
+          // injects them at render. They never touch the component source or the
+          // generated preview file — pristine source, recomputed per select.
+          const comp = typeof msg.componentPath === 'string' ? msg.componentPath : null;
+          if (!comp) break;
+          const values = msg.values && typeof msg.values === 'object' ? (msg.values as Record<string, unknown>) : {};
+          // Remember the latest payload per path so we can re-forward after an iframe
+          // (re)load, when the iframe's message listener was not yet registered.
+          generatedPropsByPathRef.current[comp] = values;
+          iframeElRef.current?.contentWindow?.postMessage(
+            { type: 'hypercanvas:setGeneratedProps', componentPath: comp, values },
+            '*', // nosemgrep: wildcard-postmessage-configuration -- webview->iframe, same-origin VS Code context
+          );
+          break;
+        }
+
         case 'goToVisual':
           // Update overlay state (selection highlighting)
           onStateUpdateRef.current({
@@ -588,7 +635,11 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           // Extension responded with prop type schema — enrich existing componentError
           setComponentError((prev) =>
             prev && prev.componentPath === msg.componentPath
-              ? { ...prev, propsSchema: msg.propsSchema as SimplePropInfo[] }
+              ? {
+                  ...prev,
+                  propsSchema: msg.propsSchema as SimplePropInfo[],
+                  unsatisfiedProps: (msg as { unsatisfiedProps?: string[] }).unsatisfiedProps ?? [],
+                }
               : prev,
           );
           break;

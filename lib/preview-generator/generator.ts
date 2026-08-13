@@ -7,7 +7,7 @@ import { basename, dirname } from 'node:path';
 import type { ContainerSampleJsxBody } from './sample-scaffold';
 import type { ExportStyle } from './scanner';
 
-export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v9';
+export const PREVIEW_GENERATOR_SCHEMA_MARKER = '@hyperide-preview-schema:fallback-props-v10';
 
 export interface PreviewComponentEntry {
   /** Relative path from project root, e.g. 'src/components/Button.tsx' */
@@ -783,6 +783,34 @@ function buildImportLine(entry: PreviewComponentEntry, alias: string): string {
   return `import { ${allImports.join(', ')} } from '${safePath}';`;
 }
 
+/**
+ * Feature #210 — shared React state + listener for in-memory generated sample props.
+ * The extension host posts `hypercanvas:setGeneratedProps` into the iframe; we store
+ * the payload in state keyed by component path. State (not a parent-window global) is
+ * required because the extension iframe is cross-origin to the webview — a
+ * `window.parent.__CANVAS_GENERATED_PROPS__` read would throw SecurityError. State
+ * also guarantees a re-render when props arrive, which drives the ErrorBoundary
+ * reset (propsReady false→true) that clears a crash from a bare first render.
+ */
+function buildGeneratedPropsState(): string[] {
+  return [
+    '  // Feature #210 — generated sample props delivered via postMessage (cross-origin safe).',
+    '  const [generatedPropsMap, setGeneratedPropsMap] = React.useState<Record<string, Record<string, unknown>>>({});',
+    '  React.useEffect(() => {',
+    '    function onGeneratedProps(e: MessageEvent) {',
+    "      if (e.data?.type !== 'hypercanvas:setGeneratedProps') return;",
+    '      const path = typeof e.data.componentPath === "string" ? e.data.componentPath : null;',
+    '      if (!path) return;',
+    '      const values = e.data.values && typeof e.data.values === "object" ? e.data.values : {};',
+    '      setGeneratedPropsMap((prev) => ({ ...prev, [path]: values as Record<string, unknown> }));',
+    '    }',
+    "    window.addEventListener('message', onGeneratedProps);",
+    "    return () => window.removeEventListener('message', onGeneratedProps);",
+    '  }, []);',
+    '',
+  ];
+}
+
 function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoutes?: Set<string>): string[] {
   return [
     'interface CanvasPreviewProps {',
@@ -794,6 +822,7 @@ function buildCanvasPreviewURLParams(providerWrap?: ProviderWrapConfig, ssrRoute
     '  const [componentPath, setComponentPath] = React.useState<string | null>(componentProp ?? null);',
     "  const [mode, setMode] = React.useState<'single' | 'multi'>(modeProp ?? 'single');",
     '',
+    ...buildGeneratedPropsState(),
     '  // Sync props to state when parent re-renders with new searchParams (Next.js App Router)',
     '  React.useEffect(() => {',
     '    if (componentProp != null) setComponentPath(componentProp);',
@@ -839,6 +868,7 @@ function buildCanvasPreviewNextPages(providerWrap?: ProviderWrapConfig, ssrRoute
     "  const mode = router.query.mode as 'single' | 'multi';",
     '  const [componentPath, setComponentPath] = React.useState(router.query.component as string);',
     '',
+    ...buildGeneratedPropsState(),
     '  // Sync with router query changes',
     '  React.useEffect(() => {',
     '    if (router.query.component) setComponentPath(router.query.component as string);',
@@ -892,10 +922,10 @@ function buildComponentMissingSignal(): string[] {
 function buildErrorBoundary(): string[] {
   return [
     'class ComponentErrorBoundary extends React.Component<',
-    '  { children: React.ReactNode; componentPath: string },',
+    '  { children: React.ReactNode; componentPath: string; propsReady?: boolean },',
     '  { error: Error | null }',
     '> {',
-    '  constructor(props: { children: React.ReactNode; componentPath: string }) {',
+    '  constructor(props: { children: React.ReactNode; componentPath: string; propsReady?: boolean }) {',
     '    super(props);',
     '    this.state = { error: null };',
     '  }',
@@ -909,9 +939,13 @@ function buildErrorBoundary(): string[] {
     '      error: error.message,',
     "    }, '*');",
     '  }',
-    '  componentDidUpdate(prevProps: { componentPath: string }) {',
-    '    // Reset error state when switching to a different component',
-    '    if (prevProps.componentPath !== this.props.componentPath && this.state.error) {',
+    '  componentDidUpdate(prevProps: { componentPath: string; propsReady?: boolean }) {',
+    '    // Reset error state when switching to a different component OR when feature',
+    '    // #210 generated props arrive for the first time (propsReady false→true).',
+    '    // The latter clears a crash from a bare first render that happened before',
+    '    // the props landed, so the component re-renders WITH the generated props.',
+    '    const propsJustArrived = !prevProps.propsReady && this.props.propsReady === true;',
+    '    if ((prevProps.componentPath !== this.props.componentPath || propsJustArrived) && this.state.error) {',
     '      this.setState({ error: null });',
     '    }',
     '  }',
@@ -950,10 +984,18 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
   const wo = providerWrap?.wrapOpen ?? '';
   const wc = providerWrap?.wrapClose ?? '';
   const hasSSR = ssrRoutes && ssrRoutes.size > 0;
-  // Runtime fallback render: use RemixMockWrapper for SSR routes, direct render otherwise
+  // Runtime fallback render: use RemixMockWrapper for SSR routes, direct render otherwise.
+  // Feature #210 — in-memory generated sample props. The extension host computes
+  // best-effort values for ALL of a component's props (generateSamplePropValues) and
+  // posts them into this iframe via `hypercanvas:setGeneratedProps` (postMessage —
+  // the iframe is cross-origin to the webview, so a parent-window global read would
+  // throw SecurityError). They are NEVER written to the component source or to this
+  // generated file — held only in `generatedPropsMap` React state so the source
+  // stays pristine and values are recomputed/refreshed per selection. Precedence:
+  // generated props win over the generic `previewFallbackProps` (matches multi-mode).
   const singleRender = hasSSR
-    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} />}`
-    : `{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} />}`;
+    ? `{SampleDefault ? <SampleDefault /> : ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} {...generatedProps} />}`
+    : `{SampleDefault ? <SampleDefault /> : <Component {...previewFallbackProps} {...generatedProps} />}`;
   const multiRender = hasSSR
     ? `{ssrRouteSet.has(componentPath) ? <RemixMockWrapper Component={Component} /> : <Component {...previewFallbackProps} />}`
     : `<Component {...previewFallbackProps} />`;
@@ -970,6 +1012,17 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '',
     '  const Component = componentRegistry[componentPath];',
     '  const sampleRenderers = sampleRenderersMap[componentPath] || {};',
+    '  // Feature #210 — in-memory generated sample props injected by the extension host',
+    "  // via the 'hypercanvas:setGeneratedProps' postMessage. `generatedPropsReady`",
+    '  // flips false→true once a payload (even {}) arrives for this path. It is passed',
+    '  // to the ErrorBoundary, which resets on that transition: if the bare Component',
+    '  // first-rendered and crashed on a required prop before the props arrived, the',
+    '  // reset re-renders WITH the props (otherwise the boundary only resets on a',
+    '  // component-path change and would latch the overlay forever). In SaaS this',
+    '  // message is never sent, so `generatedPropsReady` stays false and the boundary',
+    '  // behaves exactly as before — no SaaS behavior change.',
+    '  const generatedProps = generatedPropsMap[componentPath] ?? {};',
+    '  const generatedPropsReady = Object.prototype.hasOwnProperty.call(generatedPropsMap, componentPath);',
     '',
     "  if (mode !== 'multi') {",
     '    const SampleDefault = sampleRenderMap[componentPath];',
@@ -992,7 +1045,7 @@ function buildCanvasPreviewBody(providerWrap?: ProviderWrapConfig, ssrRoutes?: S
     '        </div>',
     '      );',
     '    }',
-    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath}><div style={{ padding: 20 }}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
+    `    return ${wo}<ComponentErrorBoundary componentPath={componentPath} propsReady={generatedPropsReady}><div style={{ padding: 20 }}>${singleRender}<_ComponentSuccessSignal componentPath={componentPath} /></div></ComponentErrorBoundary>${wc};`,
     '  }',
     '',
     '  const instances = ((window.parent as unknown) as { __CANVAS_INSTANCES__?: Record<string, InstanceEntry> }).__CANVAS_INSTANCES__ || {};',

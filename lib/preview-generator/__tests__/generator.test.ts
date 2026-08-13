@@ -834,6 +834,102 @@ describe('generatePreviewContent — synthetic SampleDefault', () => {
   });
 });
 
+describe('generatePreviewContent — in-memory generated props (#210)', () => {
+  it('holds generated props in React state fed by a postMessage listener (cross-origin safe)', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+
+    // State, not a parent-window global (a cross-origin window.parent read throws).
+    expect(content).toContain('generatedPropsMap');
+    expect(content).toContain('setGeneratedPropsMap');
+    expect(content).toContain("e.data?.type !== 'hypercanvas:setGeneratedProps'");
+    // The render reads the per-path entry from state.
+    expect(content).toContain('const generatedProps = generatedPropsMap[componentPath] ?? {};');
+  });
+
+  it('does NOT read generated props from a cross-origin parent-window global', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+    // window.parent.__CANVAS_GENERATED_PROPS__ would throw SecurityError in the
+    // extension's cross-origin iframe — must never appear.
+    expect(content).not.toContain('__CANVAS_GENERATED_PROPS__');
+  });
+
+  it('resets the ErrorBoundary when generated props arrive (no permanent latch)', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+    // The boundary takes an optional propsReady prop and clears the error on its
+    // false→true transition, so a bare first render that crashed before props
+    // arrived re-renders with the props instead of latching the overlay.
+    expect(content).toContain('propsReady?: boolean');
+    expect(content).toContain('const propsJustArrived = !prevProps.propsReady && this.props.propsReady === true;');
+    expect(content).toContain('propsReady={generatedPropsReady}');
+  });
+
+  it('does NOT block rendering behind a readiness placeholder (would strand SaaS)', () => {
+    // SaaS never sends hypercanvas:setGeneratedProps, so a hard gate that holds a
+    // placeholder until props arrive would strand SaaS unsampled components forever.
+    // The boundary-reset approach must NOT introduce such a gate. (Note: the
+    // pre-existing missing-component fallback legitimately says "Generating sample…",
+    // so we assert on the gate CONDITION, not the placeholder text.)
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+    expect(content).not.toContain('!generatedPropsReady');
+    expect(content).not.toContain('Component && !generatedPropsReady');
+  });
+
+  it('merges generated props after previewFallbackProps so generated values win', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+
+    // Generated props are spread last → override the generic fallback props.
+    expect(content).toContain('<Component {...previewFallbackProps} {...generatedProps} />');
+  });
+
+  it('does NOT bake any generated prop VALUES into the generated file', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+
+    // The generated file must only contain generic state-read code, never the
+    // computed sample values (those are posted in at runtime). The string "Sample "
+    // is what generateSamplePropValues emits for string props — never in the file.
+    expect(content).not.toContain('Sample title');
+    expect(content).not.toContain('Sample name');
+  });
+
+  it('injects generated props into the SSR fallback render path too', () => {
+    const entries: PreviewComponentEntry[] = [
+      {
+        componentPath: 'app/routes/feed.tsx',
+        componentName: 'Feed',
+        exportStyle: 'named',
+        sampleExports: [],
+        importPath: './routes/feed',
+        isSSRRoute: true,
+      },
+    ];
+    const content = generatePreviewContent(entries, { ssrMock: { framework: 'remix' } });
+
+    // Non-SSR fallback in the SSR-enabled body still merges generated props.
+    expect(content).toContain('<Component {...previewFallbackProps} {...generatedProps} />');
+    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+  });
+
+  it('wires the generated-props listener into the Next.js pages-router CanvasPreview too', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries, { isNextPagesRouter: true });
+    expect(content).toContain("e.data?.type !== 'hypercanvas:setGeneratedProps'");
+    expect(content).toContain('const generatedProps = generatedPropsMap[componentPath] ?? {};');
+    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+  });
+
+  it('still produces valid TS/TSX with the generated-props state + listener', () => {
+    const entries: PreviewComponentEntry[] = [makeEntry('src/components/Tweet.tsx', 'Tweet')];
+    const content = generatePreviewContent(entries);
+    expect(() => parse(content, { sourceType: 'module', plugins: ['typescript', 'jsx'] })).not.toThrow();
+  });
+});
+
 function makeEntry(path: string, name: string): PreviewComponentEntry {
   return {
     componentPath: path,

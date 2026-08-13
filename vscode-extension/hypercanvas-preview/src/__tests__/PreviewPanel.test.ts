@@ -424,6 +424,68 @@ export { Alert, AlertTitle, AlertDescription };
     expect(scaffold).not.toContain('TODO');
   });
 
+  describe('injectGeneratedSampleProps (#210)', () => {
+    function panelWithPropDefs(propDefs: unknown) {
+      const stateHub = createStateHub();
+      const { panel, postMessage } = createPanel(stateHub);
+      Object.assign(panel as PreviewPanel & { _panelRouter: unknown }, {
+        _panelRouter: {
+          componentService: {
+            getComponentDefinitions: mock(() => Promise.resolve(propDefs)),
+          },
+        },
+      });
+      return { panel, postMessage };
+    }
+
+    it('posts generated values keyed by the previewKey (relative path), not componentPath', async () => {
+      const { panel, postMessage } = panelWithPropDefs([{ name: 'title', type: 'string', required: true }]);
+
+      await panel.injectGeneratedSampleProps('/abs/workspace/src/Tweet.tsx', 'src/Tweet.tsx');
+
+      const call = postMessage.mock.calls.find((c) => (c[0] as { type?: string })?.type === 'setGeneratedProps');
+      expect(call).toBeDefined();
+      const payload = call?.[0] as { componentPath: string; values: Record<string, unknown> };
+      expect(payload.componentPath).toBe('src/Tweet.tsx');
+      expect(payload.values).toEqual({ title: 'Sample title' });
+    });
+
+    it('deep-strips nested function values so the payload is structured-clone safe', async () => {
+      const { panel, postMessage } = panelWithPropDefs([
+        {
+          name: 'actions',
+          type: 'Actions',
+          required: true,
+          objectFields: [
+            { name: 'label', type: 'string', required: true },
+            { name: 'onSave', type: '() => void', required: true },
+          ],
+        },
+        { name: 'onClick', type: '() => void', required: true },
+      ]);
+
+      await panel.injectGeneratedSampleProps('src/Card.tsx', 'src/Card.tsx');
+
+      const call = postMessage.mock.calls.find((c) => (c[0] as { type?: string })?.type === 'setGeneratedProps');
+      const payload = call?.[0] as { values: Record<string, unknown> };
+      // structuredClone throws if any function survived at any depth.
+      expect(() => structuredClone(payload.values)).not.toThrow();
+      expect(payload.values).toEqual({ actions: { label: 'Sample label' } });
+      expect(payload.values).not.toHaveProperty('onClick');
+    });
+
+    it('posts an empty payload (readiness signal) when the component has no props', async () => {
+      const { panel, postMessage } = panelWithPropDefs([]);
+
+      const result = await panel.injectGeneratedSampleProps('src/Plain.tsx', 'src/Plain.tsx');
+
+      const call = postMessage.mock.calls.find((c) => (c[0] as { type?: string })?.type === 'setGeneratedProps');
+      expect(call).toBeDefined();
+      expect((call?.[0] as { values: Record<string, unknown> }).values).toEqual({});
+      expect(result).toBe(false);
+    });
+  });
+
   it('accepts webview:ready fired during the initial preview HTML write', async () => {
     const originalLog = console.log;
     console.log = mock();

@@ -29,6 +29,7 @@ export {
   type SampleGeneratorFn,
 } from './sample-ensurer';
 export { buildSamplePrompt, extractCodeFromAIResponse } from './sample-prompt';
+export { generateSamplePropValues } from './sample-values';
 export { buildSampleScaffold, normalizeSampleComponentName, type SampleScaffoldConfig } from './sample-scaffold';
 export {
   detectExportStyle,

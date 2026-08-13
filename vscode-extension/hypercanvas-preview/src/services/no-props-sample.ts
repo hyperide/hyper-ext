@@ -1,26 +1,31 @@
 /**
- * @file Decides when the extension should create a deterministic SampleDefault scaffold.
+ * @file Decides when the extension should inject in-memory generated sample props.
  *
  * Accessed via: VS Code extension component selection flow before preview registration
  */
 
 import type { EnsureSampleResult } from '@lib/preview-generator';
-import * as vscode from 'vscode';
 
-export function shouldCreateNoPropsSample(
+/**
+ * Feature #210 — decide whether to compute + inject in-memory generated sample
+ * props for a freshly selected component.
+ *
+ * Returns true when the component has NO authored SampleDefault yet (so the
+ * preview would otherwise render it propless and crash on required props) AND its
+ * prop schema was parsed successfully. "Try first, then ask": inject best-effort
+ * values, attempt a real render, and only fall back to the "requires props"
+ * overlay when that still fails.
+ *
+ * NOTE: intentionally NOT gated on `hypercanvas.preview.autoSampleGeneration`.
+ * That setting exists to stop the AI/scaffold path from writing into the
+ * component SOURCE file (which `git checkout` between E2E specs would revert).
+ * In-memory injection never touches source, so the gate does not apply.
+ *
+ * `props` being null/undefined means the component couldn't be parsed — skip.
+ */
+export function shouldInjectGeneratedProps(
   ensureResult: EnsureSampleResult,
   props: readonly unknown[] | null | undefined,
 ): boolean {
-  // Respect the user-facing setting so E2E harnesses can disable the
-  // source-file mutation — git checkout between specs would drop the
-  // export and trigger Vite "Could not Fast Refresh" + failed reload.
-  const enabled = vscode.workspace.getConfiguration('hypercanvas.preview').get<boolean>('autoSampleGeneration', true);
-  if (!enabled) return false;
-
-  // Create a minimal no-props scaffold whenever no sample was generated — regardless of
-  // whether the component declares props. If the component renders without them, great.
-  // If it crashes, the ErrorBoundary catches it and ComponentErrorOverlay shows instead.
-  // This implements "try first, then ask" rather than "refuse to try".
-  // `props` being null/undefined means the component couldn't be parsed — skip in that case.
   return !ensureResult.exists && Array.isArray(props);
 }
