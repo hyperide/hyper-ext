@@ -44,8 +44,6 @@ pre-commit:
       stage_fixed: true
     typecheck:
       glob: '*.{ts,tsx}'
-      # TODO: re-enable `&& npx tsgo --noEmit -p vscode-extension/hypercanvas-preview/tsconfig.json`
-      # once pre-existing TS6059 rootDir errors (and missing @types/vscode in worktree) are resolved.
       run: |
         TSGO="$(git rev-parse --path-format=absolute --git-common-dir)/../node_modules/.bin/tsgo"
         if [ -x "$TSGO" ]; then
@@ -54,6 +52,26 @@ pre-commit:
           echo "ERROR: tsgo not found in node_modules/.bin — run 'bun install' first" >&2
           exit 1
         fi
+    ext-tsc:
+      # The VS Code extension (vscode-extension/hypercanvas-preview) isn't covered by the
+      # root `typecheck` job above: root tsconfig.json doesn't include it, and `tsgo`
+      # (the fast native compiler used above) mis-infers `rootDir` for the extension's
+      # tsconfig (it pulls in ../../lib and ../../shared via `include` and throws bogus
+      # TS6059 "not under rootDir" errors that plain `tsc` does not — verified: `tsc -p
+      # vscode-extension/hypercanvas-preview/tsconfig.json` from repo root is clean).
+      # HYP: P-8 retrospective finding — this gate was disabled with a TODO for a long
+      # time, so the extension could merge with real type errors uncaught.
+      # The extension is npm-only (never `bun install`/`bun test` it — see no-ext-bun-lock
+      # below), so this runs its own locally-installed `tsc`, not the root's tsgo/bun deps.
+      glob: '*.{ts,tsx}'
+      run: |
+        cd vscode-extension/hypercanvas-preview
+        TSC="node_modules/.bin/tsc"
+        if [ ! -x "$TSC" ]; then
+          echo "ERROR: extension TypeScript not installed — run 'npm ci' in vscode-extension/hypercanvas-preview first (npm-only, never bun install)." >&2
+          exit 1
+        fi
+        "$TSC" --noEmit -p ./ < /dev/null
     react-hooks-import:
       glob: '*.{tsx,ts}'
       run: node scripts/check-react-hooks-import.cjs {staged_files}
@@ -106,6 +124,6 @@ pre-push:
     # its "push files" list is empty (e.g. the first push of a branch), which would
     # fail OPEN; scripts always run. use_stdin: git delivers the pushed refs on the
     # hook's stdin ("<local-ref> <local-sha> <remote-ref> <remote-sha>" lines).
-    "protect-main.sh":
+    'protect-main.sh':
       runner: sh
       use_stdin: true

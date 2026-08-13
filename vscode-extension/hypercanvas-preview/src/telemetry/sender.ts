@@ -128,7 +128,9 @@ function makeSentry(cfg: SenderConfig): { client: NodeClient; scope: Scope } | n
       transport: makeNodeTransport,
       stackParser: defaultStackParser,
       integrations,
-      defaultIntegrations: false,
+      // `defaultIntegrations` isn't in `NodeClientOptions` (that field only applies to the
+      // higher-level `Options` type consumed by `Sentry.init()`); constructing `NodeClient`
+      // directly with an explicit `integrations` list already means no defaults are added.
       // Errors only — no perf/replay traffic from a local editor.
       tracesSampleRate: 0,
       // PII scrub: strip absolute paths from the message and every stack frame

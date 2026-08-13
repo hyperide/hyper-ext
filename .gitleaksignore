@@ -19,6 +19,16 @@
 # All entries below are pre-existing findings in this repo's history, each verified by eye
 # to be a non-secret (see annotation). The first line of each pair is the CI-authoritative
 # (runner) path; the second is the local (rename-resolved) path.
+#
+# SCAN-MODE NOTE (HYP-935 fix-strategy rig-sync): secret-scan.yml switched from `gitleaks
+# git` (history/diff scan, fingerprint = `<commit>:<path>:<rule>:<line>`) to `gitleaks dir .`
+# (working-tree scan, fingerprint = `<path>:<rule>:<line>` — no commit, since there is no
+# diff/history involved). The commit-prefixed entries below are now dead weight for the
+# active `dir` scan (they still work if the workflow ever reverts to `gitleaks git`, so they
+# are kept rather than deleted). Each finding below ALSO gets a commit-less `dir`-mode
+# entry, using the file's CURRENT line number. Unlike the commit-pinned entries above, a
+# `dir`-mode entry is NOT immune to future line-shifts in the same file — an edit above the
+# line silently invalidates it (re-verify by eye and update the line if this ever recurs).
 
 # RFC 6455 sample WebSocket nonce ("the sample nonce" base64). Not a credential.
 11e8344493a8b4b19c9704dc2f806072d6836681:hmr-plan.md:generic-api-key:33
@@ -27,19 +37,24 @@
 # in the setup instructions (header/body redacted). No real key material.
 247fb011d6a22be812b079e1097010cd5968a46d:docs/github-app-setup.md:private-key:130
 247fb011d6a22be812b079e1097010cd5968a46d:github-app-setup.md:private-key:130
+docs/github-app-setup.md:private-key:130
 
 # Unit-test fixtures: TEST_JWT_SECRET = 'unit-test-jwt-secret' / 'stub-refresh-token'.
 ebb942009bf2ace3d1f9a945ef722c8d03f0120e:server/proxy/__tests__/ide-auth-gate.test.ts:generic-api-key:66
 ebb942009bf2ace3d1f9a945ef722c8d03f0120e:proxy/__tests__/ide-auth-gate.test.ts:generic-api-key:66
+server/proxy/__tests__/ide-auth-gate.test.ts:generic-api-key:66
 ebb942009bf2ace3d1f9a945ef722c8d03f0120e:server/proxy/__tests__/proxy-auth-gate.test.ts:generic-api-key:86
 ebb942009bf2ace3d1f9a945ef722c8d03f0120e:proxy/__tests__/proxy-auth-gate.test.ts:generic-api-key:86
+server/proxy/__tests__/proxy-auth-gate.test.ts:generic-api-key:86
 
 # redactToken() unit-test fixture (asserts a fake token is stripped from output).
 07eeb1ee182805b26038f71f77b5fabb4b454377:server/services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
 07eeb1ee182805b26038f71f77b5fabb4b454377:services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
+server/services/__tests__/ai-agent-remote-git.test.ts:generic-api-key:289
 
 # Spec doc + UI source: high-entropy non-secret strings flagged by generic-api-key.
 37818880e37e7ce7779c743b114f17211911a8f6:docs/specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:142
 37818880e37e7ce7779c743b114f17211911a8f6:specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:142
+docs/specs/2026-06-11-style-write-verified-pipeline.md:generic-api-key:144
 3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:client/components/RightSidebar/RightSidebar.tsx:generic-api-key:729
 3bff90dd9d496b28c82bf0bbc0d738d2f86498f5:components/RightSidebar/RightSidebar.tsx:generic-api-key:729
