@@ -753,6 +753,115 @@ describe("ComponentScanner.getComponentsData — sub-project grouping (HYP-391)"
     const pageNames = sharedProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
     expect(pageNames).toHaveLength(0);
   });
+
+  // Codex #230: flat consumers (useComponentAutoLoad, FloatingPanels) read only
+  // atomGroups/compositeGroups. Monorepo must mirror the union of sub-project
+  // atom/composite groups into the flat fields, while leaving pageGroups empty
+  // (PagesSection renders flat pageGroups unconditionally → would double-render).
+  it("monorepo mirrors sub-project atom/composite groups into flat groups, pageGroups stays empty (Codex #230)", async () => {
+    const root = createSubprojProject("flat-compat", {
+      "nx.json": "{}",
+      "package.json": '{"devDependencies":{"nx":"22"}}',
+      "targets/web/package.json": '{"dependencies":{"react":"19"}}',
+      "targets/web/src/LoginScreen.tsx": "export function LoginScreen() { return <div/>; }",
+      "targets/web/src/components/ConlocaCard.tsx": "export function ConlocaCard() { return <div/>; }",
+      "targets/web/src/components/ui/Button.tsx": "export function Button() { return <button/>; }",
+      "targets/admin/package.json": '{"dependencies":{"react":"19"}}',
+      "targets/admin/src/components/DataTable.tsx": "export function DataTable() { return <div/>; }",
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+
+    // Flat groups = union of all sub-project atom + composite groups.
+    const flatComponentNames = [
+      ...result.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...result.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(flatComponentNames.some((n) => n.includes("ConlocaCard"))).toBe(true);
+    expect(flatComponentNames.some((n) => n.includes("Button"))).toBe(true);
+    expect(flatComponentNames.some((n) => n.includes("DataTable"))).toBe(true);
+
+    // pageGroups stays empty — no flat consumer reads it and PagesSection would double-render.
+    expect(result.pageGroups).toHaveLength(0);
+  });
+
+  // Codex #229: a sub-package keeping pages/ or components/ at its package root
+  // (no src/ or app/) must still produce Explorer entries.
+  it("sub-package with pages/components at package root (no src/) produces groups (Codex #229)", async () => {
+    const root = createSubprojProject("pkg-root-dirs", {
+      "nx.json": "{}",
+      "package.json": '{"devDependencies":{"nx":"22"}}',
+      // apps/web keeps pages/ at the package root, no src/ or app/
+      "apps/web/package.json": '{"dependencies":{"react":"19"}}',
+      "apps/web/pages/index.tsx": "export default function Index() { return <div/>; }",
+      "apps/web/pages/About.tsx": "export default function About() { return <div/>; }",
+      // packages/ui keeps components/ at the package root
+      "packages/ui/package.json": '{"dependencies":{"react":"19"}}',
+      "packages/ui/components/Button.tsx": "export function Button() { return <button/>; }",
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+
+    const webProject = result.subProjects?.find((p) => p.name === "web");
+    expect(webProject).toBeDefined();
+    expect(webProject!.supported).toBe(true);
+    const webPageNames = webProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    expect(webPageNames.some((n) => n.includes("About"))).toBe(true);
+
+    const uiProject = result.subProjects?.find((p) => p.name === "ui");
+    expect(uiProject).toBeDefined();
+    expect(uiProject!.supported).toBe(true);
+    const uiComponentNames = [
+      ...uiProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...uiProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    expect(uiComponentNames.some((n) => n.includes("Button"))).toBe(true);
+  });
+
+  // Codex #251 (P2): a sub-package with BOTH src/ AND root-level conventional dirs
+  // must surface components from both — the root scan must not be skipped just
+  // because a nested src/ exists. And nothing must be double-counted.
+  it("sub-package with src/ AND root-level components/pages produces groups from both, no dupes (Codex #251)", async () => {
+    const root = createSubprojProject("pkg-src-plus-root", {
+      "nx.json": "{}",
+      "package.json": '{"devDependencies":{"nx":"22"}}',
+      // packages/ui keeps a nested src/components/ AND a root-level components/
+      "packages/ui/package.json": '{"dependencies":{"react":"19"}}',
+      "packages/ui/src/components/Card.tsx": "export function Card() { return <div/>; }",
+      "packages/ui/components/Button.tsx": "export function Button() { return <button/>; }",
+      // apps/web keeps a nested src/ App AND a root-level pages/
+      "apps/web/package.json": '{"dependencies":{"react":"19"}}',
+      "apps/web/src/App.tsx": "export function App() { return <div/>; }",
+      "apps/web/pages/About.tsx": "export default function About() { return <div/>; }",
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const result = await scanner.getComponentsData(root);
+
+    expect(result.isMonorepo).toBe(true);
+
+    const uiProject = result.subProjects?.find((p) => p.name === "ui");
+    expect(uiProject).toBeDefined();
+    const uiComponentNames = [
+      ...uiProject!.atomGroups.flatMap((g) => g.components.map((c) => c.name)),
+      ...uiProject!.compositeGroups.flatMap((g) => g.components.map((c) => c.name)),
+    ];
+    // Both the nested src component AND the root-level component are discovered.
+    expect(uiComponentNames.filter((n) => n.includes("Card"))).toHaveLength(1);
+    expect(uiComponentNames.filter((n) => n.includes("Button"))).toHaveLength(1);
+
+    const webProject = result.subProjects?.find((p) => p.name === "web");
+    expect(webProject).toBeDefined();
+    const webPageNames = webProject!.pageGroups.flatMap((g) => g.components.map((c) => c.name));
+    // Root-level pages/ discovered even though src/ exists, exactly once.
+    expect(webPageNames.filter((n) => n.includes("About"))).toHaveLength(1);
+  });
 });
 
 // ─── HYP-397: pages fallback — individual files, not whole src/ directory ─────

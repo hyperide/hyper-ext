@@ -611,9 +611,23 @@ export class ComponentScanner {
       return { atomGroups, compositeGroups, pageGroups, isMonorepo: false };
     }
 
-    // In monorepo mode all components live in sub-projects; flat groups would duplicate them.
+    // Monorepo: components live under sub-projects (rendered by SubProjectAccordion).
+    // Flat consumers that only read atom/composite groups — useComponentAutoLoad
+    // (auto-selects first component) and FloatingPanels — would otherwise see nothing.
+    // Mirror the union of sub-project atom/composite groups into the flat fields so
+    // those consumers keep working. pageGroups stays empty: no flat consumer reads it,
+    // and PagesSection renders flat pageGroups unconditionally — populating it would
+    // double-render pages already shown per sub-project in the accordion.
     const subProjects = this.detectSubProjects(projectRoot);
-    return { atomGroups: [], compositeGroups: [], pageGroups: [], isMonorepo: true, subProjects };
+    const flatAtomGroups = subProjects.flatMap((sp) => sp.atomGroups);
+    const flatCompositeGroups = subProjects.flatMap((sp) => sp.compositeGroups);
+    return {
+      atomGroups: flatAtomGroups,
+      compositeGroups: flatCompositeGroups,
+      pageGroups: [],
+      isMonorepo: true,
+      subProjects,
+    };
   }
 
   /** Enumerate sub-packages in a monorepo and build per-sub-project component groups. */
@@ -737,7 +751,7 @@ export class ComponentScanner {
 
     for (const srcDirName of ["src", "app"]) {
       const srcPath = path.join(subPkgRoot, srcDirName);
-      if (!fs.existsSync(srcPath)) continue;
+      if (!fs.existsSync(srcPath) || !fs.statSync(srcPath).isDirectory()) continue;
 
       let entries: fs.Dirent[];
       try {
@@ -790,6 +804,41 @@ export class ComponentScanner {
               pages.push(path.join(srcPath, e.name));
             }
           }
+        }
+      }
+    }
+
+    // Package-root conventional dirs (e.g. apps/web/pages/, packages/ui/components/).
+    // Runs alongside the src/app scan above — a package may keep BOTH a nested src/
+    // AND root-level components/pages, and both must surface (Codex #251). src/ and app/
+    // entries are skipped here: they were already handled by the nested-source loop.
+    // No duplication: nested (src/components) and root (components) are distinct dirs,
+    // each yielding its own group keyed by relative dirPath.
+    {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(subPkgRoot, { withFileTypes: true });
+      } catch {
+        entries = [];
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (SKIP_DIRS.has(entry.name) || NON_COMPONENT_DIRS.has(entry.name)) continue;
+        const entryName = entry.name.toLowerCase();
+        if (entryName === "src" || entryName === "app") continue;
+        const entryPath = path.join(subPkgRoot, entry.name);
+
+        if (PAGE_DIR_NAMES.has(entryName)) {
+          pages.push(entryPath);
+          continue;
+        }
+        if (entryName === "components") {
+          this.categorizeComponentsDir(entryPath, atoms, composites);
+          continue;
+        }
+        if (entryName === "features" || entryName === "modules") {
+          composites.push(entryPath);
+          continue;
         }
       }
     }
