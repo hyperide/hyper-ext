@@ -9,6 +9,7 @@ import type { StateHub } from './StateHub';
 import type { DevServerRuntimeError } from './types';
 import { generateSamplePropValues } from '@lib/preview-generator';
 import { deriveSubProjectPrefix, resolveComponentAbsPath } from './bridges/monorepo-path-translate';
+import { postToWebviewSafe } from './webview-post';
 
 /**
  * Focused dependency surface for the message router. Built inside PreviewPanel
@@ -302,7 +303,9 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
     if (running) {
       deps.updatePreviewUrl();
     } else {
-      deps.panel?.webview.postMessage({ type: 'devserver:statusChanged', running: false, url: null });
+      // Disposed-safe: this fires on a devserver-status message that can arrive after the
+      // panel's webview is torn down; a plain post would throw `Webview is disposed`.
+      postToWebviewSafe(deps.panel, { type: 'devserver:statusChanged', running: false, url: null });
     }
     return;
   }

@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { generateSamplePropValues } from '@lib/preview-generator';
 import { stripFunctions } from './preview-utils';
+import { postToWebviewSafe, postToWebviewRawSafe } from './webview-post';
 import type { PanelRouter } from './PanelRouter';
 
 export async function injectGeneratedSampleProps(
@@ -13,6 +14,7 @@ export async function injectGeneratedSampleProps(
   panelRouter: PanelRouter,
   componentPath: string,
   previewKey: string,
+  onDisposed?: () => void,
 ): Promise<boolean> {
   if (!panel) return false;
 
@@ -25,11 +27,18 @@ export async function injectGeneratedSampleProps(
 
   const values = stripFunctions(rawValues) as Record<string, unknown>;
 
-  panel.webview.postMessage({
-    type: 'setGeneratedProps',
-    componentPath: previewKey,
-    values,
-  });
+  // Panel can be disposed during the awaited getComponent above; postToWebviewSafe
+  // neutralizes the disposed-webview throw — see webview-post.ts.
+  const posted = postToWebviewSafe(
+    panel,
+    {
+      type: 'setGeneratedProps',
+      componentPath: previewKey,
+      values,
+    },
+    onDisposed,
+  );
+  if (!posted) return false;
   return Object.keys(values).length > 0;
 }
 
@@ -48,29 +57,33 @@ export function watchSampleInFile(
   const fileUri = vscode.Uri.file(absPath);
   const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(fileUri, ''));
 
+  const stopWatching = () => {
+    state.watcher?.dispose();
+    state.watcher = undefined;
+  };
+
+  // Post the sample-deleted notice and tear down the watcher. Disposed-safe: these fire
+  // on later watcher events that can outlive the webview (workspace switch / tab close /
+  // E2E teardown). On a disposed webview, drop the now-pointless watcher too — otherwise it
+  // would fire forever against a dead webview. See webview-post.ts.
+  const notifySampleDeletedAndStop = () => {
+    postToWebviewRawSafe(webview, { type: 'errorOverlay:sampleDeleted', sampleName: exportName }, stopWatching);
+    stopWatching();
+  };
+
   const checkSample = async () => {
     try {
       const bytes = await vscode.workspace.fs.readFile(fileUri);
       const content = Buffer.from(bytes).toString('utf-8');
       const exists = content.includes(`export const ${exportName}`);
-      if (!exists) {
-        webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-        state.watcher?.dispose();
-        state.watcher = undefined;
-      }
+      if (!exists) notifySampleDeletedAndStop();
     } catch {
-      webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-      state.watcher?.dispose();
-      state.watcher = undefined;
+      notifySampleDeletedAndStop();
     }
   };
 
   watcher.onDidChange(checkSample);
-  watcher.onDidDelete(() => {
-    webview.postMessage({ type: 'errorOverlay:sampleDeleted', sampleName: exportName });
-    state.watcher?.dispose();
-    state.watcher = undefined;
-  });
+  watcher.onDidDelete(notifySampleDeletedAndStop);
 
   state.watcher = watcher;
 }

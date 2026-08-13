@@ -60,6 +60,7 @@ import {
 import { SyncPositionService } from './services/SyncPositionService';
 import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
 import { generatePreviewHtml } from './preview-html';
+import { postToWebviewSafe } from './webview-post';
 
 export { normalizeSampleComponentName };
 
@@ -240,7 +241,7 @@ export class PreviewPanel {
     // active editor instead of picking up the previous workspace's component.
     this._capabilities = null;
     this._stateHub.applyUpdate({ currentComponent: null });
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities: null });
+    this._postToWebview({ type: 'projectCapabilities', capabilities: null });
     this.notifyUnsupportedProject(null);
     this.notifyDevServerStopped();
     this._sampleWatcher?.dispose();
@@ -491,10 +492,13 @@ export class PreviewPanel {
    *   lookup misses and the component renders without the generated props.
    *
    * Returns true when non-empty values were posted, false when there is no panel
-   * (an empty payload is still posted as a readiness signal — see below).
+   * (an empty payload is still posted as a readiness signal — see below), and also
+   * false when the panel was disposed mid-flight (the post was skipped).
    */
   public async injectGeneratedSampleProps(componentPath: string, previewKey: string): Promise<boolean> {
-    return injectGeneratedSampleProps(this._panel, this._panelRouter, componentPath, previewKey);
+    return injectGeneratedSampleProps(this._panel, this._panelRouter, componentPath, previewKey, () =>
+      this._clearDisposedPanel(),
+    );
   }
   private _sampleWatcher?: vscode.Disposable;
 
@@ -608,7 +612,7 @@ export class PreviewPanel {
         resolve(result.driving);
       });
 
-      webview.postMessage({
+      const posted = this._postToWebview({
         type: 'probeColorCandidates',
         elementId: request.elementId,
         itemIndex: request.itemIndex ?? null,
@@ -618,6 +622,13 @@ export class PreviewPanel {
         requestClass: request.requestClass,
         requestId,
       });
+      // Webview disposed mid-flight: no iframe will ever answer, so resolve now instead of
+      // leaking the pending entry until the timeout below fires.
+      if (!posted) {
+        this._pendingProbeRequests.delete(requestId);
+        resolve([]);
+        return;
+      }
 
       // Timeout mirrors the live-className RPC: resolve [] if the iframe doesn't answer
       // (e.g. mid-HMR reload). 800ms is well under any human-perceptible write latency and
@@ -653,12 +664,19 @@ export class PreviewPanel {
         resolve(result.className);
       });
 
-      webview.postMessage({
+      const posted = this._postToWebview({
         type: 'requestLiveClassName',
         elementId,
         itemIndex: itemIndex ?? null,
         requestId,
       });
+      // Webview disposed mid-flight: no iframe will ever answer, so resolve now instead of
+      // leaking the pending entry until the timeout below fires.
+      if (!posted) {
+        this._pendingClassNameRequests.delete(requestId);
+        resolve(null);
+        return;
+      }
 
       // Timeout: resolve null if the iframe doesn't answer (e.g. mid-HMR reload).
       // 800ms is well under any human-perceptible write latency and never blocks the write.
@@ -685,11 +703,18 @@ export class PreviewPanel {
         resolve(result.dataUrl);
       });
 
-      webview.postMessage({
+      const posted = this._postToWebview({
         type: 'takeScreenshot',
         elementId: elementId ?? null,
         requestId,
       });
+      // Webview disposed mid-flight: no iframe will ever answer, so resolve now instead of
+      // leaking the pending entry until the timeout below fires.
+      if (!posted) {
+        this._pendingScreenshotRequests.delete(requestId);
+        resolve(null);
+        return;
+      }
 
       // Timeout: 10 seconds for screenshot rendering
       setTimeout(() => {
@@ -770,25 +795,27 @@ export class PreviewPanel {
    * Idempotent — safe to call repeatedly. No-op if no panel is attached.
    */
   private _pushFullStateToWebview(): void {
-    const webview = this._panel?.webview;
-    if (!webview) return;
+    if (!this._panel) return;
 
-    webview.postMessage({
+    // Route every post through _postToWebview: if the panel was disposed mid-flight
+    // the first post drops the stale reference and the rest short-circuit on the
+    // null check, instead of five `Webview is disposed` throws.
+    this._postToWebview({
       type: 'devserver:statusChanged',
       running: this._devServerRunning,
       url: this._devServerRunning ? this._previewBaseUrl : null,
     });
 
     const autoStart = vscode.workspace.getConfiguration('hypercanvas.devServer').get<boolean>('autoStart', false);
-    webview.postMessage({ type: 'devserver:settings', autoStart });
+    this._postToWebview({ type: 'devserver:settings', autoStart });
 
-    webview.postMessage({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
+    this._postToWebview({ type: 'projectCapabilities', capabilities: this._capabilities ?? null });
 
     if (this._projectError) {
-      webview.postMessage({ type: 'projectError', error: this._projectError });
+      this._postToWebview({ type: 'projectError', error: this._projectError });
     }
     if (this._componentState.repoPath && canNavigate(this._componentState)) {
-      webview.postMessage({ type: 'setComponent', component: this._componentState.repoPath });
+      this._postToWebview({ type: 'setComponent', component: this._componentState.repoPath });
     }
     if (this._devServerRunning) {
       this._updatePreviewUrl();
@@ -890,7 +917,7 @@ export class PreviewPanel {
     // No component selected — show hint instead of loading bare URL
     if (!component) {
       console.log('[HyperIDE] No component selected, showing hint');
-      this._panel?.webview.postMessage({ type: 'showNoComponentHint' });
+      this._postToWebview({ type: 'showNoComponentHint' });
       return;
     }
     if (needsNavigationWait(this._componentState)) {
@@ -917,7 +944,7 @@ export class PreviewPanel {
 
     console.log('[HyperIDE] Updating URL:', url);
 
-    this._panel?.webview.postMessage({ type: 'updateUrl', url });
+    this._postToWebview({ type: 'updateUrl', url });
   }
   /**
    * Set preview URL (called by dev server when started)
@@ -927,7 +954,7 @@ export class PreviewPanel {
     this._dispatch({ type: 'devserverStatusChanged', running: true });
 
     // Notify React webview of devserver status change
-    this._panel?.webview.postMessage({
+    this._postToWebview({
       type: 'devserver:statusChanged',
       running: true,
       url,
@@ -940,7 +967,7 @@ export class PreviewPanel {
    */
   public notifyDevServerStopped(): void {
     this._dispatch({ type: 'devserverStatusChanged', running: false });
-    this._panel?.webview.postMessage({
+    this._postToWebview({
       type: 'devserver:statusChanged',
       running: false,
       url: null,
@@ -956,7 +983,7 @@ export class PreviewPanel {
   public notifyUnsupportedProject(error: UnsupportedProjectError | null): void {
     this._screenDecisionSeq++;
     this._projectError = error;
-    this._panel?.webview.postMessage({ type: 'projectError', error });
+    this._postToWebview({ type: 'projectError', error });
   }
 
   /**
@@ -1016,7 +1043,7 @@ export class PreviewPanel {
    */
   public notifyCapabilities(capabilities: import('./types').ProjectCapabilities): void {
     this._capabilities = capabilities;
-    this._panel?.webview.postMessage({ type: 'projectCapabilities', capabilities });
+    this._postToWebview({ type: 'projectCapabilities', capabilities });
   }
   /**
    * Refresh preview
@@ -1030,7 +1057,7 @@ export class PreviewPanel {
     if (this._currentComponent && this._navigableComponent !== this._currentComponent) {
       return;
     }
-    this._panel.webview.postMessage({ type: 'refresh' });
+    this._postToWebview({ type: 'refresh' });
   }
   /**
    * Dispose the preview panel. This closes the webview tab and fires
@@ -1050,6 +1077,38 @@ export class PreviewPanel {
     // (idempotent) and nulls `_panel`, moving the derived lifecycle to Detached.
     this._dispatch({ type: 'dispose' });
     this._panel?.dispose();
+  }
+  /**
+   * Post a message to the preview webview, surviving a disposed panel.
+   *
+   * The cached `_panel` can be a stale reference to an already-disposed webview:
+   * VS Code fires `onDidDispose` (which nulls `_panel`) asynchronously, and the
+   * async ensure-sample/preview pipeline awaits across several ticks during which
+   * the panel may be torn down (workspace switch, tab close, or the E2E harness
+   * disposing the panel between specs). A plain `_panel?.webview.postMessage(...)`
+   * guards only `_panel === undefined`, not "disposed", so it throws
+   * `Error: Webview is disposed` — which previously escaped the per-call guards and
+   * poisoned the shared extension-host worker into a cascade of dead-preview
+   * failures. Routing every post through here turns that into a graceful no-op and
+   * drops the stale reference so the NEXT `createOrShow` rebuilds a fresh panel.
+   */
+  private _postToWebview(message: unknown): boolean {
+    return postToWebviewSafe(this._panel, message, () => this._clearDisposedPanel());
+  }
+  /**
+   * Drop a stale reference to an already-disposed panel. The webview is gone, so any
+   * further post would throw `Webview is disposed`; nulling `_panel` here means the
+   * next `createOrShow` rebuilds a fresh panel instead of reusing the dead one.
+   * Dispatching `dispose` keeps the derived lifecycle (Detached) consistent with the
+   * nulled panel, exactly as VS Code's own `onDidDispose` path does — and it is
+   * idempotent, so a later real `onDidDispose` firing is harmless.
+   */
+  private _clearDisposedPanel(): void {
+    // Drops ONLY the stale reference (and keeps the derived lifecycle consistent). Resource
+    // teardown stays with VS Code's identity-gated onDidDispose (setupPanel) when the panel
+    // is genuinely disposed — duplicating it here would double-dispose / race that gate.
+    this._dispatch({ type: 'dispose' });
+    this._panel = undefined;
   }
   /**
    * Update iframe component URL param without a hard reload.
@@ -1085,7 +1144,7 @@ export class PreviewPanel {
     // Post the preview (project-root-relative) path: the iframe navigates to it and
     // the sub-project's __canvas_preview__ registry is keyed by that path, not the
     // repo-relative one (HYP-420).
-    this._panel.webview.postMessage({
+    this._postToWebview({
       type: 'setComponent',
       component: previewComponentPath,
     });
@@ -1201,7 +1260,7 @@ export class PreviewPanel {
         return;
       }
     }
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: false });
+    this._postToWebview({ type: 'canvas:keyboard', key: 'Enter', shiftKey: false });
   }
   /**
    * Select parent of selected element (called from VS Code keybinding command).
@@ -1226,7 +1285,7 @@ export class PreviewPanel {
         return;
       }
     }
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Enter', shiftKey: true });
+    this._postToWebview({ type: 'canvas:keyboard', key: 'Enter', shiftKey: true });
   }
   /**
    * Select next sibling of selected element (called from VS Code keybinding command).
@@ -1234,13 +1293,13 @@ export class PreviewPanel {
   public selectNextSibling(): void {
     // Forward to iframe where DOM-based keyboard handler resolves siblings via fiber tree.
     // AST-based NodeMapService doesn't reliably track elements inside conditional JSX expressions.
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
+    this._postToWebview({ type: 'canvas:keyboard', key: 'Tab', shiftKey: false });
   }
   /**
    * Select previous sibling of selected element (called from VS Code keybinding command).
    */
   public selectPrevSibling(): void {
-    this._panel?.webview.postMessage({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
+    this._postToWebview({ type: 'canvas:keyboard', key: 'Tab', shiftKey: true });
   }
   /**
    * Programmatically select an element by its nodeRef.
@@ -1411,7 +1470,7 @@ export class PreviewPanel {
     currentRoute?: string;
   }): void {
     this._appModeEntryPreviewPath = payload.entryPreviewPath;
-    this._panel?.webview.postMessage({
+    this._postToWebview({
       type: 'appMode',
       enabled: true,
       entryPath: payload.entryPreviewPath,
@@ -1428,7 +1487,7 @@ export class PreviewPanel {
    */
   public clearAppMode(): void {
     this._appModeEntryPreviewPath = null;
-    this._panel?.webview.postMessage({ type: 'appMode', enabled: false });
+    this._postToWebview({ type: 'appMode', enabled: false });
   }
   /**
    * Public trigger for the otherwise-private iframe URL refresh. Lets the extension host
@@ -1444,7 +1503,7 @@ export class PreviewPanel {
   public sendGoToVisual(elementId: string): void {
     if (this._panel) {
       console.log(`[HyperIDE] Sending goToVisual: ${elementId}`);
-      this._panel.webview.postMessage({
+      this._postToWebview({
         type: 'goToVisual',
         elementId,
       });

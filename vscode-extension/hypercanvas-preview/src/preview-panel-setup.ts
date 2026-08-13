@@ -92,6 +92,14 @@ export function setupPanel(
   deps.startSyncService();
 
   panel.onDidDispose(() => {
+    // Identity gate: only tear down if THIS panel is still the current one. The
+    // disposed-webview guard (_clearDisposedPanel) nulls _panel without running this
+    // teardown, so a later createOrShow can build a NEW panel that pushes NEW listeners
+    // onto the SHARED _disposables. If the OLD panel's onDidDispose then fires, running
+    // the full teardown would dispose the NEW panel's resources. A superseded panel's
+    // stale onDidDispose must no-op — the newer panel owns the current resources.
+    if (deps.getPanel() !== panel) return;
+
     const timer = deps.getReEmitTimer();
     if (timer) {
       clearTimeout(timer);
