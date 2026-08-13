@@ -83,4 +83,22 @@ export function App() {
     expect(range?.endLine).toBe(span.endLoc.line);
     expect(range?.endColumn).toBe(span.endLoc.column);
   });
+
+  it('returns null for a synthetic counter ref that is not in the node map', async () => {
+    // Synthetic `filePath:counter` refs (the OLD format) are NOT accepted by getElementRange —
+    // it expects source-location refs. A stale or fabricated counter ref must return null cleanly.
+    const componentPath = '/workspace/src/App.tsx';
+    const service = await makeService({ [componentPath]: APP_SOURCE });
+
+    const range = await service.getElementRange('src/App.tsx', 'src/App.tsx:999' as string);
+    expect(range).toBeNull();
+  });
+
+  it('returns null for a completely unknown element id', async () => {
+    const componentPath = '/workspace/src/App.tsx';
+    const service = await makeService({ [componentPath]: APP_SOURCE });
+
+    const range = await service.getElementRange('src/App.tsx', 'src/Missing.tsx:1:0');
+    expect(range).toBeNull();
+  });
 });

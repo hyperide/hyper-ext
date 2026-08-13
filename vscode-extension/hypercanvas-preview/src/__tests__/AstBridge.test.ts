@@ -17,6 +17,16 @@ const mockAstService = {
   pasteElement: mock(() => Promise.resolve({ success: true, newId: 'paste-1' })),
   moveElement: mock(() => Promise.resolve({ success: true as const })),
   updateI18nKey: mock(() => Promise.resolve({ success: true, resolvedPath: '/workspace/Greet.tsx' })),
+  getElementRange: mock(() =>
+    Promise.resolve({
+      filePath: '/workspace/src/App.tsx',
+      startLine: 4,
+      startColumn: 6,
+      endLine: 4,
+      endColumn: 22,
+    }),
+  ),
+  getElementLocation: mock(() => Promise.resolve({ line: 4, column: 6 })),
 };
 
 /** Build the fake AstService instance AstBridge receives via DI. */
@@ -33,6 +43,8 @@ function createFakeAstService(): AstService {
     pasteElement: mockAstService.pasteElement,
     moveElement: mockAstService.moveElement,
     updateI18nKey: mockAstService.updateI18nKey,
+    getElementRange: mockAstService.getElementRange,
+    getElementLocation: mockAstService.getElementLocation,
     get nodeMapService() {
       return {
         resolveNodeRef: () => null,
@@ -117,6 +129,16 @@ describe('AstBridge', () => {
     mockAstService.wrapElement.mockImplementation(() => Promise.resolve({ success: true, wrapperId: 'wrap-1' }));
     mockAstService.pasteElement.mockImplementation(() => Promise.resolve({ success: true, newId: 'paste-1' }));
     mockAstService.moveElement.mockImplementation(() => Promise.resolve({ success: true as const }));
+    mockAstService.getElementRange.mockImplementation(() =>
+      Promise.resolve({
+        filePath: '/workspace/src/App.tsx',
+        startLine: 4,
+        startColumn: 6,
+        endLine: 4,
+        endColumn: 22,
+      }),
+    );
+    mockAstService.getElementLocation.mockImplementation(() => Promise.resolve({ line: 4, column: 6 }));
 
     // Reset disk mock registry and re-install per-path implementation.
     // mock-vscode.ts uses mockClear() (resets calls, not impl), so we set impl here.
@@ -785,6 +807,51 @@ describe('AstBridge', () => {
       bridge.setSubProjectPrefix('');
       await bridge.deleteElements('src/App.tsx', ['src/App.tsx:5:2']);
       expect(mockAstService.deleteElements).toHaveBeenCalledWith('src/App.tsx', ['src/App.tsx:5:2']);
+    });
+  });
+
+  // === getElementRange / getElementLocation — read-only query re-rooting (HYP-771) ===
+  //
+  // Callers that bypass PanelRouter.routeMessage (PreviewPanel.goToCodeSelected,
+  // preview-panel-context-menu, PanelRouter._goToDefinitionViaLsp) must use these bridge
+  // methods instead of astBridge.astService.get*() directly, so path translation is applied.
+
+  describe('getElementRange — sub-project prefix translation', () => {
+    it('strips the sub-project prefix from the elementId before calling astService', async () => {
+      bridge.setSubProjectPrefix('targets/conloca-app/');
+      await bridge.getElementRange('targets/conloca-app/src/app/page.tsx', 'src/app/page.tsx:5:2');
+      expect(mockAstService.getElementRange).toHaveBeenCalledWith(
+        'targets/conloca-app/src/app/page.tsx',
+        'targets/conloca-app/src/app/page.tsx:5:2',
+      );
+    });
+
+    it('is an identity no-op for single-package projects (empty prefix)', async () => {
+      bridge.setSubProjectPrefix('');
+      await bridge.getElementRange('src/App.tsx', 'src/App.tsx:4:6');
+      expect(mockAstService.getElementRange).toHaveBeenCalledWith('src/App.tsx', 'src/App.tsx:4:6');
+    });
+  });
+
+  describe('getElementLocation — sub-project prefix translation', () => {
+    it('strips the sub-project prefix from elementId and nodeRef', async () => {
+      bridge.setSubProjectPrefix('targets/conloca-app/');
+      await bridge.getElementLocation(
+        'targets/conloca-app/src/app/page.tsx',
+        'src/app/page.tsx:5:2',
+        'src/app/page.tsx:5:2' as import('@shared/element-tracing/types').NodeRef,
+      );
+      expect(mockAstService.getElementLocation).toHaveBeenCalledWith(
+        'targets/conloca-app/src/app/page.tsx',
+        'targets/conloca-app/src/app/page.tsx:5:2',
+        'targets/conloca-app/src/app/page.tsx:5:2',
+      );
+    });
+
+    it('is an identity no-op when prefix is empty', async () => {
+      bridge.setSubProjectPrefix('');
+      await bridge.getElementLocation('src/App.tsx', 'src/App.tsx:4:6');
+      expect(mockAstService.getElementLocation).toHaveBeenCalledWith('src/App.tsx', 'src/App.tsx:4:6', undefined);
     });
   });
 });

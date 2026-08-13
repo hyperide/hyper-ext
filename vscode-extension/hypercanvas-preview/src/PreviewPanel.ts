@@ -1338,7 +1338,7 @@ export class PreviewPanel {
     // `getElementLocation(componentPath, selectedIds[0])` passed no nodeRef and resolved
     // nothing, so Go-to-Code did nothing at all. getElementRange is cross-file aware and
     // returns start+end so the editor selects the element's JSX, not just a caret.
-    const range = await this._panelRouter.astBridge.astService.getElementRange(componentPath, selectedIds[0]);
+    const range = await this._panelRouter.astBridge.getElementRange(componentPath, selectedIds[0]);
     // Re-read the webview AFTER the await: the panel can be disposed during getElementRange
     // and the getter throws on a disposed panel (see `_liveWebview`). Abort cleanly if so.
     const webview = this._liveWebview();

@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   type Fiber,
+  FiberTag,
   findNearestSourceLocation,
   getItemIndexFromFiber,
   isRenderedFilePath,
@@ -209,5 +210,64 @@ describe('getItemIndexFromFiber — React 19 .map() of components', () => {
     const text = stackFiber(['http://localhost:5173/src/components/Tweet.tsx:77:10'], { tag: 5, return: only });
     only.child = text;
     expect(getItemIndexFromFiber(text)).toBe(0);
+  });
+
+  // Regression guard: the index walk must CLIMB THROUGH IndeterminateComponent (2) and
+  // LazyComponent (16) fibers to reach the repeated component level above them. Before the
+  // fix, those tags were not in COMPONENT_FIBER_TAGS, so `isComponentFiber()` returned false
+  // and the walk skipped them — an Indeterminate/Lazy wrapper would always produce index 0
+  // even when the repeated component was a single parent level above.
+  it('climbs through an IndeterminateComponent (tag=2) to find the repeated level', () => {
+    const MAP_CALL_SITE = 'http://localhost:5173/src/Feed.tsx:20:8';
+    const main = stackFiber(['http://localhost:5173/src/Feed.tsx:15:4'], { tag: FiberTag.HostComponent, type: 'main' });
+    let prev: Fiber | null = null;
+    const texts: Fiber[] = [];
+    for (let i = 0; i < 3; i++) {
+      // Indeterminate wrapper at the repeated level (tag=2, e.g. before React 18 resolves it)
+      const indeterminate = stackFiber([MAP_CALL_SITE], {
+        tag: FiberTag.IndeterminateComponent,
+        return: main,
+      });
+      const text = stackFiber(['http://localhost:5173/src/Card.tsx:5:6'], {
+        tag: FiberTag.HostComponent,
+        type: 'span',
+        return: indeterminate,
+      });
+      indeterminate.child = text;
+      if (prev) prev.sibling = indeterminate;
+      else main.child = indeterminate;
+      prev = indeterminate;
+      texts.push(text);
+    }
+    expect(getItemIndexFromFiber(texts[0])).toBe(0);
+    expect(getItemIndexFromFiber(texts[1])).toBe(1);
+    expect(getItemIndexFromFiber(texts[2])).toBe(2);
+  });
+
+  it('climbs through a LazyComponent (tag=16) to find the repeated level', () => {
+    const MAP_CALL_SITE = 'http://localhost:5173/src/Feed.tsx:30:8';
+    const main = stackFiber(['http://localhost:5173/src/Feed.tsx:25:4'], { tag: FiberTag.HostComponent, type: 'ul' });
+    let prev: Fiber | null = null;
+    const texts: Fiber[] = [];
+    for (let i = 0; i < 3; i++) {
+      // LazyComponent wrapper (tag=16, e.g. React.lazy(() => import('./Item')))
+      const lazy = stackFiber([MAP_CALL_SITE], {
+        tag: FiberTag.LazyComponent,
+        return: main,
+      });
+      const text = stackFiber(['http://localhost:5173/src/Item.tsx:3:4'], {
+        tag: FiberTag.HostComponent,
+        type: 'li',
+        return: lazy,
+      });
+      lazy.child = text;
+      if (prev) prev.sibling = lazy;
+      else main.child = lazy;
+      prev = lazy;
+      texts.push(text);
+    }
+    expect(getItemIndexFromFiber(texts[0])).toBe(0);
+    expect(getItemIndexFromFiber(texts[1])).toBe(1);
+    expect(getItemIndexFromFiber(texts[2])).toBe(2);
   });
 });

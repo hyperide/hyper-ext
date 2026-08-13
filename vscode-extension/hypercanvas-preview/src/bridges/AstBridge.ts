@@ -16,6 +16,7 @@ import type {
   WrapElementResult,
 } from '../services/AstService';
 import { AstService } from '../services/AstService';
+import type { NodeRef } from '@shared/element-tracing/types';
 import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
@@ -326,6 +327,41 @@ export class AstBridge {
 
   async redo(panel: vscode.WebviewPanel): Promise<boolean> {
     return this._undoRedoService.redo(panel);
+  }
+
+  // === Read-only query methods (with sub-project prefix translation) ===
+
+  /**
+   * Resolve the full JSX range for `rawElementId` so the editor can select the
+   * element's source (not just a caret). Wraps AstService.getElementRange() with
+   * the same sub-project prefix translation the mutation methods apply, so Go-to-Code
+   * resolves correctly for monorepo previews (HYP-771).
+   *
+   * Callers that bypass PanelRouter.routeMessage (PreviewPanel.goToCodeSelected,
+   * preview-panel-context-menu, and PanelRouter._goToDefinitionViaLsp) must go through
+   * this method instead of `astBridge.astService.getElementRange()` directly, which
+   * skips translation and produces wrong paths under a non-empty sub-project prefix.
+   */
+  async getElementRange(rawFilePath: string, rawElementId: string): ReturnType<AstService['getElementRange']> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const elementId = toRepoRelativeElementId(rawElementId, this._subProjectPrefix);
+    return this._astService.getElementRange(filePath, elementId);
+  }
+
+  /**
+   * Resolve the start cursor position for `rawElementId`. Wraps
+   * AstService.getElementLocation() with sub-project prefix translation,
+   * matching the same re-rooting that every mutation method applies (HYP-771).
+   */
+  async getElementLocation(
+    rawFilePath: string,
+    rawElementId: string,
+    rawNodeRef?: NodeRef,
+  ): ReturnType<AstService['getElementLocation']> {
+    const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
+    const elementId = toRepoRelativeElementId(rawElementId, this._subProjectPrefix);
+    const nodeRef = rawNodeRef ? (toRepoRelativeElementId(rawNodeRef, this._subProjectPrefix) as NodeRef) : undefined;
+    return this._astService.getElementLocation(filePath, elementId, nodeRef);
   }
 
   // === Message handlers (routed from webview via handleMessage) ===

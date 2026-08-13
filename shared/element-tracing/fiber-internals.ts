@@ -37,10 +37,17 @@ export interface Fiber {
 export const FiberTag = {
   FunctionComponent: 0,
   ClassComponent: 1,
+  // React 17 and earlier: a fiber whose type hasn't been determined yet
+  // (React resolves it on first render to FunctionComponent or ClassComponent).
+  // Must be treated as a component fiber so the index walk climbs through it.
+  IndeterminateComponent: 2,
   HostRoot: 3,
   HostComponent: 5,
   HostText: 6,
   ForwardRef: 11,
+  // React.lazy() wrapper — behaves like a component; its child fiber carries the
+  // real component tag once resolved. The index walk must not stop at a Lazy node.
+  LazyComponent: 16,
   MemoComponent: 14,
   SimpleMemoComponent: 15,
 } as const;
@@ -274,9 +281,11 @@ export function parseDebugStackFrames(err: Error): SourceLocation[] {
 const COMPONENT_FIBER_TAGS = new Set<number>([
   FiberTag.FunctionComponent,
   FiberTag.ClassComponent,
+  FiberTag.IndeterminateComponent,
   FiberTag.ForwardRef,
   FiberTag.MemoComponent,
   FiberTag.SimpleMemoComponent,
+  FiberTag.LazyComponent,
 ]);
 
 function isComponentFiber(fiber: Fiber): boolean {
@@ -406,14 +415,7 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
 
   // When the immediate parent is not a component-like fiber, repeated items are
   // usually rendered as sibling host nodes inside the same container.
-  if (
-    myLoc !== null &&
-    parent.tag !== FiberTag.FunctionComponent &&
-    parent.tag !== FiberTag.ClassComponent &&
-    parent.tag !== FiberTag.ForwardRef &&
-    parent.tag !== FiberTag.MemoComponent &&
-    parent.tag !== FiberTag.SimpleMemoComponent
-  ) {
+  if (myLoc !== null && !isComponentFiber(parent)) {
     const hostIndex = getSiblingIndex(parent, myLoc);
     if (hostIndex > 0) return hostIndex;
   }

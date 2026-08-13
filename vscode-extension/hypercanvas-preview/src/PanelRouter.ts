@@ -553,7 +553,7 @@ export class PanelRouter {
     webview: vscode.Webview,
   ): Promise<boolean> {
     try {
-      const loc = await this._astBridge.astService.getElementLocation(componentPath, elementId, nodeRef);
+      const loc = await this._astBridge.getElementLocation(componentPath, elementId, nodeRef);
       if (!loc) return false;
 
       const absolute = path.isAbsolute(componentPath)

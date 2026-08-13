@@ -272,11 +272,9 @@ describe('PreviewPanel disposed _panel.webview getter guard (#72)', () => {
     Object.assign(panel as PreviewPanel & { _panelRouter: PanelRouter }, {
       _panelRouter: {
         astBridge: {
-          astService: {
-            getElementRange: mock(() =>
-              Promise.resolve({ filePath: 'src/App.tsx', startLine: 1, startColumn: 0, endLine: 1, endColumn: 10 }),
-            ),
-          },
+          getElementRange: mock(() =>
+            Promise.resolve({ filePath: 'src/App.tsx', startLine: 1, startColumn: 0, endLine: 1, endColumn: 10 }),
+          ),
         },
       } as unknown as PanelRouter,
     });
