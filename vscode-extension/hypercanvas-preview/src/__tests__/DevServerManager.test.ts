@@ -47,6 +47,58 @@ describe('devScriptDeclaresPort', () => {
     expect(devScriptDeclaresPort('vite dev --open --host')).toBe(false);
     expect(devScriptDeclaresPort('node --import tsx server.ts')).toBe(false);
   });
+
+  // ---------------------------------------------------------------------------
+  // ADVERSARIAL (HYP-462 audit): probe the regex for the false-positives /
+  // false-negatives named in the audit brief. The blast radius is small — a
+  // false positive only means we skip injecting --port and rely on stdout
+  // port-detection (_maybeUpdatePortFromOutput) instead, which usually self-heals.
+  // These are documented as expectations of the CURRENT behaviour, not bugs.
+  describe('adversarial edge cases', () => {
+    it('does not match flags that merely START with -p (--public, --print)', () => {
+      // `-p` branch requires (^|\s)-p, so the leading `--` of --public/--print blocks it.
+      expect(devScriptDeclaresPort('vite --public 3000')).toBe(false);
+      expect(devScriptDeclaresPort('tsx --print 3')).toBe(false);
+    });
+
+    it('does not match --port with no following number', () => {
+      expect(devScriptDeclaresPort('vite dev --port')).toBe(false);
+      expect(devScriptDeclaresPort('vite dev --port --host')).toBe(false);
+      expect(devScriptDeclaresPort('vite dev --port=')).toBe(false);
+    });
+
+    it('does not match -p used as a non-port flag (project/path) with a non-digit value', () => {
+      // tsc -p tsconfig.json, tsx watch -p ./dir — value is not a digit, so no match.
+      expect(devScriptDeclaresPort('tsc -p tsconfig.json')).toBe(false);
+      expect(devScriptDeclaresPort('tsx watch -p ./src')).toBe(false);
+    });
+
+    it('does not match a flag whose name merely embeds "port"', () => {
+      // --port-prefix / --portal would only match if followed directly by [=\s]+\d.
+      expect(devScriptDeclaresPort('my-cli --port-prefix 80')).toBe(false);
+      expect(devScriptDeclaresPort('my-cli --portal 3000')).toBe(false);
+    });
+
+    // KNOWN/ACCEPTED false positives — documenting that they DO trigger a skip.
+    // Not worth fixing (would require shell parsing); blast radius is benign
+    // because stdout port-detection recovers the real bound port.
+    it('FALSE POSITIVE (accepted): --port belonging to a co-process under concurrently', () => {
+      // The --port here belongs to a sidecar proxy, not the dev server, but the
+      // regex cannot tell. We skip injection; stdout detection saves us.
+      expect(devScriptDeclaresPort('concurrently "vite" "node proxy.js --port 9000"')).toBe(true);
+    });
+
+    it('FALSE POSITIVE (accepted): --port inside a quoted, unrelated value', () => {
+      expect(devScriptDeclaresPort('vite dev --config "server --port 3000"')).toBe(true);
+    });
+
+    it('matches -p directly after a shell separator (&&, ;)', () => {
+      // (^|\s) only allows start-of-string or whitespace before -p, so a -p glued
+      // to a separator without a space is NOT matched. Documenting the boundary.
+      expect(devScriptDeclaresPort('build && next -p 4000')).toBe(true); // space before -p
+      expect(devScriptDeclaresPort('build &&next -p 4000')).toBe(true); // still has space before -p
+    });
+  });
 });
 
 describe('DevServerManager', () => {

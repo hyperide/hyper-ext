@@ -57,4 +57,41 @@ describe('isProviderContextError', () => {
     expect(isProviderContextError(undefined)).toBe(false);
     expect(isProviderContextError('')).toBe(false);
   });
+
+  // ---------------------------------------------------------------------------
+  // ADVERSARIAL (HYP-487 audit): the original regex matched ONLY the
+  //   "must be used (inside|within) …Provider"
+  // family. Other libraries throw "missing provider" errors with different
+  // wording. If a previewed component reaches one of those errors FIRST (before
+  // any "must be used …Provider" hook), isProviderContextError returned false →
+  // onComponentError early-returns → auto-recovery never fires, no guidance
+  // message → silent blank preview.
+  //
+  // NOTE on conloca-app grounding: this path is NOT actually reached in
+  // conloca-app. Its four context hooks (useWorkspace/useHostClient/
+  // useFeatureFlags/useAuth) all throw "must be used inside <…Provider>" which
+  // the original regex already matched, AND every component that also calls
+  // useQuery calls a conloca hook FIRST (verified: MembersSection,
+  // IntegrationsSection call useWorkspace/useHostClient before useQuery). So the
+  // first throw is always a matched message. The vite.config.ts "No QueryClient
+  // set" comment is about a devtools dedupe issue, not the preview render path.
+  // These tests therefore exercise DEFENSIVE broadening for OTHER apps, not a
+  // confirmed conloca regression.
+  describe('false negatives — provider errors the original regex missed (defensive, cross-app)', () => {
+    it('matches the React Query "No QueryClient set" crash (outermost provider in conloca)', () => {
+      expect(isProviderContextError('No QueryClient set, use QueryClientProvider to set one')).toBe(true);
+    });
+
+    it('matches react-redux "could not find react-redux context"', () => {
+      expect(
+        isProviderContextError(
+          'could not find react-redux context value; please ensure the component is wrapped in a <Provider>',
+        ),
+      ).toBe(true);
+    });
+
+    it('matches the "wrapped in <XProvider>" phrasing', () => {
+      expect(isProviderContextError('useTheme: component must be wrapped in <ThemeProvider>')).toBe(true);
+    });
+  });
 });
