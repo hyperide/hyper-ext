@@ -81,6 +81,7 @@ const ViewColumn = { One: 1, Two: 2, Three: 3, Active: -1, Beside: -2 };
 const TextEditorRevealType = { Default: 0, InCenter: 1, InCenterIfOutsideViewport: 2, AtTop: 3 };
 const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 };
 const StatusBarAlignment = { Left: 1, Right: 2 };
+const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 };
 
 /* ---------- TabInputWebview stub ---------- */
 
@@ -124,6 +125,20 @@ const window = {
     hide: mock(),
     dispose: mock(),
   })),
+  // Runs the task immediately with a no-op progress/token — good enough for unit
+  // tests that just need the wrapped work to execute and resolve/reject.
+  withProgress: mock((_options: unknown, task: (progress: unknown, token: unknown) => unknown) =>
+    Promise.resolve(task({ report: mock() }, { isCancellationRequested: false })),
+  ),
+};
+
+/* ---------- namespace: env ---------- */
+
+const env = {
+  clipboard: {
+    writeText: mock(() => Promise.resolve()),
+    readText: mock(() => Promise.resolve('')),
+  },
 };
 
 /* ---------- WorkspaceEdit ---------- */
@@ -195,11 +210,13 @@ mock.module('vscode', () => ({
   TextEditorRevealType,
   FileType,
   StatusBarAlignment,
+  ProgressLocation,
   TabInputWebview,
   TabInputText,
   window,
   workspace,
   commands,
+  env,
 }));
 
 /* ---------- reset between tests ---------- */
@@ -212,6 +229,9 @@ const allMockFns = [
   window.createOutputChannel,
   window.onDidChangeActiveTextEditor,
   window.createStatusBarItem,
+  window.withProgress,
+  env.clipboard.writeText,
+  env.clipboard.readText,
   workspace.getConfiguration,
   workspace.openTextDocument,
   workspace.applyEdit,

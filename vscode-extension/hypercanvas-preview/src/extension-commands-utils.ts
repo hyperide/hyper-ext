@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { HyperMcpServer } from './mcp/HyperMcpServer';
 
 /**
  * Matches the `url = "http://127.0.0.1:<port>/mcp[?token=...]"` line in a Codex `config.toml`.
@@ -370,5 +371,40 @@ export function registerCopilotMcp(context: vscode.ExtensionContext, url: string
     }
   } catch (err) {
     console.error('[HyperMCP] Failed to register Copilot MCP provider:', err);
+  }
+}
+
+/**
+ * HYP-954: the actionable failure toast for `hypercanvas.setupMcp` when
+ * `ensureStarted()` rejects. Replaces the old dead-end "HyperCanvas MCP server is
+ * not running" string (which offered no recovery except reloading the window) —
+ * `startError` (or the rejection message, as a fallback for e.g. the ensureStarted
+ * timeout race) gives the real errno-level reason, and Retry re-invokes the same
+ * command so a transient failure doesn't need a window reload to recover from.
+ */
+export async function showMcpStartFailureToast(
+  mcpServer: Pick<HyperMcpServer, 'startError'>,
+  error: unknown,
+): Promise<void> {
+  const reason = mcpServer.startError ?? (error instanceof Error ? error.message : String(error));
+  const choice = await vscode.window.showErrorMessage(
+    `HyperCanvas MCP server failed to start: ${reason}`,
+    'Retry',
+    'Show Logs',
+    'Copy Diagnostics',
+  );
+
+  if (choice === 'Retry') {
+    await vscode.commands.executeCommand('hypercanvas.setupMcp');
+  } else if (choice === 'Show Logs') {
+    await vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+  } else if (choice === 'Copy Diagnostics') {
+    const diagnostics = [
+      'HyperCanvas MCP start failure',
+      `Reason: ${reason}`,
+      `Timestamp: ${new Date().toISOString()}`,
+      `Platform: ${process.platform}`,
+    ].join('\n');
+    await vscode.env.clipboard.writeText(diagnostics);
   }
 }

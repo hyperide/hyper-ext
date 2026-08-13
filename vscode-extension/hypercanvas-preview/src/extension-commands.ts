@@ -31,6 +31,7 @@ import { VSCodeFileIO } from './vscode-file-io';
 import {
   detectConfiguredAgents,
   installChromeForPlaywright,
+  showMcpStartFailureToast,
   writeCodexConfig,
   writeCompanionServers,
   writeMcpJson,
@@ -1055,16 +1056,30 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
   context.subscriptions.push(
     register('hypercanvas.setupMcp', async () => {
       const mcpServer = ctx.getMcpServer();
-      if (!mcpServer || mcpServer.port === 0) {
-        // HYP-953: distinguish "still starting" (no error yet — port flips to
-        // nonzero within milliseconds under normal conditions) from a genuine
-        // startup failure. Base message text stays byte-identical to the pre-fix
-        // string when there's no known reason — the #383 regression tests pin it.
-        const reason = mcpServer?.startError;
-        const message = reason
-          ? `HyperCanvas MCP server is not running (failed to start: ${reason})`
-          : 'HyperCanvas MCP server is not running';
-        vscode.window.showErrorMessage(message);
+      if (!mcpServer) {
+        // No server instance at all (getMcpServer() closure not yet wired) —
+        // byte-identical to the pre-HYP-954 string; the #383 regression tests pin it.
+        vscode.window.showErrorMessage('HyperCanvas MCP server is not running');
+        return;
+      }
+
+      // HYP-954: await the real start instead of synchronously checking
+      // `port === 0` right after activation's fire-and-forget start — that race
+      // (this command running before start() resolves) was the dominant bug.
+      // ensureStarted() is idempotent: if the server is already up this resolves
+      // immediately; if activation's start is in flight, this awaits the SAME
+      // promise; a prior failure is retried here rather than being terminal.
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'HyperIDE: Starting MCP server...',
+            cancellable: false,
+          },
+          () => mcpServer.ensureStarted(3000),
+        );
+      } catch (error) {
+        await showMcpStartFailureToast(mcpServer, error);
         return;
       }
 

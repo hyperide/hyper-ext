@@ -43,13 +43,20 @@ interface ServerHolder {
 }
 
 /** Only the fields the gate / handler actually read. Typed (not `as unknown as`) so
- *  this fake fails loudly if the surface the handler depends on changes. */
-function fakeServer(port: number, startError: string | null = null): HyperMcpServer {
-  const minimal: Pick<HyperMcpServer, 'port' | 'url' | 'dispose' | 'startError'> = {
+ *  this fake fails loudly if the surface the handler depends on changes.
+ *  `ensureStarted` defaults to an already-started server (resolves immediately);
+ *  pass a rejecting one to simulate a start failure (HYP-954). */
+function fakeServer(
+  port: number,
+  startError: string | null = null,
+  ensureStarted: () => Promise<void> = () => Promise.resolve(),
+): HyperMcpServer {
+  const minimal: Pick<HyperMcpServer, 'port' | 'url' | 'dispose' | 'startError' | 'ensureStarted'> = {
     port,
     url: `http://127.0.0.1:${port}/mcp`,
     startError,
     dispose() {},
+    ensureStarted,
   };
   return minimal as HyperMcpServer;
 }
@@ -120,34 +127,34 @@ describe('hypercanvas.setupMcp — live MCP-server gate (#383 regression)', () =
     await handler();
     expect(firedNotRunning()).toBe(true);
   });
-
-  it('aborts when the server exists but its port is still 0 (not yet listening)', async () => {
-    const handler = registerAndGetHandler({ server: fakeServer(0) });
-    await handler();
-    expect(firedNotRunning()).toBe(true);
-  });
 });
 
-describe('hypercanvas.setupMcp — startError surfacing (HYP-953)', () => {
-  it('appends the startError reason to the toast when start() failed', async () => {
-    const handler = registerAndGetHandler({ server: fakeServer(0, 'listen EACCES: permission denied 127.0.0.1') });
+describe('hypercanvas.setupMcp — ensureStarted() failure toast (HYP-954)', () => {
+  it('shows the actionable failure toast (with Retry) when ensureStarted() rejects', async () => {
+    const rejecting = fakeServer(0, 'listen EACCES: permission denied 127.0.0.1', () =>
+      Promise.reject(new Error('listen EACCES: permission denied 127.0.0.1')),
+    );
+    const handler = registerAndGetHandler({ server: rejecting });
     await handler();
+
     const calls = recordedArgs(vscode.window.showErrorMessage);
     expect(
       calls.some(
-        (c) => c[0] === 'HyperCanvas MCP server is not running (failed to start: listen EACCES: permission denied 127.0.0.1)',
+        (c) =>
+          c[0] === 'HyperCanvas MCP server failed to start: listen EACCES: permission denied 127.0.0.1' &&
+          c.includes('Retry'),
       ),
     ).toBe(true);
-    // Must NOT also fire the bare pre-fix string — exactly one toast, with the reason.
+    // The pre-HYP-954 dead-end string must NOT fire once ensureStarted() was awaited.
     expect(firedNotRunning()).toBe(false);
   });
 
-  it('keeps the pre-fix exact string when the server has not failed, just not started yet', async () => {
-    // No startError set (server.port === 0, startError === null) — still-starting case,
-    // byte-identical to the #383 regression tests' pinned string.
-    const handler = registerAndGetHandler({ server: fakeServer(0) });
-    await handler();
-    expect(firedNotRunning()).toBe(true);
+  it('awaits ensureStarted() and proceeds to the quick pick on success', async () => {
+    const handler = registerAndGetHandler({ server: fakeServer(45321) });
+    // Success -> handler runs on to the quick pick (absent in the mock -> TypeError),
+    // exactly like the live-getter success case above.
+    await expect(handler()).rejects.toThrow(PICK_REACHED);
+    expect(firedNotRunning()).toBe(false);
   });
 });
 
