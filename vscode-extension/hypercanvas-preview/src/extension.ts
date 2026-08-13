@@ -28,6 +28,7 @@ import { resolveRunnableProjectRoot } from '@lib/preview-generator/monorepo-root
 import { buildNeedsPatchPrompt } from '@lib/preview-generator/needs-patch-prompt';
 import type { RouteSuggestion } from '@lib/preview-generator/route-heuristics';
 import type { SharedEditorState } from '@lib/types';
+import { shouldRetryWithAppWrapper } from '@shared/components/preview-chrome/app-mode-fallback';
 import * as vscode from 'vscode';
 import { runAppModeActivation } from './webview-preview-panel/app-mode-activation';
 import { resetPreviewToAppShell } from './webview-preview-panel/reset-to-app-shell';
@@ -35,6 +36,8 @@ import { AIChatPanelProvider } from './AIChatPanelProvider';
 import { DiagnosticHub } from './DiagnosticHub';
 import {
   createSequencedReroot,
+  isActivationStale,
+  isFailureSignalForCurrentSelection,
   isForeignExtensionError,
   isProviderContextError,
   resolveComponentIdentifier,
@@ -452,6 +455,38 @@ export function activate(context: vscode.ExtensionContext) {
   // and back can retry.
   const providerErrorAttempts = new Set<string>();
 
+  // Render-failure app-mode fallback: components for which we already retried a FAILED
+  // component-mode render inside the full-app wrapper (componentMissing / non-provider
+  // componentError on an app-entry candidate). Once-per-selection latch — if the WRAPPED
+  // render also fails the signal re-fires, but this set short-circuits a second retry so the
+  // real error surfaces instead of looping. Keyed by the iframe-reported component path.
+  // Cleared on component switch (same lifecycle as the two above) so a switch-away-and-back retries.
+  const appModeRetryAttempts = new Set<string>();
+
+  // Short-lived in-flight marker for the app-mode candidacy check (the gap between a render-failure
+  // signal and its async `isAppEntryCandidate(...)` verdict), mirroring the SaaS hook's
+  // `candidacyInFlightPathsRef`. Two rapid missing/error signals for the same path before the first
+  // candidacy resolves would otherwise race: the first latches appModeRetryAttempts + starts app-mode;
+  // the second sees alreadyTriedWrapper=true, the decision returns false, and it falls through to a
+  // concurrent selfHealMissingComponent → ensureComponent WHILE app-mode is rebuilding. This set
+  // suppresses only DUPLICATE concurrent signals for one path while a check is in flight — it does NOT
+  // permanently block self-heal: it is deleted when the check settles (then/catch), so a genuinely
+  // stuck component still reaches self-heal on a LATER signal. Keyed by the iframe-reported path,
+  // shared across the missing + non-provider-error branches so a missing+error pair for one path
+  // doesn't double-fire. Cleared on component switch (same lifecycle as the latches above).
+  const appModeCandidacyInFlight = new Set<string>();
+
+  // Monotonic selection generation for the app-mode activation stale guard (P1-3). Bumped on every
+  // ACTUAL component path CHANGE (alongside the latch clears) and captured when a render-failure
+  // signal fires. The `isStale` closure checks generation mismatch IN ADDITION to path equality so an
+  // in-flight activation from a PRIOR occupancy of the same path (A→B→A) can't commit app-mode for the
+  // fresh occupancy — the SaaS hook's `selectionTokenRef` token, mirrored on the ext side.
+  let selectionGeneration = 0;
+  // The last selected component path the generation was bumped for. A same-path `currentComponent`
+  // re-emit (panel resurrection, a repeated `component:open`) must NOT bump the generation — doing so
+  // would false-invalidate an in-flight app-mode activation for the SAME, unchanged selection.
+  let lastSelectionPath: string | undefined;
+
   // App-mode (app-preview address bar): the sub-project-relative preview path of the
   // entry root currently being previewed AS AN APP, or null when off. Tracked here so a
   // component switch can disable that exact entry on the (possibly re-rooted) preview
@@ -522,24 +557,18 @@ export function activate(context: vscode.ExtensionContext) {
     });
   };
 
-  // Auto-engage app-mode when the just-selected component IS a full app-entry wrapper
-  // (owns a pushState router) — no manual "preview as app" action needed (Alex's ask:
-  // "надо чтобы само работало"). A normal leaf component is left in component-mode by the
-  // caller's prior setComponentParam. `isStale` lets a newer selection cancel this one at
-  // EVERY async boundary (candidacy read, rebuild, recompile, route scan) so a slow
-  // activation can never overwrite a fresher selection's state. On a build failure it
-  // rolls back to component-mode (the setComponentParam URL the caller already posted).
-  const autoEnterAppModeIfCandidate = async (previewPath: string, isStale: () => boolean): Promise<void> => {
-    const isCandidate = await previewManager.isAppEntryCandidate(previewPath).catch(() => false);
-    if (!isCandidate || isStale()) return;
+  // Retry app-mode for an app-entry candidate whose component-mode render FAILED (the render-
+  // failure fallback that replaced the rejected upfront engage). Shared by onComponentMissing and
+  // the non-provider onComponentError branch. `isStale` cancels at every async boundary so a slow
+  // rebuild can't clobber a fresher selection; on a rebuild failure it rolls itself back (guarded
+  // so it never clears a newer activation) and stays in component-mode with NO error toast — this
+  // is an automatic path, not a user-invoked command, so it degrades silently.
+  const retryWithAppModeForEntry = async (previewPath: string, isStale: () => boolean): Promise<void> => {
+    if (isStale()) return;
     try {
       await activateAppModeForEntry(previewPath, isStale);
     } catch (err) {
-      // Rebuild-as-app failed — activateAppModeForEntry already rolled THIS activation back
-      // (guarded so it never clears a newer selection). The caller's prior setComponentParam
-      // leaves the user in component-mode. No error toast: this is an automatic path, not a
-      // user-invoked command, so it must degrade silently.
-      console.error('[HyperIDE] Auto app-mode failed; falling back to component-mode:', err);
+      console.error('[HyperIDE] App-mode fallback failed; staying in component-mode:', err);
     }
   };
 
@@ -593,14 +622,16 @@ export function activate(context: vscode.ExtensionContext) {
       return tree ? flattenComponentTree(tree) : [];
     };
 
-    const handleComponentMissing = async (componentPath: string): Promise<void> => {
+    // Regenerate the preview file so it includes the missing entry, then re-point the iframe.
+    // Extracted so onComponentMissing can branch between this and the app-mode fallback without
+    // growing past the function-length budget.
+    const selfHealMissingComponent = async (componentPath: string, currentWorkspaceRoot: string): Promise<void> => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
       // Bump the guard SYNCHRONOUSLY before any await — the iframe re-fires
       // _ComponentMissingSignal rapidly, and the async classification below must not
       // launch concurrent self-heal storms (mirrors the HYP-487 providerErrorAttempts guard).
       componentMissingRetries.set(componentPath, count + 1);
-      const currentWorkspaceRoot = syncWorkspaceRuntime();
       // The iframe signals the PREVIEW (sub-project-relative) path. Resolve BOTH
       // the repo-relative and sub-project-relative forms so the regenerated
       // preview keeps its monorepo prefix — a single-arg setComponentParam would
@@ -668,9 +699,183 @@ export function activate(context: vscode.ExtensionContext) {
       }
     };
 
+    // Self-healing: when the generated preview produced no renderable component, EITHER retry it
+    // AS A FULL APP (render-failure fallback, for an app-entry root) OR regenerate the preview file
+    // with the missing entry (the leaf self-heal).
+    //
+    // Ordering — app-mode fallback takes PRECEDENCE over the self-heal for an app-entry candidate:
+    // an app-entry root is not a leaf with a SampleDefault, so ensureComponent can't make it
+    // renderable as a component — it would only spin to the count>=2 cap. So when the decision says
+    // retry-as-app we latch + activate and SKIP the self-heal for this fire; otherwise we fall
+    // through to the leaf self-heal unchanged.
+    //
+    // Termination: the app-mode retry happens at most once per selection (appModeRetryAttempts
+    // latch). If the WRAPPED render also reports missing, the latch makes the decision false and we
+    // fall through to the self-heal, which is itself capped at count>=2 — so the two guards together
+    // guarantee no reload/re-ensure loop.
+    //
+    // Why there is NO separate blank-render probe: a reviewer worried that a canonical App.tsx
+    // owning <BrowserRouter> would render BLANK in component mode (no route matches the preview
+    // path) yet emit componentRenderSucceeded, so this failure-fallback would never fire. Not
+    // reachable: buildEntry (lib/preview-generator/preview-build-entry.ts) excludes router shells
+    // from the component-mode registry — `detectRouterShell(sourceCode) && !allowShell → return null`
+    // — and detectRouterShell matches the same shapes as detectPushStateRouterShell. So every
+    // app-entry candidate rendered in component mode is excluded → the iframe reports componentMissing
+    // (not a blank success) → THIS handler's componentMissing→app-mode fallback engages. No DOM probe.
     previewPanel.onComponentMissing((componentPath) => {
-      void handleComponentMissing(componentPath);
+      const currentWorkspaceRoot = syncWorkspaceRuntime();
+      const { componentPath: reportedRepoRelPath, previewComponentPath: relPath } = resolveSelfHealComponentParams({
+        componentPath,
+        activeWorkspaceRoot: currentWorkspaceRoot,
+        repoRoot: workspaceFolderRoot(),
+      });
+      // Capture BEFORE the async candidacy read so a newer selection landing mid-check is detected.
+      const capturedCurrentPath = stateHub?.state.currentComponent?.path;
+      const capturedGeneration = selectionGeneration;
+      // Bind the SIGNAL to the current selection up front: a late failure from the OLD iframe (mid
+      // A→B switch) can still pass the panel sender guard. A mismatch ⇒ stale signal — it belongs to
+      // a previous occupancy, so DO NOTHING: neither app-mode (wrong selection never failed) nor the
+      // leaf self-heal (it would only spin ensureComponent + bump the retry counter for a component
+      // that didn't fail now). The current selection, if it has its own problem, emits its own signal.
+      // KNOWN LIMITATION (deferred): the reported path is resolved through the CURRENT active root, so
+      // in a monorepo where two targets each own an identically-suffixed path (e.g. both have
+      // `src/App.tsx`), a late signal from target A after switching to target B could resolve to B's
+      // path and pass this check. Rare (dup-suffix + cross-target reroot + an in-flight signal); a
+      // tighter fix would compare the raw preview path or the root captured when the iframe URL issued.
+      const signalIsCurrent = isFailureSignalForCurrentSelection(reportedRepoRelPath, capturedCurrentPath);
+      if (!signalIsCurrent) return;
+      // In-flight candidacy guard (mirrors the SaaS hook): a rapid second missing/error signal for
+      // this path before the first candidacy check resolves would see alreadyTriedWrapper=true and
+      // fall through to a concurrent selfHealMissingComponent → ensureComponent while app-mode is
+      // rebuilding. Suppress the duplicate; the marker is cleared when the check settles, so a later
+      // signal still reaches self-heal if the component is genuinely stuck.
+      if (appModeCandidacyInFlight.has(componentPath)) return;
+      appModeCandidacyInFlight.add(componentPath);
+      void previewManager
+        .isAppEntryCandidate(relPath)
+        .catch(() => false)
+        .then((isCandidate) => {
+          appModeCandidacyInFlight.delete(componentPath);
+          const isStale = (): boolean =>
+            isActivationStale({
+              capturedGeneration,
+              currentGeneration: selectionGeneration,
+              capturedPath: capturedCurrentPath,
+              currentPath: stateHub?.state.currentComponent?.path,
+            });
+          // The candidacy read is async — an A→B→A churn can resolve a STALE A result for a fresh A
+          // occupancy. Re-check staleness BEFORE latching appModeRetryAttempts: latching for a stale
+          // result would poison the fresh occupancy (its real later failure would see
+          // alreadyTriedWrapper=true and never retry). A stale result also skips the self-heal — it
+          // belongs to a previous occupancy, which already cleared its own state on the switch.
+          if (isStale()) return;
+          const retry = shouldRetryWithAppWrapper({
+            outcome: 'missing',
+            isAppEntryCandidate: isCandidate,
+            isProviderContextError: false,
+            alreadyTriedWrapper: appModeRetryAttempts.has(componentPath),
+          });
+          if (!retry) {
+            // Current selection, genuine non-candidate leaf that's missing → regenerate its preview.
+            void selfHealMissingComponent(componentPath, currentWorkspaceRoot);
+            return;
+          }
+          // Latch synchronously before the async activation so a re-fired signal can't double-retry.
+          appModeRetryAttempts.add(componentPath);
+          void retryWithAppModeForEntry(relPath, isStale);
+        })
+        .catch((err) => {
+          // The `.catch(() => false)` above already coerces the candidacy rejection, so this only
+          // fires if the `.then` itself throws — still drop the in-flight marker so a later signal
+          // for this path is not permanently suppressed.
+          appModeCandidacyInFlight.delete(componentPath);
+          console.error('[HyperIDE] componentMissing app-mode candidacy handling failed:', err);
+        });
     });
+
+    // HYP-487: auto-recover from a provider-context render error by generating the isolation
+    // wrapper. The ErrorBoundary re-fires rapidly, so the providerErrorAttempts latch is set
+    // synchronously before the async generate to avoid concurrent AI calls / write storms.
+    //
+    // P2 selection-binding (this round): bind the crash to the current selection BEFORE generating
+    // the wrapper. A late provider error from the OLD iframe after an A→B switch could otherwise
+    // generate the isolation wrapper for the current workspace even though B did not fail. Resolve
+    // the reported path to its repo-relative form (as the non-provider branch already does) and gate
+    // on isFailureSignalForCurrentSelection — a stale signal returns without writing the wrapper.
+    const handleProviderContextError = (componentPath: string, currentWorkspaceRoot: string): void => {
+      const { componentPath: reportedRepoRelPath } = resolveSelfHealComponentParams({
+        componentPath,
+        activeWorkspaceRoot: currentWorkspaceRoot,
+        repoRoot: workspaceFolderRoot(),
+      });
+      const currentPath = stateHub?.state.currentComponent?.path;
+      if (!isFailureSignalForCurrentSelection(reportedRepoRelPath, currentPath)) return;
+      if (providerErrorAttempts.has(componentPath)) return;
+      providerErrorAttempts.add(componentPath);
+      // ensureIsolationWrapper is a no-op when a wrapper already exists (manual or prior auto-gen),
+      // and shows the no-AI-key guidance message when generation is skipped — so the "not already
+      // isolated" gate and the fallback both live there.
+      void ensureIsolationWrapper(currentWorkspaceRoot, context).catch((err) => {
+        console.error('[HyperIDE] componentError auto-wrapper generation failed:', err);
+      });
+    };
+
+    // Non-provider crash: an app-entry ROOT that failed to render as a component is retried AS A
+    // FULL APP (render-failure fallback). A non-candidate leaf that crashes is NOT app-mode's domain
+    // — it has no router/provider root to render raw — so it is left to surface its error. Uses the
+    // same in-flight candidacy guard as onComponentMissing (shared appModeCandidacyInFlight set) so a
+    // missing+error pair for one path can't double-fire a concurrent candidacy check.
+    const handleNonProviderError = (componentPath: string, currentWorkspaceRoot: string): void => {
+      const { componentPath: reportedRepoRelPath, previewComponentPath: relPath } = resolveSelfHealComponentParams({
+        componentPath,
+        activeWorkspaceRoot: currentWorkspaceRoot,
+        repoRoot: workspaceFolderRoot(),
+      });
+      const capturedCurrentPath = stateHub?.state.currentComponent?.path;
+      const capturedGeneration = selectionGeneration;
+      // Bind the crash SIGNAL to the current selection up front — a late error from the OLD iframe
+      // (mid A→B switch) must not latch + engage app-mode for the current selection that never crashed.
+      if (!isFailureSignalForCurrentSelection(reportedRepoRelPath, capturedCurrentPath)) return;
+      if (appModeCandidacyInFlight.has(componentPath)) return;
+      appModeCandidacyInFlight.add(componentPath);
+      void previewManager
+        .isAppEntryCandidate(relPath)
+        .catch(() => false)
+        .then((isCandidate) => {
+          appModeCandidacyInFlight.delete(componentPath);
+          const isStale = (): boolean =>
+            isActivationStale({
+              capturedGeneration,
+              currentGeneration: selectionGeneration,
+              capturedPath: capturedCurrentPath,
+              currentPath: stateHub?.state.currentComponent?.path,
+            });
+          // The candidacy read is async — an A→B→A churn can resolve a STALE A result for a fresh A
+          // occupancy. Re-check staleness BEFORE latching appModeRetryAttempts: latching for a stale
+          // result would poison the fresh occupancy (its real later crash would see
+          // alreadyTriedWrapper=true and never retry).
+          if (isStale()) return;
+          const retry = shouldRetryWithAppWrapper({
+            outcome: 'error',
+            isAppEntryCandidate: isCandidate,
+            isProviderContextError: false,
+            alreadyTriedWrapper: appModeRetryAttempts.has(componentPath),
+          });
+          if (!retry) return;
+          // Latch synchronously before the async activation so the re-firing ErrorBoundary can't
+          // double-retry; a second crash AFTER we entered app-mode is short-circuited by the latch
+          // and the real error surfaces (no loop).
+          appModeRetryAttempts.add(componentPath);
+          void retryWithAppModeForEntry(relPath, isStale);
+        })
+        .catch((err) => {
+          // The `.catch(() => false)` above coerces the candidacy rejection, so this only fires if
+          // the `.then` itself throws — still drop the in-flight marker so a later signal for this
+          // path is not permanently suppressed.
+          appModeCandidacyInFlight.delete(componentPath);
+          console.error('[HyperIDE] componentError app-mode candidacy handling failed:', err);
+        });
+    };
 
     // HYP-487: auto-recover from provider-context render errors. No-router Vite
     // apps (e.g. conloca-app) patch the entry file to mount the previewed
@@ -682,19 +887,15 @@ export function activate(context: vscode.ExtensionContext) {
     // wrapper the manual scope→component-only toggle produces), which flips the
     // preview into isolated mode so the component renders inside its providers.
     previewPanel.onComponentError((componentPath, error) => {
-      if (!isProviderContextError(error)) return;
-      // Guard set synchronously BEFORE the async generate — the ErrorBoundary
-      // re-fires rapidly, and we must not launch concurrent AI calls. Cleared on
-      // component switch (providerErrorAttempts.clear()) so a switch-away-and-back retries.
-      if (providerErrorAttempts.has(componentPath)) return;
-      providerErrorAttempts.add(componentPath);
       const currentWorkspaceRoot = syncWorkspaceRuntime();
-      // ensureIsolationWrapper is a no-op when a wrapper already exists (manual or
-      // prior auto-gen), and shows the no-AI-key guidance message when generation
-      // is skipped — so the "not already isolated" gate and the fallback both live there.
-      void ensureIsolationWrapper(currentWorkspaceRoot, context).catch((err) => {
-        console.error('[HyperIDE] componentError auto-wrapper generation failed:', err);
-      });
+      // ORDER: provider-context crash → HYP-487 isolation wrapper (FIRST); else an app-entry-candidate
+      // NON-provider crash → full-app retry. Never both for the same signal — a provider-context error
+      // dispatches to the wrapper branch and returns before the app-mode branch can run.
+      if (isProviderContextError(error)) {
+        handleProviderContextError(componentPath, currentWorkspaceRoot);
+        return;
+      }
+      handleNonProviderError(componentPath, currentWorkspaceRoot);
     });
   }
 
@@ -1124,14 +1325,37 @@ export function activate(context: vscode.ExtensionContext) {
   let previewAbortController: AbortController | null = null;
 
   const unsubStateChange = stateHub.onChange((_state, patch) => {
+    // A `currentComponent: null` patch (e.g. PreviewPanel.setWorkspaceRoot clearing the selection)
+    // resets the path tracker so a later RE-selection of the same path still counts as a real change
+    // and bumps the generation — otherwise `A → null → A` would keep the old generation and let a
+    // stale activation from the first A survive isActivationStale.
+    if (patch.currentComponent !== undefined && !patch.currentComponent?.path) {
+      lastSelectionPath = undefined;
+    }
     if (patch.currentComponent?.path) {
+      // Bump the selection generation on the SYNCHRONOUS selection edge — BEFORE the async
+      // reroot below — so any in-flight app-mode activation from a PRIOR occupancy is invalidated
+      // immediately (P1-3 / A→B→A reroot-gap race). The bump used to live in handleComponentSelected,
+      // but that runs INSIDE resolveAndRerootToComponent(...).then(...) — i.e. AFTER the async reroot.
+      // During an A→B→A switch the reroot gap meant the generation wasn't bumped yet, so a stale A
+      // activation could still pass isActivationStale() and commit app-mode for the fresh A. The path
+      // flips synchronously on selection (the reroot is downstream), so bumping here — on EVERY
+      // selection edge — invalidates any in-flight activation from a prior occupancy at once. Every
+      // path that reaches handleComponentSelected first passes through this edge, so the generation is
+      // always bumped before any failure handler captures it. Bump ONLY on an actual path change: a
+      // same-path re-emit (panel resurrection, repeated component:open) must not invalidate an
+      // in-flight activation for the same unchanged selection.
+      const componentPath = patch.currentComponent.path;
+      if (componentPath !== lastSelectionPath) {
+        selectionGeneration += 1;
+        lastSelectionPath = componentPath;
+      }
       // Re-root the pipeline to the monorepo sub-project that owns this component
       // before computing any paths (HYP-420). The component path from the Explorer
       // is relative to the VS Code workspace folder (repo root); resolve the abs
       // path against the repo root, then re-root so the dev server / entry patch /
       // __canvas_preview__ run inside the sub-project. For single-package projects
       // this resolves back to the workspace root — a no-op.
-      const componentPath = patch.currentComponent.path;
       const repoRoot = workspaceFolderRoot();
       const absSelectedComponent = isAbsolute(componentPath) ? componentPath : join(repoRoot, componentPath);
       void resolveAndRerootToComponent(absSelectedComponent).then(({ root: currentWorkspaceRoot, stale }) => {
@@ -1216,6 +1440,12 @@ export function activate(context: vscode.ExtensionContext) {
     // Clear any standing non-previewable-file overlay: a fresh selection supersedes it.
     // If THIS selection is also non-previewable, onComponentMissing re-posts it.
     previewPanel?.notifyNonPreviewableFile(null);
+    appModeRetryAttempts.clear();
+    appModeCandidacyInFlight.clear();
+    // NOTE: the selectionGeneration bump does NOT live here — it is done on the SYNCHRONOUS selection
+    // edge in the stateHub.onChange handler (before the async reroot), so an in-flight app-mode
+    // activation from a prior A→B→A occupancy is invalidated during the reroot gap, before this
+    // (post-reroot) handler runs. See the bump-site comment in unsubStateChange for the race.
     // A genuine component switch always exits app-mode: the address bar belongs to the
     // previewed app entry, not to an ordinary component. Disable the previous entry on
     // its owning manager and hide the bar before the normal component-preview pipeline
@@ -1360,23 +1590,13 @@ export function activate(context: vscode.ExtensionContext) {
         // _currentComponent stays repo-relative (astBridge identity); the iframe URL uses
         // the sub-project-relative path (the dev server's preview registry key).
         previewPanel?.setComponentParam(repoRelativePath, relativePath);
-        if (ac.signal.aborted) return;
-        // 6. Auto-app-mode: if the selected file is a full app-entry wrapper (owns a
-        // pushState router), ALSO render it AS AN APP — the address bar + the app's own
-        // router, no manual toggle. activateAppModeForEntry rebuilds with isAppEntry and
-        // reloads the iframe with `&app=1` for the now-current component. A normal
-        // component is left in component-mode by the setComponentParam above.
-        //
-        // The stale guard checks BOTH the abort signal AND the live selected component path.
-        // `ac` is only aborted once the NEXT selection's handleComponentSelected runs, which is
-        // gated behind its async reroot — so during that gap `ac.signal.aborted` is still false.
-        // The StateHub's currentComponent path flips synchronously on selection (the reroot is
-        // downstream), so comparing it to this activation's captured path catches a newer
-        // selection that landed during the reroot gap and stops A from committing for the old
-        // component (final review P1).
-        const isAutoAppModeStale = (): boolean =>
-          ac.signal.aborted || stateHub?.state.currentComponent?.path !== componentPath;
-        await autoEnterAppModeIfCandidate(relativePath, isAutoAppModeStale);
+        // App-mode is NO LONGER engaged proactively here. Static router-shape detection
+        // (isAppEntryCandidate) proves router SHAPE, not render FAILURE — a router-owning root can
+        // still render usable UI as a plain component — so the upfront engage was rejected (the CTO
+        // asked: engage app-mode only when the render does NOT work without it). App-mode is now a
+        // pure render-failure FALLBACK driven by the componentMissing / componentError runtime
+        // signals (see onComponentMissing / onComponentError below). A file that renders fine as a
+        // component stays in component-mode.
       })
       .catch((err) => {
         if (ac.signal.aborted) return;

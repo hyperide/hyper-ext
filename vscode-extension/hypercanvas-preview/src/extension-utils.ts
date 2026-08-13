@@ -213,3 +213,54 @@ export function resolveSelfHealComponentParams(input: {
     previewComponentPath: relative(activeWorkspaceRoot, absPath),
   };
 }
+
+/**
+ * Decide whether a render-failure signal (`componentMissing` / `componentError`) from the preview
+ * iframe still belongs to the component currently shown in the canvas.
+ *
+ * Why: a late failure signal from the OLD iframe (mid-switch A→B) can still pass the panel's
+ * sender guard and reach the handler after the selection already moved on. Acting on it would
+ * latch + engage app-mode for the WRONG (current) selection even though that one never failed.
+ * Both paths are repo-relative: `reportedRepoRelPath` is the iframe path after
+ * `resolveSelfHealComponentParams(...).componentPath`, and `currentComponentPath` is
+ * `stateHub.state.currentComponent?.path` (same astBridge identity). We normalize path separators
+ * so a Windows `\` vs `/` mismatch can't spuriously reject a genuine match.
+ *
+ * Returns false (treat as stale → skip the app-mode retry) when there is no current selection, or
+ * when the reported path does not match it. Returns true only on an exact repo-relative match.
+ */
+export function isFailureSignalForCurrentSelection(
+  reportedRepoRelPath: string,
+  currentComponentPath: string | undefined,
+): boolean {
+  if (!currentComponentPath) return false;
+  const normalize = (p: string): string => p.replace(/\\/g, '/');
+  return normalize(reportedRepoRelPath) === normalize(currentComponentPath);
+}
+
+/**
+ * Decide whether an in-flight app-mode activation, started from a render-failure signal, has been
+ * superseded by a newer component selection — so its eventual commit must be dropped.
+ *
+ * Why path equality alone is not enough (P1-3): the ext fallback used to test only
+ * `currentComponent.path !== capturedPath`. During an A→B→A occupancy churn (select A, A fails and
+ * app-mode activation starts; user switches to B then back to A before the activation's
+ * rebuild+recompile+route-scan finishes) the path string is A again, so a pure-path stale check
+ * returns false and the STALE activation from the FIRST A occupancy commits app-mode for the FRESH
+ * A occupancy. The SaaS hook guards this with a `selectionTokenRef` generation token; this mirrors
+ * it on the ext side. A monotonic selection generation is bumped on EVERY component switch and
+ * captured when the signal fires; a mismatch means at least one switch happened since, so the
+ * activation belongs to a prior occupancy and is stale even when the path string repeats.
+ *
+ * Returns true (stale → drop the activation) when the captured generation differs from the current
+ * one, OR when the captured path differs from the current path. Returns false (still current) only
+ * when BOTH the generation and the path still match.
+ */
+export function isActivationStale(input: {
+  capturedGeneration: number;
+  currentGeneration: number;
+  capturedPath: string | undefined;
+  currentPath: string | undefined;
+}): boolean {
+  return input.currentGeneration !== input.capturedGeneration || input.currentPath !== input.capturedPath;
+}
