@@ -1,7 +1,7 @@
 {
   "name": "hypercanvas-preview",
   "displayName": "HyperIDE",
-  "version": "0.1.57",
+  "version": "0.1.58",
   "description": "Visual editor for React components",
   "categories": [
     "Other",
@@ -29,7 +29,8 @@
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node esbuild.js --production && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "build": "node esbuild.js --production && node scripts/check-webview-bundles.mjs && tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
+    "check:webview-bundles": "node scripts/check-webview-bundles.mjs",
     "build:css": "tailwindcss --input src/webview/styles.css --output out/webview.css --minify",
     "watch": "node esbuild.js --watch & tailwindcss --input src/webview/styles.css --output out/webview.css --watch",
     "compile": "tsc -p ./",

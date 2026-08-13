@@ -5,6 +5,20 @@ const fs = require('node:fs');
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
+// Browser webview bundles have no Node runtime, so any surviving `process.env.X`
+// read throws `process is not defined`. Node-only LIBRARIES (e.g. @babel) are kept
+// out via stubs in createWebviewPlugins; this `define` compile-time-substitutes the
+// env vars that legit browser libs (React, tailwindcss) read, eliminating the
+// `process` reference entirely (NOT a runtime shim). New unhandled `process.env.*`
+// leaks are caught by scripts/check-webview-bundles.mjs and must be added here or
+// stubbed deliberately.
+const WEBVIEW_DEFINE = {
+  'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
+  'process.env.CSS_TRANSFORMER_WASM': 'false',
+  'process.env.LANG': '""',
+  'process.env.JEST_WORKER_ID': 'undefined',
+};
+
 const rootDir = path.resolve(__dirname, '../..');
 
 const extensions = ['.tsx', '.ts', '.jsx', '.js', ''];
@@ -115,6 +129,15 @@ function createWebviewPlugins() {
       build.onResolve({ filter: /monaco-editor|@monaco-editor/ }, () => {
         return { path: path.resolve(__dirname, 'src/stubs/monaco.ts') };
       });
+      // Stub NodePod retarget transport: browser-SaaS-only i18n that pulls
+      // @babel/traverse + @babel/types (via @shared/i18n-text/retarget). @babel/types
+      // reads process.env at init → `process is not defined` crash in the webview.
+      // The VS Code webview delegates i18n/AST to the extension host, so this is dead
+      // code here; stubbing keeps @babel out of the browser bundle (HYP-747 follow-up,
+      // enforced by scripts/check-webview-bundles.mjs).
+      build.onResolve({ filter: /nodepod\/nodepodRetargetTransport/ }, () => {
+        return { path: path.resolve(__dirname, 'src/stubs/nodepod-stub.ts') };
+      });
     }),
   ];
 }
@@ -147,6 +170,7 @@ async function main() {
     outfile: 'out/webview.js',
     jsx: 'automatic',
     logLevel: 'info',
+    define: WEBVIEW_DEFINE,
     plugins: createWebviewPlugins(),
   });
 
@@ -162,6 +186,7 @@ async function main() {
     outfile: 'out/webview-left.js',
     jsx: 'automatic',
     logLevel: 'info',
+    define: WEBVIEW_DEFINE,
     plugins: createWebviewPlugins(),
   });
 
@@ -177,6 +202,7 @@ async function main() {
     outfile: 'out/webview-right.js',
     jsx: 'automatic',
     logLevel: 'info',
+    define: WEBVIEW_DEFINE,
     plugins: createWebviewPlugins(),
   });
 
@@ -192,6 +218,7 @@ async function main() {
     outfile: 'out/webview-preview-panel.js',
     jsx: 'automatic',
     logLevel: 'info',
+    define: WEBVIEW_DEFINE,
     plugins: createWebviewPlugins(),
   });
 
@@ -207,6 +234,7 @@ async function main() {
     outfile: 'out/webview-ai-chat.js',
     jsx: 'automatic',
     logLevel: 'info',
+    define: WEBVIEW_DEFINE,
     plugins: createWebviewPlugins(),
   });
 
