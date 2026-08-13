@@ -1,8 +1,12 @@
 import type { ComponentGroup } from '../../../lib/component-scanner/types';
+import type { UiKitLabel } from '@lib/ui-kit';
 
 export type PositionType = 'static' | 'rel' | 'abs' | 'fixed' | 'sticky' | 'mixed';
 export type LayoutType = 'layout' | 'col' | 'row' | 'grid' | 'mixed';
-export type UIKitType = 'tailwind' | 'tamagui' | 'none';
+// HYP-984: re-exported alias of the shared `UiKitLabel` union (lib/ui-kit.ts) rather than a
+// locally-redeclared literal — a UIKit label rename now fails to compile at every consumer of
+// `UIKitType` instead of silently degrading `uiKitToDefaultCssSystem` to `undefined`.
+export type UIKitType = UiKitLabel;
 
 export type DesignTokenCategory = 'colors' | 'typography' | 'spacing' | 'shadows' | 'other';
 

@@ -4,6 +4,7 @@
  */
 
 import type { CssSystemId } from '@lib/style-read/types';
+import type { UiKitLabel } from '@lib/ui-kit';
 import type { I18nLibrary } from '../../../shared/i18n-text/types';
 import type { ColorProbeCandidate } from './services/color-probe-types';
 
@@ -192,8 +193,8 @@ export interface SupportDimension {
 export interface ProjectCapabilities {
   /** Detected CSS framework */
   cssSystem: CssSystem;
-  /** Detected UI kit ('tailwind' | 'tamagui' | 'none') — backward compat */
-  uiKit: 'tailwind' | 'tamagui' | 'none';
+  /** Detected UI kit — shared `UiKitLabel` union (HYP-984), backward-compat field name */
+  uiKit: UiKitLabel;
   /** Detected project/bundler type */
   projectType?: ProjectType;
   /** Monorepo topology of the workspace */

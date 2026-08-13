@@ -2002,7 +2002,9 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // --- MCP Server for AI Agents ---
-  mcpServer = setupMcpServer(context, panelRouter, stateHub, diagnosticHub, workspaceRoot, previewPanel);
+  // HYP-984 review: `() => previewPanel`, not `previewPanel` by value — see
+  // extension-mcp-setup.ts's getPreviewPanel param doc for why.
+  mcpServer = setupMcpServer(context, panelRouter, stateHub, diagnosticHub, () => previewPanel);
 
   // Status bar item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);

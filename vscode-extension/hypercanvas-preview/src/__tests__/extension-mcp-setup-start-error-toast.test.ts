@@ -11,7 +11,7 @@
  * `../services/netProbe`'s `listenLoopback`, since start() always binds an OS-assigned
  * ephemeral port (no fixed port to pre-occupy for a real bind conflict).
  */
-import { describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import * as vscode from 'vscode';
 
 const BIND_ERROR = new Error('listen EACCES: permission denied 127.0.0.1:0');
@@ -35,21 +35,32 @@ function makeFakePanelRouter(): PanelRouter {
   return {
     astBridge: { astService: {} },
     componentService: {},
+    // HYP-984 review round 2: `setupMcpServer()` no longer takes a `workspaceRoot` constructor
+    // argument — it reads `panelRouter.workspaceRoot` live — so a fake PanelRouter must implement
+    // it like the real one does.
+    workspaceRoot: '/test-workspace',
   } as unknown as PanelRouter;
 }
 
 describe('setupMcpServer() — start() failure toast (HYP-953)', () => {
+  let disposeServer: (() => void) | null = null;
+
+  afterEach(() => {
+    disposeServer?.();
+    disposeServer = null;
+  });
+
   it('shows an error notification with the real reason when start() rejects', async () => {
     const fakeContext = { subscriptions: [] as Array<{ dispose(): void }> };
 
-    setupMcpServer(
+    const server = setupMcpServer(
       fakeContext as unknown as import('vscode').ExtensionContext,
       makeFakePanelRouter(),
       {} as unknown as StateHub,
       {} as unknown as DiagnosticHub,
-      '/test-workspace',
-      null,
+      () => null,
     );
+    disposeServer = () => server.dispose();
 
     // start() rejection propagates through a couple of microtask hops
     // (listenLoopback's mocked rejection -> HyperMcpServer.start()'s .catch ->

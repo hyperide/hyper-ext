@@ -25,10 +25,11 @@
  */
 
 import type { CanvasEngine } from '@/lib/canvas-engine/core/CanvasEngine';
+import type { UiKitLabel } from '@lib/ui-kit';
 import { ColorCombobox } from './color-combobox';
 
-/** Project UI kit — mirrors RightSidebar's UIKitType ('tamagui' | 'tailwind' | 'none'). */
-export type PropColorUIKit = 'tamagui' | 'tailwind' | 'none';
+/** Project UI kit — alias of the shared `UiKitLabel` union (HYP-984), same as RightSidebar's `UIKitType`. */
+export type PropColorUIKit = UiKitLabel;
 
 interface PropColorFieldProps {
   /** Prop name (used for the accessible field id). */

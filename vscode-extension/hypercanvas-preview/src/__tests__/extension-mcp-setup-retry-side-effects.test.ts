@@ -14,7 +14,7 @@
  * `../extension-commands-utils`'s `autoUpdateMcpConfigs`/`registerCopilotMcp` so
  * this file can assert they run with the RETRY's port, not just activation's.
  */
-import { describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 
 type BindImpl = () => Promise<number>;
 let currentBindImpl: BindImpl = () => Promise.reject(new Error('listen EACCES: permission denied 127.0.0.1:0'));
@@ -41,6 +41,10 @@ function makeFakePanelRouter(): PanelRouter {
   return {
     astBridge: { astService: {} },
     componentService: {},
+    // HYP-984 review round 2: `setupMcpServer()` no longer takes a `workspaceRoot` constructor
+    // argument — it reads `panelRouter.workspaceRoot` live — so a fake PanelRouter must implement
+    // it like the real one does. `autoUpdateMcpConfigs` below is asserted against this value.
+    workspaceRoot: '/test-workspace',
   } as unknown as PanelRouter;
 }
 
@@ -52,6 +56,19 @@ function makeFakeContext(): import('vscode').ExtensionContext {
 }
 
 describe('setupMcpServer() — retry-success side effects (HYP-954 review P3)', () => {
+  let disposeServer: (() => void) | null = null;
+
+  afterEach(() => {
+    disposeServer?.();
+    disposeServer = null;
+    // Reset shared module-level mock state (review round 4) — only one test uses these today,
+    // but leaving them dirty makes call-count assertions order-dependent the moment a sibling
+    // test is added to this file.
+    autoUpdateMcpConfigs.mockClear();
+    registerCopilotMcp.mockClear();
+    currentBindImpl = () => Promise.reject(new Error('listen EACCES: permission denied 127.0.0.1:0'));
+  });
+
   it('fires config auto-update / Copilot registration on a successful Retry after activation failed', async () => {
     const fakeContext = makeFakeContext();
 
@@ -60,9 +77,9 @@ describe('setupMcpServer() — retry-success side effects (HYP-954 review P3)', 
       makeFakePanelRouter(),
       {} as unknown as StateHub,
       {} as unknown as DiagnosticHub,
-      '/test-workspace',
-      null,
+      () => null,
     );
+    disposeServer = () => server.dispose();
 
     // Let activation's own eager ensureStarted() attempt settle (it rejects).
     await new Promise((resolve) => setTimeout(resolve, 0));

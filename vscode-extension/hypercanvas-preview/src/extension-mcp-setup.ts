@@ -45,11 +45,16 @@ const ACTIVATION_START_TIMEOUT_MS = 30_000;
  */
 function handleMcpServerStarted(
   context: vscode.ExtensionContext,
-  workspaceRoot: string,
+  panelRouter: PanelRouter,
   mcpStatusBarItem: vscode.StatusBarItem,
   server: HyperMcpServer,
 ): void {
-  autoUpdateMcpConfigs(workspaceRoot, server.url);
+  // HYP-984: read panelRouter.workspaceRoot live at fire time, not a value captured at
+  // setupMcpServer() call time — this handler fires on every successful start INCLUDING a
+  // hypercanvas.setupMcp retry that happens after a workspace reroot, and a captured string
+  // would keep writing .mcp.json / .vscode/mcp.json / opencode.json / .codex/config.toml to the
+  // OLD workspace forever.
+  autoUpdateMcpConfigs(panelRouter.workspaceRoot, server.url);
   registerCopilotMcp(context, server.url);
   mcpStatusBarItem.text = '$(plug) Hyper MCP';
   mcpStatusBarItem.tooltip = `HyperCanvas MCP: http://127.0.0.1:${server.port}/mcp\nClick to configure AI agents`;
@@ -77,20 +82,52 @@ export function setupMcpServer(
   panelRouter: PanelRouter,
   stateHub: StateHub,
   diagnosticHub: DiagnosticHub,
-  workspaceRoot: string,
-  previewPanel: PreviewPanel | null,
+  // A thunk, not a by-value `PreviewPanel | null` parameter — same snapshot shape this whole fix
+  // eliminates for astService/componentService/workspaceRoot below.
+  getPreviewPanel: () => PreviewPanel | null,
 ): HyperMcpServer {
-  const astService = panelRouter.astBridge.astService;
-  const componentService = panelRouter.componentService;
-
+  // Does NOT rotate the MCP bearer token or restart the server on a workspace reroot:
+  // `HyperMcpServer._token` authenticates "this running server PROCESS", not "this workspace" —
+  // there is no separate per-workspace trust boundary to enforce for a single-user loopback
+  // server, and forcing re-auth on every folder switch would be a pure UX regression. What this
+  // fix delivers is narrower and load-bearing: a NEW tool call issued after a reroot resolves
+  // `astService`/`componentService`/`workspaceRoot` against the CURRENT workspace (the getters
+  // below), not the previous one. This is a per-CALL guarantee, not a per-OPERATION one — a
+  // handler that resolves a service and then awaits I/O is not re-checked mid-flight, so a reroot
+  // during that await can still complete against the workspace current when the call STARTED. A
+  // narrower, pre-existing race, unaffected by this fix either way.
+  //
+  // NEVER snapshot `panelRouter.astBridge.astService` / `.componentService` / `.workspaceRoot`
+  // into a local `const` here. PanelRouter._ensureCurrentWorkspace() replaces `_astBridge` (and
+  // `_componentService`, `_workspaceRoot`) wholesale on a workspace reroot, and every one of
+  // PanelRouter's public getters (`astBridge`, `componentService`, `workspaceRoot`) calls
+  // `_ensureCurrentWorkspace()` itself before returning — so reading any of them here, at any
+  // time, always re-derives from `vscode.workspace.workspaceFolders` first. A by-value snapshot
+  // captured once at activation would keep every later MCP tool call (and the `onNavigate`
+  // closure below) wired to the OLD workspace forever. `HyperMcpServer` already re-reads
+  // `this._services.astService` on EVERY request (`_createMcpServer()` runs per-request,
+  // stateless mode), so a `get` accessor here is enough to make the whole chain live.
   const server = new HyperMcpServer({
-    astService,
-    componentService,
+    get astService() {
+      return panelRouter.astBridge.astService;
+    },
+    get componentService() {
+      return panelRouter.componentService;
+    },
     stateHub,
     diagnosticHub,
-    workspaceRoot,
-    onNavigate: (filePath, elementId) => navigateToElement(astService, filePath, elementId),
-    onRefresh: () => previewPanel?.refresh(),
+    // No MCP tool handler currently reads `this._services.workspaceRoot` (grep
+    // `vscode-extension/hypercanvas-preview/src/mcp/tools/` — every tool resolves paths through
+    // `resolveFilePath(stateHub, filePath)` or `astService`/`componentService` instead), so there
+    // is no tool-call-level regression to test beyond `handleMcpServerStarted()`'s config-write
+    // path (covered by extension-mcp-setup-workspaceroot-reroot.test.ts). Kept live via the same
+    // getter pattern regardless, so a future tool that DOES read it inherits correct behavior for
+    // free instead of needing its own HYP-984-shaped fix.
+    get workspaceRoot() {
+      return panelRouter.workspaceRoot;
+    },
+    onNavigate: (filePath, elementId) => navigateToElement(panelRouter.astBridge.astService, filePath, elementId),
+    onRefresh: () => getPreviewPanel()?.refresh(),
     onOpenComponent: (path) => {
       stateHub?.applyUpdate({
         currentComponent: {
@@ -103,7 +140,7 @@ export function setupMcpServer(
         },
       });
     },
-    onScreenshot: (elementId) => previewPanel?.takeScreenshot(elementId) ?? Promise.resolve(null),
+    onScreenshot: (elementId) => getPreviewPanel()?.takeScreenshot(elementId) ?? Promise.resolve(null),
   });
 
   // MCP status bar item (shown after server starts)
@@ -113,7 +150,7 @@ export function setupMcpServer(
 
   // HYP-954: fires handleMcpServerStarted() on EVERY successful start, not just
   // activation's — see HyperMcpServer.onStarted's doc comment.
-  server.onStarted(() => handleMcpServerStarted(context, workspaceRoot, mcpStatusBarItem, server));
+  server.onStarted(() => handleMcpServerStarted(context, panelRouter, mcpStatusBarItem, server));
 
   // Eager fire-and-forget via ensureStarted() (not a bare start()) so this
   // activation attempt and any LATER hypercanvas.setupMcp invocation share the

@@ -4,6 +4,7 @@
 
 import type { NodePath } from '@babel/traverse';
 import type * as t from '@babel/types';
+import type { UiKitLabel } from './ui-kit';
 
 /**
  * Result of parsing a file
@@ -57,7 +58,7 @@ export interface SharedEditorState {
   /** Engine mode: design (select/edit) or interact (pass-through to iframe) */
   engineMode: 'design' | 'interact';
   /** Detected UI kit from project dependencies */
-  projectUIKit?: 'tailwind' | 'tamagui' | 'none';
+  projectUIKit?: UiKitLabel;
   /** Element ID for which the component insertion UI is open */
   insertTargetId?: string | null;
   /** Monotonic counter — increment to force inspector style re-read (e.g. after undo/redo) */

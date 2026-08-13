@@ -15,6 +15,7 @@ import * as path from 'node:path';
 import { invokesBunRuntime, readNxDevCommand } from '@lib/preview-generator/framework-routing';
 import type { NxPackageJson } from '@lib/preview-generator/framework-routing';
 import { getWriterBackedCssSystemIds } from '@lib/style-adapters/registry';
+import type { UiKitLabel } from '@lib/ui-kit';
 import type { CssSystem, ProjectInfo, ProjectType, RepoType, UnsupportedProjectError } from '../types';
 import { CSS_SYSTEM_TO_ADAPTER_ID } from '../types';
 
@@ -454,7 +455,7 @@ export async function detectUnsupportedProject(
 export async function detectUIKit(
   projectPath: string,
   packageJson?: Record<string, unknown> | null,
-): Promise<'tailwind' | 'tamagui' | 'none'> {
+): Promise<UiKitLabel> {
   const pkg = packageJson ?? (await readPackageJson(projectPath));
 
   if (!pkg) {
@@ -700,7 +701,7 @@ const FULL_EDIT_BUNDLERS: import('../types').ProjectType[] = ['vite', 'cra', 'we
  */
 export function computeCapabilities(
   cssSystem: import('../types').CssSystem,
-  uiKit: 'tailwind' | 'tamagui' | 'none',
+  uiKit: UiKitLabel,
   projectError: import('../types').UnsupportedProjectError | null,
   projectType?: import('../types').ProjectType,
   repoType?: RepoType,

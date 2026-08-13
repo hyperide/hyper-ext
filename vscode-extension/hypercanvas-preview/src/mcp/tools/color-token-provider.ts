@@ -18,6 +18,7 @@ import {
 import { colorDistance } from '@shared/utils/color';
 import twColors from 'tailwindcss/colors';
 import type { AstService } from '../../services/AstService';
+import type { UiKitLabel } from '@lib/ui-kit';
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -429,15 +430,36 @@ class TamaguiStyleAdapter implements StyleAdapter {
 const tailwindColorProvider = new TailwindColorTokenProvider();
 const tamaguiColorProvider = new TamaguiColorTokenProvider();
 
-export function getColorTokenProvider(uiKit: string | undefined): ColorTokenProvider {
-  if (uiKit === 'tamagui') return tamaguiColorProvider;
-  return tailwindColorProvider;
+// HYP-984: `UiKitLabel | undefined`, not a bare `string` — a renamed UIKit label now fails to
+// compile at this call site instead of silently falling through into the Tailwind branch.
+// Exhaustive `switch` (review round 2, Fable): the earlier `=== 'tamagui'`-else-Tailwind shape
+// caught a RENAME (unrelated-literal comparison error) but let a future NEW `UiKitLabel` member
+// compile cleanly and silently inherit the Tailwind provider — the exact silent-fallthrough this
+// type exists to prevent, just deferred to the next member instead of the next rename. NOTE
+// (ticket AC4, deferred): the Tailwind-for-everything-but-Tamagui default itself — including
+// 'none' — is the pre-existing overloaded-'none'-semantics issue the ticket explicitly defers;
+// this only tightens exhaustiveness, it does not change today's routing for any current member.
+function routeToTamagui(uiKit: UiKitLabel | undefined): boolean {
+  if (uiKit === undefined) return false;
+  switch (uiKit) {
+    case 'tamagui':
+      return true;
+    case 'tailwind':
+    case 'none':
+      return false;
+    default:
+      ((_exhaustive: never) => _exhaustive)(uiKit);
+      return false;
+  }
+}
+
+export function getColorTokenProvider(uiKit: UiKitLabel | undefined): ColorTokenProvider {
+  return routeToTamagui(uiKit) ? tamaguiColorProvider : tailwindColorProvider;
 }
 
 const tailwindStyleAdapter = new TailwindStyleAdapter();
 const tamaguiStyleAdapter = new TamaguiStyleAdapter();
 
-export function getStyleAdapter(uiKit: string | undefined): StyleAdapter {
-  if (uiKit === 'tamagui') return tamaguiStyleAdapter;
-  return tailwindStyleAdapter;
+export function getStyleAdapter(uiKit: UiKitLabel | undefined): StyleAdapter {
+  return routeToTamagui(uiKit) ? tamaguiStyleAdapter : tailwindStyleAdapter;
 }
