@@ -418,6 +418,11 @@ function extractClientChunkFrames(err: Error): Array<{ url: string; line: number
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
       continue;
     }
+    // Bun hot dev server bundled chunks — source map needed to resolve to src file
+    if (url.includes('/_bun/client/') || url.includes('/_bun/')) {
+      frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
+      continue;
+    }
     // Vite source files (React 19: _debugStack has compiled positions that need source map)
     if (url.startsWith('http') && url.includes('/src/') && !url.includes('node_modules')) {
       frames.push({ url, line: Number.parseInt(m[2], 10), col: Number.parseInt(m[3], 10) });
