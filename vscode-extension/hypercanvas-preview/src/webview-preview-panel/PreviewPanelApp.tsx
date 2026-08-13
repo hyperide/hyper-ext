@@ -5,7 +5,12 @@
  * Manages iframe preview, overlay rendering, and context menu.
  */
 
-import { ComponentErrorOverlay, LoadingOverlay, NoComponentOverlay } from '@shared/components/overlays';
+import {
+  ComponentErrorOverlay,
+  LoadingOverlay,
+  NoComponentOverlay,
+  NonPreviewableFileOverlay,
+} from '@shared/components/overlays';
 import { AddressBar } from '@shared/components/preview-chrome';
 import { IconBrush, IconLayoutGrid, IconPointer } from '@tabler/icons-react';
 import cn from 'clsx';
@@ -88,6 +93,8 @@ function PreviewContent() {
     projectError,
     projectCapabilities,
     componentError,
+    unsupportedFile,
+    selectRecommendation,
     appMode,
     navigateAppRoute,
     clearComponentError,
@@ -300,6 +307,15 @@ function PreviewContent() {
             canvas.sendEvent({ type: 'errorBoundary:configureAIKey' });
           }}
           onClose={clearComponentError}
+        />
+      )}
+
+      {unsupportedFile && (
+        <NonPreviewableFileOverlay
+          filePath={unsupportedFile.filePath}
+          reason={unsupportedFile.reason}
+          recommendations={unsupportedFile.recommendations}
+          onSelect={selectRecommendation}
         />
       )}
 

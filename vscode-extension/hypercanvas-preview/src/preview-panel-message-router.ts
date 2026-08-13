@@ -120,6 +120,16 @@ export async function routeMessage(deps: MessageRouterDeps, message: unknown, we
     }
     return;
   }
+  // User clicked a recommendation in the non-previewable-file overlay — select that
+  // component, driving the same selection pipeline as an Explorer click (opens the
+  // file + previews it).
+  if (msg.type === 'preview:selectComponent') {
+    const { path, name } = msg as { path?: string; name?: string };
+    if (path) {
+      deps.stateHub.applyUpdate({ currentComponent: { name: name ?? path, path } });
+    }
+    return;
+  }
 
   // === Console capture ===
   if (msg.type === 'diagnostic:console') {

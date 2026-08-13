@@ -58,7 +58,7 @@ import {
   handleScreenshotResult,
 } from './preview-panel-context-menu';
 import { SyncPositionService } from './services/SyncPositionService';
-import type { DevServerRuntimeError, UnsupportedProjectError } from './types';
+import type { DevServerRuntimeError, NonPreviewableFilePayload, UnsupportedProjectError } from './types';
 import { generatePreviewHtml } from './preview-html';
 import { postToWebviewSafe, readWebviewSafe } from './webview-post';
 
@@ -973,6 +973,15 @@ export class PreviewPanel {
       url: null,
     });
   }
+  /**
+   * Surface the non-previewable-file error (clear error + clickable recommendations)
+   * in the canvas instead of the iframe's infinite "Generating sample…" spinner.
+   * Pass null to clear it (e.g. when a previewable component is later selected).
+   */
+  public notifyNonPreviewableFile(payload: NonPreviewableFilePayload | null): void {
+    this._postToWebview({ type: 'previewUnsupportedFile', payload });
+  }
+
   /**
    * Notify webview that the project type is unsupported (e.g. React Native / Tamagui).
    * Pass null to clear the error (e.g. after fix installed react-native-web).

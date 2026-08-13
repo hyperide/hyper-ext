@@ -47,6 +47,21 @@ export interface UnsupportedProjectError {
   fixLabel?: string;
 }
 
+/**
+ * The opened file cannot be previewed as a component — a ReactDOM entry/bootstrap
+ * (`main.tsx`) or any file with no renderable component export. Drives the
+ * NonPreviewableFileOverlay (clear error + clickable recommendations) instead of the
+ * iframe's infinite "Generating sample…" spinner. Posted to the webview as
+ * `previewUnsupportedFile`; cleared by passing null.
+ */
+export interface NonPreviewableFilePayload {
+  /** Project-relative path of the opened, non-previewable file. */
+  filePath: string;
+  reason: 'entry-file' | 'no-renderable-export';
+  /** Renderable component files to recommend, already ranked + capped by the host. */
+  recommendations: Array<{ path: string; name: string }>;
+}
+
 // ============================================
 // Project Capabilities (readonly mode)
 // ============================================

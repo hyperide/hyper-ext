@@ -17,6 +17,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
+  type ComponentRecommendation,
   ensureSample,
   isUiPrimitive,
   PreviewFileManager,
@@ -44,6 +45,7 @@ import { LeftPanelProvider } from './LeftPanelProvider';
 import { LogsPanelProvider } from './LogsPanelProvider';
 import { HyperMcpServer } from './mcp/HyperMcpServer';
 import { PanelRouter } from './PanelRouter';
+import { buildNonPreviewablePayload, flattenComponentTree } from './preview-panel-non-previewable';
 import { normalizeSampleComponentName, PreviewPanel } from './PreviewPanel';
 import { isWebviewDisposedError } from './webview-post';
 import { RightPanelProvider } from './RightPanelProvider';
@@ -558,9 +560,21 @@ export function activate(context: vscode.ExtensionContext) {
     // diff-before-write check in _initPreviewFile prevents HMR when the generated content
     // is unchanged. Primitives that have neither authored nor synthetic SampleDefault
     // remain filtered out by entryHasRenderableSample and surface the "no sample" toast.
-    previewPanel.onComponentMissing((componentPath) => {
+    // Scan the project for renderable component files to recommend when the opened
+    // file is not previewable. Empty list on any failure (panelRouter not ready, no
+    // workspace) — the overlay then shows the error without suggestions.
+    const listRenderableComponents = async (): Promise<ComponentRecommendation[]> => {
+      const tree = await panelRouter?.componentService.scanComponents();
+      return tree ? flattenComponentTree(tree) : [];
+    };
+
+    const handleComponentMissing = async (componentPath: string): Promise<void> => {
       const count = componentMissingRetries.get(componentPath) ?? 0;
       if (count >= 2) return;
+      // Bump the guard SYNCHRONOUSLY before any await — the iframe re-fires
+      // _ComponentMissingSignal rapidly, and the async classification below must not
+      // launch concurrent self-heal storms (mirrors the HYP-487 providerErrorAttempts guard).
+      componentMissingRetries.set(componentPath, count + 1);
       const currentWorkspaceRoot = syncWorkspaceRuntime();
       // The iframe signals the PREVIEW (sub-project-relative) path. Resolve BOTH
       // the repo-relative and sub-project-relative forms so the regenerated
@@ -571,38 +585,66 @@ export function activate(context: vscode.ExtensionContext) {
         activeWorkspaceRoot: currentWorkspaceRoot,
         repoRoot: workspaceFolderRoot(),
       });
-      componentMissingRetries.set(componentPath, count + 1);
+
+      // Fail fast for files that can NEVER converge into a preview — a ReactDOM entry
+      // (main.tsx → createRoot(...).render(<App/>)) or a file with no renderable
+      // component export. Retrying ensureComponent would just regenerate the same
+      // empty registry while the iframe spins on "Generating sample…" forever. Surface
+      // a clear error + clickable recommendations in the canvas instead (see
+      // previewability.ts / preview-panel-non-previewable.ts).
+      const nonPreviewable = await buildNonPreviewablePayload({
+        filePath: repoRelativePath,
+        readSource: () => vsCodeIO.readFile(join(currentWorkspaceRoot, relPath)).catch(() => null),
+        listRenderableComponents,
+      });
+      if (nonPreviewable) {
+        // A router-owning entry (isAppEntryCandidate) previews AS AN APP — auto-app-mode is
+        // engaging concurrently and can fire a transient componentMissing during activation.
+        // Don't show the non-previewable overlay for it; fall through to the (harmless) retry,
+        // which the count>=2 guard caps. A bootstrap that merely mounts <App/> (the bug case)
+        // is NOT a candidate, so the overlay still shows for it.
+        const isAppEntry = await previewManager.isAppEntryCandidate(relPath).catch(() => false);
+        if (!isAppEntry) {
+          // Stop the self-heal loop for this file: nothing about it will change.
+          componentMissingRetries.set(componentPath, 2);
+          previewPanel?.notifyNonPreviewableFile(nonPreviewable);
+          return;
+        }
+      }
+
       // Capture current component so a stale resolve doesn't snap the preview back
       // if the user switched to a different component while ensureComponent was running.
       const capturedCurrentPath = stateHub?.state.currentComponent?.path;
-      previewManager
-        .ensureComponent([relPath])
-        .then((content) => {
-          if (isUiPrimitive(relPath)) {
-            const normalizedRelPath = relPath.replace(/\\/g, '/');
-            const entries = parseExistingPreview(content);
-            const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
-            if (!inRegistry) {
-              // Primitive that has neither an authored SampleDefault nor a synthesizable
-              // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
-              // returned false, so it stays filtered out of the registry. Don't call
-              // setComponentParam — the same-value React state bail-out would leave the
-              // preview stuck on "Loading…" indefinitely. Keep the retry count so repeated
-              // _ComponentMissingSignal fires are blocked by the count >= 2 guard.
-              vscode.window.showInformationMessage(
-                `Hyper Canvas: "${relPath}" has no SampleDefault and its exports don't form a renderable compound — preview not available.`,
-              );
-              return;
-            }
+      try {
+        const content = await previewManager.ensureComponent([relPath]);
+        if (isUiPrimitive(relPath)) {
+          const normalizedRelPath = relPath.replace(/\\/g, '/');
+          const entries = parseExistingPreview(content);
+          const inRegistry = entries.some((e) => e.componentPath.replace(/\\/g, '/') === normalizedRelPath);
+          if (!inRegistry) {
+            // Primitive that has neither an authored SampleDefault nor a synthesizable
+            // compound scaffold (no shadcn-style nested exports) — entryHasRenderableSample
+            // returned false, so it stays filtered out of the registry. Don't call
+            // setComponentParam — the same-value React state bail-out would leave the
+            // preview stuck on "Loading…" indefinitely. Keep the retry count so repeated
+            // _ComponentMissingSignal fires are blocked by the count >= 2 guard.
+            vscode.window.showInformationMessage(
+              `Hyper Canvas: "${relPath}" has no SampleDefault and its exports don't form a renderable compound — preview not available.`,
+            );
+            return;
           }
-          componentMissingRetries.delete(componentPath);
-          if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
-            previewPanel?.setComponentParam(repoRelativePath, relPath);
-          }
-        })
-        .catch((err) => {
-          console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
-        });
+        }
+        componentMissingRetries.delete(componentPath);
+        if (stateHub?.state.currentComponent?.path === capturedCurrentPath) {
+          previewPanel?.setComponentParam(repoRelativePath, relPath);
+        }
+      } catch (err) {
+        console.error('[HyperIDE] componentMissing ensureComponent failed:', err);
+      }
+    };
+
+    previewPanel.onComponentMissing((componentPath) => {
+      void handleComponentMissing(componentPath);
     });
 
     // HYP-487: auto-recover from provider-context render errors. No-router Vite
@@ -1091,6 +1133,9 @@ export function activate(context: vscode.ExtensionContext) {
     previewAbortController = ac;
     componentMissingRetries.clear();
     providerErrorAttempts.clear();
+    // Clear any standing non-previewable-file overlay: a fresh selection supersedes it.
+    // If THIS selection is also non-previewable, onComponentMissing re-posts it.
+    previewPanel?.notifyNonPreviewableFile(null);
     // A genuine component switch always exits app-mode: the address bar belongs to the
     // previewed app entry, not to an ordinary component. Disable the previous entry on
     // its owning manager and hide the bar before the normal component-preview pipeline

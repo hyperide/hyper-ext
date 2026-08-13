@@ -13,6 +13,11 @@ export { ComponentErrorOverlay } from './ComponentErrorOverlay';
 export { ConnectionErrorOverlay } from './ConnectionErrorOverlay';
 export { LoadingOverlay } from './LoadingOverlay';
 export { NoComponentOverlay } from './NoComponentOverlay';
+export {
+  NonPreviewableFileOverlay,
+  type NonPreviewableReason,
+  type NonPreviewableRecommendation,
+} from './NonPreviewableFileOverlay';
 export { ParseErrorOverlay } from './ParseErrorOverlay';
 export { PreviewSetupOverlay } from './PreviewSetupOverlay';
 export type { SimplePropInfo } from './PropsForm';

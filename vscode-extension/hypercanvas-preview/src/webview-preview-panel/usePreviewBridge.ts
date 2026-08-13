@@ -8,12 +8,22 @@
  * - extension -> canvas interaction: forwards state patches for overlay rendering
  */
 
-import type { SimplePropInfo } from '@shared/components/overlays';
+import type { NonPreviewableReason, NonPreviewableRecommendation, SimplePropInfo } from '@shared/components/overlays';
 import type { RouteSuggestionItem } from '@shared/components/preview-chrome';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasAdapter, PlatformMessage } from '@/lib/platform/types';
 import type { UnsupportedProjectError } from '../types';
 import { postToPreviewIframe } from './postToPreviewIframe';
+
+/**
+ * The opened file cannot be previewed (entry/bootstrap or no renderable component
+ * export). Drives the NonPreviewableFileOverlay instead of the dead iframe spinner.
+ */
+interface NonPreviewableFile {
+  filePath: string;
+  reason: NonPreviewableReason;
+  recommendations: NonPreviewableRecommendation[];
+}
 
 /**
  * App-mode preview state — set by the extension host's `appMode` message when the user
@@ -70,6 +80,10 @@ interface UsePreviewBridgeResult {
   projectCapabilities: import('../types').ProjectCapabilities | null;
   /** Set when iframe ErrorBoundary catches a component render error */
   componentError: ComponentError | null;
+  /** Set when the opened file is not previewable (entry/bootstrap or no component export). */
+  unsupportedFile: NonPreviewableFile | null;
+  /** Open + preview a recommended component from the non-previewable overlay. */
+  selectRecommendation: (recommendation: NonPreviewableRecommendation) => void;
   /** Current value of hypercanvas.devServer.autoStart setting */
   autoStart: boolean;
   /** Non-null when previewing an app entry AS AN APP (shows the address bar). */
@@ -216,6 +230,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
   const [projectError, setProjectError] = useState<UnsupportedProjectError | null>(null);
   const [projectCapabilities, setProjectCapabilities] = useState<import('../types').ProjectCapabilities | null>(null);
   const [componentError, setComponentError] = useState<ComponentError | null>(null);
+  const [unsupportedFile, setUnsupportedFile] = useState<NonPreviewableFile | null>(null);
   const [autoStart, setAutoStart] = useState(false);
   const [appMode, setAppMode] = useState<AppModeState | null>(null);
   // Track whether we were previously connected (for reconnecting banner)
@@ -585,6 +600,7 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
             // later bridgeReady can't replay the previous component's selection (#51).
             lastForwardedStateRef.current = null;
             setComponentError(null);
+            setUnsupportedFile(null);
             setShowNoComponentHint(false);
             setStoredPreviewUrl(null);
           }
@@ -823,6 +839,13 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
           setProjectError((msg.error as UnsupportedProjectError) ?? null);
           break;
 
+        case 'previewUnsupportedFile':
+          // Extension classified the opened file as non-previewable (entry/bootstrap or
+          // no renderable component export). Show the error+recommendations overlay
+          // instead of the iframe's infinite "Generating sample…". A null payload clears it.
+          setUnsupportedFile((msg as { payload?: NonPreviewableFile | null }).payload ?? null);
+          break;
+
         case 'projectCapabilities':
           // Extension detected CSS system and computed read/write capabilities
           setProjectCapabilities(
@@ -921,6 +944,19 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
 
   const clearComponentError = useCallback(() => setComponentError(null), []);
 
+  // Recommendation click in the non-previewable overlay → ask the host to select that
+  // component (same path as an Explorer click: opens the file + drives the preview).
+  const selectRecommendation = useCallback(
+    (recommendation: NonPreviewableRecommendation) => {
+      canvas.sendEvent({
+        type: 'preview:selectComponent',
+        path: recommendation.path,
+        name: recommendation.name,
+      } as unknown as PlatformMessage);
+    },
+    [canvas],
+  );
+
   // Drive the previewed app's own router by posting into the iframe. The generated
   // CanvasPreview handles `hypercanvas:navigateRoute` (pushState + popstate). We also
   // update the resting address locally so the bar reflects the new route immediately.
@@ -939,6 +975,8 @@ export function usePreviewBridge({ iframeEl, canvas, onStateUpdate }: UsePreview
     projectError,
     projectCapabilities,
     componentError,
+    unsupportedFile,
+    selectRecommendation,
     autoStart,
     appMode,
     navigateAppRoute,

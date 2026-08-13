@@ -12,6 +12,8 @@ export const TID = {
     toolbarMode: (mode: string) => `hyper-preview-mode-${mode}`,
     contextMenu: 'hyper-preview-context-menu',
     contextMenuItem: (action: string) => `hyper-preview-context-${action}`,
+    nonPreviewableRoot: 'hyper-preview-non-previewable',
+    nonPreviewableRecommendation: (path: string) => `hyper-preview-non-previewable-rec-${path}`,
     componentErrorOverlay: 'hyper-preview-component-error',
     componentErrorCreateSample: 'hyper-preview-component-error-create-sample',
     componentErrorConfigureAI: 'hyper-preview-component-error-configure-ai',
