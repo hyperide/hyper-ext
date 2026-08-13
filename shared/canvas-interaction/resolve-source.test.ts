@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { DebugSource, Fiber } from '../element-tracing/fiber-internals';
+import { isSyntheticPreviewPath } from '../element-tracing/synthetic-preview';
 import type { SourceLocation } from '../element-tracing/types';
 import { resolveCallSiteTarget } from './resolve-source';
 
@@ -31,6 +32,13 @@ function source(overrides: Partial<SourceLocation> = {}): SourceLocation {
     column: 6,
     ...overrides,
   };
+}
+
+// React-19-style fiber whose _debugStack resolves to a single frame at the given URL.
+function makeStackFiber(fileName: string, line: number, col: number, overrides: Partial<Fiber> = {}): Fiber {
+  const stack = new Error();
+  stack.stack = `Error\n    at http://localhost:5173/${fileName}:${line}:${col}`;
+  return mockFiber({ _debugStack: stack, ...overrides } as Partial<Fiber>);
 }
 
 describe('resolveCallSiteTarget', () => {
@@ -151,6 +159,139 @@ describe('resolveCallSiteTarget', () => {
     const result = resolveCallSiteTarget(directSource, internalDiv, 'src/__canvas_preview__.tsx', 0);
 
     expect(result.source).toEqual(directSource);
+  });
+
+  it('recovers the rendered component source when the DIRECT source IS the synthetic preview wrapper, skipping a library frame — React 19 _debugStack (HYP-424)', () => {
+    // tamagui-whatsapp / React 19 + Vite (the exact Docker-reproduced shape): the
+    // clicked host div's NEAREST resolved source collapses to the synthetic preview
+    // entry __canvas_preview__.tsx. Walking up, the first non-synthetic fiber source is
+    // a LIBRARY internal (react-native-safe-area-context) that the internal-frame
+    // filter does not strip — just as wrong a target as the wrapper. The element's REAL
+    // component source (ChatInputBar.tsx, the rendered component) is further up the chain.
+    //
+    // resolveCallSiteTarget's call-site walk reads only `_debugSource` (absent in React
+    // 19) so it commits the synthetic line. The fix must reject the synthetic
+    // directSource AND prefer the rendered component file over the library frame.
+    const chatInputBar = makeStackFiber('src/components/ChatInputBar.tsx', 18, 5, {
+      tag: 0,
+      type: function ChatInputBar() {},
+    });
+    // Library internal between the wrapper and the user component (the real-world leak).
+    const libInternal = makeStackFiber(
+      'node_modules/react-native-safe-area-context/lib/module/SafeAreaContext.js',
+      52,
+      138,
+      {
+        tag: 0,
+        type: function SafeAreaProvider() {},
+        return: chatInputBar,
+      },
+    );
+    // Clicked host div: its own _debugStack frame collapses to the synthetic wrapper.
+    const clickedDiv = makeStackFiber('src/__canvas_preview__.tsx', 969, 31, {
+      tag: 5,
+      type: 'div',
+      return: libInternal,
+    });
+    chatInputBar.child = libInternal;
+    libInternal.child = clickedDiv;
+
+    // directSource is the synthetic wrapper — exactly what getSourceLocationFromDOM
+    // hands resolveClickLocal for the leaking Tamagui div[style].
+    const syntheticDirect = source({
+      fileName: 'src/__canvas_preview__.tsx',
+      line: 969,
+      column: 30,
+    });
+
+    const result = resolveCallSiteTarget(syntheticDirect, clickedDiv, 'src/components/ChatInputBar.tsx', 0);
+
+    expect(isSyntheticPreviewPath(result.source.fileName)).toBe(false);
+    expect(result.source.fileName).toContain('ChatInputBar.tsx');
+    expect(result.source.fileName).not.toContain('node_modules');
+    expect(result.source).toEqual({
+      fileName: 'src/components/ChatInputBar.tsx',
+      line: 18,
+      column: 4,
+    });
+  });
+
+  it('recovers the rendered file from DEEPER in a single _debugStack, past a leading library frame (HYP-424)', () => {
+    // The real Docker shape: the clicked div's OWN _debugStack lists the synthetic
+    // wrapper, then a react-native-safe-area-context library frame, then the real
+    // ChatInputBar.tsx call site — all in ONE stack. A first-frame-per-fiber walk
+    // stops at the library frame; the fix must scan every frame and prefer the
+    // rendered file.
+    const stack = new Error();
+    stack.stack = [
+      'Error',
+      '    at http://localhost:5173/src/__canvas_preview__.tsx:969:31',
+      '    at http://localhost:5173/node_modules/react-native-safe-area-context/lib/module/SafeAreaContext.js:52:138',
+      '    at http://localhost:5173/src/components/ChatInputBar.tsx:18:5',
+    ].join('\n');
+    const clickedDiv = mockFiber({ tag: 5, type: 'div', _debugStack: stack } as Partial<Fiber>);
+
+    const syntheticDirect = source({ fileName: 'src/__canvas_preview__.tsx', line: 969, column: 30 });
+    const result = resolveCallSiteTarget(syntheticDirect, clickedDiv, 'src/components/ChatInputBar.tsx', 0);
+
+    expect(isSyntheticPreviewPath(result.source.fileName)).toBe(false);
+    expect(result.source.fileName).not.toContain('node_modules');
+    expect(result.source.fileName).toContain('ChatInputBar.tsx');
+    expect(result.source).toEqual({ fileName: 'src/components/ChatInputBar.tsx', line: 18, column: 4 });
+  });
+
+  it('recovers the rendered component from a DESCENDANT when the clicked element is the wrapper scaffold div (HYP-424)', () => {
+    // The exact Docker shape: the test clicks the FIRST div[style], which is the synthetic
+    // wrapper's OWN scaffold container `<div style={...}>{<ChatInputBar/>}</div>`. Its fiber
+    // source is the synthetic wrapper and ChatInputBar is its CHILD, not an ancestor — so the
+    // upward walk finds nothing and recovery must descend into the subtree.
+    const chatInputBar = makeStackFiber('src/components/ChatInputBar.tsx', 18, 5, {
+      tag: 0,
+      type: function ChatInputBar() {},
+    });
+    // The wrapper's scaffold container div (its source IS the synthetic wrapper).
+    const scaffoldDiv = makeStackFiber('src/__canvas_preview__.tsx', 969, 31, {
+      tag: 5,
+      type: 'div',
+    });
+    scaffoldDiv.child = chatInputBar;
+    chatInputBar.return = scaffoldDiv;
+
+    const syntheticDirect = source({ fileName: 'src/__canvas_preview__.tsx', line: 969, column: 30 });
+    const result = resolveCallSiteTarget(syntheticDirect, scaffoldDiv, 'src/components/ChatInputBar.tsx', 0);
+
+    expect(isSyntheticPreviewPath(result.source.fileName)).toBe(false);
+    expect(result.source.fileName).toContain('ChatInputBar.tsx');
+    expect(result.source).toEqual({ fileName: 'src/components/ChatInputBar.tsx', line: 18, column: 4 });
+  });
+
+  it('does NOT settle for an unrelated ancestor frame when the rendered file is absent (defers to warm-retry) (HYP-424)', () => {
+    // Tamagui host nodes can have their own JSX line optimized out of the _debugStack,
+    // so the rendered component file is sometimes absent and the only non-synthetic
+    // frames are unrelated module boundaries (the app entry src/main.tsx, a wrapping
+    // provider). Committing those would be just as wrong as the synthetic wrapper, so
+    // recovery yields nothing and the direct (synthetic) source is kept — the click
+    // path then routes it into the source-map warm-and-retry, which maps the compiled
+    // host position back to the real component. So resolveCallSiteTarget returns the
+    // synthetic directSource here (a sentinel the caller treats as "retry", never a
+    // committed selection).
+    const appEntry = makeStackFiber('src/main.tsx', 10, 92, { tag: 0, type: function App() {} });
+    const clickedDiv = makeStackFiber('src/__canvas_preview__.tsx', 969, 31, {
+      tag: 5,
+      type: 'div',
+      return: appEntry,
+    });
+    appEntry.child = clickedDiv;
+
+    const syntheticDirect = source({ fileName: 'src/__canvas_preview__.tsx', line: 969, column: 30 });
+
+    // renderedFile (ChatInputBar.tsx) is NOT present in the chain — only main.tsx is.
+    const result = resolveCallSiteTarget(syntheticDirect, clickedDiv, 'src/components/ChatInputBar.tsx', 0);
+
+    // Must NOT mis-resolve to the unrelated app entry.
+    expect(result.source.fileName).not.toContain('main.tsx');
+    // Keeps the synthetic direct source as the retry sentinel.
+    expect(result.source).toEqual(syntheticDirect);
   });
 
   it('uses the rendered-file ancestor item index when clicking a nested child inside a map item', () => {

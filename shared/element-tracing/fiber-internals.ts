@@ -7,6 +7,7 @@
  */
 
 import { stripPreviewProxyPrefix } from './path-normalization';
+import { isSyntheticPreviewPath } from './synthetic-preview';
 import type { SourceLocation } from './types';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
@@ -27,7 +28,8 @@ export interface Fiber {
   memoizedProps: Record<string, unknown>;
   _debugSource?: DebugSource | null; // React 18; absent in React 19
   _debugStack?: Error | null; // React 19; absent in React 18
-  _debugOwner: Fiber | null;
+  // React 19 leaves this `undefined` (not null) for root-level fibers — optional, not nullable-only.
+  _debugOwner?: Fiber | null;
 }
 
 /* ─── Constants ──────────────────────────────────────────────────── */
@@ -193,6 +195,42 @@ function isInternalUrl(url: string): boolean {
   return REACT_INTERNAL_PATTERNS.some((p) => url.includes(p));
 }
 
+/** Parse one V8 Error.stack line into a SourceLocation, or null when it is not a
+ *  source-bearing user frame (no match, or a React/bundler-internal URL). */
+function parseStackLine(line: string): SourceLocation | null {
+  // V8 format: "    at FuncName (URL:line:col)" or "    at URL:line:col"
+  const m = line.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
+  if (!m) return null;
+
+  const url = m[1];
+  if (isInternalUrl(url)) return null;
+
+  // Strip protocol+host for absolute URLs (e.g. Vite dev server)
+  let fileName = url;
+  try {
+    const parsed = new URL(url);
+    // "http://localhost:5173/src/App.tsx" → "src/App.tsx"
+    fileName = parsed.pathname.replace(/^\//, '');
+  } catch {
+    // Not an absolute URL — use as-is (relative path or file:// handled elsewhere)
+  }
+
+  // Strip NodePod virtual path prefix: "__virtual__/{podId}/{port}/src/..."
+  // NodePod serves files via SW at /__virtual__/{randomId}/{vitePort}/...
+  fileName = fileName.replace(/^__virtual__\/[^/]+\/\d+\//, '');
+
+  // Strip the SaaS preview proxy prefix ("project-preview/{projectId}/src/…") —
+  // it leaks into React 19 _debugStack module URLs, while node-map and AST
+  // lookups expect project-relative paths.
+  fileName = stripPreviewProxyPrefix(fileName);
+
+  return {
+    fileName,
+    line: Number.parseInt(m[2], 10),
+    column: Number.parseInt(m[3], 10) - 1, // V8 Error.stack is 1-based, SourceLocation.column is 0-based
+  };
+}
+
 /**
  * Parse a React 19 `_debugStack` Error object into a SourceLocation.
  *
@@ -206,45 +244,30 @@ function isInternalUrl(url: string): boolean {
 export function parseDebugStack(err: Error): SourceLocation | null {
   const stack = err.stack;
   if (!stack) return null;
-
   for (const line of stack.split('\n')) {
-    // V8 format: "    at FuncName (URL:line:col)" or "    at URL:line:col"
-    const m = line.match(/^\s+at\s+(?:[^(]+\s+\()?(.+):(\d+):(\d+)\)?$/);
-    if (!m) continue;
-
-    const url = m[1];
-    const lineNum = Number.parseInt(m[2], 10);
-    const colNum = Number.parseInt(m[3], 10);
-
-    if (isInternalUrl(url)) continue;
-
-    // Strip protocol+host for absolute URLs (e.g. Vite dev server)
-    let fileName = url;
-    try {
-      const parsed = new URL(url);
-      // "http://localhost:5173/src/App.tsx" → "src/App.tsx"
-      fileName = parsed.pathname.replace(/^\//, '');
-    } catch {
-      // Not an absolute URL — use as-is (relative path or file:// handled elsewhere)
-    }
-
-    // Strip NodePod virtual path prefix: "__virtual__/{podId}/{port}/src/..."
-    // NodePod serves files via SW at /__virtual__/{randomId}/{vitePort}/...
-    fileName = fileName.replace(/^__virtual__\/[^/]+\/\d+\//, '');
-
-    // Strip the SaaS preview proxy prefix ("project-preview/{projectId}/src/…") —
-    // it leaks into React 19 _debugStack module URLs, while node-map and AST
-    // lookups expect project-relative paths.
-    fileName = stripPreviewProxyPrefix(fileName);
-
-    return {
-      fileName,
-      line: lineNum,
-      column: colNum - 1, // V8 Error.stack is 1-based, SourceLocation.column is 0-based
-    };
+    const loc = parseStackLine(line);
+    if (loc !== null) return loc;
   }
-
   return null;
+}
+
+/**
+ * Parse ALL non-internal frames of a React 19 `_debugStack`, in stack order
+ * (innermost JSX call site first). Unlike {@link parseDebugStack} (which returns
+ * only the first), this exposes the deeper user frames — needed when the first
+ * non-internal frame is a library module (e.g. a provider from `node_modules` that
+ * the internal-frame filter does not strip) and the element's real component frame
+ * sits further down the same stack (HYP-424).
+ */
+export function parseDebugStackFrames(err: Error): SourceLocation[] {
+  const stack = err.stack;
+  if (!stack) return [];
+  const frames: SourceLocation[] = [];
+  for (const line of stack.split('\n')) {
+    const loc = parseStackLine(line);
+    if (loc !== null) frames.push(loc);
+  }
+  return frames;
 }
 
 /**
@@ -340,6 +363,54 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
 }
 
 /**
+ * Read the source location of a SINGLE fiber (no chain walk), supporting both
+ * React 18 (`_debugSource`, incl. memo/forwardRef wrapper types) and React 19
+ * (`_debugStack`). Returns null when this fiber carries no usable source.
+ */
+function readFiberSource(fiber: Fiber): SourceLocation | null {
+  // React 18
+  if (fiber._debugSource != null) {
+    return debugSourceToLocation(fiber._debugSource);
+  }
+  // React 19
+  if (fiber._debugStack) {
+    const loc = parseDebugStack(fiber._debugStack);
+    if (loc !== null) return loc;
+  }
+  // Wrapper types (React.memo / React.forwardRef)
+  const fromType = extractDebugSourceFromType(fiber);
+  if (fromType !== null) {
+    return debugSourceToLocation(fromType);
+  }
+  return null;
+}
+
+/** Walk the `return` chain then the `_debugOwner` chain, returning the first
+ *  fiber source `accept()` keeps. Shared by every nearest-source variant. */
+function walkFiberSources(fiber: Fiber | null, accept: (loc: SourceLocation) => boolean): SourceLocation | null {
+  // 1. Walk the structural parent chain (return) — covers most cases.
+  let current: Fiber | null = fiber;
+  while (current !== null) {
+    const loc = readFiberSource(current);
+    if (loc !== null && accept(loc)) return loc;
+    current = current.return;
+  }
+
+  // 2. Walk the logical owner chain (_debugOwner) as a fallback.
+  //    In React 19 RSC hydration, the owner component may have _debugStack
+  //    pointing to a source path when the rendered element's return chain does not.
+  //    Note: _debugOwner can be undefined (not null) in React 19 for root-level fibers.
+  let owner: Fiber | null = fiber?._debugOwner ?? null;
+  while (owner !== null) {
+    const loc = readFiberSource(owner);
+    if (loc !== null && accept(loc)) return loc;
+    owner = owner._debugOwner ?? null;
+  }
+
+  return null;
+}
+
+/**
  * Find source location for a fiber, supporting both React 18 and React 19.
  *
  * React 18: reads `_debugSource` (set by Babel plugin).
@@ -352,41 +423,118 @@ export function getItemIndexFromFiber(fiber: Fiber, resolveLocation?: (fiber: Fi
  *     logical owner (server component) does.
  */
 export function findNearestSourceLocation(fiber: Fiber | null): SourceLocation | null {
-  // 1. Walk the structural parent chain (return)
+  return walkFiberSources(fiber, () => true);
+}
+
+/** True when `fileName` is the rendered component file (either path is a suffix
+ *  of the other — fiber paths and the rendered path can carry different prefixes).
+ *  Shared so `resolveCallSiteTarget`'s "is this the rendered file?" check stays in
+ *  one place. */
+export function isRenderedFilePath(fileName: string, renderedFile: string): boolean {
+  return fileName.endsWith(renderedFile) || renderedFile.endsWith(fileName);
+}
+
+/**
+ * Collect ALL source candidates of a SINGLE fiber, in resolution order. Unlike
+ * {@link readFiberSource} (first hit only), this exposes every `_debugStack` frame
+ * so the recovery walk can reach the element's real component frame even when a
+ * library frame precedes it in the same stack (HYP-424).
+ */
+function collectFiberSourceCandidates(fiber: Fiber): SourceLocation[] {
+  // React 18: a single real source position.
+  if (fiber._debugSource != null) return [debugSourceToLocation(fiber._debugSource)];
+  // React 19: every non-internal frame of the JSX-call-site stack, innermost first.
+  if (fiber._debugStack) {
+    const frames = parseDebugStackFrames(fiber._debugStack);
+    if (frames.length > 0) return frames;
+  }
+  // Wrapper types (React.memo / React.forwardRef).
+  const fromType = extractDebugSourceFromType(fiber);
+  return fromType !== null ? [debugSourceToLocation(fromType)] : [];
+}
+
+/** Walk the `return` chain then `_debugOwner` chain, scanning EVERY source
+ *  candidate of each fiber, returning the first that `accept()` keeps. */
+function walkFiberSourceCandidates(
+  fiber: Fiber | null,
+  accept: (loc: SourceLocation) => boolean,
+): SourceLocation | null {
   let current: Fiber | null = fiber;
   while (current !== null) {
-    // React 18
-    if (current._debugSource != null) {
-      return debugSourceToLocation(current._debugSource);
-    }
-    // React 19
-    if (current._debugStack) {
-      const loc = parseDebugStack(current._debugStack);
-      if (loc !== null) return loc;
-    }
-    // Try wrapper types (React.memo / React.forwardRef)
-    const fromType = extractDebugSourceFromType(current);
-    if (fromType !== null) {
-      return debugSourceToLocation(fromType);
+    for (const loc of collectFiberSourceCandidates(current)) {
+      if (accept(loc)) return loc;
     }
     current = current.return;
   }
-
-  // 2. Walk the logical owner chain (_debugOwner) as a fallback.
-  //    In React 19 RSC hydration, the owner component may have _debugStack
-  //    pointing to a source path when the rendered element's return chain does not.
-  //    Note: _debugOwner can be undefined (not null) in React 19 for root-level fibers.
-  let owner: Fiber | null = (fiber?._debugOwner as Fiber | null | undefined) ?? null;
+  let owner: Fiber | null = fiber?._debugOwner ?? null;
   while (owner !== null) {
-    if (owner._debugSource != null) {
-      return debugSourceToLocation(owner._debugSource);
+    for (const loc of collectFiberSourceCandidates(owner)) {
+      if (accept(loc)) return loc;
     }
-    if (owner._debugStack) {
-      const loc = parseDebugStack(owner._debugStack);
-      if (loc !== null) return loc;
-    }
-    owner = (owner._debugOwner as Fiber | null | undefined) ?? null;
+    owner = owner._debugOwner ?? null;
   }
-
   return null;
+}
+
+/**
+ * Bounded breadth-first search of a fiber's `child`/`sibling` subtree for the
+ * first source `accept()` keeps. Used when the clicked element is the synthetic
+ * preview wrapper's OWN scaffold container `<div style>` — the rendered user
+ * component is then a DESCENDANT (the wrapper renders `<div>{<Component/>}</div>`),
+ * not an ancestor, so the upward walk finds nothing and we must look down. (HYP-424)
+ */
+function findDescendantSource(
+  fiber: Fiber | null,
+  accept: (loc: SourceLocation) => boolean,
+  // Bound guards against a pathological fiber tree; the scaffold wrapper's subtree to the
+  // rendered component is typically well under 20 nodes, so 200 is comfortable headroom.
+  maxNodes = 200,
+): SourceLocation | null {
+  const queue: Fiber[] = [];
+  if (fiber?.child) queue.push(fiber.child);
+  let scanned = 0;
+  while (queue.length > 0 && scanned < maxNodes) {
+    const node = queue.shift() as Fiber;
+    scanned++;
+    for (const loc of collectFiberSourceCandidates(node)) {
+      if (accept(loc)) return loc;
+    }
+    if (node.child) queue.push(node.child);
+    if (node.sibling) queue.push(node.sibling);
+  }
+  return null;
+}
+
+/**
+ * Recover the element's REAL component source when its nearest fiber source is
+ * the synthetic preview entry (`__canvas_preview__.tsx`) — HYP-424.
+ *
+ * Resolves the RENDERED component file (the user's actual component) from the
+ * fiber tree. Other candidates are deliberately rejected as recovery targets:
+ *  - Skipping merely the synthetic frame is not enough — the next resolvable fiber
+ *    source is frequently a LIBRARY internal (e.g. a `react-native-safe-area-context`
+ *    provider that `_debugStack` surfaces but the internal-frame filter doesn't strip).
+ *  - Settling for the first non-synthetic USER frame is also wrong — for a Tamagui
+ *    host node whose own JSX line is optimized out of the stack, that frame is an
+ *    unrelated module boundary like the app entry (`src/main.tsx`), not the clicked
+ *    element's component.
+ *
+ * Resolution order:
+ *  1. ANCESTOR scan — for an element INSIDE the rendered component, its source is
+ *     up the `return` chain (covers the common "clicked a div inside ChatInputBar").
+ *  2. DESCENDANT scan — for the wrapper's OWN scaffold container `<div style>`, the
+ *     rendered component is a CHILD (`<div>{<Component/>}</div>`), so look downward.
+ *
+ * Returns null when the rendered file is reachable in neither direction: the caller
+ * keeps the synthetic direct source, which the click path routes into the
+ * source-map warm-and-retry rather than committing an unrelated module.
+ */
+export function recoverNonSyntheticSourceLocation(
+  fiber: Fiber | null,
+  renderedFile: string | null,
+): SourceLocation | null {
+  if (!renderedFile) return null;
+  const isRendered = (loc: SourceLocation): boolean =>
+    !isSyntheticPreviewPath(loc.fileName) && isRenderedFilePath(loc.fileName, renderedFile);
+  return walkFiberSourceCandidates(fiber, isRendered) ?? findDescendantSource(fiber, isRendered);
 }

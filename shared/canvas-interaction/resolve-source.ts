@@ -10,7 +10,13 @@
  *   to find the CALL SITE (where <Button> is used in the parent component)
  */
 
-import { debugSourceToLocation, type Fiber, getItemIndexFromFiber } from '../element-tracing/fiber-internals';
+import {
+  debugSourceToLocation,
+  type Fiber,
+  getItemIndexFromFiber,
+  isRenderedFilePath,
+  recoverNonSyntheticSourceLocation,
+} from '../element-tracing/fiber-internals';
 import { isSyntheticPreviewPath } from '../element-tracing/synthetic-preview';
 import type { SourceLocation } from '../element-tracing/types';
 
@@ -61,12 +67,22 @@ export function resolveCallSiteTarget(
   renderedFile: string | null,
   directItemIndex: number,
 ): ResolvedCallSiteTarget {
+  // The synthetic preview entry (__canvas_preview__.tsx) is NEVER a valid go-to-code
+  // target, but a direct source can itself BE synthetic (the call-site walk below only
+  // rejects a synthetic ancestor, not a synthetic directSource — HYP-424). Recover the
+  // rendered component's source from the fiber tree; if it isn't reachable,
+  // recoverNonSyntheticSourceLocation returns null and we keep the synthetic directSource
+  // as a retry sentinel (the click path defers it to the source-map warm-retry).
+  if (isSyntheticPreviewPath(directSource.fileName)) {
+    const recovered = recoverNonSyntheticSourceLocation(fiber, renderedFile);
+    if (recovered !== null) directSource = recovered;
+  }
+
   // If no rendered file info, can't determine — use direct source
   if (!renderedFile || !fiber) return { source: directSource, itemIndex: directItemIndex };
 
   // Check if direct source is from the rendered component file
-  const isFromRenderedFile =
-    directSource.fileName.endsWith(renderedFile) || renderedFile.endsWith(directSource.fileName);
+  const isFromRenderedFile = isRenderedFilePath(directSource.fileName, renderedFile);
 
   if (isFromRenderedFile) return { source: directSource, itemIndex: getAncestorItemIndex(fiber, directItemIndex) };
 

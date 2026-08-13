@@ -8,6 +8,7 @@ import {
   stripNodePodPrefix,
 } from '@shared/element-tracing/fiber-internals';
 import { FiberSourceIndex, getOwnFiberSourceLocation } from '@shared/element-tracing/fiber-source-index';
+import { isSyntheticPreviewPath } from '@shared/element-tracing/synthetic-preview';
 import type { SourceLocation } from '@shared/element-tracing/types';
 import {
   clientInternalFrames,
@@ -89,6 +90,15 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       ctx.pendingClickElement = null;
       let source = getSourceLocationFromDOM(element);
       const fiber = getFiberFromDOM(element);
+      // Warm the fiber's chunk frames and mark this click pending so the warm-retry
+      // re-resolves it once the source maps land — shared by the cold-cache miss and the
+      // still-synthetic guard below so the two retry paths can't drift.
+      const deferToWarmRetry = (f: Fiber): void => {
+        ctx.warmServerChunkFrames(f);
+        ctx.warmFiberChunkFrames(f);
+        ctx.pendingClickElement = element;
+        ctx.pendingClickTimestamp.value = Date.now();
+      };
       if (fiber !== null) {
         const smSource = resolveOwnServerSourceMap(fiber) ?? resolveViaClientSourceMap(fiber);
         if (smSource) {
@@ -125,11 +135,22 @@ export function createIframeResolver(ctx: ResolverContext): TracingResolver {
       source = target.source;
       const itemIndex = target.itemIndex;
 
-      const syntheticRef = `${source.fileName}:${source.line}:${source.column}`;
+      // Belt-and-suspenders: resolveCallSiteTarget already recovers the element's real
+      // source when the direct source is the synthetic preview wrapper, but if the
+      // rendered component is not yet reachable it keeps the synthetic line as a retry
+      // sentinel. Committing __canvas_preview__.tsx as a nodeRef is never correct, so a
+      // still-synthetic result defers to the warm-retry instead of selecting the wrapper.
+      if (isSyntheticPreviewPath(source.fileName)) {
+        if (fiber !== null) deferToWarmRetry(fiber);
+        return null;
+      }
+
+      // After the guard above, `source` is guaranteed non-synthetic.
+      const nodeRef = `${source.fileName}:${source.line}:${source.column}`;
       return {
-        nodeRef: syntheticRef,
+        nodeRef,
         entry: {
-          nodeRef: syntheticRef,
+          nodeRef,
           tag: '',
           loc: source,
           endLoc: source,
