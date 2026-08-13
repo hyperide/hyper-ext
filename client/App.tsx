@@ -13,16 +13,22 @@ import { PlatformProvider } from './lib/platform';
 
 // Initialize PostHog EU analytics only in production.
 // Token is a public project key — safe to commit.
-// Wrapped in try/catch so analytics failure never prevents the app from mounting.
-if (import.meta.env.PROD) {
-  try {
+// The client is bundled by Bun (Bun.serve HTML import / Bun.build), NOT Vite: Vite's
+// `import.meta` env object does not exist here — Bun leaves such reads verbatim in
+// browser output, where they are undefined at runtime, so a bare `...env.PROD` guard
+// throws a TypeError at module top level and white-screens the whole app (HYP-855).
+// `process.env.NODE_ENV` IS statically inlined by Bun in both dev and production
+// serving, so this guard folds to a constant at bundle time. The try/catch wraps the
+// guard too, so no future bundler surprise can ever prevent the app from mounting.
+try {
+  if (process.env.NODE_ENV === 'production') {
     posthog.init('phc_zPBEBNdNyiie4jygsN7ZUkLjig5afSKCYTrPing5Ts7f', {
       api_host: 'https://eu.i.posthog.com',
       defaults: '2026-05-30',
     });
-  } catch {
-    // Analytics init failure must not block the app.
   }
+} catch {
+  // Analytics init failure must not block the app.
 }
 
 // Lazy load pages for code splitting

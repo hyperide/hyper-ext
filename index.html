@@ -16,6 +16,14 @@
   <body>
     <div id="root"></div>
 
+    <!-- Node-ism shim: transitive deps (@babel/types via shared/i18n-text, pulled in by
+         PlatformProvider) read bare `process.env.*` at module scope. Browsers have no
+         `process`, so the whole entry module throws a ReferenceError and the app
+         white-screens (HYP-855). Must run BEFORE the module script below. -->
+    <script>
+      window.process = window.process || { env: {} };
+    </script>
+
     <script type="module" src="/client/App.tsx"></script>
   </body>
 </html>
