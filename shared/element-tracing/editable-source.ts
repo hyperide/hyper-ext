@@ -36,7 +36,11 @@ const NODE_MODULES_SEGMENT = /(?:^|[\\/])node_modules[\\/]/;
 /**
  * Non-file source identifiers that can appear in a fiber `_debugSource` / source map but are
  * NEVER an editable on-disk project file: URL schemes with an authority (`http://`,
- * `webpack-internal://`, `file://`, `ws://`), no-authority schemes (`data:`, `blob:`, `about:`),
+ * `webpack-internal://`, `file://`, `ws://`), no-authority schemes (`data:`, `blob:`, `about:`), nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+ * (the insecure-websocket scheme above is doc text enumerating schemes to REJECT, not a
+ * connection; the nosemgrep marker must share the finding's line — block-comment markers
+ * on adjacent lines are not honored, and a justification line that repeats the literal
+ * scheme becomes the NEW finding line — found the hard way).
  * Vite virtual modules (`virtual:…` and the `\0`-prefixed form). These must never be classified
  * editable — otherwise a browser-fabricated `http://…`/`data:…`/`blob:…` source could be
  * committed as a nodeRef and handed to the AST write path.

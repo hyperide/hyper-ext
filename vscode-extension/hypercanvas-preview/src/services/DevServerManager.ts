@@ -1199,6 +1199,10 @@ export class DevServerManager {
 
       // Spawn process. Fold args into the command string (no `args` array) so
       // `shell: true` does not trigger DEP0190 (deprecated: args + shell:true).
+      // shell:true is required — the dev server runs author-controlled shell strings
+      // (npm/pnpm/yarn scripts), not attacker-controlled input. The nosemgrep marker
+      // must sit directly above the finding's FIRST line (the `spawn(` call) to bite.
+      // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
       const child = spawn(toShellCommandString(command.cmd, command.args), {
         cwd: plan.cwd,
         env: {
@@ -1215,7 +1219,7 @@ export class DevServerManager {
           VITE_PORT: String(this._port),
         },
         detached: process.platform !== 'win32',
-        shell: true, // nosemgrep: spawn-shell-true -- dev server requires shell for npm/pnpm/yarn scripts
+        shell: true,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       this._process = child;

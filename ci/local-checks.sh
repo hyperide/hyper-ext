@@ -15,13 +15,24 @@
 #                                       untracked TODOs, console.log (exit 5)
 #   ci/secret-scan/secret-scan.sh     → gitleaks working-tree scan, SECRET_SCAN_SCOPE=dir
 #                                       (matches secret-scan.yml's `gitleaks dir .`, exit 6)
-#                                       SKIPPED with a warning if gitleaks is not installed
 #   ci/dependency-review/dep-audit.sh → bun audit --audit-level=high (exit 7)
+#   security-scan.yml / Semgrep SAST  → semgrep scan --config auto --severity ERROR --error
+#                                       (exit 8; ERROR-only scope rationale in the leg —
+#                                       the CI job runs the identical policy)
+#   security-scan.yml / Trivy scan    → trivy fs --scanners vuln --severity CRITICAL,HIGH
+#                                       --skip-dirs cloned-projects,node_modules,docs,templates
+#                                       (exit 10)
+#
+# Missing security tooling (gitleaks / semgrep / trivy) is a HARD FAIL (exit 9), never
+# a silent skip: this script is gh ship's billing-block merge gate, and an "advertised
+# security gate that quietly does nothing on a fresh ship host" is exactly the HYP-1126
+# gap. Each security leg attempts an auto-install (brew first) and only a genuine
+# install/operational failure reaches exit 9. Documented manual fix:
+# `brew install gitleaks semgrep trivy`. Semgrep's registry ruleset and Trivy's vuln
+# DB download need NETWORK but not GH infrastructure — a CI billing block does not cut
+# network access, so both legs replicate their CI gate faithfully.
 #
 # NOT COVERED locally (require GH infrastructure or are informational-only):
-#   security-scan.yml / Semgrep SAST  — SAST engine requires network + credentials;
-#                                       no local script exists
-#   security-scan.yml / Trivy scan    — container/binary scan; same constraint
 #   bundle-size.yml                   — informational (comment on PR); no merge gate;
 #                                       baseline artifact lives in GH Actions artifacts
 #   pr-checklist-gate.yml             — parses the PR body via GH API; no PR = no body
@@ -243,5 +254,120 @@ DEP_AUDIT_ALLOW_MISSING="${DEP_AUDIT_ALLOW_MISSING:-1}" \
   DEP_AUDIT_LEVEL="${DEP_AUDIT_LEVEL:-high}" \
   bash "$ROOT/ci/dependency-review/dep-audit.sh" \
   || { echo "[local-checks] FAIL: dependency audit — high/critical vulnerability found"; exit 7; }
+
+echo "[local-checks] ── Semgrep SAST (ERROR severity) ─────────────────────────"
+# Mirrors the 'Semgrep SAST' job in security-scan.yml: registry "auto" ruleset,
+# ERROR-severity gating (`--severity ERROR --error`), one `semgrep scan` over the
+# repo. Two things to know about how this policy came to be:
+#
+# 1. CI's job used to run the pinned semgrep/semgrep-action@713efdd (the
+#    returntocorp/semgrep-agent:v1 image, semgrep 1.36.0) with `config: auto`. That
+#    image's `semgrep ci` CRASHED on today's registry ruleset (ValueError: invalid
+#    rule severity value: MEDIUM — the 2023 binary predates uppercase severities)
+#    and the crash was swallowed into a SUCCESS conclusion, so the CI gate scanned
+#    NOTHING and always passed (verified against the job log of security-scan.yml
+#    run on main, 2026-08-07). The workflow now runs a current semgrep directly
+#    with exactly this leg's policy — keep the two in sync.
+# 2. Severity scope: a full `--error` scan of current main reports 75 blocking
+#    findings (pre-existing debt — e.g. wildcard postMessage targets in the
+#    extension iframe scripts) that the (broken) CI gate never enforced. Failing
+#    the merge gate on pre-existing debt would false-block every billing-blocked
+#    ship, so the gate is ERROR-severity findings only (`--severity ERROR` both
+#    filters the ruleset and speeds the scan up); main is clean at that bar,
+#    with three individually-justified inline nosemgrep suppressions. Triage the
+#    INFO/WARNING backlog deliberately before widening.
+#
+# The registry ruleset is fetched over the NETWORK (cached under ~/.semgrep) —
+# a CI billing block does not cut network access, so the fallback can and must
+# run this. Missing-tool posture is the HYP-1126 hard-fail precedent (see the
+# gitleaks leg above): attempt brew/pipx install, and FAIL the gate (exit 9) if
+# semgrep still can't run — never silently skip a security leg of a merge gate.
+if ! command -v semgrep >/dev/null 2>&1; then
+  echo "[local-checks] semgrep not found — attempting install (brew | pipx)."
+  if command -v brew >/dev/null 2>&1; then
+    brew install semgrep || true
+  elif command -v pipx >/dev/null 2>&1; then
+    pipx install semgrep || true
+  fi
+fi
+if ! command -v semgrep >/dev/null 2>&1; then
+  echo "[local-checks] FAIL: semgrep is not installed and could not be auto-installed (brew install semgrep | pipx install semgrep) — this is a tooling error, NOT a SAST finding; the merge gate requires this security leg to actually run"
+  exit 9
+fi
+set +e
+semgrep scan --config auto --severity ERROR --error .
+semgrep_rc=$?
+set -e
+if [ "$semgrep_rc" -eq 1 ]; then
+  echo "[local-checks] FAIL: semgrep SAST — ERROR-severity finding(s) above; fix them (or justify with an inline nosemgrep comment) before shipping"
+  exit 8
+elif [ "$semgrep_rc" -ne 0 ]; then
+  # semgrep exit codes ≥2 are operational (registry ruleset fetch failed — offline,
+  # invalid rules, unparseable targets): the scan did NOT complete, so this is a
+  # tooling/environment error, not a finding.
+  echo "[local-checks] FAIL: semgrep operational error (exit $semgrep_rc — the registry ruleset fetch needs network; check connectivity/proxy) — the scan did not complete, this is NOT a SAST finding"
+  exit 9
+fi
+
+echo "[local-checks] ── Trivy vulnerability scan ──────────────────────────────"
+# Mirrors the 'Trivy vulnerability scan' step of security-scan.yml's audit job:
+# aquasecurity/trivy-action@v0.36.0 with scan-type=fs, scanners=vuln,
+# severity=CRITICAL,HIGH, exit-code 1, skip-dirs cloned-projects,node_modules,
+# docs,templates. An fs scan reads the repo's lockfiles (bun.lock, the
+# extension's package-lock.json) against the trivy vuln DB — the DB download
+# needs network (cached in ~/.cache/trivy), which a CI billing block does not
+# affect. Same HYP-1126 missing-tool posture as gitleaks/semgrep: attempt brew
+# install, hard-fail (exit 9) if trivy still can't run.
+if ! command -v trivy >/dev/null 2>&1; then
+  echo "[local-checks] trivy not found — attempting install (brew)."
+  if command -v brew >/dev/null 2>&1; then
+    brew install trivy || true
+  fi
+fi
+if ! command -v trivy >/dev/null 2>&1; then
+  echo "[local-checks] FAIL: trivy is not installed and could not be auto-installed (brew install trivy) — this is a tooling error, NOT a vulnerability finding; the merge gate requires this security leg to actually run"
+  exit 9
+fi
+# trivy shells out to the docker credential helper named in ~/.docker/config.json's
+# credsStore even for a public-DB fs scan; a stale credsStore whose helper binary is
+# gone (e.g. Docker Desktop uninstalled, config left behind) makes every scan FATAL
+# with "docker-credential-osxkeychain: executable file not found". A public-DB fs
+# scan needs no registry auth at all, so in that case point DOCKER_CONFIG at a
+# scratch empty config for the trivy invocation only.
+TRIVY_DOCKER_CONFIG_FIX=""
+docker_cfg="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+if [ -f "$docker_cfg" ]; then
+  creds_store=$(sed -n 's/.*"credsStore"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$docker_cfg" | head -1)
+  if [ -n "$creds_store" ] && ! command -v "docker-credential-$creds_store" >/dev/null 2>&1; then
+    TRIVY_DOCKER_CONFIG_FIX=$(mktemp -d)
+    printf '{}\n' > "$TRIVY_DOCKER_CONFIG_FIX/config.json"
+    echo "[local-checks] note: docker credential helper 'docker-credential-$creds_store' not on PATH — running trivy with an isolated empty DOCKER_CONFIG (an fs scan needs no registry auth)."
+  fi
+fi
+# trivy reuses exit code 1 for BOTH "vulnerabilities found" (with --exit-code 1) and
+# operational failures (DB download FATALs, cobra flag/usage "Error:" after a version
+# drift), so capture the output and disambiguate on those markers — otherwise a network
+# hiccup or a renamed flag would be reported as a vulnerability finding, the same
+# mislabeled-failure class the secret-scan leg's exit-9-vs-6 split exists to avoid.
+trivy_log=$(mktemp)
+set +e
+DOCKER_CONFIG="${TRIVY_DOCKER_CONFIG_FIX:-${DOCKER_CONFIG:-$HOME/.docker}}" \
+  trivy fs --scanners vuln --severity CRITICAL,HIGH --exit-code 1 \
+    --skip-dirs cloned-projects,node_modules,docs,templates . >"$trivy_log" 2>&1
+trivy_rc=$?
+set -e
+cat "$trivy_log"
+if [ -n "$TRIVY_DOCKER_CONFIG_FIX" ]; then rm -rf "$TRIVY_DOCKER_CONFIG_FIX"; fi
+if [ "$trivy_rc" -ne 0 ]; then
+  if grep -qE 'FATAL|Error:' "$trivy_log"; then
+    rm -f "$trivy_log"
+    echo "[local-checks] FAIL: trivy operational error (see FATAL above — usually a vuln-DB download/network problem; retry with connectivity) — this is NOT a vulnerability finding"
+    exit 9
+  fi
+  rm -f "$trivy_log"
+  echo "[local-checks] FAIL: trivy found CRITICAL/HIGH vulnerabilities (see table above) — patch or override the affected dependency before shipping"
+  exit 10
+fi
+rm -f "$trivy_log"
 
 echo "[local-checks] ── All local checks PASSED ────────────────────────────────"
