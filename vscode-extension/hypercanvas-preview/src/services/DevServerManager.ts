@@ -413,10 +413,20 @@ export class DevServerManager {
   }
 
   private async _runStart(dependencyRepairAttempted = false): Promise<DevServerState> {
-    // Layer 2 epoch: a later _runStop/_runStart bumps _generation; this snapshot lets
-    // each await below detect that it was superseded and bail before spawning/polling.
-    const gen = ++this._generation;
+    // Sync the project path FIRST. When the path differs from the workspace folder (an
+    // unpinned monorepo/subproject reroot), this runs _applyProjectPath -> _runStop,
+    // which bumps _generation. That bump is an INTRA-OP side effect of our own start, not
+    // a concurrent stop — so it must NOT count against the supersede epoch (HYP-52
+    // regression: capturing gen BEFORE this await made every such start self-supersede at
+    // the pre-spawn check and never spawn -> "Server failed to start").
     await this._syncProjectPathWithWorkspace();
+
+    // Layer 2 epoch (defense-in-depth — see the _generation field doc): snapshot AFTER the
+    // sync's own bump. Layer 1 (_lifecycleOp) already serializes public start/stop/restart,
+    // so the realistic bumper during an await below is an INTRA-OP _runStop (the
+    // dependency-repair retry at the bottom of this method). If anything bumps _generation
+    // past this snapshot, each await below detects it and bails before spawning/polling.
+    const gen = ++this._generation;
 
     if (this._status === 'running') {
       return this.getState();
