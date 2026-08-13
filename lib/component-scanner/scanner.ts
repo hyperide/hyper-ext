@@ -228,7 +228,44 @@ export class ComponentScanner {
       }
     }
 
-    // If neither src/ nor app/ exist, nothing to scan
+    // Monorepo: also scan sub-package source directories.
+    // Triggered by nx.json, turbo.json, pnpm-workspace.yaml, or workspaces field.
+    const isMonorepo = this.isMonorepoRoot(projectRoot);
+    if (isMonorepo) {
+      for (const subDir of ['targets', 'apps', 'packages', 'libs', 'services']) {
+        const subDirPath = path.join(projectRoot, subDir);
+        if (!fs.existsSync(subDirPath)) continue;
+        let pkgEntries: fs.Dirent[];
+        try {
+          pkgEntries = fs.readdirSync(subDirPath, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        for (const pkg of pkgEntries) {
+          if (!pkg.isDirectory() || SKIP_DIRS.has(pkg.name)) continue;
+          const pkgRoot = path.join(subDirPath, pkg.name);
+          let foundNested = false;
+          for (const srcDir of ['src', 'app']) {
+            const srcPath = path.join(pkgRoot, srcDir);
+            if (fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory()) {
+              sourceRoots.push(srcPath);
+              foundNested = true;
+            }
+          }
+          // If no src/ or app/ found, check for conventional dirs at package root
+          // (e.g. apps/web/pages/, packages/ui/components/).
+          if (!foundNested) {
+            const hasConventionalDir = ['pages', 'components', 'screens', 'routes'].some((d) => {
+              const dp = path.join(pkgRoot, d);
+              return fs.existsSync(dp) && fs.statSync(dp).isDirectory();
+            });
+            if (hasConventionalDir) sourceRoots.push(pkgRoot);
+          }
+        }
+      }
+    }
+
+    // If no source roots found, nothing to scan
     if (sourceRoots.length === 0) {
       return this.emptyStructure();
     }
@@ -294,10 +331,16 @@ export class ComponentScanner {
 
       // Remix: app/routes/ already handled above
 
-      // Fallback for simple React/Vite projects: if no pages/ directory was found,
+      // Fallback for React/Vite projects: if no pages/ directory was found,
       // but src/ has .tsx/.jsx files at top level (e.g. App.tsx), treat src/ as pages source.
-      // This covers the common pattern where there's no explicit pages/ directory.
-      if (dirName === 'src' && framework === 'react' && pages.length === 0) {
+      // Also applies to monorepo sub-package src/ directories even when root src/ already found pages —
+      // each sub-package's direct .tsx files should be discoverable independently.
+      const isSubPackageSrc =
+        dirName === 'src' &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'src')) &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'app')) &&
+        !sourceRoot.endsWith(path.join(projectRoot, 'client'));
+      if (dirName === 'src' && framework === 'react' && (pages.length === 0 || isSubPackageSrc)) {
         const hasTsxAtRoot = entries.some(
           (e) => e.isFile() && (e.name.endsWith('.tsx') || e.name.endsWith('.jsx')) && /^[A-Z]/.test(e.name),
         );
@@ -333,6 +376,26 @@ export class ComponentScanner {
     }
     // No analyzer, or analyzer returned empty — fall back to heuristic detection
     return this.detectProjectStructure(projectRoot);
+  }
+
+  /** Return true if projectRoot is a monorepo workspace (Nx, Turbo, pnpm, Lerna, generic). */
+  private isMonorepoRoot(projectRoot: string): boolean {
+    if (fs.existsSync(path.join(projectRoot, 'nx.json'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'turbo.json'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'pnpm-workspace.yaml'))) return true;
+    if (fs.existsSync(path.join(projectRoot, 'lerna.json'))) return true;
+    try {
+      const pkgPath = path.join(projectRoot, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        if (deps.nx || deps.turbo) return true;
+        if (Array.isArray(pkg.workspaces)) return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
   }
 
   /** Detect framework from package.json dependencies */

@@ -471,3 +471,90 @@ describe('ComponentScanner.detectProjectStructure', () => {
     expect(structure.compositeComponentsPaths).not.toContain(path.join(root, 'app'));
   });
 });
+
+// ─── Monorepo sub-package scanning ───────────────────────────────────────────
+
+describe('ComponentScanner.detectProjectStructure — monorepo', () => {
+  const MONO_DIR = path.join(TMP_DIR, 'monorepo');
+
+  afterAll(() => {
+    fs.rmSync(MONO_DIR, { recursive: true, force: true });
+  });
+
+  function createMonoProject(name: string, dirs: string[], files: Record<string, string> = {}): string {
+    const root = path.join(MONO_DIR, name);
+    for (const dir of dirs) fs.mkdirSync(path.join(root, dir), { recursive: true });
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = path.join(root, filePath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content);
+    }
+    return root;
+  }
+
+  it('Nx with targets/: detects pages AND components in targets/web/src/', () => {
+    const root = createMonoProject('nx-targets', ['targets/web/src/components'], {
+      'package.json': '{"devDependencies":{"nx":"22","vite":"8"}}',
+      'nx.json': '{}',
+      'targets/web/package.json': '{"devDependencies":{"tailwindcss":"4"}}',
+      'targets/web/src/LoginScreen.tsx': 'export function LoginScreen() { return <div/>; }',
+      'targets/web/src/components/Button.tsx': 'export function Button() { return <button/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // LoginScreen.tsx at sub-package src/ root → pages
+    expect(structure.pagesPaths).toContain(path.join(root, 'targets', 'web', 'src'));
+    // Button.tsx in components/ → composites
+    expect(
+      structure.compositeComponentsPaths.some((p) => p.includes(path.join('targets', 'web', 'src', 'components'))),
+    ).toBe(true);
+  });
+
+  it('Nx with apps/: detects components in apps/web/src/', () => {
+    const root = createMonoProject('nx-apps', ['apps/web/src'], {
+      'package.json': '{"devDependencies":{"nx":"22","vite":"8"}}',
+      'nx.json': '{}',
+      'apps/web/package.json': '{"devDependencies":{"tailwindcss":"4"}}',
+      'apps/web/src/Dashboard.tsx': 'export function Dashboard() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    const allPaths = [...structure.pagesPaths, ...structure.compositeComponentsPaths, ...structure.atomComponentsPaths];
+    expect(allPaths.some((p) => p.includes('apps/web'))).toBe(true);
+  });
+
+  it('pnpm workspace: detects components in packages/ui/src/', () => {
+    const root = createMonoProject('pnpm-ws', ['packages/ui/src/components/ui'], {
+      'package.json': '{"workspaces":["packages/*"]}',
+      'pnpm-workspace.yaml': 'packages:\n  - packages/*',
+      'packages/ui/package.json': '{"devDependencies":{"tailwindcss":"4"}}',
+      'packages/ui/src/components/ui/Button.tsx': 'export function Button() { return <button/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    const allPaths = [...structure.pagesPaths, ...structure.compositeComponentsPaths, ...structure.atomComponentsPaths];
+    expect(allPaths.some((p) => p.includes('packages/ui'))).toBe(true);
+  });
+
+  it('non-monorepo: no sub-package scan for plain vite projects', () => {
+    const root = createMonoProject('plain-vite', ['src'], {
+      'package.json': '{"devDependencies":{"vite":"8","react":"19"}}',
+      'src/App.tsx': 'export function App() { return <div/>; }',
+    });
+
+    const scanner = new ComponentScanner(createMockStore(null));
+    const structure = scanner.detectProjectStructure(root);
+
+    // src/App.tsx should be found, no sub-package dirs
+    const allPaths = [...structure.pagesPaths, ...structure.compositeComponentsPaths, ...structure.atomComponentsPaths];
+    expect(allPaths.length).toBeGreaterThan(0);
+    // No apps/ targets/ packages/ in paths
+    expect(allPaths.every((p) => !p.match(/\/(apps|targets|packages|libs)\//))).toBe(true);
+  });
+});
