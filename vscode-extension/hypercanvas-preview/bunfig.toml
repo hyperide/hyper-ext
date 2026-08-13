@@ -1,0 +1,19 @@
+# Test config for the extension's own `npm test` (`bun test --isolate src/`).
+#
+# Why this exists: `npm test` runs from THIS dir, so bun does not pick up the
+# monorepo-root bunfig.toml. Without a local preload the 5 @testing-library/react
+# `.tsx` tests (32 cases) fail with `document is not defined` — a false-green that
+# only the root `bun test` / CI ever caught (CI runs from the repo root and DOES
+# get the root preload). These point at the SAME shared setup files the root
+# bunfig uses (DRY — happy-dom DOM env + the `vscode` module mock), resolved
+# relative to this file: ../../test/{setup,mock-vscode}.ts.
+#
+# `--isolate` (in the test script) is required, not optional: happy-dom's selector
+# parser leaks state across files in a shared-context run, so a non-isolated run
+# shows ~17 spurious cross-file failures. Isolation matches CI exactly.
+[test]
+preload = ["../../test/setup.ts", "../../test/mock-vscode.ts"]
+# Self-defensive: a bare `bun test` (no path arg) from this dir would otherwise
+# scan node_modules/, the built out/, and the committed .vsix archives. `npm test`
+# always passes `src/`, but this keeps an arg-less run sane too.
+pathIgnorePatterns = ["out/**", "node_modules/**", "*.vsix"]
