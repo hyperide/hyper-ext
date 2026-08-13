@@ -18,6 +18,8 @@ import { ASTDeleteOperation } from '../operations/ASTDeleteOperation';
 import { ASTDuplicateOperation } from '../operations/ASTDuplicateOperation';
 import { ASTEditConditionOperation } from '../operations/ASTEditConditionOperation';
 import { ASTInsertOperation } from '../operations/ASTInsertOperation';
+import { ASTMapLiteralArrayOperation } from '../operations/ASTMapLiteralArrayOperation';
+import { ASTMapSampleArrayOperation } from '../operations/ASTMapSampleArrayOperation';
 import { ASTPasteOperation } from '../operations/ASTPasteOperation';
 import { ASTStyleOperation } from '../operations/ASTStyleOperation';
 import { ASTUpdateOperation } from '../operations/ASTUpdateOperation';
@@ -25,8 +27,9 @@ import { ASTUpdatePropsOperation } from '../operations/ASTUpdatePropsOperation';
 import { BatchOperation } from '../operations/BatchOperation';
 import { FileSnapshotOperation, type FileSnapshotOperationParams } from '../operations/FileSnapshotOperation';
 import type { Operation as BaseOperation, Operation } from '../operations/Operation';
-import type { ASTApiService } from '../services/ASTApiService';
+import type { ASTApiService, MapLiteralArrayOpParams, MapSampleArrayOpParams } from '../services/ASTApiService';
 import { ASTApiServiceImpl } from '../services/ASTApiServiceImpl';
+import { MapOpDispatchController, type MapOpDomParams } from './MapOpDispatchController';
 import type { ASTNode } from '../types/ast';
 import { deserialize, serialize } from '../utils/serialization';
 import { ClipboardManager } from './ClipboardManager';
@@ -179,6 +182,108 @@ export class CanvasEngine {
 
   getSelectedMapContext() {
     return this.selectionManager.getSelectedMapContext(this._buildSelectionDeps());
+  }
+
+  /**
+   * Dispatch the HYP-290d DOM-mode (data-mode) op for a `.map()` iteration — splices
+   * the Sample-file array prop instead of editing the JSX template. Creates and executes
+   * {@link ASTMapSampleArrayOperation}; this is the CanvasEngine dispatcher the engine
+   * op was left "unwired" against in HYP-290d.
+   *
+   * Awaits the server write and records in history ONLY on success: a refused op (the
+   * server reclassifies the receiver as not props-from-sample) must NOT enter history —
+   * the dual-mode switch re-applies the JSX delete instead. Resolves to whether the
+   * server accepted the op.
+   */
+  async dispatchMapSampleArrayOp(params: MapSampleArrayOpParams): Promise<boolean> {
+    const operation = new ASTMapSampleArrayOperation(this.api, params);
+    operation.execute(this.tree);
+
+    // `_pendingPromise` swallows the rejection to stay non-throwing; the success signal
+    // is the op's `succeeded` flag, set in executeAsync after the server responds.
+    await operation._pendingPromise;
+
+    if (operation.succeeded) {
+      this.historyManager.record(operation);
+      this.emitHistoryChange();
+      this.log(`Map sample-array op (${params.operation}) recorded for index ${params.itemIndex}`);
+      return true;
+    }
+
+    console.error('[CanvasEngine] Map sample-array op refused by server — not recorded');
+    return false;
+  }
+
+  /**
+   * Dispatch the HYP-290e DOM-mode (data-mode) op for a `.map()` iteration whose source is
+   * an in-component `const items = [...]` literal array (classifier category `literal-array`).
+   * Splices that array in the component file itself instead of editing the JSX template.
+   * Mirrors {@link dispatchMapSampleArrayOp}: awaits the server write and records in history
+   * ONLY on success; a refused op (server reclassifies the receiver) must not enter history.
+   * Resolves to whether the server accepted the op.
+   */
+  async dispatchMapLiteralArrayOp(params: MapLiteralArrayOpParams): Promise<boolean> {
+    const operation = new ASTMapLiteralArrayOperation(this.api, params);
+    operation.execute(this.tree);
+
+    await operation._pendingPromise;
+
+    if (operation.succeeded) {
+      this.historyManager.record(operation);
+      this.emitHistoryChange();
+      this.log(`Map literal-array op (${params.operation}) recorded for index ${params.itemIndex}`);
+      return true;
+    }
+
+    console.error('[CanvasEngine] Map literal-array op refused by server — not recorded');
+    return false;
+  }
+
+  /**
+   * Build the dual-mode JSX/DOM dispatch controller for a structural op on a `.map()`
+   * iteration (HYP-290c). The JSX op is applied immediately (default); the returned
+   * controller drives the toast's ~3s switch window. On switch, it undoes the JSX op
+   * and dispatches the DOM op with the captured params.
+   *
+   * `applyJsx` is the existing template op the caller already knows how to run
+   * (delete/duplicate/reorder). `domEnabled` must reflect the classifier (HYP-290h):
+   * true only for a supported DOM category; the server re-validates regardless.
+   *
+   * `applyDom` (HYP-290h) lets the caller pick the route the classifier selected — the
+   * Sample-array op (category 1) or the in-component literal-array op (category 3).
+   * Defaults to {@link dispatchMapSampleArrayOp} for backward compatibility.
+   */
+  createMapOpDispatchController(args: {
+    operation: 'delete' | 'duplicate' | 'reorder';
+    domEnabled: boolean;
+    domParams: MapOpDomParams;
+    applyJsx: () => void;
+    /** Caller-selected DOM dispatch (sample vs literal). Defaults to the sample op. */
+    applyDom?: (params: MapOpDomParams) => Promise<boolean>;
+    windowMs?: number;
+  }): MapOpDispatchController {
+    return new MapOpDispatchController({
+      operation: args.operation,
+      domEnabled: args.domEnabled,
+      domParams: args.domParams,
+      applyJsx: args.applyJsx,
+      // The JSX op sits at the history head after applyJsx. Undo drops it (and awaits
+      // the in-flight write so the component file is restored before the DOM op's
+      // server-side re-classification reads it).
+      undoJsx: () => this.undo(),
+      // On success the chosen dispatch records the DOM op — recording truncates the redo
+      // branch (HistoryManager.record), so the JSX op is dropped and the DOM op is the
+      // clean history head. On refusal it records nothing and returns false.
+      applyDom: args.applyDom ?? ((params) => this.dispatchMapSampleArrayOp(params as MapSampleArrayOpParams)),
+      // DOM refused → re-apply the JSX delete from the redo stack (still there because
+      // the refused DOM op was never recorded). No data loss.
+      redoJsx: () => this.redo(),
+      windowMs: args.windowMs ?? 3000,
+      schedule: (cb, ms) => {
+        const handle = setTimeout(cb, ms);
+        return () => clearTimeout(handle);
+      },
+    });
   }
 
   getSelectedInstances(): ComponentInstance[] {

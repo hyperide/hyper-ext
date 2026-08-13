@@ -158,6 +158,8 @@ export class SelectionManager {
       parentMapId: mapItem.parentMapId,
       itemIndex,
       mapExpression: mapItem.expression ?? '',
+      // Data-source category (HYP-290h) — drives DOM-mode op routing in useMapOpToast.
+      category: mapItem.category,
     };
   }
 

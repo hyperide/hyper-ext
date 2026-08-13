@@ -5,6 +5,10 @@
  * Used by adapters to read and manipulate component code.
  */
 
+// Type-only import — erased at build, so the babel-based classifier module is never
+// pulled into the client bundle (HYP-290h: only the bare category label crosses over).
+import type { MapDataSourceCategory } from '@lib/services/map-datasource-classifier';
+
 /**
  * AST Node representing a React/JSX element
  */
@@ -29,6 +33,12 @@ export interface ASTNode {
     parentMapId: string;
     depth: number;
     expression?: string;
+    /**
+     * Data-source category (HYP-290h), set server-side by parse-component. Drives
+     * DOM-mode op routing: `props-from-sample` → sample op, `literal-array` → literal op,
+     * `hook-derived`/`generator` → DOM mode unsupported (toggle disabled).
+     */
+    category?: MapDataSourceCategory;
   };
 
   /** Conditional rendering metadata (if this node is inside a ternary or &&) */

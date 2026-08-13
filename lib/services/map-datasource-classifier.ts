@@ -75,6 +75,13 @@ export type MapDataSourceClassification =
   | { category: 'literal-array'; rootName: string; declarationLoc: SourceLoc | null }
   | { category: 'generator'; reason: GeneratorReason };
 
+/**
+ * The bare category label, carried from the server (parse-component) to the client
+ * controller so DOM-mode routing happens WITHOUT re-parsing the component source in the
+ * browser (the classifier is babel-based and is never shipped client-side; HYP-290h).
+ */
+export type MapDataSourceCategory = MapDataSourceClassification['category'];
+
 const HOOK_NAME_RE = /^use[A-Z0-9]/;
 
 function generatorResult(reason: GeneratorReason): MapDataSourceClassification {
@@ -249,4 +256,31 @@ export function classifyMapDataSource(mapExpression: string, source: string): Ma
   if (!rootName) return generatorResult('ambiguous');
 
   return classifyBinding(rootName, isMember, source) ?? generatorResult('unresolved');
+}
+
+/** Minimal structural shape of a parsed component node carrying a `.map()` tag. */
+interface MapTaggedNode {
+  children?: MapTaggedNode[];
+  mapItem?: { expression?: string; category?: MapDataSourceCategory };
+}
+
+/**
+ * HYP-290h — tag every `.map()` node in a parsed component tree with its data-source
+ * category, in place. Called by parse-component (which has the source in hand) so the
+ * client controller routes DOM-mode ops on `mapItem.category` without re-parsing the
+ * source in the browser (the babel-based classifier is server-only).
+ *
+ * Pure-ish: mutates the passed nodes' `mapItem.category`; does no IO. A receiver that
+ * cannot be classified is tagged with the safe `generator` category by the classifier
+ * itself, so callers never see an un-tagged map node.
+ */
+export function attachMapDataSourceCategories(nodes: MapTaggedNode[], source: string): void {
+  for (const node of nodes) {
+    if (node.mapItem?.expression) {
+      node.mapItem.category = classifyMapDataSource(node.mapItem.expression, source).category;
+    }
+    if (node.children?.length) {
+      attachMapDataSourceCategories(node.children, source);
+    }
+  }
 }

@@ -32,6 +32,13 @@ export class ASTMapLiteralArrayOperation extends BaseOperation {
   private undoSnapshotId?: number;
   private redoSnapshotId?: number;
   _pendingPromise?: Promise<void>;
+  /**
+   * Whether the most recent server write succeeded (mirrors ASTMapSampleArrayOperation).
+   * `_pendingPromise` swallows the rejection, so the dual-mode dispatcher reads this after
+   * awaiting it to decide whether to record the op or re-apply the JSX delete. `undefined`
+   * until the first execute settles.
+   */
+  succeeded?: boolean;
 
   constructor(api: ASTApiService, params: MapLiteralArrayOpParams) {
     super(api);
@@ -82,12 +89,15 @@ export class ASTMapLiteralArrayOperation extends BaseOperation {
   }
 
   private async executeAsync(): Promise<void> {
+    this.succeeded = undefined;
     const result = await this.api.mapLiteralArrayOp(this.params);
 
     if (!result.success) {
+      this.succeeded = false;
       throw new Error(result.error || 'Failed to apply map literal-array op');
     }
 
+    this.succeeded = true;
     this.undoSnapshotId = result.snapshotId;
 
     const snapshotResult = await this.api.saveFileSnapshot(this.params.componentFilePath);

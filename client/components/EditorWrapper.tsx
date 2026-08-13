@@ -19,6 +19,8 @@ interface ComponentLoadData {
   projectName?: string;
   projectId?: string;
   relativeFilePath?: string;
+  /** Resolved active sample file for DOM-mode Sample-array routing (HYP-290h). */
+  sampleFilePath?: string | null;
   error?: string;
 }
 
@@ -155,6 +157,8 @@ function CanvasEngineSetup({ children }: { children: React.ReactNode }) {
             repoPath: data.repoPath,
             filePath: data.filePath,
             relativeFilePath: data.relativeFilePath,
+            // HYP-290h: resolved active sample file for DOM-mode Sample-array routing.
+            sampleFilePath: data.sampleFilePath ?? null,
           });
         }
       } else {

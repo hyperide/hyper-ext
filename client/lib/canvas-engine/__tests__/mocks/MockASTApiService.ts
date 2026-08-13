@@ -55,6 +55,13 @@ export class MockASTApiService implements ASTApiService {
     newIds: ['pasted-1'],
     index: 0,
   };
+  /**
+   * Optional gate to hold the delete write in-flight. Tests set this to a pending
+   * promise to fire a follow-up action (e.g. the HYP-290c dual-mode switch) BEFORE the
+   * delete resolves, asserting CanvasEngine.undo() awaits ASTDeleteOperation's
+   * `_pendingPromise` (ordering safety — no half-written file race).
+   */
+  deleteElementGate?: Promise<void>;
   reorderElementResult: ReorderElementResult = { success: true, snapshotId: 7 };
   /**
    * Optional gate to keep the reorder write in-flight. Tests set this to a
@@ -90,6 +97,7 @@ export class MockASTApiService implements ASTApiService {
 
   async deleteElement(params: DeleteElementParams): Promise<ApiResult> {
     this.calls.push({ method: 'deleteElement', args: [params] });
+    if (this.deleteElementGate) await this.deleteElementGate;
     return { ...this.deleteElementResult };
   }
 
@@ -178,6 +186,7 @@ export class MockASTApiService implements ASTApiService {
     this.reorderElementGate = undefined;
     this.mapSampleArrayOpGate = undefined;
     this.mapLiteralArrayOpGate = undefined;
+    this.deleteElementGate = undefined;
   }
 
   getCallsFor(method: string): MockCall[] {

@@ -11,6 +11,7 @@ import _generate from '@babel/generator';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import { analyzeJSXChildren } from '../ast/traverser';
+import type { MapDataSourceCategory } from './map-datasource-classifier';
 
 const generate = (_generate as { default?: typeof _generate }).default ?? _generate;
 // @ts-expect-error - babel/traverse has ESM/CJS issues
@@ -32,6 +33,12 @@ export interface ComponentNode {
     parentMapId: string;
     depth: number;
     expression: string;
+    /**
+     * Data-source category (HYP-290h), attached by parse-component via
+     * {@link attachMapDataSourceCategories}. Drives DOM-mode op routing on the client
+     * without re-parsing the source in the browser. Absent until the tagging pass runs.
+     */
+    category?: MapDataSourceCategory;
   };
   condItem?: {
     type: CondItemType;

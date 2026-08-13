@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'bun:test';
-import { classifyMapDataSource } from './map-datasource-classifier';
+import { attachMapDataSourceCategories, classifyMapDataSource } from './map-datasource-classifier';
+
+/** Minimal structural shape of a ComponentNode tree for the attach-categories test. */
+interface MapNode {
+  id: string;
+  type: string;
+  children?: MapNode[];
+  mapItem?: { parentMapId: string; depth: number; expression: string; category?: string };
+}
 
 /**
  * HYP-290g — Data-source category classifier.
@@ -225,5 +233,78 @@ describe('classifyMapDataSource', () => {
       `;
       expect(classifyMapDataSource('', source).category).toBe('generator');
     });
+  });
+});
+
+/**
+ * HYP-290h — parse-component attaches the data-source category per `.map()` node so the
+ * client controller routes DOM-mode ops without re-parsing the source in the browser.
+ */
+describe('attachMapDataSourceCategories (HYP-290h)', () => {
+  it('tags each mapItem with its classified category, walking the tree', () => {
+    const source = `
+      export function List({ items }) {
+        const tags = ['a', 'b'];
+        return (
+          <div>
+            <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>
+            <ol>{tags.map((t) => <li key={t}>{t}</li>)}</ol>
+          </div>
+        );
+      }
+    `;
+    const tree: MapNode[] = [
+      {
+        id: 'root',
+        type: 'div',
+        children: [
+          {
+            id: 'item-1',
+            type: 'li',
+            mapItem: { parentMapId: 'map-items', depth: 0, expression: 'items' },
+          },
+          {
+            id: 'item-2',
+            type: 'li',
+            mapItem: { parentMapId: 'map-tags', depth: 0, expression: 'tags' },
+          },
+        ],
+      },
+    ];
+
+    attachMapDataSourceCategories(tree as never, source);
+
+    // `items` is a destructured prop → props-from-sample; `tags` is a const literal array.
+    expect(tree[0].children?.[0].mapItem?.category).toBe('props-from-sample');
+    expect(tree[0].children?.[1].mapItem?.category).toBe('literal-array');
+  });
+
+  it('inline-sample props map classifies as generator (two `items` bindings — documented boundary)', () => {
+    // BOUNDARY (HYP-558): when the `SampleDefault` is APPENDED INLINE into the
+    // component file (what ensureSample does), the sample defines `const items = [...]` to
+    // pass the prop. The component file then has TWO referenced `items` bindings — the
+    // component param and the sample const — so the classifier (scoped to the whole file)
+    // returns `ambiguous` → `generator`. Data mode is therefore (safely) DISABLED for inline
+    // props-from-sample lists, rather than risking a destructive mutation at the wrong array.
+    // Sibling samples (separate *.samples.tsx) have a single binding and classify cleanly.
+    const inlineSampleSource = `
+      export function List({ items }) {
+        return <ul>{items.map((i) => <li key={i.id}>{i.id}</li>)}</ul>;
+      }
+
+      export const SampleDefault = () => {
+        const items = [{ id: 'a' }, { id: 'b' }];
+        return <List items={items} />;
+      };
+    `;
+    const result = classifyMapDataSource('items', inlineSampleSource);
+    expect(result.category).toBe('generator');
+  });
+
+  it('leaves nodes without a mapItem untouched and tolerates an unparseable source', () => {
+    const tree: MapNode[] = [{ id: 'plain', type: 'span' }];
+    // Must not throw; plain nodes get no category.
+    attachMapDataSourceCategories(tree as never, 'not <<< valid');
+    expect(tree[0].mapItem).toBeUndefined();
   });
 });

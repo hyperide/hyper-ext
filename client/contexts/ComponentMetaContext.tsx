@@ -9,6 +9,13 @@ interface ComponentMeta {
   repoPath: string;
   filePath?: string;
   relativeFilePath?: string;
+  /**
+   * File the active sample export was resolved from (HYP-290h), reported by
+   * parse-component. The DOM-mode Sample-array op targets THIS path instead of a
+   * hardcoded sibling `*.samples.tsx`. Today it equals `filePath` (samples are inline in
+   * the component file); null when no sample was resolved.
+   */
+  sampleFilePath?: string | null;
 }
 
 export type PreviewSetupStatus = 'ok' | 'unsupported' | 'needs-patch';

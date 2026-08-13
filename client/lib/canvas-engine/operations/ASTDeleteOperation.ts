@@ -23,6 +23,18 @@ export class ASTDeleteOperation extends BaseOperation {
   private parentId?: string; // Store parent ID for undo (undefined = root-level element)
   private elementIndex?: number; // Store position in parent for undo
   private elementStored = false; // True after successful storeElementForUndo
+  /**
+   * In-flight server write (delete on execute/redo, restore on undo). Exposed so
+   * CanvasEngine.undo()/.redo() can AWAIT completion before the next history action
+   * runs — mirroring ASTMapSampleArrayOperation / ASTReorderOperation, whose headers
+   * call out this op's previous fire-and-forget as the anti-pattern.
+   *
+   * Why this matters for HYP-290c: the dual-mode switch undoes this JSX delete and
+   * then dispatches the DOM op, whose server route re-reads the component source. If
+   * the restore is still in flight the route races a half-written file. undo() also
+   * chains AFTER the prior delete so a late-landing delete cannot clobber the restore.
+   */
+  _pendingPromise?: Promise<void>;
 
   constructor(api: ASTApiService, params: ASTDeleteOperationParams) {
     super(api);
@@ -41,7 +53,7 @@ export class ASTDeleteOperation extends BaseOperation {
     this.storeElementForUndo(tree);
 
     // Delete from file in background
-    this.syncDelete()
+    this._pendingPromise = this.syncDelete()
       .then(() => {
         console.log('[ASTDeleteOperation] Delete complete');
       })
@@ -64,21 +76,22 @@ export class ASTDeleteOperation extends BaseOperation {
     console.log('[ASTDeleteOperation] Undoing delete, restoring element with original ID');
     const deletedId = this.deletedElement.id;
 
-    // Restore element via insert API - preserves original ID
-    this.syncRestore()
-      .then((restoredId) => {
-        // Verify that ID matches original
-        if (restoredId !== deletedId) {
-          console.warn('[ASTDeleteOperation] Restored ID differs from original:', {
-            original: deletedId,
-            restored: restoredId,
-          });
-        }
-        console.log('[ASTDeleteOperation] Element restored with ID:', restoredId);
-      })
-      .catch((error) => {
-        console.error('[ASTDeleteOperation] Undo failed:', error);
-      });
+    // Restore element via insert API - preserves original ID. Chain after any in-flight
+    // delete so a late-landing delete can't overwrite the restore (ordering safety).
+    const prior = this._pendingPromise;
+    this._pendingPromise = (async () => {
+      await prior?.catch(() => {});
+      const restoredId = await this.syncRestore();
+      if (restoredId !== deletedId) {
+        console.warn('[ASTDeleteOperation] Restored ID differs from original:', {
+          original: deletedId,
+          restored: restoredId,
+        });
+      }
+      console.log('[ASTDeleteOperation] Element restored with ID:', restoredId);
+    })().catch((error) => {
+      console.error('[ASTDeleteOperation] Undo failed:', error);
+    });
 
     return this.success([this.params.elementId]);
   }
@@ -89,14 +102,16 @@ export class ASTDeleteOperation extends BaseOperation {
   redo(_tree: DocumentTree): OperationResult {
     console.log('[ASTDeleteOperation] Redoing delete');
 
-    // Delete element again
-    this.syncDelete()
-      .then(() => {
-        console.log('[ASTDeleteOperation] Redo complete');
-      })
-      .catch((error) => {
-        console.error('[ASTDeleteOperation] Redo failed:', error);
-      });
+    // Delete element again. Chain after any in-flight restore for the same ordering
+    // safety the undo path uses.
+    const prior = this._pendingPromise;
+    this._pendingPromise = (async () => {
+      await prior?.catch(() => {});
+      await this.syncDelete();
+      console.log('[ASTDeleteOperation] Redo complete');
+    })().catch((error) => {
+      console.error('[ASTDeleteOperation] Redo failed:', error);
+    });
 
     return this.success([this.params.elementId]);
   }

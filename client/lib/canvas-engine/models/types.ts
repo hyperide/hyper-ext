@@ -2,6 +2,7 @@
  * Core types for Canvas Engine
  */
 
+import type { MapDataSourceCategory } from '@lib/services/map-datasource-classifier';
 import type React from 'react';
 import type { ReactNode } from 'react';
 import type { ServerSyncConfig } from '../core/ServerSyncManager';
@@ -251,6 +252,14 @@ export interface MapIterationContext {
    * captured by the parser. The data source the iteration was rendered from.
    */
   mapExpression: string;
+
+  /**
+   * Data-source category (HYP-290h), classified server-side by parse-component.
+   * Drives DOM-mode op routing: `props-from-sample` → sample op, `literal-array` →
+   * literal op, `hook-derived`/`generator` → DOM mode unsupported. Undefined when the
+   * structure predates the tagging pass (older payload) — treated as unsupported.
+   */
+  category?: MapDataSourceCategory;
 }
 
 /**

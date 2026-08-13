@@ -2,6 +2,7 @@ import { TID } from '@shared/data-testid-map';
 import cn from 'clsx';
 import { type CSSProperties, forwardRef, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useMapOpToast } from '@/components/canvas/useMapOpToast';
 import { Input } from '@/components/ui/input';
 import { useComponentMetaOptional } from '@/contexts/ComponentMetaContext';
 import { toast } from '@/hooks/use-toast';
@@ -65,6 +66,7 @@ export function CanvasElementContextMenu({
   const engine = useCanvasEngineOptional();
   const metaCtx = useComponentMetaOptional();
   const meta = metaCtx?.meta ?? null;
+  const { deleteSelected: deleteWithMapToast } = useMapOpToast(engine, meta, metaCtx?.currentSampleName ?? null);
   const canvas = usePlatformCanvas();
   const { openFile, isReadonly } = useEditorStore();
 
@@ -107,7 +109,13 @@ export function CanvasElementContextMenu({
         const uniqId = element.dataset.uniqId;
         const currentSelection = engine.getSelection().selectedIds;
         if (!currentSelection.includes(uniqId)) {
-          engine.select(uniqId);
+          // Select with the map-iteration index (when the right-clicked element is a
+          // `.map()` child) so getSelectedMapContext() resolves — a plain select()
+          // clears selectedItemIndices and would hide the HYP-290c dual-mode toast on
+          // a direct right-click-delete (the most common path). itemIndex is null /
+          // -1 for non-map elements, which selectWithItemIndex treats as "no index".
+          const itemIndex = getActiveTracer()?.getItemIndex(element) ?? null;
+          engine.selectWithItemIndex(uniqId, itemIndex !== null && itemIndex >= 0 ? itemIndex : null);
         }
       }
 
@@ -299,14 +307,16 @@ export function CanvasElementContextMenu({
   const handleDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
     if (engine && meta?.filePath) {
-      engine.deleteASTElements(selectedIds, meta.filePath);
+      // Map-aware: a `.map()` iteration deletes in JSX mode by default and raises the
+      // dual-mode toast (HYP-290c); a plain element falls back to the template delete.
+      deleteWithMapToast(selectedIds, meta.filePath);
     } else {
       canvas.sendEvent({
         type: 'contextMenu:delete',
         elementId: selectedIds[0],
       } as never);
     }
-  }, [selectedIds, meta, engine, canvas]);
+  }, [selectedIds, meta, engine, canvas, deleteWithMapToast]);
 
   const handleSelectParent = useCallback(() => {
     if (selectedIds.length === 0) return;

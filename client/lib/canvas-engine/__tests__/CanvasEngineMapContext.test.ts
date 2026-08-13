@@ -143,6 +143,35 @@ describe('CanvasEngine map-iteration context (HYP-290b)', () => {
     });
   });
 
+  it('HYP-290h: carries the server-classified `category` through to getSelectedMapContext', () => {
+    // The classifier-driven routing depends on `category` surviving the
+    // server → astStructure → getMapContext seam. The e2e that would catch a break here
+    // cannot run (the dual-mode toast is SaaS-only; no ComponentMetaProvider in the
+    // extension realm), so this unit test guards the carry-through directly.
+    const root = engine.getRoot();
+    root.metadata = {
+      ...root.metadata,
+      astStructure: [
+        {
+          id: 'literal-map-0',
+          type: 'Card',
+          props: {},
+          children: [],
+          mapItem: { parentMapId: 'lit-map', depth: 1, expression: 'items', category: 'literal-array' },
+        },
+      ],
+    };
+
+    engine.selectWithItemIndex('literal-map-0', 0);
+
+    expect(engine.getSelectedMapContext()).toEqual({
+      parentMapId: 'lit-map',
+      itemIndex: 0,
+      mapExpression: 'items',
+      category: 'literal-array',
+    });
+  });
+
   it('resolves map context from sampleStructure when the canvas renders a sample', () => {
     // When a sample drives the canvas, rendered node ids come from sampleStructure.
     const root = engine.getRoot();

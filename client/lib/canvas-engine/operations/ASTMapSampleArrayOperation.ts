@@ -30,6 +30,15 @@ export class ASTMapSampleArrayOperation extends BaseOperation {
   private undoSnapshotId?: number;
   private redoSnapshotId?: number;
   _pendingPromise?: Promise<void>;
+  /**
+   * Whether the most recent server write succeeded. `_pendingPromise` swallows the
+   * rejection (it `.catch`es to keep undo/redo non-throwing), so callers that must
+   * branch on server success — the dual-mode switch, which re-applies the JSX delete
+   * if the DOM op is refused (e.g. server reclassifies the receiver as not
+   * props-from-sample) — read this after awaiting `_pendingPromise`. `undefined`
+   * until the first execute settles.
+   */
+  succeeded?: boolean;
 
   constructor(api: ASTApiService, params: MapSampleArrayOpParams) {
     super(api);
@@ -83,12 +92,15 @@ export class ASTMapSampleArrayOperation extends BaseOperation {
   }
 
   private async executeAsync(): Promise<void> {
+    this.succeeded = undefined;
     const result = await this.api.mapSampleArrayOp(this.params);
 
     if (!result.success) {
+      this.succeeded = false;
       throw new Error(result.error || 'Failed to apply map sample-array op');
     }
 
+    this.succeeded = true;
     this.undoSnapshotId = result.snapshotId;
 
     const snapshotResult = await this.api.saveFileSnapshot(this.params.filePath);
