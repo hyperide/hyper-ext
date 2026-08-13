@@ -176,6 +176,19 @@ describe("detectUIKit", () => {
     expect(await detectUIKit("/proj")).toBe("tailwind");
   });
 
+  // HYP-383: Astro Tailwind integrations must keep detectUIKit in sync with
+  // detectCssSystem, otherwise projectUIKit stays 'none' and the right sidebar
+  // hides hover/focus variant editing for Astro+Tailwind projects.
+  it("detects @astrojs/tailwind as tailwind", async () => {
+    setPackageJson("/proj", { devDependencies: { "@astrojs/tailwind": "5.0.0" } });
+    expect(await detectUIKit("/proj")).toBe("tailwind");
+  });
+
+  it("detects @tailwindcss/vite as tailwind", async () => {
+    setPackageJson("/proj", { devDependencies: { "@tailwindcss/vite": "4.0.0" } });
+    expect(await detectUIKit("/proj")).toBe("tailwind");
+  });
+
   it("detects tamagui", async () => {
     setPackageJson("/proj", { dependencies: { tamagui: "1.0.0" } });
     expect(await detectUIKit("/proj")).toBe("tamagui");
