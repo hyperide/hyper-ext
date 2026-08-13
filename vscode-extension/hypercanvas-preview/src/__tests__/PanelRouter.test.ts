@@ -18,6 +18,7 @@ function createFakeAstService(): AstService {
   return {
     ensureInitialized: mock(() => Promise.resolve()),
     setVerifyComputedStyleProvider: mock(),
+    setAdditionalWorkspaceRoot: mock(),
     updateStyles: mock(() => Promise.resolve({ success: true, className: 'c' })),
     updateProps: mock(() => Promise.resolve({ success: true })),
     insertElement: mock(() => Promise.resolve({ success: true, newId: 'n', index: 0 })),
@@ -257,6 +258,48 @@ describe('PanelRouter', () => {
       await router.routeMessage({ type: 'component:listGroups', requestId: 'r1' }, wv as never);
 
       expect(setAdditionalWorkspaceRootSpy).toHaveBeenCalledWith('/monorepo');
+    });
+
+    // HYP-1012 review rounds 2+3 (codex P1): a workspace-folder switch landing WHILE
+    // scanComponentGroups() is in flight must neither (a) widen the NEW workspace's
+    // containment with the OLD workspace's monorepoRoot, nor (b) return/publish the OLD
+    // workspace's stale scan data to a caller acting for the NEW workspace. getComponentGroups
+    // must detect the switch and retry against the CURRENT workspace instead. Note:
+    // _ensureCurrentWorkspace REBUILDS _componentService/_astBridge/_styleReadService on a
+    // real switch, so the retry's second scan necessarily runs against a real (unmocked)
+    // ComponentService for the new root — this test asserts the SAFETY invariant (the old
+    // AstBridge instance is never widened with the old root) rather than the retried scan's
+    // exact contents, which depend on real disk state for the switched-to path.
+    it('never applies the OLD workspace scan to its AstBridge when the workspace switches WHILE the scan is in flight', async () => {
+      const oldAstBridge = router.astBridge;
+      const oldAstBridgeSpy = mock();
+      oldAstBridge.setAdditionalWorkspaceRoot = oldAstBridgeSpy;
+      const vscode = await import('vscode');
+      const originalFolders = vscode.workspace.workspaceFolders;
+
+      (router.componentService.scanComponentGroups as ReturnType<typeof mock>).mockImplementationOnce(() => {
+        // Simulate the workspace switching WHILE this (first) scan is in flight — by the time
+        // it resolves, the NEXT _ensureCurrentWorkspace call picks up the new root and rebuilds
+        // _astBridge/_componentService/_styleReadService.
+        Object.assign(vscode.workspace, {
+          workspaceFolders: [{ uri: vscode.Uri.file('/switched-workspace'), name: 'switched', index: 0 }],
+        });
+        return Promise.resolve({
+          data: { atomGroups: [], compositeGroups: [], pageGroups: [], monorepoRoot: '/old-monorepo' },
+          needsSetup: false,
+        });
+      });
+
+      try {
+        await router.getComponentGroups();
+
+        // The stale (old-workspace) scan result was never applied to the OLD AstBridge instance.
+        expect(oldAstBridgeSpy).not.toHaveBeenCalled();
+        // A rebuild actually happened — the router now holds a DIFFERENT AstBridge instance.
+        expect(router.astBridge).not.toBe(oldAstBridge);
+      } finally {
+        Object.assign(vscode.workspace, { workspaceFolders: originalFolders });
+      }
     });
   });
 

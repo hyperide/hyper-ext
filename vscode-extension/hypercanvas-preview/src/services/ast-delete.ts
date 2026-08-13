@@ -24,8 +24,14 @@ export async function deleteElements(
   elementIds: string[],
   workspaceRoot: string,
   deps: DeleteElementsDeps,
+  additionalWorkspaceRoot?: string,
 ): Promise<AstOperationResult> {
-  const absolutePath = resolveWorkspacePath(workspaceRoot, filePath);
+  const absolutePath = resolveWorkspacePath(
+    workspaceRoot,
+    filePath,
+    undefined,
+    additionalWorkspaceRoot ? [additionalWorkspaceRoot] : [],
+  );
   let deletedCount = 0;
 
   const contentBeforeByPath = new Map<string, string>();

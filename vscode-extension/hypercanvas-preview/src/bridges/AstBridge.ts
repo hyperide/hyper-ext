@@ -21,6 +21,7 @@ import type { NodeRef } from '@shared/element-tracing/types';
 import { UndoRedoService } from '../services/UndoRedoService';
 import type { AstMessage, AstResponse } from '../types';
 import { VSCodeFileIO } from '../vscode-file-io';
+import { resolveWorkspacePath } from '../services/workspace-path';
 import { toRepoRelativeElementId, toRepoRelativePath } from './monorepo-path-translate';
 
 /**
@@ -61,6 +62,8 @@ export class AstBridge {
   private _fileIO: VSCodeFileIO;
   private _undoRedoService: UndoRedoService;
   private _workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — see `setAdditionalWorkspaceRoot`. */
+  private _additionalWorkspaceRoot?: string;
   private _webview: vscode.Webview | null = null;
   /**
    * Sub-project path prefix for a monorepo opened at the repo ROOT (e.g.
@@ -133,9 +136,17 @@ export class AstBridge {
    * sibling paths resolve outside `_workspaceRoot` by design, and without this
    * the undo/redo snapshot for editing them was silently rejected (HYP-909
    * follow-up).
+   *
+   * HYP-1012 monorepo follow-up: also widens `AstService`'s containment allowlist
+   * (`resolveWorkspacePath`'s `additionalRoots`) and this bridge's own `_resolvePath` the
+   * same way — otherwise the HYP-1012 containment check rejects the exact sibling reads/
+   * writes this widened undo boundary exists to track, regressing the supported
+   * opened-leaf-monorepo workflow (review round 1, HYP-1012 follow-up).
    */
   setAdditionalWorkspaceRoot(root: string | null): void {
     this._undoRedoService.setAdditionalWorkspaceRoot(root);
+    this._astService.setAdditionalWorkspaceRoot(root);
+    this._additionalWorkspaceRoot = root ?? undefined;
   }
 
   async handleMessage(message: AstMessage, targetWebview?: vscode.Webview, verifyElementId?: string): Promise<void> {
@@ -254,26 +265,66 @@ export class AstBridge {
     // Truthiness fallback (NOT `??`): an empty-string id must fall through to `null`, else the
     // scoped clear's `elementIdsMatch(current, '')` never matches and a real clear is lost (review).
     const elementId = m.elementId || m.sourceId || m.aId || m.elementIds?.[0] || m.parentId || null;
-    void this._postEditWatcher?.checkAfterEdit(
-      baseline,
-      this._resolvePath(m.filePath),
-      elementId,
-      m.filePath,
-      message.type,
-    );
+    // This runs only after a successful mutation, so `m.filePath` already passed AstService's own
+    // containment check — but `_resolvePath` can now throw (HYP-1012), and this call sits outside
+    // handleMessage's top-level try/catch (fire-and-forget, must not delay the response). Guard
+    // defensively rather than let a throw here crash message handling for an otherwise-successful edit.
+    let resolvedFilePath: string;
+    try {
+      resolvedFilePath = this._resolvePath(m.filePath);
+    } catch (error) {
+      console.warn(`[AstBridge] _schedulePostEditDiagnosticCheck: path rejected by containment check: ${m.filePath}`, error);
+      return;
+    }
+    void this._postEditWatcher?.checkAfterEdit(baseline, resolvedFilePath, elementId, m.filePath, message.type);
   }
 
   // === Undo tracking helpers ===
 
+  /**
+   * Resolve + validate `filePath` against the same containment boundary `AstService` enforces
+   * (`_workspaceRoot`, widened by `_additionalWorkspaceRoot` — see `setAdditionalWorkspaceRoot`).
+   *
+   * HYP-1012 follow-up, fixes two review-round-1 findings:
+   *  - (P1) Previously used native `path.resolve`/`path.isAbsolute` instead of
+   *    `resolveWorkspacePath`, so on Windows this returned a BACKSLASH path while AstService's
+   *    `resolveWorkspacePath`-derived `resolvedPath` is always forward-slash (HYP-1012 Windows
+   *    follow-up). `_withUndoTracking`'s `actualPath !== absolutePath` same-file check then
+   *    false-mismatched on every Windows same-file write, misclassifying it as cross-file and
+   *    skipping `contentBeforeWrite` capture — undo silently stopped working. Delegating to the
+   *    shared `resolveWorkspacePath` makes both sides produce the identical forward-slash form.
+   *  - (P1) Previously never validated containment at all, so every `_withUndoTracking`/
+   *    `deleteElements`/`moveElement`/`swapElements` call site read the RAW untrusted
+   *    `filePath` off disk for its undo pre-snapshot BEFORE `AstService` got a chance to reject
+   *    it — an attacker-controlled nodeRef could exfiltrate file contents outside the workspace
+   *    via the undo snapshot even though the eventual WRITE was correctly blocked. Now throws
+   *    the same containment error `AstService` throws; every caller below catches it and runs
+   *    the underlying operation untracked (identical to the pre-existing "file doesn't exist
+   *    locally" fallback), so `AstService`'s own containment check still fires and the read
+   *    never happens.
+   */
   private _resolvePath(filePath: string): string {
-    return path.isAbsolute(filePath) ? filePath : path.resolve(this._workspaceRoot, filePath);
+    return resolveWorkspacePath(
+      this._workspaceRoot,
+      filePath,
+      undefined,
+      this._additionalWorkspaceRoot ? [this._additionalWorkspaceRoot] : [],
+    );
   }
 
   private async _withUndoTracking<T extends AstOperationResult>(
     filePath: string,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const absolutePath = this._resolvePath(filePath);
+    let absolutePath: string;
+    try {
+      absolutePath = this._resolvePath(filePath);
+    } catch (error) {
+      // Containment rejection — no pre-read, run untracked so AstService's own containment
+      // check produces the user-facing `{ success: false }` (see method doc, HYP-1012 P1).
+      console.warn(`[AstBridge] _withUndoTracking: path rejected by containment check: ${filePath}`, error);
+      return await operation();
+    }
     // Clear redo stack before ANY write — even when readFile fails.
     // If beginTracking() were called only after a successful readFile(), a
     // readFile() error (e.g. VS Code in-flight document update) would skip it,
@@ -344,7 +395,14 @@ export class AstBridge {
   async deleteElements(rawFilePath: string, rawElementIds: string[]): Promise<AstOperationResult> {
     const filePath = toRepoRelativePath(rawFilePath, this._subProjectPrefix);
     const elementIds = rawElementIds.map((id) => toRepoRelativeElementId(id, this._subProjectPrefix));
-    const absolutePath = this._resolvePath(filePath);
+    let absolutePath: string;
+    try {
+      absolutePath = this._resolvePath(filePath);
+    } catch (error) {
+      // Containment rejection — no pre-read, run untracked (see _resolvePath's doc, HYP-1012 P1).
+      console.warn(`[AstBridge] deleteElements: path rejected by containment check: ${filePath}`, error);
+      return this._astService.deleteElements(filePath, elementIds);
+    }
     // Clear redo stack before ANY write — even when readFile fails (same invariant as _withUndoTracking).
     this._undoRedoService.beginTracking();
     try {
@@ -644,7 +702,25 @@ export class AstBridge {
    * succeeds.
    */
   private async _handleMoveElement(message: Extract<AstMessage, { type: 'ast:moveElement' }>): Promise<AstResponse> {
-    const absolutePath = this._resolvePath(message.filePath);
+    let absolutePath: string;
+    try {
+      absolutePath = this._resolvePath(message.filePath);
+    } catch (error) {
+      // Containment rejection — no pre-read, run untracked (see _resolvePath's doc, HYP-1012 P1).
+      console.warn(`[AstBridge] _handleMoveElement: path rejected by containment check: ${message.filePath}`, error);
+      const r = await this._astService.moveElement(
+        message.filePath,
+        message.sourceId,
+        message.targetId,
+        message.position,
+      );
+      return {
+        type: 'ast:response',
+        requestId: message.requestId,
+        success: r.success,
+        data: r.adjustments ? { adjustments: r.adjustments } : undefined,
+      };
+    }
     this._undoRedoService.beginTracking();
     try {
       // Snapshot the source file BEFORE the move so single-file moves can
@@ -757,7 +833,15 @@ export class AstBridge {
    * `AstService.swapElements` and surface as `success: false` to the iframe.
    */
   private async _handleSwapElements(message: Extract<AstMessage, { type: 'ast:swapElements' }>): Promise<AstResponse> {
-    const absolutePath = this._resolvePath(message.filePath);
+    let absolutePath: string;
+    try {
+      absolutePath = this._resolvePath(message.filePath);
+    } catch (error) {
+      // Containment rejection — no pre-read, run untracked (see _resolvePath's doc, HYP-1012 P1).
+      console.warn(`[AstBridge] _handleSwapElements: path rejected by containment check: ${message.filePath}`, error);
+      const r = await this._astService.swapElements(message.filePath, message.aId, message.bId);
+      return { type: 'ast:response', requestId: message.requestId, success: r.success };
+    }
     this._undoRedoService.beginTracking();
     try {
       let contentBefore: string;
@@ -909,16 +993,25 @@ export class AstBridge {
       `[writeI18nResource] key=${message.key} previousKey=${previousKey} filePath=${i18nFilePath} elementId=${i18nElementId} skipResourceWrite=${message.skipResourceWrite}`,
     );
     if (i18nFilePath && i18nElementId && previousKey) {
-      try {
-        const preContent = await this._fileIO.readFile(i18nFilePath);
-        const lines = preContent.split('\n');
-        const snippet = lines
-          .slice(109, 145)
-          .map((l, i) => `L${i + 110}:${l}`)
-          .join(' | ')
-          .substring(0, 2000);
-        _dbgBridge(`[pre-updateI18nKey] lines 110-145: ${snippet}`);
-      } catch {}
+      // HYP-1012 review round 2 (codex) P2: this debug snippet read the raw, untrusted
+      // `i18nFilePath` unconditionally — even when `_BRIDGE_DEBUG_LOG` is unset and the
+      // resulting snippet is never logged anywhere. Resolve through the same containment
+      // check every other read/write in this class goes through FIRST; a rejected path
+      // skips the debug read entirely (and the real mutation below still independently
+      // rejects via AstService's own containment, so no functional change there).
+      if (_BRIDGE_DEBUG_LOG) {
+        try {
+          const resolvedI18nPath = this._resolvePath(i18nFilePath);
+          const preContent = await this._fileIO.readFile(resolvedI18nPath);
+          const lines = preContent.split('\n');
+          const snippet = lines
+            .slice(109, 145)
+            .map((l, i) => `L${i + 110}:${l}`)
+            .join(' | ')
+            .substring(0, 2000);
+          _dbgBridge(`[pre-updateI18nKey] lines 110-145: ${snippet}`);
+        } catch {}
+      }
       const updateResult = await this._withUndoTracking(i18nFilePath, () =>
         this._astService.updateI18nKey(i18nFilePath, i18nElementId, previousKey, message.key),
       );

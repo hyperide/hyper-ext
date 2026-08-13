@@ -158,6 +158,25 @@ describe('StyleReadService', () => {
     ]);
   });
 
+  // HYP-1012 (workspace containment at the AST write/read boundary): componentPath is
+  // resolved via resolveWorkspacePath before the method's own try/catch begins, so an
+  // out-of-workspace escape must propagate as a rejection here rather than silently
+  // reading the escaped file. The message-level caller (PanelRouter) is what converts
+  // this into a graceful `styles:response` failure — this test covers the service level.
+  it('rejects an out-of-workspace absolute componentPath instead of reading it', async () => {
+    const nodeMap = new NodeMapService();
+    const evilPath = '/secret/outside.tsx';
+    const evilSource = `const Evil = () => <div className="leaked">content</div>;`;
+    const fileIO = makeFileIO({ [evilPath]: evilSource });
+    const service = new StyleReadService(WORKSPACE, fileIO, nodeMap);
+
+    const helper = new NodeMapService();
+    const entries = helper.parseAndBuild(evilSource, evilPath);
+    const evilRef = getSyntheticRef(evilPath, entries[0].loc.line, entries[0].loc.column);
+
+    await expect(service.readElementClassName(evilPath, evilRef)).rejects.toThrow();
+  });
+
   it('extracts static parts from dynamic template literal className', async () => {
     const nodeMap = new NodeMapService();
 

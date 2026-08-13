@@ -7,6 +7,7 @@ import type { AstService } from '../services/AstService';
 // the stub into AstService's own tests under a non-isolated run, failing them
 // (HYP-579). Constructor injection keeps the fake local to this file.
 const mockAstService = {
+  setAdditionalWorkspaceRoot: mock(() => {}),
   updateStyles: mock(() => Promise.resolve({ success: true, className: 'text-red' })),
   updateProps: mock(() => Promise.resolve({ success: true })),
   insertElement: mock(() => Promise.resolve({ success: true, newId: 'new-1', index: 0 })),
@@ -33,6 +34,7 @@ const mockAstService = {
 function createFakeAstService(): AstService {
   return {
     ensureInitialized: mock(() => Promise.resolve()),
+    setAdditionalWorkspaceRoot: mockAstService.setAdditionalWorkspaceRoot,
     updateStyles: mockAstService.updateStyles,
     updateProps: mockAstService.updateProps,
     insertElement: mockAstService.insertElement,
@@ -388,6 +390,36 @@ describe('AstBridge', () => {
       const panel = { reveal: mock(() => {}) } as never;
       const canUndo = await bridge.undo(panel);
       expect(canUndo).toBe(false);
+    });
+
+    // HYP-1012 review round 1 P1 (codex): _withUndoTracking previously read the raw untrusted
+    // filePath off disk for its undo pre-snapshot BEFORE AstService got a chance to reject it —
+    // a crafted nodeRef could exfiltrate out-of-workspace file contents via the undo snapshot
+    // even though the WRITE itself was correctly blocked. `_resolvePath` now throws the same
+    // containment error AstService does, and every call site catches it and skips the pre-read.
+    it('never reads the file for undo tracking when filePath escapes the workspace root', async () => {
+      const readFileSpy = mock((_uri: unknown) => Promise.reject(new Error('should never be called')));
+      (vscode.workspace.fs as unknown as { readFile: typeof readFileSpy }).readFile = readFileSpy;
+
+      const wv = createMockWebview();
+      const response = await bridge.handleMessage(
+        {
+          type: 'ast:updateStyles',
+          requestId: 'r22',
+          filePath: '/etc/passwd',
+          elementId: 'e1',
+          styles: {},
+        } as never,
+        wv as never,
+      );
+
+      // AstService itself is a fake here (always resolves success:true) — the point of this
+      // test is solely that the containment-rejected path never triggers a pre-operation read.
+      expect(readFileSpy).not.toHaveBeenCalled();
+      expect(response).toBeUndefined(); // handleMessage posts via webview, doesn't return
+      const panel = { reveal: mock(() => {}) } as never;
+      // Ran untracked (no contentBefore snapshot was ever captured) — nothing to undo.
+      expect(await bridge.undo(panel)).toBe(false);
     });
   });
 

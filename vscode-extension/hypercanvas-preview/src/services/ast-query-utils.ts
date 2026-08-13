@@ -13,6 +13,8 @@ import type { FindElementResult } from '@lib/types';
 
 export interface QueryDeps {
   workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — widens containment past `workspaceRoot` (see workspace-path.ts). */
+  additionalWorkspaceRoot?: string;
   fileParser: {
     readAndParseFile(filePath: string): Promise<{ ast: t.File }>;
     readFileContent(filePath: string): Promise<string>;
@@ -34,7 +36,7 @@ export async function findElementAtPosition(
   column: number,
 ): Promise<{ tagName: string; nodeRef?: NodeRef } | null> {
   try {
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
     const { ast } = await deps.fileParser.readAndParseFile(absolutePath);
     const result = findElementAtPositionInAST(ast, line, column);
     if (!result) return null;
@@ -110,7 +112,7 @@ export async function getElementCode(
   nodeRef?: NodeRef,
 ): Promise<string | null> {
   try {
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
     const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
     const sourceCode = await deps.fileParser.readFileContent(absolutePath);
     const { ast } = await deps.fileParser.readAndParseFile(absolutePath);

@@ -53,6 +53,8 @@ import type { FindElementResult } from '@lib/types';
 
 export interface UpdateStylesDeps {
   workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — widens containment past `workspaceRoot` (see workspace-path.ts). */
+  additionalWorkspaceRoot?: string;
   fileIO: FileIO;
   resolveElementInCorrectFile: (
     absolutePath: string,
@@ -116,7 +118,12 @@ export async function updateStyles(
   domClasses: string | undefined,
   deps: UpdateStylesDeps,
 ): Promise<UpdateStylesResult> {
-  const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+  const absolutePath = resolveWorkspacePath(
+    deps.workspaceRoot,
+    filePath,
+    undefined,
+    deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : [],
+  );
   const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
   const resolved = await deps.resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
@@ -194,6 +201,7 @@ async function writeDirectCandidate(
       projectDefaultCssSystem: deps.projectDefaultCssSystem,
       runtimeThemeContext: { ideThemePreference: 'system', resolvedColorScheme: 'light', source: 'vscode' },
       projectRoot: deps.workspaceRoot,
+      additionalProjectRoots: deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : undefined,
     },
   });
   if (writeResult.success === false) return { success: false, error: writeResult.error };

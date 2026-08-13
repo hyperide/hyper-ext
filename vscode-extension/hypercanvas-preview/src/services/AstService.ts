@@ -86,6 +86,15 @@ function dbg(msg: string) {
 }
 export class AstService {
   private _workspaceRoot: string;
+  /**
+   * HYP-1012 monorepo follow-up — widens the containment allowlist (see
+   * `resolveWorkspacePath`'s `additionalRoots`) to also accept sibling sub-project paths
+   * outside the opened leaf `_workspaceRoot`, mirroring `UndoRedoService.setAdditionalWorkspaceRoot`.
+   * Set by `AstBridge.setAdditionalWorkspaceRoot`, itself driven by
+   * `PanelRouter.getComponentGroups`'s `monorepoRoot` discovery. `undefined` narrows back to
+   * `_workspaceRoot` only.
+   */
+  private _additionalWorkspaceRoot?: string;
   private _fileParser: ReturnType<typeof createFileParser>;
   private _nodeMapService = new NodeMapService();
   private _fileIO: FileIO;
@@ -227,10 +236,31 @@ export class AstService {
     return this._nodeMapService;
   }
 
+  /**
+   * Widen (or, with `null`, narrow back to just `_workspaceRoot`) the containment allowlist —
+   * see the `_additionalWorkspaceRoot` field doc. Threaded into every `resolveWorkspacePath`
+   * call via `_resolvePath` / the `deps.additionalWorkspaceRoot` passed to the standalone
+   * element-ops/mutation-wrapper modules.
+   */
+  setAdditionalWorkspaceRoot(root: string | null): void {
+    this._additionalWorkspaceRoot = root ?? undefined;
+  }
+
+  /** Resolve + validate `filePath` against `_workspaceRoot` (widened by `_additionalWorkspaceRoot`). */
+  private _resolvePath(filePath: string): string {
+    return resolveWorkspacePath(
+      this._workspaceRoot,
+      filePath,
+      undefined,
+      this._additionalWorkspaceRoot ? [this._additionalWorkspaceRoot] : [],
+    );
+  }
+
   /** Build DI context for shared mutation utilities. */
   private _mutationDeps() {
     return {
       workspaceRoot: this._workspaceRoot,
+      additionalWorkspaceRoot: this._additionalWorkspaceRoot,
       fileIO: this._fileIO,
       fileParser: this._fileParser,
       updateNodeMap: (fp: string) => this._updateNodeMap(fp),
@@ -256,6 +286,7 @@ export class AstService {
   private _elementOpsDeps() {
     return {
       workspaceRoot: this._workspaceRoot,
+      additionalWorkspaceRoot: this._additionalWorkspaceRoot,
       fileParser: this._fileParser,
       updateNodeMap: (fp: string) => this._updateNodeMap(fp),
       // Element-ops must follow a nodeRef into the file it actually lives in (a child
@@ -270,6 +301,7 @@ export class AstService {
   private _queryDeps() {
     return {
       workspaceRoot: this._workspaceRoot,
+      additionalWorkspaceRoot: this._additionalWorkspaceRoot,
       fileParser: this._fileParser,
       nodeMapService: this._nodeMapService,
       resolveElement: (ast: t.File, nodeRef: NodeRef, filePath?: string) =>
@@ -283,6 +315,7 @@ export class AstService {
   private _mutationWrapperDeps() {
     return {
       workspaceRoot: this._workspaceRoot,
+      additionalWorkspaceRoot: this._additionalWorkspaceRoot,
       fileIO: this._fileIO,
       fileParser: this._fileParser,
       updateNodeMap: (fp: string) => this._updateNodeMap(fp),
@@ -325,7 +358,7 @@ export class AstService {
    * "иногда работает" race in moveElement, updateStyles, etc.
    */
   async invalidateFile(filePath: string): Promise<void> {
-    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    const absolutePath = this._resolvePath(filePath);
     this._fileParser.invalidate(absolutePath);
     await this._updateNodeMap(absolutePath);
   }
@@ -508,7 +541,7 @@ export class AstService {
   ): Promise<AstOperationResult> {
     await this.ensureInitialized();
     try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const absolutePath = this._resolvePath(filePath);
       const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
       const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
@@ -694,7 +727,7 @@ export class AstService {
   ): Promise<MoveResult> {
     await this.ensureInitialized();
 
-    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    const absolutePath = this._resolvePath(filePath);
 
     dbg(
       `[moveElement] BEGIN filePath=${filePath} absolutePath=${absolutePath} sourceId=${String(sourceId)} targetId=${String(targetId)} position=${position}`,
@@ -889,7 +922,7 @@ export class AstService {
    */
   async swapElements(filePath: string, aId: NodeRef | string, bId: NodeRef | string): Promise<MoveResult> {
     await this.ensureInitialized();
-    const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+    const absolutePath = this._resolvePath(filePath);
     dbg(`[swapElements] BEGIN filePath=${filePath} aId=${String(aId)} bId=${String(bId)}`);
 
     const { ast, resolvedPath } = await this._resolveSwapFile(absolutePath, aId, bId);
@@ -1216,7 +1249,11 @@ export class AstService {
     const m = nodeRef.match(/^(.+):(\d+):(\d+)$/);
     if (!m) return null;
     const fileName = m[1];
-    return resolveWorkspacePath(this._workspaceRoot, fileName);
+    try {
+      return this._resolvePath(fileName);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -1249,7 +1286,7 @@ export class AstService {
     if (!nodeRefFile) {
       const entry = this._nodeMapService.resolveNodeRef(effectiveNodeRef as NodeRef);
       if (entry?.loc?.fileName) {
-        nodeRefFile = resolveWorkspacePath(this._workspaceRoot, entry.loc.fileName);
+        nodeRefFile = this._resolvePath(entry.loc.fileName);
         dbg(
           `[AstService._resolveElementInCorrectFile] nodeMap fallback: entry file=${entry.loc.fileName} → ${nodeRefFile}`,
         );
@@ -1326,7 +1363,7 @@ export class AstService {
   } | null> {
     await this.ensureInitialized();
     try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const absolutePath = this._resolvePath(filePath);
       const resolved = await this._resolveElementInCorrectFile(absolutePath, elementId);
       const loc = resolved?.result?.element?.loc;
       if (!resolved || !loc) return null;
@@ -1358,7 +1395,7 @@ export class AstService {
   ): Promise<MasterComponentResolution> {
     await this.ensureInitialized();
     try {
-      const absolutePath = resolveWorkspacePath(this._workspaceRoot, filePath);
+      const absolutePath = this._resolvePath(filePath);
       const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
       const resolved = await this._resolveElementInCorrectFile(absolutePath, effectiveNodeRef);

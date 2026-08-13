@@ -332,7 +332,15 @@ export function registerCommands(context: vscode.ExtensionContext, workspaceRoot
       const line = position.line + 1;
       const column = position.character + 1;
 
-      const astService = new AstService(getCurrentRoot(), new VSCodeFileIO());
+      // HYP-1012 review round 2 (codex) P1: a fresh `new AstService(getCurrentRoot(), ...)`
+      // here is scoped to the opened LEAF root only — it never receives the widened
+      // `additionalWorkspaceRoot` PanelRouter.getComponentGroups discovers for a monorepo's
+      // sibling sub-projects. Pre-HYP-1012 this coincidentally still worked (no containment
+      // check existed at all); post-fix, Go to Visual on a sibling-package file silently
+      // resolved nothing. Reuse the live, already-widened AstService off `ctx.panelRouter`
+      // when available (falls back to a fresh leaf-rooted instance only if the panel hasn't
+      // been constructed yet, matching the pre-existing behavior for that edge case).
+      const astService = ctx.panelRouter?.astBridge.astService ?? new AstService(getCurrentRoot(), new VSCodeFileIO());
       const result = await astService.findElementAtPosition(filePath, line, column);
 
       if (result?.nodeRef) {

@@ -581,6 +581,70 @@ export function App() {
     expect(content).toContain('padding-left: 16px');
   });
 
+  // HYP-1012 review round 2 (codex) P1: `resolveCssImportPath`
+  // (`@lib/ast/css-module-references.ts`) resolves a `.module.css` import with a plain,
+  // unguarded `path.resolve(dirname(importer), importSource)` — an authorized component
+  // importing `../../secret/Outside.module.css` reached `executeCssFilePlan` with no
+  // containment check anywhere in this shared (VS Code + SaaS) executor.
+  it('rejects a CSS Modules file plan whose cssFilePath escapes the project root', async () => {
+    const evilPath = '/secret/Outside.module.css';
+    const plan = makeCssModulesPlan({ target: { ...makeCssModulesPlan().target, cssFilePath: evilPath } });
+    const fileIO = new InMemoryFileIO({ [evilPath]: '.root {\n  color: red;\n}\n' });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result.success).toBe(false);
+    expect(fileIO.content(evilPath)).toBe('.root {\n  color: red;\n}\n'); // untouched
+  });
+
+  it('rejects a CSS Modules file plan whose cssFilePath ../-traverses out of the project root', async () => {
+    const plan = makeCssModulesPlan({
+      target: { ...makeCssModulesPlan().target, cssFilePath: '../../secret/Outside.module.css' },
+    });
+    const fileIO = new InMemoryFileIO({ '/secret/Outside.module.css': '.root {\n  color: red;\n}\n' });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result.success).toBe(false);
+    expect(fileIO.content('/secret/Outside.module.css')).toBe('.root {\n  color: red;\n}\n'); // untouched
+  });
+
+  it('accepts a sibling CSS Modules cssFilePath once additionalProjectRoots widens the monorepo boundary', async () => {
+    // Mirrors AstService.setAdditionalWorkspaceRoot: a monorepo opened at a sub-package leaf
+    // (/repo/targets/app, passed as projectRoot) legitimately imports a CSS module from a
+    // sibling sub-project (/repo/targets/shared-lib) once /repo is authorized as the wider root.
+    const siblingCssPath = '/repo/targets/shared-lib/src/Button.module.css';
+    const plan = makeCssModulesPlan({
+      projectRoot: '/repo/targets/app',
+      target: { ...makeCssModulesPlan().target, cssFilePath: siblingCssPath },
+    });
+    const fileIO = new InMemoryFileIO({ [siblingCssPath]: '.root {\n  color: red;\n}\n' });
+    const executor = new StyleWriteExecutor({ fileIO, additionalProjectRoots: ['/repo'] });
+
+    const result = await executor.execute(plan);
+
+    expect(result).toEqual({ success: true, plan, mutatedFiles: [siblingCssPath] });
+    expect(fileIO.content(siblingCssPath)).toContain('padding-left: 16px');
+  });
+
+  // HYP-1012 review round 3 (codex) P2: a bare `rel.startsWith('..')` containment check
+  // (matching this file's own pre-existing `projectResolvesTailwindMerge` clamp) falsely
+  // rejects a legitimately in-root directory that merely starts with the two characters
+  // `..` — the check must be segment-boundary-aware (`rel === '..'` or `rel.startsWith('../')`).
+  it('accepts an in-root CSS Modules path in a directory literally named "..generated"', async () => {
+    const cssPath = '/project/..generated/App.module.css';
+    const plan = makeCssModulesPlan({ target: { ...makeCssModulesPlan().target, cssFilePath: cssPath } });
+    const fileIO = new InMemoryFileIO({ [cssPath]: '.root {\n  color: red;\n}\n' });
+    const executor = new StyleWriteExecutor({ fileIO });
+
+    const result = await executor.execute(plan);
+
+    expect(result).toEqual({ success: true, plan, mutatedFiles: [cssPath] });
+    expect(fileIO.content(cssPath)).toContain('padding-left: 16px');
+  });
+
   it('executes plain CSS existing-owner plans inside matching at-rules', async () => {
     const cssPath = '/project/src/App.css';
     const original = `@media (min-width: 768px) {

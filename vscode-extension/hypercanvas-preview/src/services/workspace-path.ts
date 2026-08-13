@@ -1,27 +1,92 @@
 /**
  * @file Workspace path resolution helper for VS Code extension services
  *
- * Accessed via: VS Code extension AST and style-read services resolving project files
+ * Accessed via: VS Code extension AST and style-read services resolving project files.
+ *   Every AstService mutation (updateStyles, moveElement, deleteElements, etc.) funnels
+ *   `filePath`/nodeRef fileName through this function before touching disk — it is the
+ *   AST write boundary's single containment choke point (HYP-1012).
+ * Assumptions: `workspaceRoot` is the VS Code workspace folder root, which for a monorepo
+ *   is expected to be the REPO root, not a sub-package folder (see
+ *   AstServiceMonorepoCollision.test.ts and shared/element-tracing/path-normalization.ts's
+ *   `/@fs/`-stripping — a legitimate cross-package/Vite-`/@fs/`-served file still resolves
+ *   as long as it lands inside that repo root). Sub-project-RELATIVE paths were already
+ *   only resolvable when opened at the repo root (monorepo-path-translate.ts's prefix
+ *   translation assumes it). Cross-package ABSOLUTE `/@fs/`-stripped paths are a real,
+ *   intentional narrowing by this fix: pre-fix, any absolute path was returned as-is with
+ *   no root check at all, so it happened to keep working even when VS Code was opened at a
+ *   sub-package; post-fix it's rejected unless it's inside whatever `workspaceRoot` this
+ *   AstService instance was actually constructed with. That's the correct behavior for the
+ *   write boundary — "authorized workspace root" means the root this instance was scoped
+ *   to, not the whole disk — so the supported/documented monorepo workflow (open at the
+ *   repo root) is what keeps cross-package edits working; a sub-package-opened workspace
+ *   trades that convenience for containment.
+ * Known limitation: containment is a LEXICAL check (resolves `.`/`..` textually via
+ *   `path.normalize`), not a symlink-safe one — it does not call `fs.realpath`. A symlink
+ *   inside the workspace pointing outside it can still be followed by the actual file I/O
+ *   layer. Adding symlink resolution here would require every caller's `workspaceRoot` to
+ *   be an on-disk path (this function is also exercised against `InMemoryFileIO` fixtures
+ *   with synthetic paths that don't exist on disk), so it's deferred as a follow-up
+ *   (HYP-1060) rather than folded into this fix. HYP-1060 also covers this function's
+ *   case-SENSITIVE containment comparison potentially false-rejecting a legitimate path on
+ *   a case-insensitive filesystem (macOS/Windows default).
+ * Known pre-existing limitation, unchanged by this fix: absolute-path detection
+ *   (`filePath.startsWith('/')` below) is POSIX-only, same as before this fix. A Windows
+ *   drive-letter path (`C:\...`) isn't recognized as absolute, so it gets joined onto
+ *   `workspaceRoot` instead of used as-is — pre-fix this silently produced a broken
+ *   (non-existent) path that failed at the `fs` read; post-fix it's rejected earlier, by
+ *   the containment check, with a clearer error. Either way the operation already didn't
+ *   succeed — not a new regression, just an earlier and clearer failure point.
+ * Return value is ALWAYS forward-slash separated, regardless of host OS. On Windows,
+ *   `path.normalize` rewrites embedded `/` to `\`, which would otherwise turn a relative
+ *   nodeRef fileName (e.g. "src/screens/RecordScreen.tsx", always forward-slash — it
+ *   originates from the browser/webview side) into a backslash-joined absolute path.
+ *   AstService._resolveElement hardcodes forward-slash suffix checks
+ *   (`absolutePath.endsWith(\`/${entryFile}\`)`, AstService.ts:375-376/411/423) when
+ *   matching this function's return value against nodeMap `entryFile`/`locFile` values —
+ *   a backslash-joined path silently stops matching every one of those checks, regressing
+ *   ordinary writes to "Element not found" on Windows even though containment itself is
+ *   correct (Codex P1 follow-up on the HYP-1012 fix, PR #675). Note this function's own
+ *   forward-slash return value is the ONLY thing that needed fixing for this: the
+ *   `entryFile`/`locFile` side of those comparisons already goes through
+ *   NodeMapService.toStorageKey -> `toProjectRelative`
+ *   (shared/element-tracing/path-normalization.ts), which independently forward-slash-
+ *   normalizes both its `fileName` and `projectRoot` operands regardless of this fix — so
+ *   it was never part of the break and needs no change.
+ * Known limitation, deferred to HYP-1060 alongside the symlink/case-sensitivity items
+ *   above: a Windows extended-length root (`\\?\C:\workspace`) is left untouched by the
+ *   forward-slash conversion (converting its `\\?\` prefix to `//?/` is rejected by
+ *   Win32), so containment/resolution still work but the backslash-suffix-match break
+ *   this fix targets would reappear for that one root shape. Not reachable through VS
+ *   Code's ordinary `workspaceFolders[0].uri.fsPath`, which doesn't surface extended-length
+ *   form for a normally-opened project.
  * Architecture: https://hyperide.github.io/reports/style-write-unification
  */
 
 import { realpath as fsRealpath } from 'node:fs/promises';
 import { normalize, resolve, sep } from 'node:path';
 
-/**
- * @deprecated Naive, un-hardened path join — no containment check, so an absolute or
- * `../`-traversing `filePath` escapes `workspaceRoot` unchecked. This is the exact HYP-1012
- * bug class; PR #675 (not yet merged) owns hardening THIS function (with the monorepo
- * `additionalRoots` allowlist plumbing needed to avoid regressing AstService/StyleReadService's
- * supported sibling-sub-project workflow). Do not add new callers — use
- * `resolveContainedPath` below for any new raw-filesystem read.
- */
-export function resolveWorkspacePath(workspaceRoot: string, filePath: string): string {
-  if (filePath.startsWith('/')) {
-    return filePath;
-  }
-  return `${workspaceRoot}/${filePath}`;
-}
+/** The subset of `node:path` this module depends on — narrow enough that a test can
+ *  inject `path.win32`'s `normalize`/`sep` to deterministically reproduce Windows path
+ *  behavior from any host OS, without mocking the global `node:path` module (bun's
+ *  `mock.module` is process-global, so mocking `node:path` here would leak into every
+ *  other test file sharing the process). Only `resolveWorkspacePath` below uses this —
+ *  `assertPathLexicallyContained`/`resolveContainedPath` use the real `node:path`
+ *  directly, since PanelRouter's callers don't share the nodeMap-suffix-matching
+ *  constraint that requires Windows-forward-slash normalization.
+ *
+ *  Written as a plain structural interface, NOT `Pick<PlatformPath, 'normalize' | 'sep'>`
+ *  (`import type { PlatformPath } from 'node:path'`) — `shared/ast-service-insert.test.ts`
+ *  dynamically imports `AstService.ts`, which imports this module, so this file is
+ *  reachable from the ROOT tsconfig's typecheck (`bun run typecheck` / tsgo), not only the
+ *  extension's own (`vscode-extension/hypercanvas-preview/tsconfig.json`). The two resolve
+ *  a DIFFERENT `@types/node` (root: `^25.0.3`, extension: `^18.0.0`), and `PlatformPath`'s
+ *  export shape isn't compatible across both — the extension's own `npx tsc` passes, but the
+ *  root tsgo run fails with `TS2305: Module "node:path" has no exported member
+ *  'PlatformPath'`, which blocks `ci/local-checks.sh`'s typecheck step (the CI billing-block
+ *  fallback gate). A hand-written structural type has no such cross-version dependency. */
+type PathOps = { normalize: (path: string) => string; sep: string };
+
+const nativePathOps: PathOps = { normalize, sep };
 
 /**
  * Strip a single trailing path separator (normalize() collapses runs of separators to
@@ -29,8 +94,86 @@ export function resolveWorkspacePath(workspaceRoot: string, filePath: string): s
  * `sep` is wrong on Windows, where `sep` is a literal backslash that escapes the
  * following regex character instead of matching itself.
  */
-function stripTrailingSep(p: string): string {
-  return p.length > 1 && p.endsWith(sep) ? p.slice(0, -1) : p;
+function stripTrailingSep(p: string, pathSep: string): string {
+  return p.length > 1 && p.endsWith(pathSep) ? p.slice(0, -1) : p;
+}
+
+/**
+ * Convert a path's separators to forward slashes. No-op on POSIX (`pathSep === '/'`).
+ * Plain string split/join on purpose, same reasoning as `stripTrailingSep` — a RegExp
+ * built from `pathSep` would be wrong on Windows (`\` escapes instead of matching).
+ *
+ * Leaves a Windows extended-length root (`\\?\C:\...`) untouched: that prefix is
+ * verbatim-only per Win32 — converting it to `//?/` is rejected by the OS — so
+ * converting the rest of the path would produce something worse than the backslash
+ * form this function exists to fix. Narrow, deliberately unhandled edge; see the
+ * file header's HYP-1060 note.
+ */
+function toForwardSlashes(p: string, pathSep: string): string {
+  if (pathSep === '/' || p.startsWith('\\\\?\\')) return p;
+  return p.split(pathSep).join('/');
+}
+
+/**
+ * Resolve `filePath` (relative to `workspaceRoot`, or already absolute) to an absolute
+ * path, normalizing `.`/`..` segments, and reject (throw) any result that lexically
+ * escapes `workspaceRoot` — both an absolute path outside the root and a `../` traversal
+ * that walks out of it. Segment-boundary-aware: a sibling directory that merely shares a
+ * name prefix (`/workspace-evil` vs `/workspace`) is never treated as contained. This is
+ * the AST write boundary's containment choke point (HYP-1012); every `AstService`
+ * mutation funnels its target path through this function before touching disk.
+ *
+ * NOT SYMLINK-SAFE on its own — same caveat `assertPathLexicallyContained` below
+ * documents (both converged on the same lexical-containment algorithm independently:
+ * this one for the write boundary, HYP-1012; that one for PanelRouter's raw read
+ * handlers, HYP-1131). Use `resolveContainedPath` for a symlink-safe read.
+ *
+ * `pathOps` defaults to the real `node:path`; it exists only so tests can pass
+ * `path.win32` to deterministically exercise Windows separator behavior (see `PathOps`).
+ *
+ * `additionalRoots` (HYP-1012 monorepo follow-up) widens the containment ALLOWLIST. It exists
+ * because a monorepo opened at a sub-package leaf has a documented, supported workflow
+ * (PanelRouter.getComponentGroups / AstBridge.setAdditionalWorkspaceRoot) where the Explorer's
+ * ancestor-fallback scan surfaces SIBLING sub-projects living outside the opened leaf, reached
+ * via absolute (Vite `/@fs/`-stripped) paths. Pre-HYP-1012 those absolute sibling paths were
+ * returned as-is with no containment check at all, so they resolved; the leaf-only containment
+ * check this file introduced regressed that supported flow (review round 1, HYP-1012
+ * follow-up). The candidate — absolute OR a relative path once JOINED against `workspaceRoot`
+ * (relative filePaths are always joined against `workspaceRoot` specifically, never directly
+ * against an additional root) — is accepted when it lands inside `workspaceRoot` OR any
+ * `additionalRoots` entry. NOTE (review round 2, P2): a relative `../`-traversal CAN still
+ * land inside an `additionalRoots` entry once joined+normalized (e.g. `../../shared/x.tsx`
+ * from a leaf under a widened monorepo root) — this is intentional, not a gap: an
+ * `additionalRoots` entry is already a FULLY TRUSTED boundary (the caller only ever widens to
+ * the monorepo root that `setAdditionalWorkspaceRoot` was invoked with), so a relative path
+ * that stays inside it is exactly as authorized as one that stays inside `workspaceRoot`
+ * itself. It is NOT an unbounded escape hatch: both the join AND the final containment check
+ * still apply, so a traversal that walks past every allowed root is still rejected.
+ */
+export function resolveWorkspacePath(
+  workspaceRoot: string,
+  filePath: string,
+  pathOps: PathOps = nativePathOps,
+  additionalRoots: readonly string[] = [],
+): string {
+  const { normalize: normalizePath, sep: pathSep } = pathOps;
+  const canonicalizedRoot = stripTrailingSep(normalizePath(workspaceRoot), pathSep);
+  const candidate = filePath.startsWith('/') ? filePath : `${canonicalizedRoot}${pathSep}${filePath}`;
+  const canonicalizedCandidate = stripTrailingSep(normalizePath(candidate), pathSep);
+
+  const allRoots = [canonicalizedRoot, ...additionalRoots.map((r) => stripTrailingSep(normalizePath(r), pathSep))];
+  const isContained = allRoots.some((root) => {
+    // When a root IS the filesystem root (normalizes to just `pathSep`), the "contained"
+    // prefix is `pathSep` itself, not `pathSep+pathSep` — `${root}${pathSep}` would double up
+    // and reject every one of the root's own children.
+    const containedPrefix = root === pathSep ? pathSep : `${root}${pathSep}`;
+    return canonicalizedCandidate === root || canonicalizedCandidate.startsWith(containedPrefix);
+  });
+
+  if (!isContained) {
+    throw new Error(`Path resolves outside workspace root: ${filePath}`);
+  }
+  return toForwardSlashes(canonicalizedCandidate, pathSep);
 }
 
 /**
@@ -65,23 +208,22 @@ function stripTrailingSep(p: string): string {
  * a containment bypass. Any fix must be conditioned on the ACTUAL filesystem's case
  * semantics (e.g. via a runtime probe), not a blanket case-insensitive comparison.
  *
- * This is the same containment algorithm reviewed and hardened by HYP-1012 (see
- * `resolveWorkspacePath`'s sibling fix in PR #675, not yet merged at the time this was
- * written) — reused here as a standalone assertion for PanelRouter's raw filesystem
- * message handlers (`file:read`, `hypercanvas:resolveServerSourceMap`),
- * which resolve paths directly with `path.resolve`/`path.join` rather than through
- * `resolveWorkspacePath`'s relative-path-joining convention above. Deliberately NOT
- * folded into `resolveWorkspacePath` itself: that function is still the naive,
- * un-hardened implementation on `main` today (PR #675 owns hardening it, including the
- * monorepo `additionalRoots` allowlist plumbing needed to avoid regressing
- * AstService/StyleReadService's supported sibling-sub-project workflow) — changing its
- * behavior here would race that in-flight PR and risk breaking monorepo callers that
- * currently work only because containment is absent. Once PR #675 lands, this and
- * `resolveWorkspacePath` should converge onto one shared implementation.
+ * This is the same containment algorithm HYP-1012 hardened for `resolveWorkspacePath`
+ * above (the AST write boundary) — reused here as a standalone assertion for
+ * PanelRouter's raw filesystem message handlers (`file:read`,
+ * `hypercanvas:resolveServerSourceMap`), which resolve paths directly with
+ * `path.resolve`/`path.join` rather than through `resolveWorkspacePath`'s
+ * relative-path-joining convention above. Deliberately NOT folded into
+ * `resolveWorkspacePath` itself — that function additionally forward-slash-normalizes
+ * its return value for AstService's nodeMap suffix matching (see its own doc comment),
+ * a concern this read-only assertion doesn't share. Uses the real `node:path` `sep`
+ * directly (not the `PathOps`/Windows-forward-slash machinery `resolveWorkspacePath`
+ * needs) since PanelRouter's callers don't have the same nodeMap-suffix-matching
+ * constraint driving that machinery.
  */
 export function assertPathLexicallyContained(workspaceRoot: string, resolvedPath: string): string {
-  const canonicalizedRoot = stripTrailingSep(normalize(workspaceRoot));
-  const canonicalizedCandidate = stripTrailingSep(normalize(resolvedPath));
+  const canonicalizedRoot = stripTrailingSep(normalize(workspaceRoot), sep);
+  const canonicalizedCandidate = stripTrailingSep(normalize(resolvedPath), sep);
 
   // When the root IS the filesystem root (normalizes to just `sep`), the "contained"
   // prefix is `sep` itself, not `sep+sep` — `${root}${sep}` would double up and reject

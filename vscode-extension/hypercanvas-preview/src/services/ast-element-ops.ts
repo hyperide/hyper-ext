@@ -14,6 +14,8 @@ import type { FindElementResult } from '@lib/types';
 
 export interface ElementOpsDeps {
   workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — widens containment past `workspaceRoot` (see workspace-path.ts). */
+  additionalWorkspaceRoot?: string;
   fileParser: {
     readAndParseFile(filePath: string): Promise<{ ast: t.File }>;
     writeAST(ast: t.File, filePath: string): Promise<void>;
@@ -86,7 +88,7 @@ export async function insertElement(
   parentNodeRef?: NodeRef,
 ): Promise<InsertElementResult> {
   try {
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
 
     // Production wires the parent's source-location nodeRef through `parentId` (the dedicated
     // `parentNodeRef` slot is never populated by the AstBridge handler). So treat `parentId`
@@ -163,7 +165,7 @@ export async function duplicateElement(
 ): Promise<DuplicateElementResult> {
   try {
     const effectiveNodeRef = (nodeRef ?? elementId) as NodeRef;
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
 
     // duplicateElementInAST mutates the AST that result.path belongs to, so resolving via
     // resolveElementInCorrectFile makes a cross-file duplicate land in the child AST/path.
@@ -198,7 +200,7 @@ export async function pasteElement(
   targetNodeRef?: NodeRef,
 ): Promise<InsertElementResult> {
   try {
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
 
     const { elements: newElements } = parseTSXElements(tsxCode);
 
@@ -290,7 +292,7 @@ export async function wrapElement(
   nodeRef?: NodeRef,
 ): Promise<WrapElementResult> {
   try {
-    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+    const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath, undefined, deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : []);
     const effectiveNodeRef = (nodeRef ?? elementId) as NodeRef;
 
     // wrapElementInAST replaces result.path in place, so resolving via

@@ -65,6 +65,13 @@ const DEFAULT_RUNTIME_THEME_CONTEXT: RuntimeThemeContext = {
 
 export class StyleReadService {
   private _workspaceRoot: string;
+  /**
+   * HYP-1012 monorepo follow-up — widens the containment allowlist (see
+   * `resolveWorkspacePath`'s `additionalRoots`) to also accept sibling sub-project paths
+   * outside the opened leaf `_workspaceRoot`, mirroring `AstService.setAdditionalWorkspaceRoot`.
+   * Set by `PanelRouter.getComponentGroups`'s `monorepoRoot` discovery.
+   */
+  private _additionalWorkspaceRoot?: string;
   private _fileIO: FileIO;
   private _nodeMapService: NodeMapService;
   private _styleReadManager: StyleReadManager;
@@ -84,6 +91,21 @@ export class StyleReadService {
     this._styleReadManager = styleReadManager;
   }
 
+  /** See `_additionalWorkspaceRoot`. Set `null` to narrow back to just `_workspaceRoot`. */
+  setAdditionalWorkspaceRoot(root: string | null): void {
+    this._additionalWorkspaceRoot = root ?? undefined;
+  }
+
+  /** Resolve + validate `filePath` against `_workspaceRoot` (widened by `_additionalWorkspaceRoot`). */
+  private _resolvePath(filePath: string): string {
+    return resolveWorkspacePath(
+      this._workspaceRoot,
+      filePath,
+      undefined,
+      this._additionalWorkspaceRoot ? [this._additionalWorkspaceRoot] : [],
+    );
+  }
+
   /**
    * Read className and metadata from an element in the AST.
    * Uses nodeRef (preferred) to resolve element by position.
@@ -95,7 +117,7 @@ export class StyleReadService {
     domTextContent?: string,
     activeLocale?: string,
   ): Promise<ElementStyleReadResult> {
-    const absolutePath = resolveWorkspacePath(this._workspaceRoot, componentPath);
+    const absolutePath = this._resolvePath(componentPath);
     const empty: ElementStyleReadResult = {
       className: '',
       childrenType: undefined,
@@ -121,7 +143,7 @@ export class StyleReadService {
         if (m) {
           directLine = Number.parseInt(m[2], 10);
           directColumn = Number.parseInt(m[3], 10);
-          directPath = resolveWorkspacePath(this._workspaceRoot, m[1]);
+          directPath = this._resolvePath(m[1]);
           entry = this._nodeMapService.resolveSourceLocation({
             fileName: m[1],
             line: directLine,

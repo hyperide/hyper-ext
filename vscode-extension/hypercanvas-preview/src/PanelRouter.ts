@@ -204,34 +204,38 @@ export class PanelRouter {
   }
 
   /**
-   * Scan for component groups and widen the undo/redo workspace boundary to
+   * Scan for component groups and widen the undo/redo + read/write workspace boundary to
    * match. Must be the single call site for scanComponentGroups(): the result's
    * `monorepoRoot` (set only when the ancestor-fallback surfaced sibling
-   * sub-projects outside the opened folder) has to reach AstBridge/UndoRedoService
-   * every time the scan runs, or a stale/missing boundary silently drops undo
-   * snapshots for sibling-component edits (HYP-909 follow-up).
+   * sub-projects outside the opened folder) has to reach AstBridge/UndoRedoService/
+   * AstService/StyleReadService every time the scan runs, or a stale/missing boundary
+   * silently drops undo snapshots (HYP-909 follow-up) — or, since HYP-1012, silently
+   * REJECTS the sibling read/write itself — for sibling-component edits.
    *
    * The widened boundary covers the WHOLE monorepo root, not just the specific
    * sibling sub-project paths the scanner happened to surface. That's deliberate,
-   * not a missed narrowing: AstService/resolveWorkspacePath (the actual file
-   * read/write path) has no boundary check of its own beyond string
-   * concatenation — it already reaches anywhere under the opened folder (and,
-   * via sibling paths, the monorepo root) regardless of what the Explorer
-   * currently lists. Narrowing UndoRedoService to just the listed sub-projects
-   * would make undo-tracking MORE restrictive than the writes it's tracking,
-   * silently dropping snapshots again the moment a write touches a monorepo
-   * file the scanner hasn't (yet) enumerated as a sub-project.
+   * not a missed narrowing: AstService/StyleReadService/resolveWorkspacePath (the
+   * actual file read/write path) validate containment against `_workspaceRoot` widened
+   * by exactly this `additionalWorkspaceRoot` — nothing else — so it must cover every
+   * sibling path a write could ever target, not just the ones the Explorer currently
+   * lists. Narrowing it to just the listed sub-projects would make containment MORE
+   * restrictive than the reads/writes it's supposed to allow, silently rejecting them
+   * again the moment an edit touches a monorepo file the scanner hasn't (yet)
+   * enumerated as a sub-project (review round 1, HYP-1012 follow-up: the leaf-only
+   * containment check this widening now feeds previously rejected this exact
+   * supported opened-leaf-monorepo workflow).
    *
    * HYP-1131 note: `file:read`/`hypercanvas:resolveServerSourceMap` deliberately do NOT
-   * consume this widening (unlike AstBridge/UndoRedoService here). An earlier version of
-   * this fix threaded `monorepoRoot` into PanelRouter's own containment too, but every
-   * attempt at bounding that widening safely (ancestor-of-workspaceRoot checks, ABA-race
-   * guards, keeping it in sync with AstBridge across workspace switches) kept surfacing
-   * new gaps in review — `monorepoRoot` can legitimately be `/` or `$HOME`-adjacent, which
-   * an ancestor check cannot distinguish from a genuine monorepo root, and the widening
-   * would need its own lifecycle-correct home (ideally read through AstBridge rather than
-   * duplicated in a second field) to be sound. That's real design work belonging to a
-   * dedicated follow-up, not bolted onto a security-hotfix diff. Consequence: a
+   * consume this widening (unlike AstBridge/UndoRedoService/StyleReadService here). An
+   * earlier version of this fix threaded `monorepoRoot` into PanelRouter's own
+   * containment too, but every attempt at bounding that widening safely
+   * (ancestor-of-workspaceRoot checks, ABA-race guards, keeping it in sync with
+   * AstBridge across workspace switches) kept surfacing new gaps in review —
+   * `monorepoRoot` can legitimately be `/` or `$HOME`-adjacent, which an ancestor check
+   * cannot distinguish from a genuine monorepo root, and the widening would need its
+   * own lifecycle-correct home (ideally read through AstBridge rather than duplicated
+   * in a second field) to be sound. That's real design work belonging to a dedicated
+   * follow-up, not bolted onto a security-hotfix diff. Consequence: a
    * `hypercanvas:resolveServerSourceMap` request for a sibling sub-project outside the
    * opened leaf (the HYP-1104 cross-package dev-server scenario) resolves to `result:
    * null` instead of the source location — a functional regression from the pre-fix
@@ -240,10 +244,66 @@ export class PanelRouter {
    * https://linear.app/glide-vc/issue/HYP-1136.
    */
   async getComponentGroups(): Promise<ScanResult> {
-    this._ensureCurrentWorkspace();
-    const result = await this._componentService.scanComponentGroups();
-    this._astBridge.setAdditionalWorkspaceRoot(result.data.monorepoRoot ?? null);
-    return result;
+    // HYP-1012 review rounds 2+3 (codex) P1: `scanComponentGroups()` is awaited below, and a
+    // workspace-folder switch can land WHILE it's in flight — `_ensureCurrentWorkspace()`
+    // (called by any other message handled during that await, or by the retry loop below)
+    // rebuilds `_astBridge`/`_styleReadService`/`_componentService` for the NEW workspace.
+    // Two distinct hazards this loop closes:
+    //  1. Applying the OLD workspace's `monorepoRoot` to widen the NEW (unrelated)
+    //     workspace's containment allowlist to include a directory tree from a completely
+    //     different project.
+    //  2. Returning/publishing the OLD workspace's stale scan data to a caller that is
+    //     acting on behalf of the NEW (current) workspace (routeMessage's
+    //     'component:listGroups' posts whatever this returns straight to the webview).
+    // Bounded retry (not an infinite loop): re-scan for whichever workspace is current after
+    // a detected switch, up to a small cap — a workspace flipping THIS many times inside one
+    // call is pathological, not a real user flow; give up and return the last scan rather than
+    // spin forever.
+    const MAX_ATTEMPTS = 3;
+    let result: ScanResult | undefined;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      this._ensureCurrentWorkspace();
+      const scanForRoot = this._workspaceRoot;
+      const scanForAstBridge = this._astBridge;
+      const scanForStyleReadService = this._styleReadService;
+      result = await this._componentService.scanComponentGroups();
+      // Re-check for a switch that landed WHILE the scan above was in flight — this call is
+      // what actually picks up a `vscode.workspace.workspaceFolders` change into
+      // `this._workspaceRoot` (it isn't observed automatically); without it, `scanForRoot`
+      // would still equal the (unread) old `this._workspaceRoot` and the race would go undetected.
+      this._ensureCurrentWorkspace();
+      // Compare captured SERVICE IDENTITY, not just the root string: an A->B->A switch
+      // sequence landing entirely within one scan's await window rebuilds
+      // `_astBridge`/`_styleReadService` TWICE (once for B, once back to A), so
+      // `this._workspaceRoot === scanForRoot` alone is satisfied by the second rebuild's
+      // string equality even though `scanForAstBridge`/`scanForStyleReadService` are the
+      // FIRST (now-detached) A instances — applying the result to them would leave the
+      // CURRENT A services without the monorepo widening (review round 4 follow-up).
+      if (
+        this._workspaceRoot === scanForRoot &&
+        this._astBridge === scanForAstBridge &&
+        this._styleReadService === scanForStyleReadService
+      ) {
+        const monorepoRoot = result.data.monorepoRoot ?? null;
+        scanForAstBridge.setAdditionalWorkspaceRoot(monorepoRoot);
+        scanForStyleReadService.setAdditionalWorkspaceRoot(monorepoRoot);
+        return result;
+      }
+      // Workspace changed mid-scan (root string OR service identity) — loop to re-scan for
+      // whatever is current now, instead of returning/publishing this now-stale result.
+    }
+    // Exhausted retries under a pathologically unstable workspace-switch sequence — return the
+    // last scan rather than throw; `result` is always assigned (the loop runs >=1 iteration).
+    // Deliberately does NOT best-effort-apply `result.data.monorepoRoot` to the current
+    // services here: `result` came from an attempt whose identity check FAILED, so it may
+    // have been computed against a DIFFERENT (mid-switch) workspace — applying its
+    // `monorepoRoot` to the settled current services would risk widening containment to a
+    // foreign workspace's subtree (review round 4 follow-up: caught in review before landing,
+    // see PR discussion — a root-string-only re-check here is not a safe substitute for the
+    // loop's three-way identity guard). Current services are simply left with whatever
+    // widening their own last successful scan set (possibly none); a pathologically unstable
+    // rapid-switch sequence degrading to "no widening this round" is the safe direction.
+    return result as ScanResult;
   }
 
   /** Flush deferred .hyperide writes to disk. Returns true if anything was written. */

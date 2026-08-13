@@ -18,6 +18,8 @@ import type { FindElementResult } from '@lib/types';
 
 export interface MutationWrapperDeps {
   workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — widens containment past `workspaceRoot` (see workspace-path.ts). */
+  additionalWorkspaceRoot?: string;
   fileIO: FileIO;
   fileParser: {
     readAndParseFile(filePath: string): Promise<{ ast: t.File; absolutePath: string }>;
@@ -59,6 +61,7 @@ export async function updateStylesWrapper(
   try {
     const result = await updateStyles(filePath, elementId, styles, state, nodeRef, selectedSourceTabId, domClasses, {
       workspaceRoot: deps.workspaceRoot,
+      additionalWorkspaceRoot: deps.additionalWorkspaceRoot,
       fileIO: deps.fileIO,
       resolveElementInCorrectFile: (absolutePath, nr) => deps.resolveElementInCorrectFile(absolutePath, nr),
       updateNodeMap: (fp) => deps.updateNodeMap(fp),
@@ -86,6 +89,7 @@ export async function updatePropsWrapper(
     const result = await mutateElement(
       {
         workspaceRoot: deps.workspaceRoot,
+        additionalWorkspaceRoot: deps.additionalWorkspaceRoot,
         fileIO: deps.fileIO,
         fileParser: deps.fileParser,
         updateNodeMap: deps.updateNodeMap,
@@ -118,6 +122,7 @@ export async function updateTextWrapper(
     const result = await mutateElement(
       {
         workspaceRoot: deps.workspaceRoot,
+        additionalWorkspaceRoot: deps.additionalWorkspaceRoot,
         fileIO: deps.fileIO,
         fileParser: deps.fileParser,
         updateNodeMap: deps.updateNodeMap,
@@ -150,12 +155,18 @@ export async function deleteElementsWrapper(
   elementIds: string[],
 ): Promise<AstOperationResult> {
   try {
-    return await deleteElements(filePath, elementIds, deps.workspaceRoot, {
-      fileIO: deps.fileIO,
-      fileParser: deps.fileParser,
-      updateNodeMap: (fp) => deps.updateNodeMap(fp),
-      resolveElementInCorrectFile: (ap, nr) => deps.resolveElementInCorrectFile(ap, nr),
-    });
+    return await deleteElements(
+      filePath,
+      elementIds,
+      deps.workspaceRoot,
+      {
+        fileIO: deps.fileIO,
+        fileParser: deps.fileParser,
+        updateNodeMap: (fp) => deps.updateNodeMap(fp),
+        resolveElementInCorrectFile: (ap, nr) => deps.resolveElementInCorrectFile(ap, nr),
+      },
+      deps.additionalWorkspaceRoot,
+    );
   } catch (error) {
     console.error('[deleteElementsWrapper] Error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

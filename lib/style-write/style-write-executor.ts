@@ -77,6 +77,16 @@ export interface StyleWriteExecutorOptions {
    * TailwindPlan only carries the generated class, not the raw value).
    */
   requestedStyles?: Record<string, string>;
+  /**
+   * HYP-1012 monorepo follow-up (review round 2) — widens `resolveFilePath`'s containment
+   * allowlist past `projectRoot` alone, mirroring `AstService.setAdditionalWorkspaceRoot` /
+   * `resolveWorkspacePath`'s `additionalRoots`. Needed for a monorepo opened at a
+   * sub-package LEAF: a CSS Modules import can legitimately point at a SIBLING
+   * sub-project outside that leaf (the same supported workflow the extension's own
+   * AstService widening restores), and `projectRoot` here is always the leaf, not the
+   * wider monorepo root.
+   */
+  additionalProjectRoots?: string[];
 }
 
 export interface ExecuteStyleWriteRequestInput {
@@ -106,6 +116,8 @@ export interface ExecuteStyleWriteRequestInput {
    * as the floor when the element owns no concrete system; edit-in-place still wins. No silent inline.
    */
   projectDefaultCssSystem?: CssSystemId;
+  /** See `StyleWriteExecutorOptions.additionalProjectRoots`. */
+  additionalProjectRoots?: string[];
 }
 
 interface ElementRefPosition {
@@ -166,6 +178,7 @@ export class StyleWriteExecutor {
   private readonly fileParser: ReturnType<typeof createFileParser>;
   private readonly fileIO: FileIO;
   private readonly projectRoot?: string;
+  private readonly additionalProjectRoots: string[];
   private readonly domClasses?: string;
   private readonly probeDriving?: ProbeDrivingCandidate[];
   private readonly requestedStyles?: Record<string, string>;
@@ -174,6 +187,7 @@ export class StyleWriteExecutor {
     this.fileIO = options.fileIO ?? new NodeFileIO();
     this.fileParser = createFileParser(this.fileIO);
     this.projectRoot = options.projectRoot;
+    this.additionalProjectRoots = options.additionalProjectRoots ?? [];
     this.domClasses = options.domClasses;
     this.probeDriving = options.probeDriving;
     this.requestedStyles = options.requestedStyles;
@@ -407,7 +421,7 @@ export class StyleWriteExecutor {
 
   private async executeCssFilePlan(plan: CssFilePlan): Promise<StyleWriteResult> {
     const target = cssRuleTarget(plan);
-    const cssFilePath = this.resolveFilePath(target.cssFilePath, plan.projectRoot);
+    const cssFilePath = this.resolveContainedFilePath(target.cssFilePath, plan.projectRoot);
     await this.fileIO.access(cssFilePath);
 
     const source = await this.fileIO.readFile(cssFilePath);
@@ -465,11 +479,63 @@ export class StyleWriteExecutor {
     return { success: false, plan, error };
   }
 
+  /**
+   * Resolve `filePath` (relative to `planProjectRoot`, or already absolute) to an
+   * absolute path. No containment check: `plan.target.filePath` here is always the JSX
+   * source file the caller (AstService, via the extension's own `resolveWorkspacePath`
+   * containment) already resolved and validated upstream — this is a second, redundant
+   * resolution of the SAME already-authorized path, not a new untrusted input. (Also
+   * exercised directly by tests with deliberately out-of-root fixture paths for the
+   * unrelated `projectResolvesTailwindMerge` dep-walk clamp — HYP-564 — which must keep
+   * working unclamped here.) For the one path that IS genuinely untrusted at this layer
+   * — the CSS Modules file resolved independently by `executeCssFilePlan` — use
+   * `resolveContainedFilePath` instead; see its doc.
+   */
   private resolveFilePath(filePath: string, planProjectRoot: string): string {
     if (path.isAbsolute(filePath)) return filePath;
 
     const root = planProjectRoot || this.projectRoot || process.cwd();
     return path.resolve(root, filePath);
+  }
+
+  /**
+   * Resolve `filePath` (relative to `planProjectRoot`, or already absolute) and reject
+   * (throw) any result that lexically escapes the project root (widened by
+   * `additionalProjectRoots` — see that option's doc).
+   *
+   * HYP-1012 review round 2 (codex) P1: `executeCssFilePlan`'s `target.cssFilePath`, for
+   * a `.module.css` import, is derived by `resolveCssImportPath`
+   * (`@lib/ast/css-module-references.ts`) via a plain `path.resolve(dirname(importer),
+   * importSource)` with NO boundary check of its own — unlike the JSX source path
+   * `resolveFilePath` handles, this one is genuinely untrusted at this layer (never
+   * independently validated by the extension's `resolveWorkspacePath`). Pre-fix, an
+   * authorized component importing `../../secret/Outside.module.css` resolved and wrote
+   * straight through. Reject-by-throw contract mirrors `resolveWorkspacePath`:
+   * `execute()`'s existing top-level try/catch (fail-closed, spec §8.4) turns this into
+   * a `{ success: false }` result.
+   */
+  private resolveContainedFilePath(filePath: string, planProjectRoot: string): string {
+    const root = planProjectRoot || this.projectRoot || process.cwd();
+    const resolvedRoot = path.resolve(root);
+    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(resolvedRoot, filePath);
+
+    // Path-relative containment check (repo convention — see server/lib/path-security.ts),
+    // NOT a string prefix: `absolutePath.startsWith(resolvedRoot)` would treat a sibling like
+    // `/project-evil` as inside `/project`. `rel === '..' || rel.startsWith('..' + path.sep)`
+    // (not a bare `rel.startsWith('..')`, which this file's own pre-existing
+    // `projectResolvesTailwindMerge` clamp above uses and which review round 3 (codex P2)
+    // caught here too) — a bare prefix check false-rejects a legitimately-named in-root
+    // directory that merely starts with the two characters `..` (e.g. `..generated/`).
+    const allRoots = [resolvedRoot, ...this.additionalProjectRoots.map((r) => path.resolve(r))];
+    const contained = allRoots.some((candidateRoot) => {
+      const rel = path.relative(candidateRoot, absolutePath);
+      return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+    });
+    if (!contained) {
+      throw new Error(`Path resolves outside project root: ${filePath}`);
+    }
+
+    return absolutePath;
   }
 
   private findElement(ast: t.File, elementRef: string): t.JSXElement | null {
@@ -620,6 +686,7 @@ export async function executeStyleWriteRequest(input: ExecuteStyleWriteRequestIn
     executor: new StyleWriteExecutor({
       fileIO: input.fileIO,
       projectRoot: input.projectRoot,
+      additionalProjectRoots: input.additionalProjectRoots,
       domClasses: input.domClasses,
       probeDriving: input.probeDriving,
       requestedStyles: expressible,

@@ -10,6 +10,8 @@ import { resolveWorkspacePath } from './workspace-path';
 
 export interface AstMutationDeps {
   workspaceRoot: string;
+  /** HYP-1012 monorepo follow-up — widens containment past `workspaceRoot` (see workspace-path.ts). */
+  additionalWorkspaceRoot?: string;
   fileIO: FileIO;
   fileParser: {
     readAndParseFile(filePath: string): Promise<{ ast: import('@babel/types').File }>;
@@ -53,7 +55,12 @@ async function resolveAndPrepare(
     }
   | MutationError
 > {
-  const absolutePath = resolveWorkspacePath(deps.workspaceRoot, filePath);
+  const absolutePath = resolveWorkspacePath(
+    deps.workspaceRoot,
+    filePath,
+    undefined,
+    deps.additionalWorkspaceRoot ? [deps.additionalWorkspaceRoot] : [],
+  );
   const effectiveNodeRef = nodeRef ?? (elementId as NodeRef);
 
   const resolved = await deps.resolveElementInCorrectFile(absolutePath, effectiveNodeRef);
