@@ -432,6 +432,131 @@ describe('ensureSample', () => {
   });
 });
 
+describe('writeSampleCode: import prepend on first write (HYP-378 follow-up)', () => {
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+
+  beforeEach(() => {
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = mock();
+    console.error = mock();
+  });
+
+  afterEach(() => {
+    console.log = originalLog;
+    console.error = originalError;
+  });
+
+  it('deterministic compound: imports container + all compound children on first write', async () => {
+    const io = new InMemoryFileIO();
+    // lowercase filename — Alert is a named export, NOT default
+    io.files.set('/project/src/alert.tsx', ALERT_COMPOUND_SOURCE);
+    const generate = mock(() => Promise.reject(new Error('AI should not be called')));
+
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/src/alert.tsx',
+      componentName: 'Alert',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    expect(result.generated).toBe(true);
+    const sampleFile = io.files.get('/project/src/alert.samples.tsx');
+    expect(sampleFile).toBeDefined();
+    // Must import from './alert' (lowercase — matches the actual filename, not componentName)
+    expect(sampleFile).toContain("from './alert'");
+    // Must import ALL referenced names in a single named import
+    expect(sampleFile).toContain('Alert');
+    expect(sampleFile).toContain('AlertTitle');
+    expect(sampleFile).toContain('AlertDescription');
+    // The import line must precede the export
+    const importIdx = sampleFile!.indexOf('import {');
+    const exportIdx = sampleFile!.indexOf('export');
+    expect(importIdx).toBeGreaterThanOrEqual(0);
+    expect(importIdx).toBeLessThan(exportIdx);
+  });
+
+  it('deterministic compound: named import (not default) for shadcn-style named exports', async () => {
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/alert.tsx', ALERT_COMPOUND_SOURCE);
+    const generate = mock(() => Promise.reject(new Error('AI should not be called')));
+
+    await ensureSample({
+      io,
+      absolutePath: '/project/src/alert.tsx',
+      componentName: 'Alert',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    const sampleFile = io.files.get('/project/src/alert.samples.tsx')!;
+    // Must use named import syntax { ... }, not default import
+    expect(sampleFile).toMatch(/^import \{[^}]+\} from/m);
+    // Must NOT use default import like `import Alert from`
+    expect(sampleFile).not.toMatch(/^import Alert from/m);
+  });
+
+  it('deterministic compound: does NOT add extra import when appending to existing .samples.tsx', async () => {
+    const CARD_SOURCE = `
+import * as React from 'react';
+export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ ...props }, ref) => <div ref={ref} {...props} />
+);
+Card.displayName = 'Card';
+export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ ...props }, ref) => <div ref={ref} {...props} />
+);
+CardHeader.displayName = 'CardHeader';
+export { Card, CardHeader };
+`;
+    const io = new InMemoryFileIO();
+    io.files.set('/project/src/card.tsx', CARD_SOURCE);
+    const existingCardSamples =
+      "import { Card, CardHeader } from './card';\n\nexport const SampleDefault = () => <Card><CardHeader>Header</CardHeader></Card>;\n";
+    io.files.set('/project/src/card.samples.tsx', existingCardSamples);
+
+    const generate = mock(() => Promise.reject(new Error('AI should not be called')));
+    const result = await ensureSample({
+      io,
+      absolutePath: '/project/src/card.tsx',
+      componentName: 'Card',
+      sampleName: 'SamplePrimary',
+      generate,
+    });
+
+    expect(result.generated).toBe(true);
+    const sampleFile = io.files.get('/project/src/card.samples.tsx')!;
+    // Original import must appear exactly once — not duplicated on append
+    const importMatches = (sampleFile.match(/^import \{/gm) ?? []).length;
+    expect(importMatches).toBe(1);
+    // Both samples present
+    expect(sampleFile).toContain('SampleDefault');
+    expect(sampleFile).toContain('SamplePrimary');
+  });
+
+  it('deterministic compound: preserves lowercase filename casing in import specifier', async () => {
+    const io = new InMemoryFileIO();
+    // Component file is lowercase 'alert.tsx' even though componentName is 'Alert'
+    io.files.set('/project/src/alert.tsx', ALERT_COMPOUND_SOURCE);
+    const generate = mock(() => Promise.reject(new Error('should not be called')));
+
+    await ensureSample({
+      io,
+      absolutePath: '/project/src/alert.tsx',
+      componentName: 'Alert',
+      sampleName: 'SampleDefault',
+      generate,
+    });
+
+    const sampleFile = io.files.get('/project/src/alert.samples.tsx')!;
+    // Must derive stem from the actual .samples.tsx filename (alert), not from componentName (Alert)
+    expect(sampleFile).toContain("from './alert'");
+    expect(sampleFile).not.toContain("from './Alert'");
+  });
+});
+
 describe('buildContainerSample', () => {
   it('generates a function export wrapping compound components as children', () => {
     const code = buildContainerSample('Alert', ['AlertTitle', 'AlertDescription'], 'SampleDefault');

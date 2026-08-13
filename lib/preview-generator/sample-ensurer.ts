@@ -139,6 +139,10 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
     exportName: sampleName,
   });
   if (deterministicCode) {
+    // Compound samples reference the container + all its compound children.
+    // Pass all names so writeSampleCode can build the import line on first write.
+    const compoundNames = detectCompoundExports(sourceCode, componentName);
+    const referencedNames = [componentName, ...compoundNames];
     return writeSampleCode(
       io,
       sampleFilePath,
@@ -147,6 +151,7 @@ export async function ensureSample(config: EnsureSampleConfig): Promise<EnsureSa
       componentName,
       sampleName,
       'deterministic',
+      referencedNames,
     );
   }
 
@@ -182,6 +187,20 @@ async function readFileSafe(io: FileIO, path: string): Promise<string | null> {
   }
 }
 
+/**
+ * Build a named import line for the component and its compound children.
+ *
+ * The module specifier is derived from the .samples.tsx filename (not from
+ * componentName) to preserve the original file casing — critical on case-sensitive
+ * file systems where `alert.tsx` exports `Alert` but `import from './Alert'` fails.
+ *
+ * Example: /project/src/alert.samples.tsx → `import { Alert, AlertTitle, AlertDescription } from './alert';`
+ */
+function buildSamplesFileImportLine(sampleFilePath: string, referencedNames: string[]): string {
+  const stem = basename(sampleFilePath).replace(/\.samples\.(tsx?|jsx?)$/, '');
+  return `import { ${referencedNames.join(', ')} } from './${stem}';`;
+}
+
 async function writeSampleCode(
   io: FileIO,
   sampleFilePath: string,
@@ -190,8 +209,21 @@ async function writeSampleCode(
   componentName: string,
   sampleName: string,
   source: 'deterministic' | 'AI',
+  /** Names the generated code references (container + compound children). Only used on first write. */
+  referencedNames?: string[],
 ): Promise<EnsureSampleResult> {
-  const updatedContent = existingContent !== null ? `${existingContent.trimEnd()}\n\n${newCode}\n` : `${newCode}\n`;
+  let updatedContent: string;
+  if (existingContent !== null) {
+    updatedContent = `${existingContent.trimEnd()}\n\n${newCode}\n`;
+  } else {
+    // First write: prepend a component import so the sample can reference the component.
+    // Only added when referencedNames is provided (deterministic path) and the generated
+    // code has no existing import statement (guard against double-import).
+    const hasExistingImport = /^import\s/m.test(newCode);
+    const needsImport = referencedNames && referencedNames.length > 0 && !hasExistingImport;
+    const importLine = needsImport ? `${buildSamplesFileImportLine(sampleFilePath, referencedNames)}\n\n` : '';
+    updatedContent = `${importLine}${newCode}\n`;
+  }
   try {
     await io.writeFile(sampleFilePath, updatedContent);
     const label = source === 'deterministic' ? 'deterministic ' : '';
