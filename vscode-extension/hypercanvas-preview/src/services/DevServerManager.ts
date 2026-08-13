@@ -268,11 +268,11 @@ export class DevServerManager {
       child.stdout?.on('data', (data: Buffer) => {
         if (!isCurrentProcess()) return;
         const text = data.toString();
-        // Strip ANSI escape codes for message detection — Vite 8 (rolldown)
-        // wraps output in color codes that can split keywords across chunks.
+        // Strip ANSI escape codes — Vite 8 (rolldown) wraps output in color
+        // codes that pollute the VS Code output channel and split keywords.
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
-        this._outputChannel.append(text);
-        this._appendLog(text);
+        this._outputChannel.append(clean);
+        this._appendLog(clean);
 
         this._maybeUpdatePortFromOutput(clean);
 
@@ -290,8 +290,8 @@ export class DevServerManager {
         if (!isCurrentProcess()) return;
         const text = data.toString();
         const clean = text.replace(ANSI_ESCAPE_PATTERN, '');
-        this._outputChannel.append(text);
-        this._appendLog(text);
+        this._outputChannel.append(clean);
+        this._appendLog(clean);
 
         this._maybeUpdatePortFromOutput(clean);
 
@@ -603,15 +603,15 @@ export class DevServerManager {
       });
 
       child.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        this._outputChannel.append(text);
-        this._appendLog(text);
+        const clean = data.toString().replace(ANSI_ESCAPE_PATTERN, '');
+        this._outputChannel.append(clean);
+        this._appendLog(clean);
       });
 
       child.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        this._outputChannel.append(text);
-        this._appendLog(text);
+        const clean = data.toString().replace(ANSI_ESCAPE_PATTERN, '');
+        this._outputChannel.append(clean);
+        this._appendLog(clean);
       });
 
       child.on('error', (error) => reject(error));
