@@ -88,6 +88,99 @@ describe('ElementsTree — scroll into view (Task A)', () => {
   });
 });
 
+describe('ElementsTree — auto-expand collapsed parent on external selection (HYP-841)', () => {
+  let scrollIntoViewMock: ReturnType<typeof mock>;
+
+  beforeEach(() => {
+    scrollIntoViewMock = mock();
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock as unknown as typeof HTMLElement.prototype.scrollIntoView;
+  });
+
+  afterEach(() => {
+    scrollIntoViewMock.mockReset?.();
+  });
+
+  it('expands a collapsed parent and scrolls child into view when child becomes selected', () => {
+    const collapsedParent: TreeNode = {
+      id: 'parent-2',
+      type: 'element',
+      label: 'CollapsedParent',
+      collapsed: true,
+      children: [{ id: 'child-1', type: 'element', label: 'Child' }],
+    };
+
+    const { rerender, queryByText } = render(
+      <ElementsTree tree={[collapsedParent]} selectedElements={[]} onSelectElement={() => {}} />,
+    );
+
+    // Child should not be in the DOM while parent is collapsed
+    expect(queryByText('Child')).toBeNull();
+
+    // Canvas selects the child externally
+    rerender(<ElementsTree tree={[collapsedParent]} selectedElements={['child-1']} onSelectElement={() => {}} />);
+
+    // Parent auto-expands → child renders → scrollIntoView fires
+    expect(queryByText('Child')).not.toBeNull();
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(1);
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  it('allows manual collapse after auto-expand even while child stays selected', () => {
+    const collapsedParent: TreeNode = {
+      id: 'parent-3',
+      type: 'element',
+      label: 'ManualCollapseParent',
+      collapsed: true,
+      children: [{ id: 'child-2', type: 'element', label: 'ChildStaysSelected' }],
+    };
+
+    const { rerender, queryByText, getAllByRole } = render(
+      <ElementsTree tree={[collapsedParent]} selectedElements={[]} onSelectElement={() => {}} />,
+    );
+
+    // Auto-expand: child becomes selected externally
+    rerender(<ElementsTree tree={[collapsedParent]} selectedElements={['child-2']} onSelectElement={() => {}} />);
+
+    expect(queryByText('ChildStaysSelected')).not.toBeNull();
+
+    // User manually clicks the collapse chevron button
+    const buttons = getAllByRole('button');
+    fireEvent.click(buttons[0]);
+
+    // Child should now be hidden — manual collapse must not be overridden
+    expect(queryByText('ChildStaysSelected')).toBeNull();
+  });
+
+  it('expands multiple collapsed ancestors to reveal deeply nested selected child', () => {
+    const deeplyNested: TreeNode = {
+      id: 'grandparent',
+      type: 'element',
+      label: 'GrandParent',
+      collapsed: true,
+      children: [
+        {
+          id: 'middle',
+          type: 'element',
+          label: 'Middle',
+          collapsed: true,
+          children: [{ id: 'deep-child', type: 'element', label: 'DeepChild' }],
+        },
+      ],
+    };
+
+    const { rerender, queryByText } = render(
+      <ElementsTree tree={[deeplyNested]} selectedElements={[]} onSelectElement={() => {}} />,
+    );
+
+    expect(queryByText('DeepChild')).toBeNull();
+
+    rerender(<ElementsTree tree={[deeplyNested]} selectedElements={['deep-child']} onSelectElement={() => {}} />);
+
+    expect(queryByText('DeepChild')).not.toBeNull();
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ElementsTree — click selects element (Task B)', () => {
   it('calls onSelectElement with node id when row is clicked', () => {
     const onSelectElement = mock();

@@ -1,11 +1,21 @@
 import { TID } from '@shared/data-testid-map';
 import { IconBinaryTree, IconBraces, IconChevronDown, IconFrame, IconSquareRotated } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TreeNode } from '../../lib/types';
 import { usePlatformContext } from '../lib/platform';
 import IconSquareRotatedPlus from './icons/IconSquareRotatedPlus';
 
 export type { TreeNode };
+
+/** Returns true if any descendant of the given nodes list is in selectedIds. */
+function hasDescendantSelected(children: TreeNode[] | undefined, selectedIds: string[]): boolean {
+  if (!children) return false;
+  for (const child of children) {
+    if (selectedIds.includes(child.id)) return true;
+    if (hasDescendantSelected(child.children, selectedIds)) return true;
+  }
+  return false;
+}
 
 interface TreeNodeItemProps {
   node: TreeNode;
@@ -36,6 +46,21 @@ function TreeNodeItem({
   const hasChildren = node.children && node.children.length > 0;
   const isSelected = selectedElements.includes(node.id);
   const isHovered = hoveredElement === node.id;
+
+  // Auto-expand when a descendant is externally selected (e.g. canvas click on
+  // a node inside a collapsed subtree). Without this, the child TreeNodeItem is
+  // not mounted and its scrollIntoView effect never fires.
+  const hasSelectedDescendant = useMemo(
+    () => hasDescendantSelected(node.children, selectedElements),
+    [node.children, selectedElements],
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: we react only to
+  // hasSelectedDescendant transitions (false→true), not to isCollapsed. Including isCollapsed
+  // would re-fire the effect on every manual collapse and immediately re-expand the node.
+  useEffect(() => {
+    if (hasSelectedDescendant) setIsCollapsed(false);
+  }, [hasSelectedDescendant]);
 
   useEffect(() => {
     if (!isSelected || !elementRef.current) return;
